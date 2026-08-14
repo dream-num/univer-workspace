@@ -1,0 +1,143 @@
+CreateResource:
+  type: object
+  additionalProperties: false
+  required: [kind, spaceId, parentNodeId, name, unitType]
+  properties:
+    kind:
+      type: string
+      const: univer
+    spaceId:
+      type: string
+    parentNodeId:
+      type: [string, "null"]
+    name:
+      type: string
+      minLength: 1
+      maxLength: 255
+    unitType:
+      $ref: ./nodes.yaml#/UnitType
+    initialData:
+      type: object
+      description: >-
+        Complete initial Univer Unit data for unitType. When omitted, the
+        server creates a blank Unit. The server always overrides id with the
+        Unit identity reserved from the Idempotency-Key and resets rev to the
+        initial revision.
+      additionalProperties: true
+
+ResourceCreateResponse:
+  type: object
+  additionalProperties: false
+  required: [operation, node]
+  properties:
+    operation:
+      $ref: ./operations.yaml#/OperationView
+    node:
+      $ref: ./nodes.yaml#/NodeSummary
+
+ResourceResponse:
+  type: object
+  additionalProperties: false
+  required: [resource, node]
+  properties:
+    resource:
+      $ref: ./nodes.yaml#/ResourceSummary
+    node:
+      $ref: ./nodes.yaml#/NodeSummary
+
+EditorMode:
+  type: string
+  enum: [edit, readOnly]
+
+OpenUniverResource:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - kind
+    - nodeId
+    - spaceId
+    - name
+    - unitId
+    - unitType
+    - accessRole
+    - editorMode
+  properties:
+    id:
+      type: string
+    kind:
+      type: string
+      const: univer
+    nodeId:
+      type: string
+    spaceId:
+      type: string
+    name:
+      type: string
+    unitId:
+      type: string
+    unitType:
+      $ref: ./nodes.yaml#/UnitType
+    accessRole:
+      $ref: ./nodes.yaml#/AccessRole
+    editorMode:
+      $ref: "#/EditorMode"
+
+OpenBlobResource:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - kind
+    - nodeId
+    - spaceId
+    - name
+    - accessRole
+    - originalFilename
+    - mediaType
+    - byteSize
+    - sha256
+    - contentUrl
+    - downloadUrl
+  properties:
+    id:
+      type: string
+    kind:
+      type: string
+      const: blob
+    nodeId:
+      type: string
+    spaceId:
+      type: string
+    name:
+      type: string
+    accessRole:
+      $ref: ./nodes.yaml#/AccessRole
+    originalFilename:
+      type: string
+    mediaType:
+      type: string
+    byteSize:
+      type: integer
+      minimum: 0
+    sha256:
+      type: string
+    contentUrl:
+      type: string
+    downloadUrl:
+      type: string
+
+ResourceOpenView:
+  type: object
+  additionalProperties: false
+  required: [resource]
+  properties:
+    resource:
+      oneOf:
+        - $ref: "#/OpenUniverResource"
+        - $ref: "#/OpenBlobResource"
+      discriminator:
+        propertyName: kind
+        mapping:
+          univer: "#/OpenUniverResource"
+          blob: "#/OpenBlobResource"

@@ -1,0 +1,65 @@
+OperationKind:
+  type: string
+  enum:
+    - createResource
+    - createBlobResource
+    - createWorktree
+    - addWorktreeUnit
+    - createWorktreeUnit
+    - mergeWorktree
+    - discardWorktree
+    - activateWorktreeResource
+
+OperationState:
+  type: string
+  enum: [pending, completed, failed]
+
+OperationError:
+  type: object
+  additionalProperties: false
+  required: [code, message]
+  properties:
+    code:
+      type: string
+    message:
+      type: string
+
+OperationView:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - kind
+    - state
+    - createdAt
+    - updatedAt
+    - result
+    - error
+  properties:
+    id:
+      type: string
+    kind:
+      $ref: "#/OperationKind"
+    state:
+      $ref: "#/OperationState"
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+    result:
+      type: [object, "null"]
+      additionalProperties: true
+    error:
+      oneOf:
+        - $ref: "#/OperationError"
+        - type: "null"
+
+OperationEnvelope:
+  type: object
+  additionalProperties: false
+  required: [operation]
+  properties:
+    operation:
+      $ref: "#/OperationView"

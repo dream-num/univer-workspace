@@ -1,0 +1,478 @@
+WorktreeKind:
+  type: string
+  enum: [user, team]
+
+WorktreeVisibility:
+  type: string
+  enum: [private, space]
+
+WorktreeState:
+  type: string
+  enum: [draft, ready, merging, merged, discarded]
+
+WorktreeCapabilities:
+  type: object
+  additionalProperties: false
+  required:
+    - review
+    - editDraft
+    - addUnit
+    - changeVisibility
+    - markReady
+    - reopen
+    - merge
+    - discard
+  properties:
+    review:
+      type: boolean
+    editDraft:
+      type: boolean
+    addUnit:
+      type: boolean
+    changeVisibility:
+      type: boolean
+    markReady:
+      type: boolean
+    reopen:
+      type: boolean
+    merge:
+      type: boolean
+    discard:
+      type: boolean
+
+WorktreeSummary:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - name
+    - summary
+    - kind
+    - teamSpace
+    - visibility
+    - state
+    - creator
+    - unitCount
+    - processedAt
+    - createdAt
+    - updatedAt
+    - capabilities
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    summary:
+      type: [string, "null"]
+    kind:
+      $ref: "#/WorktreeKind"
+    teamSpace:
+      oneOf:
+        - $ref: ./spaces.yaml#/SpaceSummary
+        - type: "null"
+    visibility:
+      $ref: "#/WorktreeVisibility"
+    state:
+      $ref: "#/WorktreeState"
+    creator:
+      $ref: ./identity.yaml#/PublicUser
+    unitCount:
+      type: integer
+      minimum: 0
+    processedAt:
+      type: [string, "null"]
+      format: date-time
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+    capabilities:
+      $ref: "#/WorktreeCapabilities"
+
+WorktreeUnitTarget:
+  type: object
+  additionalProperties: false
+  required: [spaceId, parentNodeId]
+  properties:
+    spaceId:
+      type: string
+    parentNodeId:
+      type: [string, "null"]
+
+MergeResult:
+  type: string
+  enum: [pending, merged, unchanged, conflict, failed]
+
+WorktreeUnitChange:
+  type: string
+  enum: [modified, added, deleted, unchanged]
+
+ActivationState:
+  type: string
+  enum:
+    - notApplicable
+    - waitingForMerge
+    - pending
+    - completed
+    - failed
+    - discarded
+
+WorktreeUnit:
+  type: object
+  additionalProperties: false
+  required:
+    - unitId
+    - resourceId
+    - nodeId
+    - source
+    - name
+    - unitType
+    - target
+    - draftHeadRevision
+    - change
+    - mergeResult
+    - activationState
+  properties:
+    unitId:
+      type: string
+    resourceId:
+      type: string
+    nodeId:
+      type: string
+    source:
+      type: string
+      enum: [trunk, worktree]
+    name:
+      type: string
+    unitType:
+      $ref: ./nodes.yaml#/UnitType
+    target:
+      oneOf:
+        - $ref: "#/WorktreeUnitTarget"
+        - type: "null"
+    draftHeadRevision:
+      type: integer
+      minimum: 0
+    change:
+      $ref: "#/WorktreeUnitChange"
+    mergeResult:
+      $ref: "#/MergeResult"
+    activationState:
+      $ref: "#/ActivationState"
+
+WorktreeDetail:
+  allOf:
+    - $ref: "#/WorktreeSummary"
+    - type: object
+      required: [units]
+      properties:
+        units:
+          type: array
+          items:
+            $ref: "#/WorktreeUnit"
+
+WorktreeEnvelope:
+  type: object
+  additionalProperties: false
+  required: [worktree]
+  properties:
+    worktree:
+      $ref: "#/WorktreeDetail"
+
+WorktreeSummaryEnvelope:
+  type: object
+  additionalProperties: false
+  required: [worktree]
+  properties:
+    worktree:
+      $ref: "#/WorktreeSummary"
+
+WorktreeList:
+  type: object
+  additionalProperties: false
+  required: [items, nextCursor]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/WorktreeSummary"
+    nextCursor:
+      type: [string, "null"]
+
+CreateUserWorktree:
+  type: object
+  additionalProperties: false
+  required: [kind, name, summary]
+  properties:
+    kind:
+      const: user
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    summary:
+      type: [string, "null"]
+      maxLength: 1000
+
+CreateTeamWorktree:
+  type: object
+  additionalProperties: false
+  required: [kind, teamSpaceId, visibility, name, summary]
+  properties:
+    kind:
+      const: team
+    teamSpaceId:
+      type: string
+    visibility:
+      $ref: "#/WorktreeVisibility"
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    summary:
+      type: [string, "null"]
+      maxLength: 1000
+
+CreateWorktree:
+  oneOf:
+    - $ref: "#/CreateUserWorktree"
+    - $ref: "#/CreateTeamWorktree"
+
+PatchWorktree:
+  type: object
+  additionalProperties: false
+  minProperties: 1
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    summary:
+      type: [string, "null"]
+      maxLength: 1000
+    visibility:
+      $ref: "#/WorktreeVisibility"
+
+AddTrunkUnit:
+  type: object
+  additionalProperties: false
+  required: [source, resourceId]
+  properties:
+    source:
+      const: trunk
+    resourceId:
+      type: string
+
+CreateWorktreeLocalUnit:
+  type: object
+  additionalProperties: false
+  required:
+    - source
+    - name
+    - unitType
+    - targetSpaceId
+    - targetParentNodeId
+  properties:
+    source:
+      const: worktree
+    name:
+      type: string
+      minLength: 1
+      maxLength: 255
+    unitType:
+      $ref: ./nodes.yaml#/UnitType
+    targetSpaceId:
+      type: string
+    targetParentNodeId:
+      type: [string, "null"]
+    initialData:
+      type: object
+      description: >-
+        Complete initial Univer Unit data for unitType. When omitted, the
+        server creates a blank Unit. The server always overrides id with the
+        Unit identity reserved from the Idempotency-Key and resets rev to the
+        initial revision.
+      additionalProperties: true
+
+AddWorktreeUnit:
+  oneOf:
+    - $ref: "#/AddTrunkUnit"
+    - $ref: "#/CreateWorktreeLocalUnit"
+
+WorktreeUnitEnvelope:
+  type: object
+  additionalProperties: false
+  required: [unit]
+  properties:
+    unit:
+      $ref: "#/WorktreeUnit"
+
+WorktreeOpenMode:
+  type: string
+  enum: [draft, trunk, mergePreview]
+
+OpenWorktreeUnit:
+  type: object
+  additionalProperties: false
+  required: [mode]
+  properties:
+    mode:
+      $ref: "#/WorktreeOpenMode"
+
+OpenedWorktreeUnit:
+  type: object
+  additionalProperties: false
+  required: [unitId, unitType, editorMode]
+  properties:
+    unitId:
+      type: string
+    unitType:
+      $ref: ./nodes.yaml#/UnitType
+    editorMode:
+      $ref: ./resources.yaml#/EditorMode
+
+CollaborationScope:
+  oneOf:
+    - type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          const: trunk
+    - type: object
+      additionalProperties: false
+      required: [kind, worktreeId]
+      properties:
+        kind:
+          type: string
+          enum: [worktree, mergePreview]
+        worktreeId:
+          type: string
+
+WorktreeUnitOpenView:
+  type: object
+  additionalProperties: false
+  required: [unit, collaborationScope]
+  properties:
+    unit:
+      $ref: "#/OpenedWorktreeUnit"
+    collaborationScope:
+      $ref: "#/CollaborationScope"
+
+ProtocolMutation:
+  type: object
+  additionalProperties: false
+  required: [id, data]
+  properties:
+    id:
+      type: string
+      minLength: 1
+    data:
+      type: string
+
+WorktreeChangeset:
+  type: object
+  additionalProperties: false
+  required:
+    - unitID
+    - type
+    - baseRev
+    - revision
+    - userID
+    - memberID
+    - sid
+    - reqId
+    - mutations
+  properties:
+    unitID:
+      type: string
+    type:
+      type: integer
+      enum: [1, 2, 3, 5, 6]
+      description: Univer protocol Unit type.
+    baseRev:
+      type: integer
+      minimum: 1
+    revision:
+      type: integer
+      minimum: 2
+    userID:
+      type: string
+      description: Ignored on input and replaced with the authenticated User ID.
+    memberID:
+      type: string
+      description: Ignored on input and replaced with a server-owned member ID.
+    sid:
+      type: string
+      minLength: 1
+    reqId:
+      type: integer
+      minimum: 1
+    mutations:
+      type: array
+      items:
+        $ref: "#/ProtocolMutation"
+    mutationSize:
+      type: integer
+      minimum: 0
+    additionalFields:
+      type: string
+    createTime:
+      type: integer
+      minimum: 0
+
+SubmitWorktreeChangeset:
+  type: object
+  additionalProperties: false
+  required: [changeset]
+  properties:
+    changeset:
+      $ref: "#/WorktreeChangeset"
+
+WorktreeChangesetError:
+  type: object
+  additionalProperties: false
+  required: [code, message, retryable]
+  properties:
+    code:
+      type: string
+    message:
+      type: string
+    retryable:
+      type: boolean
+    details:
+      type: object
+      additionalProperties: true
+
+WorktreeChangesetSubmitResult:
+  oneOf:
+    - type: object
+      additionalProperties: false
+      required: [status, changeset]
+      properties:
+        status:
+          type: string
+          enum: [committed, already-committed]
+        changeset:
+          $ref: "#/WorktreeChangeset"
+    - type: object
+      additionalProperties: false
+      required: [status, error]
+      properties:
+        status:
+          type: string
+          enum: [rejected, retry]
+        error:
+          $ref: "#/WorktreeChangesetError"
+
+WorktreeOperationResponse:
+  type: object
+  additionalProperties: false
+  required: [operation, worktree]
+  properties:
+    operation:
+      $ref: ./operations.yaml#/OperationView
+    worktree:
+      $ref: "#/WorktreeSummary"

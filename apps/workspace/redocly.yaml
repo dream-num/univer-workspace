@@ -1,0 +1,15 @@
+apis:
+  workspace@v1:
+    root: contracts/http/openapi.yaml
+    x-openapi-ts:
+      output: generated/http/schema.d.ts
+
+extends:
+  - recommended
+
+rules:
+  no-server-example.com: off
+  info-license: off
+  info-license-strict: off
+  operation-2xx-response: off
+  operation-4xx-response: off

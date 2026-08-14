@@ -1,0 +1,66 @@
+name: Docker build setup
+description: 'Set up Docker Buildx and QEMU'
+
+inputs:
+  runner-name:
+    description: 'The name of the runner'
+    default: 'github-runner'
+
+  environment:
+    description: 'Environment to run deploy'
+    default: 'staging'
+
+outputs:
+  builder-name:
+    description: 'The name of the builder'
+    value: ${{ inputs.runner-name == 'github-runner' && steps.buildx.outputs.name || steps.buildx2.outputs.name }}
+
+runs:
+  using: 'composite'
+  steps:
+    - shell: bash
+      name: Set US ACR region
+      if: ${{ inputs.environment == 'capalyze' || inputs.environment == 'feature capalyze' }}
+      run: echo "ACR_REGION=us-east-1" >> $GITHUB_ENV
+
+    - name: Set US ACR registry
+      if: ${{ env.ACR_REGION == 'us-east-1' || inputs.environment == 'capalyze' || inputs.environment == 'feature capalyze' }}
+      shell: bash
+      run: |
+        echo "CR=univer-acr-eastus-registry.us-east-1.cr.aliyuncs.com" >> $GITHUB_ENV
+
+    - name: Set Shenzhen ACR registry
+      if: ${{ inputs.runner-name == 'shenzhen' && !(inputs.environment == 'capalyze' || inputs.environment == 'feature capalyze') }}
+      shell: bash
+      run: |
+        echo "CR=univer-acr-registry-vpc.cn-shenzhen.cr.aliyuncs.com" >> $GITHUB_ENV
+
+    - name: Login to Aliyun Container Registry (ACR)
+      uses: aliyun/acr-login@v1
+      with:
+        login-server: ${{ env.CR }}
+        region-id: ${{ env.ACR_REGION }}
+        username: "${{ env.REGISTRY_USERNAME }}"
+        password: "${{ env.REGISTRY_PASSWORD }}"
+
+    - if: ${{ inputs.runner-name == 'github-runner' }}
+      uses: docker/setup-qemu-action@v3
+      with:
+        cache-image: false
+
+    - if: ${{ inputs.runner-name == 'github-runner' }}
+      id: buildx
+      uses: docker/setup-buildx-action@v3
+
+    - if: ${{ inputs.runner-name == 'shenzhen' }}
+      uses: docker/setup-qemu-action@v3
+      with:
+        image: ${{ env.CR }}/devops/binfmt:qemu-v7.0.0
+        cache-image: false
+
+    - if: ${{ inputs.runner-name == 'shenzhen' }}
+      id: buildx2
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          image=${{ env.CR }}/devops/buildkit:buildx-stable-1

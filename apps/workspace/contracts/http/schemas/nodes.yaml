@@ -1,0 +1,204 @@
+UnitType:
+  type: string
+  enum: [sheet, doc, slide, board, base]
+
+AccessRole:
+  type: string
+  enum: [owner, admin, editor, viewer]
+
+NodeCapabilities:
+  type: object
+  additionalProperties: false
+  required: [browseChildren, createChildren, rename, move, trash, share]
+  properties:
+    browseChildren:
+      type: boolean
+    createChildren:
+      type: boolean
+    rename:
+      type: boolean
+    move:
+      type: boolean
+    trash:
+      type: boolean
+    share:
+      type: boolean
+
+ResourceCapabilities:
+  type: object
+  additionalProperties: false
+  required: [openContent, editContent, downloadContent]
+  properties:
+    openContent:
+      type: boolean
+    editContent:
+      type: boolean
+    downloadContent:
+      type: boolean
+
+UniverResourceSummary:
+  type: object
+  additionalProperties: false
+  required: [id, kind, unitType, capabilities]
+  properties:
+    id:
+      type: string
+    kind:
+      type: string
+      const: univer
+    unitType:
+      $ref: "#/UnitType"
+    capabilities:
+      $ref: "#/ResourceCapabilities"
+
+BlobAvailability:
+  type: string
+  enum: [ready, quarantined]
+
+BlobResourceSummary:
+  type: object
+  additionalProperties: false
+  required: [id, kind, mediaType, byteSize, availability, capabilities]
+  properties:
+    id:
+      type: string
+    kind:
+      type: string
+      const: blob
+    mediaType:
+      type: string
+    byteSize:
+      type: integer
+      minimum: 0
+    availability:
+      $ref: "#/BlobAvailability"
+    capabilities:
+      $ref: "#/ResourceCapabilities"
+
+ResourceSummary:
+  oneOf:
+    - $ref: "#/UniverResourceSummary"
+    - $ref: "#/BlobResourceSummary"
+  discriminator:
+    propertyName: kind
+    mapping:
+      univer: "#/UniverResourceSummary"
+      blob: "#/BlobResourceSummary"
+
+NodeSummary:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - spaceId
+    - parentNodeId
+    - name
+    - resource
+    - hasChildren
+    - updatedAt
+    - accessRole
+    - capabilities
+  properties:
+    id:
+      type: string
+    spaceId:
+      type: string
+    parentNodeId:
+      type: [string, "null"]
+    name:
+      type: string
+    resource:
+      oneOf:
+        - $ref: "#/ResourceSummary"
+        - type: "null"
+    hasChildren:
+      type: boolean
+    updatedAt:
+      type: string
+      format: date-time
+    accessRole:
+      $ref: "#/AccessRole"
+    capabilities:
+      $ref: "#/NodeCapabilities"
+
+Breadcrumb:
+  type: object
+  additionalProperties: false
+  required: [id, name]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+
+NodePage:
+  type: object
+  additionalProperties: false
+  required:
+    - space
+    - parentNode
+    - navigationRootNodeId
+    - breadcrumbs
+    - nodes
+    - nextCursor
+  properties:
+    space:
+      $ref: ./spaces.yaml#/SpaceSummary
+    parentNode:
+      oneOf:
+        - $ref: "#/NodeSummary"
+        - type: "null"
+    navigationRootNodeId:
+      type: [string, "null"]
+    breadcrumbs:
+      type: array
+      items:
+        $ref: "#/Breadcrumb"
+    nodes:
+      type: array
+      items:
+        $ref: "#/NodeSummary"
+    nextCursor:
+      type: [string, "null"]
+
+NodeResponse:
+  type: object
+  additionalProperties: false
+  required: [node, space, breadcrumbs, navigationRootNodeId]
+  properties:
+    node:
+      $ref: "#/NodeSummary"
+    space:
+      $ref: ./spaces.yaml#/SpaceSummary
+    breadcrumbs:
+      type: array
+      items:
+        $ref: "#/Breadcrumb"
+    navigationRootNodeId:
+      type: [string, "null"]
+
+CreateNode:
+  type: object
+  additionalProperties: false
+  required: [spaceId, parentNodeId, name]
+  properties:
+    spaceId:
+      type: string
+    parentNodeId:
+      type: [string, "null"]
+    name:
+      type: string
+      minLength: 1
+      maxLength: 255
+
+PatchNode:
+  type: object
+  additionalProperties: false
+  minProperties: 1
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 255
+    parentNodeId:
+      type: [string, "null"]

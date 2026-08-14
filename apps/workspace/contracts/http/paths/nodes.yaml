@@ -1,0 +1,128 @@
+/api/spaces/{spaceId}/nodes:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Nodes]
+    operationId: listSpaceRootNodes
+    summary: List the root Nodes of a Space.
+    parameters:
+      - $ref: ../schemas/common.yaml#/CursorParameter
+      - $ref: ../schemas/common.yaml#/LimitParameter
+    responses:
+      "200":
+        description: Node page for the Space root.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/nodes.yaml#/NodePage
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/nodes:
+  post:
+    tags: [Nodes]
+    operationId: createNode
+    summary: Create a pure organizational Node.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/nodes.yaml#/CreateNode
+    responses:
+      "201":
+        description: Created Node.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/nodes.yaml#/NodeSummary
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/nodes/{nodeId}:
+  parameters:
+    - name: nodeId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Nodes]
+    operationId: getNode
+    summary: Get Node metadata without loading children or content.
+    responses:
+      "200":
+        description: Node metadata and navigation context.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/nodes.yaml#/NodeResponse
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+  patch:
+    tags: [Nodes]
+    operationId: updateNode
+    summary: Atomically rename or move a Node.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/nodes.yaml#/PatchNode
+    responses:
+      "200":
+        description: Updated Node.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/nodes.yaml#/NodeSummary
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/nodes/{nodeId}/children:
+  parameters:
+    - name: nodeId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Nodes]
+    operationId: listNodeChildren
+    summary: List the direct children of any Node.
+    parameters:
+      - $ref: ../schemas/common.yaml#/CursorParameter
+      - $ref: ../schemas/common.yaml#/LimitParameter
+    responses:
+      "200":
+        description: Direct child Node page.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/nodes.yaml#/NodePage
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound

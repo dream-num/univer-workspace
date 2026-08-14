@@ -1,0 +1,53 @@
+/api/recent-resources:
+  get:
+    tags: [Views]
+    operationId: listRecentResources
+    summary: List currently accessible Resources by last successful open.
+    parameters:
+      - $ref: ../schemas/common.yaml#/CursorParameter
+      - $ref: ../schemas/common.yaml#/LimitParameter
+    responses:
+      "200":
+        description: Recent Resources.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/views.yaml#/RecentResourceList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/owned-by-me:
+  get:
+    tags: [Views]
+    operationId: listOwnedByMe
+    summary: List Resources in Spaces owned by the current User.
+    parameters:
+      - $ref: ../schemas/common.yaml#/CursorParameter
+      - $ref: ../schemas/common.yaml#/LimitParameter
+    responses:
+      "200":
+        description: Resources owned by the current User.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/views.yaml#/OwnedResourceList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/shared-with-me:
+  get:
+    tags: [Views]
+    operationId: listSharedWithMe
+    summary: List direct Node Grants in other Personal Spaces.
+    parameters:
+      - $ref: ../schemas/common.yaml#/CursorParameter
+      - $ref: ../schemas/common.yaml#/LimitParameter
+    responses:
+      "200":
+        description: Directly shared Nodes.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/views.yaml#/SharedList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized

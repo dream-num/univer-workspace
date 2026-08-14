@@ -1,0 +1,103 @@
+name: ⚓ Push
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to run deploy'
+        type: environment
+        required: true
+        default: staging
+
+      image-tag:
+        description: Image tag (Optional, only used for existing images)
+        type: string
+        default: ''
+
+      runner-name:
+        description: Runner
+        type: choice
+        default: 'github-runner'
+        options:
+          - 'github-runner'
+          - 'shenzhen'
+
+      acr-region:
+        description: ACR registry
+        type: choice
+        default: 'shenzhen'
+        options:
+          - 'cn-shenzhen'
+          - 'us-east-1'
+
+jobs:
+  build-docker-image:
+    name: BuildDockerImage
+    runs-on: ${{ inputs.runner-name == 'github-runner' && 'ubuntu-latest' || inputs.runner-name }}
+    environment: ${{ inputs.environment }}
+    env:
+      GH_ACCESS_TOKEN: ${{ secrets.GH_TOKEN }}
+      CR: univer-acr-registry.cn-shenzhen.cr.aliyuncs.com
+      ACR_REGION: ${{ inputs.acr-region }}
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        id: setup
+        with:
+          runner-name: ${{ inputs.runner-name }}
+          environment: ${{ inputs.environment }}
+
+      - name: Build and Push Image
+        run: |
+          IMAGE_TAG=$(echo "${{ github.sha }}" | cut -c 1-7)
+          make push_image IMAGE_TAG=$IMAGE_TAG CR=${{ env.CR }}
+
+  deploy-k8s:
+    name: DeployK8s
+    runs-on: arc-runner-set
+    needs: build-docker-image
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Set IMAGE_TAG environment variable
+        run: echo "IMAGE_TAG=$(echo ${{ github.sha }} | cut -c 1-7)" >> $GITHUB_ENV
+
+      - name: Set FEATURE environment variable
+        if: ${{ startsWith(inputs.environment, 'feature') }}
+        run: echo "FEATURE=$(echo ${GITHUB_REF#refs/heads/feat/})" >> $GITHUB_ENV
+
+      - name: Set US ACR region
+        if: ${{ inputs.acr-region == 'us-east-1' || inputs.environment == 'prod' || inputs.environment == 'feature prod' }}
+        run: |
+          echo "CR=univer-acr-eastus-registry.us-east-1.cr.aliyuncs.com" >> $GITHUB_ENV
+
+      - uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          repository: dream-num/helm-chart-private
+          event-type: ${{ vars.DISPATCH_EVENT_TYPE }}
+          client-payload: '{"service":"colla-workspace","tag":"${{ env.IMAGE_TAG }}","feature":"${{ env.FEATURE }}","registry":"${{ env.CR }}"}'
+
+  deploy-manual:
+    name: DeployK8s
+    runs-on: arc-runner-set
+    environment: ${{ inputs.environment }}
+    if: ${{ inputs.image-tag }}
+    steps:
+      - name: Set IMAGE_TAG environment variable
+        run: echo "IMAGE_TAG=${{ inputs.image-tag }}" >> $GITHUB_ENV
+
+      - name: Set FEATURE environment variable
+        if: ${{ startsWith(inputs.environment, 'feature') }}
+        run: echo "FEATURE=$(echo ${GITHUB_REF#refs/heads/feat/})" >> $GITHUB_ENV
+
+      - uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          repository: dream-num/helm-chart-private
+          event-type: ${{ vars.DISPATCH_EVENT_TYPE }}
+          client-payload: '{"service":"colla-workspace","tag":"${{ env.IMAGE_TAG }}","feature":"${{ env.FEATURE }}"}'

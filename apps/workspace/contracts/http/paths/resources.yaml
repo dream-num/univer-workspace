@@ -1,0 +1,93 @@
+/api/resources:
+  post:
+    tags: [Resources]
+    operationId: createResource
+    summary: Create a Univer Resource and its Node.
+    parameters:
+      - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/resources.yaml#/CreateResource
+    responses:
+      "201":
+        description: Resource created during the initial attempt.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/resources.yaml#/ResourceCreateResponse
+      "200":
+        description: Existing completed result for the Idempotency Key.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/resources.yaml#/ResourceCreateResponse
+      "202":
+        description: Resource creation remains pending.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/operations.yaml#/OperationEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/resources/{resourceId}:
+  parameters:
+    - name: resourceId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Resources]
+    operationId: getResource
+    summary: Get Resource and owning Node metadata.
+    responses:
+      "200":
+        description: Current Resource and Node.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/resources.yaml#/ResourceResponse
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/resources/{resourceId}/open:
+  parameters:
+    - name: resourceId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Resources]
+    operationId: openResource
+    summary: Resolve the Unit and editor mode for a Resource.
+    responses:
+      "200":
+        description: Resource open descriptor.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/resources.yaml#/ResourceOpenView
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound

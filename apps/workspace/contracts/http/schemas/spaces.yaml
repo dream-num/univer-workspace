@@ -1,0 +1,90 @@
+SpaceType:
+  type: string
+  enum: [personal, team]
+
+SpaceRole:
+  type: string
+  enum: [owner, admin, editor, viewer]
+
+SpaceCapabilities:
+  type: object
+  additionalProperties: false
+  required:
+    - browseRoot
+    - createAtRoot
+    - renameSpace
+    - manageMembers
+    - viewTrash
+  properties:
+    browseRoot:
+      type: boolean
+    createAtRoot:
+      type: boolean
+    renameSpace:
+      type: boolean
+    manageMembers:
+      type: boolean
+    viewTrash:
+      type: boolean
+
+SpaceSummary:
+  type: object
+  additionalProperties: false
+  required: [id, type, name, publicRead]
+  properties:
+    id:
+      type: string
+    type:
+      $ref: "#/SpaceType"
+    name:
+      type: string
+    publicRead:
+      type: boolean
+      description: Whether every authenticated User can browse and open this Space read-only.
+
+SpaceView:
+  allOf:
+    - $ref: "#/SpaceSummary"
+    - type: object
+      required: [accessRole, capabilities]
+      properties:
+        accessRole:
+          $ref: "#/SpaceRole"
+        capabilities:
+          $ref: "#/SpaceCapabilities"
+  unevaluatedProperties: false
+
+SpaceList:
+  type: object
+  additionalProperties: false
+  required: [spaces]
+  properties:
+    spaces:
+      type: array
+      items:
+        $ref: "#/SpaceView"
+
+CreateTeamSpace:
+  type: object
+  additionalProperties: false
+  required: [name]
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    publicRead:
+      type: boolean
+      description: Whether signed-in users can read the Space without membership. Omit to keep it private.
+
+PatchSpace:
+  type: object
+  additionalProperties: false
+  minProperties: 1
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    publicRead:
+      type: boolean

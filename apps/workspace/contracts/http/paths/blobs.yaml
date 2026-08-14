@@ -1,0 +1,230 @@
+/api/blob-upload-sessions:
+  post:
+    tags: [Blobs]
+    operationId: createBlobUploadSession
+    summary: Reserve stable identities and create a Blob Upload Session.
+    parameters:
+      - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/blobs.yaml#/CreateBlobUpload
+    responses:
+      "201":
+        description: A new Upload Session was reserved.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/blobs.yaml#/BlobUploadSessionEnvelope
+      "200":
+        description: The existing Upload Session for this Idempotency Key.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/blobs.yaml#/BlobUploadSessionEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+      "413":
+        $ref: ../schemas/common.yaml#/PayloadTooLarge
+
+/api/blob-upload-sessions/{uploadId}:
+  parameters:
+    - name: uploadId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Blobs]
+    operationId: getBlobUploadSession
+    summary: Get current Upload Session state.
+    responses:
+      "200":
+        description: Current Upload Session.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/blobs.yaml#/BlobUploadSessionEnvelope
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+  delete:
+    tags: [Blobs]
+    operationId: abortBlobUploadSession
+    summary: Abort an unpublished Blob Upload Session.
+    responses:
+      "204":
+        description: Upload Session aborted.
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/blob-upload-sessions/{uploadId}/content:
+  parameters:
+    - name: uploadId
+      in: path
+      required: true
+      schema:
+        type: string
+  put:
+    tags: [Blobs]
+    operationId: uploadBlobContent
+    summary: Stream the exact reserved Blob bytes into storage.
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+    responses:
+      "204":
+        description: Bytes received and verified.
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/blob-upload-sessions/{uploadId}/complete:
+  parameters:
+    - name: uploadId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Blobs]
+    operationId: completeBlobUploadSession
+    summary: Atomically publish the Node and Blob Resource.
+    responses:
+      "201":
+        description: Blob Resource published.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/resources.yaml#/ResourceCreateResponse
+      "200":
+        description: Existing result for an already completed Upload Session.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/resources.yaml#/ResourceCreateResponse
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/blob-resources/{resourceId}/content:
+  $ref: "#/BlobContentPath"
+
+/api/blob-resources/{resourceId}/download:
+  $ref: "#/BlobDownloadPath"
+
+BlobContentPath:
+  parameters:
+    - $ref: "#/BlobResourceId"
+    - $ref: "#/Range"
+    - $ref: "#/IfNoneMatch"
+  get:
+    tags: [Blobs]
+    operationId: getBlobContent
+    summary: Read Blob bytes for client-selected preview or other use.
+    responses:
+      "200":
+        $ref: "#/BlobBytes"
+      "206":
+        $ref: "#/BlobBytes"
+      "304":
+        description: The current ETag matches If-None-Match.
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "416":
+        $ref: ../schemas/common.yaml#/RangeNotSatisfiable
+
+BlobDownloadPath:
+  parameters:
+    - $ref: "#/BlobResourceId"
+    - $ref: "#/Range"
+    - $ref: "#/IfNoneMatch"
+  get:
+    tags: [Blobs]
+    operationId: downloadBlobContent
+    summary: Download Blob bytes as an attachment.
+    responses:
+      "200":
+        $ref: "#/BlobBytes"
+      "206":
+        $ref: "#/BlobBytes"
+      "304":
+        description: The current ETag matches If-None-Match.
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "416":
+        $ref: ../schemas/common.yaml#/RangeNotSatisfiable
+
+BlobResourceId:
+  name: resourceId
+  in: path
+  required: true
+  schema:
+    type: string
+
+Range:
+  name: Range
+  in: header
+  required: false
+  schema:
+    type: string
+  description: A single RFC 9110 bytes range.
+
+IfNoneMatch:
+  name: If-None-Match
+  in: header
+  required: false
+  schema:
+    type: string
+  description: Return 304 when the current content ETag matches.
+
+BlobBytes:
+  description: Blob bytes with media type, ETag, disposition, and Range headers.
+  headers:
+    Accept-Ranges:
+      schema:
+        type: string
+    Content-Range:
+      schema:
+        type: string
+    ETag:
+      schema:
+        type: string
+  content:
+    "*/*":
+      schema:
+        type: string
+        format: binary

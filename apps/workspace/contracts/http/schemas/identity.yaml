@@ -1,0 +1,162 @@
+User:
+  type: object
+  additionalProperties: false
+  required: [id, username, displayName, avatarUrl]
+  properties:
+    id:
+      type: string
+    username:
+      type: string
+    displayName:
+      type: string
+    avatarUrl:
+      type: [string, "null"]
+      format: uri
+
+PublicUser:
+  $ref: "#/User"
+
+ExternalIdentitySummary:
+  type: object
+  additionalProperties: false
+  required: [provider, providerUsername]
+  properties:
+    provider:
+      type: string
+      enum: [github, discord]
+    providerUsername:
+      type: string
+
+AuthenticationMethods:
+  type: object
+  additionalProperties: false
+  required: [password, externalIdentities]
+  properties:
+    password:
+      type: boolean
+    externalIdentities:
+      type: array
+      items:
+        $ref: "#/ExternalIdentitySummary"
+
+AnonymousSession:
+  type: object
+  additionalProperties: false
+  required: [authenticated, githubOAuthEnabled, discordOAuthEnabled]
+  properties:
+    authenticated:
+      const: false
+    githubOAuthEnabled:
+      type: boolean
+    discordOAuthEnabled:
+      type: boolean
+
+AuthenticatedSession:
+  type: object
+  additionalProperties: false
+  required:
+    - authenticated
+    - githubOAuthEnabled
+    - discordOAuthEnabled
+    - user
+    - authenticationMethods
+  properties:
+    authenticated:
+      const: true
+    githubOAuthEnabled:
+      type: boolean
+    discordOAuthEnabled:
+      type: boolean
+    user:
+      $ref: "#/User"
+    authenticationMethods:
+      $ref: "#/AuthenticationMethods"
+
+SessionView:
+  oneOf:
+    - $ref: "#/AnonymousSession"
+    - $ref: "#/AuthenticatedSession"
+
+PasswordRegistration:
+  type: object
+  additionalProperties: false
+  required: [username, displayName, password]
+  properties:
+    username:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[\p{L}\p{N}._-]+$'
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    password:
+      type: string
+      minLength: 8
+      maxLength: 200
+
+PasswordLogin:
+  type: object
+  additionalProperties: false
+  required: [username, password]
+  properties:
+    username:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[\p{L}\p{N}._-]+$'
+    password:
+      type: string
+
+DiscordBotLogin:
+  type: object
+  additionalProperties: false
+  required: [discordUserId]
+  properties:
+    discordUserId:
+      type: string
+      description: Stable Discord snowflake User ID from a trusted Bot event.
+      pattern: "^[1-9][0-9]{0,19}$"
+    username:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[\p{L}\p{N}._-]+$'
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    avatarUrl:
+      type: [string, "null"]
+      format: uri
+
+PasswordChange:
+  type: object
+  additionalProperties: false
+  required: [currentPassword, newPassword]
+  properties:
+    currentPassword:
+      type: string
+    newPassword:
+      type: string
+      minLength: 8
+      maxLength: 200
+
+UserProfilePatch:
+  type: object
+  additionalProperties: false
+  minProperties: 1
+  properties:
+    username:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[\p{L}\p{N}._-]+$'
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+    avatarUrl:
+      type: [string, "null"]
+      format: uri

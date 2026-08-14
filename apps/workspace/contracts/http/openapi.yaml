@@ -1,0 +1,221 @@
+openapi: 3.1.2
+info:
+  title: Univer Workspace API
+  version: 0.1.0
+  summary: Product HTTP interface for the Univer Workspace collaboration example.
+  description: |
+    This contract exposes product concepts such as users, spaces, Nodes,
+    Resources, trash batches, grants, operations, and worktrees. Univer
+    Collaboration protocol endpoints are configured separately and are not
+    redefined here.
+servers:
+  - url: /
+tags:
+  - name: Session
+    description: Browser login session bootstrap and logout.
+  - name: Authentication
+    description: Password, GitHub, and Discord authentication methods.
+  - name: Users
+    description: Current User profile and User discovery.
+  - name: Spaces
+    description: Personal and Team Space discovery and metadata.
+  - name: Nodes
+    description: Workspace tree browsing and modification.
+  - name: Operations
+    description: Durable cross-module operation progress and retry.
+  - name: Resources
+    description: Resource creation, metadata, and editor opening.
+  - name: Blobs
+    description: Blob upload sessions, publication, preview bytes, and downloads.
+  - name: Views
+    description: Recent and Shared With Me projections.
+  - name: Trash
+    description: Recoverable Trash Batch lifecycle.
+  - name: Membership
+    description: Team Space membership management.
+  - name: Sharing
+    description: Personal Space Direct Share management.
+  - name: Worktrees
+    description: Isolated collaborative draft and merge workflows.
+security:
+  - sessionCookie: []
+paths:
+  /api/session:
+    $ref: ./paths/auth.yaml#/~1api~1session
+  /api/auth/logout:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1logout
+  /api/auth/password/register:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1password~1register
+  /api/auth/password/login:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1password~1login
+  /api/auth/password:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1password
+  /api/auth/github/login:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1github~1login
+  /api/auth/github/link:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1github~1link
+  /api/auth/github/callback:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1github~1callback
+  /api/auth/github:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1github
+  /api/auth/discord/login:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1discord~1login
+  /api/auth/discord/bot-login:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1discord~1bot-login
+  /api/auth/discord/link:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1discord~1link
+  /api/auth/discord/callback:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1discord~1callback
+  /api/auth/discord:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1discord
+  /api/users/me:
+    $ref: ./paths/auth.yaml#/~1api~1users~1me
+  /api/users/search:
+    $ref: ./paths/permissions.yaml#/~1api~1users~1search
+  /api/spaces:
+    $ref: ./paths/spaces.yaml#/~1api~1spaces
+  /api/team-spaces:
+    $ref: ./paths/spaces.yaml#/~1api~1team-spaces
+  /api/spaces/{spaceId}:
+    $ref: ./paths/spaces.yaml#/~1api~1spaces~1{spaceId}
+  /api/spaces/{spaceId}/nodes:
+    $ref: ./paths/nodes.yaml#/~1api~1spaces~1{spaceId}~1nodes
+  /api/nodes:
+    $ref: ./paths/nodes.yaml#/~1api~1nodes
+  /api/nodes/{nodeId}:
+    $ref: ./paths/nodes.yaml#/~1api~1nodes~1{nodeId}
+  /api/nodes/{nodeId}/children:
+    $ref: ./paths/nodes.yaml#/~1api~1nodes~1{nodeId}~1children
+  /api/operations/{operationId}:
+    $ref: ./paths/operations.yaml#/~1api~1operations~1{operationId}
+  /api/operations/{operationId}/retry:
+    $ref: ./paths/operations.yaml#/~1api~1operations~1{operationId}~1retry
+  /api/resources:
+    $ref: ./paths/resources.yaml#/~1api~1resources
+  /api/resources/{resourceId}:
+    $ref: ./paths/resources.yaml#/~1api~1resources~1{resourceId}
+  /api/resources/{resourceId}/open:
+    $ref: ./paths/resources.yaml#/~1api~1resources~1{resourceId}~1open
+  /api/blob-upload-sessions:
+    $ref: ./paths/blobs.yaml#/~1api~1blob-upload-sessions
+  /api/blob-upload-sessions/{uploadId}:
+    $ref: ./paths/blobs.yaml#/~1api~1blob-upload-sessions~1{uploadId}
+  /api/blob-upload-sessions/{uploadId}/content:
+    $ref: ./paths/blobs.yaml#/~1api~1blob-upload-sessions~1{uploadId}~1content
+  /api/blob-upload-sessions/{uploadId}/complete:
+    $ref: ./paths/blobs.yaml#/~1api~1blob-upload-sessions~1{uploadId}~1complete
+  /api/blob-resources/{resourceId}/content:
+    $ref: ./paths/blobs.yaml#/~1api~1blob-resources~1{resourceId}~1content
+  /api/blob-resources/{resourceId}/download:
+    $ref: ./paths/blobs.yaml#/~1api~1blob-resources~1{resourceId}~1download
+  /api/recent-resources:
+    $ref: ./paths/views.yaml#/~1api~1recent-resources
+  /api/owned-by-me:
+    $ref: ./paths/views.yaml#/~1api~1owned-by-me
+  /api/shared-with-me:
+    $ref: ./paths/views.yaml#/~1api~1shared-with-me
+  /api/nodes/{nodeId}/trash:
+    $ref: ./paths/trash.yaml#/~1api~1nodes~1{nodeId}~1trash
+  /api/spaces/{spaceId}/trash:
+    $ref: ./paths/trash.yaml#/~1api~1spaces~1{spaceId}~1trash
+  /api/trash-batches/{trashBatchId}/restore:
+    $ref: ./paths/trash.yaml#/~1api~1trash-batches~1{trashBatchId}~1restore
+  /api/trash-batches/{trashBatchId}:
+    $ref: ./paths/trash.yaml#/~1api~1trash-batches~1{trashBatchId}
+  /api/team-spaces/{spaceId}/members:
+    $ref: ./paths/permissions.yaml#/~1api~1team-spaces~1{spaceId}~1members
+  /api/team-spaces/{spaceId}/members/{userId}:
+    $ref: ./paths/permissions.yaml#/~1api~1team-spaces~1{spaceId}~1members~1{userId}
+  /api/nodes/{nodeId}/grants:
+    $ref: ./paths/permissions.yaml#/~1api~1nodes~1{nodeId}~1grants
+  /api/nodes/{nodeId}/grants/{userId}:
+    $ref: ./paths/permissions.yaml#/~1api~1nodes~1{nodeId}~1grants~1{userId}
+  /api/nodes/{nodeId}/link-sharing:
+    $ref: ./paths/permissions.yaml#/~1api~1nodes~1{nodeId}~1link-sharing
+  /api/worktrees:
+    $ref: ./paths/worktrees.yaml#/~1api~1worktrees
+  /api/worktrees/{worktreeId}:
+    $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}
+  /api/worktrees/{worktreeId}/units:
+    $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1units
+  /api/worktrees/{worktreeId}/units/{unitId}/open:
+    $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1units~1{unitId}~1open
+  /api/worktrees/{worktreeId}/units/{unitId}/changesets:
+    $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1units~1{unitId}~1changesets
+  /api/worktrees/{worktreeId}/ready:
+    $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1ready
+  /api/worktrees/{worktreeId}/reopen:
+    $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1reopen
+  /api/worktrees/{worktreeId}/merge:
+    $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1merge
+  /api/worktrees/{worktreeId}/discard:
+    $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1discard
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: workspace_session
+      description: Opaque HttpOnly login session cookie.
+    discordBotApiKey:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: Shared secret configured on Workspace and the trusted Discord Bot server.
+  schemas:
+    Error:
+      $ref: ./schemas/common.yaml#/Error
+    ErrorResponse:
+      $ref: ./schemas/common.yaml#/ErrorResponse
+    User:
+      $ref: ./schemas/identity.yaml#/User
+    PublicUser:
+      $ref: ./schemas/identity.yaml#/PublicUser
+    SessionView:
+      $ref: ./schemas/identity.yaml#/SessionView
+    SpaceView:
+      $ref: ./schemas/spaces.yaml#/SpaceView
+    NodeSummary:
+      $ref: ./schemas/nodes.yaml#/NodeSummary
+    NodePage:
+      $ref: ./schemas/nodes.yaml#/NodePage
+    OperationView:
+      $ref: ./schemas/operations.yaml#/OperationView
+    ResourceOpenView:
+      $ref: ./schemas/resources.yaml#/ResourceOpenView
+    BlobUploadSessionEnvelope:
+      $ref: ./schemas/blobs.yaml#/BlobUploadSessionEnvelope
+    TrashBatchView:
+      $ref: ./schemas/views.yaml#/TrashBatchView
+    TeamMembership:
+      $ref: ./schemas/permissions.yaml#/TeamMembership
+    NodeGrant:
+      $ref: ./schemas/permissions.yaml#/NodeGrant
+    NodeLinkSharing:
+      $ref: ./schemas/permissions.yaml#/NodeLinkSharing
+    WorktreeSummary:
+      $ref: ./schemas/worktrees.yaml#/WorktreeSummary
+    WorktreeDetail:
+      $ref: ./schemas/worktrees.yaml#/WorktreeDetail
+  parameters:
+    Cursor:
+      $ref: ./schemas/common.yaml#/CursorParameter
+    Limit:
+      $ref: ./schemas/common.yaml#/LimitParameter
+    IdempotencyKey:
+      $ref: ./schemas/common.yaml#/IdempotencyKeyParameter
+  responses:
+    BadRequest:
+      $ref: ./schemas/common.yaml#/BadRequest
+    Unauthorized:
+      $ref: ./schemas/common.yaml#/Unauthorized
+    Forbidden:
+      $ref: ./schemas/common.yaml#/Forbidden
+    NotFound:
+      $ref: ./schemas/common.yaml#/NotFound
+    Conflict:
+      $ref: ./schemas/common.yaml#/Conflict
+    PayloadTooLarge:
+      $ref: ./schemas/common.yaml#/PayloadTooLarge
+    RangeNotSatisfiable:
+      $ref: ./schemas/common.yaml#/RangeNotSatisfiable

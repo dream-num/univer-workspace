@@ -1,0 +1,52 @@
+/api/operations/{operationId}:
+  parameters:
+    - name: operationId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Operations]
+    operationId: getOperation
+    summary: Get the current state of an Operation.
+    responses:
+      "200":
+        description: Operation state.
+        headers:
+          Retry-After:
+            description: Suggested polling delay for a pending Operation.
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/operations.yaml#/OperationView
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/operations/{operationId}/retry:
+  parameters:
+    - name: operationId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Operations]
+    operationId: retryOperation
+    summary: Retry a failed Operation with its original immutable input.
+    responses:
+      "202":
+        description: Operation returned to pending.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/operations.yaml#/OperationView
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict

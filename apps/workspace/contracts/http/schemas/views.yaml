@@ -1,0 +1,210 @@
+Location:
+  type: object
+  additionalProperties: false
+  required: [space, breadcrumbs]
+  properties:
+    space:
+      $ref: ./spaces.yaml#/SpaceSummary
+    breadcrumbs:
+      type: array
+      items:
+        $ref: ./nodes.yaml#/Breadcrumb
+
+RecentResourceItem:
+  type: object
+  additionalProperties: false
+  required: [lastOpenedAt, node, resource, location]
+  properties:
+    lastOpenedAt:
+      type: string
+      format: date-time
+    node:
+      $ref: ./nodes.yaml#/NodeSummary
+    resource:
+      $ref: ./nodes.yaml#/ResourceSummary
+    location:
+      $ref: "#/Location"
+
+RecentResourceList:
+  type: object
+  additionalProperties: false
+  required: [items, nextCursor]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/RecentResourceItem"
+    nextCursor:
+      type: [string, "null"]
+
+OwnedResourceItem:
+  type: object
+  additionalProperties: false
+  required: [node, resource, location]
+  properties:
+    node:
+      $ref: ./nodes.yaml#/NodeSummary
+    resource:
+      $ref: ./nodes.yaml#/ResourceSummary
+    location:
+      $ref: "#/Location"
+
+OwnedResourceList:
+  type: object
+  additionalProperties: false
+  required: [items, nextCursor]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/OwnedResourceItem"
+    nextCursor:
+      type: [string, "null"]
+
+SharedItem:
+  type: object
+  additionalProperties: false
+  required: [node, sharedBy, sharedAt]
+  properties:
+    node:
+      $ref: ./nodes.yaml#/NodeSummary
+    sharedBy:
+      $ref: ./identity.yaml#/PublicUser
+    sharedAt:
+      type: string
+      format: date-time
+
+SharedList:
+  type: object
+  additionalProperties: false
+  required: [items, nextCursor]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/SharedItem"
+    nextCursor:
+      type: [string, "null"]
+
+TrashRoot:
+  type: object
+  additionalProperties: false
+  required: [id, name, resource]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    resource:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [id, kind, unitType]
+          properties:
+            id:
+              type: string
+            kind:
+              type: string
+              const: univer
+            unitType:
+              $ref: ./nodes.yaml#/UnitType
+        - type: object
+          additionalProperties: false
+          required: [id, kind, mediaType, byteSize]
+          properties:
+            id:
+              type: string
+            kind:
+              type: string
+              const: blob
+            mediaType:
+              type: string
+            byteSize:
+              type: integer
+              minimum: 0
+        - type: "null"
+
+TrashCapabilities:
+  type: object
+  additionalProperties: false
+  required: [restore, removePermanently]
+  properties:
+    restore:
+      type: boolean
+    removePermanently:
+      type: boolean
+
+TrashBlocker:
+  type: object
+  additionalProperties: false
+  required: [code]
+  properties:
+    code:
+      type: string
+      enum:
+        - RESTORE_PARENT_IN_TRASH
+        - NESTED_TRASH_BATCH
+        - ACTIVE_WORKTREE_RESOURCE_REFERENCE
+    trashBatchId:
+      type: string
+
+TrashBatchView:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - spaceId
+    - root
+    - originalLocation
+    - trashedBy
+    - trashedAt
+    - nodeCount
+    - capabilities
+    - restoreBlockedBy
+    - removeBlockedBy
+  properties:
+    id:
+      type: string
+    spaceId:
+      type: string
+    root:
+      $ref: "#/TrashRoot"
+    originalLocation:
+      type: object
+      additionalProperties: false
+      required: [breadcrumbs]
+      properties:
+        breadcrumbs:
+          type: array
+          items:
+            $ref: ./nodes.yaml#/Breadcrumb
+    trashedBy:
+      $ref: ./identity.yaml#/PublicUser
+    trashedAt:
+      type: string
+      format: date-time
+    nodeCount:
+      type: integer
+      minimum: 1
+    capabilities:
+      $ref: "#/TrashCapabilities"
+    restoreBlockedBy:
+      oneOf:
+        - $ref: "#/TrashBlocker"
+        - type: "null"
+    removeBlockedBy:
+      oneOf:
+        - $ref: "#/TrashBlocker"
+        - type: "null"
+
+TrashList:
+  type: object
+  additionalProperties: false
+  required: [items, nextCursor]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/TrashBatchView"
+    nextCursor:
+      type: [string, "null"]

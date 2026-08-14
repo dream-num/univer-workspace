@@ -1,0 +1,119 @@
+Error:
+  type: object
+  additionalProperties: false
+  required: [code, message]
+  properties:
+    code:
+      type: string
+      description: Stable machine-readable error code.
+    message:
+      type: string
+      description: Human-readable diagnostic text.
+    field:
+      type: string
+      description: Input field related to the error, when applicable.
+
+ErrorResponse:
+  type: object
+  additionalProperties: false
+  required: [error]
+  properties:
+    error:
+      $ref: "#/Error"
+
+CursorPage:
+  type: object
+  required: [nextCursor]
+  properties:
+    nextCursor:
+      type: [string, "null"]
+
+CursorParameter:
+  name: cursor
+  in: query
+  required: false
+  description: Opaque cursor returned by the previous page.
+  schema:
+    type: string
+
+LimitParameter:
+  name: limit
+  in: query
+  required: false
+  schema:
+    type: integer
+    minimum: 1
+    maximum: 200
+    default: 100
+
+IdempotencyKeyParameter:
+  name: Idempotency-Key
+  in: header
+  required: true
+  description: Random opaque key representing one user intent.
+  schema:
+    type: string
+    minLength: 16
+    maxLength: 200
+    pattern: "^[A-Za-z0-9_-]+$"
+
+BadRequest:
+  description: Invalid request.
+  content:
+    application/json:
+      schema:
+        $ref: "#/ErrorResponse"
+
+Unauthorized:
+  description: A valid login session is required.
+  content:
+    application/json:
+      schema:
+        $ref: "#/ErrorResponse"
+      examples:
+        unauthenticated:
+          value:
+            error:
+              code: UNAUTHENTICATED
+              message: Authentication is required.
+
+Forbidden:
+  description: The current User cannot perform this action.
+  content:
+    application/json:
+      schema:
+        $ref: "#/ErrorResponse"
+
+NotFound:
+  description: The resource does not exist or is not discoverable.
+  content:
+    application/json:
+      schema:
+        $ref: "#/ErrorResponse"
+      examples:
+        notFound:
+          value:
+            error:
+              code: NOT_FOUND
+              message: The resource was not found.
+
+Conflict:
+  description: The request conflicts with current resource state.
+  content:
+    application/json:
+      schema:
+        $ref: "#/ErrorResponse"
+
+PayloadTooLarge:
+  description: The declared Blob size exceeds the configured limit.
+  content:
+    application/json:
+      schema:
+        $ref: "#/ErrorResponse"
+
+RangeNotSatisfiable:
+  description: The requested byte range cannot be served.
+  content:
+    application/json:
+      schema:
+        $ref: "#/ErrorResponse"

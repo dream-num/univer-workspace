@@ -1,0 +1,148 @@
+UserSearchResult:
+  type: object
+  additionalProperties: false
+  required: [users]
+  properties:
+    users:
+      type: array
+      maxItems: 20
+      items:
+        $ref: ./identity.yaml#/PublicUser
+
+TeamRole:
+  type: string
+  enum: [admin, editor, viewer]
+
+TeamMembership:
+  type: object
+  additionalProperties: false
+  required: [user, role, grantedBy, createdAt, updatedAt]
+  properties:
+    user:
+      $ref: ./identity.yaml#/PublicUser
+    role:
+      $ref: "#/TeamRole"
+    grantedBy:
+      $ref: ./identity.yaml#/PublicUser
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+TeamMemberList:
+  type: object
+  additionalProperties: false
+  required: [owner, members]
+  properties:
+    owner:
+      $ref: ./identity.yaml#/PublicUser
+    members:
+      type: array
+      items:
+        $ref: "#/TeamMembership"
+
+UpsertTeamMembership:
+  type: object
+  additionalProperties: false
+  required: [role]
+  properties:
+    role:
+      $ref: "#/TeamRole"
+
+GrantRole:
+  type: string
+  enum: [editor, viewer]
+
+NodeGrant:
+  type: object
+  additionalProperties: false
+  required: [user, role, effectiveRole, grantedBy, createdAt, updatedAt]
+  properties:
+    user:
+      $ref: ./identity.yaml#/PublicUser
+    role:
+      $ref: "#/GrantRole"
+    effectiveRole:
+      $ref: "#/GrantRole"
+    grantedBy:
+      $ref: ./identity.yaml#/PublicUser
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+NodeGrantList:
+  type: object
+  additionalProperties: false
+  required: [grants]
+  properties:
+    grants:
+      type: array
+      items:
+        $ref: "#/NodeGrant"
+
+UpsertNodeGrant:
+  type: object
+  additionalProperties: false
+  required: [role]
+  properties:
+    role:
+      $ref: "#/GrantRole"
+
+GrantRemovalResult:
+  type: object
+  additionalProperties: false
+  required: [effectiveRole]
+  properties:
+    effectiveRole:
+      oneOf:
+        - $ref: "#/GrantRole"
+        - type: "null"
+
+LinkSharingRole:
+  type: string
+  enum: [editor, viewer]
+
+NodeLinkSharing:
+  type: object
+  additionalProperties: false
+  required:
+    - enabled
+    - role
+    - createdBy
+    - updatedBy
+    - createdAt
+    - updatedAt
+  properties:
+    enabled:
+      type: boolean
+    role:
+      $ref: "#/LinkSharingRole"
+    createdBy:
+      oneOf:
+        - $ref: ./identity.yaml#/PublicUser
+        - type: "null"
+    updatedBy:
+      oneOf:
+        - $ref: ./identity.yaml#/PublicUser
+        - type: "null"
+    createdAt:
+      type: [string, "null"]
+      format: date-time
+    updatedAt:
+      type: [string, "null"]
+      format: date-time
+
+UpdateNodeLinkSharing:
+  type: object
+  additionalProperties: false
+  required: [enabled, role]
+  properties:
+    enabled:
+      type: boolean
+    role:
+      $ref: "#/LinkSharingRole"

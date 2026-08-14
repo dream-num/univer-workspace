@@ -1,0 +1,117 @@
+BlobUploadState:
+  type: string
+  enum:
+    - waitingForUpload
+    - uploaded
+    - verifying
+    - completed
+    - failed
+    - expired
+    - aborted
+
+CreateBlobUpload:
+  type: object
+  additionalProperties: false
+  required:
+    - spaceId
+    - parentNodeId
+    - name
+    - originalFilename
+    - byteSize
+  properties:
+    spaceId:
+      type: string
+    parentNodeId:
+      type: [string, "null"]
+    name:
+      type: string
+      minLength: 1
+      maxLength: 255
+    originalFilename:
+      type: string
+      minLength: 1
+      maxLength: 1024
+    byteSize:
+      type: integer
+      minimum: 0
+    declaredMediaType:
+      type: string
+      maxLength: 255
+
+BlobUploadSession:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - operationId
+    - nodeId
+    - resourceId
+    - state
+    - name
+    - originalFilename
+    - byteSize
+    - receivedSize
+    - detectedMediaType
+    - sha256
+    - expiresAt
+    - createdAt
+    - updatedAt
+  properties:
+    id:
+      type: string
+    operationId:
+      type: string
+    nodeId:
+      type: string
+    resourceId:
+      type: string
+    state:
+      $ref: "#/BlobUploadState"
+    name:
+      type: string
+    originalFilename:
+      type: string
+    byteSize:
+      type: integer
+      minimum: 0
+    receivedSize:
+      type: [integer, "null"]
+      minimum: 0
+    detectedMediaType:
+      type: [string, "null"]
+    sha256:
+      type: [string, "null"]
+    expiresAt:
+      type: string
+      format: date-time
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+BlobUploadTarget:
+  type: object
+  additionalProperties: false
+  required: [method, contentUrl]
+  properties:
+    method:
+      type: string
+      const: PUT
+    contentUrl:
+      type: string
+
+BlobUploadSessionEnvelope:
+  type: object
+  additionalProperties: false
+  required: [operation, upload, uploadTarget]
+  properties:
+    operation:
+      $ref: ./operations.yaml#/OperationView
+    upload:
+      $ref: "#/BlobUploadSession"
+    uploadTarget:
+      oneOf:
+        - $ref: "#/BlobUploadTarget"
+        - type: "null"

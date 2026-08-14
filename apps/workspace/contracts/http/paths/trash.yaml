@@ -1,0 +1,106 @@
+/api/nodes/{nodeId}/trash:
+  parameters:
+    - name: nodeId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Trash]
+    operationId: trashNode
+    summary: Recursively place a Node in a new Trash Batch.
+    responses:
+      "201":
+        description: Created Trash Batch.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/views.yaml#/TrashBatchView
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/spaces/{spaceId}/trash:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Trash]
+    operationId: listTrash
+    summary: List active Trash Batches in a Space.
+    parameters:
+      - $ref: ../schemas/common.yaml#/CursorParameter
+      - $ref: ../schemas/common.yaml#/LimitParameter
+    responses:
+      "200":
+        description: Trash Batches.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/views.yaml#/TrashList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/trash-batches/{trashBatchId}/restore:
+  parameters:
+    - name: trashBatchId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Trash]
+    operationId: restoreTrashBatch
+    summary: Restore one Trash Batch to its original location.
+    responses:
+      "200":
+        description: Restored Batch root.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/nodes.yaml#/NodeSummary
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        description: An ancestor remains in Trash.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/trash-batches/{trashBatchId}:
+  parameters:
+    - name: trashBatchId
+      in: path
+      required: true
+      schema:
+        type: string
+  delete:
+    tags: [Trash]
+    operationId: removeTrashBatchPermanently
+    summary: Permanently remove a Trash Batch from the Node tree.
+    responses:
+      "204":
+        description: Product content is no longer recoverable.
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        description: Nested Trash Batch or active Worktree reference.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse

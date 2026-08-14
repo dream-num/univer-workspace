@@ -1,0 +1,368 @@
+/api/session:
+  get:
+    tags: [Session]
+    operationId: getSession
+    summary: Get the current login session.
+    security:
+      - {}
+      - sessionCookie: []
+    responses:
+      "200":
+        description: Current authenticated or anonymous session.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/SessionView
+
+/api/auth/logout:
+  post:
+    tags: [Session]
+    operationId: logout
+    summary: Delete the current login session.
+    responses:
+      "204":
+        description: The session is absent or has been deleted.
+
+/api/auth/password/register:
+  post:
+    tags: [Authentication]
+    operationId: registerWithPassword
+    summary: Create a User, Personal Space, Password Credential, and session.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/PasswordRegistration
+    responses:
+      "201":
+        description: Registered and authenticated.
+        headers:
+          Set-Cookie:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthenticatedSession
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/auth/password/login:
+  post:
+    tags: [Authentication]
+    operationId: loginWithPassword
+    summary: Authenticate with a System Username and password.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/PasswordLogin
+    responses:
+      "200":
+        description: Authenticated.
+        headers:
+          Set-Cookie:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthenticatedSession
+      "401":
+        description: Username or password is invalid.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/auth/password:
+  put:
+    tags: [Authentication]
+    operationId: changePassword
+    summary: Change the current User's password.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/PasswordChange
+    responses:
+      "204":
+        description: Password changed.
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/auth/github/login:
+  get:
+    tags: [Authentication]
+    operationId: startGitHubLogin
+    summary: Start the GitHub OAuth login flow.
+    security: []
+    parameters:
+      - name: returnTo
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^/
+    responses:
+      "302":
+        description: Redirect to GitHub.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+              format: uri
+
+/api/auth/github/link:
+  get:
+    tags: [Authentication]
+    operationId: startGitHubLink
+    summary: Start GitHub OAuth to link the current User.
+    parameters:
+      - name: returnTo
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^/
+    responses:
+      "302":
+        description: Redirect to GitHub.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+              format: uri
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/auth/github/callback:
+  get:
+    tags: [Authentication]
+    operationId: finishGitHubOAuth
+    summary: Validate the OAuth callback and finish login or linking.
+    security: []
+    parameters:
+      - name: code
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: state
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: error
+        in: query
+        required: false
+        schema:
+          type: string
+    responses:
+      "302":
+        description: Redirect to a validated local application path.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+
+/api/auth/github:
+  delete:
+    tags: [Authentication]
+    operationId: unlinkGitHub
+    summary: Unlink the current User's GitHub identity.
+    responses:
+      "200":
+        description: Updated authenticated session.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthenticatedSession
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "409":
+        description: GitHub is the last authentication method.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/auth/discord/login:
+  get:
+    tags: [Authentication]
+    operationId: startDiscordLogin
+    summary: Start the Discord OAuth login flow.
+    security: []
+    parameters:
+      - name: returnTo
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^/
+    responses:
+      "302":
+        description: Redirect to Discord.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+              format: uri
+
+/api/auth/discord/bot-login:
+  post:
+    tags: [Authentication]
+    operationId: loginWithDiscordBot
+    summary: Resolve or create a User from a trusted Discord Bot event and create a session.
+    description: |
+      This server-to-server endpoint trusts the Discord User ID asserted by the
+      configured Bot server. The caller must authenticate with the shared API key.
+    security:
+      - discordBotApiKey: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/DiscordBotLogin
+    responses:
+      "200":
+        description: Authenticated; a new User and Personal Space are created when necessary.
+        headers:
+          Set-Cookie:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthenticatedSession
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        description: The Discord Bot API key is missing or invalid.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "503":
+        description: Discord Bot authentication is not configured.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/auth/discord/link:
+  get:
+    tags: [Authentication]
+    operationId: startDiscordLink
+    summary: Start Discord OAuth to link the current User.
+    parameters:
+      - name: returnTo
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^/
+    responses:
+      "302":
+        description: Redirect to Discord.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+              format: uri
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/auth/discord/callback:
+  get:
+    tags: [Authentication]
+    operationId: finishDiscordOAuth
+    summary: Validate the Discord OAuth callback and finish login or linking.
+    security: []
+    parameters:
+      - name: code
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: state
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: error
+        in: query
+        required: false
+        schema:
+          type: string
+    responses:
+      "302":
+        description: Redirect to a validated local application path.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+
+/api/auth/discord:
+  delete:
+    tags: [Authentication]
+    operationId: unlinkDiscord
+    summary: Unlink the current User's Discord identity.
+    responses:
+      "200":
+        description: Updated authenticated session.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthenticatedSession
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "409":
+        description: Discord is the last authentication method.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/users/me:
+  patch:
+    tags: [Users]
+    operationId: updateCurrentUser
+    summary: Update the current User's product profile.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/UserProfilePatch
+    responses:
+      "200":
+        description: Updated User.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/User
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict

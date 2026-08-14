@@ -1,0 +1,11 @@
+node_modules/
+dist/
+package-dist/
+coverage/
+.data/
+.DS_Store
+.vscode/
+*.tsbuildinfo
+.agents/
+.claude/
+skills-lock.json

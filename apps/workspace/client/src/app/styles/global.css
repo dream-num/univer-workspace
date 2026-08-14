@@ -1,0 +1,366 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ------------------------------------------------------------------ */
+  /* Typography                                                          */
+  /* ------------------------------------------------------------------ */
+  --font-sans:
+    "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+
+  /* ------------------------------------------------------------------ */
+  /* Brand — royal blue                                                  */
+  /* ------------------------------------------------------------------ */
+  --color-brand-25: #f6f9ff;
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #e0eaff;
+  --color-brand-200: #c7d7fe;
+  --color-brand-300: #a3bffc;
+  --color-brand-400: #7d9ef8;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-brand-800: #1e40af;
+
+  /* ------------------------------------------------------------------ */
+  /* Semantic surfaces                                                   */
+  /* ------------------------------------------------------------------ */
+  --color-canvas: #e9ebf1;
+  --color-background: #ffffff;
+  --color-foreground: #1d2129;
+  --color-surface: #f7f8fa;
+  --color-muted: #f0f2f5;
+  --color-muted-foreground: #69707e;
+  --color-subtle-foreground: #9aa1ad;
+  --color-accent: #eceff4;
+  --color-accent-foreground: #1d2129;
+  --color-border: #e4e7ed;
+  --color-border-strong: #d4d9e1;
+  --color-input: #dde1e8;
+  --color-ring: #2563eb;
+
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #eef1f6;
+  --color-secondary-hover: #e3e7ee;
+  --color-secondary-foreground: #3c4350;
+
+  --color-destructive: #dc2626;
+  --color-destructive-hover: #b91c1c;
+  --color-destructive-foreground: #ffffff;
+  --color-destructive-soft: #fdecec;
+  --color-destructive-soft-foreground: #b42318;
+
+  --color-success: #16a34a;
+  --color-success-soft: #e9f7ef;
+  --color-success-soft-foreground: #157347;
+
+  --color-warning: #d97706;
+  --color-warning-soft: #fdf3e3;
+  --color-warning-soft-foreground: #b45309;
+
+  --color-info-soft: #eef4ff;
+  --color-info-soft-foreground: #1d4ed8;
+
+  /* ------------------------------------------------------------------ */
+  /* Unit type accents                                                   */
+  /* ------------------------------------------------------------------ */
+  --color-doc: #2f6de0;
+  --color-doc-soft: #e8f0fe;
+  --color-sheet: #0f9960;
+  --color-sheet-soft: #e6f6ef;
+  --color-slide: #e5670c;
+  --color-slide-soft: #fdeee0;
+  --color-board: #7c3aed;
+  --color-board-soft: #f1eafd;
+  --color-baseunit: #0a8fa3;
+  --color-baseunit-soft: #e2f4f6;
+  --color-group: #d97706;
+  --color-group-soft: #fef3e2;
+  --color-resource: #667085;
+  --color-resource-soft: #eef1f5;
+
+  /* ------------------------------------------------------------------ */
+  /* Radius & shadow                                                     */
+  /* ------------------------------------------------------------------ */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --shadow-xs: 0 1px 2px rgb(23 28 38 / 5%);
+  --shadow-sm: 0 1px 2px rgb(23 28 38 / 4%), 0 2px 8px -2px rgb(23 28 38 / 6%);
+  --shadow-md: 0 4px 16px -4px rgb(23 28 38 / 10%), 0 2px 6px -2px rgb(23 28 38 / 4%);
+  --shadow-lg: 0 12px 36px -10px rgb(23 28 38 / 16%), 0 4px 10px -4px rgb(23 28 38 / 5%);
+  --shadow-pop: 0 8px 30px -6px rgb(23 28 38 / 14%), 0 2px 8px -2px rgb(23 28 38 / 6%);
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    background: var(--color-canvas);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgb(37 99 235 / 16%);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  /* -------------------------------------------------------------- */
+  /* Scrollbars                                                      */
+  /* -------------------------------------------------------------- */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(23 28 38 / 18%) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgb(23 28 38 / 16%);
+    border: 3px solid transparent;
+    border-radius: 8px;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(23 28 38 / 28%);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+
+  /* Numeric columns align better with tabular figures */
+  time,
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Auth page ambient backdrop                                          */
+/* ------------------------------------------------------------------ */
+.auth-backdrop {
+  background:
+    radial-gradient(1100px 540px at 12% -8%, rgb(37 99 235 / 12%) 0%, transparent 62%),
+    radial-gradient(880px 480px at 88% 112%, rgb(124 58 237 / 10%) 0%, transparent 58%),
+    radial-gradient(640px 420px at 78% 8%, rgb(10 143 163 / 8%) 0%, transparent 55%),
+    var(--color-canvas);
+}
+
+/* ------------------------------------------------------------------ */
+/* Draggable sidebar resize handle                                     */
+/* ------------------------------------------------------------------ */
+.ui-resize-handle {
+  position: relative;
+  z-index: 5;
+  width: 7px;
+  min-width: 7px;
+  margin-right: -1px;
+  padding: 0;
+  cursor: col-resize;
+  background: transparent;
+  border: 0;
+  touch-action: none;
+  transition: background 120ms ease;
+}
+
+.ui-resize-handle::after {
+  position: absolute;
+  top: calc(50% - 18px);
+  left: 2px;
+  width: 3px;
+  height: 36px;
+  content: "";
+  background: var(--color-border-strong);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.ui-resize-handle:hover,
+.ui-resize-handle:focus-visible,
+.ui-resize-handle[data-dragging] {
+  background: var(--color-brand-50);
+}
+
+.ui-resize-handle:hover::after,
+.ui-resize-handle:focus-visible::after,
+.ui-resize-handle[data-dragging]::after {
+  background: var(--color-brand-600);
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Univer editor integration                                           */
+/* ------------------------------------------------------------------ */
+.univer-editor-shell,
+.univer-editor-container {
+  position: relative;
+  min-height: 0;
+}
+
+.univer-editor-shell {
+  flex: 1;
+}
+
+.univer-editor-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sonner toast alignment with the design language                     */
+/* ------------------------------------------------------------------ */
+.sonner-toast-custom {
+  font-family: var(--font-sans);
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark theme — semantic token overrides                               */
+/*                                                                     */
+/* Unlayered on purpose: these rules must beat the `@layer theme`      */
+/* `:root` variables emitted by `@theme` above.                        */
+/* ------------------------------------------------------------------ */
+.dark {
+  color-scheme: dark;
+
+  /* Brand tints (backgrounds stay deep, text steps brighten) */
+  --color-brand-25: #101826;
+  --color-brand-50: #16233d;
+  --color-brand-100: #1d3153;
+  --color-brand-200: #2c4a7c;
+  --color-brand-700: #93b4fb;
+
+  /* Semantic surfaces */
+  --color-canvas: #0d0f14;
+  --color-background: #14171d;
+  --color-foreground: #e2e6ee;
+  --color-surface: #1a1e26;
+  --color-muted: #1f242e;
+  --color-muted-foreground: #98a1b0;
+  --color-subtle-foreground: #66707f;
+  --color-accent: #232933;
+  --color-accent-foreground: #e2e6ee;
+  --color-border: #272d38;
+  --color-border-strong: #343c49;
+  --color-input: #39414f;
+  --color-ring: #3b82f6;
+
+  --color-secondary: #1f242e;
+  --color-secondary-hover: #262c37;
+  --color-secondary-foreground: #c3cad6;
+
+  --color-destructive: #ef4444;
+  --color-destructive-hover: #dc2626;
+  --color-destructive-soft: #382124;
+  --color-destructive-soft-foreground: #f3a9a2;
+
+  --color-success: #22c55e;
+  --color-success-soft: #14281c;
+  --color-success-soft-foreground: #4ade80;
+
+  --color-warning: #f59e0b;
+  --color-warning-soft: #2c2210;
+  --color-warning-soft-foreground: #fbbf24;
+
+  --color-info-soft: #16233d;
+  --color-info-soft-foreground: #8ab0fa;
+
+  /* Unit type accents */
+  --color-doc: #5f8ff0;
+  --color-doc-soft: #1a2440;
+  --color-sheet: #2ebd85;
+  --color-sheet-soft: #12291e;
+  --color-slide: #f08a3c;
+  --color-slide-soft: #2e1f10;
+  --color-board: #a78bfa;
+  --color-board-soft: #241c40;
+  --color-baseunit: #2dc3d7;
+  --color-baseunit-soft: #102e33;
+  --color-group: #f0a93c;
+  --color-group-soft: #2b2210;
+  --color-resource: #8b93a3;
+  --color-resource-soft: #20242c;
+
+  /* Shadows lift with black instead of ink */
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-sm:
+    0 1px 2px rgb(0 0 0 / 35%), 0 2px 8px -2px rgb(0 0 0 / 40%);
+  --shadow-md:
+    0 4px 16px -4px rgb(0 0 0 / 55%), 0 2px 6px -2px rgb(0 0 0 / 35%);
+  --shadow-lg:
+    0 12px 36px -10px rgb(0 0 0 / 65%), 0 4px 10px -4px rgb(0 0 0 / 40%);
+  --shadow-pop:
+    0 8px 30px -6px rgb(0 0 0 / 65%), 0 2px 8px -2px rgb(0 0 0 / 40%);
+}
+
+/* Scrollbars flip to light-on-dark */
+.dark * {
+  scrollbar-color: rgb(255 255 255 / 20%) transparent;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background-color: rgb(255 255 255 / 14%);
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(255 255 255 / 26%);
+}
+
+/* Auth page ambient backdrop, dimmed */
+.dark .auth-backdrop {
+  background:
+    radial-gradient(1100px 540px at 12% -8%, rgb(59 130 246 / 16%) 0%, transparent 62%),
+    radial-gradient(880px 480px at 88% 112%, rgb(139 92 246 / 13%) 0%, transparent 58%),
+    radial-gradient(640px 420px at 78% 8%, rgb(45 195 215 / 9%) 0%, transparent 55%),
+    var(--color-canvas);
+}
+
+/* Sidebar resize handle hover glow */
+.dark .ui-resize-handle:hover,
+.dark .ui-resize-handle:focus-visible,
+.dark .ui-resize-handle[data-dragging] {
+  background: rgb(59 130 246 / 14%);
+}
+
+.dark .ui-resize-handle:hover::after,
+.dark .ui-resize-handle:focus-visible::after,
+.dark .ui-resize-handle[data-dragging]::after {
+  background: var(--color-brand-500);
+}

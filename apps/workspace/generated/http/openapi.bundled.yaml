@@ -1,0 +1,3705 @@
+openapi: 3.1.2
+info:
+  title: Univer Workspace API
+  version: 0.1.0
+  summary: Product HTTP interface for the Univer Workspace collaboration example.
+  description: |
+    This contract exposes product concepts such as users, spaces, Nodes,
+    Resources, trash batches, grants, operations, and worktrees. Univer
+    Collaboration protocol endpoints are configured separately and are not
+    redefined here.
+servers:
+  - url: /
+security:
+  - sessionCookie: []
+tags:
+  - name: Session
+    description: Browser login session bootstrap and logout.
+  - name: Authentication
+    description: Password, GitHub, and Discord authentication methods.
+  - name: Users
+    description: Current User profile and User discovery.
+  - name: Spaces
+    description: Personal and Team Space discovery and metadata.
+  - name: Nodes
+    description: Workspace tree browsing and modification.
+  - name: Operations
+    description: Durable cross-module operation progress and retry.
+  - name: Resources
+    description: Resource creation, metadata, and editor opening.
+  - name: Blobs
+    description: Blob upload sessions, publication, preview bytes, and downloads.
+  - name: Views
+    description: Recent and Shared With Me projections.
+  - name: Trash
+    description: Recoverable Trash Batch lifecycle.
+  - name: Membership
+    description: Team Space membership management.
+  - name: Sharing
+    description: Personal Space Direct Share management.
+  - name: Worktrees
+    description: Isolated collaborative draft and merge workflows.
+paths:
+  /api/session:
+    get:
+      tags:
+        - Session
+      operationId: getSession
+      summary: Get the current login session.
+      security:
+        - {}
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current authenticated or anonymous session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+  /api/auth/logout:
+    post:
+      tags:
+        - Session
+      operationId: logout
+      summary: Delete the current login session.
+      responses:
+        '204':
+          description: The session is absent or has been deleted.
+  /api/auth/password/register:
+    post:
+      tags:
+        - Authentication
+      operationId: registerWithPassword
+      summary: Create a User, Personal Space, Password Credential, and session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordRegistration'
+      responses:
+        '201':
+          description: Registered and authenticated.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/auth/password/login:
+    post:
+      tags:
+        - Authentication
+      operationId: loginWithPassword
+      summary: Authenticate with a System Username and password.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLogin'
+      responses:
+        '200':
+          description: Authenticated.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '401':
+          description: Username or password is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/password:
+    put:
+      tags:
+        - Authentication
+      operationId: changePassword
+      summary: Change the current User's password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChange'
+      responses:
+        '204':
+          description: Password changed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/auth/github/login:
+    get:
+      tags:
+        - Authentication
+      operationId: startGitHubLogin
+      summary: Start the GitHub OAuth login flow.
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^/
+      responses:
+        '302':
+          description: Redirect to GitHub.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: uri
+  /api/auth/github/link:
+    get:
+      tags:
+        - Authentication
+      operationId: startGitHubLink
+      summary: Start GitHub OAuth to link the current User.
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^/
+      responses:
+        '302':
+          description: Redirect to GitHub.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/github/callback:
+    get:
+      tags:
+        - Authentication
+      operationId: finishGitHubOAuth
+      summary: Validate the OAuth callback and finish login or linking.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to a validated local application path.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+  /api/auth/github:
+    delete:
+      tags:
+        - Authentication
+      operationId: unlinkGitHub
+      summary: Unlink the current User's GitHub identity.
+      responses:
+        '200':
+          description: Updated authenticated session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: GitHub is the last authentication method.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/discord/login:
+    get:
+      tags:
+        - Authentication
+      operationId: startDiscordLogin
+      summary: Start the Discord OAuth login flow.
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^/
+      responses:
+        '302':
+          description: Redirect to Discord.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: uri
+  /api/auth/discord/bot-login:
+    post:
+      tags:
+        - Authentication
+      operationId: loginWithDiscordBot
+      summary: Resolve or create a User from a trusted Discord Bot event and create a session.
+      description: |
+        This server-to-server endpoint trusts the Discord User ID asserted by the
+        configured Bot server. The caller must authenticate with the shared API key.
+      security:
+        - discordBotApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscordBotLogin'
+      responses:
+        '200':
+          description: Authenticated; a new User and Personal Space are created when necessary.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: The Discord Bot API key is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Discord Bot authentication is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/discord/link:
+    get:
+      tags:
+        - Authentication
+      operationId: startDiscordLink
+      summary: Start Discord OAuth to link the current User.
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^/
+      responses:
+        '302':
+          description: Redirect to Discord.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/discord/callback:
+    get:
+      tags:
+        - Authentication
+      operationId: finishDiscordOAuth
+      summary: Validate the Discord OAuth callback and finish login or linking.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to a validated local application path.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+  /api/auth/discord:
+    delete:
+      tags:
+        - Authentication
+      operationId: unlinkDiscord
+      summary: Unlink the current User's Discord identity.
+      responses:
+        '200':
+          description: Updated authenticated session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Discord is the last authentication method.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/users/me:
+    patch:
+      tags:
+        - Users
+      operationId: updateCurrentUser
+      summary: Update the current User's product profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfilePatch'
+      responses:
+        '200':
+          description: Updated User.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/users/search:
+    get:
+      tags:
+        - Users
+      operationId: searchUsers
+      summary: Find Users for Team Membership or Direct Share.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+      responses:
+        '200':
+          description: At most twenty Public User summaries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSearchResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/spaces:
+    get:
+      tags:
+        - Spaces
+      operationId: listSpaces
+      summary: List Spaces discoverable by the current User.
+      responses:
+        '200':
+          description: Personal Space followed by owned and joined Team Spaces.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/team-spaces:
+    post:
+      tags:
+        - Spaces
+      operationId: createTeamSpace
+      summary: Create a Team Space owned by the current User.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTeamSpace'
+      responses:
+        '201':
+          description: Created Team Space.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/spaces/{spaceId}:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Spaces
+      operationId: getSpace
+      summary: Get a Space the current User may discover.
+      responses:
+        '200':
+          description: Space and effective capabilities.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Spaces
+      operationId: updateSpace
+      summary: Update Space settings.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchSpace'
+      responses:
+        '200':
+          description: Updated Space.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/spaces/{spaceId}/nodes:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Nodes
+      operationId: listSpaceRootNodes
+      summary: List the root Nodes of a Space.
+      parameters:
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/LimitParameter'
+      responses:
+        '200':
+          description: Node page for the Space root.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/nodes:
+    post:
+      tags:
+        - Nodes
+      operationId: createNode
+      summary: Create a pure organizational Node.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNode'
+      responses:
+        '201':
+          description: Created Node.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/nodes/{nodeId}:
+    parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Nodes
+      operationId: getNode
+      summary: Get Node metadata without loading children or content.
+      responses:
+        '200':
+          description: Node metadata and navigation context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Nodes
+      operationId: updateNode
+      summary: Atomically rename or move a Node.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchNode'
+      responses:
+        '200':
+          description: Updated Node.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/nodes/{nodeId}/children:
+    parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Nodes
+      operationId: listNodeChildren
+      summary: List the direct children of any Node.
+      parameters:
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/LimitParameter'
+      responses:
+        '200':
+          description: Direct child Node page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/operations/{operationId}:
+    parameters:
+      - name: operationId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Operations
+      operationId: getOperation
+      summary: Get the current state of an Operation.
+      responses:
+        '200':
+          description: Operation state.
+          headers:
+            Retry-After:
+              description: Suggested polling delay for a pending Operation.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/operations/{operationId}/retry:
+    parameters:
+      - name: operationId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Operations
+      operationId: retryOperation
+      summary: Retry a failed Operation with its original immutable input.
+      responses:
+        '202':
+          description: Operation returned to pending.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/resources:
+    post:
+      tags:
+        - Resources
+      operationId: createResource
+      summary: Create a Univer Resource and its Node.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateResource'
+      responses:
+        '200':
+          description: Existing completed result for the Idempotency Key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceCreateResponse'
+        '201':
+          description: Resource created during the initial attempt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceCreateResponse'
+        '202':
+          description: Resource creation remains pending.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/resources/{resourceId}:
+    parameters:
+      - name: resourceId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Resources
+      operationId: getResource
+      summary: Get Resource and owning Node metadata.
+      responses:
+        '200':
+          description: Current Resource and Node.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/resources/{resourceId}/open:
+    parameters:
+      - name: resourceId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Resources
+      operationId: openResource
+      summary: Resolve the Unit and editor mode for a Resource.
+      responses:
+        '200':
+          description: Resource open descriptor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceOpenView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/blob-upload-sessions:
+    post:
+      tags:
+        - Blobs
+      operationId: createBlobUploadSession
+      summary: Reserve stable identities and create a Blob Upload Session.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBlobUpload'
+      responses:
+        '200':
+          description: The existing Upload Session for this Idempotency Key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlobUploadSessionEnvelope'
+        '201':
+          description: A new Upload Session was reserved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlobUploadSessionEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+  /api/blob-upload-sessions/{uploadId}:
+    parameters:
+      - name: uploadId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Blobs
+      operationId: getBlobUploadSession
+      summary: Get current Upload Session state.
+      responses:
+        '200':
+          description: Current Upload Session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlobUploadSessionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Blobs
+      operationId: abortBlobUploadSession
+      summary: Abort an unpublished Blob Upload Session.
+      responses:
+        '204':
+          description: Upload Session aborted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/blob-upload-sessions/{uploadId}/content:
+    parameters:
+      - name: uploadId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags:
+        - Blobs
+      operationId: uploadBlobContent
+      summary: Stream the exact reserved Blob bytes into storage.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '204':
+          description: Bytes received and verified.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/blob-upload-sessions/{uploadId}/complete:
+    parameters:
+      - name: uploadId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Blobs
+      operationId: completeBlobUploadSession
+      summary: Atomically publish the Node and Blob Resource.
+      responses:
+        '200':
+          description: Existing result for an already completed Upload Session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceCreateResponse'
+        '201':
+          description: Blob Resource published.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceCreateResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/blob-resources/{resourceId}/content:
+    parameters:
+      - $ref: '#/components/parameters/BlobResourceId'
+      - $ref: '#/components/parameters/Range'
+      - $ref: '#/components/parameters/IfNoneMatch'
+    get:
+      tags:
+        - Blobs
+      operationId: getBlobContent
+      summary: Read Blob bytes for client-selected preview or other use.
+      responses:
+        '200':
+          $ref: '#/components/responses/BlobBytes'
+        '206':
+          $ref: '#/components/responses/BlobBytes'
+        '304':
+          description: The current ETag matches If-None-Match.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '416':
+          $ref: '#/components/responses/RangeNotSatisfiable'
+  /api/blob-resources/{resourceId}/download:
+    parameters:
+      - $ref: '#/components/parameters/BlobResourceId'
+      - $ref: '#/components/parameters/Range'
+      - $ref: '#/components/parameters/IfNoneMatch'
+    get:
+      tags:
+        - Blobs
+      operationId: downloadBlobContent
+      summary: Download Blob bytes as an attachment.
+      responses:
+        '200':
+          $ref: '#/components/responses/BlobBytes'
+        '206':
+          $ref: '#/components/responses/BlobBytes'
+        '304':
+          description: The current ETag matches If-None-Match.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '416':
+          $ref: '#/components/responses/RangeNotSatisfiable'
+  /api/recent-resources:
+    get:
+      tags:
+        - Views
+      operationId: listRecentResources
+      summary: List currently accessible Resources by last successful open.
+      parameters:
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/LimitParameter'
+      responses:
+        '200':
+          description: Recent Resources.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecentResourceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/owned-by-me:
+    get:
+      tags:
+        - Views
+      operationId: listOwnedByMe
+      summary: List Resources in Spaces owned by the current User.
+      parameters:
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/LimitParameter'
+      responses:
+        '200':
+          description: Resources owned by the current User.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnedResourceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/shared-with-me:
+    get:
+      tags:
+        - Views
+      operationId: listSharedWithMe
+      summary: List direct Node Grants in other Personal Spaces.
+      parameters:
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/LimitParameter'
+      responses:
+        '200':
+          description: Directly shared Nodes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/nodes/{nodeId}/trash:
+    parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Trash
+      operationId: trashNode
+      summary: Recursively place a Node in a new Trash Batch.
+      responses:
+        '201':
+          description: Created Trash Batch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrashBatchView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/spaces/{spaceId}/trash:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Trash
+      operationId: listTrash
+      summary: List active Trash Batches in a Space.
+      parameters:
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/LimitParameter'
+      responses:
+        '200':
+          description: Trash Batches.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrashList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/trash-batches/{trashBatchId}/restore:
+    parameters:
+      - name: trashBatchId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Trash
+      operationId: restoreTrashBatch
+      summary: Restore one Trash Batch to its original location.
+      responses:
+        '200':
+          description: Restored Batch root.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: An ancestor remains in Trash.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/trash-batches/{trashBatchId}:
+    parameters:
+      - name: trashBatchId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      tags:
+        - Trash
+      operationId: removeTrashBatchPermanently
+      summary: Permanently remove a Trash Batch from the Node tree.
+      responses:
+        '204':
+          description: Product content is no longer recoverable.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Nested Trash Batch or active Worktree reference.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/team-spaces/{spaceId}/members:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Membership
+      operationId: listTeamMembers
+      summary: List a Team Space Owner and Memberships.
+      responses:
+        '200':
+          description: Team membership.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMemberList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/team-spaces/{spaceId}/members/{userId}:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags:
+        - Membership
+      operationId: upsertTeamMember
+      summary: Add a Team Member or change their Role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertTeamMembership'
+      responses:
+        '200':
+          description: Current Membership.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMembership'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+        - Membership
+      operationId: removeTeamMember
+      summary: Remove a Team Member or leave the Team Space.
+      responses:
+        '204':
+          description: Membership removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/nodes/{nodeId}/grants:
+    parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Sharing
+      operationId: listNodeGrants
+      summary: List direct Grants on a Personal Space Node.
+      responses:
+        '200':
+          description: Direct Grants only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeGrantList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/nodes/{nodeId}/grants/{userId}:
+    parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags:
+        - Sharing
+      operationId: upsertNodeGrant
+      summary: Create or change a Direct Share.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertNodeGrant'
+      responses:
+        '200':
+          description: Current direct and effective Role.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeGrant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+        - Sharing
+      operationId: removeNodeGrant
+      summary: Remove one direct Grant.
+      responses:
+        '200':
+          description: Effective Role remaining through ancestor Grants.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantRemovalResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/nodes/{nodeId}/link-sharing:
+    parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Sharing
+      operationId: getNodeLinkSharing
+      summary: Get Link Sharing settings for a Personal Space Node.
+      responses:
+        '200':
+          description: Current Link Sharing settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeLinkSharing'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Sharing
+      operationId: updateNodeLinkSharing
+      summary: Enable, disable, or change Link Sharing for a Personal Space Node.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNodeLinkSharing'
+      responses:
+        '200':
+          description: Updated Link Sharing settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeLinkSharing'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/worktrees:
+    get:
+      tags:
+        - Worktrees
+      operationId: listWorktrees
+      summary: List reviewable Worktrees and private Team Worktrees manageable by an Owner or Admin.
+      parameters:
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - active
+              - processed
+            default: active
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/WorktreeKind'
+        - name: teamSpaceId
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/LimitParameter'
+      responses:
+        '200':
+          description: |
+            Reviewable Worktrees plus Summary-only private Team Worktrees the
+            current Space Owner or Admin may manage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Worktrees
+      operationId: createWorktree
+      summary: Create a User or Team Worktree.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorktree'
+      responses:
+        '201':
+          description: Worktree created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeSummary'
+        '202':
+          description: Worktree creation remains pending.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Worktrees
+      operationId: getWorktree
+      summary: Get Worktree metadata, current state, Units, and capabilities.
+      responses:
+        '200':
+          description: Worktree detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Worktrees
+      operationId: updateWorktree
+      summary: Update Worktree metadata or Team Worktree Visibility.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchWorktree'
+      responses:
+        '200':
+          description: Updated Worktree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}/units:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Worktrees
+      operationId: addWorktreeUnit
+      summary: Add an existing Resource or create a Worktree-local Unit.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddWorktreeUnit'
+      responses:
+        '201':
+          description: Worktree Unit added.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeUnitEnvelope'
+        '202':
+          description: Unit creation or addition remains pending.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}/units/{unitId}/open:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: unitId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Worktrees
+      operationId: openWorktreeUnit
+      summary: Open a Draft, Trunk, or Merge Preview Worktree Unit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenWorktreeUnit'
+      responses:
+        '200':
+          description: Worktree Unit editor descriptor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeUnitOpenView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}/units/{unitId}/changesets:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: unitId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Worktrees
+      operationId: submitWorktreeChangeset
+      summary: Submit an authenticated non-realtime change to a Worktree Draft Unit.
+      description: |
+        The server binds the changeset to the authenticated User and a
+        server-owned collaboration member identity. Clients must not use the
+        internal collaboration transport endpoint for this operation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitWorktreeChangeset'
+      responses:
+        '200':
+          description: Changeset committed, deduplicated, rejected, or eligible for retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeChangesetSubmitResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}/ready:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Worktrees
+      operationId: markWorktreeReady
+      summary: Freeze a Draft and mark the Worktree ready to merge.
+      responses:
+        '200':
+          description: Current Worktree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeSummaryEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}/reopen:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Worktrees
+      operationId: reopenWorktree
+      summary: Return a ready Worktree to Draft.
+      responses:
+        '200':
+          description: Current Worktree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeSummaryEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}/merge:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Worktrees
+      operationId: mergeWorktree
+      summary: Merge Worktree Units and activate successful local Units.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      responses:
+        '200':
+          description: Merge attempt reached a stable result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeOperationResponse'
+        '202':
+          description: Merge or Activation remains pending.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}/discard:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Worktrees
+      operationId: discardWorktree
+      summary: Discard a Draft or ready Worktree without rolling back merged Units.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      responses:
+        '200':
+          description: Worktree discarded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeOperationResponse'
+        '202':
+          description: Discard remains pending.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: workspace_session
+      description: Opaque HttpOnly login session cookie.
+    discordBotApiKey:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: Shared secret configured on Workspace and the trusted Discord Bot server.
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable error code.
+        message:
+          type: string
+          description: Human-readable diagnostic text.
+        field:
+          type: string
+          description: Input field related to the error, when applicable.
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/Error'
+    User:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - username
+        - displayName
+        - avatarUrl
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type:
+            - string
+            - 'null'
+          format: uri
+    PublicUser:
+      $ref: '#/components/schemas/User'
+    SessionView:
+      oneOf:
+        - $ref: '#/components/schemas/AnonymousSession'
+        - $ref: '#/components/schemas/AuthenticatedSession'
+    SpaceView:
+      allOf:
+        - $ref: '#/components/schemas/SpaceSummary'
+        - type: object
+          required:
+            - accessRole
+            - capabilities
+          properties:
+            accessRole:
+              $ref: '#/components/schemas/SpaceRole'
+            capabilities:
+              $ref: '#/components/schemas/SpaceCapabilities'
+      unevaluatedProperties: false
+    NodeSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - parentNodeId
+        - name
+        - resource
+        - hasChildren
+        - updatedAt
+        - accessRole
+        - capabilities
+      properties:
+        id:
+          type: string
+        spaceId:
+          type: string
+        parentNodeId:
+          type:
+            - string
+            - 'null'
+        name:
+          type: string
+        resource:
+          oneOf:
+            - $ref: '#/components/schemas/ResourceSummary'
+            - type: 'null'
+        hasChildren:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+        accessRole:
+          $ref: '#/components/schemas/AccessRole'
+        capabilities:
+          $ref: '#/components/schemas/NodeCapabilities'
+    NodePage:
+      type: object
+      additionalProperties: false
+      required:
+        - space
+        - parentNode
+        - navigationRootNodeId
+        - breadcrumbs
+        - nodes
+        - nextCursor
+      properties:
+        space:
+          $ref: '#/components/schemas/SpaceSummary'
+        parentNode:
+          oneOf:
+            - $ref: '#/components/schemas/NodeSummary'
+            - type: 'null'
+        navigationRootNodeId:
+          type:
+            - string
+            - 'null'
+        breadcrumbs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Breadcrumb'
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/NodeSummary'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    OperationView:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - state
+        - createdAt
+        - updatedAt
+        - result
+        - error
+      properties:
+        id:
+          type: string
+        kind:
+          $ref: '#/components/schemas/OperationKind'
+        state:
+          $ref: '#/components/schemas/OperationState'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        result:
+          type:
+            - object
+            - 'null'
+          additionalProperties: true
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/OperationError'
+            - type: 'null'
+    ResourceOpenView:
+      type: object
+      additionalProperties: false
+      required:
+        - resource
+      properties:
+        resource:
+          oneOf:
+            - $ref: '#/components/schemas/OpenUniverResource'
+            - $ref: '#/components/schemas/OpenBlobResource'
+          discriminator:
+            propertyName: kind
+            mapping:
+              univer: '#/components/schemas/OpenUniverResource'
+              blob: '#/components/schemas/OpenBlobResource'
+    BlobUploadSessionEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+        - upload
+        - uploadTarget
+      properties:
+        operation:
+          $ref: '#/components/schemas/OperationView'
+        upload:
+          $ref: '#/components/schemas/BlobUploadSession'
+        uploadTarget:
+          oneOf:
+            - $ref: '#/components/schemas/BlobUploadTarget'
+            - type: 'null'
+    TrashBatchView:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - spaceId
+        - root
+        - originalLocation
+        - trashedBy
+        - trashedAt
+        - nodeCount
+        - capabilities
+        - restoreBlockedBy
+        - removeBlockedBy
+      properties:
+        id:
+          type: string
+        spaceId:
+          type: string
+        root:
+          $ref: '#/components/schemas/TrashRoot'
+        originalLocation:
+          type: object
+          additionalProperties: false
+          required:
+            - breadcrumbs
+          properties:
+            breadcrumbs:
+              type: array
+              items:
+                $ref: '#/components/schemas/Breadcrumb'
+        trashedBy:
+          $ref: '#/components/schemas/User'
+        trashedAt:
+          type: string
+          format: date-time
+        nodeCount:
+          type: integer
+          minimum: 1
+        capabilities:
+          $ref: '#/components/schemas/TrashCapabilities'
+        restoreBlockedBy:
+          oneOf:
+            - $ref: '#/components/schemas/TrashBlocker'
+            - type: 'null'
+        removeBlockedBy:
+          oneOf:
+            - $ref: '#/components/schemas/TrashBlocker'
+            - type: 'null'
+    TeamMembership:
+      type: object
+      additionalProperties: false
+      required:
+        - user
+        - role
+        - grantedBy
+        - createdAt
+        - updatedAt
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        role:
+          $ref: '#/components/schemas/TeamRole'
+        grantedBy:
+          $ref: '#/components/schemas/User'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    NodeGrant:
+      type: object
+      additionalProperties: false
+      required:
+        - user
+        - role
+        - effectiveRole
+        - grantedBy
+        - createdAt
+        - updatedAt
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        role:
+          $ref: '#/components/schemas/GrantRole'
+        effectiveRole:
+          $ref: '#/components/schemas/GrantRole'
+        grantedBy:
+          $ref: '#/components/schemas/User'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    NodeLinkSharing:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+        - role
+        - createdBy
+        - updatedBy
+        - createdAt
+        - updatedAt
+      properties:
+        enabled:
+          type: boolean
+        role:
+          $ref: '#/components/schemas/LinkSharingRole'
+        createdBy:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - type: 'null'
+        updatedBy:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - type: 'null'
+        createdAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updatedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    WorktreeSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - summary
+        - kind
+        - teamSpace
+        - visibility
+        - state
+        - creator
+        - unitCount
+        - processedAt
+        - createdAt
+        - updatedAt
+        - capabilities
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        summary:
+          type:
+            - string
+            - 'null'
+        kind:
+          $ref: '#/components/schemas/WorktreeKind'
+        teamSpace:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceSummary'
+            - type: 'null'
+        visibility:
+          $ref: '#/components/schemas/WorktreeVisibility'
+        state:
+          $ref: '#/components/schemas/WorktreeState'
+        creator:
+          $ref: '#/components/schemas/User'
+        unitCount:
+          type: integer
+          minimum: 0
+        processedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        capabilities:
+          $ref: '#/components/schemas/WorktreeCapabilities'
+    WorktreeDetail:
+      allOf:
+        - $ref: '#/components/schemas/WorktreeSummary'
+        - type: object
+          required:
+            - units
+          properties:
+            units:
+              type: array
+              items:
+                $ref: '#/components/schemas/WorktreeUnit'
+    AnonymousSession:
+      type: object
+      additionalProperties: false
+      required:
+        - authenticated
+        - githubOAuthEnabled
+        - discordOAuthEnabled
+      properties:
+        authenticated:
+          const: false
+        githubOAuthEnabled:
+          type: boolean
+        discordOAuthEnabled:
+          type: boolean
+    ExternalIdentitySummary:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - providerUsername
+      properties:
+        provider:
+          type: string
+          enum:
+            - github
+            - discord
+        providerUsername:
+          type: string
+    AuthenticationMethods:
+      type: object
+      additionalProperties: false
+      required:
+        - password
+        - externalIdentities
+      properties:
+        password:
+          type: boolean
+        externalIdentities:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExternalIdentitySummary'
+    AuthenticatedSession:
+      type: object
+      additionalProperties: false
+      required:
+        - authenticated
+        - githubOAuthEnabled
+        - discordOAuthEnabled
+        - user
+        - authenticationMethods
+      properties:
+        authenticated:
+          const: true
+        githubOAuthEnabled:
+          type: boolean
+        discordOAuthEnabled:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/User'
+        authenticationMethods:
+          $ref: '#/components/schemas/AuthenticationMethods'
+    PasswordRegistration:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+        - displayName
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[\p{L}\p{N}._-]+$
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        password:
+          type: string
+          minLength: 8
+          maxLength: 200
+    PasswordLogin:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[\p{L}\p{N}._-]+$
+        password:
+          type: string
+    PasswordChange:
+      type: object
+      additionalProperties: false
+      required:
+        - currentPassword
+        - newPassword
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 200
+    DiscordBotLogin:
+      type: object
+      additionalProperties: false
+      required:
+        - discordUserId
+      properties:
+        discordUserId:
+          type: string
+          description: Stable Discord snowflake User ID from a trusted Bot event.
+          pattern: ^[1-9][0-9]{0,19}$
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[\p{L}\p{N}._-]+$
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        avatarUrl:
+          type:
+            - string
+            - 'null'
+          format: uri
+    UserProfilePatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[\p{L}\p{N}._-]+$
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        avatarUrl:
+          type:
+            - string
+            - 'null'
+          format: uri
+    UserSearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        - users
+      properties:
+        users:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/User'
+    SpaceType:
+      type: string
+      enum:
+        - personal
+        - team
+    SpaceSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - type
+        - name
+        - publicRead
+      properties:
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/SpaceType'
+        name:
+          type: string
+        publicRead:
+          type: boolean
+          description: Whether every authenticated User can browse and open this Space read-only.
+    SpaceRole:
+      type: string
+      enum:
+        - owner
+        - admin
+        - editor
+        - viewer
+    SpaceCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        - browseRoot
+        - createAtRoot
+        - renameSpace
+        - manageMembers
+        - viewTrash
+      properties:
+        browseRoot:
+          type: boolean
+        createAtRoot:
+          type: boolean
+        renameSpace:
+          type: boolean
+        manageMembers:
+          type: boolean
+        viewTrash:
+          type: boolean
+    SpaceList:
+      type: object
+      additionalProperties: false
+      required:
+        - spaces
+      properties:
+        spaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceView'
+    CreateTeamSpace:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        publicRead:
+          type: boolean
+          description: Whether signed-in users can read the Space without membership. Omit to keep it private.
+    PatchSpace:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        publicRead:
+          type: boolean
+    UnitType:
+      type: string
+      enum:
+        - sheet
+        - doc
+        - slide
+        - board
+        - base
+    ResourceCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        - openContent
+        - editContent
+        - downloadContent
+      properties:
+        openContent:
+          type: boolean
+        editContent:
+          type: boolean
+        downloadContent:
+          type: boolean
+    UniverResourceSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - unitType
+        - capabilities
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          const: univer
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        capabilities:
+          $ref: '#/components/schemas/ResourceCapabilities'
+    BlobAvailability:
+      type: string
+      enum:
+        - ready
+        - quarantined
+    BlobResourceSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - mediaType
+        - byteSize
+        - availability
+        - capabilities
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          const: blob
+        mediaType:
+          type: string
+        byteSize:
+          type: integer
+          minimum: 0
+        availability:
+          $ref: '#/components/schemas/BlobAvailability'
+        capabilities:
+          $ref: '#/components/schemas/ResourceCapabilities'
+    ResourceSummary:
+      oneOf:
+        - $ref: '#/components/schemas/UniverResourceSummary'
+        - $ref: '#/components/schemas/BlobResourceSummary'
+      discriminator:
+        propertyName: kind
+        mapping:
+          univer: '#/components/schemas/UniverResourceSummary'
+          blob: '#/components/schemas/BlobResourceSummary'
+    AccessRole:
+      type: string
+      enum:
+        - owner
+        - admin
+        - editor
+        - viewer
+    NodeCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        - browseChildren
+        - createChildren
+        - rename
+        - move
+        - trash
+        - share
+      properties:
+        browseChildren:
+          type: boolean
+        createChildren:
+          type: boolean
+        rename:
+          type: boolean
+        move:
+          type: boolean
+        trash:
+          type: boolean
+        share:
+          type: boolean
+    Breadcrumb:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    CreateNode:
+      type: object
+      additionalProperties: false
+      required:
+        - spaceId
+        - parentNodeId
+        - name
+      properties:
+        spaceId:
+          type: string
+        parentNodeId:
+          type:
+            - string
+            - 'null'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+    NodeResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - node
+        - space
+        - breadcrumbs
+        - navigationRootNodeId
+      properties:
+        node:
+          $ref: '#/components/schemas/NodeSummary'
+        space:
+          $ref: '#/components/schemas/SpaceSummary'
+        breadcrumbs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Breadcrumb'
+        navigationRootNodeId:
+          type:
+            - string
+            - 'null'
+    PatchNode:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        parentNodeId:
+          type:
+            - string
+            - 'null'
+    OperationKind:
+      type: string
+      enum:
+        - createResource
+        - createBlobResource
+        - createWorktree
+        - addWorktreeUnit
+        - createWorktreeUnit
+        - mergeWorktree
+        - discardWorktree
+        - activateWorktreeResource
+    OperationState:
+      type: string
+      enum:
+        - pending
+        - completed
+        - failed
+    OperationError:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    CreateResource:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - spaceId
+        - parentNodeId
+        - name
+        - unitType
+      properties:
+        kind:
+          type: string
+          const: univer
+        spaceId:
+          type: string
+        parentNodeId:
+          type:
+            - string
+            - 'null'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        initialData:
+          type: object
+          description: Complete initial Univer Unit data for unitType. When omitted, the server creates a blank Unit. The server always overrides id with the Unit identity reserved from the Idempotency-Key and resets rev to the initial revision.
+          additionalProperties: true
+    ResourceCreateResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+        - node
+      properties:
+        operation:
+          $ref: '#/components/schemas/OperationView'
+        node:
+          $ref: '#/components/schemas/NodeSummary'
+    OperationEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+      properties:
+        operation:
+          $ref: '#/components/schemas/OperationView'
+    ResourceResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - resource
+        - node
+      properties:
+        resource:
+          $ref: '#/components/schemas/ResourceSummary'
+        node:
+          $ref: '#/components/schemas/NodeSummary'
+    EditorMode:
+      type: string
+      enum:
+        - edit
+        - readOnly
+    OpenUniverResource:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - nodeId
+        - spaceId
+        - name
+        - unitId
+        - unitType
+        - accessRole
+        - editorMode
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          const: univer
+        nodeId:
+          type: string
+        spaceId:
+          type: string
+        name:
+          type: string
+        unitId:
+          type: string
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        accessRole:
+          $ref: '#/components/schemas/AccessRole'
+        editorMode:
+          $ref: '#/components/schemas/EditorMode'
+    OpenBlobResource:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - nodeId
+        - spaceId
+        - name
+        - accessRole
+        - originalFilename
+        - mediaType
+        - byteSize
+        - sha256
+        - contentUrl
+        - downloadUrl
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          const: blob
+        nodeId:
+          type: string
+        spaceId:
+          type: string
+        name:
+          type: string
+        accessRole:
+          $ref: '#/components/schemas/AccessRole'
+        originalFilename:
+          type: string
+        mediaType:
+          type: string
+        byteSize:
+          type: integer
+          minimum: 0
+        sha256:
+          type: string
+        contentUrl:
+          type: string
+        downloadUrl:
+          type: string
+    CreateBlobUpload:
+      type: object
+      additionalProperties: false
+      required:
+        - spaceId
+        - parentNodeId
+        - name
+        - originalFilename
+        - byteSize
+      properties:
+        spaceId:
+          type: string
+        parentNodeId:
+          type:
+            - string
+            - 'null'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        originalFilename:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        byteSize:
+          type: integer
+          minimum: 0
+        declaredMediaType:
+          type: string
+          maxLength: 255
+    BlobUploadState:
+      type: string
+      enum:
+        - waitingForUpload
+        - uploaded
+        - verifying
+        - completed
+        - failed
+        - expired
+        - aborted
+    BlobUploadSession:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - operationId
+        - nodeId
+        - resourceId
+        - state
+        - name
+        - originalFilename
+        - byteSize
+        - receivedSize
+        - detectedMediaType
+        - sha256
+        - expiresAt
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        operationId:
+          type: string
+        nodeId:
+          type: string
+        resourceId:
+          type: string
+        state:
+          $ref: '#/components/schemas/BlobUploadState'
+        name:
+          type: string
+        originalFilename:
+          type: string
+        byteSize:
+          type: integer
+          minimum: 0
+        receivedSize:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        detectedMediaType:
+          type:
+            - string
+            - 'null'
+        sha256:
+          type:
+            - string
+            - 'null'
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    BlobUploadTarget:
+      type: object
+      additionalProperties: false
+      required:
+        - method
+        - contentUrl
+      properties:
+        method:
+          type: string
+          const: PUT
+        contentUrl:
+          type: string
+    Location:
+      type: object
+      additionalProperties: false
+      required:
+        - space
+        - breadcrumbs
+      properties:
+        space:
+          $ref: '#/components/schemas/SpaceSummary'
+        breadcrumbs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Breadcrumb'
+    RecentResourceItem:
+      type: object
+      additionalProperties: false
+      required:
+        - lastOpenedAt
+        - node
+        - resource
+        - location
+      properties:
+        lastOpenedAt:
+          type: string
+          format: date-time
+        node:
+          $ref: '#/components/schemas/NodeSummary'
+        resource:
+          $ref: '#/components/schemas/ResourceSummary'
+        location:
+          $ref: '#/components/schemas/Location'
+    RecentResourceList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecentResourceItem'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    OwnedResourceItem:
+      type: object
+      additionalProperties: false
+      required:
+        - node
+        - resource
+        - location
+      properties:
+        node:
+          $ref: '#/components/schemas/NodeSummary'
+        resource:
+          $ref: '#/components/schemas/ResourceSummary'
+        location:
+          $ref: '#/components/schemas/Location'
+    OwnedResourceList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnedResourceItem'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    SharedItem:
+      type: object
+      additionalProperties: false
+      required:
+        - node
+        - sharedBy
+        - sharedAt
+      properties:
+        node:
+          $ref: '#/components/schemas/NodeSummary'
+        sharedBy:
+          $ref: '#/components/schemas/User'
+        sharedAt:
+          type: string
+          format: date-time
+    SharedList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SharedItem'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    TrashRoot:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - resource
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        resource:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required:
+                - id
+                - kind
+                - unitType
+              properties:
+                id:
+                  type: string
+                kind:
+                  type: string
+                  const: univer
+                unitType:
+                  $ref: '#/components/schemas/UnitType'
+            - type: object
+              additionalProperties: false
+              required:
+                - id
+                - kind
+                - mediaType
+                - byteSize
+              properties:
+                id:
+                  type: string
+                kind:
+                  type: string
+                  const: blob
+                mediaType:
+                  type: string
+                byteSize:
+                  type: integer
+                  minimum: 0
+            - type: 'null'
+    TrashCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        - restore
+        - removePermanently
+      properties:
+        restore:
+          type: boolean
+        removePermanently:
+          type: boolean
+    TrashBlocker:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - RESTORE_PARENT_IN_TRASH
+            - NESTED_TRASH_BATCH
+            - ACTIVE_WORKTREE_RESOURCE_REFERENCE
+        trashBatchId:
+          type: string
+    TrashList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrashBatchView'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    TeamRole:
+      type: string
+      enum:
+        - admin
+        - editor
+        - viewer
+    TeamMemberList:
+      type: object
+      additionalProperties: false
+      required:
+        - owner
+        - members
+      properties:
+        owner:
+          $ref: '#/components/schemas/User'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMembership'
+    UpsertTeamMembership:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+      properties:
+        role:
+          $ref: '#/components/schemas/TeamRole'
+    GrantRole:
+      type: string
+      enum:
+        - editor
+        - viewer
+    NodeGrantList:
+      type: object
+      additionalProperties: false
+      required:
+        - grants
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/NodeGrant'
+    UpsertNodeGrant:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+      properties:
+        role:
+          $ref: '#/components/schemas/GrantRole'
+    GrantRemovalResult:
+      type: object
+      additionalProperties: false
+      required:
+        - effectiveRole
+      properties:
+        effectiveRole:
+          oneOf:
+            - $ref: '#/components/schemas/GrantRole'
+            - type: 'null'
+    LinkSharingRole:
+      type: string
+      enum:
+        - editor
+        - viewer
+    UpdateNodeLinkSharing:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+        - role
+      properties:
+        enabled:
+          type: boolean
+        role:
+          $ref: '#/components/schemas/LinkSharingRole'
+    WorktreeKind:
+      type: string
+      enum:
+        - user
+        - team
+    WorktreeVisibility:
+      type: string
+      enum:
+        - private
+        - space
+    WorktreeState:
+      type: string
+      enum:
+        - draft
+        - ready
+        - merging
+        - merged
+        - discarded
+    WorktreeCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        - review
+        - editDraft
+        - addUnit
+        - changeVisibility
+        - markReady
+        - reopen
+        - merge
+        - discard
+      properties:
+        review:
+          type: boolean
+        editDraft:
+          type: boolean
+        addUnit:
+          type: boolean
+        changeVisibility:
+          type: boolean
+        markReady:
+          type: boolean
+        reopen:
+          type: boolean
+        merge:
+          type: boolean
+        discard:
+          type: boolean
+    WorktreeList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorktreeSummary'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    CreateUserWorktree:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - name
+        - summary
+      properties:
+        kind:
+          const: user
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        summary:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+    CreateTeamWorktree:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - teamSpaceId
+        - visibility
+        - name
+        - summary
+      properties:
+        kind:
+          const: team
+        teamSpaceId:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/WorktreeVisibility'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        summary:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+    CreateWorktree:
+      oneOf:
+        - $ref: '#/components/schemas/CreateUserWorktree'
+        - $ref: '#/components/schemas/CreateTeamWorktree'
+    WorktreeUnitTarget:
+      type: object
+      additionalProperties: false
+      required:
+        - spaceId
+        - parentNodeId
+      properties:
+        spaceId:
+          type: string
+        parentNodeId:
+          type:
+            - string
+            - 'null'
+    WorktreeUnitChange:
+      type: string
+      enum:
+        - modified
+        - added
+        - deleted
+        - unchanged
+    MergeResult:
+      type: string
+      enum:
+        - pending
+        - merged
+        - unchanged
+        - conflict
+        - failed
+    ActivationState:
+      type: string
+      enum:
+        - notApplicable
+        - waitingForMerge
+        - pending
+        - completed
+        - failed
+        - discarded
+    WorktreeUnit:
+      type: object
+      additionalProperties: false
+      required:
+        - unitId
+        - resourceId
+        - nodeId
+        - source
+        - name
+        - unitType
+        - target
+        - draftHeadRevision
+        - change
+        - mergeResult
+        - activationState
+      properties:
+        unitId:
+          type: string
+        resourceId:
+          type: string
+        nodeId:
+          type: string
+        source:
+          type: string
+          enum:
+            - trunk
+            - worktree
+        name:
+          type: string
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        target:
+          oneOf:
+            - $ref: '#/components/schemas/WorktreeUnitTarget'
+            - type: 'null'
+        draftHeadRevision:
+          type: integer
+          minimum: 0
+        change:
+          $ref: '#/components/schemas/WorktreeUnitChange'
+        mergeResult:
+          $ref: '#/components/schemas/MergeResult'
+        activationState:
+          $ref: '#/components/schemas/ActivationState'
+    WorktreeEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - worktree
+      properties:
+        worktree:
+          $ref: '#/components/schemas/WorktreeDetail'
+    PatchWorktree:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        summary:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        visibility:
+          $ref: '#/components/schemas/WorktreeVisibility'
+    AddTrunkUnit:
+      type: object
+      additionalProperties: false
+      required:
+        - source
+        - resourceId
+      properties:
+        source:
+          const: trunk
+        resourceId:
+          type: string
+    CreateWorktreeLocalUnit:
+      type: object
+      additionalProperties: false
+      required:
+        - source
+        - name
+        - unitType
+        - targetSpaceId
+        - targetParentNodeId
+      properties:
+        source:
+          const: worktree
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        targetSpaceId:
+          type: string
+        targetParentNodeId:
+          type:
+            - string
+            - 'null'
+        initialData:
+          type: object
+          description: Complete initial Univer Unit data for unitType. When omitted, the server creates a blank Unit. The server always overrides id with the Unit identity reserved from the Idempotency-Key and resets rev to the initial revision.
+          additionalProperties: true
+    AddWorktreeUnit:
+      oneOf:
+        - $ref: '#/components/schemas/AddTrunkUnit'
+        - $ref: '#/components/schemas/CreateWorktreeLocalUnit'
+    WorktreeUnitEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - unit
+      properties:
+        unit:
+          $ref: '#/components/schemas/WorktreeUnit'
+    WorktreeOpenMode:
+      type: string
+      enum:
+        - draft
+        - trunk
+        - mergePreview
+    OpenWorktreeUnit:
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+      properties:
+        mode:
+          $ref: '#/components/schemas/WorktreeOpenMode'
+    OpenedWorktreeUnit:
+      type: object
+      additionalProperties: false
+      required:
+        - unitId
+        - unitType
+        - editorMode
+      properties:
+        unitId:
+          type: string
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        editorMode:
+          $ref: '#/components/schemas/EditorMode'
+    CollaborationScope:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+          properties:
+            kind:
+              const: trunk
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+            - worktreeId
+          properties:
+            kind:
+              type: string
+              enum:
+                - worktree
+                - mergePreview
+            worktreeId:
+              type: string
+    WorktreeUnitOpenView:
+      type: object
+      additionalProperties: false
+      required:
+        - unit
+        - collaborationScope
+      properties:
+        unit:
+          $ref: '#/components/schemas/OpenedWorktreeUnit'
+        collaborationScope:
+          $ref: '#/components/schemas/CollaborationScope'
+    ProtocolMutation:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - data
+      properties:
+        id:
+          type: string
+          minLength: 1
+        data:
+          type: string
+    WorktreeChangeset:
+      type: object
+      additionalProperties: false
+      required:
+        - unitID
+        - type
+        - baseRev
+        - revision
+        - userID
+        - memberID
+        - sid
+        - reqId
+        - mutations
+      properties:
+        unitID:
+          type: string
+        type:
+          type: integer
+          enum:
+            - 1
+            - 2
+            - 3
+            - 5
+            - 6
+          description: Univer protocol Unit type.
+        baseRev:
+          type: integer
+          minimum: 1
+        revision:
+          type: integer
+          minimum: 2
+        userID:
+          type: string
+          description: Ignored on input and replaced with the authenticated User ID.
+        memberID:
+          type: string
+          description: Ignored on input and replaced with a server-owned member ID.
+        sid:
+          type: string
+          minLength: 1
+        reqId:
+          type: integer
+          minimum: 1
+        mutations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProtocolMutation'
+        mutationSize:
+          type: integer
+          minimum: 0
+        additionalFields:
+          type: string
+        createTime:
+          type: integer
+          minimum: 0
+    SubmitWorktreeChangeset:
+      type: object
+      additionalProperties: false
+      required:
+        - changeset
+      properties:
+        changeset:
+          $ref: '#/components/schemas/WorktreeChangeset'
+    WorktreeChangesetError:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+        details:
+          type: object
+          additionalProperties: true
+    WorktreeChangesetSubmitResult:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - status
+            - changeset
+          properties:
+            status:
+              type: string
+              enum:
+                - committed
+                - already-committed
+            changeset:
+              $ref: '#/components/schemas/WorktreeChangeset'
+        - type: object
+          additionalProperties: false
+          required:
+            - status
+            - error
+          properties:
+            status:
+              type: string
+              enum:
+                - rejected
+                - retry
+            error:
+              $ref: '#/components/schemas/WorktreeChangesetError'
+    WorktreeSummaryEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - worktree
+      properties:
+        worktree:
+          $ref: '#/components/schemas/WorktreeSummary'
+    WorktreeOperationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+        - worktree
+      properties:
+        operation:
+          $ref: '#/components/schemas/OperationView'
+        worktree:
+          $ref: '#/components/schemas/WorktreeSummary'
+  parameters:
+    Cursor:
+      $ref: '#/components/parameters/CursorParameter'
+    Limit:
+      $ref: '#/components/parameters/LimitParameter'
+    IdempotencyKey:
+      $ref: '#/components/parameters/IdempotencyKeyParameter'
+    CursorParameter:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor returned by the previous page.
+      schema:
+        type: string
+    LimitParameter:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 100
+    IdempotencyKeyParameter:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Random opaque key representing one user intent.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 200
+        pattern: ^[A-Za-z0-9_-]+$
+    BlobResourceId:
+      name: resourceId
+      in: path
+      required: true
+      schema:
+        type: string
+    Range:
+      name: Range
+      in: header
+      required: false
+      schema:
+        type: string
+      description: A single RFC 9110 bytes range.
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Return 304 when the current content ETag matches.
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: A valid login session is required.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthenticated:
+              value:
+                error:
+                  code: UNAUTHENTICATED
+                  message: Authentication is required.
+    Forbidden:
+      description: The current User cannot perform this action.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: The resource does not exist or is not discoverable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              value:
+                error:
+                  code: NOT_FOUND
+                  message: The resource was not found.
+    Conflict:
+      description: The request conflicts with current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PayloadTooLarge:
+      description: The declared Blob size exceeds the configured limit.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RangeNotSatisfiable:
+      description: The requested byte range cannot be served.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BlobBytes:
+      description: Blob bytes with media type, ETag, disposition, and Range headers.
+      headers:
+        Accept-Ranges:
+          schema:
+            type: string
+        Content-Range:
+          schema:
+            type: string
+        ETag:
+          schema:
+            type: string
+      content:
+        '*/*':
+          schema:
+            type: string
+            format: binary

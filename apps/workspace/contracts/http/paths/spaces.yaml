@@ -1,0 +1,83 @@
+/api/spaces:
+  get:
+    tags: [Spaces]
+    operationId: listSpaces
+    summary: List Spaces discoverable by the current User.
+    responses:
+      "200":
+        description: Personal Space followed by owned and joined Team Spaces.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpaceList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/team-spaces:
+  post:
+    tags: [Spaces]
+    operationId: createTeamSpace
+    summary: Create a Team Space owned by the current User.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/spaces.yaml#/CreateTeamSpace
+    responses:
+      "201":
+        description: Created Team Space.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpaceView
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/spaces/{spaceId}:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Spaces]
+    operationId: getSpace
+    summary: Get a Space the current User may discover.
+    responses:
+      "200":
+        description: Space and effective capabilities.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpaceView
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+  patch:
+    tags: [Spaces]
+    operationId: updateSpace
+    summary: Update Space settings.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/spaces.yaml#/PatchSpace
+    responses:
+      "200":
+        description: Updated Space.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpaceView
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound

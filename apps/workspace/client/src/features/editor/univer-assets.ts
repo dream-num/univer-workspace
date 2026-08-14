@@ -1,0 +1,1 @@
+export const MAX_UNIVER_IMAGE_BYTES = 20 * 1024 * 1024;

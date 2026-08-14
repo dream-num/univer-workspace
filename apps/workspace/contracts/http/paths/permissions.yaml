@@ -1,0 +1,231 @@
+/api/users/search:
+  get:
+    tags: [Users]
+    operationId: searchUsers
+    summary: Find Users for Team Membership or Direct Share.
+    parameters:
+      - name: query
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 2
+    responses:
+      "200":
+        description: At most twenty Public User summaries.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/permissions.yaml#/UserSearchResult
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/team-spaces/{spaceId}/members:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Membership]
+    operationId: listTeamMembers
+    summary: List a Team Space Owner and Memberships.
+    responses:
+      "200":
+        description: Team membership.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/permissions.yaml#/TeamMemberList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/team-spaces/{spaceId}/members/{userId}:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+  put:
+    tags: [Membership]
+    operationId: upsertTeamMember
+    summary: Add a Team Member or change their Role.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/permissions.yaml#/UpsertTeamMembership
+    responses:
+      "200":
+        description: Current Membership.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/permissions.yaml#/TeamMembership
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+  delete:
+    tags: [Membership]
+    operationId: removeTeamMember
+    summary: Remove a Team Member or leave the Team Space.
+    responses:
+      "204":
+        description: Membership removed.
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/nodes/{nodeId}/grants:
+  parameters:
+    - name: nodeId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Sharing]
+    operationId: listNodeGrants
+    summary: List direct Grants on a Personal Space Node.
+    responses:
+      "200":
+        description: Direct Grants only.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/permissions.yaml#/NodeGrantList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/nodes/{nodeId}/grants/{userId}:
+  parameters:
+    - name: nodeId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+  put:
+    tags: [Sharing]
+    operationId: upsertNodeGrant
+    summary: Create or change a Direct Share.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/permissions.yaml#/UpsertNodeGrant
+    responses:
+      "200":
+        description: Current direct and effective Role.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/permissions.yaml#/NodeGrant
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+  delete:
+    tags: [Sharing]
+    operationId: removeNodeGrant
+    summary: Remove one direct Grant.
+    responses:
+      "200":
+        description: Effective Role remaining through ancestor Grants.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/permissions.yaml#/GrantRemovalResult
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/nodes/{nodeId}/link-sharing:
+  parameters:
+    - name: nodeId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Sharing]
+    operationId: getNodeLinkSharing
+    summary: Get Link Sharing settings for a Personal Space Node.
+    responses:
+      "200":
+        description: Current Link Sharing settings.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/permissions.yaml#/NodeLinkSharing
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+  put:
+    tags: [Sharing]
+    operationId: updateNodeLinkSharing
+    summary: Enable, disable, or change Link Sharing for a Personal Space Node.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/permissions.yaml#/UpdateNodeLinkSharing
+    responses:
+      "200":
+        description: Updated Link Sharing settings.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/permissions.yaml#/NodeLinkSharing
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
