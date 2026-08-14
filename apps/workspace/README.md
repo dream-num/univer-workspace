@@ -18,8 +18,14 @@ pnpm workspace:dev:server
 pnpm workspace:dev:client
 ```
 
-The client runs at `http://127.0.0.1:5173` and proxies product requests to the
-server at `http://127.0.0.1:3020`.
+`workspace:dev:server` watches the backend and listens at
+`http://127.0.0.1:3020`. If `dist/public` exists, it also serves that last-built
+static frontend; frontend source changes are not rebuilt or hot-reloaded there.
+
+`workspace:dev:client` starts Vite at `http://127.0.0.1:5173`, enables frontend
+hot module replacement, and proxies product API and WebSocket requests to port
+3020. Run both commands and open port 5173 for frontend development. Port 3020
+alone is sufficient for backend work or viewing the latest built frontend.
 
 API documentation is available at:
 

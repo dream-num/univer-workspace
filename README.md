@@ -32,9 +32,18 @@ pnpm workspace:dev:server
 pnpm workspace:dev:client
 ```
 
-The browser runs at <http://127.0.0.1:5173> and the server at
-<http://127.0.0.1:3020>. See [the Workspace application README](apps/workspace/README.md)
-for configuration, deployment, and data migration details.
+`workspace:dev:server` watches the backend and listens on
+<http://127.0.0.1:3020>. When `apps/workspace/dist/public` exists, the server also
+serves that last-built static frontend; it does not rebuild or hot-reload frontend
+changes.
+
+`workspace:dev:client` starts the Vite frontend server at
+<http://127.0.0.1:5173>, enables hot module replacement, and proxies API and WebSocket
+requests to port 3020. Run both commands and open port 5173 for frontend development.
+Use port 3020 alone for backend work or to inspect the latest built frontend.
+
+See [the Workspace application README](apps/workspace/README.md) for configuration,
+deployment, and data migration details.
 
 ## Verification
 
