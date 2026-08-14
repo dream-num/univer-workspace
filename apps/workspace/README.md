@@ -15,17 +15,17 @@ Requirements:
 ```bash
 pnpm install
 pnpm workspace:dev:server
-pnpm workspace:dev:client
+pnpm workspace:dev:web
 ```
 
 `workspace:dev:server` watches the backend and listens at
 `http://127.0.0.1:3020`. If `dist/public` exists, it also serves that last-built
-static frontend; frontend source changes are not rebuilt or hot-reloaded there.
+static web application; web source changes are not rebuilt or hot-reloaded there.
 
-`workspace:dev:client` starts Vite at `http://127.0.0.1:5173`, enables frontend
+`workspace:dev:web` starts Vite at `http://127.0.0.1:5173`, enables web
 hot module replacement, and proxies product API and WebSocket requests to port
-3020. Run both commands and open port 5173 for frontend development. Port 3020
-alone is sufficient for backend work or viewing the latest built frontend.
+3020. Run both commands and open port 5173 for web development. Port 3020
+alone is sufficient for backend work or viewing the latest built web application.
 
 API documentation is available at:
 

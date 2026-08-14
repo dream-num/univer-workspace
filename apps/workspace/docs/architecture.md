@@ -1,6 +1,6 @@
 # Univer Workspace 架构
 
-Univer Workspace 是仓库 `apps/workspace` 中的一个 private package。React 客户端、产品 API、
+Univer Workspace 是仓库 `apps/workspace` 中的一个 private package。React Web 应用、产品 API、
 Univer Collaboration Endpoint 和后台任务由同一个 Node 进程部署，共享静态资源目录和
 SQLite 数据目录。
 
@@ -12,21 +12,21 @@ SQLite 数据目录。
 | UI | Base UI、Tailwind CSS、应用 UI Primitive |
 | 路由 | TanStack Router 文件路由 |
 | 服务端状态 | TanStack Query |
-| 客户端状态 | React 本地状态 |
+| Web 本地状态 | React 本地状态 |
 | HTTP | Express 5 |
 | 产品数据库 | Node `node:sqlite`、显式 SQL schema |
 | API 客户端 | `openapi-typescript`、`openapi-fetch` |
 | API 文档 | OpenAPI 3.1、Redocly CLI、Scalar |
 | 单元与集成测试 | Vitest |
 
-OpenAPI 是独立的 HTTP 契约，用于文档、客户端类型生成和契约检查，不参与 Express
+OpenAPI 是独立的 HTTP 契约，用于文档、Web API 类型生成和契约检查，不参与 Express
 运行时路由。每个服务端业务模块显式注册自己的 Router。
 
 ## 目录
 
 ```text
 apps/workspace/
-├── client/
+├── web/
 │   ├── index.html
 │   └── src/
 │       ├── app/
@@ -97,19 +97,19 @@ apps/workspace/
 ├── Dockerfile
 ├── package.json
 ├── redocly.yaml
-├── tsconfig.client.json
+├── tsconfig.web.json
 ├── tsconfig.server.json
 └── vite.config.ts
 ```
 
-`client` 和 `server` 是同一 package 的两个编译入口：
+`web` 和 `server` 是同一 package 的两个编译入口：
 
-- Vite 把客户端构建到 `dist/public`。
+- Vite 把 Web 应用构建到 `dist/public`。
 - TypeScript 把服务端构建到 `dist/server`。
-- Node 进程挂载产品 API、Collaboration Endpoint、API 文档和客户端静态资源。
+- Node 进程挂载产品 API、Collaboration Endpoint、API 文档和 Web 静态资源。
 - Docker 镜像只包含 production dependencies、`dist` 和数据库 schema。
 
-## 客户端
+## Web 应用
 
 `routes` 对应 URL 和页面组合，`features` 按用户能力组织，`shared` 保存无业务归属的
 基础代码。依赖方向为：

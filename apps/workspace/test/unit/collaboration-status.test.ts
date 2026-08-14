@@ -1,6 +1,6 @@
 import { CollaborationStatus } from "@univerjs-pro/collaboration-client";
 import { describe, expect, it } from "vitest";
-import { collaborationStatusMessageKey } from "../../client/src/features/editor/collaboration-status";
+import { collaborationStatusMessageKey } from "../../web/src/features/editor/collaboration-status";
 
 describe("collaborationStatusMessageKey", () => {
   it("distinguishes permission rejection from an editing conflict", () => {

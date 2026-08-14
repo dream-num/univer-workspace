@@ -40,7 +40,7 @@ describe("Workspace Sheet presets", () => {
       import("@univerjs/preset-sheets-sort"),
       import("@univerjs/preset-sheets-table"),
       import("@univerjs/preset-sheets-thread-comment"),
-      import("../../client/src/features/editor/sheet-presets.js"),
+      import("../../web/src/features/editor/sheet-presets.js"),
     ]);
     Object.defineProperty(globalThis, "window", {
       configurable: true,

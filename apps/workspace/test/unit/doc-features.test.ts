@@ -46,7 +46,7 @@ describe("Workspace Doc feature plugins", () => {
       import("@univerjs-pro/docs-table"),
       import("@univerjs-pro/docs-table-ui"),
       import("@univerjs-pro/engine-formula"),
-      import("../../client/src/features/editor/doc-features.js"),
+      import("../../web/src/features/editor/doc-features.js"),
     ]);
     const expectedPlugins = [
       UniverDocsCalloutPlugin,
@@ -104,7 +104,7 @@ describe("Workspace Doc feature plugins", () => {
       { getThreadCommentCollaborationPlugins },
     ] = await Promise.all([
       import("@univerjs-pro/thread-comment-datasource"),
-      import("../../client/src/features/editor/thread-comment-features.js"),
+      import("../../web/src/features/editor/thread-comment-features.js"),
     ]);
 
     expect(getThreadCommentCollaborationPlugins()).toEqual([

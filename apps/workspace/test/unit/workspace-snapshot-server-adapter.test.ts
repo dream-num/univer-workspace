@@ -6,7 +6,7 @@ import {
   BrowserWorkspaceSourceSnapshotResolver,
   WorkspaceSnapshotServerAdapter,
   withWorkspaceSnapshotServerOverride,
-} from "../../client/src/features/editor/workspace-snapshot-server-adapter";
+} from "../../web/src/features/editor/workspace-snapshot-server-adapter";
 import { describe, expect, it, vi } from "vitest";
 
 describe("WorkspaceSnapshotServerAdapter", () => {

@@ -16,7 +16,7 @@
     "sdk:update": "node scripts/update-sdk-dependencies.mjs",
     "link:workspace-cli": "pnpm --filter univer-workspace-cli build && pnpm link --global ./apps/cli",
     "unlink:workspace-cli": "node scripts/unlink-workspace-cli.mjs",
-    "workspace:dev:client": "pnpm --filter @univerjs/univer-workspace dev:client",
+    "workspace:dev:web": "pnpm --filter @univerjs/univer-workspace dev:web",
     "workspace:dev:server": "pnpm --filter @univerjs/univer-workspace dev:server",
     "workspace:start": "pnpm --filter @univerjs/univer-workspace start"
   },

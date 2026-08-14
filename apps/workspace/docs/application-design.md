@@ -183,9 +183,9 @@ Collaboration Snapshot 重试、Node 元数据加载、Worktree Preview 和失�
 
 业务代码没有旧字段回退、旧表 Union、双写或旧 Route 转发。
 
-## 客户端
+## Web 应用
 
-客户端 Tree Row 总是 Node：
+Web 应用的 Tree Row 总是 Node：
 
 - `/nodes/{nodeId}` 是 Canonical URL；
 - `hasChildren` 控制树展开；
@@ -196,5 +196,5 @@ Collaboration Snapshot 重试、Node 元数据加载、Worktree Preview 和失�
 - 权限、Move、Trash 全部传 Node ID；
 - Recent 和 Worktree 内容操作使用 Resource ID。
 
-OpenAPI 生成类型是客户端与服务端的唯一 HTTP 结构约束。旧 Route 不在 OpenAPI 中，
-Express 的未知 `/api/*` 路由直接返回 404，不落入客户端 SPA Fallback。
+OpenAPI 生成类型是 Web 应用与服务端的唯一 HTTP 结构约束。旧 Route 不在 OpenAPI 中，
+Express 的未知 `/api/*` 路由直接返回 404，不落入 Web SPA Fallback。

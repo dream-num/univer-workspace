@@ -5,7 +5,7 @@ export default defineConfig({
     environment: "node",
     fileParallelism: false,
     include: [
-      "client/src/**/*.test.ts",
+      "web/src/**/*.test.ts",
       "server/src/**/*.test.ts",
       "test/**/*.test.ts",
     ],

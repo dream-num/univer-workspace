@@ -10,8 +10,8 @@
     "types": ["vite/client"]
   },
   "include": [
-    "client/**/*.ts",
-    "client/**/*.tsx",
+    "web/**/*.ts",
+    "web/**/*.tsx",
     "generated/**/*.d.ts",
     "vite.config.ts"
   ]

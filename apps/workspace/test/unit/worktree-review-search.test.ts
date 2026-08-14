@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseWorktreeDashboardSearch,
   reviewViewForOpenMode,
-} from "../../client/src/features/worktrees/worktree-review-search.js";
+} from "../../web/src/features/worktrees/worktree-review-search.js";
 
 describe("parseWorktreeDashboardSearch", () => {
   it("keeps the selected Worktree, Unit, and version", () => {

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveMergeReview,
   resolveMergeReviewStatus,
-} from "../../client/src/features/editor/merge-review.js";
+} from "../../web/src/features/editor/merge-review.js";
 
 describe("resolveMergeReview", () => {
   it("loads the frozen Worktree draft when trunk has not advanced", () => {
