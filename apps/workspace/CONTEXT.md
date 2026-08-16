@@ -16,6 +16,20 @@ The installable command-line client for operating a remote Univer Workspace and 
 content. It belongs to the Univer Workspace product but has its own release version.
 _Avoid_: Univer CLI, Workspace Agent
 
+## Delivery
+
+**Stable Release Tag**:
+An immutable `vX.Y.Z` repository source coordinate used by the stable Univer Workspace
+CLI release and by a manually selected Workspace deployment. Creating the tag does not
+deploy Workspace or promote the CLI to a public registry.
+_Avoid_: Deployment, Public Release
+
+**SDK Baseline**:
+The one exact release shared by every version-coupled `@univer-cli/*`, `@univerjs/*`,
+and `@univerjs-pro/*` dependency in the repository. It is independent of the Stable
+Release Tag and the Univer Workspace CLI release version.
+_Avoid_: CLI version, Workspace version
+
 ## Content
 
 **Space**:

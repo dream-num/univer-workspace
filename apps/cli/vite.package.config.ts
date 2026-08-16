@@ -10,6 +10,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const sourcePackageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")) as {
   readonly version: string;
 };
+const buildVersion = process.env.UNIVER_WORKSPACE_CLI_BUILD_VERSION ?? sourcePackageJson.version;
 const nodeBuiltins = new Set([
   ...builtinModules,
   ...builtinModules.map((name) => `node:${name}`),
@@ -44,7 +45,7 @@ export default defineConfig({
     target: "node22",
   },
   define: {
-    __UNIVER_WORKSPACE_CLI_VERSION__: JSON.stringify(sourcePackageJson.version),
+    __UNIVER_WORKSPACE_CLI_VERSION__: JSON.stringify(buildVersion),
     __UNIVER_RUST_FORMULA_LOCAL_BINDING_FALLBACKS__: "false",
   },
   plugins: [provideNodeGlobalsForBundledCommonjs()],

@@ -4,6 +4,7 @@ import {
   createDistributionPackageJson,
   EXTERNAL_RUNTIME_DEPENDENCIES,
   PACKAGE_FILES,
+  PUBLISH_REGISTRY,
 } from "./package-artifact.mjs";
 import { injectNodeCommonjsGlobals } from "./node-commonjs-globals.mjs";
 
@@ -15,7 +16,7 @@ test("generates a publishable CLI-only manifest", () => {
   const result = createDistributionPackageJson(
     {
       name: "univer-workspace-cli",
-      version: "0.4.0",
+      version: "0.0.0",
       private: true,
       description: "Workspace CLI",
       engines: { node: ">=22.12.0" },
@@ -25,6 +26,7 @@ test("generates a publishable CLI-only manifest", () => {
       },
     },
     externalDependencies,
+    "0.4.0",
   );
 
   assert.equal(result.private, false);
@@ -36,6 +38,8 @@ test("generates a publishable CLI-only manifest", () => {
   assert.deepEqual(result.engines, { node: ">=22.12.0" });
   assert.equal(result.description, "Workspace CLI");
   assert.equal(result.devDependencies, undefined);
+  assert.equal(result.version, "0.4.0");
+  assert.deepEqual(result.publishConfig, { registry: PUBLISH_REGISTRY });
 });
 
 test("rejects an undeclared external runtime dependency", () => {
@@ -46,10 +50,11 @@ test("rejects an undeclared external runtime dependency", () => {
       createDistributionPackageJson(
         {
           name: "univer-workspace-cli",
-          version: "0.4.0",
+          version: "0.0.0",
           engines: { node: ">=22.12.0" },
         },
         dependencies,
+        "0.4.0",
       ),
     /must declare an npm version/u,
   );
@@ -61,15 +66,32 @@ test("rejects a workspace external runtime dependency", () => {
       createDistributionPackageJson(
         {
           name: "univer-workspace-cli",
-          version: "0.4.0",
+          version: "0.0.0",
           engines: { node: ">=22.12.0" },
         },
         {
           ...externalDependencies,
           [EXTERNAL_RUNTIME_DEPENDENCIES[0]]: "workspace:*",
         },
+        "0.4.0",
       ),
     /must declare an npm version/u,
+  );
+});
+
+test("requires the source manifest to keep the sentinel version", () => {
+  assert.throws(
+    () =>
+      createDistributionPackageJson(
+        {
+          name: "univer-workspace-cli",
+          version: "0.4.0",
+          engines: { node: ">=22.12.0" },
+        },
+        externalDependencies,
+        "0.4.0",
+      ),
+    /Source package version must remain 0\.0\.0/u,
   );
 });
 

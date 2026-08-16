@@ -1,18 +1,18 @@
-name: ⚓ Push
+name: Deploy Workspace
 
 on:
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: Existing stable release tag in vX.Y.Z form
+        type: string
+        required: true
+
       environment:
         description: 'Environment to run deploy'
         type: environment
         required: true
         default: staging
-
-      image-tag:
-        description: Image tag (Optional, only used for existing images)
-        type: string
-        default: ''
 
       runner-name:
         description: Runner
@@ -25,10 +25,13 @@ on:
       acr-region:
         description: ACR registry
         type: choice
-        default: 'shenzhen'
+        default: 'cn-shenzhen'
         options:
           - 'cn-shenzhen'
           - 'us-east-1'
+
+permissions:
+  contents: read
 
 jobs:
   build-docker-image:
@@ -45,6 +48,30 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
+          ref: refs/tags/${{ inputs.release_tag }}
+
+      - name: Validate release tag
+        id: release
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "release_tag must use stable vX.Y.Z form" >&2
+            exit 1
+          fi
+          if [[ "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" != "$(git rev-parse HEAD)" ]]; then
+            echo "Checkout does not match release tag $RELEASE_TAG" >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor HEAD "refs/remotes/origin/$BASE_BRANCH"; then
+            echo "Release tag commit must be contained in origin/$BASE_BRANCH" >&2
+            exit 1
+          fi
+          echo "image_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/setup
         id: setup
@@ -53,27 +80,32 @@ jobs:
           environment: ${{ inputs.environment }}
 
       - name: Build and Push Image
+        env:
+          IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
         run: |
-          IMAGE_TAG=$(echo "${{ github.sha }}" | cut -c 1-7)
-          make push_image IMAGE_TAG=$IMAGE_TAG CR=${{ env.CR }}
+          make push_image "IMAGE_TAG=$IMAGE_TAG" "CR=$CR"
 
   deploy-k8s:
     name: DeployK8s
     runs-on: arc-runner-set
     needs: build-docker-image
     environment: ${{ inputs.environment }}
+    env:
+      CR: univer-acr-registry.cn-shenzhen.cr.aliyuncs.com
     steps:
       - name: Set IMAGE_TAG environment variable
-        run: echo "IMAGE_TAG=$(echo ${{ github.sha }} | cut -c 1-7)" >> $GITHUB_ENV
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: echo "IMAGE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
 
       - name: Set FEATURE environment variable
         if: ${{ startsWith(inputs.environment, 'feature') }}
-        run: echo "FEATURE=$(echo ${GITHUB_REF#refs/heads/feat/})" >> $GITHUB_ENV
+        run: echo "FEATURE=$(echo ${GITHUB_REF#refs/heads/feat/})" >> "$GITHUB_ENV"
 
       - name: Set US ACR region
         if: ${{ inputs.acr-region == 'us-east-1' || inputs.environment == 'prod' || inputs.environment == 'feature prod' }}
         run: |
-          echo "CR=univer-acr-eastus-registry.us-east-1.cr.aliyuncs.com" >> $GITHUB_ENV
+          echo "CR=univer-acr-eastus-registry.us-east-1.cr.aliyuncs.com" >> "$GITHUB_ENV"
 
       - uses: peter-evans/repository-dispatch@v2
         with:
@@ -81,23 +113,3 @@ jobs:
           repository: dream-num/helm-chart-private
           event-type: ${{ vars.DISPATCH_EVENT_TYPE }}
           client-payload: '{"service":"colla-workspace","tag":"${{ env.IMAGE_TAG }}","feature":"${{ env.FEATURE }}","registry":"${{ env.CR }}"}'
-
-  deploy-manual:
-    name: DeployK8s
-    runs-on: arc-runner-set
-    environment: ${{ inputs.environment }}
-    if: ${{ inputs.image-tag }}
-    steps:
-      - name: Set IMAGE_TAG environment variable
-        run: echo "IMAGE_TAG=${{ inputs.image-tag }}" >> $GITHUB_ENV
-
-      - name: Set FEATURE environment variable
-        if: ${{ startsWith(inputs.environment, 'feature') }}
-        run: echo "FEATURE=$(echo ${GITHUB_REF#refs/heads/feat/})" >> $GITHUB_ENV
-
-      - uses: peter-evans/repository-dispatch@v2
-        with:
-          token: ${{ secrets.GH_TOKEN }}
-          repository: dream-num/helm-chart-private
-          event-type: ${{ vars.DISPATCH_EVENT_TYPE }}
-          client-payload: '{"service":"colla-workspace","tag":"${{ env.IMAGE_TAG }}","feature":"${{ env.FEATURE }}"}'

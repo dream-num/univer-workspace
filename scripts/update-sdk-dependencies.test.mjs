@@ -10,11 +10,18 @@ import {
 
 test("requires one exact SDK version", () => {
   assert.equal(
-    parseSdkUpdateVersion(["--", "1.0.0-insiders.20260805-b15e7f3"]),
+    parseSdkUpdateVersion([
+      "--sdk_version",
+      "1.0.0-insiders.20260805-b15e7f3",
+    ]),
     "1.0.0-insiders.20260805-b15e7f3"
   );
-  assert.throws(() => parseSdkUpdateVersion([]), /exactly one exact SemVer/);
-  assert.throws(() => parseSdkUpdateVersion(["^1.0.0"]), /exactly one exact SemVer/);
+  assert.equal(
+    parseSdkUpdateVersion(["--sdk_version=1.0.0"]),
+    "1.0.0"
+  );
+  assert.throws(() => parseSdkUpdateVersion([]), /--sdk_version/);
+  assert.throws(() => parseSdkUpdateVersion(["^1.0.0"]), /--sdk_version/);
 });
 
 test("aligns SDK dependencies and preserves independent and workspace versions", () => {

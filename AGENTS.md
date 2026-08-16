@@ -50,7 +50,7 @@ checkout、其他仓库的绝对路径或未发布源码目录。
 SDK release。升级时运行：
 
 ```bash
-pnpm sdk:update -- <exact-sdk-version>
+pnpm update:sdk --sdk_version <exact-sdk-version>
 ```
 
 必须同时提交所有受影响的 manifest 和 `pnpm-lock.yaml`，不得手工只更新其中一部分。
@@ -81,9 +81,17 @@ pnpm sdk:update -- <exact-sdk-version>
 - `apps/workspace` 和 `packages/reference-provider` 是 private workspace package，不发布为公共 SDK。
 - `univer-workspace-cli` 通过仓库内 packaging workflow 生成内部安装包；不要把 source workspace
   manifest 的 `private` 状态误当成公共 npm SDK 合同。
+- `apps/cli/package.json` 的 source version 固定为 `0.0.0`；稳定 CLI 版本只来自 `vX.Y.Z` git tag，
+  insiders 版本由 release workflow 的完整 `X.Y.Z-insider.<suffix>` 输入提供，发布过程不得改写 source
+  manifest。
+- CLI 只有 `latest`、`insiders` 和 `dev` 三个发布通道。`latest` 只由默认分支上的稳定 tag push
+  触发，`insiders` 只由默认分支手动 CI 触发，`dev` 只允许本地触发。`latest` 和 `insiders`
+  发布前必须检查整个 workspace 的单一 SDK baseline；`dev` 明确跳过该检查。
 - CLI package artifact 必须只包含运行所需代码、资源和版本匹配的 Skills，不得依赖当前 checkout。
 - `packages/reference-provider` 不增加独立发布、版本或外部 consumer 合同。
-- Docker image 和 CLI artifact 是独立交付物；不要因为它们位于同一仓库而耦合版本或发布流程。
+- 稳定 `vX.Y.Z` tag 是 CLI release 与 Workspace deployment 共享的不可变源码坐标；tag push 只发布
+  CLI，部署 workflow 只手动部署所选 tag。Docker image 和 CLI artifact 的交付时机与执行流程仍然独立。
+- 当前 release workflow 只写 insider-npm；公开 npm Promotion 属于独立后续工作，不得加入该 workflow。
 
 ## 文档维护
 

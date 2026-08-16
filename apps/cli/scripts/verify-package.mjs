@@ -3,7 +3,11 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { init as initEsmLexer, parse as parseEsmImports } from "es-module-lexer";
-import { EXTERNAL_RUNTIME_DEPENDENCIES, PACKAGE_FILES } from "./package-artifact.mjs";
+import {
+  EXTERNAL_RUNTIME_DEPENDENCIES,
+  PACKAGE_FILES,
+  PUBLISH_REGISTRY,
+} from "./package-artifact.mjs";
 
 await initEsmLexer;
 
@@ -11,6 +15,7 @@ const packageRoot = resolve(process.argv[2] ?? "package-dist");
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
 
 assertEqual(packageJson.private, false, "private");
+assertEqual(packageJson.publishConfig?.registry, PUBLISH_REGISTRY, "publish registry");
 assertEqual(packageJson.engines?.node, ">=22.12.0", "Node engine");
 assertEqual(
   JSON.stringify(packageJson.bin),
