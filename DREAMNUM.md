@@ -24,7 +24,7 @@
   and [OpenAPI source](apps/workspace/contracts/http/openapi.yaml).
 - **Univer Workspace CLI** — the internally packaged `univer-workspace-cli` application for agent-driven remote
   Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows. Contract:
-  [CLI README](apps/cli/README.md).
+  [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli.yml).
 
 ## Depends on
 
@@ -65,8 +65,10 @@
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
 - OAuth secrets, trusted Bot credentials, registry credentials, production licenses, and deployment credentials are
   environment or build configuration and must not be committed to the repository.
-- Production images are handed off to the private deployment repository; database migration and rollout ordering
-  remain part of the Workspace application contract.
+- Stable `vX.Y.Z` tags are immutable source coordinates shared by the stable CLI release and manually selected
+  Workspace deployments. Tag push publishes only the CLI; deployment remains a separate manual workflow.
+- Production images use the selected release tag and are handed off to the private deployment repository; database
+  migration and rollout ordering remain part of the Workspace application contract.
 
 ## Update contract
 

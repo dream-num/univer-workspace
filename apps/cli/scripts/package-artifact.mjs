@@ -13,6 +13,10 @@ export const EXTERNAL_RUNTIME_DEPENDENCIES = [
 ];
 
 export const PACKAGE_FILES = ["bin", "dist", "skill-data", "README.md"];
+export const SOURCE_PACKAGE_VERSION = "0.0.0";
+export const PUBLISH_REGISTRY = "https://insider-npm-registry.univer.work/";
+const EXACT_SEMVER_PATTERN =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 
 export async function assemblePackageArtifact(options) {
   const sourcePackageJson = JSON.parse(
@@ -21,6 +25,7 @@ export async function assemblePackageArtifact(options) {
   const packageJson = createDistributionPackageJson(
     sourcePackageJson,
     resolveExternalRuntimeDependencies(options.appRoot, sourcePackageJson),
+    options.version,
   );
 
   await Promise.all([
@@ -51,7 +56,13 @@ async function copyCollaborationRuntimeWorkerChild(appRoot, packageRoot) {
   await cp(join(dirname(runtimePool.path), "dist", "worker-child.mjs"), target);
 }
 
-export function createDistributionPackageJson(source, runtimeDependencies) {
+export function createDistributionPackageJson(source, runtimeDependencies, version = source.version) {
+  if (source.version !== SOURCE_PACKAGE_VERSION) {
+    throw new Error(
+      `Source package version must remain ${SOURCE_PACKAGE_VERSION}, got ${String(source.version)}`,
+    );
+  }
+  const releaseVersion = assertExactSemver(version, "Package version");
   const dependencies = {};
   for (const dependencyName of EXTERNAL_RUNTIME_DEPENDENCIES) {
     const version = runtimeDependencies[dependencyName];
@@ -65,7 +76,7 @@ export function createDistributionPackageJson(source, runtimeDependencies) {
 
   return {
     name: source.name,
-    version: source.version,
+    version: releaseVersion,
     private: false,
     ...copyMetadata(source),
     type: "module",
@@ -75,7 +86,17 @@ export function createDistributionPackageJson(source, runtimeDependencies) {
     },
     files: PACKAGE_FILES,
     dependencies,
+    publishConfig: {
+      registry: PUBLISH_REGISTRY,
+    },
   };
+}
+
+export function assertExactSemver(version, label = "Version") {
+  if (typeof version !== "string" || !EXACT_SEMVER_PATTERN.test(version)) {
+    throw new Error(`${label} must be an exact SemVer version: ${String(version)}`);
+  }
+  return version;
 }
 
 export function resolveExternalRuntimeDependencies(appRoot, source) {

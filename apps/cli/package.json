@@ -1,6 +1,6 @@
 {
   "name": "univer-workspace-cli",
-  "version": "0.4.0",
+  "version": "0.0.0",
   "private": true,
   "description": "Agent-ready Univer Workspace automation powered by the Univer SDK.",
   "keywords": [

@@ -20,10 +20,18 @@ const EXACT_SEMVER_PATTERN =
 
 export function parseSdkUpdateVersion(argv) {
   const args = argv.filter((argument) => argument !== "--");
-  if (args.length !== 1 || !EXACT_SEMVER_PATTERN.test(args[0])) {
-    throw new Error("SDK update requires exactly one exact SemVer version.");
+  let version;
+  if (args.length === 2 && args[0] === "--sdk_version") {
+    version = args[1];
+  } else if (args.length === 1 && args[0].startsWith("--sdk_version=")) {
+    version = args[0].slice("--sdk_version=".length);
   }
-  return args[0];
+  if (version === undefined || !EXACT_SEMVER_PATTERN.test(version)) {
+    throw new Error(
+      "SDK update requires --sdk_version <exact-semver> as its only argument.",
+    );
+  }
+  return version;
 }
 
 export function alignManifestSdkDependencies(

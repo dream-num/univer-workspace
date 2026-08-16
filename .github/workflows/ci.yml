@@ -24,4 +24,6 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm package:workspace-cli
+      - run: pnpm --filter univer-workspace-cli package:smoke
       - run: pnpm --filter @univerjs/univer-workspace test:production-import

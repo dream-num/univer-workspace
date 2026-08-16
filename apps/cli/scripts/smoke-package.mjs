@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 const packageRoot = resolve(process.argv[2] ?? "package-dist");
+const packageManifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 const temporaryRoot = await mkdtemp(join(tmpdir(), "univer-workspace-cli-package-"));
 let executable;
 let smokeEnv;
@@ -37,7 +38,13 @@ try {
     process.platform === "win32" ? "univer-workspace-cli.cmd" : "univer-workspace-cli",
   );
   smokeEnv = { ...process.env, UNIVER_HOME: univerHome };
-  run(executable, ["--version"], installRoot, smokeEnv);
+  const version = run(executable, ["--version"], installRoot, smokeEnv);
+  const expectedVersion = `univer-workspace-cli ${packageManifest.version}`;
+  if (version.stdout.trim() !== expectedVersion) {
+    throw new Error(
+      `Installed CLI version mismatch: expected ${expectedVersion}, got ${version.stdout.trim()}`,
+    );
+  }
   run(executable, ["--help"], installRoot, smokeEnv);
   run(executable, ["skills", "list", "--json"], installRoot, smokeEnv);
   run(executable, ["api", "--help"], installRoot, smokeEnv);

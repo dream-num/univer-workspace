@@ -1,0 +1,157 @@
+name: Release CLI to insider-npm
+run-name: Release CLI to insider-npm ${{ github.event_name == 'push' && github.ref_name || inputs.version }}${{ inputs.dry_run && ' (dry-run)' || '' }}
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact insiders version in X.Y.Z-insider.<suffix> form
+        required: true
+        type: string
+      dry_run:
+        description: Build and verify without publishing
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: univer-workspace-cli-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: ${{ github.event_name == 'push' || github.ref_name == github.event.repository.default_branch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      artifact_name: ${{ steps.release.outputs.artifact_name }}
+      publish: ${{ steps.release.outputs.publish }}
+      version: ${{ steps.release.outputs.version }}
+    env:
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve release request
+        id: release
+        shell: bash
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          DISPATCH_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            CHANNEL="latest"
+            DRY_RUN="false"
+          else
+            VERSION="$DISPATCH_VERSION"
+            CHANNEL="insiders"
+            DRY_RUN="$DISPATCH_DRY_RUN"
+          fi
+          {
+            echo "version=$VERSION"
+            echo "channel=$CHANNEL"
+            echo "dry_run=$DRY_RUN"
+            echo "artifact_name=univer-workspace-cli-$VERSION"
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "publish=false"
+            else
+              echo "publish=true"
+            fi
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "## Release CLI to insider-npm $VERSION"
+            echo
+            echo "- trigger: \`$GITHUB_EVENT_NAME\`"
+            echo "- channel: \`$CHANNEL\`"
+            echo "- npm dist-tag: \`$CHANNEL\`"
+            echo "- dry_run: \`$DRY_RUN\`"
+            echo "- source: \`$GITHUB_SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build and gate exact tarball
+        shell: bash
+        env:
+          RELEASE_CHANNEL: ${{ steps.release.outputs.channel }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          DRY_RUN: ${{ steps.release.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          MODE="--prepare-only"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            MODE="--dry-run"
+          fi
+          pnpm release:cli -- \
+            --channel="$RELEASE_CHANNEL" \
+            --version="$RELEASE_VERSION" \
+            "$MODE"
+
+      - name: Upload reviewed release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.release.outputs.artifact_name }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            .release/release-manifest.json
+            .release/*.tgz
+
+  publish:
+    if: ${{ needs.prepare.outputs.publish == 'true' }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+
+    steps:
+      - name: Checkout publisher
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Download reviewed release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.artifact_name }}
+          path: .release
+
+      - name: Publish reviewed tarball
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/univer-workspace-cli.npmrc
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm config set "//insider-npm-registry.univer.work/:_authToken" "$NODE_AUTH_TOKEN"
+          node scripts/release/publish-cli.mjs \
+            --manifest=.release/release-manifest.json \
+            --publish
