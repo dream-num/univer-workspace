@@ -35,6 +35,7 @@ test("defines one CI workflow for latest and insiders CLI releases", () => {
   assert.match(releaseWorkflow, /CHANNEL="insiders"/u);
   assert.match(releaseWorkflow, /^  prepare:$/mu);
   assert.match(releaseWorkflow, /^  publish:$/mu);
+  assert.match(releaseWorkflow, /include-hidden-files: true/u);
   assert.match(releaseWorkflow, /actions\/download-artifact@v4/u);
   assert.match(releaseWorkflow, /node scripts\/release\/publish-cli\.mjs/u);
   assert.doesNotMatch(releaseWorkflow, /Promotion|registry\.npmjs\.org/u);
