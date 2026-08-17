@@ -60,13 +60,15 @@ Univer SDK.
 Install the CLI from the internal Univer npm registry in the environment used by the agent:
 
 ```bash
-npm install --global univer-workspace-cli@latest \
+npm install --global univer-workspace-cli@insiders \
   --registry=https://insider-npm-registry.univer.work/
 ```
 
-Maintainers publish three internal channels: stable `latest`, CI-only
-`X.Y.Z-insider.<suffix>` versions under `insiders`, and local-only
-`X.Y.Z-dev.<suffix>` versions under `dev`. The source package version is a `0.0.0`
+Maintainers keep this application on the `0.4.x` line and publish three internal channels:
+tag-driven `0.4.x-alpha.<suffix>` versions under `alpha`, CI-only
+`0.4.x-insider.<suffix>` versions under `insiders`, and local-only
+`0.4.x-dev.<suffix>` versions under `dev`. Alpha is the only version eligible for a later
+external release. The source package version is a `0.0.0`
 sentinel; the release workflow injects the selected version into both the tarball and
 the CLI runtime. Public npm Promotion is not part of this repository's current release
 workflow.

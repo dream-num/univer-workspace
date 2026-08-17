@@ -27,25 +27,28 @@ test("keeps the source version as a sentinel and exposes one SDK update command"
   assert.equal(rootManifest.scripts["sdk:update"], undefined);
 });
 
-test("defines one CI workflow for latest and insiders CLI releases", () => {
+test("defines one CI workflow for alpha and insiders CLI releases", () => {
   assert.match(releaseWorkflow, /^name: Release CLI to insider-npm$/mu);
-  assert.match(releaseWorkflow, /tags:\n\s+- "v\*\.\*\.\*"/u);
+  assert.match(releaseWorkflow, /tags:\n\s+- "v0\.4\.\*-alpha\.\*"/u);
   assert.match(releaseWorkflow, /workflow_dispatch:/u);
-  assert.match(releaseWorkflow, /CHANNEL="latest"/u);
+  assert.match(releaseWorkflow, /CHANNEL="alpha"/u);
   assert.match(releaseWorkflow, /CHANNEL="insiders"/u);
+  assert.match(releaseWorkflow, /GITHUB_REF_NAME.*BASE_BRANCH/u);
   assert.match(releaseWorkflow, /^  prepare:$/mu);
   assert.match(releaseWorkflow, /^  publish:$/mu);
   assert.match(releaseWorkflow, /include-hidden-files: true/u);
   assert.match(releaseWorkflow, /actions\/download-artifact@v4/u);
   assert.match(releaseWorkflow, /node scripts\/release\/publish-cli\.mjs/u);
-  assert.doesNotMatch(releaseWorkflow, /Promotion|registry\.npmjs\.org/u);
+  assert.doesNotMatch(releaseWorkflow, /CHANNEL="latest"|Promotion|registry\.npmjs\.org/u);
 });
 
-test("deploys one existing stable release tag without an image bypass", () => {
+test("deploys one existing 0.4.x alpha release tag without an image bypass", () => {
   assert.match(deployWorkflow, /^name: Deploy Workspace$/mu);
   assert.match(deployWorkflow, /release_tag:\n[\s\S]*?required: true/u);
   assert.match(deployWorkflow, /ref: refs\/tags\/\$\{\{ inputs\.release_tag \}\}/u);
   assert.match(deployWorkflow, /IMAGE_TAG: \$\{\{ steps\.release\.outputs\.image_tag \}\}/u);
+  assert.match(deployWorkflow, /\^v0\\\.4\\\./u);
+  assert.match(deployWorkflow, /-alpha/u);
   assert.doesNotMatch(deployWorkflow, /image-tag:|deploy-manual:/u);
 });
 

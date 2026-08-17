@@ -13,6 +13,11 @@ export async function publishPreparedRelease(manifestPath, env = process.env) {
     JSON.parse(await readFile(absoluteManifestPath, "utf8")),
   );
   assertReleaseContext(manifest.channel, manifest.version, env);
+  if (manifest.channel !== "dev" && manifest.sourceSha !== env.GITHUB_SHA) {
+    throw new Error(
+      `Release manifest source ${manifest.sourceSha} does not match workflow source ${String(env.GITHUB_SHA)}.`,
+    );
+  }
   const tarballPath = join(dirname(absoluteManifestPath), manifest.tarball);
   const tarball = await readFile(tarballPath);
   const integrity = `sha512-${createHash("sha512").update(tarball).digest("base64")}`;
