@@ -29,7 +29,7 @@ await stopLegacyWorkspaceDaemonIfPresent({
   socketPath,
 });
 await createProgram({
-  browserRuntimeRoot: resolve(appRoot, "dist/render-runtime"),
+  renderPageRoot: resolve(appRoot, "dist/render-runtime"),
   config: createWorkspaceConfig(env),
   daemonEntry,
   env,

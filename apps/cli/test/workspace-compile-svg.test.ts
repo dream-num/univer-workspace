@@ -47,7 +47,7 @@ describe("Workspace compile-svg command", () => {
     );
 
     expect(createRuntime).toHaveBeenCalledWith({
-      browserRuntimeRoot: "/render-runtime",
+      renderPageRoot: "/render-runtime",
       env: {},
         license: UNIVER_LICENSE,
     });
@@ -120,7 +120,7 @@ function createHarness(
   const err: string[] = [];
   const out: string[] = [];
   const command = createWorkspaceCompileSvgCommand({
-    browserRuntimeRoot: "/render-runtime",
+    renderPageRoot: "/render-runtime",
     env: {},
     executeSlide: vi.fn(),
     ...overrides,

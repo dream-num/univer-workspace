@@ -34,7 +34,7 @@ describe("Workspace Slide layout lint", () => {
     const createRuntime = vi.fn(async () => runtime);
     const command = createWorkspaceUnitLayoutLintCommand(
       new WorkspaceUnitLayoutLintFeature({
-        browserRuntimeRoot: "/render-runtime",
+        renderPageRoot: "/render-runtime",
         createRuntime,
         env: {},
         source,
@@ -60,7 +60,7 @@ describe("Workspace Slide layout lint", () => {
     });
     expect(createRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
-        browserRuntimeRoot: "/render-runtime",
+        renderPageRoot: "/render-runtime",
         license: UNIVER_LICENSE,
       }),
     );
@@ -70,7 +70,7 @@ describe("Workspace Slide layout lint", () => {
   it("rejects a non-Slide target before creating a browser runtime", async () => {
     const createRuntime = vi.fn(async () => slideRuntime({ pages: [] }));
     const feature = new WorkspaceUnitLayoutLintFeature({
-      browserRuntimeRoot: "/render-runtime",
+      renderPageRoot: "/render-runtime",
       createRuntime,
       env: {},
       source: { loadUnit: async () => ({ unitType: "doc", unitData: { id: "doc-1" } }) },

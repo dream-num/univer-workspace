@@ -24,7 +24,7 @@ const ESTIMATE_LINT =
   "text boxes were sized by estimation (--estimate-text-size), not by real font metrics: text can sit off-position, especially centred or right-aligned lines; recompile without the flag (with a browser) before you ship";
 
 export interface WorkspaceCompileSvgCommandOptions {
-  readonly browserRuntimeRoot: string;
+  readonly renderPageRoot: string;
   readonly createRuntime?: (
     options: UniverRenderRuntimeOptions,
   ) => Promise<UniverTextMeasureRuntime>;
@@ -71,7 +71,7 @@ export function createWorkspaceCompileSvgCommand(
                 source: "univer-render-runtime",
                 measureLine: async (input) => {
                   runtimePromise ??= createRuntime({
-                    browserRuntimeRoot: dependencies.browserRuntimeRoot,
+                    renderPageRoot: dependencies.renderPageRoot,
                     env: dependencies.env,
                     license: resolveUniverLicense(dependencies.env),
                   });

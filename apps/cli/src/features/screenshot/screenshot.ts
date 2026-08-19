@@ -46,7 +46,7 @@ export interface WorkspaceScreenshotSource {
 }
 
 export interface WorkspaceScreenshotFeatureOptions {
-  readonly browserRuntimeRoot: string;
+  readonly renderPageRoot: string;
   readonly createRuntime?: (options: UniverRenderRuntimeOptions) => Promise<UniverRenderRuntime>;
   readonly cwd?: string;
   readonly daemon: Pick<DaemonClient, "request">;
@@ -134,7 +134,7 @@ export class WorkspaceScreenshotFeature implements WorkspaceScreenshotApplicatio
 
   public async capture(input: UnitScreenshotInput): Promise<UnitScreenshotResult> {
     const runtime = await this.#createRuntime({
-      browserRuntimeRoot: this.options.browserRuntimeRoot,
+      renderPageRoot: this.options.renderPageRoot,
       license: resolveUniverLicense(this.options.env),
       env: this.options.env,
       ...(input.signal === undefined ? {} : { signal: input.signal }),

@@ -51,7 +51,7 @@ describe("Workspace screenshot feature", () => {
       return { id: unitId };
     });
     const feature = new WorkspaceScreenshotFeature({
-      browserRuntimeRoot: "/render-runtime",
+      renderPageRoot: "/render-runtime",
       daemon: { request },
       env: {},
       openSource: async () => ({
@@ -118,7 +118,7 @@ describe("Workspace screenshot feature", () => {
       return { id: unitId };
     });
     const feature = new WorkspaceScreenshotFeature({
-      browserRuntimeRoot: "/render-runtime",
+      renderPageRoot: "/render-runtime",
       daemon: { request },
       env: {},
       openSource: async () => ({
@@ -179,7 +179,7 @@ describe("Workspace screenshot feature", () => {
       mediaType: "image/png",
     }));
     const feature = new WorkspaceScreenshotFeature({
-      browserRuntimeRoot: "/render-runtime",
+      renderPageRoot: "/render-runtime",
       daemon: { request },
       env: {},
       openSource: async () => ({
@@ -233,7 +233,7 @@ describe("Workspace screenshot feature", () => {
     ).resolves.toMatchObject({ unitId: "book-1", unitType: "sheet" });
     expect(createRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
-        browserRuntimeRoot: "/render-runtime",
+        renderPageRoot: "/render-runtime",
         license: UNIVER_LICENSE,
       }),
     );
@@ -296,7 +296,7 @@ function featureWith(
   overrides: Partial<ConstructorParameters<typeof WorkspaceScreenshotFeature>[0]> = {},
 ): WorkspaceScreenshotFeature {
   return new WorkspaceScreenshotFeature({
-    browserRuntimeRoot: "/render-runtime",
+    renderPageRoot: "/render-runtime",
     daemon: { request: vi.fn() },
     env: {},
     openSource: vi.fn(),

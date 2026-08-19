@@ -51,7 +51,7 @@ import { WORKSPACE_CLI_VERSION } from "./version.js";
 export { DEFAULT_ORIGIN } from "./config.js";
 
 export interface WorkspaceCliProgramOptions {
-  readonly browserRuntimeRoot: string;
+  readonly renderPageRoot: string;
   readonly config: Config;
   readonly createRenderRuntime?: (
     options: UniverRenderRuntimeOptions,
@@ -131,7 +131,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
       ),
   });
   const screenshot = new WorkspaceScreenshotFeature({
-    browserRuntimeRoot: options.browserRuntimeRoot,
+    renderPageRoot: options.renderPageRoot,
     daemon,
     env: options.env,
     openSource: async () => new WorkspaceContentSource(await auth.authenticatedHttp("client")),
@@ -140,7 +140,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
       : { createRuntime: options.createRenderRuntime }),
   });
   const unitLayoutLint = new WorkspaceUnitLayoutLintFeature({
-    browserRuntimeRoot: options.browserRuntimeRoot,
+    renderPageRoot: options.renderPageRoot,
     env: options.env,
     source: screenshot,
     ...(options.createSlideLayoutRuntime === undefined
@@ -169,7 +169,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createContentExecuteCommand(contentExecution),
     createWorkspaceCompileTypstCommand(compileTypst),
     createWorkspaceCompileSvgCommand({
-      browserRuntimeRoot: options.browserRuntimeRoot,
+      renderPageRoot: options.renderPageRoot,
       env: options.env,
       executeSlide: async (input) => await contentExecution.executeSlide(input),
       ...(options.createTextMeasureRuntime === undefined

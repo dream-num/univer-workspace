@@ -21,7 +21,7 @@ export interface WorkspaceUnitLayoutLintSource {
 }
 
 export interface WorkspaceUnitLayoutLintFeatureOptions {
-  readonly browserRuntimeRoot: string;
+  readonly renderPageRoot: string;
   readonly createRuntime?: (
     options: UniverRenderRuntimeOptions,
   ) => Promise<UniverSlideLayoutRuntime & { close(): Promise<void> }>;
@@ -60,7 +60,7 @@ export class WorkspaceUnitLayoutLintFeature {
     return {
       lint: async (input) => {
         const runtime = await this.#createRuntime({
-          browserRuntimeRoot: this.options.browserRuntimeRoot,
+          renderPageRoot: this.options.renderPageRoot,
           env: this.options.env,
           license: resolveUniverLicense(this.options.env),
           ...(input.signal === undefined ? {} : { signal: input.signal }),
