@@ -1,10 +1,15 @@
 import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 const packageRoot = resolve(process.argv[2] ?? "package-dist");
 const packageManifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
+const registry = packageManifest.publishConfig?.registry;
+if (typeof registry !== "string" || registry === "") {
+  throw new Error("Package manifest must declare publishConfig.registry");
+}
 const temporaryRoot = await mkdtemp(join(tmpdir(), "univer-workspace-cli-package-"));
 let executable;
 let smokeEnv;
@@ -27,7 +32,14 @@ try {
   const tarball = join(tarballRoot, basename(artifacts[0].filename));
   run(
     "npm",
-    ["install", "--no-audit", "--no-fund", "--package-lock=false", tarball],
+    [
+      "install",
+      "--no-audit",
+      "--no-fund",
+      "--package-lock=false",
+      `--registry=${registry}`,
+      tarball,
+    ],
     installRoot,
   );
 
@@ -50,6 +62,15 @@ try {
   run(executable, ["api", "--help"], installRoot, smokeEnv);
   run(executable, ["daemon", "start", "--json"], installRoot, smokeEnv);
   run(executable, ["daemon", "status", "--json"], installRoot, smokeEnv);
+  const binding = createRequire(join(installRoot, "package.json"))(
+    "@univerjs-pro/exchange-node-binding",
+  );
+  if (
+    typeof binding.exchangeImportToSnapshot !== "function" ||
+    typeof binding.exchangeExportSnapshot !== "function"
+  ) {
+    throw new Error("Installed package did not load the Exchange Node native binding");
+  }
   run(executable, ["daemon", "stop", "--json"], installRoot, smokeEnv);
   console.log("[package-smoke] installed tarball commands passed");
 } finally {

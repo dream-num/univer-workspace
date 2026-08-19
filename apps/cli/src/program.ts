@@ -8,7 +8,6 @@ import { createDaemonClient, createDaemonControl, type JsonValue } from "@univer
 import { createDaemonCommand } from "@univer-cli/daemon-command";
 import { createNodeResourceLibraryFactory } from "@univer-cli/resource-library";
 import { createResourcesCommand } from "@univer-cli/resource-library-command";
-import { createUnitExchange, type UnitExchange } from "@univer-cli/unit-exchange";
 import type {
   UniverRenderRuntime,
   UniverRenderRuntimeOptions,
@@ -69,7 +68,6 @@ export interface WorkspaceCliProgramOptions {
   readonly resourceManifestPath: string;
   readonly socketPath: string;
   readonly skillDataRoot: string;
-  readonly unitExchange?: UnitExchange;
   readonly write: (text: string) => void;
   readonly writeError?: (text: string) => void;
 }
@@ -123,7 +121,6 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
   });
   const exchange = new WorkspaceUnitExchangeFeature({
     daemon,
-    exchange: options.unitExchange ?? createUnitExchange(),
     createUnit: async (input) => await units.create(input),
     resolveRuntimeTarget: async (input) =>
       await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveRuntimeTarget(

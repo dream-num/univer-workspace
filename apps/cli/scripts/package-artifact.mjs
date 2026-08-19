@@ -8,7 +8,7 @@ export const EXTERNAL_RUNTIME_DEPENDENCIES = [
   "@univerjs-pro/cli-assets",
   "@univerjs-pro/doc-typst-native-binding",
   "@univerjs-pro/engine-formula-rust-binding",
-  "@univerjs-pro/uexcli",
+  "@univerjs-pro/exchange-node-binding",
   "puppeteer-core",
 ];
 
@@ -103,7 +103,6 @@ export function resolveExternalRuntimeDependencies(appRoot, source) {
   const appRequire = createRequire(resolve(appRoot, "package.json"));
   const renderRuntime = readPackageManifest(appRequire, "@univer-cli/univer-render-runtime");
   const typst = readPackageManifest(appRequire, "@univer-cli/doc-typst-facade");
-  const exchange = readPackageManifest(appRequire, "@univer-cli/unit-exchange");
   const headless = readPackageManifest(appRequire, "@univer-cli/headless-univer");
   const headlessRequire = createRequire(headless.path);
   const formula = readPackageManifest(headlessRequire, "@univerjs-pro/engine-formula-rust");
@@ -122,7 +121,10 @@ export function resolveExternalRuntimeDependencies(appRoot, source) {
       formula.manifest,
       "@univerjs-pro/engine-formula-rust-binding",
     ),
-    "@univerjs-pro/uexcli": readOwnedDependency(exchange.manifest, "@univerjs-pro/uexcli"),
+    "@univerjs-pro/exchange-node-binding": readOwnedDependency(
+      source,
+      "@univerjs-pro/exchange-node-binding",
+    ),
     "puppeteer-core": readOwnedDependency(renderRuntime.manifest, "puppeteer-core"),
   };
 }

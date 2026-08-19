@@ -30,13 +30,13 @@
 
 - [`dream-num/univer`](https://github.com/dream-num/univer) — owns the core Unit model, Facade APIs, mutations,
   rendering, and `@univerjs/*` packages composed by both applications. Contract: [repository boundary](AGENTS.md).
-- [`dream-num/univer-pro`](https://github.com/dream-num/univer-pro) — owns the Univer Pro content, collaboration
-  client, and UI packages consumed by the Browser and CLI. Contract: [repository boundary](AGENTS.md).
+- [`dream-num/univer-pro`](https://github.com/dream-num/univer-pro) — owns the Univer Pro content, Office exchange,
+  collaboration client, and UI packages consumed by the Browser and CLI. Contract: [repository boundary](AGENTS.md).
 - [`dream-num/univer-collaboration-sdk`](https://github.com/dream-num/univer-collaboration-sdk) — owns collaboration
   Service, revision, changeset, Worktree, persistence, Endpoint, and Transport contracts used by Workspace.
   Contract: [repository boundary](AGENTS.md).
 - [`dream-num/univer-cli-sdk`](https://github.com/dream-num/univer-cli-sdk) — owns the target-neutral headless,
-  execution, inspection, rendering, exchange, daemon, and Commander capabilities composed by Workspace CLI.
+  execution, inspection, rendering, daemon, and Commander capabilities composed by Workspace CLI.
   Contract: [repository boundary](AGENTS.md).
 - [`dream-num/univer-protocol`](https://github.com/dream-num/univer-protocol) — owns the protocol types consumed by
   collaboration and content workflows. Contract: [repository boundary](AGENTS.md).

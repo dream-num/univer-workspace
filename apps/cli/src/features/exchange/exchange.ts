@@ -1,20 +1,41 @@
 import { extname } from "node:path";
 import type { DaemonClient, JsonValue } from "@univer-cli/daemon";
 import {
-  UnitExchangeFormat,
-  type ImportableUnitType,
-  type UnitExchange,
-  type UnitExchangeData,
-} from "@univer-cli/unit-exchange";
+  ExchangeFormat,
+  FormulaCalculationMode,
+  exportToFile,
+  importFile,
+  type ExportOptions,
+  type ImportOptions,
+} from "@univerjs-pro/exchange-node";
 import { UniverInstanceType } from "@univerjs/core";
 import { workspaceError } from "../../errors.js";
 import type { WorkspaceRuntimeTarget } from "../../runtime/target.js";
 import type { WorkspaceUnitType } from "../space/model.js";
 import type { WorkspaceUnit } from "../worktree/model.js";
 
+type WorkspaceExchangeUnitType =
+  | UniverInstanceType.UNIVER_SHEET
+  | UniverInstanceType.UNIVER_BASE
+  | UniverInstanceType.UNIVER_DOC
+  | UniverInstanceType.UNIVER_SLIDE;
+type ImportOfficeFile = (
+  path: string,
+  options: ImportOptions,
+) => Promise<Readonly<Record<string, unknown>>>;
+type ExportOfficeFile = (
+  data: Readonly<Record<string, JsonValue>>,
+  path: string,
+  options: ExportOptions,
+) => Promise<void>;
+
+const importOfficeFile = importFile as unknown as ImportOfficeFile;
+const exportOfficeFile = exportToFile as unknown as ExportOfficeFile;
+
 export interface WorkspaceUnitExchangeDependencies {
   readonly daemon: Pick<DaemonClient, "request">;
-  readonly exchange: UnitExchange;
+  readonly exportToFile?: ExportOfficeFile;
+  readonly importFile?: ImportOfficeFile;
   readonly createUnit: (input: {
     readonly idempotencyKey?: string;
     readonly initialData: Readonly<Record<string, unknown>>;
@@ -70,18 +91,18 @@ export class WorkspaceUnitExchangeFeature {
   public async importFile(input: WorkspaceImportFileInput): Promise<WorkspaceImportFileResult> {
     const type = inferImportType(input.sourcePath, input.type);
     const unitType = toInstanceType(type);
-    const imported = await this.dependencies.exchange.importFile({
-      sourcePath: input.sourcePath,
-      unitType,
-    });
+    const imported = await (this.dependencies.importFile ?? importOfficeFile)(
+      input.sourcePath,
+      importOptions(input.sourcePath, unitType),
+    );
     const explicitName = nonEmpty(input.name);
     const name =
       explicitName ??
-      nonEmpty("name" in imported.data ? imported.data.name : undefined) ??
-      nonEmpty("title" in imported.data ? imported.data.title : undefined) ??
+      nonEmpty(imported["name"]) ??
+      nonEmpty(imported["title"]) ??
       `Imported ${type}`;
     const initialData = {
-      ...imported.data,
+      ...imported,
       ...(explicitName === undefined ? {} : { name: explicitName }),
     } as Readonly<Record<string, unknown>>;
     const created = await this.dependencies.createUnit({
@@ -129,7 +150,13 @@ export class WorkspaceUnitExchangeFeature {
         `Workspace runtime exported invalid UnitData for ${target.unitId}.`,
       );
     }
-    await exportUnit(this.dependencies.exchange, target.unitType, result, format, input.outputPath);
+    await exportUnit(
+      this.dependencies.exportToFile ?? exportOfficeFile,
+      target.unitType,
+      result,
+      format,
+      input.outputPath,
+    );
     return {
       outputPath: input.outputPath,
       type: target.unitType,
@@ -159,14 +186,14 @@ function inferImportType(
   );
 }
 
-function inferExportFormat(outputPath: string): UnitExchangeFormat {
+function inferExportFormat(outputPath: string): ExchangeFormat {
   switch (extname(outputPath).toLowerCase()) {
     case ".xlsx":
-      return UnitExchangeFormat.XLSX;
+      return ExchangeFormat.XLSX;
     case ".docx":
-      return UnitExchangeFormat.DOCX;
+      return ExchangeFormat.DOCX;
     case ".pptx":
-      return UnitExchangeFormat.PPTX;
+      return ExchangeFormat.PPTX;
     default:
       throw workspaceError(
         "workspace-exchange-export-format-unsupported",
@@ -177,12 +204,12 @@ function inferExportFormat(outputPath: string): UnitExchangeFormat {
 
 function requireCompatibleExport(
   type: Exclude<WorkspaceUnitType, "board">,
-  format: UnitExchangeFormat,
+  format: ExchangeFormat,
 ): void {
   const compatible =
-    ((type === "sheet" || type === "base") && format === UnitExchangeFormat.XLSX) ||
-    (type === "doc" && format === UnitExchangeFormat.DOCX) ||
-    (type === "slide" && format === UnitExchangeFormat.PPTX);
+    ((type === "sheet" || type === "base") && format === ExchangeFormat.XLSX) ||
+    (type === "doc" && format === ExchangeFormat.DOCX) ||
+    (type === "slide" && format === ExchangeFormat.PPTX);
   if (!compatible) {
     throw workspaceError(
       "workspace-exchange-export-format-mismatch",
@@ -191,7 +218,7 @@ function requireCompatibleExport(
   }
 }
 
-function toInstanceType(type: Exclude<WorkspaceUnitType, "board">): ImportableUnitType {
+function toInstanceType(type: Exclude<WorkspaceUnitType, "board">): WorkspaceExchangeUnitType {
   switch (type) {
     case "sheet":
       return UniverInstanceType.UNIVER_SHEET;
@@ -205,14 +232,34 @@ function toInstanceType(type: Exclude<WorkspaceUnitType, "board">): ImportableUn
 }
 
 async function exportUnit(
-  exchange: UnitExchange,
+  exchange: ExportOfficeFile,
   type: Exclude<WorkspaceUnitType, "board">,
   data: Record<string, JsonValue>,
-  format: UnitExchangeFormat,
+  format: ExchangeFormat,
   outputPath: string,
 ): Promise<void> {
-  const unit = { data, type: toInstanceType(type) } as unknown as UnitExchangeData;
-  await exchange.exportFile({ unit, format, outputPath });
+  const unitType = toInstanceType(type);
+  await exchange(data, outputPath, {
+    format,
+    type: unitType,
+    ...(unitType === UniverInstanceType.UNIVER_SHEET
+      ? { formulaCalculation: FormulaCalculationMode.FORCED }
+      : {}),
+  } as ExportOptions);
+}
+
+function importOptions(sourcePath: string, type: WorkspaceExchangeUnitType): ImportOptions {
+  const extension = extname(sourcePath).toLowerCase();
+  const format = [".pptm", ".ppsx", ".ppsm", ".potx"].includes(extension)
+    ? ExchangeFormat.PPTX
+    : undefined;
+  return {
+    type,
+    ...(format === undefined ? {} : { format }),
+    ...(type === UniverInstanceType.UNIVER_SHEET && extension === ".xlsx"
+      ? { formulaCalculation: FormulaCalculationMode.FORCED }
+      : {}),
+  } as ImportOptions;
 }
 
 function requireCreatedUnit(

@@ -68,9 +68,6 @@ importers:
       '@univer-cli/svg-facade':
         specifier: 1.0.0-insiders.20260819-8595af2
         version: 1.0.0-insiders.20260819-8595af2
-      '@univer-cli/unit-exchange':
-        specifier: 1.0.0-insiders.20260819-8595af2
-        version: 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
       '@univer-cli/unit-layout-lint':
         specifier: 1.0.0-insiders.20260819-8595af2
         version: 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
@@ -209,6 +206,12 @@ importers:
       '@univerjs-pro/exchange-client':
         specifier: 1.0.0-insiders.20260819-8595af2
         version: 1.0.0-insiders.20260819-8595af2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/exchange-node':
+        specifier: 1.0.0-insiders.20260819-8595af2
+        version: 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/exchange-node-binding':
+        specifier: 0.1.0
+        version: 0.1.0
       '@univerjs-pro/ink':
         specifier: 1.0.0-insiders.20260819-8595af2
         version: 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
@@ -2091,9 +2094,6 @@ packages:
   '@univer-cli/svg-facade@1.0.0-insiders.20260819-8595af2':
     resolution: {integrity: sha512-bD3HWbOIFjhenOaNPRBfJmZf6j06jsjaBvySJU19IlbjqB+uwHtvexvirOQJd0ghBMB8JLC3yrapAYZubyFcqA==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univer-cli/svg-facade/versions/1.0.0-insiders.20260819-8595af2/package.tgz}
 
-  '@univer-cli/unit-exchange@1.0.0-insiders.20260819-8595af2':
-    resolution: {integrity: sha512-UPW06JgYc5C5bwUtwQhDrhLWozNszVAl7pLx4ZDdUiP/jKeouUBXOZTl0kqqIUw2iqrlC2IXz6rGpJMYu4Y7/A==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univer-cli/unit-exchange/versions/1.0.0-insiders.20260819-8595af2/package.tgz}
-
   '@univer-cli/unit-layout-lint-command@1.0.0-insiders.20260819-8595af2':
     resolution: {integrity: sha512-WAmIVxj6XVNiHogM+iWf+NIUJ6pgo1lMbx1a4yT6cXoyys09iCd6ORK/toZ2xirYa/ZK3PC5DJEoz/gd9M5Wag==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univer-cli/unit-layout-lint-command/versions/1.0.0-insiders.20260819-8595af2/package.tgz}
     peerDependencies:
@@ -2430,6 +2430,34 @@ packages:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       rxjs: '>=7.0.0'
 
+  '@univerjs-pro/exchange-node-binding-darwin-arm64@0.1.0':
+    resolution: {integrity: sha512-QoNg/6PyhpwRmOdzmkZpb5EoM1Z/zNOCT3yyFzDyyKLObjD/Q1fvWRnicuhlB7Bi9HK4rKRAKWq3hn7DRY/LGg==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univerjs-pro/exchange-node-binding-darwin-arm64/versions/0.1.0/package.tgz}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@univerjs-pro/exchange-node-binding-linux-arm64-gnu@0.1.0':
+    resolution: {integrity: sha512-qcFw4sCb02pyPdvQfM4JTG7/EPHgnerKcu+VWO/O7pxXW8lIoFKC897Bwx6+xYThrjAtLl9ycyEWZaVCKQL4lA==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univerjs-pro/exchange-node-binding-linux-arm64-gnu/versions/0.1.0/package.tgz}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@univerjs-pro/exchange-node-binding-linux-x64-gnu@0.1.0':
+    resolution: {integrity: sha512-qGDzRn67tqINU/zZ8luvDq2G1O2gYECZOzN42LtPotCDkFLEcYMweExe+vV4QaJ9tx8tBMQt/fnGTpfH/kzEgw==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univerjs-pro/exchange-node-binding-linux-x64-gnu/versions/0.1.0/package.tgz}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@univerjs-pro/exchange-node-binding-win32-x64-msvc@0.1.0':
+    resolution: {integrity: sha512-eO79lZCXEtnFbArmXFKIMxUoKfiDtAhfClG+uZVmvqcg+blj7BD/Rn/WSmyB4CYciXdRcR4QAX0Si0DaMrxfgA==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univerjs-pro/exchange-node-binding-win32-x64-msvc/versions/0.1.0/package.tgz}
+    cpu: [x64]
+    os: [win32]
+
+  '@univerjs-pro/exchange-node-binding@0.1.0':
+    resolution: {integrity: sha512-opsPVyI2WFafWzvFSdRvy2Fz5leMS6edwqc4o8GYqzIRSu36DkpWaydvFRGcXLN+CxhB6EkpHDQaFIRextey8w==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univerjs-pro/exchange-node-binding/versions/0.1.0/package.tgz}
+
+  '@univerjs-pro/exchange-node@1.0.0-insiders.20260819-8595af2':
+    resolution: {integrity: sha512-tADRVxotmJXq1ed6/GjHn5xy+QTQIucs61Y3/ZUzRcih8eLHnuN8AXQEaQFsYgV1VTS++hSmHguXh74Mk7gC+Q==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univerjs-pro/exchange-node/versions/1.0.0-insiders.20260819-8595af2/package.tgz}
+
   '@univerjs-pro/ink-ui@1.0.0-insiders.20260819-8595af2':
     resolution: {integrity: sha512-fHDOhDLEzbzHtEywS7X5A760WWlZIQJNILfOD0VJyotc4r1EBcWMYNTepWVN/4wHYFWlpoNUMHmSfWtVzD7maQ==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univerjs-pro/ink-ui/versions/1.0.0-insiders.20260819-8595af2/package.tgz}
     peerDependencies:
@@ -2569,31 +2597,6 @@ packages:
 
   '@univerjs-pro/thread-comment-resource@1.0.0-insiders.20260819-8595af2':
     resolution: {integrity: sha512-yO115DBquvSZMHNXx2R5DN4RM7e0P4A5vV91K7iq82bQoq8vsxehQk3VS9GW9Kl/Y5z2elYqnzONOHwGtFRrag==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univerjs-pro/thread-comment-resource/versions/1.0.0-insiders.20260819-8595af2/package.tgz}
-
-  '@univerjs-pro/uexcli-darwin-arm64@0.3.2':
-    resolution: {integrity: sha512-7TVsR9LHcVVAHhAU61+2ArxBmKbMugHHUnRFel0SYeG/b4Q9qhw/XljBJhvndO7XLoLkDXFAVFGysg21Ci3mOA==, tarball: https://registry.npmjs.org/@univerjs-pro/uexcli-darwin-arm64/-/uexcli-darwin-arm64-0.3.2.tgz}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@univerjs-pro/uexcli-linux-arm64@0.3.2':
-    resolution: {integrity: sha512-0Nnc2mh/dnXcoxpMO8iefxhWvqF1hQfGMByXnuRThO+1CP3yzutwTWd0luOHA7ubRGyleHOQmiUnz1axMZ2cKw==, tarball: https://registry.npmjs.org/@univerjs-pro/uexcli-linux-arm64/-/uexcli-linux-arm64-0.3.2.tgz}
-    cpu: [arm64]
-    os: [linux]
-
-  '@univerjs-pro/uexcli-linux-x64@0.3.2':
-    resolution: {integrity: sha512-mGywOKQjahJoWXaSW2WVueiX6AP9/PLk6/mg/MY0WOlw+43pZ3i7dwwPvcEeF/gYgCol2j0obMzbjLrTtXTyGQ==, tarball: https://registry.npmjs.org/@univerjs-pro/uexcli-linux-x64/-/uexcli-linux-x64-0.3.2.tgz}
-    cpu: [x64]
-    os: [linux]
-
-  '@univerjs-pro/uexcli-windows-x64@0.3.2':
-    resolution: {integrity: sha512-WahkA4tssvKxl4iEYsyQQgyoMtMsaxzLZBC7cOh1Ag0snJvZhXpiwJLd+cZz/LMLU8lvynubwvq7lzsq6bUDvg==, tarball: https://registry.npmjs.org/@univerjs-pro/uexcli-windows-x64/-/uexcli-windows-x64-0.3.2.tgz}
-    cpu: [x64]
-    os: [win32]
-
-  '@univerjs-pro/uexcli@0.3.2':
-    resolution: {integrity: sha512-Ys6av5p9ayJ5K1cThGI7N83dZPOAS/wJTvExwV8vmfMLXA5KXZrjKrMMGyWvkodU5zdp2IvXHXylfsPkqs92Xg==, tarball: https://registry.npmjs.org/@univerjs-pro/uexcli/-/uexcli-0.3.2.tgz}
-    engines: {node: '>=16'}
-    hasBin: true
 
   '@univerjs/core@1.0.0-insiders.20260819-8595af2':
     resolution: {integrity: sha512-27wtPWqEYywMS3EE991rmfOhoMZ5ooN52qb4tYaEafc3t+j6WJ3kH3l7CtHfr/zAJ+HSAluDOS4mmBigsRRGUw==, tarball: https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/@univerjs/core/versions/1.0.0-insiders.20260819-8595af2/package.tgz}
@@ -5554,17 +5557,6 @@ snapshots:
 
   '@univer-cli/svg-facade@1.0.0-insiders.20260819-8595af2': {}
 
-  '@univer-cli/unit-exchange@1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)':
-    dependencies:
-      '@univerjs-pro/collaboration': 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
-      '@univerjs-pro/slides': 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
-      '@univerjs-pro/uexcli': 0.3.2
-      '@univerjs/core': 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
-      '@univerjs/protocol': 1.0.0-insiders.20260819-8595af2
-    transitivePeerDependencies:
-      - react
-      - rxjs
-
   '@univer-cli/unit-layout-lint-command@1.0.0-insiders.20260819-8595af2(commander@15.0.0)(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@univer-cli/unit-layout-lint': 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
@@ -6678,6 +6670,36 @@ snapshots:
       - '@types/react-dom'
       - react-dom
 
+  '@univerjs-pro/exchange-node-binding-darwin-arm64@0.1.0':
+    optional: true
+
+  '@univerjs-pro/exchange-node-binding-linux-arm64-gnu@0.1.0':
+    optional: true
+
+  '@univerjs-pro/exchange-node-binding-linux-x64-gnu@0.1.0':
+    optional: true
+
+  '@univerjs-pro/exchange-node-binding-win32-x64-msvc@0.1.0':
+    optional: true
+
+  '@univerjs-pro/exchange-node-binding@0.1.0':
+    optionalDependencies:
+      '@univerjs-pro/exchange-node-binding-darwin-arm64': 0.1.0
+      '@univerjs-pro/exchange-node-binding-linux-arm64-gnu': 0.1.0
+      '@univerjs-pro/exchange-node-binding-linux-x64-gnu': 0.1.0
+      '@univerjs-pro/exchange-node-binding-win32-x64-msvc': 0.1.0
+
+  '@univerjs-pro/exchange-node@1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/collaboration': 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/exchange-node-binding': 0.1.0
+      '@univerjs-pro/slides': 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/core': 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/protocol': 1.0.0-insiders.20260819-8595af2
+    transitivePeerDependencies:
+      - react
+      - rxjs
+
   '@univerjs-pro/ink-ui@1.0.0-insiders.20260819-8595af2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/ink': 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
@@ -7124,25 +7146,6 @@ snapshots:
     transitivePeerDependencies:
       - react
       - rxjs
-
-  '@univerjs-pro/uexcli-darwin-arm64@0.3.2':
-    optional: true
-
-  '@univerjs-pro/uexcli-linux-arm64@0.3.2':
-    optional: true
-
-  '@univerjs-pro/uexcli-linux-x64@0.3.2':
-    optional: true
-
-  '@univerjs-pro/uexcli-windows-x64@0.3.2':
-    optional: true
-
-  '@univerjs-pro/uexcli@0.3.2':
-    optionalDependencies:
-      '@univerjs-pro/uexcli-darwin-arm64': 0.3.2
-      '@univerjs-pro/uexcli-linux-arm64': 0.3.2
-      '@univerjs-pro/uexcli-linux-x64': 0.3.2
-      '@univerjs-pro/uexcli-windows-x64': 0.3.2
 
   '@univerjs/core@1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)':
     dependencies:

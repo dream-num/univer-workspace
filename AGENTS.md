@@ -36,11 +36,11 @@ scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
 
 本仓库是 product/application composition root，不重新拥有上游 SDK 的合同：
 
-- Univer / Univer Pro SDK 拥有 Unit 数据模型、Facade API、mutation、render 和内容能力。
+- Univer / Univer Pro SDK 拥有 Unit 数据模型、Facade API、mutation、render、Office exchange 和内容能力。
 - Univer Collaboration SDK 拥有 snapshot、changeset、revision、OT、协同 Service、Worktree、
   Database Adapter、Endpoint 和 Transport 合同。
-- Univer CLI SDK 拥有 target-neutral 的 headless runtime、execution、inspection、render、exchange、
-  daemon 和可选 Commander preset。
+- Univer CLI SDK 拥有 target-neutral 的 headless runtime、execution、inspection、render、daemon 和可选
+  Commander preset。
 - Workspace 产品模型、认证、资源目录、远程 workflow 和 deployment 留在本仓库。
 
 只通过已发布 package 的公开 exports 使用其他 SDK。代码、构建、测试和生成流程不得依赖相邻仓库

@@ -1,9 +1,8 @@
 import type { OutputConfiguration } from "commander";
 import { Command } from "commander";
+import { ExchangeFormat, FormulaCalculationMode } from "@univerjs-pro/exchange-node";
 import { UniverInstanceType } from "@univerjs/core";
 import { describe, expect, it, vi } from "vitest";
-import type { UnitExchange } from "@univer-cli/unit-exchange";
-import { UnitExchangeFormat } from "@univer-cli/unit-exchange";
 import { createWorkspaceUnitExchangeCommands } from "../src/features/exchange/command.js";
 import {
   WorkspaceUnitExchangeFeature,
@@ -14,13 +13,14 @@ import type { WorkspaceUnit } from "../src/features/worktree/model.js";
 describe("Workspace Unit exchange workflow", () => {
   it("imports XLSX as Sheet and stages the converted UnitData", async () => {
     const importFile = vi.fn(async () => ({
-      data: { id: "imported-id", name: "Imported workbook", sheets: {} },
-      type: UniverInstanceType.UNIVER_SHEET,
+      id: "imported-id",
+      name: "Imported workbook",
+      sheets: {},
     }));
     const createUnit = vi.fn(async () => createdUnit());
     const feature = createFeature({
       createUnit,
-      exchange: exchangeWith({ importFile }),
+      importFile,
     });
 
     await expect(
@@ -41,9 +41,9 @@ describe("Workspace Unit exchange workflow", () => {
       unitId: "unit-1",
       worktreeId: "wt-1",
     });
-    expect(importFile).toHaveBeenCalledWith({
-      sourcePath: "./planning.XLSX",
-      unitType: UniverInstanceType.UNIVER_SHEET,
+    expect(importFile).toHaveBeenCalledWith("./planning.XLSX", {
+      formulaCalculation: FormulaCalculationMode.FORCED,
+      type: UniverInstanceType.UNIVER_SHEET,
     });
     expect(createUnit).toHaveBeenCalledWith({
       idempotencyKey: "import-key",
@@ -57,10 +57,7 @@ describe("Workspace Unit exchange workflow", () => {
   });
 
   it("supports explicit Base import and applies an explicit Unit name", async () => {
-    const importFile = vi.fn(async () => ({
-      data: { id: "base-1", name: "Source name" },
-      type: UniverInstanceType.UNIVER_BASE,
-    }));
+    const importFile = vi.fn(async () => ({ id: "base-1", name: "Source name" }));
     const createUnit = vi.fn(async () =>
       createdUnit({
         name: "Inventory",
@@ -68,7 +65,7 @@ describe("Workspace Unit exchange workflow", () => {
         type: "base",
       }),
     );
-    const feature = createFeature({ createUnit, exchange: exchangeWith({ importFile }) });
+    const feature = createFeature({ createUnit, importFile });
 
     await feature.importFile({
       name: "Inventory",
@@ -78,9 +75,8 @@ describe("Workspace Unit exchange workflow", () => {
       worktreeId: "wt-1",
     });
 
-    expect(importFile).toHaveBeenCalledWith({
-      sourcePath: "inventory.xlsx",
-      unitType: UniverInstanceType.UNIVER_BASE,
+    expect(importFile).toHaveBeenCalledWith("inventory.xlsx", {
+      type: UniverInstanceType.UNIVER_BASE,
     });
     expect(createUnit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -91,13 +87,36 @@ describe("Workspace Unit exchange workflow", () => {
     );
   });
 
+  it("maps compatible presentation suffixes to PPTX explicitly", async () => {
+    const importFile = vi.fn(async () => ({ id: "slide-1", title: "Quarterly review" }));
+    const createUnit = vi.fn(async () =>
+      createdUnit({
+        name: "Quarterly review",
+        target: { parentNodeId: null, spaceId: "space-1" },
+        type: "slide",
+      }),
+    );
+    const feature = createFeature({ createUnit, importFile });
+
+    await feature.importFile({
+      sourcePath: "quarterly.PPTM",
+      spaceId: "space-1",
+      worktreeId: "wt-1",
+    });
+
+    expect(importFile).toHaveBeenCalledWith("quarterly.PPTM", {
+      format: ExchangeFormat.PPTX,
+      type: UniverInstanceType.UNIVER_SLIDE,
+    });
+  });
+
   it("exports the resolved Worktree head through the daemon and inferred format", async () => {
     const request = vi.fn(async () => ({ id: "unit-1", name: "Planning", sheets: {} }));
-    const exportFile = vi.fn(async () => ({ outputPath: "planning.xlsx" }));
+    const exportToFile = vi.fn(async () => undefined);
     const resolveRuntimeTarget = vi.fn(async () => target("sheet"));
     const feature = createFeature({
       daemon: { request },
-      exchange: exchangeWith({ exportFile }),
+      exportToFile,
       resolveRuntimeTarget,
     });
 
@@ -117,14 +136,15 @@ describe("Workspace Unit exchange workflow", () => {
     expect(request).toHaveBeenCalledWith("runtime.export-unit-data", {
       target: target("sheet"),
     });
-    expect(exportFile).toHaveBeenCalledWith({
-      format: UnitExchangeFormat.XLSX,
-      outputPath: "planning.xlsx",
-      unit: {
-        data: { id: "unit-1", name: "Planning", sheets: {} },
+    expect(exportToFile).toHaveBeenCalledWith(
+      { id: "unit-1", name: "Planning", sheets: {} },
+      "planning.xlsx",
+      {
+        format: ExchangeFormat.XLSX,
+        formulaCalculation: FormulaCalculationMode.FORCED,
         type: UniverInstanceType.UNIVER_SHEET,
       },
-    });
+    );
   });
 
   it("rejects Board export before starting the daemon", async () => {
@@ -223,23 +243,16 @@ function createFeature(
   return new WorkspaceUnitExchangeFeature({
     createUnit: async () => createdUnit(),
     daemon: { request: async () => ({ id: "unit-1" }) },
-    exchange: exchangeWith(),
+    exportToFile: async () => undefined,
+    importFile: async () => ({
+      id: "unit-1",
+      name: "Imported",
+      sheetOrder: [],
+      sheets: {},
+    }),
     resolveRuntimeTarget: async () => target("sheet"),
     ...overrides,
   });
-}
-
-function exchangeWith(
-  overrides: { readonly exportFile?: unknown; readonly importFile?: unknown } = {},
-): UnitExchange {
-  return {
-    importFile: async () => ({
-      data: { id: "unit-1", name: "Imported", sheets: {}, sheetOrder: [] },
-      type: UniverInstanceType.UNIVER_SHEET,
-    }),
-    exportFile: async (input) => ({ outputPath: input.outputPath }),
-    ...overrides,
-  } as UnitExchange;
 }
 
 function createdUnit(overrides: Partial<WorkspaceUnit> = {}): WorkspaceUnit {
