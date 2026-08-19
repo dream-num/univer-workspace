@@ -69,6 +69,29 @@
       "404":
         $ref: ../schemas/common.yaml#/NotFound
 
+/api/unit-resources/{unitId}:
+  parameters:
+    - name: unitId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Resources]
+    operationId: getResourceByUnit
+    summary: Resolve Resource and owning Node metadata from a Univer Unit.
+    responses:
+      "200":
+        description: Current Resource and Node accessible to the signed-in User.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/resources.yaml#/ResourceResponse
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
 /api/resources/{resourceId}/open:
   parameters:
     - name: resourceId

@@ -38,6 +38,7 @@ export interface ResourcesModule {
     input: unknown
   ): Promise<CreateResourceResult>;
   get(userId: string, resourceId: string): ResourceResponse;
+  getByUnit(userId: string, unitId: string): ResourceResponse;
   open(userId: string, resourceId: string): ResourceOpenView;
   getOperation(userId: string, operationId: string): OperationView;
   retry(userId: string, operationId: string): Promise<OperationView>;
@@ -172,6 +173,15 @@ export function createResourcesModule(options: {
 
     get(userId, resourceId) {
       const access = requireResourceAccess(options.access, userId, resourceId);
+      return {
+        resource: resourceSummary(access.node)!,
+        node: nodeSummary(access.node),
+      };
+    },
+
+    getByUnit(userId, unitId) {
+      const access = options.access.resolveUnit(userId, unitId);
+      if (!access) throw notFound();
       return {
         resource: resourceSummary(access.node)!,
         node: nodeSummary(access.node),

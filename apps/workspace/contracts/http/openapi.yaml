@@ -94,6 +94,8 @@ paths:
     $ref: ./paths/resources.yaml#/~1api~1resources
   /api/resources/{resourceId}:
     $ref: ./paths/resources.yaml#/~1api~1resources~1{resourceId}
+  /api/unit-resources/{unitId}:
+    $ref: ./paths/resources.yaml#/~1api~1unit-resources~1{unitId}
   /api/resources/{resourceId}/open:
     $ref: ./paths/resources.yaml#/~1api~1resources~1{resourceId}~1open
   /api/blob-upload-sessions:

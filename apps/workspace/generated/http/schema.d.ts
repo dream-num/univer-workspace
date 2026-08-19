@@ -483,6 +483,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/unit-resources/{unitId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        /** Resolve Resource and owning Node metadata from a Univer Unit. */
+        get: operations["getResourceByUnit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/resources/{resourceId}/open": {
         parameters: {
             query?: never;
@@ -2521,6 +2540,30 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Current Resource and Node. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getResourceByUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current Resource and Node accessible to the signed-in User. */
             200: {
                 headers: {
                     [name: string]: unknown;
