@@ -555,6 +555,12 @@ importers:
       '@univerjs-pro/engine-formula':
         specifier: 1.0.0-insiders.20260819-8595af2
         version: 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/exchange-client':
+        specifier: 1.0.0-insiders.20260819-8595af2
+        version: 1.0.0-insiders.20260819-8595af2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/exchange-node':
+        specifier: 1.0.0-insiders.20260819-8595af2
+        version: 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/ink':
         specifier: 1.0.0-insiders.20260819-8595af2
         version: 1.0.0-insiders.20260819-8595af2(react@19.2.8)(rxjs@7.8.2)

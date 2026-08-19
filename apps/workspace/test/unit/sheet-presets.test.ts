@@ -26,6 +26,10 @@ describe("Workspace Sheet presets", () => {
       { UniverSheetsTablePreset },
       { UniverSheetsThreadCommentPreset },
       { createSheetEditorPresets },
+      {
+        configureExchangePresetPlugins,
+        createWorkspaceExchangeClientConfig,
+      },
     ] = await Promise.all([
       import("@univerjs/preset-sheets-advanced"),
       import("@univerjs/preset-sheets-conditional-formatting"),
@@ -41,6 +45,7 @@ describe("Workspace Sheet presets", () => {
       import("@univerjs/preset-sheets-table"),
       import("@univerjs/preset-sheets-thread-comment"),
       import("../../web/src/features/editor/sheet-presets.js"),
+      import("../../web/src/features/editor/exchange-plugins.js"),
     ]);
     Object.defineProperty(globalThis, "window", {
       configurable: true,
@@ -94,6 +99,28 @@ describe("Workspace Sheet presets", () => {
     expect(presetPluginKeys(actual)).toContain(
       "SHEET_CONDITIONAL_FORMATTING_PLUGIN"
     );
+    expect(presetPluginKeys(actual)).toEqual(
+      expect.arrayContaining([
+        "UNIVER_EXCHANGE_CLIENT_PLUGIN",
+        "SHEET_EXCHANGE_CLIENT_PLUGIN",
+      ])
+    );
+    expect(
+      presetPluginKeys(configureExchangePresetPlugins(actual, false))
+    ).not.toEqual(
+      expect.arrayContaining([
+        "UNIVER_EXCHANGE_CLIENT_PLUGIN",
+        "SHEET_EXCHANGE_CLIENT_PLUGIN",
+      ])
+    );
+    expect(createWorkspaceExchangeClientConfig(`${endpoint}/`)).toEqual({
+      uploadFileServerUrl: `${endpoint}/universer-api/stream/file/upload`,
+      getTaskServerUrl: `${endpoint}/universer-api/exchange/task/{taskID}`,
+      signUrlServerUrl: `${endpoint}/universer-api/file/{fileID}/sign-url`,
+      importServerUrl: `${endpoint}/universer-api/exchange/{type}/import`,
+      exportServerUrl: `${endpoint}/universer-api/exchange/{type}/export`,
+      downloadEndpointUrl: `${endpoint}/`,
+    });
     expect(pluginOptions(actual, "UNIVER_LICENSE_PLUGIN")).toMatchObject({
       license,
     });

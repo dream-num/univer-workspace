@@ -9,6 +9,7 @@ import { openWorkspaceDatabase } from "./db/initialize.js";
 import {
   createCollaborationRuntime,
   type CollaborationRuntime,
+  type UnitSnapshotStore,
   type UnitStore,
 } from "./integrations/univer/unit-store.js";
 import { createWorktreeBackend } from "./integrations/univer/worktree-store.js";
@@ -97,6 +98,11 @@ import {
   UniverAssetsRepository,
   type UniverAssetsModule,
 } from "./modules/univer-assets/index.js";
+import {
+  createExchangeModule,
+  createExchangeRouter,
+  type ExchangeModule,
+} from "./modules/exchange/index.js";
 
 export interface WorkspaceApplication {
   readonly app: express.Express;
@@ -113,6 +119,7 @@ export interface WorkspaceApplication {
   readonly operations: OperationsModule;
   readonly blobs: BlobsModule;
   readonly univerAssets: UniverAssetsModule;
+  readonly exchange: ExchangeModule;
   attachWebSocket(server: Server): void;
   closeRealtime(): Promise<void>;
   close(): Promise<void>;
@@ -122,6 +129,7 @@ export function createWorkspaceApplication(
   config: WorkspaceConfig,
   dependencies: {
     readonly unitStore?: UnitStore;
+    readonly unitSnapshotStore?: UnitSnapshotStore;
     readonly worktreeBackend?: WorktreeBackend;
     readonly blobStore?: BlobStore;
     readonly githubOAuthProvider?: GitHubOAuthProvider;
@@ -136,6 +144,10 @@ export function createWorkspaceApplication(
     (collaboration = createCollaborationRuntime(
       config.collaborationDatabaseFilename
     )).unitStore;
+  const unitSnapshotStore =
+    dependencies.unitSnapshotStore ??
+    collaboration?.unitSnapshotStore ??
+    unavailableUnitSnapshotStore();
   const oauthStateSecret =
     dependencies.oauthStateSecret ??
     config.githubOAuth?.clientSecret ??
@@ -219,6 +231,13 @@ export function createWorkspaceApplication(
     resources,
     worktrees,
   });
+  const exchange = createExchangeModule({
+    access,
+    resources,
+    spaces,
+    snapshots: unitSnapshotStore,
+    store: blobStore,
+  });
   const collaborationGateway: CollaborationGateway | null = collaboration
     ? createCollaborationGateway({
         service: collaboration.service,
@@ -285,6 +304,10 @@ export function createWorkspaceApplication(
   );
   app.use(
     "/universer-api",
+    createExchangeRouter({ identity, exchange })
+  );
+  app.use(
+    "/universer-api",
     createUniverAssetsRouter({ identity, assets: univerAssets })
   );
   if (collaborationGateway) {
@@ -318,6 +341,7 @@ export function createWorkspaceApplication(
     operations,
     blobs,
     univerAssets,
+    exchange,
     attachWebSocket(server) {
       collaborationGateway?.attachWebSocket(server);
     },
@@ -329,11 +353,25 @@ export function createWorkspaceApplication(
         await collaborationGateway?.dispose();
       } finally {
         try {
-          await collaboration?.dispose();
+          await exchange.dispose();
         } finally {
-          database.close();
+          try {
+            await collaboration?.dispose();
+          } finally {
+            database.close();
+          }
         }
       }
+    },
+  };
+}
+
+function unavailableUnitSnapshotStore(): UnitSnapshotStore {
+  return {
+    async materialize() {
+      throw new Error(
+        "A Collaboration snapshot store is required for Unit export."
+      );
     },
   };
 }

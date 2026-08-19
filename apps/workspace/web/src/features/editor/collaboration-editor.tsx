@@ -28,6 +28,9 @@ import CollaborationClientUIEnUS from "@univerjs-pro/collaboration-client-ui/loc
 import CollaborationClientUIZhCN from "@univerjs-pro/collaboration-client-ui/locale/zh-CN";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
+import { UniverExchangeClientPlugin } from "@univerjs-pro/exchange-client";
+import ExchangeClientEnUS from "@univerjs-pro/exchange-client/locale/en-US";
+import ExchangeClientZhCN from "@univerjs-pro/exchange-client/locale/zh-CN";
 import { UniverLicensePlugin } from "@univerjs-pro/license";
 import {
   createWorktreeCollaborationConfig,
@@ -56,6 +59,10 @@ import {
   collaborationStatusMessageKey,
   type CollaborationIssue,
 } from "./collaboration-status";
+import {
+  configureExchangePresetPlugins,
+  createWorkspaceExchangeClientConfig,
+} from "./exchange-plugins";
 import { resolveMergeReview } from "./merge-review";
 import { resolveUniverLicense } from "./univer-license";
 import {
@@ -67,6 +74,7 @@ import "@univerjs-pro/collaboration-client-ui/lib/index.css";
 import "@univerjs-pro/collaboration-client/facade";
 import "@univerjs-pro/embed/facade";
 import "@univerjs-pro/embed-ui/lib/index.css";
+import "@univerjs-pro/exchange-client/lib/index.css";
 
 export interface CollaborationEditorProps {
   readonly unitId: string;
@@ -89,6 +97,8 @@ interface ICollaborationEditorDefinition {
   readonly label: string;
   readonly enableDocumentCollaborationUI?: boolean;
   readonly collaborationProvidedByPreset?: boolean;
+  readonly exchangeProvidedByPreset?: boolean;
+  readonly exchangeEnabled?: boolean;
   readonly licenseProvidedByPreset?: boolean;
   readonly useCustomCollaborationStatus?: boolean;
   readonly theme: Theme;
@@ -157,6 +167,9 @@ export function createCollaborationEditor(
           unitId
         );
         if (disposed) return;
+        const exchangeEnabled =
+          collaborationScope.kind === "trunk" &&
+          definition.exchangeEnabled !== false;
         const collaborationConfig = {
           ...resolvedCollaboration.pluginConfig,
           override: withWorkspaceSnapshotServerOverride(
@@ -240,11 +253,23 @@ export function createCollaborationEditor(
               ];
         const collaborationFeaturePlugins =
           definition.collaborationFeaturePlugins?.() ?? [];
+        const exchangePlugins: IPresetPlugin[] =
+          exchangeEnabled && !definition.exchangeProvidedByPreset
+            ? [
+                [
+                  UniverExchangeClientPlugin,
+                  createWorkspaceExchangeClientConfig(
+                    window.location.origin
+                  ),
+                ],
+              ]
+            : [];
         if (definition.collaborationProvidedByPreset) {
           presets = configurePresetCollaboration(
             presets,
             collaborationConfig,
-            definition
+            definition,
+            exchangeEnabled
           );
         }
         const univerLocale =
@@ -259,7 +284,14 @@ export function createCollaborationEditor(
                 : CollaborationClientEnUS,
               language === "zh-CN"
                 ? CollaborationClientUIZhCN
-                : CollaborationClientUIEnUS
+                : CollaborationClientUIEnUS,
+              ...(exchangeEnabled
+                ? [
+                    language === "zh-CN"
+                      ? ExchangeClientZhCN
+                      : ExchangeClientEnUS,
+                  ]
+                : [])
             ),
           },
           theme: definition.theme,
@@ -270,6 +302,7 @@ export function createCollaborationEditor(
           plugins: [
             ...collaborationPlugins,
             ...collaborationFeaturePlugins,
+            ...exchangePlugins,
             [
               UniverEmbedPlugin,
               {
@@ -480,44 +513,47 @@ function configurePresetCollaboration(
   collaborationConfig: Awaited<
     ReturnType<typeof resolveCollaborationConfig>
   >["pluginConfig"],
-  definition: ICollaborationEditorDefinition
+  definition: ICollaborationEditorDefinition,
+  exchangeEnabled: boolean
 ): IPreset[] {
-  return presets.map((preset) => ({
-    ...preset,
-    plugins: preset.plugins.map((plugin): IPresetPlugin => {
-      if (!Array.isArray(plugin)) return plugin;
-      const [PluginConstructor, pluginConfig] = plugin;
-      if (PluginConstructor === UniverCollaborationClientPlugin) {
-        return [
-          PluginConstructor,
-          {
-            ...(pluginConfig as object),
-            enableOfflineEditing: true,
-            enableAuthServer: true,
-            wsSessionTicketUrl: "/universer-api/user/session-ticket",
-            authzUrl: "/universer-api/authz",
-            loginUrlKey: "/login",
-            sendChangesetTimeout: 200,
-            ...collaborationConfig,
-          },
-        ];
-      }
-      if (PluginConstructor === UniverCollaborationClientUIPlugin) {
-        return [
-          PluginConstructor,
-          {
-            ...(pluginConfig as object),
-            enableDocumentCollaborationUI:
-              definition.enableDocumentCollaborationUI,
-            override: definition.useCustomCollaborationStatus
-              ? [[DesktopCollaborationStatusDisplayController, null]]
-              : undefined,
-          },
-        ];
-      }
-      return plugin;
-    }),
-  }));
+  return configureExchangePresetPlugins(presets, exchangeEnabled).map(
+    (preset) => ({
+      ...preset,
+      plugins: preset.plugins.map((plugin): IPresetPlugin => {
+        if (!Array.isArray(plugin)) return plugin;
+        const [PluginConstructor, pluginConfig] = plugin;
+        if (PluginConstructor === UniverCollaborationClientPlugin) {
+          return [
+            PluginConstructor,
+            {
+              ...(pluginConfig as object),
+              enableOfflineEditing: true,
+              enableAuthServer: true,
+              wsSessionTicketUrl: "/universer-api/user/session-ticket",
+              authzUrl: "/universer-api/authz",
+              loginUrlKey: "/login",
+              sendChangesetTimeout: 200,
+              ...collaborationConfig,
+            },
+          ];
+        }
+        if (PluginConstructor === UniverCollaborationClientUIPlugin) {
+          return [
+            PluginConstructor,
+            {
+              ...(pluginConfig as object),
+              enableDocumentCollaborationUI:
+                definition.enableDocumentCollaborationUI,
+              override: definition.useCustomCollaborationStatus
+                ? [[DesktopCollaborationStatusDisplayController, null]]
+                : undefined,
+            },
+          ];
+        }
+        return plugin;
+      }),
+    })
+  );
 }
 
 async function resolveCollaborationConfig(

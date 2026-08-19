@@ -1,9 +1,7 @@
-import Busboy from "busboy";
-import type { Readable } from "node:stream";
 import { ErrorCode } from "@univerjs/protocol";
 import { Router, type Request, type Response } from "express";
 import { contentDisposition } from "../../integrations/blob/blob-http.js";
-import { ApplicationError } from "../../middleware/errors.js";
+import { receiveSingleMultipartFile } from "../../integrations/blob/multipart.js";
 import type { IdentityModule } from "../identity/index.js";
 import {
   MAX_UNIVER_ASSET_BYTES,
@@ -107,15 +105,18 @@ async function uploadMultipart(
   userId: string,
   scope: UniverAssetScope
 ): Promise<{ readonly FileId: string }> {
-  return await receiveSingleFile(request, async (file) =>
-    assets.upload(userId, scope, {
-      size: request.query.size,
-      source: request.query.source,
-      assign: request.query.assign,
-      filename: file.filename,
-      declaredMediaType: file.mediaType || null,
-      body: file.stream,
-    })
+  return await receiveSingleMultipartFile(
+    request,
+    MAX_UNIVER_ASSET_BYTES,
+    async (file) =>
+      assets.upload(userId, scope, {
+        size: request.query.size,
+        source: request.query.source,
+        assign: request.query.assign,
+        filename: file.filename,
+        declaredMediaType: file.mediaType || null,
+        body: file.stream,
+      })
   );
 }
 
@@ -156,91 +157,6 @@ async function sendContent(
   }
   opened.stream.on("error", (error) => response.destroy(error));
   opened.stream.pipe(response);
-}
-
-function receiveSingleFile<T>(
-  request: Request,
-  accept: (file: {
-    readonly filename: string;
-    readonly mediaType: string;
-    readonly stream: Readable;
-  }) => Promise<T>
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let parser: ReturnType<typeof Busboy>;
-    try {
-      parser = Busboy({
-        headers: request.headers,
-        limits: {
-          files: 1,
-          fields: 0,
-          parts: 1,
-          fileSize: MAX_UNIVER_ASSET_BYTES,
-        },
-      });
-    } catch {
-      reject(invalidMultipart());
-      return;
-    }
-    let fileTask:
-      | Promise<
-          | { readonly ok: true; readonly value: T }
-          | { readonly ok: false; readonly error: unknown }
-        >
-      | null = null;
-    let parseError: unknown = null;
-    parser.on("file", (field, stream, info) => {
-      if (field !== "file" || fileTask) {
-        parseError ??= invalidMultipart();
-        stream.resume();
-        return;
-      }
-      fileTask = accept({
-        filename: info.filename,
-        mediaType: info.mimeType,
-        stream,
-      }).then(
-        (value) => ({ ok: true as const, value }),
-        (error: unknown) => {
-          stream.resume();
-          return { ok: false as const, error };
-        }
-      );
-    });
-    parser.on("field", () => {
-      parseError ??= invalidMultipart();
-    });
-    parser.once("error", (error) => {
-      parseError ??= error;
-    });
-    parser.once("close", () => {
-      if (parseError) {
-        reject(parseError);
-        return;
-      }
-      if (!fileTask) {
-        reject(invalidMultipart());
-        return;
-      }
-      fileTask.then((result) => {
-        if (result.ok) resolve(result.value);
-        else reject(result.error);
-      });
-    });
-    request.once("aborted", () => {
-      parseError ??= invalidMultipart();
-    });
-    request.pipe(parser);
-  });
-}
-
-function invalidMultipart(): ApplicationError {
-  return new ApplicationError(
-    "INVALID_INPUT",
-    400,
-    "A multipart file field named 'file' is required.",
-    "file"
-  );
 }
 
 function required(value: string | undefined): string {

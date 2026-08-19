@@ -20,6 +20,9 @@ const { SQLiteDatabaseAdapter } = moduleRequire(
 const { CollabError, UniverCollabService } = moduleRequire(
   "@univerjs-pro/collaboration-service"
 ) as typeof CollaborationServiceModule;
+const { UniverUnitRuntime } = moduleRequire(
+  "@univerjs-pro/collaboration-service"
+) as typeof CollaborationServiceModule;
 const { UniverCollabWorktreeService } = moduleRequire(
   "@univerjs-pro/collaboration-worktree-service"
 ) as typeof WorktreeServiceModule;
@@ -66,8 +69,17 @@ export interface UnitStore {
   }>;
 }
 
+export interface UnitSnapshotStore {
+  materialize(input: {
+    readonly unitId: string;
+    readonly unitType: UnitType;
+    readonly userId: string;
+  }): Promise<CollaborationServiceModule.SaveSnapshotInput>;
+}
+
 export interface CollaborationRuntime {
   readonly unitStore: UnitStore;
+  readonly unitSnapshotStore: UnitSnapshotStore;
   readonly service: CollaborationServiceModule.UniverCollabService;
   readonly worktreeService: WorktreeServiceModule.UniverCollabWorktreeService;
   dispose(): Promise<void>;
@@ -78,6 +90,7 @@ export function createCollaborationRuntime(
 ): CollaborationRuntime {
   const database = new SQLiteDatabaseAdapter({ filename });
   const service = new UniverCollabService({ dbAdapter: database });
+  const snapshotRuntime = new UniverUnitRuntime({ dbAdapter: database });
   const worktreeDatabase = new SQLiteWorktreeDatabaseAdapter({ filename });
   const worktreeService = new UniverCollabWorktreeService({
     trunk: {
@@ -126,18 +139,54 @@ export function createCollaborationRuntime(
       }
     },
   };
+  const unitSnapshotStore: UnitSnapshotStore = {
+    async materialize(input) {
+      const context = {
+        userID: input.userId,
+        customData: { source: "workspace-exchange" },
+        request: {},
+      };
+      const handle = await snapshotRuntime.ensureUnit(
+        context,
+        input.unitId,
+        univerType(input.unitType)
+      );
+      try {
+        return await snapshotRuntime.createSnapshot(handle);
+      } finally {
+        snapshotRuntime.releaseUnit(handle);
+      }
+    },
+  };
 
   return {
     unitStore,
+    unitSnapshotStore,
     service,
     worktreeService,
     async dispose() {
+      await snapshotRuntime.dispose();
       await worktreeService.dispose();
       await worktreeDatabase.dispose();
       await service.dispose();
       await database.dispose();
     },
   };
+}
+
+function univerType(unitType: UnitType): ProtocolModule.UniverType {
+  switch (unitType) {
+    case "sheet":
+      return UniverType.UNIVER_SHEET;
+    case "doc":
+      return UniverType.UNIVER_DOC;
+    case "slide":
+      return UniverType.UNIVER_SLIDE;
+    case "board":
+      return UniverType.UNIVER_BOARD;
+    case "base":
+      return UniverType.UNIVER_BASE;
+  }
 }
 
 export function blankUnitData(input: {
