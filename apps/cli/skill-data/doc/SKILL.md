@@ -30,7 +30,8 @@ editable Doc Unit is required; Blob Resources have no `unitId` and cannot use th
 - `doc.getParagraphs()` returns all paragraphs. `doc.getParagraph(id)` selects by stable paragraph id; indexes drift as the document changes, so use ids across multi-step edits.
 - An `FDocumentParagraph` supports `getText`, `setText`, `appendText`, `setStyle`, and `getRange`.
 - List and task helpers include `isListItem`, `isTask`, and `setTaskChecked`.
-- Native charts are available through the document-owned `doc.charts` collection.
+- Native charts use the direct `doc.newChart()`, `doc.insertChart()`, `doc.getCharts()`, and
+  `doc.getChart()` methods.
 - Colors must use `#RRGGBB`.
 
 ## The dataStream model
@@ -161,7 +162,7 @@ grid:
 
 Use diagnostics source paths and spans to correct syntax. An evaluator error is not evidence that the whole grid, table, image, or spacing capability is unsupported. Make one minimal page pass first, then expand the manifest page by page.
 
-For reference reconstruction, keep three evidence layers: the reference, Typst-rendered PNG when Typst source exists, and the final Workspace screenshot. Resolve reference-to-Typst source differences before diagnosing Typst-to-Univer Facade differences. Prioritize editable text, tables, physical pagination, headers and footers, and fonts. Typst lowering does not create native chart objects; add requested data-driven charts afterward through `doc.charts` ("Native charts"). Brand marks and illustrations are not the default priority.
+For reference reconstruction, keep three evidence layers: the reference, Typst-rendered PNG when Typst source exists, and the final Workspace screenshot. Resolve reference-to-Typst source differences before diagnosing Typst-to-Univer Facade differences. Prioritize editable text, tables, physical pagination, headers and footers, and fonts. Typst lowering does not create native chart objects; add requested data-driven charts afterward through the direct `FDocument` chart methods ("Native charts"). Brand marks and illustrations are not the default priority.
 
 Layout-sensitive pages should explicitly declare font family or named face, font size, `leading`, paragraph spacing, heading size and spacing, and `hyphenate`. Build measures Typst's resolved line advance and maps it to exact Doc paragraph spacing; do not add document-specific leading compensation. Preserve fractional sizes such as `9.2pt` and `10.4pt`. Use only normal and bold for generic Word-compatible weights. Select a resolvable named face for Semibold or Black instead of assuming a continuous `100..900` Doc weight API. Literal underscores such as `read_file` require raw text or correct escaping and must be confirmed in the Typst PNG.
 
@@ -196,24 +197,21 @@ spacers, or repeated fixed page numbers. Literal headers and footers are support
 
 ## Native charts
 
-Doc chart support is registered in the runtime. Create and manage native data-driven charts through
-the document-owned `doc.charts` collection (`FDocumentCharts`). Query exact signatures before
-authoring:
+Doc chart support is registered in the runtime. Create detached chart information directly from
+`doc`, then insert it to obtain a live `FDocumentChart`. Query exact signatures before authoring:
 
 ```bash
-univer-workspace-cli api show FDocumentCharts FDocumentChartBuilder DocChartInsertAnchorKind
+univer-workspace-cli api show FDocument.newChart FDocument.insertChart FDocument.getCharts \
+  FDocument.getChart FDocumentChartBuilderOf DocsChartInsertAnchorKind
 ```
 
 Build the chart detached, configure its data, mapping, anchor, and size, then await insertion:
 
 ```js
-const charts = doc.charts;
-const chart = charts
-  .create()
-  .setType(univerAPI.Enum.ChartTypeString.Column)
-  .setTitle({ text: "Quarterly Revenue" });
-chart
-  .setData([
+const info = doc
+  .newChart(univerAPI.Enum.ChartTypeString.Column)
+  .setTitle({ text: "Quarterly Revenue" })
+  .setSource([
     ["Quarter", "Revenue"],
     ["Q1", 12],
     ["Q2", 18],
@@ -221,19 +219,23 @@ chart
   ])
   .setCategoryField(0)
   .setValueFields([1])
-  .setAnchor({ kind: univerAPI.Enum.DocChartInsertAnchorKind.BodyOffset, offset: 0 })
-  .setLayout({ width: 480, height: 320 });
-const inserted = await charts.insert(chart);
-return { chartId: inserted.getId(), chart: inserted.describe() };
+  .setPosition({ kind: univerAPI.Enum.DocsChartInsertAnchorKind.BodyOffset, offset: 0 })
+  .setInline()
+  .setSize(480, 320)
+  .build();
+const inserted = await doc.insertChart(info);
+return { chartId: inserted.getId(), drawingId: inserted.getDrawingId(), info: inserted.getInfo() };
 ```
 
-Builders returned by `charts.list()` or `charts.get(id)` are bound to the document. Update one in
-place with `chart.setData(values).commit()`. Remove one with `await charts.remove(chartOrId)` and
-check the returned boolean. `insert` and `remove` are asynchronous; await them before `execute`
-returns.
+`doc.getCharts()` and `doc.getChart(id)` return live charts. Await
+`chart.setDataSource(values)` for data changes. For a complete replacement, use
+`chart.toBuilder().build()` and `await chart.update(info)`. Remove it with `await chart.remove()`
+and check the boolean. Await every asynchronous mutation before `execute` returns.
 
 Anchor kinds include selection, body offset, paragraph, and text range. Verify each operation in a
-fresh read-only `execute` with `doc.charts.list().map((item) => item.describe())`. For an update,
+fresh read-only `execute` with
+`doc.getCharts().map((item) => ({ id: item.getId(), drawingId: item.getDrawingId(), type: item.getType(), info: item.getInfo() }))`.
+For an update,
 confirm the chart ID, count, type, title, anchor, layout, and data. For a removal, confirm the chart is
 absent. Then screenshot the affected page and test DOCX export when export fidelity is part of the
 task.

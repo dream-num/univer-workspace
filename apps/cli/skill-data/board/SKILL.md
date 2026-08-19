@@ -34,8 +34,9 @@ top-level `id`, `left`, `top`, `width`, `height`, or `text`; retain `getId()` im
 operations need the generated element id. Inspect the version-matched `FBoard.insertShapes` entry
 before batch insertion so the script follows the SDK installed with this CLI.
 
-Use `api find` and `api show` to resolve Board Facade methods and enums. Use read-only `execute`
-with `board.describeElements()` or `board.save()` for model readback. A Board screenshot with
+Use `api find` and `api show` to resolve Board Facade methods and enums, especially
+`FBoard.newChart`, `FBoard.insertChart`, `FBoard.getCharts`, and `FBoard.getChart` for native charts.
+Use read-only `execute` with `board.describeElements()` or `board.save()` for model readback. A Board screenshot with
 `--json` also returns `outputs[0].layoutAnalysis` from the real browser routes:
 
 Native `inspect` is not supported for Board targets. Use read-only `execute` for model evidence and
@@ -138,6 +139,40 @@ univer-workspace-cli screenshot \
 univer-workspace-cli screenshot \
   --worktree <worktree-id> --unit <board-id> --out <overview-directory> --json
 ```
+
+## Native charts
+
+Native Board charts are owned directly by `FBoard`. Build detached chart information, then await
+insertion to obtain a live `FBoardChart`:
+
+```js
+const info = board
+  .newChart(univerAPI.Enum.ChartTypeString.Column)
+  .setTitle({ text: "Quarterly Revenue" })
+  .setSource([
+    ["Quarter", "Revenue"],
+    ["Q1", 12],
+    ["Q2", 18],
+    ["Q3", 15],
+  ])
+  .setCategoryField(0)
+  .setValueFields([1])
+  .setAbsolutePosition(80, 80)
+  .setSize(640, 360)
+  .build();
+const inserted = await board.insertChart(info);
+return { chartId: inserted.getId(), info: inserted.getInfo(), data: inserted.getDataSource() };
+```
+
+`board.getCharts()` and `board.getChart(id)` return live charts. Common setters update the live
+chart; await `chart.setDataSource(values)` for data changes. For a complete replacement, use
+`chart.toBuilder().build()` and `await chart.update(info)`. Remove it with `await chart.remove()`
+and check the boolean. Await insertion, data updates, replacement, and removal before execution
+returns.
+
+Verify in a later read-only execution with
+`board.getCharts().map((item) => ({ id: item.getId(), type: item.getType(), info: item.getInfo(), data: item.getDataSource() }))`,
+confirming ID, count, type, title, position, size, and data. Use a screenshot for rendered evidence.
 
 ## Images
 
