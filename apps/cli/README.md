@@ -64,9 +64,9 @@ npm install --global univer-workspace-cli@latest \
   --registry=https://insider-npm-registry.univer.work/
 ```
 
-Maintainers keep this application on the `0.4.x` line and publish three internal channels:
-stable tag-driven `0.4.x` versions under `latest`, CI-only `0.4.x-insider.<suffix>`
-versions under `insiders`, and local-only `0.4.x-dev.<suffix>` versions under `dev`.
+Maintainers publish three internal channels: stable tag-driven `X.Y.Z` versions under
+`latest`, CI-only `X.Y.Z-insider.<suffix>` versions under `insiders`, and local-only
+`X.Y.Z-dev.<suffix>` versions under `dev`.
 The source package version is a `0.0.0`
 sentinel; the release workflow injects the selected version into both the tarball and
 the CLI runtime. Public npm Promotion is not part of this repository's current release

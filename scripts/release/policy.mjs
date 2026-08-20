@@ -1,6 +1,5 @@
 export const RELEASE_PACKAGE_NAME = "univer-workspace-cli";
 export const RELEASE_REGISTRY = "https://insider-npm-registry.univer.work/";
-export const RELEASE_VERSION_LINE = "0.4";
 export const SOURCE_PACKAGE_VERSION = "0.0.0";
 
 const EXACT_SEMVER_PATTERN =
@@ -20,11 +19,6 @@ export function assertExactSemver(version, label = "Version") {
 
 export function npmTagForRelease(channel, version) {
   assertExactSemver(version, "Release version");
-  if (!version.startsWith(`${RELEASE_VERSION_LINE}.`)) {
-    throw new Error(
-      `univer-workspace-cli releases must stay on the ${RELEASE_VERSION_LINE}.x version line.`,
-    );
-  }
   const npmTag = CHANNEL_TO_TAG.get(channel);
   if (npmTag === undefined) {
     throw new Error(`Unsupported release channel: ${String(channel)}`);
@@ -33,10 +27,10 @@ export function npmTagForRelease(channel, version) {
     throw new Error(`latest requires a stable version, got ${version}`);
   }
   if (channel === "insiders" && !/^\d+\.\d+\.\d+-insider\..+$/u.test(version)) {
-    throw new Error(`insiders requires 0.4.x-insider.<suffix>, got ${version}`);
+    throw new Error(`insiders requires X.Y.Z-insider.<suffix>, got ${version}`);
   }
   if (channel === "dev" && !/^\d+\.\d+\.\d+-dev\..+$/u.test(version)) {
-    throw new Error(`dev requires 0.4.x-dev.<suffix>, got ${version}`);
+    throw new Error(`dev requires X.Y.Z-dev.<suffix>, got ${version}`);
   }
   return npmTag;
 }

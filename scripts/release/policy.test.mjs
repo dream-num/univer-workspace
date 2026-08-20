@@ -9,15 +9,14 @@ import {
   validateReleaseManifest,
 } from "./policy.mjs";
 
-test("admits exactly 0.4.x latest, insiders, and dev version contracts", () => {
-  assert.equal(npmTagForRelease("latest", "0.4.0"), "latest");
-  assert.equal(npmTagForRelease("insiders", "0.4.0-insider.20260816-a1b2c3d"), "insiders");
-  assert.equal(npmTagForRelease("dev", "0.4.0-dev.feature-a1b2c3d"), "dev");
-  assert.throws(() => npmTagForRelease("latest", "0.4.0-alpha.1"), /stable/u);
-  assert.throws(() => npmTagForRelease("insiders", "0.4.0-insiders.1"), /-insider/u);
-  assert.throws(() => npmTagForRelease("dev", "0.4.0"), /-dev/u);
-  assert.throws(() => npmTagForRelease("alpha", "0.4.0-alpha.1"), /Unsupported/u);
-  assert.throws(() => npmTagForRelease("insiders", "0.5.0-insider.1"), /0\.4\.x/u);
+test("admits latest, insiders, and dev for any exact SemVer line", () => {
+  assert.equal(npmTagForRelease("latest", "0.50.0"), "latest");
+  assert.equal(npmTagForRelease("insiders", "2.3.4-insider.20260816-a1b2c3d"), "insiders");
+  assert.equal(npmTagForRelease("dev", "10.20.30-dev.feature-a1b2c3d"), "dev");
+  assert.throws(() => npmTagForRelease("latest", "0.50.0-alpha.1"), /stable/u);
+  assert.throws(() => npmTagForRelease("insiders", "2.3.4-insiders.1"), /-insider/u);
+  assert.throws(() => npmTagForRelease("dev", "10.20.30"), /-dev/u);
+  assert.throws(() => npmTagForRelease("alpha", "0.50.0-alpha.1"), /Unsupported/u);
 });
 
 test("parses one explicit release mode", () => {
@@ -56,17 +55,17 @@ test("gates latest to a matching stable tag push from GitHub Actions", () => {
     CI: "true",
     GITHUB_ACTIONS: "true",
     GITHUB_EVENT_NAME: "push",
-    GITHUB_REF_NAME: "v0.4.0",
+    GITHUB_REF_NAME: "v0.50.0",
     GITHUB_REF_TYPE: "tag",
   };
-  assert.doesNotThrow(() => assertReleaseContext("latest", "0.4.0", env));
+  assert.doesNotThrow(() => assertReleaseContext("latest", "0.50.0", env));
   assert.throws(
-    () => assertReleaseContext("latest", "0.4.1", env),
-    /tag v0\.4\.1/u,
+    () => assertReleaseContext("latest", "0.51.0", env),
+    /tag v0\.51\.0/u,
   );
   assert.throws(
     () =>
-      assertReleaseContext("latest", "0.4.0", {
+      assertReleaseContext("latest", "0.50.0", {
         ...env,
         GITHUB_ACTIONS: "false",
       }),
