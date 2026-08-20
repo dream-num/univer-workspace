@@ -4,7 +4,8 @@ run-name: Release CLI to insider-npm ${{ github.event_name == 'push' && github.r
 on:
   push:
     tags:
-      - "v0.4.*-alpha.*"
+      - "v0.4.*"
+      - "!v0.4.*-*"
   workflow_dispatch:
     inputs:
       version:
@@ -64,7 +65,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
-            CHANNEL="alpha"
+            CHANNEL="latest"
             DRY_RUN="false"
           else
             if [[ "$GITHUB_REF_NAME" != "$BASE_BRANCH" ]]; then
