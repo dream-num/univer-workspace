@@ -17,6 +17,10 @@ export function receiveSingleMultipartFile<T>(
     try {
       parser = Busboy({
         headers: request.headers,
+        // Browser FormData serializes non-ASCII filenames as UTF-8 bytes in
+        // the filename parameter. Busboy otherwise decodes that parameter as
+        // latin1, which corrupts names such as "AI转型.pptx".
+        defParamCharset: "utf8",
         limits: {
           files: 1,
           fields: 0,
