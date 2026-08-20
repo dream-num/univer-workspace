@@ -79,6 +79,18 @@ GitHub login creates the product User and Personal Space; an existing signed-in
 User can link GitHub from the account menu. Access tokens are used only to load
 the GitHub profile during sign-in and are not persisted.
 
+Workspace CLI uses browser approval by default. `univer-workspace-cli login`
+creates a ten-minute, one-time authorization request and prints a `/cli-login`
+URL plus verification code, persists the pending request locally, and exits.
+After the user approves the matching code in their own browser, the Agent runs
+`univer-workspace-cli login --complete` to exchange it once; neither command
+waits or polls. If necessary, the user can first sign in with GitHub, Discord,
+or a password and return to the approval page. The CLI receives a separate
+normal `workspace_session`; it never
+receives the browser cookie, Workspace password, or provider access token.
+Pending authorization requests are process-local and intentionally disappear
+on server restart; completed CLI sessions remain normal persisted login sessions.
+
 Discord OAuth login and account linking are enabled when
 `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `DISCORD_CALLBACK_URL` are
 all configured. Add this redirect in the Discord Developer Portal for local

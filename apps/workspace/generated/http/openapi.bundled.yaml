@@ -16,7 +16,7 @@ tags:
   - name: Session
     description: Browser login session bootstrap and logout.
   - name: Authentication
-    description: Password, GitHub, and Discord authentication methods.
+    description: Password, GitHub, Discord, and CLI browser authorization methods.
   - name: Users
     description: Current User profile and User discovery.
   - name: Spaces
@@ -144,6 +144,95 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/auth/cli/authorizations:
+    post:
+      tags:
+        - Authentication
+      operationId: startCliAuthorization
+      summary: Start a short-lived browser authorization for Workspace CLI.
+      security: []
+      responses:
+        '201':
+          description: CLI authorization request created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliAuthorizationStart'
+        '503':
+          description: The server is temporarily at capacity for CLI authorization requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/cli/authorizations/approve:
+    post:
+      tags:
+        - Authentication
+      operationId: approveCliAuthorization
+      summary: Approve a CLI authorization as the current signed-in User.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CliAuthorizationApproval'
+      responses:
+        '200':
+          description: CLI authorization approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          description: The CLI authorization request expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/cli/authorizations/exchange:
+    post:
+      tags:
+        - Authentication
+      operationId: exchangeCliAuthorization
+      summary: Poll and exchange an approved CLI authorization for a login session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CliAuthorizationExchange'
+      responses:
+        '200':
+          description: Authorization approved and exchanged for a new CLI login session.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '202':
+          description: The User has not approved the request yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliAuthorizationPending'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '410':
+          description: The CLI authorization request expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/github/login:
     get:
       tags:
@@ -2279,6 +2368,63 @@ components:
           type: string
           minLength: 8
           maxLength: 200
+    CliAuthorizationStart:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceCode
+        - userCode
+        - verificationUri
+        - verificationUriComplete
+        - expiresIn
+        - interval
+      properties:
+        deviceCode:
+          type: string
+          minLength: 40
+        userCode:
+          type: string
+          pattern: ^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$
+        verificationUri:
+          type: string
+          pattern: ^/
+        verificationUriComplete:
+          type: string
+          pattern: ^/
+        expiresIn:
+          type: integer
+          minimum: 1
+          description: Lifetime in seconds.
+        interval:
+          type: integer
+          minimum: 1
+          description: Minimum polling interval in seconds.
+    CliAuthorizationApproval:
+      type: object
+      additionalProperties: false
+      required:
+        - userCode
+      properties:
+        userCode:
+          type: string
+          pattern: ^[A-HJ-NP-Z2-9]{4}-?[A-HJ-NP-Z2-9]{4}$
+    CliAuthorizationExchange:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceCode
+      properties:
+        deviceCode:
+          type: string
+          minLength: 40
+    CliAuthorizationPending:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          const: pending
     DiscordBotLogin:
       type: object
       additionalProperties: false

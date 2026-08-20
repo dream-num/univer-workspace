@@ -19,7 +19,7 @@ export async function executeCommand<Result>(
           : "";
       const hint =
         error.code === "workspace-authentication-required"
-          ? "\nHint: run univer-workspace-cli login --username <name>"
+          ? "\nHint: run univer-workspace-cli login"
           : "";
       command.error(`${error.code}: ${error.message}${detail}${hint}`, {
         code: "workspace.command.failed",

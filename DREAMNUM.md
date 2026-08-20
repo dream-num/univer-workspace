@@ -23,7 +23,8 @@
   collaboration entry points, and background recovery processes. Contract: [Workspace README](apps/workspace/README.md)
   and [OpenAPI source](apps/workspace/contracts/http/openapi.yaml).
 - **Univer Workspace CLI** — the internally packaged `univer-workspace-cli` application for agent-driven remote
-  Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows. Contract:
+  Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, with browser-approved
+  passwordless CLI session handoff for password and external-identity users. Contract:
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli.yml).
 
 ## Depends on
@@ -63,6 +64,8 @@
   retain their identities, metadata, and recovery state.
 - Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs, sharing state, and user-authored
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
+- Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal
+  persisted login session and does not pass a browser cookie, password, or OAuth access token through the agent.
 - OAuth secrets, trusted Bot credentials, registry credentials, production licenses, and deployment credentials are
   environment or build configuration and must not be committed to the repository.
 - Stable `vX.Y.Z` tags are immutable source coordinates shared by the stable CLI release and manually selected

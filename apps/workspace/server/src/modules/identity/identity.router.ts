@@ -35,6 +35,39 @@ export function createIdentityRouter(options: {
     response.json(issued.view);
   });
 
+  router.post("/auth/cli/authorizations", (_request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.status(201).json(identity.startCliAuthorization());
+  });
+
+  router.post("/auth/cli/authorizations/approve", (request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.json(
+      identity.approveCliAuthorization(
+        request.headers.cookie,
+        request.body?.userCode
+      )
+    );
+  });
+
+  router.post("/auth/cli/authorizations/exchange", (request, response) => {
+    response.set("Cache-Control", "no-store");
+    const result = identity.exchangeCliAuthorization(
+      request.body?.deviceCode
+    );
+    if (result.status === "pending") {
+      response.status(202).json(result);
+      return;
+    }
+    setSessionCookie(
+      response,
+      identity,
+      result.issuedSession.cookieValue,
+      options
+    );
+    response.json(result.issuedSession.view);
+  });
+
   router.post("/auth/discord/bot-login", (request, response) => {
     requireDiscordBotApiKey(
       request.get("x-api-key"),

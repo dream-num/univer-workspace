@@ -261,6 +261,19 @@ const messages = {
     authDividerOr: "或",
     continueWithGitHub: "使用 GitHub 继续",
     continueWithDiscord: "使用 Discord 继续",
+    cliLoginTitle: "授权 Workspace CLI",
+    cliLoginDescription: "确认验证码，将当前账户安全地登录到发起请求的 CLI。",
+    cliLoginLoading: "正在加载 CLI 登录请求",
+    cliLoginSignInFirst: "请先登录 Workspace",
+    cliLoginSignInDescription: "登录后会返回此页面继续确认 CLI 授权；支持 GitHub、Discord 或密码登录。",
+    cliLoginAccount: "授权账户",
+    cliLoginAccountDescription: "CLI 将以“{name}”的身份登录。",
+    cliLoginCode: "验证码",
+    cliLoginApprove: "确认并授权 CLI",
+    cliLoginSafety: "仅当此验证码与 CLI 中显示的一致时才确认。授权请求将在 10 分钟后失效。",
+    cliLoginApprovedTitle: "CLI 已授权",
+    cliLoginApprovedDescription: "CLI 会自动完成登录，此页面可以关闭。",
+    cliLoginApprovedFor: "已授权 CLI 使用“{name}”账户。",
     resourceOpenFailed: "无法打开此资源",
     resourceUnavailableTitle: "无法打开此资源",
     resourceUnavailableDescription:
@@ -593,6 +606,23 @@ const messages = {
     authDividerOr: "or",
     continueWithGitHub: "Continue with GitHub",
     continueWithDiscord: "Continue with Discord",
+    cliLoginTitle: "Authorize Workspace CLI",
+    cliLoginDescription:
+      "Confirm the code to securely sign the requesting CLI in with your current account.",
+    cliLoginLoading: "Loading CLI login request",
+    cliLoginSignInFirst: "Sign in to Workspace first",
+    cliLoginSignInDescription:
+      "You will return here to approve the CLI after signing in with GitHub, Discord, or a password.",
+    cliLoginAccount: "Account to authorize",
+    cliLoginAccountDescription: "The CLI will sign in as “{name}”.",
+    cliLoginCode: "Verification code",
+    cliLoginApprove: "Confirm and authorize CLI",
+    cliLoginSafety:
+      "Only confirm when this code matches the CLI. The request expires after 10 minutes.",
+    cliLoginApprovedTitle: "CLI authorized",
+    cliLoginApprovedDescription:
+      "The CLI will finish signing in automatically. You can close this page.",
+    cliLoginApprovedFor: "The CLI is authorized to use the “{name}” account.",
     resourceOpenFailed: "Unable to open this resource",
     resourceUnavailableTitle: "Unable to open this resource",
     resourceUnavailableDescription:

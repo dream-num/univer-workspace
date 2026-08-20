@@ -109,6 +109,64 @@ PasswordLogin:
     password:
       type: string
 
+CliAuthorizationStart:
+  type: object
+  additionalProperties: false
+  required:
+    - deviceCode
+    - userCode
+    - verificationUri
+    - verificationUriComplete
+    - expiresIn
+    - interval
+  properties:
+    deviceCode:
+      type: string
+      minLength: 40
+    userCode:
+      type: string
+      pattern: "^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$"
+    verificationUri:
+      type: string
+      pattern: ^/
+    verificationUriComplete:
+      type: string
+      pattern: ^/
+    expiresIn:
+      type: integer
+      minimum: 1
+      description: Lifetime in seconds.
+    interval:
+      type: integer
+      minimum: 1
+      description: Minimum polling interval in seconds.
+
+CliAuthorizationApproval:
+  type: object
+  additionalProperties: false
+  required: [userCode]
+  properties:
+    userCode:
+      type: string
+      pattern: "^[A-HJ-NP-Z2-9]{4}-?[A-HJ-NP-Z2-9]{4}$"
+
+CliAuthorizationExchange:
+  type: object
+  additionalProperties: false
+  required: [deviceCode]
+  properties:
+    deviceCode:
+      type: string
+      minLength: 40
+
+CliAuthorizationPending:
+  type: object
+  additionalProperties: false
+  required: [status]
+  properties:
+    status:
+      const: pending
+
 DiscordBotLogin:
   type: object
   additionalProperties: false

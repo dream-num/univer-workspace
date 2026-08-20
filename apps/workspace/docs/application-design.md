@@ -63,6 +63,12 @@ interface LoginSessionAuthenticator {
 
 它只证明身份，不携带或缓存 Space、Node、Resource、Worktree Role。
 
+Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session。Server 在进程内
+保存有容量上限、十分钟过期的待授权请求；已登录 Browser 确认人类可核对的验证码后，高熵
+Device Code 只能兑换一次，并为 CLI 创建独立、持久化的 `login_sessions` 行。Server 重启可以
+取消尚未确认或兑换的请求，但不影响已经签发的 CLI Session。Browser Cookie、密码、GitHub
+Token 和 Discord Token 都不会经过 Agent。
+
 ## Access Resolver
 
 产品 HTTP 与 Collaboration Endpoint 共用：

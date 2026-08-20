@@ -102,6 +102,95 @@
       "409":
         $ref: ../schemas/common.yaml#/Conflict
 
+/api/auth/cli/authorizations:
+  post:
+    tags: [Authentication]
+    operationId: startCliAuthorization
+    summary: Start a short-lived browser authorization for Workspace CLI.
+    security: []
+    responses:
+      "201":
+        description: CLI authorization request created.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/CliAuthorizationStart
+      "503":
+        description: The server is temporarily at capacity for CLI authorization requests.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/auth/cli/authorizations/approve:
+  post:
+    tags: [Authentication]
+    operationId: approveCliAuthorization
+    summary: Approve a CLI authorization as the current signed-in User.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/CliAuthorizationApproval
+    responses:
+      "200":
+        description: CLI authorization approved.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthenticatedSession
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+      "410":
+        description: The CLI authorization request expired.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/auth/cli/authorizations/exchange:
+  post:
+    tags: [Authentication]
+    operationId: exchangeCliAuthorization
+    summary: Poll and exchange an approved CLI authorization for a login session.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/CliAuthorizationExchange
+    responses:
+      "200":
+        description: Authorization approved and exchanged for a new CLI login session.
+        headers:
+          Set-Cookie:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthenticatedSession
+      "202":
+        description: The User has not approved the request yet.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/CliAuthorizationPending
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "410":
+        description: The CLI authorization request expired.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
 /api/auth/github/login:
   get:
     tags: [Authentication]

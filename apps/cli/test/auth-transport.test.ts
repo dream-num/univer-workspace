@@ -75,6 +75,79 @@ describe("Workspace authentication and HTTP contracts", () => {
     });
   });
 
+  it("logs in through browser approval without sending a password", async () => {
+    const directory = await temporaryDirectory();
+    const config = createWorkspaceConfig({ UNIVER_HOME: directory });
+    await config.setFromText({ key: "workspace.origin", text: "https://workspace.test" });
+    const requests: Array<{ readonly body: unknown; readonly path: string }> = [];
+    let exchanges = 0;
+    const auth = new WorkspaceAuth({
+      config,
+      sessionPath: join(directory, "session.json"),
+      fetcher: async (input, init) => {
+        const url = new URL(String(input));
+        requests.push({
+          body: init?.body ? JSON.parse(String(init.body)) : undefined,
+          path: url.pathname,
+        });
+        if (url.pathname === "/api/auth/cli/authorizations") {
+          return Response.json(
+            {
+              deviceCode: "a".repeat(43),
+              userCode: "ABCD-EFGH",
+              verificationUri: "/cli-login",
+              verificationUriComplete: "/cli-login?userCode=ABCD-EFGH",
+              expiresIn: 600,
+              interval: 2,
+            },
+            { status: 201 },
+          );
+        }
+        exchanges += 1;
+        if (exchanges === 1) {
+          return Response.json({ status: "pending" }, { status: 202 });
+        }
+        return Response.json(
+          { authenticated: true, user: { displayName: "GitHub Alice", id: "user-github" } },
+          { headers: { "set-cookie": "workspace_session=browser-approved; Path=/; HttpOnly" } },
+        );
+      },
+    });
+
+    const pending = await auth.startCliLogin();
+    expect(pending).toMatchObject({
+      origin: "https://workspace.test",
+      userCode: "ABCD-EFGH",
+      verificationUrl: "https://workspace.test/cli-login?userCode=ABCD-EFGH",
+    });
+    await expect(auth.pendingCliLogin()).resolves.toEqual(pending);
+    await expect(auth.completeCliLogin(pending)).resolves.toEqual({ status: "pending" });
+    await expect(auth.completeCliLogin(pending)).resolves.toEqual({
+      status: "authenticated",
+      origin: "https://workspace.test",
+      subject: { id: "user-github", name: "GitHub Alice" },
+    });
+    expect(requests).toEqual([
+      { body: undefined, path: "/api/auth/cli/authorizations" },
+      {
+        body: { deviceCode: "a".repeat(43) },
+        path: "/api/auth/cli/authorizations/exchange",
+      },
+      {
+        body: { deviceCode: "a".repeat(43) },
+        path: "/api/auth/cli/authorizations/exchange",
+      },
+    ]);
+    expect(JSON.parse(await readFile(join(directory, "session.json"), "utf8"))).toEqual({
+      sessions: {
+        "https://workspace.test": {
+          cookie: "workspace_session=browser-approved",
+          subject: "user-github",
+        },
+      },
+    });
+  });
+
   it("clears the local Session even when remote logout is unknown", async () => {
     const directory = await temporaryDirectory();
     const config = createWorkspaceConfig({ UNIVER_HOME: directory });

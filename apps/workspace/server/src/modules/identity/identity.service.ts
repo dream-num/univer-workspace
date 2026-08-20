@@ -11,6 +11,8 @@ import { ApplicationError } from "../../middleware/errors.js";
 import { IdentityRepository } from "./identity.repository.js";
 import type {
   AuthenticatedSession,
+  CliAuthorizationExchange,
+  CliAuthorizationStart,
   IssuedSession,
   PasswordChange,
   PasswordLogin,
@@ -30,6 +32,17 @@ const scrypt = promisify(scryptCallback);
 const COOKIE_NAME = "workspace_session";
 const GITHUB_OAUTH_COOKIE_NAME = "workspace_github_oauth";
 const DISCORD_OAUTH_COOKIE_NAME = "workspace_discord_oauth";
+const CLI_AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
+const CLI_AUTHORIZATION_POLL_INTERVAL_SECONDS = 2;
+const CLI_AUTHORIZATION_CAPACITY = 10_000;
+const CLI_USER_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+interface PendingCliAuthorization {
+  readonly deviceCodeHash: string;
+  readonly userCode: string;
+  readonly expiresAt: number;
+  approvedUserId?: string;
+}
 
 export interface IdentityModule {
   readonly cookieName: string;
@@ -39,6 +52,12 @@ export interface IdentityModule {
   registerWithPassword(input: PasswordRegistration): Promise<IssuedSession>;
   loginWithPassword(input: PasswordLogin): Promise<IssuedSession>;
   loginWithDiscordBot(input: DiscordBotLogin): IssuedSession;
+  startCliAuthorization(): CliAuthorizationStart;
+  approveCliAuthorization(
+    cookieHeader: string | undefined,
+    userCode: unknown
+  ): AuthenticatedSession;
+  exchangeCliAuthorization(deviceCode: unknown): CliAuthorizationExchange;
   changePassword(
     cookieHeader: string | undefined,
     input: PasswordChange
@@ -109,6 +128,8 @@ export function createIdentityModule(options: {
   const discordOAuthEnabled = Boolean(
     discordOAuthProvider && oauthStateSecret
   );
+  const cliAuthorizations = new Map<string, PendingCliAuthorization>();
+  const cliAuthorizationDevices = new Map<string, string>();
   repository.deleteExpiredSessions(now());
 
   function authenticatedSession(user: User): AuthenticatedSession {
@@ -312,6 +333,91 @@ export function createIdentityModule(options: {
         cookieValue: token.cookieValue,
         view: authenticatedSession(user),
       };
+    },
+
+    startCliAuthorization() {
+      deleteExpiredCliAuthorizations();
+      if (cliAuthorizations.size >= CLI_AUTHORIZATION_CAPACITY) {
+        throw new ApplicationError(
+          "CLI_AUTHORIZATION_UNAVAILABLE",
+          503,
+          "CLI browser login is temporarily unavailable. Try again shortly."
+        );
+      }
+      const deviceCode = randomBytes(32).toString("base64url");
+      const deviceCodeHash = hashCliDeviceCode(deviceCode);
+      let userCode = createCliUserCode();
+      while (cliAuthorizations.has(userCode)) {
+        userCode = createCliUserCode();
+      }
+      cliAuthorizations.set(userCode, {
+        deviceCodeHash,
+        userCode,
+        expiresAt: now() + CLI_AUTHORIZATION_TTL_MS,
+      });
+      cliAuthorizationDevices.set(deviceCodeHash, userCode);
+      const verificationUri = "/cli-login";
+      return {
+        deviceCode,
+        userCode,
+        verificationUri,
+        verificationUriComplete: `${verificationUri}?userCode=${encodeURIComponent(userCode)}`,
+        expiresIn: Math.floor(CLI_AUTHORIZATION_TTL_MS / 1000),
+        interval: CLI_AUTHORIZATION_POLL_INTERVAL_SECONDS,
+      };
+    },
+
+    approveCliAuthorization(cookieHeader, inputUserCode) {
+      const session = requireSession(cookieHeader);
+      const userCode = validCliUserCode(inputUserCode);
+      const authorization = cliAuthorizations.get(userCode);
+      if (!authorization) throw invalidCliAuthorization();
+      if (authorization.expiresAt <= now()) {
+        deleteCliAuthorization(authorization);
+        throw expiredCliAuthorization();
+      }
+      if (
+        authorization.approvedUserId !== undefined &&
+        authorization.approvedUserId !== session.user.id
+      ) {
+        throw new ApplicationError(
+          "CONFLICT",
+          409,
+          "This CLI login request was already approved by another User."
+        );
+      }
+      authorization.approvedUserId = session.user.id;
+      return session;
+    },
+
+    exchangeCliAuthorization(inputDeviceCode) {
+      const deviceCode = validCliDeviceCode(inputDeviceCode);
+      const deviceCodeHash = hashCliDeviceCode(deviceCode);
+      const userCode = cliAuthorizationDevices.get(deviceCodeHash);
+      const authorization = userCode
+        ? cliAuthorizations.get(userCode)
+        : undefined;
+      if (
+        !authorization ||
+        !secretsEqual(deviceCodeHash, authorization.deviceCodeHash)
+      ) {
+        throw invalidCliAuthorization();
+      }
+      if (authorization.expiresAt <= now()) {
+        deleteCliAuthorization(authorization);
+        throw expiredCliAuthorization();
+      }
+      if (authorization.approvedUserId === undefined) {
+        return { status: "pending" };
+      }
+      const user = repository.findUser(authorization.approvedUserId);
+      if (!user) {
+        deleteCliAuthorization(authorization);
+        throw invalidCliAuthorization();
+      }
+      const issuedSession = issueSession(user);
+      deleteCliAuthorization(authorization);
+      return { status: "authorized", issuedSession };
     },
 
     async changePassword(cookieHeader, input) {
@@ -675,6 +781,72 @@ export function createIdentityModule(options: {
     repository.updateUser(completed, now());
     return completed;
   }
+
+  function deleteExpiredCliAuthorizations(): void {
+    for (const authorization of cliAuthorizations.values()) {
+      if (authorization.expiresAt <= now()) {
+        deleteCliAuthorization(authorization);
+      }
+    }
+  }
+
+  function deleteCliAuthorization(authorization: PendingCliAuthorization): void {
+    cliAuthorizations.delete(authorization.userCode);
+    cliAuthorizationDevices.delete(authorization.deviceCodeHash);
+  }
+}
+
+function createCliUserCode(): string {
+  const bytes = randomBytes(8);
+  const characters = Array.from(bytes, (byte) =>
+    CLI_USER_CODE_ALPHABET.charAt(byte % CLI_USER_CODE_ALPHABET.length)
+  ).join("");
+  return `${characters.slice(0, 4)}-${characters.slice(4)}`;
+}
+
+function validCliUserCode(value: unknown): string {
+  if (typeof value !== "string") throw invalidCliAuthorization();
+  const compact = value.trim().toUpperCase().replaceAll("-", "");
+  if (!/^[A-HJ-NP-Z2-9]{8}$/u.test(compact)) {
+    throw invalidCliAuthorization();
+  }
+  return `${compact.slice(0, 4)}-${compact.slice(4)}`;
+}
+
+function validCliDeviceCode(value: unknown): string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{40,64}$/u.test(value)) {
+    throw invalidCliAuthorization();
+  }
+  return value;
+}
+
+function hashCliDeviceCode(value: string): string {
+  return createHash("sha256").update(value).digest("base64url");
+}
+
+function secretsEqual(actual: string, expected: string): boolean {
+  const actualBytes = Buffer.from(actual);
+  const expectedBytes = Buffer.from(expected);
+  return (
+    actualBytes.length === expectedBytes.length &&
+    timingSafeEqual(actualBytes, expectedBytes)
+  );
+}
+
+function invalidCliAuthorization(): ApplicationError {
+  return new ApplicationError(
+    "CLI_AUTHORIZATION_INVALID",
+    400,
+    "The CLI login request is invalid or has already been used."
+  );
+}
+
+function expiredCliAuthorization(): ApplicationError {
+  return new ApplicationError(
+    "CLI_AUTHORIZATION_EXPIRED",
+    410,
+    "The CLI login request has expired. Start login again from the CLI."
+  );
 }
 
 interface OAuthState {

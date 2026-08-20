@@ -25,6 +25,13 @@ External login and explicit linking use different OAuth intents. Both validate
 `state` and PKCE from a short-lived protected cookie. An access token used
 only to resolve identity is discarded after the callback.
 
+CLI browser login uses a separate device authorization flow. The unauthenticated
+CLI creates a ten-minute request containing a high-entropy device code and a
+human-verifiable code. A signed-in browser explicitly approves the matching
+code; the CLI then exchanges the device code exactly once for its own normal
+login session. Pending requests are bounded, process-local, and non-durable.
+They contain no browser cookie, password, or external OAuth access token.
+
 `GET /api/session` returns `200` for both authenticated and anonymous clients so
 React can use it as its application bootstrap request.
 
