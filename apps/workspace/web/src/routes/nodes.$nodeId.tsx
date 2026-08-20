@@ -3,7 +3,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { Cloud, Download, Lock, Share2 } from "lucide-react";
 import { useState } from "react";
 import type { components } from "../../../generated/http/schema.js";
@@ -35,8 +35,34 @@ import { cn } from "../shared/utils/cn";
 
 type Node = components["schemas"]["NodeSummary"];
 export const Route = createFileRoute("/nodes/$nodeId")({
-  loader: async ({ context, params, location }) => {
+  validateSearch: (search: Readonly<Record<string, unknown>>) => ({
+    ...(typeof search.unit === "string" && search.unit
+      ? { unit: search.unit }
+      : {}),
+  }),
+  loaderDeps: ({ search }) => ({ unit: search.unit }),
+  loader: async ({ context, deps, params, location }) => {
     await requireAuthenticatedSession(context.queryClient, location.href);
+    if (deps.unit) {
+      const { data } = await api.GET("/api/unit-resources/{unitId}", {
+        params: { path: { unitId: deps.unit } },
+      });
+      if (data) {
+        await Promise.all([
+          context.queryClient.invalidateQueries({ queryKey: ["nodes"] }),
+          context.queryClient.invalidateQueries({
+            queryKey: ["recent-resources"],
+          }),
+          context.queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
+        ]);
+        throw redirect({
+          to: "/nodes/$nodeId",
+          params: { nodeId: data.node.id },
+          search: {},
+          replace: true,
+        });
+      }
+    }
     try {
       const [, result] = await Promise.all([
         context.queryClient.ensureQueryData(spacesQueryOptions),

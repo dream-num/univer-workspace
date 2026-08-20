@@ -67,6 +67,7 @@ apps/workspace/
 │       │   ├── nodes/
 │       │   ├── resources/
 │       │   ├── blobs/
+│       │   ├── exchange/
 │       │   ├── univer-assets/
 │       │   ├── operations/
 │       │   ├── trash/
@@ -179,6 +180,14 @@ Univer 集中在 `integrations/univer`，向业务 Module 提供产品语义的 
 snapshot、changeset 或 revision。Tree Blob 和内嵌 Asset 共用注入的 `BlobStore`；当前实现是
 本地目录，未来可替换为 `S3BlobStore` 或迁移包装器。Univer Collaboration Database Adapter
 独立管理协作数据。
+
+Office Exchange Module 使用已发布的 `@univerjs-pro/exchange-node` 将 Office 字节与 Univer
+数据互转。`/universer-api/exchange/**`、Exchange File Upload 和签名下载遵循 Universer
+协议形状，不进入产品 OpenAPI。导入为 Unit 时通过 Resource Module 创建 Personal Space
+根目录下的正式 Node/Resource/Unit；导出时通过 Collaboration SDK 的公开 Unit Runtime
+物化最新 Trunk snapshot 和 Sheet blocks，再交给 Exchange Node。转换源文件、JSON snapshot
+和导出文件是 `BlobStore` 中的临时对象，任务元数据只存在当前进程并在两小时后过期；它们
+不写入产品数据库，也不改变 Collaboration Database Adapter 的所有权边界。
 
 ## OpenAPI
 

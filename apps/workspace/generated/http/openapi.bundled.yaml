@@ -772,6 +772,29 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/unit-resources/{unitId}:
+    parameters:
+      - name: unitId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Resources
+      operationId: getResourceByUnit
+      summary: Resolve Resource and owning Node metadata from a Univer Unit.
+      responses:
+        '200':
+          description: Current Resource and Node accessible to the signed-in User.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/resources/{resourceId}/open:
     parameters:
       - name: resourceId

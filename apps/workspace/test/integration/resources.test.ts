@@ -127,7 +127,8 @@ describe("Resources", () => {
         .prepare("SELECT COUNT(*) AS count FROM recent_resources")
         .get()
     ).toMatchObject({ count: 0 });
-    expect(application.resources.open(userId, resourceId)).toMatchObject({
+    const opened = application.resources.open(userId, resourceId);
+    expect(opened).toMatchObject({
       resource: {
         id: resourceId,
         nodeId: created.body.node.id,
@@ -135,6 +136,15 @@ describe("Resources", () => {
         unitType: "doc",
         editorMode: "edit",
       },
+    });
+    if (opened.resource.kind !== "univer") {
+      throw new Error("Created Resource is not a Univer Resource");
+    }
+    expect(
+      application.resources.getByUnit(userId, opened.resource.unitId)
+    ).toMatchObject({
+      resource: { id: resourceId },
+      node: { id: created.body.node.id, name: "Plan" },
     });
     expect(
       application.database.connection

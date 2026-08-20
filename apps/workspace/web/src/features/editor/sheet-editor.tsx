@@ -30,6 +30,7 @@ export default createCollaborationEditor({
   label: "spreadsheet",
   theme: greenTheme,
   collaborationProvidedByPreset: true,
+  exchangeProvidedByPreset: true,
   licenseProvidedByPreset: true,
   locales: sheetEditorLocales,
   createPresets: (container, license) =>

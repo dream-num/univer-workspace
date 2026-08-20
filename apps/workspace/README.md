@@ -36,6 +36,18 @@ Product data is stored in `.data/univer-workspace.sqlite`. Univer unit data is
 stored separately in `.data/univer-collaboration.sqlite`, and uploaded Blob
 bytes default to `.data/univer-workspace-blobs`.
 
+The Univer editors import and export XLSX/CSV/TSV, DOCX, and PPTX through the
+server-side `@univerjs-pro/exchange-node` runtime. These endpoints follow the
+Universer Exchange shape under `/universer-api/exchange/**`; they are not part
+of the product OpenAPI. The Workspace file action automatically imports
+XLS/XLSX/CSV/TSV, DOC/DOCX, and PPT/PPTX as normal Univer Resources in the
+selected Space and folder; other file types remain downloadable Blob
+Resources. Editor Ribbon imports default to the root of the signed-in user's
+Personal Space. Uploaded source files, converted JSON snapshots, and export
+files are temporary BlobStore objects with process-local task metadata and a
+two-hour lifetime. Exchange actions are not shown for Worktree or merge-preview
+editors because those scopes do not yet have scope-aware Office conversion.
+
 ### Configuration
 
 Copy `.env.example` to `.env`. Development, database, and production start

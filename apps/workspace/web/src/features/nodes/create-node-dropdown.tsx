@@ -30,6 +30,9 @@ import { NodeIcon } from "./node-icon";
 
 type UnitType = "sheet" | "doc" | "slide" | "board" | "base";
 
+const IMPORTABLE_DOCUMENT_EXTENSION =
+  /\.(?:xls|xlsx|csv|tsv|doc|docx|ppt|pptx)$/iu;
+
 export function CreateNodeDropdown(props: {
   readonly spaceId?: string;
   readonly parentNodeId?: string | null;
@@ -204,15 +207,72 @@ export function CreateNodeDropdown(props: {
     },
   });
 
+  const importDocument = useMutation({
+    mutationFn: async (file: File) => {
+      if (!props.spaceId) throw new Error(t("noWritableSpace"));
+      const form = new FormData();
+      form.append("file", file);
+      const uploadedResponse = await fetch(
+        `/universer-api/stream/file/upload?size=${encodeURIComponent(file.size)}&source=1&flate=false`,
+        { method: "POST", credentials: "include", body: form }
+      );
+      const uploaded = (await uploadedResponse.json().catch(() => null)) as
+        | { readonly FileId?: string }
+        | null;
+      if (!uploadedResponse.ok || !uploaded?.FileId) {
+        throw uploaded ? apiError(uploaded) : new Error(t("fileImportFailed"));
+      }
+
+      const startedResponse = await fetch("/universer-api/exchange/import", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileID: uploaded.FileId,
+          outputType: 1,
+          spaceId: props.spaceId,
+          parentNodeId,
+        }),
+      });
+      const started = (await startedResponse.json().catch(() => null)) as
+        | { readonly taskID?: string }
+        | null;
+      if (!startedResponse.ok || !started?.taskID) {
+        throw started ? apiError(started) : new Error(t("fileImportFailed"));
+      }
+      return await waitForDocumentImport(started.taskID, t("fileImportFailed"));
+    },
+    onSuccess: async () => {
+      await refreshCreatedNodes();
+      await props.onCreated?.();
+      toast.success(t("fileImported"));
+    },
+    onError: (mutationError) => {
+      toast.error(
+        mutationError instanceof Error
+          ? mutationError.message
+          : t("fileImportFailed")
+      );
+    },
+  });
+
   const placement = props.placement ?? "toolbar";
   const action = props.action ?? "all";
   const pending =
-    createGroup.isPending || createResource.isPending || uploadBlob.isPending;
+    createGroup.isPending ||
+    createResource.isPending ||
+    uploadBlob.isPending ||
+    importDocument.isPending;
 
   const selectFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) uploadBlob.mutate(file);
+    if (!file) return;
+    if (IMPORTABLE_DOCUMENT_EXTENSION.test(file.name)) {
+      importDocument.mutate(file);
+    } else {
+      uploadBlob.mutate(file);
+    }
   };
 
   const openDialog = (unitType: UnitType | "group") => {
@@ -262,7 +322,7 @@ export function CreateNodeDropdown(props: {
     ) : placement === "home" ? (
       <button
         type="button"
-        disabled={!props.spaceId || uploadBlob.isPending}
+        disabled={!props.spaceId || pending}
         onClick={
           action === "upload"
             ? () => fileInput.current?.click()
@@ -306,7 +366,7 @@ export function CreateNodeDropdown(props: {
       ) : (
         <MenuRoot>
           <MenuTrigger
-            disabled={!props.spaceId || uploadBlob.isPending}
+            disabled={!props.spaceId || pending}
             render={trigger}
           />
           <MenuContent
@@ -424,4 +484,32 @@ export function CreateNodeDropdown(props: {
       </Dialog>
     </>
   );
+}
+
+async function waitForDocumentImport(
+  taskId: string,
+  fallbackMessage: string
+): Promise<string> {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const response = await fetch(
+      `/universer-api/exchange/task/${encodeURIComponent(taskId)}`,
+      { credentials: "include" }
+    );
+    const task = (await response.json().catch(() => null)) as
+      | {
+          readonly status?: string;
+          readonly error?: { readonly message?: string };
+          readonly import?: { readonly unitID?: string };
+        }
+      | null;
+    if (!response.ok) throw new Error(task?.error?.message || fallbackMessage);
+    if (task?.status === "done" && task.import?.unitID) {
+      return task.import.unitID;
+    }
+    if (task?.status === "failed") {
+      throw new Error(task.error?.message || fallbackMessage);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error(fallbackMessage);
 }

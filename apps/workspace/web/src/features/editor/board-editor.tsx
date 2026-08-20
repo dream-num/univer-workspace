@@ -71,6 +71,7 @@ export type BoardEditorProps = CollaborationEditorProps;
 export default createCollaborationEditor({
   label: "board",
   theme: redTheme,
+  exchangeEnabled: false,
   useCustomCollaborationStatus: true,
   locales: {
     "zh-CN": mergeLocales(

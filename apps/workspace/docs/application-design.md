@@ -14,6 +14,7 @@ React
   │           ├── Nodes
   │           ├── Resources
   │           ├── Blobs / BlobStore
+  │           ├── Office Exchange
   │           ├── Univer Assets / File Gateway
   │           ├── Permissions / Trash / Views
   │           ├── Worktrees
@@ -129,6 +130,25 @@ Univer Asset Module 适配原生 File API。它将 Slide、Board、Base 等 Unit
 `BlobStore`，但不创建 Node/Resource。Snapshot 只持有稳定 Asset ID；签名接口返回同域
 `/content` 网关，网关在每次请求时重新解析 Unit/Worktree 权限并禁止缓存。Worktree-local
 Asset 在对应 Unit 合入后发布到 Trunk。
+
+Office Exchange Module 适配 Univer Exchange Client 使用的 Universer 协议：
+
+- `source=HttpImport` 的 `/universer-api/stream/file/upload` 由 Exchange 接收；Unit Embedded
+  Asset 的上传继续由 Univer Asset Module 处理；
+- import task 使用 `@univerjs-pro/exchange-node` 转换 XLS/XLSX/CSV/TSV、DOC/DOCX 或
+  PPT/PPTX；Workspace 文件入口按扩展名自动识别这些格式，并在当前 Space 与目录创建正式
+  Resource，Editor Ribbon 导入则默认创建在当前 User 的 Personal Space 根目录。两种入口都
+  必须通过 Resource Module，不能直接写入一个没有产品归属的 Collaboration Unit；
+- export task 只接受服务端 `AccessResolver` 能解析且允许打开的 Trunk Unit，服务端自行
+  确认 Unit Type，并物化最新 snapshot 与 Sheet blocks；
+- 转换用 source、JSON 和 output 字节保存在 `BlobStore`，任务与临时文件身份只在当前进程
+  保存并在两小时后失效，不写入产品数据库；
+- Worktree 和 Merge Preview 暂不注册 Exchange 插件，避免把 Trunk 内容误当作当前 Scope
+  导出。Board 没有受支持的 Office 格式，也不注册 Exchange。
+
+这些 `/universer-api` Route 属于 Univer/Universer 兼容入口，不是产品 HTTP contract，因此
+不添加到 `contracts/http`。身份仍来自 Workspace Login Session；客户端提交的 User、Role、
+Unit Type 或 Unit 可见性都不作为授权依据。
 
 ## Collaboration Access Resolver
 

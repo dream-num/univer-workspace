@@ -125,6 +125,34 @@ describe("Node/Resource HTTP API", () => {
         },
       },
     });
+    const openedBody = opened.body as {
+      readonly resource: { readonly unitId: string };
+    };
+    expect(
+      await requestJson(
+        origin,
+        cookie,
+        `/api/unit-resources/${openedBody.resource.unitId}`
+      )
+    ).toMatchObject({
+      status: 200,
+      body: {
+        resource: { id: parentBody.node.resource.id },
+        node: { id: parentBody.node.id, name: "Overview" },
+      },
+    });
+    const otherSession = await application.identity.registerWithPassword({
+      username: "other-http-user",
+      displayName: "Other HTTP User",
+      password: "correct horse battery staple",
+    });
+    expect(
+      await requestJson(
+        origin,
+        `${application.identity.cookieName}=${otherSession.cookieValue}`,
+        `/api/unit-resources/${openedBody.resource.unitId}`
+      )
+    ).toMatchObject({ status: 404 });
     const recent = await requestJson(
       origin,
       cookie,

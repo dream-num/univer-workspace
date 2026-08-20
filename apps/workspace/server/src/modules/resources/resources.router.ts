@@ -38,6 +38,16 @@ export function createResourcesRouter(options: {
     );
   });
 
+  router.get("/unit-resources/:unitId", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(
+      options.resources.getByUnit(
+        session.user.id,
+        requiredParameter(request.params.unitId)
+      )
+    );
+  });
+
   router.post("/resources/:resourceId/open", (request, response) => {
     const session = options.identity.requireSession(request.headers.cookie);
     response.json(

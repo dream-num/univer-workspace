@@ -72,6 +72,8 @@
     "@univerjs-pro/embed-ui": "1.0.0-insiders.20260819-8595af2",
     "@univerjs-pro/engine-chart": "1.0.0-insiders.20260819-8595af2",
     "@univerjs-pro/engine-formula": "1.0.0-insiders.20260819-8595af2",
+    "@univerjs-pro/exchange-client": "1.0.0-insiders.20260819-8595af2",
+    "@univerjs-pro/exchange-node": "1.0.0-insiders.20260819-8595af2",
     "@univerjs-pro/ink": "1.0.0-insiders.20260819-8595af2",
     "@univerjs-pro/ink-ui": "1.0.0-insiders.20260819-8595af2",
     "@univerjs-pro/license": "1.0.0-insiders.20260819-8595af2",
