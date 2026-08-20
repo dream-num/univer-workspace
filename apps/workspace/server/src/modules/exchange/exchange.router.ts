@@ -37,6 +37,19 @@ export function createExchangeRouter(options: {
   });
 
   router.post(
+    "/exchange/import",
+    json({ limit: "1mb" }),
+    async (request, response) => {
+      response.json(
+        await options.exchange.importFile(
+          userId(request),
+          "auto",
+          request.body
+        )
+      );
+    }
+  );
+  router.post(
     "/exchange/:type/import",
     json({ limit: "1mb" }),
     async (request, response) => {

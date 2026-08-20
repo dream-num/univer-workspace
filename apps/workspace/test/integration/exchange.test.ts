@@ -41,6 +41,15 @@ describe("Universer Exchange protocol", () => {
     const owner = await register(application, "exchange-owner");
     const viewer = await register(application, "exchange-viewer");
     const outsider = await register(application, "exchange-outsider");
+    const personalSpace = application.spaces
+      .list(owner.userId)
+      .spaces.find((space) => space.type === "personal");
+    expect(personalSpace).toBeDefined();
+    const imports = application.nodes.create(owner.userId, {
+      spaceId: personalSpace!.id,
+      parentNodeId: null,
+      name: "Imports",
+    });
     const source = await workbookFile("Revenue", "quarterly-plan");
     const upload = await uploadExchangeFile(origin, owner.cookie, source);
 
@@ -51,8 +60,13 @@ describe("Universer Exchange protocol", () => {
     const importedTask = await startTask(
       origin,
       owner.cookie,
-      `/universer-api/exchange/${UniverType.UNIVER_SHEET}/import`,
-      { fileID: upload.body.FileId, outputType: 1 }
+      "/universer-api/exchange/import",
+      {
+        fileID: upload.body.FileId,
+        outputType: 1,
+        spaceId: personalSpace!.id,
+        parentNodeId: imports.id,
+      }
     );
     const imported = await waitForTask(origin, owner.cookie, importedTask);
     expect(imported.error.code).toBe(ErrorCode.OK);
@@ -68,11 +82,11 @@ describe("Universer Exchange protocol", () => {
       unitType: "sheet",
       node: {
         name: "quarterly-plan",
-        parentNodeId: null,
+        parentNodeId: imports.id,
         spaceType: "personal",
       },
     });
-    expect(count(application, "nodes")).toBe(1);
+    expect(count(application, "nodes")).toBe(2);
     expect(count(application, "resources")).toBe(1);
     expect(count(application, "univer_resources")).toBe(1);
 

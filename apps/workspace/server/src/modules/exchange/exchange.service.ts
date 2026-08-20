@@ -245,9 +245,12 @@ export function createExchangeModule(options: {
 
     async importFile(userId, typeValue, inputValue) {
       await removeExpired();
-      const unitType = unitTypeFromProtocol(typeValue);
       const input = validImportRequest(inputValue);
       const artifact = requireArtifact(artifacts, userId, input.fileID);
+      const unitType =
+        typeValue === "auto"
+          ? unitTypeFromFilename(artifact.filename)
+          : unitTypeFromProtocol(typeValue);
       const taskID = startTask(userId, "import", async () => {
         const buffer = await readArtifact(options.store, artifact, maxFileBytes);
         const importOptions = exchangeImportOptions(
@@ -278,20 +281,12 @@ export function createExchangeModule(options: {
         }
 
         const data = await importUnitData(buffer, importOptions);
-        const personalSpace = options.spaces
-          .list(userId)
-          .spaces.find(
-            (space) =>
-              space.type === "personal" && space.accessRole === "owner"
-          );
-        if (!personalSpace) {
-          throw new Error("The current user has no Personal Space.");
-        }
+        const target = importTarget(options.spaces, userId, input);
         const name = importedName(data, artifact.filename);
         const created = await options.resources.create(userId, randomUUID(), {
           kind: "univer",
-          spaceId: personalSpace.id,
-          parentNodeId: null,
+          spaceId: target.spaceId,
+          parentNodeId: target.parentNodeId,
           name,
           unitType,
           initialData: data,
@@ -470,6 +465,8 @@ function validImportRequest(value: unknown): {
   readonly fileID: string;
   readonly outputType: 1 | 2;
   readonly options: unknown;
+  readonly spaceId: string | null;
+  readonly parentNodeId: string | null;
 } {
   const record = requireRecord(value);
   if (typeof record.fileID !== "string" || !record.fileID) {
@@ -482,7 +479,37 @@ function validImportRequest(value: unknown): {
     fileID: record.fileID,
     outputType: record.outputType,
     options: record.options,
+    spaceId: optionalId(record.spaceId, "spaceId"),
+    parentNodeId: optionalId(record.parentNodeId, "parentNodeId"),
   };
+}
+
+function importTarget(
+  spaces: SpacesModule,
+  userId: string,
+  input: {
+    readonly spaceId: string | null;
+    readonly parentNodeId: string | null;
+  }
+): { readonly spaceId: string; readonly parentNodeId: string | null } {
+  if (input.spaceId) {
+    return { spaceId: input.spaceId, parentNodeId: input.parentNodeId };
+  }
+  if (input.parentNodeId) {
+    throw invalidInput(
+      "spaceId is required when parentNodeId is provided.",
+      "spaceId"
+    );
+  }
+  const personalSpace = spaces
+    .list(userId)
+    .spaces.find(
+      (space) => space.type === "personal" && space.accessRole === "owner"
+    );
+  if (!personalSpace) {
+    throw new Error("The current user has no Personal Space.");
+  }
+  return { spaceId: personalSpace.id, parentNodeId: null };
 }
 
 function validExportRequest(
@@ -739,6 +766,27 @@ function unitTypeFromProtocol(value: unknown): ExchangeUnitType {
       return "base";
     default:
       throw invalidInput("The Univer Unit type cannot be exchanged.", "type");
+  }
+}
+
+function unitTypeFromFilename(filename: string): ExchangeUnitType {
+  switch (extname(filename).toLowerCase()) {
+    case ".xls":
+    case ".xlsx":
+    case ".csv":
+    case ".tsv":
+      return "sheet";
+    case ".doc":
+    case ".docx":
+      return "doc";
+    case ".ppt":
+    case ".pptx":
+      return "slide";
+    default:
+      throw invalidInput(
+        "The uploaded file type is not supported for document import.",
+        "fileID"
+      );
   }
 }
 

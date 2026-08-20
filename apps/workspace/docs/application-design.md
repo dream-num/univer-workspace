@@ -136,8 +136,9 @@ Office Exchange Module 适配 Univer Exchange Client 使用的 Universer 协议�
 - `source=HttpImport` 的 `/universer-api/stream/file/upload` 由 Exchange 接收；Unit Embedded
   Asset 的上传继续由 Univer Asset Module 处理；
 - import task 使用 `@univerjs-pro/exchange-node` 转换 XLS/XLSX/CSV/TSV、DOC/DOCX 或
-  PPT/PPTX；输出为 Unit 时必须通过 Resource Module 在当前 User 的 Personal Space 根目录
-  创建正式 Resource，不能直接写入一个没有产品归属的 Collaboration Unit；
+  PPT/PPTX；Workspace 文件入口按扩展名自动识别这些格式，并在当前 Space 与目录创建正式
+  Resource，Editor Ribbon 导入则默认创建在当前 User 的 Personal Space 根目录。两种入口都
+  必须通过 Resource Module，不能直接写入一个没有产品归属的 Collaboration Unit；
 - export task 只接受服务端 `AccessResolver` 能解析且允许打开的 Trunk Unit，服务端自行
   确认 Unit Type，并物化最新 snapshot 与 Sheet blocks；
 - 转换用 source、JSON 和 output 字节保存在 `BlobStore`，任务与临时文件身份只在当前进程
