@@ -68,27 +68,26 @@ The source manifest for `univer-workspace-cli` remains at version `0.0.0`; relea
 versions are injected while building the package and must match the installed CLI
 runtime.
 
-- Pushing a `v0.4.x-alpha.<suffix>` tag whose commit belongs to `main` publishes
-  the matching package to insider-npm with the `alpha` dist-tag. Alpha is the only
-  Workspace CLI version eligible for a later external release.
+- Pushing a stable `vX.Y.Z` tag whose commit belongs to `main` publishes
+  `univer-workspace-cli@X.Y.Z` to insider-npm with the `latest` dist-tag.
 - The `Release CLI to insider-npm` workflow can be dispatched manually from `main`
-  with an exact `0.4.x-insider.<suffix>` version for the `insiders` dist-tag.
-- Development packages use `0.4.x-dev.<suffix>` and can only be published locally:
+  with an exact `X.Y.Z-insider.<suffix>` version for the `insiders` dist-tag.
+- Development packages use `X.Y.Z-dev.<suffix>` and can only be published locally:
 
   ```bash
-  pnpm release:cli:dev -- --version 0.4.0-dev.<suffix>
+  pnpm release:cli:dev -- --version X.Y.Z-dev.<suffix>
   ```
 
-The `alpha` and `insiders` paths verify that every version-coupled Univer dependency
+The `latest` and `insiders` paths verify that every version-coupled Univer dependency
 uses one exact SDK baseline before packaging. The local `dev` path deliberately skips
 that graph check. All three paths build, verify, install, and smoke-test the actual
 tarball before publication. This workflow ends at insider-npm and does not perform a
 Public Registry Promotion.
 
-Workspace deployment is a separate manual workflow. It requires an existing
-`v0.4.x-alpha.<suffix>` release tag, builds that exact commit, pushes an image with the
-same tag, and hands the image to the selected deployment environment. Pushing the tag
-does not deploy the server.
+Workspace deployment is a separate manual workflow. It requires an existing stable
+`vX.Y.Z` release tag, builds that exact commit, pushes an image with the same tag, and
+hands the image to the selected deployment environment. Pushing the tag does not deploy
+the server.
 
 ## Runtime development license
 

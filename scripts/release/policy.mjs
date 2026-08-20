@@ -1,12 +1,11 @@
 export const RELEASE_PACKAGE_NAME = "univer-workspace-cli";
 export const RELEASE_REGISTRY = "https://insider-npm-registry.univer.work/";
-export const RELEASE_VERSION_LINE = "0.4";
 export const SOURCE_PACKAGE_VERSION = "0.0.0";
 
 const EXACT_SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const CHANNEL_TO_TAG = new Map([
-  ["alpha", "alpha"],
+  ["latest", "latest"],
   ["insiders", "insiders"],
   ["dev", "dev"],
 ]);
@@ -20,23 +19,18 @@ export function assertExactSemver(version, label = "Version") {
 
 export function npmTagForRelease(channel, version) {
   assertExactSemver(version, "Release version");
-  if (!version.startsWith(`${RELEASE_VERSION_LINE}.`)) {
-    throw new Error(
-      `univer-workspace-cli releases must stay on the ${RELEASE_VERSION_LINE}.x version line.`,
-    );
-  }
   const npmTag = CHANNEL_TO_TAG.get(channel);
   if (npmTag === undefined) {
     throw new Error(`Unsupported release channel: ${String(channel)}`);
   }
-  if (channel === "alpha" && !/^\d+\.\d+\.\d+-alpha\..+$/u.test(version)) {
-    throw new Error(`alpha requires 0.4.x-alpha.<suffix>, got ${version}`);
+  if (channel === "latest" && version.includes("-")) {
+    throw new Error(`latest requires a stable version, got ${version}`);
   }
   if (channel === "insiders" && !/^\d+\.\d+\.\d+-insider\..+$/u.test(version)) {
-    throw new Error(`insiders requires 0.4.x-insider.<suffix>, got ${version}`);
+    throw new Error(`insiders requires X.Y.Z-insider.<suffix>, got ${version}`);
   }
   if (channel === "dev" && !/^\d+\.\d+\.\d+-dev\..+$/u.test(version)) {
-    throw new Error(`dev requires 0.4.x-dev.<suffix>, got ${version}`);
+    throw new Error(`dev requires X.Y.Z-dev.<suffix>, got ${version}`);
   }
   return npmTag;
 }
@@ -58,13 +52,13 @@ export function assertReleaseContext(channel, version, env) {
   if (typeof baseBranch !== "string" || baseBranch.length === 0) {
     throw new Error("CI release requires BASE_BRANCH.");
   }
-  if (channel === "alpha") {
+  if (channel === "latest") {
     if (
       env.GITHUB_EVENT_NAME !== "push" ||
       env.GITHUB_REF_TYPE !== "tag" ||
       env.GITHUB_REF_NAME !== `v${version}`
     ) {
-      throw new Error(`alpha must be triggered by pushing git tag v${version}.`);
+      throw new Error(`latest must be triggered by pushing git tag v${version}.`);
     }
     return;
   }
