@@ -9,6 +9,12 @@ import { UniverSlidesChartPlugin } from "@univerjs-pro/slides-chart";
 import { UniverSlidesChartUIPlugin } from "@univerjs-pro/slides-chart-ui";
 import UniverSlidesChartUIEnUS from "@univerjs-pro/slides-chart-ui/locale/en-US";
 import UniverSlidesChartUIZhCN from "@univerjs-pro/slides-chart-ui/locale/zh-CN";
+import { UniverSlidesExchangeClientPlugin } from "@univerjs-pro/slides-exchange-client";
+import UniverSlidesExchangeClientEnUS from "@univerjs-pro/slides-exchange-client/locale/en-US";
+import UniverSlidesExchangeClientZhCN from "@univerjs-pro/slides-exchange-client/locale/zh-CN";
+import { UniverSlidesPrintPlugin } from "@univerjs-pro/slides-print";
+import UniverSlidesPrintEnUS from "@univerjs-pro/slides-print/locale/en-US";
+import UniverSlidesPrintZhCN from "@univerjs-pro/slides-print/locale/zh-CN";
 import UniverShapeEditorUIEnUS from "@univerjs-pro/shape-editor-ui/locale/en-US";
 import UniverShapeEditorUIZhCN from "@univerjs-pro/shape-editor-ui/locale/zh-CN";
 import { UniverSlidesTablePlugin } from "@univerjs-pro/slides-table";
@@ -35,14 +41,23 @@ import UniverUIEnUS from "@univerjs/ui/locale/en-US";
 import UniverUIZhCN from "@univerjs/ui/locale/zh-CN";
 import { purpleTheme } from "@univerjs/themes";
 
+import "@univerjs-pro/chart-ui/facade";
+import "@univerjs-pro/engine-chart/facade";
 import "@univerjs-pro/slides/facade";
 import "@univerjs-pro/slides-chart/facade";
+import "@univerjs-pro/slides-exchange-client/facade";
+import "@univerjs-pro/slides-print/facade";
 import "@univerjs-pro/slides-table/facade";
-import "@univerjs-pro/slides-chart-ui/lib/index.css";
-import "@univerjs-pro/slides-table-ui/lib/index.css";
-import "@univerjs-pro/slides-ui/lib/index.css";
-import "@univerjs/docs-ui/lib/index.css";
+import "@univerjs/design/lib/index.css";
 import "@univerjs/ui/lib/index.css";
+import "@univerjs/docs-ui/lib/index.css";
+import "@univerjs/drawing-ui/lib/index.css";
+import "@univerjs-pro/chart-ui/lib/index.css";
+import "@univerjs-pro/shape-editor-ui/lib/index.css";
+import "@univerjs-pro/slides-ui/lib/index.css";
+import "@univerjs-pro/slides-chart-ui/lib/index.css";
+import "@univerjs-pro/slides-print/lib/index.css";
+import "@univerjs-pro/slides-table-ui/lib/index.css";
 
 import {
   createCollaborationEditor,
@@ -67,6 +82,8 @@ export default createCollaborationEditor({
       UniverSlidesZhCN,
       UniverShapeEditorUIZhCN,
       UniverSlidesUIZhCN,
+      UniverSlidesExchangeClientZhCN,
+      UniverSlidesPrintZhCN,
       UniverSlidesChartUIZhCN,
       UniverSlidesTableUIZhCN
     ),
@@ -80,10 +97,14 @@ export default createCollaborationEditor({
       UniverSlidesEnUS,
       UniverShapeEditorUIEnUS,
       UniverSlidesUIEnUS,
+      UniverSlidesExchangeClientEnUS,
+      UniverSlidesPrintEnUS,
       UniverSlidesChartUIEnUS,
       UniverSlidesTableUIEnUS
     ),
   },
+  exchangeFeaturePlugins: () => [UniverSlidesExchangeClientPlugin],
+  printFeaturePlugins: () => [UniverSlidesPrintPlugin],
   createPresets: (container) => [
     {
       plugins: [

@@ -1,4 +1,5 @@
 import type { IPreset, IPresetPlugin } from "@univerjs/presets";
+import { UniverExchangeClientPlugin } from "@univerjs-pro/exchange-client";
 
 export function createWorkspaceExchangeClientConfig(origin: string) {
   const endpoint = origin.replace(/\/+$/u, "");
@@ -10,6 +11,38 @@ export function createWorkspaceExchangeClientConfig(origin: string) {
     exportServerUrl: `${endpoint}/universer-api/exchange/{type}/export`,
     downloadEndpointUrl: `${endpoint}/`,
   } as const;
+}
+
+interface IWorkspaceOutputPluginOptions {
+  readonly origin: string;
+  readonly exchangeEnabled: boolean;
+  readonly exchangeProvidedByPreset: boolean;
+  readonly exchangeFeaturePlugins: readonly IPresetPlugin[];
+  readonly printFeaturePlugins: readonly IPresetPlugin[];
+}
+
+export function createWorkspaceOutputPlugins({
+  origin,
+  exchangeEnabled,
+  exchangeProvidedByPreset,
+  exchangeFeaturePlugins,
+  printFeaturePlugins,
+}: IWorkspaceOutputPluginOptions): IPresetPlugin[] {
+  const sharedExchangePlugins: IPresetPlugin[] =
+    exchangeEnabled && !exchangeProvidedByPreset
+      ? [
+          [
+            UniverExchangeClientPlugin,
+            createWorkspaceExchangeClientConfig(origin),
+          ],
+        ]
+      : [];
+
+  return [
+    ...sharedExchangePlugins,
+    ...(exchangeEnabled ? exchangeFeaturePlugins : []),
+    ...printFeaturePlugins,
+  ];
 }
 
 export function configureExchangePresetPlugins(
