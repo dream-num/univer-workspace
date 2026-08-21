@@ -19,6 +19,8 @@ React
   │           ├── Permissions / Trash / Views
   │           ├── Worktrees
   │           └── Operations
+  ├── Worktree Change Feed
+  │     └── Authenticated WebSocket cache invalidation
   │
   └── Univer Collaboration Client
         └── Collaboration Endpoint
@@ -29,6 +31,9 @@ React
 
 Product HTTP 与 Collaboration Endpoint 是两个入口，共享身份和权限模块，但不互相发起
 HTTP 回调。Application Module 通过进程内 Interface 调用 Collaboration Service。
+
+Worktree Change Feed 是第三个窄入口，只传播产品缓存失效信号。它复用 Collaboration
+Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset、产品字段或权限结果。
 
 ## 数据库启动边界
 
@@ -210,6 +215,15 @@ Collaboration Snapshot 重试、Node 元数据加载、Worktree Preview 和失�
 业务代码没有旧字段回退、旧表 Union、双写或旧 Route 转发。
 
 ## Web 应用
+
+AI 或 CLI 通过另一 Login Session 修改 Worktree 时，Worktree Module 在完整产品操作成功后
+向变更前后可发现该 Worktree 的在线用户发布 `worktreesChanged`。Browser 收到信号后使
+`["worktrees"]` Query 失效；连接建立时服务端先发送 `worktreeChangeFeedReady`，Browser
+同样执行一次失效，从而覆盖断线期间遗漏的 best-effort 通知。创建事件在产品 Worktree 与
+Operation 都已保存后发布；merge/discard 事件在 `processed_at` 与相关恢复状态收敛后发布。
+
+该通道不替代 Collaboration Worktree 的 per-Worktree 状态连接，也不建立可供其他 Module
+任意发布的全局 Event Bus。
 
 Web 应用的 Tree Row 总是 Node：
 

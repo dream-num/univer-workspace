@@ -18,7 +18,10 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     proxy: {
-      "/api": "http://127.0.0.1:3020",
+      "/api": {
+        target: "http://127.0.0.1:3020",
+        ws: true,
+      },
       "/api-docs": "http://127.0.0.1:3020",
       "/openapi.yaml": "http://127.0.0.1:3020",
       "/universer-api": {

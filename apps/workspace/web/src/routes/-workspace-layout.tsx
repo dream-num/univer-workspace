@@ -29,7 +29,10 @@ import {
 import { sessionQueryKey, sessionQueryOptions } from "../features/auth";
 import { spacesQueryKey, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceNavigationTree } from "../features/nodes";
-import { worktreeListQueryOptions } from "../features/worktrees";
+import {
+  useWorktreeChangeFeed,
+  worktreeListQueryOptions,
+} from "../features/worktrees";
 import { api } from "../shared/api/client";
 import { apiError } from "../shared/api/errors";
 import { useI18n, type MessageKey } from "../shared/i18n";
@@ -154,6 +157,7 @@ export function WorkspaceLayout({
     ...worktreeListQueryOptions("active"),
     enabled: session.data?.authenticated === true,
   });
+  useWorktreeChangeFeed(session.data?.authenticated === true);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { language, setLanguage, t } = useI18n();

@@ -14,6 +14,7 @@ SQLite 数据目录。
 | 服务端状态 | TanStack Query |
 | Web 本地状态 | React 本地状态 |
 | HTTP | Express 5 |
+| 产品实时失效 | 认证 WebSocket、TanStack Query invalidation |
 | 产品数据库 | Node `node:sqlite`、显式 SQL schema |
 | API 客户端 | `openapi-typescript`、`openapi-fetch` |
 | API 文档 | OpenAPI 3.1、Redocly CLI、Scalar |
@@ -129,6 +130,11 @@ shared → features → routes → app
 TanStack Query 管理 Session、Node、Resource、Recent、Trash、Permission、Worktree 和 Operation
 等服务端状态。Dialog、表单输入和当前选中项使用 React 本地状态，不引入额外全局状态库。
 
+Worktree 页面使用一条用户级 `/api/worktree-events` WebSocket 接收粗粒度缓存失效信号。
+连接通过现有的一次性 Collaboration Session Ticket 认证；首次连接和收到变更信号时使
+`worktrees` 及可能被 Worktree 合入改变的 Node、Recent、Owned、Shared Query 失效并重新读取
+权威产品 API，不把 WebSocket payload 当作产品数据。
+
 ## 服务端
 
 `main.ts` 读取配置、创建应用并监听端口；`app.ts` 创建 Express 实例并挂载中间件、业务
@@ -162,6 +168,11 @@ Univer 集中在 `integrations/univer`，向业务 Module 提供产品语义的 
 
 跨产品数据库和 Collaboration Service 的写入由 `operations` Module 持久化和恢复，不用
 一次 SQLite transaction 假装覆盖两个系统。
+
+Worktree Service 在 Collaboration 与产品写入均完成后调用专用 Change Feed。Change Feed
+不是通用应用 Event Bus；它只向该 Worktree 变更前后可发现的已连接用户发送不含 Worktree
+身份或内容的失效信号。实时发送失败不改变已经完成的产品写入，客户端重连后通过首帧统一
+失效查询，从产品 API 恢复当前状态。
 
 ## 产品数据库
 

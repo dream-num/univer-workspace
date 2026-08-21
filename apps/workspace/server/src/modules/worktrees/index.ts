@@ -10,6 +10,7 @@ export type {
   WorktreeDetail,
   WorktreeKind,
   WorktreeOperationView,
+  WorktreeProductChange,
   WorktreesModule,
   WorktreeState,
   WorktreeSummary,

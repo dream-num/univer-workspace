@@ -125,6 +125,13 @@ set `VITE_UNIVER_LICENSE` at build time for any non-local deployment or to
 override it locally. Server, database, GitHub, and Discord settings are runtime
 values.
 
+An authenticated Browser keeps one `/api/worktree-events` WebSocket open. AI or
+CLI Worktree writes publish a cache-invalidation signal only after the combined
+Collaboration and product operation completes, so active/processed task lists,
+details, sidebar counts, and Worktree-driven Node/Resource lists refresh without
+a page reload. The connection uses a one-time session ticket and carries no
+Worktree metadata or content.
+
 ## Docker
 
 Build the image from the repository root:
