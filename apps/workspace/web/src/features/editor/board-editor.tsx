@@ -11,6 +11,9 @@ import { UniverBoardsMindPlugin } from "@univerjs-pro/boards-mind";
 import { UniverBoardsMindUIPlugin } from "@univerjs-pro/boards-mind-ui";
 import UniverBoardsMindUIEnUS from "@univerjs-pro/boards-mind-ui/locale/en-US";
 import UniverBoardsMindUIZhCN from "@univerjs-pro/boards-mind-ui/locale/zh-CN";
+import { UniverBoardsPrintPlugin } from "@univerjs-pro/boards-print";
+import UniverBoardsPrintEnUS from "@univerjs-pro/boards-print/locale/en-US";
+import UniverBoardsPrintZhCN from "@univerjs-pro/boards-print/locale/zh-CN";
 import { UniverBoardsTablePlugin } from "@univerjs-pro/boards-table";
 import { UniverBoardsTableUIPlugin } from "@univerjs-pro/boards-table-ui";
 import UniverBoardsTableUIEnUS from "@univerjs-pro/boards-table-ui/locale/en-US";
@@ -49,16 +52,24 @@ import "@univerjs-pro/boards/facade";
 import "@univerjs-pro/boards-chart/facade";
 import "@univerjs-pro/boards-mind/facade";
 import "@univerjs-pro/boards-table/facade";
+import "@univerjs-pro/boards-ui/facade";
+import "@univerjs-pro/chart-ui/facade";
 import "@univerjs-pro/docs-latex/facade";
+import "@univerjs-pro/engine-chart/facade";
 import "@univerjs-pro/ink/facade";
+import "@univerjs/design/lib/index.css";
+import "@univerjs/ui/lib/index.css";
+import "@univerjs/docs-ui/lib/index.css";
+import "@univerjs/drawing-ui/lib/index.css";
+import "@univerjs-pro/chart-ui/lib/index.css";
+import "@univerjs-pro/shape-editor-ui/lib/index.css";
+import "@univerjs-pro/ink-ui/lib/index.css";
+import "@univerjs-pro/docs-latex-ui/lib/index.css";
+import "@univerjs-pro/boards-ui/lib/index.css";
 import "@univerjs-pro/boards-chart-ui/lib/index.css";
 import "@univerjs-pro/boards-mind-ui/lib/index.css";
+import "@univerjs-pro/boards-print/lib/index.css";
 import "@univerjs-pro/boards-table-ui/lib/index.css";
-import "@univerjs-pro/boards-ui/lib/index.css";
-import "@univerjs-pro/docs-latex-ui/lib/index.css";
-import "@univerjs-pro/ink-ui/lib/index.css";
-import "@univerjs/docs-ui/lib/index.css";
-import "@univerjs/ui/lib/index.css";
 
 import {
   createCollaborationEditor,
@@ -72,7 +83,7 @@ export default createCollaborationEditor({
   label: "board",
   theme: redTheme,
   exchangeEnabled: false,
-  useCustomCollaborationStatus: true,
+  hideCollaborationStatus: true,
   locales: {
     "zh-CN": mergeLocales(
       ChartUIZhCN,
@@ -87,6 +98,7 @@ export default createCollaborationEditor({
       UniverBoardsUIZhCN,
       UniverBoardsChartUIZhCN,
       UniverBoardsMindUIZhCN,
+      UniverBoardsPrintZhCN,
       UniverBoardsTableUIZhCN
     ),
     "en-US": mergeLocales(
@@ -102,9 +114,11 @@ export default createCollaborationEditor({
       UniverBoardsUIEnUS,
       UniverBoardsChartUIEnUS,
       UniverBoardsMindUIEnUS,
+      UniverBoardsPrintEnUS,
       UniverBoardsTableUIEnUS
     ),
   },
+  printFeaturePlugins: () => [UniverBoardsPrintPlugin],
   createPresets: (container) => [
     {
       plugins: [
@@ -115,6 +129,8 @@ export default createCollaborationEditor({
             container,
             ribbonType: "grid",
             header: false,
+            toolbar: false,
+            footer: false,
           },
         ],
         UniverDocsPlugin,

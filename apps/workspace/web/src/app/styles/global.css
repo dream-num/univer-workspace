@@ -111,6 +111,7 @@
   body,
   #root {
     height: 100%;
+    overscroll-behavior: none;
   }
 
   body {
@@ -237,11 +238,22 @@
 
 .univer-editor-shell {
   flex: 1;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .univer-editor-container {
   width: 100%;
   height: 100%;
+}
+
+/* Base renders its own sidebar/canvas footer outside UniverUI's footer slot. */
+[id^="univer-base-"] [data-u-comp="base-table-sidebar"] > :last-child {
+  display: none;
+}
+
+[id^="univer-base-"] [data-u-comp="base-canvas-container"] {
+  margin-bottom: -36px;
 }
 
 /* ------------------------------------------------------------------ */
