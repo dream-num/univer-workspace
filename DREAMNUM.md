@@ -68,10 +68,11 @@
   persisted login session and does not pass a browser cookie, password, or OAuth access token through the agent.
 - OAuth secrets, trusted Bot credentials, registry credentials, production licenses, and deployment credentials are
   environment or build configuration and must not be committed to the repository.
-- Stable `vX.Y.Z` tags are immutable source coordinates shared by the stable CLI release and manually selected
-  Workspace deployments. Tag push publishes only the CLI; deployment remains a separate manual workflow.
-- Production images use the selected release tag and are handed off to the private deployment repository; database
-  migration and rollout ordering remain part of the Workspace application contract.
+- Stable `vX.Y.Z` tags are immutable source coordinates shared by the stable CLI release and Workspace deployments
+  that select a release tag. Tag push publishes only the CLI; deployment remains a separate manual workflow.
+- Workspace images use either the selected release tag or `sha-<commit>` for an untagged workflow dispatch and are
+  handed off to the private deployment repository; database migration and rollout ordering remain part of the
+  Workspace application contract.
 
 ## Update contract
 

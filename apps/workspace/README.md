@@ -178,10 +178,12 @@ For a V6 rollout, stop every old Workspace instance, start one V6 instance and
 wait for migration and health checks to succeed, then restore normal service;
 do not let V5 and V6 processes write the same SQLite file concurrently.
 
-The manual `Deploy Workspace` workflow requires an existing stable `vX.Y.Z`
-repository tag. It checks out that exact tag, builds and pushes the container image
-with the same tag, and hands it to the selected environment. A tag push does not deploy
-Workspace automatically, and the deployment workflow does not publish the CLI.
+The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
+repository tag. When provided, it checks out that tag and uses it for the container
+image. When omitted, it builds the workflow dispatch commit and tags the image as
+`sha-<commit>`. It then hands the image to the selected environment. A tag push does
+not deploy Workspace automatically, and the deployment workflow does not publish the
+CLI.
 
 ## Commands
 
