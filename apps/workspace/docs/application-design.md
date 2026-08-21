@@ -151,7 +151,8 @@ Office Exchange Module 适配 Univer Exchange Client 使用的 Universer 协议�
   Resource，Editor Ribbon 导入则默认创建在当前 User 的 Personal Space 根目录。两种入口都
   必须通过 Resource Module，不能直接写入一个没有产品归属的 Collaboration Unit；
 - export task 只接受服务端 `AccessResolver` 能解析且允许打开的 Trunk Unit，服务端自行
-  确认 Unit Type，并物化最新 snapshot 与 Sheet blocks；
+  确认 Unit Type，通过 Collaboration Service 固定当前 head 并读取包含 Sheet blocks 的恢复
+  材料，再由 `UnitSnapshotMaterializer` 补全 snapshot；
 - 转换用 source、JSON 和 output 字节保存在 `BlobStore`，任务与临时文件身份只在当前进程
   保存并在两小时后失效，不写入产品数据库；
 - Worktree 和 Merge Preview 暂不注册 Exchange 插件，避免把 Trunk 内容误当作当前 Scope

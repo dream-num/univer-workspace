@@ -13,8 +13,8 @@ import {
   exportSnapshotToBuffer,
   importBuffer,
   importBufferToSnapshot,
+  type BufferImportOptions,
   type ExportOptions,
-  type ImportOptions,
   type ISnapshotWithBlocks,
 } from "@univerjs-pro/exchange-node";
 import {
@@ -261,7 +261,7 @@ export function createExchangeModule(options: {
         if (input.outputType === 2) {
           const converted = await importBufferToSnapshot(
             buffer,
-            importOptions as ImportOptions & { fileName: string }
+            importOptions
           );
           const json = Buffer.from(
             JSON.stringify(snapshotToJson(converted))
@@ -538,7 +538,7 @@ function exchangeImportOptions(
   unitType: ExchangeUnitType,
   filename: string,
   value: unknown
-): ImportOptions & { fileName: string } {
+): BufferImportOptions {
   const options = optionalRecord(value);
   const sheet = optionalRecord(options?.sheet);
   const base = optionalRecord(options?.base);
@@ -560,7 +560,7 @@ function exchangeImportOptions(
         "baseFormulaPolicy",
         baseFormulaPolicy
       ),
-    } as ImportOptions & { fileName: string };
+    };
   }
   if (unitType === "doc") {
     return {
@@ -572,25 +572,27 @@ function exchangeImportOptions(
         "docType",
         docxCompatibilityMode
       ),
-    } as ImportOptions & { fileName: string };
+    };
+  }
+  if (unitType === "sheet") {
+    return {
+      type: UniverInstanceType.UNIVER_SHEET,
+      fileName: filename,
+      ...(typeof sheet?.minSheetRowCount === "number"
+        ? { minSheetRowCount: sheet.minSheetRowCount }
+        : {}),
+      ...(typeof sheet?.minSheetColumnCount === "number"
+        ? { minSheetColumnCount: sheet.minSheetColumnCount }
+        : {}),
+      ...(extname(filename).toLowerCase() === ".xlsx"
+        ? { formulaCalculation: FormulaCalculationMode.FORCED }
+        : {}),
+    };
   }
   return {
-    type: instanceType(unitType),
+    type: UniverInstanceType.UNIVER_SLIDE,
     fileName: filename,
-    ...(unitType === "sheet"
-      ? {
-          ...(typeof sheet?.minSheetRowCount === "number"
-            ? { minSheetRowCount: sheet.minSheetRowCount }
-            : {}),
-          ...(typeof sheet?.minSheetColumnCount === "number"
-            ? { minSheetColumnCount: sheet.minSheetColumnCount }
-            : {}),
-          ...(extname(filename).toLowerCase() === ".xlsx"
-            ? { formulaCalculation: FormulaCalculationMode.FORCED }
-            : {}),
-        }
-      : {}),
-  } as ImportOptions & { fileName: string };
+  };
 }
 
 function exchangeExportOptions(
@@ -657,13 +659,18 @@ function exchangeExportOptions(
 
 async function importUnitData(
   buffer: Buffer,
-  options: ImportOptions & { fileName: string }
+  options: BufferImportOptions
 ): Promise<Readonly<Record<string, unknown>>> {
-  const convert = importBuffer as unknown as (
-    input: Buffer,
-    options: ImportOptions & { fileName: string }
-  ) => Promise<Readonly<Record<string, unknown>>>;
-  return await convert(buffer, options);
+  switch (options.type) {
+    case UniverInstanceType.UNIVER_SHEET:
+      return { ...(await importBuffer(buffer, options)) };
+    case UniverInstanceType.UNIVER_BASE:
+      return { ...(await importBuffer(buffer, options)) };
+    case UniverInstanceType.UNIVER_DOC:
+      return { ...(await importBuffer(buffer, options)) };
+    case UniverInstanceType.UNIVER_SLIDE:
+      return { ...(await importBuffer(buffer, options)) };
+  }
 }
 
 function snapshotToJson(input: ISnapshotWithBlocks): {
@@ -787,19 +794,6 @@ function unitTypeFromFilename(filename: string): ExchangeUnitType {
         "The uploaded file type is not supported for document import.",
         "fileID"
       );
-  }
-}
-
-function instanceType(type: ExchangeUnitType): UniverInstanceType {
-  switch (type) {
-    case "sheet":
-      return UniverInstanceType.UNIVER_SHEET;
-    case "doc":
-      return UniverInstanceType.UNIVER_DOC;
-    case "slide":
-      return UniverInstanceType.UNIVER_SLIDE;
-    case "base":
-      return UniverInstanceType.UNIVER_BASE;
   }
 }
 
