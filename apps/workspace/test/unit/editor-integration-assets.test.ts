@@ -106,17 +106,13 @@ describe("editor integration assets", () => {
     ]);
   });
 
-  it("keeps the Base-only status and footer out of the Workspace shell", () => {
+  it("keeps Base chrome out without clipping product content", () => {
     expect(editorSources.base).toContain("hideCollaborationStatus: true");
     expect(editorSources.base).toContain("toolbar: false");
     expect(editorSources.base).toContain("collaborationStatus: false");
     expect(editorSources.base).toContain("footer: false");
-    expect(globalStyles).toContain(
-      '[id^="univer-base-"] [data-u-comp="base-table-sidebar"] > :last-child'
-    );
-    expect(globalStyles).toContain(
-      '[id^="univer-base-"] [data-u-comp="base-canvas-container"]'
-    );
+    expect(globalStyles).not.toContain('[id^="univer-base-"]');
+    expect(globalStyles).not.toContain("margin-bottom: -36px");
   });
 
   it("registers the supported output plugins for each editor", () => {
