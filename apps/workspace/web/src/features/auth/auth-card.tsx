@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { UniverCliIcon } from "@univerjs/icons";
 import { useState, type FormEvent } from "react";
 import { api } from "../../shared/api/client";
 import { apiError, type ApiError } from "../../shared/api/errors";
@@ -106,14 +107,10 @@ export function AuthCard(props: {
   return (
     <div className="w-[min(420px,100%)] rounded-2xl border border-border bg-background p-8 shadow-lg max-[480px]:border-0 max-[480px]:bg-transparent max-[480px]:p-4 max-[480px]:shadow-none">
       <div className="mb-7 flex flex-col items-start gap-3.5">
-        <span className="grid size-11 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-sm">
-          <svg width="22" height="22" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-            <path
-              d="M7 6v10.2a9 9 0 0 0 18 0V6h-5v9.9a4 4 0 0 1-8 0V6z"
-              fill="white"
-            />
-          </svg>
-        </span>
+        <UniverCliIcon
+          aria-hidden="true"
+          className="size-9 shrink-0 text-foreground"
+        />
         <div>
           <h1 className="m-0 text-xl font-bold tracking-tight">
             Univer Workspace
