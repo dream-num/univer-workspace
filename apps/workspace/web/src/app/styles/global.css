@@ -247,15 +247,6 @@
   height: 100%;
 }
 
-/* Base renders its own sidebar/canvas footer outside UniverUI's footer slot. */
-[id^="univer-base-"] [data-u-comp="base-table-sidebar"] > :last-child {
-  display: none;
-}
-
-[id^="univer-base-"] [data-u-comp="base-canvas-container"] {
-  margin-bottom: -36px;
-}
-
 /* ------------------------------------------------------------------ */
 /* Sonner toast alignment with the design language                     */
 /* ------------------------------------------------------------------ */
