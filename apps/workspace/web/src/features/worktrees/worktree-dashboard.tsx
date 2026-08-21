@@ -235,9 +235,9 @@ export function WorktreeDashboard({
       <div
         className="grid min-h-0 flex-1"
         style={{
-          gridTemplateColumns: `${
-            taskSidebarCollapsed ? 44 : taskSidebar.width
-          }px ${taskSidebarCollapsed ? 0 : 7}px minmax(0, 1fr)`,
+          gridTemplateColumns: taskSidebarCollapsed
+            ? "44px minmax(0, 1fr)"
+            : `${taskSidebar.width}px 7px minmax(0, 1fr)`,
         }}
       >
         <aside
