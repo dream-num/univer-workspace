@@ -212,7 +212,6 @@ const messages = {
     noReviewPermission: "你没有查看这个任务内容的权限",
     noAgentDocuments: "Agent 尚未产出文档",
     reviewDocumentNotFound: "找不到链接中指定的任务文档。",
-    taskDocuments: "任务文档",
     documentModified: "已修改",
     documentAdded: "新建",
     documentDeleted: "已删除",
@@ -553,7 +552,6 @@ const messages = {
     noAgentDocuments: "The agent has not produced any documents yet",
     reviewDocumentNotFound:
       "The task document specified by this link could not be found.",
-    taskDocuments: "Task documents",
     documentModified: "Modified",
     documentAdded: "Added",
     documentDeleted: "Deleted",
