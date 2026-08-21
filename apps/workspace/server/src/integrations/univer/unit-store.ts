@@ -17,10 +17,11 @@ const { getBoardsEmptySnapshot } = moduleRequire(
 const { SQLiteDatabaseAdapter } = moduleRequire(
   "@univerjs-pro/collaboration-database-sqlite"
 ) as typeof CollaborationDatabaseModule;
-const { CollabError, UniverCollabService } = moduleRequire(
-  "@univerjs-pro/collaboration-service"
-) as typeof CollaborationServiceModule;
-const { UniverUnitRuntime } = moduleRequire(
+const {
+  CollabError,
+  UnitSnapshotMaterializer,
+  UniverCollabService,
+} = moduleRequire(
   "@univerjs-pro/collaboration-service"
 ) as typeof CollaborationServiceModule;
 const { UniverCollabWorktreeService } = moduleRequire(
@@ -74,7 +75,7 @@ export interface UnitSnapshotStore {
     readonly unitId: string;
     readonly unitType: UnitType;
     readonly userId: string;
-  }): Promise<CollaborationServiceModule.SaveSnapshotInput>;
+  }): Promise<CollaborationServiceModule.ISnapshotWithBlocks>;
 }
 
 export interface CollaborationRuntime {
@@ -90,7 +91,6 @@ export function createCollaborationRuntime(
 ): CollaborationRuntime {
   const database = new SQLiteDatabaseAdapter({ filename });
   const service = new UniverCollabService({ dbAdapter: database });
-  const snapshotRuntime = new UniverUnitRuntime({ dbAdapter: database });
   const worktreeDatabase = new SQLiteWorktreeDatabaseAdapter({ filename });
   const worktreeService = new UniverCollabWorktreeService({
     trunk: {
@@ -105,7 +105,7 @@ export function createCollaborationRuntime(
         const options = collaborationCallOptions(input.userId);
         const unitData = createUnitData(input);
         const created = await service.createUnitFromData(unitData, options);
-        const loaded = await service.getUnit(
+        const loaded = await service.getUnitLoadData(
           {
             unitID: input.unitId,
             type: unitData.type,
@@ -117,13 +117,13 @@ export function createCollaborationRuntime(
           created.unitID !== input.unitId ||
           loaded.snapshot.unitID !== input.unitId ||
           loaded.snapshot.type !== unitData.type ||
-          loaded.headRevision !== created.headRevision
+          loaded.targetRevision !== created.headRevision
         ) {
           throw unitIdentityMismatch(input.unitId);
         }
         return {
           unitId: created.unitID,
-          headRevision: loaded.headRevision,
+          headRevision: loaded.targetRevision,
         };
       } catch (error) {
         if (error instanceof UnitStoreError) throw error;
@@ -141,20 +141,22 @@ export function createCollaborationRuntime(
   };
   const unitSnapshotStore: UnitSnapshotStore = {
     async materialize(input) {
-      const context = {
-        userID: input.userId,
-        customData: { source: "workspace-exchange" },
-        request: {},
-      };
-      const handle = await snapshotRuntime.ensureUnit(
-        context,
-        input.unitId,
-        univerType(input.unitType)
+      const loadData = await service.getUnitLoadDataWithBlocks(
+        {
+          unitID: input.unitId,
+          type: univerType(input.unitType),
+          revision: 0,
+        },
+        {
+          userID: input.userId,
+          customData: { source: "workspace-exchange" },
+        }
       );
+      const materializer = new UnitSnapshotMaterializer();
       try {
-        return await snapshotRuntime.createSnapshot(handle);
+        return await materializer.materializeSnapshot(loadData);
       } finally {
-        snapshotRuntime.releaseUnit(handle);
+        await materializer.dispose();
       }
     },
   };
@@ -165,7 +167,6 @@ export function createCollaborationRuntime(
     service,
     worktreeService,
     async dispose() {
-      await snapshotRuntime.dispose();
       await worktreeService.dispose();
       await worktreeDatabase.dispose();
       await service.dispose();

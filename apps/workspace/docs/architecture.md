@@ -195,8 +195,9 @@ snapshot、changeset 或 revision。Tree Blob 和内嵌 Asset 共用注入的 `B
 Office Exchange Module 使用已发布的 `@univerjs-pro/exchange-node` 将 Office 字节与 Univer
 数据互转。`/universer-api/exchange/**`、Exchange File Upload 和签名下载遵循 Universer
 协议形状，不进入产品 OpenAPI。导入为 Unit 时通过 Resource Module 创建 Personal Space
-根目录下的正式 Node/Resource/Unit；导出时通过 Collaboration SDK 的公开 Unit Runtime
-物化最新 Trunk snapshot 和 Sheet blocks，再交给 Exchange Node。转换源文件、JSON snapshot
+根目录下的正式 Node/Resource/Unit；导出时通过 Collaboration Service 固定当前 Trunk head，
+读取包含 Sheet blocks 的恢复材料，再由 `UnitSnapshotMaterializer` 补全 snapshot 后交给 Exchange
+Node。转换源文件、JSON snapshot
 和导出文件是 `BlobStore` 中的临时对象，任务元数据只存在当前进程并在两小时后过期；它们
 不写入产品数据库，也不改变 Collaboration Database Adapter 的所有权边界。
 

@@ -122,7 +122,7 @@ export function createCollaborationGateway(options: {
     if (resource.kind !== "univer") {
       throw new CollabError("INVALID_REQUEST", "Unknown Unit Resource.");
     }
-    await service.getUnit(
+    await service.getUnitLoadData(
       {
         unitID: context.unitID,
         type: protocolUnitType(resource.unitType),
