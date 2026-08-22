@@ -117,6 +117,7 @@ export default createCollaborationEditor({
   createPresets: (container) => [
     UniverDocsCorePreset({
       container,
+      ribbonType: "grid",
     }),
     UniverDocsDrawingPreset({
       collaboration: true,
