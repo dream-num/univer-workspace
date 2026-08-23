@@ -45,8 +45,10 @@ import {
   createIdentityRouter,
   createGitHubOAuthProvider,
   createDiscordOAuthProvider,
+  createOAuthAuthorizationRouter,
   type DiscordOAuthProvider,
   type GitHubOAuthProvider,
+  type IssuedAuthorization,
   IdentityRepository,
   type IdentityModule,
 } from "./modules/identity/index.js";
@@ -286,6 +288,17 @@ export function createWorkspaceApplication(
       ...(config.discordBotApiKey
         ? { discordBotApiKey: config.discordBotApiKey }
         : {}),
+    })
+  );
+  const oauthClients = config.oauthClients;
+  const authorizationStore = new Map<string, IssuedAuthorization>();
+  app.use(
+    "/api/auth",
+    createOAuthAuthorizationRouter({
+      identity,
+      secureCookies: config.secureCookies,
+      oauthClients,
+      authorizationStore,
     })
   );
   app.use("/api", createSpacesRouter({ identity, spaces }));

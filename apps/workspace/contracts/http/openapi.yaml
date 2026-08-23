@@ -42,6 +42,10 @@ security:
 paths:
   /api/session:
     $ref: ./paths/auth.yaml#/~1api~1session
+  /api/auth/authorize:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1authorize
+  /api/auth/token:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1token
   /api/auth/logout:
     $ref: ./paths/auth.yaml#/~1api~1auth~1logout
   /api/auth/password/register:

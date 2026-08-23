@@ -118,6 +118,17 @@ shared key to a Discord client or browser. If the Bot initially supplies only
 OAuth login fills those placeholders from the verified Discord profile without
 replacing profile fields that the User has already customized.
 
+Workspace exposes a generic OAuth-style authorization capability. A registered
+external client starts `GET /api/auth/authorize`; the authorize endpoint reuses
+`workspace_session`, redirecting through the existing login page only when the
+session is absent, then returns a one-time short-lived code to the registered
+redirect URI. `POST /api/auth/token` validates the client secret, the registered
+redirect URI, the PKCE verifier, expiry, and one-time use before returning the
+Workspace identity. Registration is deployment-supplied via `OAUTH_CLIENTS_JSON`.
+Existing Workspace login, OAuth callbacks, Cookie behavior, and product APIs
+remain unchanged. The capability is additive and does not add a proxy or
+deployment component.
+
 The browser uses the same built-in runtime development license as Workspace
 CLI. Both copies are rotated every 90 days and are application credentials, not
 the repository software license. The built-in credential is for `localhost`;
@@ -155,6 +166,7 @@ docker run --name univer-workspace \
   -e DISCORD_CLIENT_ID \
   -e DISCORD_CLIENT_SECRET \
   -e DISCORD_CALLBACK_URL=https://workspace.univer.plus/api/auth/discord/callback \
+  -e OAUTH_CLIENTS_JSON \
   -e SECURE_COOKIES=true \
   univer-workspace
 ```
