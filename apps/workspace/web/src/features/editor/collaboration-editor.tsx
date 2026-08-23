@@ -28,7 +28,6 @@ import CollaborationClientUIEnUS from "@univerjs-pro/collaboration-client-ui/loc
 import CollaborationClientUIZhCN from "@univerjs-pro/collaboration-client-ui/locale/zh-CN";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
-import { UniverExchangeClientPlugin } from "@univerjs-pro/exchange-client";
 import ExchangeClientEnUS from "@univerjs-pro/exchange-client/locale/en-US";
 import ExchangeClientZhCN from "@univerjs-pro/exchange-client/locale/zh-CN";
 import { UniverLicensePlugin } from "@univerjs-pro/license";
@@ -61,7 +60,7 @@ import {
 } from "./collaboration-status";
 import {
   configureExchangePresetPlugins,
-  createWorkspaceExchangeClientConfig,
+  createWorkspaceOutputPlugins,
 } from "./exchange-plugins";
 import { resolveMergeReview } from "./merge-review";
 import { resolveUniverLicense } from "./univer-license";
@@ -74,6 +73,7 @@ import "@univerjs-pro/collaboration-client-ui/lib/index.css";
 import "@univerjs-pro/collaboration-client/facade";
 import "@univerjs-pro/embed/facade";
 import "@univerjs-pro/embed-ui/lib/index.css";
+import "@univerjs-pro/exchange-client/facade";
 import "@univerjs-pro/exchange-client/lib/index.css";
 
 export interface CollaborationEditorProps {
@@ -100,6 +100,7 @@ interface ICollaborationEditorDefinition {
   readonly exchangeProvidedByPreset?: boolean;
   readonly exchangeEnabled?: boolean;
   readonly licenseProvidedByPreset?: boolean;
+  readonly hideCollaborationStatus?: boolean;
   readonly useCustomCollaborationStatus?: boolean;
   readonly theme: Theme;
   readonly createPresets: (
@@ -108,6 +109,8 @@ interface ICollaborationEditorDefinition {
   ) => IPreset[];
   readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
   readonly collaborationFeaturePlugins?: () => IPresetPlugin[];
+  readonly exchangeFeaturePlugins?: () => IPresetPlugin[];
+  readonly printFeaturePlugins?: () => IPresetPlugin[];
   readonly load: (
     univerAPI: FUniver,
     unitId: string
@@ -117,6 +120,10 @@ interface ICollaborationEditorDefinition {
 export function createCollaborationEditor(
   definition: ICollaborationEditorDefinition
 ) {
+  const collaborationStatusPresentation = resolveCollaborationStatusPresentation(
+    definition.hideCollaborationStatus,
+    definition.useCustomCollaborationStatus
+  );
   return function CollaborationEditor({
     unitId,
     user,
@@ -240,7 +247,7 @@ export function createCollaborationEditor(
                   {
                     enableDocumentCollaborationUI:
                       definition.enableDocumentCollaborationUI,
-                    override: definition.useCustomCollaborationStatus
+                    override: collaborationStatusPresentation.suppressNative
                       ? [
                           [
                             DesktopCollaborationStatusDisplayController,
@@ -253,17 +260,15 @@ export function createCollaborationEditor(
               ];
         const collaborationFeaturePlugins =
           definition.collaborationFeaturePlugins?.() ?? [];
-        const exchangePlugins: IPresetPlugin[] =
-          exchangeEnabled && !definition.exchangeProvidedByPreset
-            ? [
-                [
-                  UniverExchangeClientPlugin,
-                  createWorkspaceExchangeClientConfig(
-                    window.location.origin
-                  ),
-                ],
-              ]
-            : [];
+        const outputPlugins = createWorkspaceOutputPlugins({
+          origin: window.location.origin,
+          exchangeEnabled,
+          exchangeProvidedByPreset:
+            definition.exchangeProvidedByPreset === true,
+          exchangeFeaturePlugins:
+            definition.exchangeFeaturePlugins?.() ?? [],
+          printFeaturePlugins: definition.printFeaturePlugins?.() ?? [],
+        });
         if (definition.collaborationProvidedByPreset) {
           presets = configurePresetCollaboration(
             presets,
@@ -302,7 +307,7 @@ export function createCollaborationEditor(
           plugins: [
             ...collaborationPlugins,
             ...collaborationFeaturePlugins,
-            ...exchangePlugins,
+            ...outputPlugins,
             [
               UniverEmbedPlugin,
               {
@@ -446,7 +451,9 @@ export function createCollaborationEditor(
 
     return (
       <div className="univer-editor-shell">
-        {!loading && !error && definition.useCustomCollaborationStatus ? (
+        {!loading &&
+        !error &&
+        collaborationStatusPresentation.showCustom ? (
           <div
             className={cn(
               "pointer-events-none absolute top-3 right-4 z-10 flex items-center gap-1.5 rounded-full border border-border bg-background/85 py-1 pr-2.5 pl-2 text-xs font-medium shadow-sm backdrop-blur-sm",
@@ -544,7 +551,10 @@ function configurePresetCollaboration(
               ...(pluginConfig as object),
               enableDocumentCollaborationUI:
                 definition.enableDocumentCollaborationUI,
-              override: definition.useCustomCollaborationStatus
+              override: resolveCollaborationStatusPresentation(
+                definition.hideCollaborationStatus,
+                definition.useCustomCollaborationStatus
+              ).suppressNative
                 ? [[DesktopCollaborationStatusDisplayController, null]]
                 : undefined,
             },
@@ -554,6 +564,16 @@ function configurePresetCollaboration(
       }),
     })
   );
+}
+
+export function resolveCollaborationStatusPresentation(
+  hidden: boolean | undefined,
+  custom: boolean | undefined
+): { readonly suppressNative: boolean; readonly showCustom: boolean } {
+  return {
+    suppressNative: Boolean(hidden || custom),
+    showCustom: Boolean(custom && !hidden),
+  };
 }
 
 async function resolveCollaborationConfig(

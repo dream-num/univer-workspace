@@ -73,6 +73,42 @@ export interface WorktreeOperationRow {
 export class WorktreesRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
 
+  audience(worktreeId: string): string[] {
+    const rows = this._database.connection
+      .prepare(
+        `SELECT audience.user_id
+         FROM (
+           SELECT worktree.creator_user_id AS user_id
+           FROM worktrees AS worktree
+           WHERE worktree.id = ?
+
+           UNION
+
+           SELECT team.owner_user_id AS user_id
+           FROM worktrees AS worktree
+           JOIN spaces AS team ON team.id = worktree.team_space_id
+           WHERE worktree.id = ?
+
+           UNION
+
+           SELECT membership.user_id
+           FROM worktrees AS worktree
+           JOIN space_members AS membership
+             ON membership.space_id = worktree.team_space_id
+           WHERE worktree.id = ?
+             AND (
+               worktree.visibility = 'space'
+               OR membership.role = 'admin'
+             )
+         ) AS audience
+         ORDER BY audience.user_id`
+      )
+      .all(worktreeId, worktreeId, worktreeId) as unknown as Array<{
+      readonly user_id: string;
+    }>;
+    return rows.map((row) => row.user_id);
+  }
+
   listCandidates(input: {
     readonly userId: string;
     readonly scope: "active" | "processed";

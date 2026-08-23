@@ -18,6 +18,7 @@ import {
   createCollaborationGateway,
   type CollaborationGateway,
 } from "./integrations/univer/collaboration-gateway.js";
+import { createWorktreeChangeFeed } from "./integrations/realtime/worktree-change-feed.js";
 import {
   errorHandler,
   notFoundHandler,
@@ -211,6 +212,7 @@ export function createWorkspaceApplication(
     access,
   });
   const univerAssetsRepository = new UniverAssetsRepository(database);
+  const worktreeChangeFeed = createWorktreeChangeFeed();
   const worktrees = createWorktreesModule({
     repository: new WorktreesRepository(database),
     access,
@@ -221,6 +223,7 @@ export function createWorkspaceApplication(
         : unavailableWorktreeBackend()),
     publishMergedAssets: (worktreeId, unitIds) =>
       univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds),
+    onChanged: (change) => worktreeChangeFeed.publish(change),
   });
   const univerAssets = createUniverAssetsModule({
     repository: univerAssetsRepository,
@@ -247,6 +250,7 @@ export function createWorkspaceApplication(
         access,
         worktreeService: collaboration.worktreeService,
         worktrees,
+        worktreeChangeFeed,
       })
     : null;
   invalidateRealtimeNodeAccess = () =>
@@ -359,11 +363,19 @@ export function createWorkspaceApplication(
       collaborationGateway?.attachWebSocket(server);
     },
     async closeRealtime() {
-      await collaborationGateway?.dispose();
+      try {
+        await collaborationGateway?.dispose();
+      } finally {
+        await worktreeChangeFeed.dispose();
+      }
     },
     async close() {
       try {
-        await collaborationGateway?.dispose();
+        try {
+          await collaborationGateway?.dispose();
+        } finally {
+          await worktreeChangeFeed.dispose();
+        }
       } finally {
         try {
           await exchange.dispose();

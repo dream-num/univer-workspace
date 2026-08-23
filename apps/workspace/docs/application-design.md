@@ -19,6 +19,8 @@ React
   │           ├── Permissions / Trash / Views
   │           ├── Worktrees
   │           └── Operations
+  ├── Worktree Change Feed
+  │     └── Authenticated WebSocket cache invalidation
   │
   └── Univer Collaboration Client
         └── Collaboration Endpoint
@@ -29,6 +31,9 @@ React
 
 Product HTTP 与 Collaboration Endpoint 是两个入口，共享身份和权限模块，但不互相发起
 HTTP 回调。Application Module 通过进程内 Interface 调用 Collaboration Service。
+
+Worktree Change Feed 是第三个窄入口，只传播产品缓存失效信号。它复用 Collaboration
+Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset、产品字段或权限结果。
 
 ## 数据库启动边界
 
@@ -62,6 +67,12 @@ interface LoginSessionAuthenticator {
 ```
 
 它只证明身份，不携带或缓存 Space、Node、Resource、Worktree Role。
+
+Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session。Server 在进程内
+保存有容量上限、十分钟过期的待授权请求；已登录 Browser 确认人类可核对的验证码后，高熵
+Device Code 只能兑换一次，并为 CLI 创建独立、持久化的 `login_sessions` 行。Server 重启可以
+取消尚未确认或兑换的请求，但不影响已经签发的 CLI Session。Browser Cookie、密码、GitHub
+Token 和 Discord Token 都不会经过 Agent。
 
 ## Access Resolver
 
@@ -140,7 +151,8 @@ Office Exchange Module 适配 Univer Exchange Client 使用的 Universer 协议�
   Resource，Editor Ribbon 导入则默认创建在当前 User 的 Personal Space 根目录。两种入口都
   必须通过 Resource Module，不能直接写入一个没有产品归属的 Collaboration Unit；
 - export task 只接受服务端 `AccessResolver` 能解析且允许打开的 Trunk Unit，服务端自行
-  确认 Unit Type，并物化最新 snapshot 与 Sheet blocks；
+  确认 Unit Type，通过 Collaboration Service 固定当前 head 并读取包含 Sheet blocks 的恢复
+  材料，再由 `UnitSnapshotMaterializer` 补全 snapshot；
 - 转换用 source、JSON 和 output 字节保存在 `BlobStore`，任务与临时文件身份只在当前进程
   保存并在两小时后失效，不写入产品数据库；
 - Worktree 和 Merge Preview 暂不注册 Exchange 插件，避免把 Trunk 内容误当作当前 Scope
@@ -204,6 +216,15 @@ Collaboration Snapshot 重试、Node 元数据加载、Worktree Preview 和失�
 业务代码没有旧字段回退、旧表 Union、双写或旧 Route 转发。
 
 ## Web 应用
+
+AI 或 CLI 通过另一 Login Session 修改 Worktree 时，Worktree Module 在完整产品操作成功后
+向变更前后可发现该 Worktree 的在线用户发布 `worktreesChanged`。Browser 收到信号后使
+`["worktrees"]` Query 失效；连接建立时服务端先发送 `worktreeChangeFeedReady`，Browser
+同样执行一次失效，从而覆盖断线期间遗漏的 best-effort 通知。创建事件在产品 Worktree 与
+Operation 都已保存后发布；merge/discard 事件在 `processed_at` 与相关恢复状态收敛后发布。
+
+该通道不替代 Collaboration Worktree 的 per-Worktree 状态连接，也不建立可供其他 Module
+任意发布的全局 Event Bus。
 
 Web 应用的 Tree Row 总是 Node：
 

@@ -45,7 +45,7 @@ export function createWorktreeBackend(
         },
         options
       );
-      const loaded = await service.getUnit(
+      const loaded = await service.getUnitLoadData(
         {
           worktreeID: input.worktreeId,
           unitID: input.unitId,
@@ -62,7 +62,7 @@ export function createWorktreeBackend(
         created.type !== unitData.type ||
         loaded.snapshot.unitID !== input.unitId ||
         loaded.snapshot.type !== unitData.type ||
-        loaded.headRevision !== created.draftHeadRevision
+        loaded.targetRevision !== created.draftHeadRevision
       ) {
         throw new Error(
           `Collaboration Worktree Unit identity did not match reserved Unit ${input.unitId}.`

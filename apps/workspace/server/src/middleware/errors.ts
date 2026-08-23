@@ -25,7 +25,10 @@ export type ApplicationErrorCode =
   | "INVALID_REDIRECT_URI"
   | "INVALID_GRANT"
   | "INVALID_STATE"
-  | "INVALID_CODE_VERIFIER";
+  | "INVALID_CODE_VERIFIER"
+  | "CLI_AUTHORIZATION_INVALID"
+  | "CLI_AUTHORIZATION_EXPIRED"
+  | "CLI_AUTHORIZATION_UNAVAILABLE";
 
 export class ApplicationError extends Error {
   constructor(

@@ -1,6 +1,9 @@
 import { UniverBasesPlugin } from "@univerjs-pro/bases";
 import UniverBasesEnUS from "@univerjs-pro/bases/locale/en-US";
 import UniverBasesZhCN from "@univerjs-pro/bases/locale/zh-CN";
+import { UniverBasesExchangeClientPlugin } from "@univerjs-pro/bases-exchange-client";
+import UniverBasesExchangeClientEnUS from "@univerjs-pro/bases-exchange-client/locale/en-US";
+import UniverBasesExchangeClientZhCN from "@univerjs-pro/bases-exchange-client/locale/zh-CN";
 import { UniverBasesUIPlugin } from "@univerjs-pro/bases-ui";
 import UniverBasesUIEnUS from "@univerjs-pro/bases-ui/locale/en-US";
 import UniverBasesUIZhCN from "@univerjs-pro/bases-ui/locale/zh-CN";
@@ -21,8 +24,12 @@ import UniverUIZhCN from "@univerjs/ui/locale/zh-CN";
 import { yellowTheme } from "@univerjs/themes";
 
 import "@univerjs-pro/bases/facade";
-import "@univerjs-pro/bases-ui/lib/index.css";
+import "@univerjs-pro/bases-exchange-client/facade";
+import "@univerjs-pro/bases-ui/facade";
+import "@univerjs/design/lib/index.css";
 import "@univerjs/ui/lib/index.css";
+import "@univerjs-pro/bases-ui/lib/index.css";
+import "@univerjs-pro/bases-exchange-client/lib/index.css";
 
 import {
   createCollaborationEditor,
@@ -36,13 +43,14 @@ export default createCollaborationEditor({
   label: "base",
   theme: yellowTheme,
   enableDocumentCollaborationUI: false,
-  useCustomCollaborationStatus: true,
+  hideCollaborationStatus: true,
   locales: {
     "zh-CN": mergeLocales(
       UniverDesignZhCN,
       UniverUIZhCN,
       UniverEngineFormulaZhCN,
       UniverBasesZhCN,
+      UniverBasesExchangeClientZhCN,
       UniverBasesUIZhCN
     ),
     "en-US": mergeLocales(
@@ -50,9 +58,11 @@ export default createCollaborationEditor({
       UniverUIEnUS,
       UniverEngineFormulaEnUS,
       UniverBasesEnUS,
+      UniverBasesExchangeClientEnUS,
       UniverBasesUIEnUS
     ),
   },
+  exchangeFeaturePlugins: () => [UniverBasesExchangeClientPlugin],
   createPresets: (container) => [
     {
       plugins: [
@@ -68,6 +78,8 @@ export default createCollaborationEditor({
           {
             container,
             ribbonType: "grid",
+            toolbar: false,
+            footer: false,
           },
         ],
         [
@@ -92,6 +104,10 @@ export default createCollaborationEditor({
           UniverBasesUIPlugin,
           {
             override: [[IAttachmentIoService, null]],
+            workbench: {
+              collaborationStatus: false,
+              footer: false,
+            },
           },
         ],
       ],

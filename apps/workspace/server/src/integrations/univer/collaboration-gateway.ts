@@ -33,6 +33,10 @@ import { json, Router, type RequestHandler } from "express";
 import type { AccessResolver, ResourceAccess, UnitType } from "../../modules/access/index.js";
 import type { IdentityModule } from "../../modules/identity/index.js";
 import type { WorktreesModule } from "../../modules/worktrees/index.js";
+import {
+  WORKTREE_CHANGE_FEED_PATH,
+  type WorktreeChangeFeed,
+} from "../realtime/worktree-change-feed.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
 
@@ -49,6 +53,7 @@ export function createCollaborationGateway(options: {
   readonly access: AccessResolver;
   readonly worktreeService: UniverCollabWorktreeService;
   readonly worktrees: WorktreesModule;
+  readonly worktreeChangeFeed: WorktreeChangeFeed;
 }): CollaborationGateway {
   const {
     service,
@@ -56,6 +61,7 @@ export function createCollaborationGateway(options: {
     access,
     worktreeService,
     worktrees,
+    worktreeChangeFeed,
   } = options;
   const ticketStore = new MemorySessionTicketStore();
   const endpoint = new UniverCollabEndpoint(service, { ticketStore });
@@ -116,7 +122,7 @@ export function createCollaborationGateway(options: {
     if (resource.kind !== "univer") {
       throw new CollabError("INVALID_REQUEST", "Unknown Unit Resource.");
     }
-    await service.getUnit(
+    await service.getUnitLoadData(
       {
         unitID: context.unitID,
         type: protocolUnitType(resource.unitType),
@@ -222,6 +228,7 @@ export function createCollaborationGateway(options: {
     await next();
   });
   transport.register(worktreeEndpoint);
+  transport.register(worktreeChangeFeed.endpoint(ticketStore));
   transport.register(trackConnections(endpoint, nodeAccessConnections));
 
   const router = Router();
@@ -271,7 +278,8 @@ export function createCollaborationGateway(options: {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (
       url.pathname !== "/universer-api/comb/connect" &&
-      !url.pathname.startsWith("/universer-api/worktrees/")
+      !url.pathname.startsWith("/universer-api/worktrees/") &&
+      url.pathname !== WORKTREE_CHANGE_FEED_PATH
     ) {
       return;
     }

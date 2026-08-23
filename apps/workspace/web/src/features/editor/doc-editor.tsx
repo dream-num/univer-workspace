@@ -18,8 +18,14 @@ import UniverDocsChartUIEnUS from "@univerjs-pro/docs-chart-ui/locale/en-US";
 import UniverDocsChartUIZhCN from "@univerjs-pro/docs-chart-ui/locale/zh-CN";
 import UniverDocsCodeUIEnUS from "@univerjs-pro/docs-code-ui/locale/en-US";
 import UniverDocsCodeUIZhCN from "@univerjs-pro/docs-code-ui/locale/zh-CN";
+import { UniverDocsExchangeClientPlugin } from "@univerjs-pro/docs-exchange-client";
+import UniverDocsExchangeClientEnUS from "@univerjs-pro/docs-exchange-client/locale/en-US";
+import UniverDocsExchangeClientZhCN from "@univerjs-pro/docs-exchange-client/locale/zh-CN";
 import UniverDocsLatexUIEnUS from "@univerjs-pro/docs-latex-ui/locale/en-US";
 import UniverDocsLatexUIZhCN from "@univerjs-pro/docs-latex-ui/locale/zh-CN";
+import { UniverDocsPrintPlugin } from "@univerjs-pro/docs-print";
+import UniverDocsPrintEnUS from "@univerjs-pro/docs-print/locale/en-US";
+import UniverDocsPrintZhCN from "@univerjs-pro/docs-print/locale/zh-CN";
 import UniverDocsShapeUIEnUS from "@univerjs-pro/docs-shape-ui/locale/en-US";
 import UniverDocsShapeUIZhCN from "@univerjs-pro/docs-shape-ui/locale/zh-CN";
 import UniverDocsTableUIEnUS from "@univerjs-pro/docs-table-ui/locale/en-US";
@@ -31,16 +37,28 @@ import UniverShapeEditorUIZhCN from "@univerjs-pro/shape-editor-ui/locale/zh-CN"
 import { mergeLocales } from "@univerjs/presets";
 import { defaultTheme } from "@univerjs/themes";
 
-import "@univerjs-pro/docs-callout-ui/lib/index.css";
-import "@univerjs-pro/docs-chart-ui/lib/index.css";
-import "@univerjs-pro/docs-code-ui/lib/index.css";
-import "@univerjs-pro/docs-latex-ui/lib/index.css";
-import "@univerjs-pro/docs-shape-ui/lib/index.css";
-import "@univerjs-pro/docs-table-ui/lib/index.css";
+import "@univerjs-pro/chart-ui/facade";
+import "@univerjs-pro/docs-callout/facade";
+import "@univerjs-pro/docs-chart/facade";
+import "@univerjs-pro/docs-code/facade";
+import "@univerjs-pro/docs-exchange-client/facade";
+import "@univerjs-pro/docs-latex/facade";
+import "@univerjs-pro/docs-shape/facade";
+import "@univerjs-pro/docs-table/facade";
+import "@univerjs-pro/engine-chart/facade";
 import "@univerjs/preset-docs-core/lib/index.css";
 import "@univerjs/preset-docs-drawing/lib/index.css";
 import "@univerjs/preset-docs-hyper-link/lib/index.css";
 import "@univerjs/preset-docs-thread-comment/lib/index.css";
+import "@univerjs-pro/chart-ui/lib/index.css";
+import "@univerjs-pro/shape-editor-ui/lib/index.css";
+import "@univerjs-pro/docs-callout-ui/lib/index.css";
+import "@univerjs-pro/docs-chart-ui/lib/index.css";
+import "@univerjs-pro/docs-code-ui/lib/index.css";
+import "@univerjs-pro/docs-latex-ui/lib/index.css";
+import "@univerjs-pro/docs-print/lib/index.css";
+import "@univerjs-pro/docs-shape-ui/lib/index.css";
+import "@univerjs-pro/docs-table-ui/lib/index.css";
 
 import {
   createCollaborationEditor,
@@ -68,7 +86,9 @@ export default createCollaborationEditor({
       UniverDocsCalloutUIZhCN,
       UniverDocsChartUIZhCN,
       UniverDocsCodeUIZhCN,
+      UniverDocsExchangeClientZhCN,
       UniverDocsLatexUIZhCN,
+      UniverDocsPrintZhCN,
       UniverDocsShapeUIZhCN,
       UniverDocsTableUIZhCN,
       UniverShapeEditorUIZhCN
@@ -83,16 +103,21 @@ export default createCollaborationEditor({
       UniverDocsCalloutUIEnUS,
       UniverDocsChartUIEnUS,
       UniverDocsCodeUIEnUS,
+      UniverDocsExchangeClientEnUS,
       UniverDocsLatexUIEnUS,
+      UniverDocsPrintEnUS,
       UniverDocsShapeUIEnUS,
       UniverDocsTableUIEnUS,
       UniverShapeEditorUIEnUS
     ),
   },
   collaborationFeaturePlugins: getThreadCommentCollaborationPlugins,
+  exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin],
+  printFeaturePlugins: () => [UniverDocsPrintPlugin],
   createPresets: (container) => [
     UniverDocsCorePreset({
       container,
+      ribbonType: "grid",
     }),
     UniverDocsDrawingPreset({
       collaboration: true,

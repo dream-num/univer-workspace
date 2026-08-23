@@ -169,6 +169,61 @@ describe("identity", () => {
     }
   });
 
+  it("hands an approved browser identity to the CLI through a one-time device code", async () => {
+    const database = openWorkspaceDatabase(":memory:");
+    let currentTime = 1_000;
+    const identity = createIdentityModule({
+      repository: new IdentityRepository(database),
+      sessionTtlMs: 60_000,
+      now: () => currentTime,
+    });
+
+    try {
+      const browserSession = await identity.registerWithPassword({
+        username: "device-user",
+        displayName: "Device User",
+        password: "correct horse battery staple",
+      });
+      const browserCookie = `${identity.cookieName}=${browserSession.cookieValue}`;
+      const started = identity.startCliAuthorization();
+
+      expect(started).toMatchObject({
+        userCode: expect.stringMatching(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/u),
+        verificationUri: "/cli-login",
+        verificationUriComplete: `/cli-login?userCode=${started.userCode}`,
+        expiresIn: 600,
+        interval: 2,
+      });
+      expect(identity.exchangeCliAuthorization(started.deviceCode)).toEqual({
+        status: "pending",
+      });
+      expect(
+        identity.approveCliAuthorization(
+          browserCookie,
+          started.userCode.toLowerCase().replace("-", "")
+        )
+      ).toMatchObject({ user: { username: "device-user" } });
+
+      const exchanged = identity.exchangeCliAuthorization(started.deviceCode);
+      expect(exchanged).toMatchObject({
+        status: "authorized",
+        issuedSession: { view: { user: { username: "device-user" } } },
+      });
+      expect(tableCount(database, "login_sessions")).toBe(2);
+      expect(() =>
+        identity.exchangeCliAuthorization(started.deviceCode)
+      ).toThrowError(expect.objectContaining({ code: "CLI_AUTHORIZATION_INVALID" }));
+
+      const expiring = identity.startCliAuthorization();
+      currentTime += 10 * 60 * 1000;
+      expect(() =>
+        identity.exchangeCliAuthorization(expiring.deviceCode)
+      ).toThrowError(expect.objectContaining({ code: "CLI_AUTHORIZATION_EXPIRED" }));
+    } finally {
+      database.close();
+    }
+  });
+
   it("changes the current user's password", async () => {
     const database = openWorkspaceDatabase(":memory:");
     const identity = createIdentityModule({
@@ -287,6 +342,22 @@ describe("identity", () => {
       });
       expect(tableCount(database, "external_identities")).toBe(1);
       const githubCookie = `${identity.cookieName}=${loggedIn.issuedSession!.cookieValue}`;
+      const cliLogin = identity.startCliAuthorization();
+      expect(
+        identity.approveCliAuthorization(githubCookie, cliLogin.userCode)
+      ).toMatchObject({ user: { username: "octocat" } });
+      expect(identity.exchangeCliAuthorization(cliLogin.deviceCode)).toMatchObject({
+        status: "authorized",
+        issuedSession: {
+          view: {
+            user: { id: loggedIn.issuedSession!.view.user.id },
+            authenticationMethods: {
+              password: false,
+              externalIdentities: [{ provider: "github" }],
+            },
+          },
+        },
+      });
       expect(() => identity.unlinkGitHub(githubCookie)).toThrowError(
         expect.objectContaining({ code: "CONFLICT" })
       );

@@ -17,14 +17,32 @@ interface StoredSession {
 }
 
 interface StoredSessions {
+  readonly pendingCliLogins: Readonly<Record<string, PendingCliLogin>>;
   readonly sessions: Readonly<Record<string, StoredSession>>;
 }
 
 export interface WorkspaceAuthOptions {
   readonly config: Config;
   readonly fetcher?: typeof fetch;
+  readonly now?: () => number;
   readonly sessionPath: string;
 }
+
+export interface PendingCliLogin {
+  readonly deviceCode: string;
+  readonly expiresAt: number;
+  readonly origin: string;
+  readonly userCode: string;
+  readonly verificationUrl: string;
+}
+
+export type CliLoginCompletion =
+  | { readonly status: "pending" }
+  | {
+      readonly status: "authenticated";
+      readonly origin: string;
+      readonly subject: WorkspaceSubject;
+    };
 
 export class WorkspaceAuth {
   private mutationQueue: Promise<void> = Promise.resolve();
@@ -57,6 +75,89 @@ export class WorkspaceAuth {
     const subject = parseSubject(body["user"]);
     await this.save(origin, { cookie, subject: subject.id });
     return { origin, subject };
+  }
+
+  public async startCliLogin(): Promise<PendingCliLogin> {
+    const origin = await this.configuredOrigin();
+    const response = await this.unauthenticatedHttp(origin).request(
+      "/api/auth/cli/authorizations",
+      { authenticated: false, method: "POST" },
+    );
+    const body = await readJsonResponse(response);
+    const deviceCode = requiredString(body["deviceCode"], "deviceCode");
+    const userCode = requiredString(body["userCode"], "userCode");
+    const verificationUriComplete = requiredString(
+      body["verificationUriComplete"],
+      "verificationUriComplete",
+    );
+    const expiresIn = requiredPositiveInteger(body["expiresIn"], "expiresIn");
+    requiredPositiveInteger(body["interval"], "interval");
+    const verificationUrl = new URL(verificationUriComplete, origin);
+    if (
+      verificationUrl.origin !== origin ||
+      verificationUrl.username !== "" ||
+      verificationUrl.password !== ""
+    ) {
+      throw responseError("CLI login verification URL is invalid or cross-origin.");
+    }
+    const pending = {
+      deviceCode,
+      expiresAt: this.currentTime() + expiresIn * 1000,
+      origin,
+      userCode,
+      verificationUrl: verificationUrl.href,
+    };
+    await this.savePendingCliLogin(pending);
+    return pending;
+  }
+
+  public async pendingCliLogin(): Promise<PendingCliLogin | undefined> {
+    const origin = await this.configuredOrigin();
+    const pending = (await readSessions(this.options.sessionPath)).pendingCliLogins[origin];
+    if (pending === undefined) return undefined;
+    if (pending.expiresAt <= this.currentTime()) {
+      await this.clearPendingCliLogin(origin);
+      return undefined;
+    }
+    return pending;
+  }
+
+  public async completeCliLogin(
+    pending: PendingCliLogin,
+  ): Promise<CliLoginCompletion> {
+    if (this.currentTime() >= pending.expiresAt) {
+      await this.clearPendingCliLogin(pending.origin);
+      throw workspaceError(
+        "workspace-cli-authorization-expired",
+        "The browser login request expired. Run login again.",
+      );
+    }
+    const response = await this.unauthenticatedHttp(pending.origin).request(
+      "/api/auth/cli/authorizations/exchange",
+      {
+        authenticated: false,
+        body: { deviceCode: pending.deviceCode },
+        method: "POST",
+      },
+    );
+    if (response.status === 202) {
+      const body = await readJsonResponse(response);
+      if (body["status"] !== "pending") {
+        throw responseError("CLI login completion response is invalid.");
+      }
+      return { status: "pending" };
+    }
+    const cookie = response.headers.get("set-cookie")?.split(";", 1)[0];
+    if (cookie === undefined || cookie.length === 0) {
+      throw responseError("CLI login response did not include a Session cookie.");
+    }
+    const body = await readJsonResponse(response);
+    if (body["authenticated"] !== true) {
+      throw responseError("CLI login response is not an authenticated Session.");
+    }
+    const subject = parseSubject(body["user"]);
+    await this.save(pending.origin, { cookie, subject: subject.id });
+    return { status: "authenticated", origin: pending.origin, subject };
   }
 
   public async whoami(): Promise<{ readonly origin: string; readonly subject: WorkspaceSubject }> {
@@ -114,21 +215,60 @@ export class WorkspaceAuth {
     return normalizeOrigin(entry.value);
   }
 
+  private unauthenticatedHttp(origin: string): WorkspaceHttp {
+    return new WorkspaceHttp({
+      origin,
+      role: "client",
+      ...(this.options.fetcher === undefined ? {} : { fetcher: this.options.fetcher }),
+    });
+  }
+
+  private currentTime(): number {
+    return (this.options.now ?? Date.now)();
+  }
+
   private async cookie(origin: string): Promise<string | undefined> {
     return (await readSessions(this.options.sessionPath)).sessions[normalizeOrigin(origin)]?.cookie;
   }
 
   private async save(origin: string, session: StoredSession): Promise<void> {
+    await this.mutate((current) => {
+      const normalizedOrigin = normalizeOrigin(origin);
+      const pendingCliLogins = { ...current.pendingCliLogins };
+      delete pendingCliLogins[normalizedOrigin];
+      return {
+        pendingCliLogins,
+        sessions: { ...current.sessions, [normalizedOrigin]: session },
+      };
+    });
+  }
+
+  private async savePendingCliLogin(pending: PendingCliLogin): Promise<void> {
     await this.mutate((current) => ({
-      sessions: { ...current.sessions, [normalizeOrigin(origin)]: session },
+      pendingCliLogins: {
+        ...current.pendingCliLogins,
+        [normalizeOrigin(pending.origin)]: pending,
+      },
+      sessions: current.sessions,
     }));
+  }
+
+  private async clearPendingCliLogin(origin: string): Promise<void> {
+    await this.mutate((current) => {
+      const pendingCliLogins = { ...current.pendingCliLogins };
+      delete pendingCliLogins[normalizeOrigin(origin)];
+      return { pendingCliLogins, sessions: current.sessions };
+    });
   }
 
   private async clear(origin: string): Promise<void> {
     await this.mutate((current) => {
+      const normalizedOrigin = normalizeOrigin(origin);
       const sessions = { ...current.sessions };
-      delete sessions[normalizeOrigin(origin)];
-      return { sessions };
+      const pendingCliLogins = { ...current.pendingCliLogins };
+      delete sessions[normalizedOrigin];
+      delete pendingCliLogins[normalizedOrigin];
+      return { pendingCliLogins, sessions };
     });
   }
 
@@ -156,7 +296,9 @@ async function readSessions(path: string): Promise<StoredSessions> {
   try {
     source = await readFile(path, "utf8");
   } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") return { sessions: {} };
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return { pendingCliLogins: {}, sessions: {} };
+    }
     throw error;
   }
   let value: unknown;
@@ -180,17 +322,46 @@ async function readSessions(path: string): Promise<StoredSessions> {
       ...(candidate["subject"] === undefined ? {} : { subject: candidate["subject"] }),
     };
   }
-  return { sessions };
+  const pendingCliLogins: Record<string, PendingCliLogin> = {};
+  const pendingValue = value["pendingCliLogins"];
+  if (pendingValue !== undefined) {
+    if (!isWorkspaceRecord(pendingValue)) throw sessionError();
+    for (const [origin, candidate] of Object.entries(pendingValue)) {
+      if (!isPendingCliLogin(candidate)) throw sessionError();
+      const normalizedOrigin = normalizeOrigin(origin);
+      if (normalizeOrigin(candidate.origin) !== normalizedOrigin) throw sessionError();
+      pendingCliLogins[normalizedOrigin] = candidate;
+    }
+  }
+  return { pendingCliLogins, sessions };
 }
 
 async function writeSessions(path: string, value: StoredSessions): Promise<void> {
   await mkdir(dirname(path), { mode: 0o700, recursive: true });
   const temporaryPath = `${path}.${String(process.pid)}.${randomUUID()}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(value, undefined, 2)}\n`, {
+  const serialized = {
+    sessions: value.sessions,
+    ...(Object.keys(value.pendingCliLogins).length === 0
+      ? {}
+      : { pendingCliLogins: value.pendingCliLogins }),
+  };
+  await writeFile(temporaryPath, `${JSON.stringify(serialized, undefined, 2)}\n`, {
     encoding: "utf8",
     mode: 0o600,
   });
   await rename(temporaryPath, path);
+}
+
+function isPendingCliLogin(value: unknown): value is PendingCliLogin {
+  return (
+    isWorkspaceRecord(value) &&
+    typeof value["deviceCode"] === "string" &&
+    typeof value["expiresAt"] === "number" &&
+    Number.isFinite(value["expiresAt"]) &&
+    typeof value["origin"] === "string" &&
+    typeof value["userCode"] === "string" &&
+    typeof value["verificationUrl"] === "string"
+  );
 }
 
 function parseSubject(value: unknown): WorkspaceSubject {
@@ -214,6 +385,20 @@ function normalizeOrigin(value: string): string {
 
 function responseError(message: string): Error {
   return workspaceError("workspace-invalid-response", message);
+}
+
+function requiredString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw responseError(`CLI login response contains an invalid ${field}.`);
+  }
+  return value;
+}
+
+function requiredPositiveInteger(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw responseError(`CLI login response contains an invalid ${field}.`);
+  }
+  return value;
 }
 
 async function readJsonResponse(response: Response): Promise<Record<string, unknown>> {

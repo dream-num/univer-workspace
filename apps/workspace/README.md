@@ -79,6 +79,18 @@ GitHub login creates the product User and Personal Space; an existing signed-in
 User can link GitHub from the account menu. Access tokens are used only to load
 the GitHub profile during sign-in and are not persisted.
 
+Workspace CLI uses browser approval by default. `univer-workspace-cli login`
+creates a ten-minute, one-time authorization request and prints a `/cli-login`
+URL plus verification code, persists the pending request locally, and exits.
+After the user approves the matching code in their own browser, the Agent runs
+`univer-workspace-cli login --complete` to exchange it once; neither command
+waits or polls. If necessary, the user can first sign in with GitHub, Discord,
+or a password and return to the approval page. The CLI receives a separate
+normal `workspace_session`; it never
+receives the browser cookie, Workspace password, or provider access token.
+Pending authorization requests are process-local and intentionally disappear
+on server restart; completed CLI sessions remain normal persisted login sessions.
+
 Discord OAuth login and account linking are enabled when
 `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `DISCORD_CALLBACK_URL` are
 all configured. Add this redirect in the Discord Developer Portal for local
@@ -123,6 +135,13 @@ the repository software license. The built-in credential is for `localhost`;
 set `VITE_UNIVER_LICENSE` at build time for any non-local deployment or to
 override it locally. Server, database, GitHub, and Discord settings are runtime
 values.
+
+An authenticated Browser keeps one `/api/worktree-events` WebSocket open. AI or
+CLI Worktree writes publish a cache-invalidation signal only after the combined
+Collaboration and product operation completes, so active/processed task lists,
+details, sidebar counts, and Worktree-driven Node/Resource lists refresh without
+a page reload. The connection uses a one-time session ticket and carries no
+Worktree metadata or content.
 
 ## Docker
 
@@ -171,10 +190,12 @@ For a V6 rollout, stop every old Workspace instance, start one V6 instance and
 wait for migration and health checks to succeed, then restore normal service;
 do not let V5 and V6 processes write the same SQLite file concurrently.
 
-The manual `Deploy Workspace` workflow requires an existing stable `vX.Y.Z`
-repository tag. It checks out that exact tag, builds and pushes the container image
-with the same tag, and hands it to the selected environment. A tag push does not deploy
-Workspace automatically, and the deployment workflow does not publish the CLI.
+The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
+repository tag. When provided, it checks out that tag and uses it for the container
+image. When omitted, it builds the workflow dispatch commit and tags the image as
+`sha-<commit>`. It then hands the image to the selected environment. A tag push does
+not deploy Workspace automatically, and the deployment workflow does not publish the
+CLI.
 
 ## Commands
 

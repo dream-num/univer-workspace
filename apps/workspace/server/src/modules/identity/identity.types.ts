@@ -34,6 +34,19 @@ export interface IssuedSession {
   readonly view: AuthenticatedSession;
 }
 
+export interface CliAuthorizationStart {
+  readonly deviceCode: string;
+  readonly userCode: string;
+  readonly verificationUri: string;
+  readonly verificationUriComplete: string;
+  readonly expiresIn: number;
+  readonly interval: number;
+}
+
+export type CliAuthorizationExchange =
+  | { readonly status: "pending" }
+  | { readonly status: "authorized"; readonly issuedSession: IssuedSession };
+
 export interface PasswordRegistration {
   readonly username: unknown;
   readonly displayName: unknown;

@@ -123,6 +123,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/cli/authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a short-lived browser authorization for Workspace CLI. */
+        post: operations["startCliAuthorization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/cli/authorizations/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a CLI authorization as the current signed-in User. */
+        post: operations["approveCliAuthorization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/cli/authorizations/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Poll and exchange an approved CLI authorization for a login session. */
+        post: operations["exchangeCliAuthorization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/github/login": {
         parameters: {
             query?: never;
@@ -1253,6 +1304,26 @@ export interface components {
             currentPassword: string;
             newPassword: string;
         };
+        CliAuthorizationStart: {
+            deviceCode: string;
+            userCode: string;
+            verificationUri: string;
+            verificationUriComplete: string;
+            /** @description Lifetime in seconds. */
+            expiresIn: number;
+            /** @description Minimum polling interval in seconds. */
+            interval: number;
+        };
+        CliAuthorizationApproval: {
+            userCode: string;
+        };
+        CliAuthorizationExchange: {
+            deviceCode: string;
+        };
+        CliAuthorizationPending: {
+            /** @constant */
+            status: "pending";
+        };
         DiscordBotLogin: {
             /** @description Stable Discord snowflake User ID from a trusted Bot event. */
             discordUserId: string;
@@ -2004,6 +2075,115 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    startCliAuthorization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CLI authorization request created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliAuthorizationStart"];
+                };
+            };
+            /** @description The server is temporarily at capacity for CLI authorization requests. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approveCliAuthorization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CliAuthorizationApproval"];
+            };
+        };
+        responses: {
+            /** @description CLI authorization approved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            /** @description The CLI authorization request expired. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    exchangeCliAuthorization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CliAuthorizationExchange"];
+            };
+        };
+        responses: {
+            /** @description Authorization approved and exchanged for a new CLI login session. */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedSession"];
+                };
+            };
+            /** @description The User has not approved the request yet. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliAuthorizationPending"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description The CLI authorization request expired. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     startGitHubLogin: {

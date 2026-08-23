@@ -89,8 +89,9 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
   发布前必须检查整个 workspace 的单一 SDK baseline；`dev` 明确跳过该检查。
 - CLI package artifact 必须只包含运行所需代码、资源和版本匹配的 Skills，不得依赖当前 checkout。
 - `packages/reference-provider` 不增加独立发布、版本或外部 consumer 合同。
-- 稳定 `vX.Y.Z` tag 是 CLI release 与 Workspace deployment 共享的不可变源码坐标；tag push 只发布
-  CLI，部署 workflow 只手动部署所选 tag。Docker image 和 CLI artifact 的交付时机与执行流程仍然独立。
+- 稳定 `vX.Y.Z` tag 在被选择时是 CLI release 与 Workspace deployment 共享的不可变源码坐标；tag push
+  只发布 CLI。部署 workflow 也可以不选 tag，改为手动部署 workflow dispatch 的精确 commit，并使用
+  `sha-<commit>` image tag。Docker image 和 CLI artifact 的交付时机与执行流程仍然独立。
 - 当前 release workflow 只写 insider-npm；公开 npm Promotion 属于独立后续工作，不得加入该 workflow。
 
 ## 文档维护

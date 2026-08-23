@@ -175,22 +175,36 @@ is uncertain, start a new Worktree rather than guessing.
 
 ## Connect
 
-The origin defaults to `https://workspace.univer.plus/`. Override it only when needed, then login
-without putting a password in shell history:
+The origin defaults to `https://workspace.univer.plus/`. Override it only when needed, then use the
+two-command browser approval protocol below. Never ask the user for a password.
 
 ```bash
 # Optional override:
 univer-workspace-cli config set workspace.origin https://workspace.example.com
 
-# Human at an interactive terminal:
-univer-workspace-cli login --username <name>
+# Step 1: create an approval request. This command exits immediately.
+univer-workspace-cli login --json
 
-# Agent or CI when a secret is already available:
+# Step 2: relay verificationUrl and userCode to the user, then STOP.
+# Do not poll, do not run --complete, and do not continue the Workspace task.
+# Wait until the user explicitly says that they approved the request.
+
+# Step 3: only after that user confirmation, exchange the approval once.
+univer-workspace-cli login --complete --json
+
+# Compatibility only, when the caller already owns a password secret:
 printf '%s\n' "$WORKSPACE_PASSWORD" | univer-workspace-cli login --username <name> --password-stdin
 
 univer-workspace-cli whoami --json
 univer-workspace-cli space list --json
 ```
+
+The first command returns `status: "authorization_required"`, `verificationUrl`, `userCode`,
+`expiresAt`, and `nextCommand`. The completion command also exits immediately: it returns
+`status: "authenticated"` on success or `status: "authorization_pending"` if the browser approval
+has not finished. If it is still pending, show the same URL/code to the user and wait for their
+reply; do not create a polling loop. Password, GitHub, and Discord browser accounts all use this
+same handoff.
 
 ## Start a new task
 

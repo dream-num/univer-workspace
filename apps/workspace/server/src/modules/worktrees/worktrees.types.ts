@@ -102,6 +102,19 @@ export interface WorktreeOperationView {
   } | null;
 }
 
+export interface WorktreeProductChange {
+  readonly kind:
+    | "created"
+    | "updated"
+    | "unitAdded"
+    | "contentChanged"
+    | "stateChanged"
+    | "merged"
+    | "discarded";
+  readonly worktreeId: string;
+  readonly audienceUserIds: readonly string[];
+}
+
 export interface WorktreeBackend {
   createWorktree(
     worktreeId: string,

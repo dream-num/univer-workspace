@@ -77,6 +77,38 @@ Workspace deployment, run `univer-workspace-cli config set workspace.origin <ori
 agent access to the executable and the intended Workspace; the bundled guidance supplies the
 version-correct workflow.
 
+## Login
+
+The default login does not ask the agent for a Workspace password:
+
+```bash
+univer-workspace-cli login
+```
+
+The command prints a short-lived Workspace URL and verification code, saves the pending request
+locally, and exits immediately. The agent must send the URL and code to the user, then stop and wait
+for the user's reply—it must not poll while approval is pending. Open that URL in your own browser,
+sign in if necessary, and confirm the matching code. Existing browser sessions and all browser
+sign-in methods—including GitHub and Discord—work with this flow.
+
+Only after the user confirms approval, complete the one-time exchange:
+
+```bash
+univer-workspace-cli login --complete
+```
+
+`--complete` checks once and exits; it does not wait or poll. Approval creates a separate CLI session
+without copying the browser cookie or an OAuth access token through the agent.
+
+For compatibility, a user at an interactive terminal can still sign in directly with a Workspace
+username and password:
+
+```bash
+univer-workspace-cli login --username <name>
+```
+
+`--password-stdin` remains available for controlled automation that already owns a password secret.
+
 ## License policy
 
 The CLI bundles the same application-owned runtime development license as the

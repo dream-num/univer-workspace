@@ -84,10 +84,11 @@ that graph check. All three paths build, verify, install, and smoke-test the act
 tarball before publication. This workflow ends at insider-npm and does not perform a
 Public Registry Promotion.
 
-Workspace deployment is a separate manual workflow. It requires an existing stable
-`vX.Y.Z` release tag, builds that exact commit, pushes an image with the same tag, and
-hands the image to the selected deployment environment. Pushing the tag does not deploy
-the server.
+Workspace deployment is a separate manual workflow. It can build a selected existing
+stable `vX.Y.Z` release tag and use that tag for the image, or, when no release tag is
+provided, build the workflow dispatch commit and tag the image as `sha-<commit>`. It
+hands the resulting image to the selected deployment environment. Pushing a tag does
+not deploy the server.
 
 ## Runtime development license
 

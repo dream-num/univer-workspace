@@ -274,6 +274,40 @@ describe("Universer Exchange protocol", () => {
       unitType: fixture.unitType,
     });
   });
+
+  it("preserves a UTF-8 filename when importing Office content", async () => {
+    const { application, origin } = await startApplication();
+    const owner = await register(application, "exchange-utf8-filename-owner");
+    const generated = await officeFile({
+      unitType: "slide",
+      instanceType: UniverInstanceType.UNIVER_SLIDE,
+      format: ExchangeFormat.PPTX,
+    });
+    const source = new File([await generated.arrayBuffer()], "AI转型.pptx", {
+      type: generated.type,
+    });
+    const uploaded = await uploadExchangeFile(origin, owner.cookie, source);
+    const taskId = await startTask(
+      origin,
+      owner.cookie,
+      "/universer-api/exchange/import",
+      { fileID: uploaded.body.FileId, outputType: 1 }
+    );
+    const imported = await waitForTask(origin, owner.cookie, taskId);
+
+    expect(imported).toMatchObject({
+      error: { code: ErrorCode.OK },
+      status: "done",
+      import: { unitID: expect.any(String) },
+    });
+    expect(
+      application.access.resolveUnit(owner.userId, imported.import!.unitID)
+    ).toMatchObject({
+      kind: "univer",
+      unitType: "slide",
+      node: { name: "AI转型" },
+    });
+  }, 20_000);
 });
 
 async function startApplication(): Promise<{

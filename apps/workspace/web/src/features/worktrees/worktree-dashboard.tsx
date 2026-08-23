@@ -3,7 +3,6 @@ import {
   Bot,
   ChevronDown,
   ChevronRight,
-  FileText,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -191,6 +190,12 @@ export function WorktreeDashboard({
       view,
     });
   const resetSelection = () => onSelectionChange?.(null);
+  const unitChangeStatus = (unit: WorktreeUnit) => {
+    if (unit.change === "modified") return t("documentModified");
+    if (unit.change === "added") return t("documentAdded");
+    if (unit.change === "deleted") return t("documentDeleted");
+    return t("documentUnchanged");
+  };
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
@@ -235,9 +240,9 @@ export function WorktreeDashboard({
       <div
         className="grid min-h-0 flex-1"
         style={{
-          gridTemplateColumns: `${
-            taskSidebarCollapsed ? 44 : taskSidebar.width
-          }px ${taskSidebarCollapsed ? 0 : 7}px minmax(0, 1fr)`,
+          gridTemplateColumns: taskSidebarCollapsed
+            ? "48px minmax(0, 1fr)"
+            : `${taskSidebar.width}px 7px minmax(0, 1fr)`,
         }}
       >
         <aside
@@ -249,23 +254,113 @@ export function WorktreeDashboard({
           )}
         >
           {taskSidebarCollapsed ? (
-            <div className="flex h-full min-h-60 flex-col items-center gap-3 py-3 text-muted-foreground">
-              {!compactViewport ? (
-                <Tooltip side="right" content={t("expandTaskSidebar")}>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("expandTaskSidebar")}
-                    onClick={taskSidebar.toggleCollapsed}
-                  >
-                    <PanelLeftOpen />
-                  </Button>
-                </Tooltip>
+            <div className="flex h-full min-h-60 flex-col items-center bg-surface py-3">
+              <Tooltip
+                side="right"
+                content={!compactViewport ? t("expandTaskSidebar") : null}
+              >
+                <button
+                  type="button"
+                  aria-expanded="false"
+                  aria-label={t("expandTaskSidebar")}
+                  disabled={compactViewport}
+                  className={cn(
+                    "group grid size-8 shrink-0 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors outline-none",
+                    "hover:bg-brand-50 hover:text-brand-600",
+                    "focus-visible:ring-2 focus-visible:ring-ring/40",
+                    "disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                  )}
+                  onClick={taskSidebar.toggleCollapsed}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    taskSidebar.toggleCollapsed();
+                  }}
+                >
+                  <PanelLeftOpen className="size-4" />
+                </button>
+              </Tooltip>
+
+              {selectedDocument ? (
+                <div className="mt-2 flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto border-t border-border px-1.5 pt-2">
+                  {selectedDocument.worktree.units.map((unit) => {
+                    const key = documentKey(
+                      selectedDocument.worktree.id,
+                      unit.unitId
+                    );
+                    const selected = key === selectedDocument.key;
+                    const changeStatus = unitChangeStatus(unit);
+                    const taskStatus = worktreeStateLabel(
+                      selectedDocument.worktree.state,
+                      t
+                    );
+                    const accessibleLabel = `${unit.name}，${changeStatus}，${taskStatus}`;
+                    return (
+                      <Tooltip
+                        key={unit.unitId}
+                        side="right"
+                        align="start"
+                        content={
+                          <span className="grid max-w-52 gap-0.5">
+                            <strong className="truncate font-medium">
+                              {unit.name}
+                            </strong>
+                            <small className="font-normal opacity-75">
+                              {changeStatus} · {taskStatus}
+                            </small>
+                          </span>
+                        }
+                      >
+                        <button
+                          type="button"
+                          aria-label={accessibleLabel}
+                          aria-pressed={selected}
+                          className={cn(
+                            "grid size-8 shrink-0 cursor-pointer place-items-center rounded-lg transition-colors outline-none",
+                            selected
+                              ? "bg-brand-50 ring-1 ring-brand-200"
+                              : "hover:bg-accent",
+                            "focus-visible:ring-2 focus-visible:ring-ring/40",
+                            unit.change === "deleted" && "opacity-60"
+                          )}
+                          onClick={() =>
+                            selectDocument(
+                              {
+                                key,
+                                worktree: selectedDocument.worktree,
+                                unit,
+                              },
+                              selectedView
+                            )
+                          }
+                          onKeyDown={(event) => {
+                            if (
+                              event.key !== "Enter" &&
+                              event.key !== " "
+                            ) {
+                              return;
+                            }
+                            event.preventDefault();
+                            selectDocument(
+                              {
+                                key,
+                                worktree: selectedDocument.worktree,
+                                unit,
+                              },
+                              selectedView
+                            );
+                          }}
+                        >
+                          <UnitTypeIcon
+                            type={unit.unitType}
+                            showTooltip={false}
+                          />
+                        </button>
+                      </Tooltip>
+                    );
+                  })}
+                </div>
               ) : null}
-              <FileText className="size-4" />
-              <span className="text-xs [writing-mode:vertical-rl]">
-                {t("taskDocuments")}
-              </span>
             </div>
           ) : (
             <>

@@ -22,6 +22,7 @@ import type {
   WorktreeDetail,
   WorktreeOperationKind,
   WorktreeOperationView,
+  WorktreeProductChange,
   WorktreesModule,
   WorktreeState,
   WorktreeSummary,
@@ -45,6 +46,7 @@ export function createWorktreesModule(options: {
     worktreeId: string,
     unitIds: readonly string[]
   ) => void;
+  readonly onChanged?: (change: WorktreeProductChange) => void;
   readonly now?: () => number;
 }): WorktreesModule {
   const now = options.now ?? Date.now;
@@ -90,6 +92,18 @@ export function createWorktreesModule(options: {
       capabilities: access.capabilities,
       canSeeUnits: access.canSeeUnits,
     };
+  }
+
+  function notifyChanged(
+    kind: WorktreeProductChange["kind"],
+    worktreeId: string,
+    audienceUserIds = options.repository.audience(worktreeId)
+  ): void {
+    try {
+      options.onChanged?.({ kind, worktreeId, audienceUserIds });
+    } catch {
+      // Realtime cache invalidation cannot change a completed product write.
+    }
   }
 
   return {
@@ -203,6 +217,7 @@ export function createWorktreesModule(options: {
         });
       }
       const created = await context(userId, stable.worktreeId);
+      notifyChanged("created", stable.worktreeId);
       return {
         status: 201,
         body: summaryView(
@@ -221,6 +236,7 @@ export function createWorktreesModule(options: {
     async update(userId, worktreeId, inputValue) {
       const value = await context(userId, worktreeId);
       if (!canManageSummary(userId, value.row)) throw forbidden();
+      const previousAudience = options.repository.audience(worktreeId);
       const patch = validPatch(inputValue);
       if (
         patch.visibility !== undefined &&
@@ -241,9 +257,18 @@ export function createWorktreesModule(options: {
         visibility: patch.visibility ?? value.row.visibility,
         updatedAt: now(),
       });
-      return {
+      const updated = {
         worktree: detailView(await context(userId, worktreeId)),
       };
+      notifyChanged(
+        "updated",
+        worktreeId,
+        unionAudience(
+          previousAudience,
+          options.repository.audience(worktreeId)
+        )
+      );
+      return updated;
     },
 
     async addUnit(
@@ -310,7 +335,7 @@ export function createWorktreesModule(options: {
             );
           });
         }
-        return {
+        const result = {
           status: 201,
           body: {
             unit: requireMappedUnit(
@@ -318,7 +343,9 @@ export function createWorktreesModule(options: {
               stable.unitId
             ),
           },
-        };
+        } as const;
+        notifyChanged("unitAdded", worktreeId);
+        return result;
       }
 
       validateTarget(
@@ -403,7 +430,7 @@ export function createWorktreesModule(options: {
           );
         });
       }
-      return {
+      const result = {
         status: 201,
         body: {
           unit: requireMappedUnit(
@@ -411,7 +438,9 @@ export function createWorktreesModule(options: {
             stable.unitId
           ),
         },
-      };
+      } as const;
+      notifyChanged("unitAdded", worktreeId);
+      return result;
     },
 
     async openUnit(userId, worktreeId, unitId, inputValue) {
@@ -474,13 +503,17 @@ export function createWorktreesModule(options: {
         unitId,
         unit.unitType
       );
-      return await backendCall(() =>
+      const result = await backendCall(() =>
         options.backend.submitChangeset(
           worktreeId,
           changeset,
           userId
         )
       );
+      if (result.status === "committed") {
+        notifyChanged("contentChanged", worktreeId);
+      }
+      return result;
     },
 
     async markReady(userId, worktreeId) {
@@ -490,6 +523,7 @@ export function createWorktreesModule(options: {
         options.backend.markReady(worktreeId, userId)
       );
       const updated = await contextFromData(userId, value.row, data);
+      notifyChanged("stateChanged", worktreeId);
       return {
         worktree: summaryView(
           updated.row,
@@ -506,6 +540,7 @@ export function createWorktreesModule(options: {
         options.backend.reopen(worktreeId, userId)
       );
       const updated = await contextFromData(userId, value.row, data);
+      notifyChanged("stateChanged", worktreeId);
       return {
         worktree: summaryView(
           updated.row,
@@ -559,6 +594,7 @@ export function createWorktreesModule(options: {
         });
       }
       const current = await context(userId, worktreeId);
+      notifyChanged("merged", worktreeId);
       return {
         operation: operationView(operation),
         worktree: summaryView(
@@ -603,6 +639,7 @@ export function createWorktreesModule(options: {
         });
       }
       const current = await context(userId, worktreeId);
+      notifyChanged("discarded", worktreeId);
       return {
         operation: operationView(operation),
         worktree: summaryView(
@@ -986,6 +1023,13 @@ function requireEditableResource(
   if (!resource || resource.kind !== "univer") throw notFound();
   if (!resource.capabilities.editContent) throw forbidden();
   return resource;
+}
+
+function unionAudience(
+  left: readonly string[],
+  right: readonly string[]
+): string[] {
+  return [...new Set([...left, ...right])].sort();
 }
 
 function assertTeamResource(

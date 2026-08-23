@@ -62,7 +62,9 @@ Object Deletion Job ── idempotent delete ── BlobStore Object
 
 ### `login_sessions`
 
-只持久化 Session ID、Secret Hash、User 和过期时间。原始 Cookie Secret 不入库。
+只持久化 Session ID、Secret Hash、User 和过期时间。原始 Cookie Secret 不入库。Browser
+授权 CLI 后会为 CLI 创建独立的普通 Session 行；十分钟内待确认的一次性授权请求仅存在于
+Server 进程内存，不进入产品数据库，进程重启后由用户重新发起。
 
 ### `spaces`
 

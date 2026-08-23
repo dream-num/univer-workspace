@@ -441,8 +441,10 @@ export function UnitChangeIcon({
 
 export function UnitTypeIcon({
   type,
+  showTooltip = true,
 }: {
   readonly type: WorktreeUnit["unitType"];
+  readonly showTooltip?: boolean;
 }) {
   const { t } = useI18n();
   const label = unitTypeLabel(type, t);
@@ -456,23 +458,22 @@ export function UnitTypeIcon({
           : type === "board"
             ? Shapes
             : Database;
-  return (
-    <Tooltip content={label}>
-      <span
-        aria-label={label}
-        className={cn(
-          "inline-flex size-5 items-center justify-center rounded-md [&_svg]:size-3",
-          type === "sheet" && "bg-sheet-soft text-sheet",
-          type === "doc" && "bg-doc-soft text-doc",
-          type === "slide" && "bg-slide-soft text-slide",
-          type === "board" && "bg-board-soft text-board",
-          type === "base" && "bg-baseunit-soft text-baseunit"
-        )}
-      >
-        <Icon />
-      </span>
-    </Tooltip>
+  const icon = (
+    <span
+      aria-label={label}
+      className={cn(
+        "inline-flex size-5 items-center justify-center rounded-md [&_svg]:size-3",
+        type === "sheet" && "bg-sheet-soft text-sheet",
+        type === "doc" && "bg-doc-soft text-doc",
+        type === "slide" && "bg-slide-soft text-slide",
+        type === "board" && "bg-board-soft text-board",
+        type === "base" && "bg-baseunit-soft text-baseunit"
+      )}
+    >
+      <Icon />
+    </span>
   );
+  return showTooltip ? <Tooltip content={label}>{icon}</Tooltip> : icon;
 }
 
 export function worktreeStateLabel(

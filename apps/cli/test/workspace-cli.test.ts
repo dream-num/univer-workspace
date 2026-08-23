@@ -126,8 +126,16 @@ describe("Workspace CLI", () => {
       readonly workerPid?: string;
     }> = [];
     const collaboration = new CollaborationSocketFixture();
+    const cliAuthorization = { exchanges: 0 };
     const server = createServer((request, response) => {
-      void handleWorkspaceRequest(request, response, fixture, requests, collaboration);
+      void handleWorkspaceRequest(
+        request,
+        response,
+        fixture,
+        requests,
+        collaboration,
+        cliAuthorization,
+      );
     });
     server.on("upgrade", (request, socket) => collaboration.upgrade(request, socket));
     await new Promise<void>((resolve, reject) => {
@@ -194,17 +202,44 @@ describe("Workspace CLI", () => {
       });
       expect(daemonRestarted["pid"]).not.toBe(daemonStarted["pid"]);
 
-      const loggedIn = await runCli(
-        ["login", "--username", "alice", "--password-stdin", "--json"],
-        env,
-        "secret\n",
+      const loginHelp = await runCli(["login", "--help"], env);
+      expect(loginHelp.stdout).toContain("--complete");
+      expect(loginHelp.stdout).toContain("Do not ask the user for a password");
+
+      const loginInstructions = await runCli(["login"], env);
+      expect(loginInstructions.stdout).toContain("Browser approval required.");
+      expect(loginInstructions.stdout).toContain(
+        "This command has exited and is not waiting.",
       );
-      expect(JSON.parse(loggedIn.stdout)).toEqual({
+      expect(loginInstructions.stdout).toContain(
+        `${origin}/cli-login?userCode=ABCD-EFGH`,
+      );
+      expect(loginInstructions.stdout).toContain("univer-workspace-cli login --complete");
+
+      const authorization = await runCli(["login", "--json"], env);
+      expect(JSON.parse(authorization.stdout)).toMatchObject({
+        status: "authorization_required",
         origin,
-        subject: { id: "user-1", name: "Alice" },
+        userCode: "ABCD-EFGH",
+        verificationUrl: `${origin}/cli-login?userCode=ABCD-EFGH`,
+        nextCommand: "univer-workspace-cli login --complete",
       });
       const sessionPath = workspaceSessionPath(env);
       expect((await stat(sessionPath)).mode & 0o777).toBe(0o600);
+
+      const stillPending = await runCli(["login", "--complete", "--json"], env);
+      expect(JSON.parse(stillPending.stdout)).toMatchObject({
+        status: "authorization_pending",
+        origin,
+        userCode: "ABCD-EFGH",
+      });
+
+      const loggedIn = await runCli(["login", "--complete", "--json"], env);
+      expect(JSON.parse(loggedIn.stdout)).toEqual({
+        status: "authenticated",
+        origin,
+        subject: { id: "user-1", name: "Alice" },
+      });
 
       const identity = await runCli(["whoami", "--json"], env);
       expect(JSON.parse(identity.stdout)).toEqual({
@@ -531,6 +566,7 @@ async function handleWorkspaceRequest(
   },
   requests: Array<{ path: string; role?: string; workerPid?: string }>,
   collaboration: CollaborationSocketFixture,
+  cliAuthorization: { exchanges: number },
 ): Promise<void> {
   requests.push({
     path: request.url ?? "",
@@ -545,6 +581,39 @@ async function handleWorkspaceRequest(
     const body = await readJsonBody(request);
     if (body["username"] !== "alice" || body["password"] !== "secret") {
       writeJson(response, 401, { error: { code: "INVALID_CREDENTIALS" } });
+      return;
+    }
+    writeJson(
+      response,
+      200,
+      { authenticated: true, user: { displayName: "Alice", id: "user-1" } },
+      { "set-cookie": "workspace_session=test; Path=/; HttpOnly" },
+    );
+    return;
+  }
+  if (request.method === "POST" && request.url === "/api/auth/cli/authorizations") {
+    writeJson(response, 201, {
+      deviceCode: "a".repeat(43),
+      userCode: "ABCD-EFGH",
+      verificationUri: "/cli-login",
+      verificationUriComplete: "/cli-login?userCode=ABCD-EFGH",
+      expiresIn: 600,
+      interval: 2,
+    });
+    return;
+  }
+  if (
+    request.method === "POST" &&
+    request.url === "/api/auth/cli/authorizations/exchange"
+  ) {
+    const body = await readJsonBody(request);
+    if (body["deviceCode"] !== "a".repeat(43)) {
+      writeJson(response, 400, { error: { code: "CLI_AUTHORIZATION_INVALID" } });
+      return;
+    }
+    cliAuthorization.exchanges += 1;
+    if (cliAuthorization.exchanges === 1) {
+      writeJson(response, 202, { status: "pending" });
       return;
     }
     writeJson(

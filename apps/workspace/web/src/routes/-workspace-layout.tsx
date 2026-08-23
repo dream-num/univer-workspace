@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate } from "@tanstack/react-router";
+import { UniverCliIcon } from "@univerjs/icons";
 import {
   Bot,
   ChevronDown,
@@ -29,7 +30,10 @@ import {
 import { sessionQueryKey, sessionQueryOptions } from "../features/auth";
 import { spacesQueryKey, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceNavigationTree } from "../features/nodes";
-import { worktreeListQueryOptions } from "../features/worktrees";
+import {
+  useWorktreeChangeFeed,
+  worktreeListQueryOptions,
+} from "../features/worktrees";
 import { api } from "../shared/api/client";
 import { apiError } from "../shared/api/errors";
 import { useI18n, type MessageKey } from "../shared/i18n";
@@ -154,6 +158,7 @@ export function WorkspaceLayout({
     ...worktreeListQueryOptions("active"),
     enabled: session.data?.authenticated === true,
   });
+  useWorktreeChangeFeed(session.data?.authenticated === true);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { language, setLanguage, t } = useI18n();
@@ -570,14 +575,10 @@ export function WorkspaceLayout({
 
 function BrandMark() {
   return (
-    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 shadow-xs">
-      <svg width="17" height="17" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <path
-          d="M7 6v10.2a9 9 0 0 0 18 0V6h-5v9.9a4 4 0 0 1-8 0V6z"
-          fill="white"
-        />
-      </svg>
-    </span>
+    <UniverCliIcon
+      aria-hidden="true"
+      className="size-6 shrink-0 text-foreground"
+    />
   );
 }
 

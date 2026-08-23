@@ -405,7 +405,7 @@ describe("Univer unit store", () => {
             Record<string, unknown>
           >,
         });
-        const loaded = await runtime.service.getUnit(
+        const loaded = await runtime.service.getUnitLoadData(
           {
             unitID: serverUnitId,
             type: initial.type,
