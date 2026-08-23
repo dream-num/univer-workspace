@@ -56,6 +56,108 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionView'
+  /api/auth/authorize:
+    get:
+      tags:
+        - Authentication
+      operationId: oauthAuthorize
+      summary: Start an OAuth-style authorization for a registered client.
+      security:
+        - {}
+        - sessionCookie: []
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{32,256}$
+        - name: code_challenge
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to Workspace login or back to the registered redirect_uri with a one-time code.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/auth/token:
+    post:
+      tags:
+        - Authentication
+      operationId: oauthToken
+      summary: Exchange a one-time authorization code for a registered client identity.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+                - client_id
+                - client_secret
+                - redirect_uri
+                - code_verifier
+              properties:
+                grant_type:
+                  type: string
+                code:
+                  type: string
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                redirect_uri:
+                  type: string
+                code_verifier:
+                  type: string
+      responses:
+        '200':
+          description: The registered client identity.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                  expires_in:
+                    type: integer
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid client secret or PKCE verifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/logout:
     post:
       tags:
