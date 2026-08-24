@@ -1,5 +1,7 @@
 # Univer Workspace
 
+English | [简体中文](README.zh-CN.md)
+
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 Univer Workspace is the product repository for the Workspace browser and server,

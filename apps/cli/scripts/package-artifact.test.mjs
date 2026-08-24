@@ -18,6 +18,7 @@ test("generates a publishable CLI-only manifest", () => {
       name: "univer-workspace-cli",
       version: "0.0.0",
       private: true,
+      license: "Apache-2.0",
       description: "Workspace CLI",
       engines: { node: ">=22.12.0" },
       dependencies: {
@@ -37,6 +38,7 @@ test("generates a publishable CLI-only manifest", () => {
   assert.deepEqual(result.dependencies, externalDependencies);
   assert.deepEqual(result.engines, { node: ">=22.12.0" });
   assert.equal(result.description, "Workspace CLI");
+  assert.equal(result.license, "Apache-2.0");
   assert.equal(result.devDependencies, undefined);
   assert.equal(result.version, "0.4.0");
   assert.deepEqual(result.publishConfig, { registry: PUBLISH_REGISTRY });

@@ -12,13 +12,14 @@ export const EXTERNAL_RUNTIME_DEPENDENCIES = [
   "puppeteer-core",
 ];
 
-export const PACKAGE_FILES = ["bin", "dist", "skill-data", "README.md"];
+export const PACKAGE_FILES = ["LICENSE", "README.md", "bin", "dist", "skill-data"];
 export const SOURCE_PACKAGE_VERSION = "0.0.0";
 export const PUBLISH_REGISTRY = "https://insider-npm-registry.univer.work/";
 const EXACT_SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 
 export async function assemblePackageArtifact(options) {
+  const repositoryRoot = resolve(options.appRoot, "..", "..");
   const sourcePackageJson = JSON.parse(
     await readFile(join(options.appRoot, "package.json"), "utf8"),
   );
@@ -35,6 +36,7 @@ export async function assemblePackageArtifact(options) {
       join(options.packageRoot, "dist", "render-runtime"),
     ),
     copyDirectory(join(options.appRoot, "skill-data"), join(options.packageRoot, "skill-data")),
+    cp(join(repositoryRoot, "LICENSE"), join(options.packageRoot, "LICENSE")),
     cp(join(options.appRoot, "README.md"), join(options.packageRoot, "README.md")),
   ]);
   await writeFile(

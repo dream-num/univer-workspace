@@ -15,6 +15,7 @@ const packageRoot = resolve(process.argv[2] ?? "package-dist");
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
 
 assertEqual(packageJson.private, false, "private");
+assertEqual(packageJson.license, "Apache-2.0", "license");
 assertEqual(packageJson.publishConfig?.registry, PUBLISH_REGISTRY, "publish registry");
 assertEqual(packageJson.engines?.node, ">=22.12.0", "Node engine");
 assertEqual(
@@ -30,6 +31,7 @@ assertEqual(
 );
 
 for (const path of [
+  "LICENSE",
   "README.md",
   "bin/univer-workspace-cli.js",
   "dist/main.js",
