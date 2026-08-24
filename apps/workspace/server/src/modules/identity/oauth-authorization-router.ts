@@ -1,4 +1,4 @@
-import { json, Router, urlencoded } from "express";
+import { json, Router, urlencoded } from "express"
 import { ApplicationError } from "../../middleware/errors.js";
 import type { IdentityModule } from "./identity.service.js";
 import {
