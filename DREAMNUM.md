@@ -2,6 +2,9 @@
 
 > Owns the Univer Workspace product and its agent-ready CLI for organizing, collaborating on, and automating Univer content.
 
+The repository source is licensed under Apache-2.0. Runtime development credentials,
+Pro SDK dependencies, and artifact delivery retain their separately defined policies.
+
 ## Responsibilities
 
 ### Owns

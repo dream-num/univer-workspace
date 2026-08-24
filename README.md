@@ -1,5 +1,7 @@
 # Univer Workspace
 
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 Univer Workspace is the product repository for the Workspace browser and server,
 its HTTP contract, the Workspace CLI, and the private reference-provider package.
 The product organizes collaborative office content, access, sharing, Trash, history,
@@ -96,3 +98,7 @@ The Workspace browser and CLI contain synchronized copies of the approved runtim
 development credential for local use. It is rotated every 90 days and is not the
 repository software license. Set `VITE_UNIVER_LICENSE` for browser builds or
 `UNIVER_LICENSE` for the CLI to override it.
+
+## License
+
+[Apache-2.0](LICENSE)
