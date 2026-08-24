@@ -109,15 +109,15 @@ describe("OAuth authorization", () => {
 
     const token = await fetch(`${origin}/api/auth/token`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
         grant_type: "authorization_code",
-        code,
+        code: code ?? "",
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
         redirect_uri: CALLBACK_URL,
         code_verifier: CODE_VERIFIER,
-      }),
+      }).toString(),
     });
     expect(token.status).toBe(200);
     const body = (await token.json()) as {

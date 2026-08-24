@@ -1,4 +1,4 @@
-import { json, Router } from "express";
+import { json, Router, urlencoded } from "express"
 import { ApplicationError } from "../../middleware/errors.js";
 import type { IdentityModule } from "./identity.service.js";
 import {
@@ -22,6 +22,7 @@ export function createOAuthAuthorizationRouter(options: {
 }): Router {
   const router = Router();
   router.use(json({ limit: "1mb" }));
+  router.use(urlencoded({ extended: false, limit: "1mb" }));
   const clients = new Map<string, OAuthClient>();
   for (const client of options.oauthClients?.clients ?? []) {
     clients.set(client.clientId, client);
