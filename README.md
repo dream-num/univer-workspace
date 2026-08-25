@@ -1,55 +1,175 @@
+<div align="center">
+
 # Univer Workspace
+
+**An open-source Office workspace where people and AI agents create, collaborate, and review together.**
+
+[Live Workspace](https://workspace.univer.plus/) · [Univer Docs](https://docs.univer.ai/) · [CLI guide](apps/cli/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
+[![pnpm](https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white)](package.json)
 
 English | [简体中文](README.zh-CN.md)
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+</div>
 
-Univer Workspace is the product repository for the Workspace browser and server,
-its HTTP contract, the Workspace CLI, and the private reference-provider package.
-The product organizes collaborative office content, access, sharing, Trash, history,
-and isolated Worktree changes.
+Univer Workspace is a deployable knowledge and collaboration product built on the
+[Univer SDK](https://docs.univer.ai/). It combines a human-facing Browser, a shared
+Server, and an agent-ready CLI so people and AI agents can work on the same Sheets,
+Docs, Slides, Bases, and Boards.
+
+Agents work in isolated Worktrees, verify their changes, and hand the result to a
+person for review. People stay in control of what is merged into the shared trunk.
+
+## Why Univer Workspace
+
+| For people                                              | For agents                                                         | For operators                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Organize content in Personal and Team Spaces            | Create and edit rich Office content through the Univer Facade API  | Deploy one Browser and Server application                            |
+| Co-edit Sheets, Docs, Slides, Bases, and Boards         | Inspect structured data, render screenshots, and run layout checks | Keep product, collaboration, and Blob data under application control |
+| Share content with role- and node-aware access control  | Discover version-matched Skills and APIs offline                   | Integrate password, GitHub, Discord, or application OAuth login      |
+| Use Recent, Trash, file import/export, and review views | Work through multiple rounds without changing trunk                | Operate a documented HTTP API with explicit recovery boundaries      |
+
+## How it works
+
+```mermaid
+flowchart LR
+    Human([Human]) --> Browser[Workspace Browser]
+    Agent([AI agent]) --> CLI[Workspace CLI]
+    Browser --> Server[Workspace Server]
+    CLI --> Server
+    Server --> Product[(Product data)]
+    Server --> Collaboration[(Collaboration data)]
+    Server --> Blobs[(Blob and asset bytes)]
+```
+
+The Browser is the interactive editing and review surface. The CLI gives agents a
+structured way to load, understand, edit, validate, and render the same content. The
+Server resolves authoritative identity and permissions, owns Workspace product
+workflows, and composes the Univer Collaboration SDK.
+
+Worktree turns agent editing into an explicit review workflow:
+
+```text
+create Worktree
+→ agent edits and verifies an isolated draft
+→ Ready
+→ human reviews in the Browser
+→ Merge or Reopen
+→ trunk
+```
+
+Intermediate changes remain isolated from shared content until a person accepts
+them. See the [CLI guide](apps/cli/README.md) for the complete product workflow.
+
+## Quick start
+
+### Requirements
+
+- Node.js 24 or newer
+- pnpm 10
+- Access to the internal Univer npm registry
+
+Install dependencies and prepare the application configuration:
+
+```bash
+pnpm install
+cp apps/workspace/.env.example apps/workspace/.env
+```
+
+Start the Server:
+
+```bash
+pnpm workspace:dev:server
+```
+
+In another terminal, start the Browser development server:
+
+```bash
+pnpm workspace:dev:web
+```
+
+Open <http://127.0.0.1:5173>. Vite provides hot module replacement and proxies API
+and WebSocket traffic to the Server at <http://127.0.0.1:3020>.
+
+The Server can also serve the latest built Browser from port 3020 when
+`apps/workspace/dist/public` exists. Its product API is available at
+<http://127.0.0.1:3020/api-docs> and
+<http://127.0.0.1:3020/openapi.yaml>.
+
+Configuration, authentication, storage, Docker, and database migration details live
+in the [Workspace application guide](apps/workspace/README.md).
+
+## Use the Workspace CLI
+
+Install the agent-facing CLI from the internal registry:
+
+```bash
+npm install --global univer-workspace-cli@latest \
+  --registry=https://insider-npm-registry.univer.work/
+```
+
+The CLI targets <https://workspace.univer.plus/> by default. Point it at another
+deployment when needed, then begin browser-approved login:
+
+```bash
+univer-workspace-cli config set workspace.origin <origin>
+univer-workspace-cli login
+```
+
+After the user approves the displayed URL and verification code, complete the
+one-time exchange:
+
+```bash
+univer-workspace-cli login --complete
+```
+
+The installed package includes version-matched Skills, structured JSON output,
+Facade API discovery, content inspection, rendering, Office exchange, and Worktree
+workflows. See the [CLI guide](apps/cli/README.md) for the complete usage and login
+contract.
 
 ## Repository layout
 
 ```text
-apps/workspace                 Workspace browser, server, and HTTP contract
-apps/cli                       Agent-ready Workspace CLI
-packages/reference-provider   Private browser reference-provider policy
+apps/workspace                 Workspace Browser, Server, HTTP contract, and deployment app
+apps/cli                       Agent-ready remote Workspace automation application
+packages/reference-provider   Private Browser-only referenced-Unit policy
+scripts                       SDK version and local CLI release tooling
 ```
 
-The repository consumes version-matched `@univer-cli/*`, `@univerjs/*`, and
-`@univerjs-pro/*` packages from the internal npm registry. The application and
-reference provider are private workspace packages. Only `univer-workspace-cli`
-is packaged for the internal npm registry.
+This repository is the product composition root, not a replacement for the upstream
+SDKs. Univer Runtime owns the Unit model, rendering, Facade APIs, and Office content
+capabilities. Univer Collaboration SDK owns snapshots, revisions, OT, realtime
+collaboration, and Worktree protocol contracts. Univer CLI SDK owns the reusable
+headless runtime, execution, inspection, and rendering capabilities.
 
-## Development
+Workspace owns product identity, Spaces, hierarchy, ACLs, sharing, Trash, Recent,
+Blob storage policy, remote workflows, and deployment. The reference-provider package
+is a private Browser implementation detail, not a third public application or SDK.
 
-Requirements:
+## Architecture principles
 
-- Node.js 24 or newer
-- pnpm 10
-- access to the internal Univer npm registry
+- **One authoritative Server.** Client-provided users, roles, Resources, Units,
+  Worktrees, and revisions are never trusted as authority.
+- **Separate storage boundaries.** Product data, collaboration state, and Blob bytes
+  have distinct owners and are coordinated through durable, idempotent operations.
+- **Published SDK contracts only.** The repository consumes public package exports and
+  never depends on adjacent source checkouts.
+- **One exact SDK baseline.** Version-coupled `@univer-cli/*`, `@univerjs/*`, and
+  `@univerjs-pro/*` packages always move together.
+- **Contract-first HTTP.** OpenAPI source, generated types, Server routes, Browser, and
+  CLI must describe the same behavior.
 
-```bash
-pnpm install
-pnpm workspace:dev:server
-pnpm workspace:dev:web
-```
+Read the [technical architecture](apps/workspace/docs/architecture.md),
+[application design](apps/workspace/docs/application-design.md), and
+[data model](apps/workspace/docs/data-model.md) before changing these boundaries.
 
-`workspace:dev:server` watches the backend and listens on
-<http://127.0.0.1:3020>. When `apps/workspace/dist/public` exists, the server also
-serves that last-built static web application; it does not rebuild or hot-reload web
-changes.
+## Development and verification
 
-`workspace:dev:web` starts the Vite web development server at
-<http://127.0.0.1:5173>, enables hot module replacement, and proxies API and WebSocket
-requests to port 3020. Run both commands and open port 5173 for web development.
-Use port 3020 alone for backend work or to inspect the latest built web application.
-
-See [the Workspace application README](apps/workspace/README.md) for configuration,
-deployment, and data migration details.
-
-## Verification
+Run the smallest relevant check while iterating, then use the repository-level suite
+before claiming a complete change:
 
 ```bash
 pnpm typecheck
@@ -59,48 +179,62 @@ pnpm --filter @univerjs/univer-workspace test:production-import
 pnpm package:workspace-cli
 ```
 
-All version-coupled Univer SDK packages use one exact release. Update them and the
-lockfile together:
+HTTP contract changes also require:
+
+```bash
+pnpm --filter @univerjs/univer-workspace api:verify
+```
+
+Update every version-coupled Univer dependency and the lockfile with the repository
+script rather than editing individual manifests:
 
 ```bash
 pnpm update:sdk --sdk_version <exact-sdk-version>
 ```
 
-## Delivery
+## Delivery model
 
-The source manifest for `univer-workspace-cli` remains at version `0.0.0`; release
-versions are injected while building the package and must match the installed CLI
-runtime.
+The CLI and Workspace deployment are delivered independently from the same source:
 
-- Pushing a stable `vX.Y.Z` tag whose commit belongs to `main` publishes
-  `univer-workspace-cli@X.Y.Z` to insider-npm with the `latest` dist-tag.
-- The `Release CLI to insider-npm` workflow can be dispatched manually from `main`
-  with an exact `X.Y.Z-insider.<suffix>` version for the `insiders` dist-tag.
-- Development packages use `X.Y.Z-dev.<suffix>` and can only be published locally:
+- A stable `vX.Y.Z` tag on `main` publishes `univer-workspace-cli@X.Y.Z` to the
+  internal registry with the `latest` dist-tag. The source manifest remains `0.0.0`;
+  packaging injects the release version.
+- A manual workflow on `main` publishes exact `X.Y.Z-insider.<suffix>` builds to the
+  `insiders` channel. Local development releases use `X.Y.Z-dev.<suffix>` and the
+  `dev` channel.
+- Workspace deployment is a separate manual workflow. It builds either an existing
+  stable tag or an exact commit as `sha-<commit>`. Pushing a release tag does not
+  deploy the Server.
 
-  ```bash
-  pnpm release:cli:dev -- --version X.Y.Z-dev.<suffix>
-  ```
+Stable and insiders CLI releases validate the repository-wide SDK baseline and test
+the actual package artifact before publication. The current workflow publishes only
+to insider-npm; public npm promotion is a separate concern.
 
-The `latest` and `insiders` paths verify that every version-coupled Univer dependency
-uses one exact SDK baseline before packaging. The local `dev` path deliberately skips
-that graph check. All three paths build, verify, install, and smoke-test the actual
-tarball before publication. This workflow ends at insider-npm and does not perform a
-Public Registry Promotion.
+## Documentation
 
-Workspace deployment is a separate manual workflow. It can build a selected existing
-stable `vX.Y.Z` release tag and use that tag for the image, or, when no release tag is
-provided, build the workflow dispatch commit and tag the image as `sha-<commit>`. It
-hands the resulting image to the selected deployment environment. Pushing a tag does
-not deploy the server.
+| Resource                                                            | Scope                                                                  |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [Univer Runtime documentation](https://docs.univer.ai/)             | Browser Runtime, presets, plugins, Facade API, and editor capabilities |
+| [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades           |
+| [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract             |
+| [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries               |
+| [HTTP contract](apps/workspace/contracts/http/README.md)            | Product API source and generation workflow                             |
+| [Reference-provider package](packages/reference-provider/README.md) | Private Browser referenced-Unit policy                                 |
+
+## Contributing
+
+Issues and pull requests are welcome. Before changing code, read [AGENTS.md](AGENTS.md)
+and the README or design document closest to the target. Preserve unrelated changes,
+do not edit generated files by hand, and include the verification required by the
+affected boundary.
 
 ## Runtime development license
 
-The Workspace browser and CLI contain synchronized copies of the approved runtime
-development credential for local use. It is rotated every 90 days and is not the
-repository software license. Set `VITE_UNIVER_LICENSE` for browser builds or
-`UNIVER_LICENSE` for the CLI to override it.
+The Browser and CLI contain synchronized copies of the approved runtime development
+credential for local use. It rotates every 90 days and is not the repository software
+license. Set `VITE_UNIVER_LICENSE` for Browser builds or `UNIVER_LICENSE` for the CLI
+to override it.
 
 ## License
 
-[Apache-2.0](LICENSE)
+Univer Workspace is licensed under [Apache-2.0](LICENSE).

@@ -1,50 +1,163 @@
+<div align="center">
+
 # Univer Workspace
+
+**一个让人类与 AI Agent 共同创作、协作和审阅的开源 Office 工作空间。**
+
+[在线 Workspace](https://workspace.univer.plus/) · [Univer 文档](https://docs.univer.ai/) · [CLI 指南](apps/cli/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
+[![pnpm](https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white)](package.json)
 
 [English](README.md) | 简体中文
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+</div>
 
-Univer Workspace 是 Workspace Browser、Server、HTTP 合同、Workspace CLI 和私有
-reference-provider package 的产品仓库。产品用于组织协同办公内容，并提供访问控制、分享、
-回收站、历史记录和隔离的 Worktree 变更。
+Univer Workspace 是一个基于 [Univer SDK](https://docs.univer.ai/) 构建、可独立部署的知识管理与
+团队协作产品。它将面向人类的 Browser、共享 Server 与面向 Agent 的 CLI 组合在一起，让人类和
+AI Agent 能够共同处理 Sheet、Doc、Slide、Base 与 Board。
+
+Agent 在隔离的 Worktree 中工作、验证修改，再把结果交给人类审阅；只有经过确认的内容才会合入
+共享 trunk。
+
+## 为什么选择 Univer Workspace
+
+| 面向人类                                     | 面向 Agent                                          | 面向运维                                    |
+| -------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
+| 使用个人与团队 Space 组织内容                | 通过 Univer Facade API 创建、修改丰富的 Office 内容 | 部署一套 Browser 与 Server 应用             |
+| 共同编辑 Sheet、Doc、Slide、Base 与 Board    | 检查结构化数据、渲染截图并执行布局检查              | 自主管理产品数据、协同数据与 Blob 数据      |
+| 通过角色与 Node 级权限控制分享和访问         | 离线发现版本匹配的 Skill 与 API                     | 接入密码、GitHub、Discord 或应用 OAuth 登录 |
+| 使用最近访问、回收站、文件导入导出与审阅视图 | 多轮修改而不影响 trunk                              | 运行具备明确恢复边界、文档完备的 HTTP API   |
+
+## 工作原理
+
+```mermaid
+flowchart LR
+    Human([人类]) --> Browser[Workspace Browser]
+    Agent([AI Agent]) --> CLI[Workspace CLI]
+    Browser --> Server[Workspace Server]
+    CLI --> Server
+    Server --> Product[(产品数据)]
+    Server --> Collaboration[(协同数据)]
+    Server --> Blobs[(Blob 与 Asset 字节)]
+```
+
+Browser 是交互式编辑和审阅界面；CLI 为 Agent 提供加载、理解、修改、验证和渲染同一份内容的
+结构化入口；Server 解析权威身份与权限、拥有 Workspace 产品 workflow，并组合 Univer
+Collaboration SDK。
+
+Worktree 将 Agent 编辑转化为边界清晰的审阅流程：
+
+```text
+创建 Worktree
+→ Agent 编辑并验证隔离草稿
+→ Ready
+→ 人类在 Browser 中审阅
+→ Merge 或 Reopen
+→ trunk
+```
+
+在人类接受之前，中间修改不会进入共享内容。完整产品 workflow 见
+[CLI 指南](apps/cli/README.md)。
+
+## 快速开始
+
+### 环境要求
+
+- Node.js 24 或更高版本
+- pnpm 10
+- Univer 内部 npm registry 的访问权限
+
+安装依赖并准备应用配置：
+
+```bash
+pnpm install
+cp apps/workspace/.env.example apps/workspace/.env
+```
+
+启动 Server：
+
+```bash
+pnpm workspace:dev:server
+```
+
+在另一个终端启动 Browser 开发服务器：
+
+```bash
+pnpm workspace:dev:web
+```
+
+打开 <http://127.0.0.1:5173>。Vite 提供热更新，并将 API 与 WebSocket 流量代理到
+<http://127.0.0.1:3020> 的 Server。
+
+当 `apps/workspace/dist/public` 存在时，Server 也可以在 3020 端口提供最近一次构建的 Browser。
+产品 API 文档位于 <http://127.0.0.1:3020/api-docs> 和
+<http://127.0.0.1:3020/openapi.yaml>。
+
+配置、认证、存储、Docker 与数据库迁移的详细说明见
+[Workspace 应用指南](apps/workspace/README.md)。
+
+## 使用 Workspace CLI
+
+从内部 registry 安装面向 Agent 的 CLI：
+
+```bash
+npm install --global univer-workspace-cli@latest \
+  --registry=https://insider-npm-registry.univer.work/
+```
+
+CLI 默认连接 <https://workspace.univer.plus/>。需要使用其他部署时，先修改目标 origin，再开始
+需要 Browser 确认的登录流程：
+
+```bash
+univer-workspace-cli config set workspace.origin <origin>
+univer-workspace-cli login
+```
+
+用户确认命令输出的 URL 与验证码后，完成一次性交换：
+
+```bash
+univer-workspace-cli login --complete
+```
+
+安装包包含版本匹配的 Skill、结构化 JSON 输出、Facade API 发现、内容检查、渲染、Office
+文件交换与 Worktree workflow。完整用法和登录合同见 [CLI 指南](apps/cli/README.md)。
 
 ## 仓库结构
 
 ```text
-apps/workspace                 Workspace Browser、Server 和 HTTP 合同
-apps/cli                       面向 Agent 的 Workspace CLI
-packages/reference-provider   Browser 私有 reference-provider policy
+apps/workspace                 Workspace Browser、Server、HTTP contract 与部署应用
+apps/cli                       面向 Agent 的远程 Workspace 自动化应用
+packages/reference-provider   仅供 Browser 使用的私有 referenced-Unit policy
+scripts                       SDK 版本与 CLI 本地发布工具
 ```
 
-本仓库从内部 npm registry 使用版本匹配的 `@univer-cli/*`、`@univerjs/*` 和
-`@univerjs-pro/*` package。Workspace 应用和 reference provider 都是 private workspace
-package；只有 `univer-workspace-cli` 会打包并发布到内部 npm registry。
+本仓库是产品的 composition root，不重新实现上游 SDK。Univer Runtime 拥有 Unit 模型、渲染、
+Facade API 与 Office 内容能力；Univer Collaboration SDK 拥有 snapshot、revision、OT、实时协同与
+Worktree 协议合同；Univer CLI SDK 拥有可复用的 headless runtime、执行、检查与渲染能力。
 
-## 开发
+Workspace 拥有产品身份、Space、目录层级、ACL、分享、回收站、最近访问、Blob 存储策略、远程
+workflow 与部署。reference-provider package 只是 Browser 的私有实现，不是第三个对外应用或 SDK。
 
-环境要求：
+## 架构原则
 
-- Node.js 24 或更高版本
-- pnpm 10
-- 内部 Univer npm registry 的访问权限
+- **一个权威 Server。** 不把客户端提供的 User、Role、Resource、Unit、Worktree 或 revision
+  当作权威信息。
+- **分离存储边界。** 产品数据、协同状态与 Blob 字节各有明确所有者，并通过持久化、幂等的
+  Operation 协调。
+- **只使用已发布的 SDK 合同。** 仓库只消费 package 的公开 export，不依赖相邻源码 checkout。
+- **一个精确 SDK baseline。** 所有版本耦合的 `@univer-cli/*`、`@univerjs/*` 与
+  `@univerjs-pro/*` package 始终一起升级。
+- **HTTP contract first。** OpenAPI 源文件、生成类型、Server route、Browser 与 CLI 必须描述
+  同一行为。
 
-```bash
-pnpm install
-pnpm workspace:dev:server
-pnpm workspace:dev:web
-```
+修改这些边界前，请阅读[技术架构](apps/workspace/docs/architecture.md)、
+[应用层设计](apps/workspace/docs/application-design.md)与[数据模型](apps/workspace/docs/data-model.md)。
 
-`workspace:dev:server` 会监听后端变更，并在 <http://127.0.0.1:3020> 提供服务。
-如果 `apps/workspace/dist/public` 已存在，Server 也会提供最近一次构建的静态 Web 应用，
-但不会重新构建 Web 源码或为其启用热更新。
+## 开发与验证
 
-`workspace:dev:web` 会在 <http://127.0.0.1:5173> 启动 Vite 开发服务器，启用热更新，
-并将 API 与 WebSocket 请求代理到 3020 端口。Web 开发时请同时运行两个命令并访问 5173
-端口；只进行后端开发或查看最近构建的 Web 应用时，可以直接使用 3020 端口。
-
-配置、部署和数据迁移说明见 [Workspace 应用 README](apps/workspace/README.md)。
-
-## 验证
+开发过程中先运行最小相关检查；在宣称完整变更前，运行合适的仓库级验证：
 
 ```bash
 pnpm typecheck
@@ -54,44 +167,54 @@ pnpm --filter @univerjs/univer-workspace test:production-import
 pnpm package:workspace-cli
 ```
 
-所有与版本耦合的 Univer SDK package 必须使用同一个精确版本。升级时同时更新依赖和
-lockfile：
+修改 HTTP contract 时还需要运行：
+
+```bash
+pnpm --filter @univerjs/univer-workspace api:verify
+```
+
+升级 Univer SDK 时使用仓库脚本一次性更新所有版本耦合依赖与 lockfile，不要单独编辑 manifest：
 
 ```bash
 pnpm update:sdk --sdk_version <exact-sdk-version>
 ```
 
-## 交付
+## 交付模型
 
-`univer-workspace-cli` 源码 manifest 的版本固定为 `0.0.0`；打包时会注入发布版本，且该版本
-必须与 CLI runtime 一致。
+CLI 与 Workspace 部署基于同一份源码，但各自独立交付：
 
-- 推送属于 `main` 的稳定 `vX.Y.Z` tag，会将 `univer-workspace-cli@X.Y.Z` 发布到
-  insider-npm，并使用 `latest` dist-tag。
-- 可以在 `main` 手动运行 `Release CLI to insider-npm` workflow，并使用精确的
-  `X.Y.Z-insider.<suffix>` 版本发布 `insiders` dist-tag。
-- 开发包使用 `X.Y.Z-dev.<suffix>`，且只能在本地发布：
+- `main` 上的稳定 `vX.Y.Z` tag 会把 `univer-workspace-cli@X.Y.Z` 发布到内部 registry，并使用
+  `latest` dist-tag。源码 manifest 始终保持 `0.0.0`，发布版本由打包过程注入。
+- `main` 上的手动 workflow 使用精确的 `X.Y.Z-insider.<suffix>` 版本发布 `insiders` 通道；本地
+  开发版本使用 `X.Y.Z-dev.<suffix>` 与 `dev` 通道。
+- Workspace 使用独立的手动部署 workflow，构建已有稳定 tag，或把精确 commit 标记为
+  `sha-<commit>`。推送 release tag 不会部署 Server。
 
-  ```bash
-  pnpm release:cli:dev -- --version X.Y.Z-dev.<suffix>
-  ```
+稳定版与 insiders CLI 发布会检查整个仓库的 SDK baseline，并在发布前验证实际 package artifact。
+当前 workflow 只发布到 insider-npm；Public npm Promotion 属于独立流程。
 
-`latest` 和 `insiders` 流程会在打包前验证所有版本耦合的 Univer 依赖是否使用同一个精确
-SDK baseline。本地 `dev` 流程明确跳过该依赖图检查。三个流程都会构建、检查、安装并冒烟
-测试实际 tarball，然后才允许发布。当前 workflow 只写入 insider-npm，不执行 Public Registry
-Promotion。
+## 文档
 
-Workspace 部署使用独立的手动 workflow。它可以构建一个已存在的稳定 `vX.Y.Z` release tag，
-并将该 tag 用作 image tag；未指定 release tag 时，则构建 workflow dispatch 对应的 commit，
-并使用 `sha-<commit>` image tag。构建完成后，image 会交给选定的部署环境。推送 tag 不会自动
-部署 Server。
+| 资源                                                                | 范围                                                     |
+| ------------------------------------------------------------------- | -------------------------------------------------------- |
+| [Univer Runtime 文档](https://docs.univer.ai/)                      | Browser Runtime、Preset、Plugin、Facade API 与编辑器能力 |
+| [Workspace 应用指南](apps/workspace/README.md)                      | 配置、认证、存储、Docker 与升级                          |
+| [Workspace CLI 指南](apps/cli/README.md)                            | 安装、登录、Agent workflow 与 package 合同               |
+| [技术架构](apps/workspace/docs/architecture.md)                     | Browser、Server、存储、OpenAPI 与模块边界                |
+| [HTTP contract](apps/workspace/contracts/http/README.md)            | 产品 API 源文件与生成流程                                |
+| [Reference-provider package](packages/reference-provider/README.md) | Browser 私有 referenced-Unit policy                      |
+
+## 参与贡献
+
+欢迎提交 Issue 与 Pull Request。修改代码前，请阅读 [AGENTS.md](AGENTS.md) 和目标附近的 README
+或设计文档；保留无关改动，不手工编辑生成文件，并完成受影响边界要求的验证。
 
 ## Runtime 开发 License
 
-Workspace Browser 和 CLI 包含经过批准、内容同步的 runtime 开发凭据，用于本地开发。该凭据
-每 90 天轮换一次，并不是本仓库的软件许可证。Browser 构建可以通过
-`VITE_UNIVER_LICENSE` 覆盖，CLI 可以通过 `UNIVER_LICENSE` 覆盖。
+Browser 与 CLI 包含内容同步、经过批准的 runtime 开发凭据，用于本地开发。该凭据每 90 天轮换
+一次，并不是本仓库的软件许可证。Browser 构建可以通过 `VITE_UNIVER_LICENSE` 覆盖，CLI 可以
+通过 `UNIVER_LICENSE` 覆盖。
 
 ## License
 
-[Apache-2.0](LICENSE)
+Univer Workspace 使用 [Apache-2.0](LICENSE) 许可证。
