@@ -1899,89 +1899,89 @@ packages:
     resolution: {integrity: sha512-8mam4H1NHLtu7nmtalF7eyBH14QyOASmcxHhSfEoRyr0nP/YdoesEtU+uSRvMe96TW/HPTtkoKqQLl53N7UXMQ==}
 
   '@univer-cli/api-reference-command@1.0.0-beta.2':
-    resolution: {integrity: sha512-3BIP69s8v4P0k0b45OmooCkEqE733LMOAzoKXTm4FLwMuIyeslxujN+sp4jqBvEGvx+ZQM1CK6WojVpQ03Z8cw==}
+    resolution: {integrity: sha512-g9dlNMfjfotDqTi55xCaunGVBnzKRavAtCkHwo4bSs8h/fY3IasPRojXFQ3LbITMUEDvA+pGywpkFavfBSYMkg==}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/api-reference@1.0.0-beta.2':
-    resolution: {integrity: sha512-kgxcfv3x8qd4PZTdvEyPV/6ER+JwEShb8CGbjSn6v3fOdY0RmYrsSQ5aOvIkJqp0yST+hi8p2S1tPBQZ6nnHPg==}
+    resolution: {integrity: sha512-fwKOziQV4d3+b95EY8PP2LercK55H6q6z6yU+Dy7l/vZVsxHXXz9YAFI0WJQiDkZj7TJXjFYoRIQrb2tlyI93w==}
 
   '@univer-cli/config-command@1.0.0-beta.2':
-    resolution: {integrity: sha512-h4unyfJKVCtOaYRBxFhgjO/Tos29dffjyn89nnORYk9XzopUb+vRNuMZodOFuHNf+xx8LkOhJN2gEW8tMdajjw==}
+    resolution: {integrity: sha512-0y4S/7gZzYJy7Rfri2EC/xF1CiPldI8t5+UAgsRJjExTtA1AZbwe2KolM8x2Dey/MrHhdsYfYc91fwNG63Oklw==}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/config@1.0.0-beta.2':
-    resolution: {integrity: sha512-gDGJEZaWWd8uZQIDk7GMAW+4zz84MqqSkDExSWe/OJt0m6UtEAZTildBmAlwKcTEOkl5DS6ljTcRY7goRyyJPg==}
+    resolution: {integrity: sha512-uG6qVn4K9VGMhJDqikNesB7YOJRjh6Fs0PfjGvInJAY7bjVEwsbSo32J95XiYkOhUZUt4DYbSHUUJhvT1jHxGQ==}
 
   '@univer-cli/content-execution@1.0.0-beta.2':
-    resolution: {integrity: sha512-erQbffjZqbPueYL5GZFFfn/eLM6ad4xsWdDIxT8q+o7oKuL60td4zg35UT6nnkAwTaXf8eBMfc/MxyD9JLq6ow==}
+    resolution: {integrity: sha512-jL2koTK9BkkzTEGmvWnVyvikk6BsQP6tP9n8V6xf4nCfUXoGrAT+A5BsHoJURIFmVOMArdnJxz43liHEcARy8Q==}
 
   '@univer-cli/content-inspection-command@1.0.0-beta.2':
-    resolution: {integrity: sha512-12yv1oq8Dx2FBinHYN7aF9yLURDPSiHLnsWP40o8vBlSlrR0XF5reZ7zt1iH1S+o0E/qweF5lQDgfUTNYYP5iw==}
+    resolution: {integrity: sha512-JLkv8ufGZi2M+hWshVq9RxKjuMqoz9dI2DaZx7Xdn1BcXrGDAw3/YgtA4l5v3bjdmVY0qVyC+RjnVY5CpPBDKg==}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/content-inspection@1.0.0-beta.2':
-    resolution: {integrity: sha512-3I1FuQgRHdiHfeVqlf+1nS+YJvS6O7Mga4Eo6sJnkO6Wy/d0c+NNSV1swQh2oEgpwbFYrzO1pwjq+xOGVia4mg==}
+    resolution: {integrity: sha512-2a0rSBeAUxjzwoA4LuBxlPXwO5HeCmb2CpykEcEir1+n4rd8lB5GzqJ6U7MNZ9Ynl0Lw5LTK0V4SbXnbdnJA5g==}
 
   '@univer-cli/daemon-command@1.0.0-beta.2':
-    resolution: {integrity: sha512-N+ugGm6xrKe/25rbj2TNXmfynovcnrxkGbvIj1H1DL1UNZYgd9OimDHilrGcVyVjfHU/TLamCBQ3hWwv9XePrg==}
+    resolution: {integrity: sha512-ihj5qDvNzUmJPx1cmlUQMgE2AC5ceeNokT/cQxlSWhAiQd8JoK29odzy3KSO+UNhrcUU/sJ+3y0oHG5DI/AKgg==}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/daemon@1.0.0-beta.2':
-    resolution: {integrity: sha512-ibSw3mv69TU+SfowDCHU+kgmuDqdWzCk01oExDLzMGiI0FafkTGK+DPuu0CNE9J17CgiRSc8xL+TBD8IoPdzyw==}
+    resolution: {integrity: sha512-QFwhDHc0xOg9xHHVQHn+JusjAhszXp+UC1Ee50SwupaFGhemVuCT7IX78ivvPYvzKhGbSWFDrUJ2FwXyvcNPRg==}
 
   '@univer-cli/doc-typst-facade@1.0.0-beta.2':
-    resolution: {integrity: sha512-/6382JqgRk51Q4CHXMRKg2BivFj0X0WUoetKL9/VKvXy30FmUWN8MGp2FCO3+fznksEfnVfiS9SiIeFa6prt/w==}
+    resolution: {integrity: sha512-PWPbtIn1PTwcttVbK83Bk14Bw9QEnOFzM71JG2ya6klIrK5epcs8Quf3bund5289qyOmc16yLayXwZCvq5/UPw==}
 
   '@univer-cli/generic-keyed-instance-pool@1.0.0-beta.2':
-    resolution: {integrity: sha512-Lcr2ljYXhBoFky3hkI6NwiIEIVzKpHR7I8g4Dk9BW97ctuAPBiS+pCHurdCQnaHhuPrjwb9m6ElsTuZbk7vXEA==}
+    resolution: {integrity: sha512-PGdsJlmhEiE9bIGj+lzJA4koHyMr81Bd5PgIPO2jGGHPlW9h1iKeDT46xMlKe4YqbIC+pXE+JefNNrrbF4t62Q==}
 
   '@univer-cli/headless-univer@1.0.0-beta.2':
-    resolution: {integrity: sha512-S29qRgQkRpOYeQcgfvyrBcgK2/CUAYoqBYCd+xaDDj7/elimPx1Jvvh6faQ8wpeiApIX1vdJaBTF/V42paPlGQ==}
+    resolution: {integrity: sha512-JGVMUn5lALimpNpsK3iPhaWVoqV2z7LPnVoVS+NdxeJuokPocaxfChCFOUxydKQYnIUA4AXvUXCfVLcjvVL+sw==}
 
   '@univer-cli/resource-library-command@1.0.0-beta.2':
-    resolution: {integrity: sha512-uRnOnYqMHUyE2qGXfKwy0e013NUo69YdwJluHVE7ccJRhrtXHRMKybZrbOZgrPD0o/bcioBLT52IPIWKbz/Vpg==}
+    resolution: {integrity: sha512-82H7FS1k0wEoSh4a+j822QOmAuaEkx0eWZk1pILfU4F+p2WTLVCauvKPf2/5mVmdR5dzxHORk4OgBsWYUDPYHw==}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/resource-library@1.0.0-beta.2':
-    resolution: {integrity: sha512-jheo/Mguwc69fOju9VjWI1MQda1YWJK6xUDS3smBdiMSwn31LcWlggydREDd4MMterJbdPTRIXCwasLdddZx6Q==}
+    resolution: {integrity: sha512-Hmgs4/IkfsOfNYYkVbcnIx8x5FAEdLUTP1Rf9iKZevAZQtmDLUy6YUmjt0GIgKmLhA8OSGMLDpPvCYfljEXjow==}
 
   '@univer-cli/svg-facade@1.0.0-beta.2':
-    resolution: {integrity: sha512-IwbWnu9kZMufCiQxQk/l1+GXsUE7IPAtT2DnXIIshppVMPzhDjreWilc7p/VixrwHjeos2xpdLJpyD2jzv1k/A==}
+    resolution: {integrity: sha512-qh+gcdQ10TjlJ/ewhFtpvw4TGxXG7nebtkb6QPPEVh3MZ20CB6yXtiALXetdVXE1rOJULwnVkpxmM22haE4C1g==}
 
   '@univer-cli/unit-layout-lint-command@1.0.0-beta.2':
-    resolution: {integrity: sha512-SYsl9Hx0Umyv+UPu4noXKR2gNemrjX0VP+Z4L13e85fQhI2imIwBln2Fyoo5Meln9ecfx6hs0/OrqjipOeaUeA==}
+    resolution: {integrity: sha512-vOjrNpT0YAq7ZY2vXKkQ6zNAJUKHertMh/jW4hA+5EbkdemCinSY29OqGAlNwdzCeeejQ5/34arSZOsbWfQeQQ==}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/unit-layout-lint@1.0.0-beta.2':
-    resolution: {integrity: sha512-TwskL+TzcCQneC+RuMik4ZqAAnZgwNUn+7tE6LCpedUR26CmYs/firoJdoQPwPpPBbWmQaxia/hmhbvUYoZ6bw==}
+    resolution: {integrity: sha512-Z9R+qwLfDNlq6IYAOk0p8wLzTIEghPt6N/rx+marewR5les23e2WK31NZUYbA04fEHlRD4ewbvyvFf/usgNb7g==}
 
   '@univer-cli/unit-screenshot-command@1.0.0-beta.2':
-    resolution: {integrity: sha512-jJxx8h5G9k4Js+adM+g1R0rida86YgFvDDAb9ELM0hSDbe7z5O61/3wR4H2HZ71y3eHebZUTUi5veBuDtSmIFA==}
+    resolution: {integrity: sha512-uNUhtaWJL6jQhMN6b6YnJPYI+TaGOCY+V/gp+g7sFzKSJkJzUral5wpENpibMAAxzSYoepj9WEaJ2F20p/rnzQ==}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/unit-screenshot@1.0.0-beta.2':
-    resolution: {integrity: sha512-v1ET/6xqchXVVi/iJW2BJWa/gz2eIdtU3mGwwyvlAHU5HXsIbuJ6aO0CUBFHtkg86+Qg1+7m7jpujTBEWEEjNA==}
+    resolution: {integrity: sha512-ewAaMcu66QRsFrxLcSe9mfYcGUQZpDimhrQNpBMerUStdL+uaPVbaXX/2rzlBIdL1nCm9KKDFfY0PF3EQ6ubcQ==}
 
   '@univer-cli/univer-collaboration-runtime-pool@1.0.0-beta.2':
-    resolution: {integrity: sha512-7J0X82LnJKBDG0X3nGEuJBwACCLB3fLd2BAMLg1g5yJEoMc2mugLNgmSd69cNvSoq0APYi1rx5RQFNvQYeFHog==}
+    resolution: {integrity: sha512-0cpDOlHHkEvGOIXOJ+c96/0gxTkjpdaqJeLBK4REcW6np+5hpp+TPytMgKvP9Q8dP8l9aMdZ0+XvUESoJBB6rw==}
 
   '@univer-cli/univer-collaboration-runtime@1.0.0-beta.2':
-    resolution: {integrity: sha512-C5XnqqjtFYcJOTb1ZqqULJPqkrhkmnLjaVZY09NgulOxsITBIFE9qjX4LQxzWDiMTtDuACNs+ko+zwcfEgfvLw==}
+    resolution: {integrity: sha512-XoJKs9cA93tkK9ckVbuxONXhiYHYpEIiIqFHuRTOkuDQDpFd1XsbsIldmVprHKt3rsdmXhhcKpsB09LA3ywVpQ==}
 
   '@univer-cli/univer-render-page@1.0.0-beta.2':
-    resolution: {integrity: sha512-jLbSxfFJVWCAbPQKJ71N0pNRxtd5qumcSIVv6eUQjV+Mfeyyocv1T9Sxmnp+XyFPly8JGsFclCzKUhG6GDipLQ==}
+    resolution: {integrity: sha512-tahlWyYHF769bMu4d5F8iPtUzZazvyTpDEAiAO10BXHuWEZ7fUFVh90nqfsOa3N1mprKK9ZhnYhvJAq6atXUIw==}
     peerDependencies:
       '@univer-cli/univer-render-runtime': 1.0.0-beta.2
 
   '@univer-cli/univer-render-runtime@1.0.0-beta.2':
-    resolution: {integrity: sha512-82rZpI5Xq7gphRymIbkqUYxmhrYy2t+vAvGeTLN8Fz5Vlt6GaChHzRT2xkNjarbE/NRdAmJm14fz+wymMAY1KQ==}
+    resolution: {integrity: sha512-zoX/zLgQALfBrXCZxsCU5NaBbald7/WSDC98yYBZd5x/Y+tqHAXs/gXoA5Hnywr3dGCG+0scbulajDOPRZNLTg==}
 
   '@univerjs-pro/bases-exchange-client@1.0.0-beta.2':
     resolution: {integrity: sha512-uV6i4NkMG0sKKhanP9nhdyvOy5FTW4M144rSNOa9tNt4utWqQZCDaTn6lBRVbFrb+WNyg//lfjIN5nNN9Ap9DQ==, tarball: https://registry.npmjs.org/@univerjs-pro/bases-exchange-client/-/bases-exchange-client-1.0.0-beta.2.tgz}
@@ -2064,30 +2064,30 @@ packages:
       rxjs: '>=7.0.0'
 
   '@univerjs-pro/collaboration-database-sqlite@1.0.0-beta.2':
-    resolution: {integrity: sha512-zn8H6sfrCbikk3zhpaBaie4Gh+MWVDqXPeLYWuevuaPqynaXyX7kwrKj+j+fpW0diZKpniAoI9S37t70qq2UWQ==}
+    resolution: {integrity: sha512-J9tJGSKE/Msqe35GB+v5ZMAiSwFz6HycIIRE0z4tYZqOEcbUwNg2pcdsUoVDrxO/MP09vsFuL5Jsa1qZMS4KMA==}
     engines: {node: '>=22'}
 
   '@univerjs-pro/collaboration-endpoint@1.0.0-beta.2':
-    resolution: {integrity: sha512-OQgGqOO+Mee+KYFlYATFkTFMGO4xaXFEOM5TiBDQCJcKDSuNkIZPB40AwfIWpOLhe2/TCUQNQanUZBapdlp9qw==}
+    resolution: {integrity: sha512-IcEYJMTqqHR6TgX57KggNBRGZXW5bg4kmZkH54LCsfKklSkLcbYm2OqvCq2WdmEzlgmCqyWV2Ef4YU1ytGIhIg==}
 
   '@univerjs-pro/collaboration-service@1.0.0-beta.2':
-    resolution: {integrity: sha512-8lyQYlepsyQqaLmMsxa8LAxak+jRjZpx5XoTw7ZauFU004Moq7hk8A3vtQ0XaE3yf1OXRKWjIWiwVooGH4FfQg==}
+    resolution: {integrity: sha512-XFecDwkgQUhDeXb73UkNK91Kp2VRC/XKHsZTUQWIWBx90z6URFyngjn3SdQuOuxCn+txwhnjwZ/qhIHhb4d1Jg==}
 
   '@univerjs-pro/collaboration-transport-node@1.0.0-beta.2':
-    resolution: {integrity: sha512-xj9h45w9/e+EIuWst1TxlFvawU6NjFyBXkKoMsupr6SMrkcdRgfEX/xcMAb7mKJytmRdGG6MItcWlOVviOtMpg==}
+    resolution: {integrity: sha512-6VJ9t2WPYUXYGNYRjnfcngf++3dnDWg647utDLi+g74QnYtkV5Qd6QMTna/27rBHSCMh+x6T9jhAHHxe3WHr3Q==}
 
   '@univerjs-pro/collaboration-worktree-client@1.0.0-beta.2':
-    resolution: {integrity: sha512-+WfN4e0IuMpGPe00t92VsTm7LG3/o3H4a4p6Z5T6G4mjUAqZRQPy9mh4USLl/8potW1ik7n5LdeEH8pmX8G6nA==}
+    resolution: {integrity: sha512-kGz2t00Dn4a7IjuHpiuWdqKOzzwhHUIuwmgjHoIxQLEdY3rE/UnvkL/PjqYfFbp1V1FA+AyBFqonoDS/G8aSfQ==}
 
   '@univerjs-pro/collaboration-worktree-database-sqlite@1.0.0-beta.2':
-    resolution: {integrity: sha512-XKiiMBgNtirR7paa78+GzUzoORIDJZbspL4pxwuWnyDUme4qe/vQ9sU3lHs8Wl9WIchw2f6WB8PAYlZGqiFZLg==}
+    resolution: {integrity: sha512-+YjzmTucy5rZa0J9HR5YRPgAWYoao3MJCE/IU47AH34/G/+2XL1uOBOc8zQ34J82EVbJbTAlK5/mQsSvxIVFzA==}
     engines: {node: '>=22'}
 
   '@univerjs-pro/collaboration-worktree-endpoint@1.0.0-beta.2':
-    resolution: {integrity: sha512-6tBkoL9cdPkGr3o0Hn5Vg+qjGak5wIiyVCrK2UHoFGI2Bh/Z8fARE9jAtbDzJ0Sw9DWUreyPhlZRpgg+nQamaA==}
+    resolution: {integrity: sha512-M6KGGU0uoW4cntufKZPqwGOdHctQJV2c+Sur0UOJVRYredgUOzoUwdbqDzq7+rSgwpa0bBKH4QzIjpk+8SP3Tw==}
 
   '@univerjs-pro/collaboration-worktree-service@1.0.0-beta.2':
-    resolution: {integrity: sha512-1YgWhoz6DrZL93VFItqDWFJjYco6KZvQSRmOGDODp3o22VIRXdhnfSbRzTat7Eej9vTNlp0ocoQx5G8FBY0ieg==}
+    resolution: {integrity: sha512-K7+fuja/bWPkWdyHfJis4Xdbp3pGtDHzKhcENSLLG37Y8paX3fo/ATaF6/W3pFYzO93xwJl5wjzhnFBfMDowYg==}
 
   '@univerjs-pro/collaboration@1.0.0-beta.2':
     resolution: {integrity: sha512-lJRRRvPzspxsnPon6g1eb1b7qwa5RsiSKfpN2qLr4ctCHtlPj96W0TPTRfGSaRpHjXpYkM/1ohFGQEAceQEiHg==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration/-/collaboration-1.0.0-beta.2.tgz}
