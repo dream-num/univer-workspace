@@ -21,6 +21,8 @@ AI Agent 能够共同处理 Sheet、Doc、Slide、Base 与 Board。
 Agent 在隔离的 Worktree 中工作、验证修改，再把结果交给人类审阅；只有经过确认的内容才会合入
 共享 trunk。
 
+![Univer Workspace 中文团队空间，展示 Sheet、Board、Doc、Slide、Base 与文件夹示例](docs/images/univer-workspace-zh-CN.png)
+
 ## 为什么选择 Univer Workspace
 
 | 面向人类                                     | 面向 Agent                                          | 面向运维                                    |

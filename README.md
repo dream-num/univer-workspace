@@ -22,6 +22,8 @@ Docs, Slides, Bases, and Boards.
 Agents work in isolated Worktrees, verify their changes, and hand the result to a
 person for review. People stay in control of what is merged into the shared trunk.
 
+![Univer Workspace showing an English team space with Sheet, Board, Doc, Slide, Base, and folder examples](docs/images/univer-workspace-en.png)
+
 ## Why Univer Workspace
 
 | For people                                              | For agents                                                         | For operators                                                        |
