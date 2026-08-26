@@ -39,7 +39,7 @@ export function apply(ctx: Context, config: Config): void {
   const license = resolveLicense(config.license);
   ctx.plugin(serviceProvider, { workspaceRoot: config.workspaceRoot, license, workerUrl });
   ctx.plugin(tools);
-  ctx.plugin(webServer);
+  ctx.plugin(webServer, { license });
   ctx.plugin(skills);
   ctx.plugin(collabProxy);
 }

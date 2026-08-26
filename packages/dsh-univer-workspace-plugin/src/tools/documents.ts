@@ -102,8 +102,10 @@ export function registerDocumentTools(ctx: Context): () => void {
           additionalProperties: false,
         },
         render: (_args, value: unknown) => {
-          const record = (value ?? {}) as { name?: string; unitType?: string; editorMode?: string; unitId?: string };
-          return text(`${record.name ?? "document"} (${record.unitType ?? "?"}, unit ${record.unitId ?? "?"}) — ${record.editorMode === "readOnly" ? "read-only" : "editable"}`);
+          // Emit the canonical value as JSON: the model reads the structured
+          // document descriptor, and the viewer turn-definition parses it to
+          // open the floating document window.
+          return text(JSON.stringify(value));
         },
       },
       async execute(args, exec) {
