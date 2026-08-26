@@ -47,6 +47,7 @@ import {
   type WorkspaceFacts,
 } from "./identity.ts";
 import * as workspaceAuthProvider from "./workspace-auth-provider.ts";
+import * as workspaceSessionProvider from "./workspace-session-provider.ts";
 import * as sessionInputGuard from "./session-input-guard.ts";
 
 export {
@@ -56,6 +57,7 @@ export {
   buildMeView, isBalancedLog, isDirectSha256Child, projectWorkspaceView, seedCutForSource, workspacePathFor, workspacePathName, SHA_256_HEX_LENGTH,
 } from "./identity.ts";
 export { WorkspaceAuthService, WORKSPACE_SESSION_COOKIE, type WorkspaceHttpClient } from "./workspace-auth.ts";
+export { WorkspaceSessionService } from "./workspace-session.ts";
 
 /** A workspace entity the idempotent handlers use. */
 export interface WorkspaceLike extends WorkspaceFacts {
@@ -413,6 +415,10 @@ function sanitizeReturnTo(pathname: string): string {
  */
 export function apply(ctx: Context, config: Config): void {
   ctx.plugin(workspaceAuthProvider, { workspaceOrigin: config.workspaceOrigin });
+  ctx.plugin(workspaceSessionProvider, {
+    sessionCookieName: config.sessionCookieName,
+    sessionSecret: config.sessionSecret,
+  });
   ctx.plugin(sessionInputGuard, {
     workspaceRoot: config.workspaceRoot,
     sessionCookieName: config.sessionCookieName,

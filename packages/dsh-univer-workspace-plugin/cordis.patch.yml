@@ -1,8 +1,9 @@
 # dsh-univer-workspace-plugin bundle patch. The plugin row is mounted by the
-# univer-workspace-harness composition; configuration (workspace origin is
-# resolved through the harness workspaceAuth service) arrives with the
-# capability implementation.
+# univer-workspace-harness composition; the mechanical per-Space directory
+# root is a deployment value.
 
 - insert:
     - id: univer-workspace
       name: 'dsh-univer-workspace-plugin'
+      config:
+        workspaceRoot: !!js process.env.UWH_WORKSPACE_ROOT
