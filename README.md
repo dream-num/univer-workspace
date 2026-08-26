@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
-[![pnpm](https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white)](package.json)
+[![pnpm](https://img.shields.io/badge/pnpm-11-F69220?logo=pnpm&logoColor=white)](package.json)
 
 English | [简体中文](README.zh-CN.md)
 
@@ -70,7 +70,7 @@ them. See the [CLI guide](apps/cli/README.md) for the complete product workflow.
 ### Requirements
 
 - Node.js 24 or newer
-- pnpm 10
+- pnpm 11
 
 Install dependencies and prepare the application configuration:
 

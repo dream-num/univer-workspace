@@ -9,7 +9,7 @@ and Worktrees.
 Requirements:
 
 - Node.js 24 or newer
-- pnpm 10
+- pnpm 11
 - a Univer license for capabilities that require one
 
 ```bash
