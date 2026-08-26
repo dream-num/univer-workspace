@@ -64,11 +64,12 @@ Homepage URL: http://127.0.0.1:5173
 Authorization callback URL: http://127.0.0.1:5173/api/auth/github/callback
 ```
 
-For the production deployment, create a separate production OAuth App with:
+For the production deployment, create a separate production OAuth App with your own
+deployment domain:
 
 ```text
-Homepage URL: https://workspace.univer.plus/
-Authorization callback URL: https://workspace.univer.plus/api/auth/github/callback
+Homepage URL: https://workspace.example.com/
+Authorization callback URL: https://workspace.example.com/api/auth/github/callback
 ```
 
 The callback URL configured in GitHub must exactly match
@@ -162,17 +163,17 @@ docker run --name univer-workspace \
   -v univer-workspace-data:/app/univer-workspace/.data \
   -e GITHUB_CLIENT_ID \
   -e GITHUB_CLIENT_SECRET \
-  -e GITHUB_CALLBACK_URL=https://workspace.univer.plus/api/auth/github/callback \
+  -e GITHUB_CALLBACK_URL=https://workspace.example.com/api/auth/github/callback \
   -e DISCORD_CLIENT_ID \
   -e DISCORD_CLIENT_SECRET \
-  -e DISCORD_CALLBACK_URL=https://workspace.univer.plus/api/auth/discord/callback \
+  -e DISCORD_CALLBACK_URL=https://workspace.example.com/api/auth/discord/callback \
   -e OAUTH_CLIENTS_JSON \
   -e SECURE_COOKIES=true \
   univer-workspace
 ```
 
 For a plain HTTP environment, use `-e SECURE_COOKIES=false`. Keep secure
-cookies enabled for `https://workspace.univer.plus`.
+cookies enabled when the deployment is served over HTTPS.
 
 To intentionally erase all product and collaboration data in a disposable
 environment, run the reset command against the volume:
