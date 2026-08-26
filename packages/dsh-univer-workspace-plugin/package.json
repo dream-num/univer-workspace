@@ -1,0 +1,51 @@
+{
+  "name": "dsh-univer-workspace-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Univer capability plugin for DSH: agent tools that operate remote Univer Workspace Units (documents) through the harness workspaceAuth service.",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./src/client/plugin.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "clean": "rm -rf lib",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.27.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  }
+}

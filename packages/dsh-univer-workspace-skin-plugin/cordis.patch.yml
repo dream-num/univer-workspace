@@ -1,0 +1,7 @@
+# dsh-univer-workspace-skin-plugin bundle patch. The plugin row is mounted
+# by the univer-workspace-harness composition; the brand name configuration
+# arrives with the skin implementation.
+
+- insert:
+    - id: univer-workspace-skin
+      name: 'dsh-univer-workspace-skin-plugin'

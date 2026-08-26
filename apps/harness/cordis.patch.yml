@@ -1,0 +1,7 @@
+# univer-workspace-harness bundle patch. Rows for the preloaded Univer
+# plugins and the webserver/connection overrides are added with the harness
+# core; this skeleton only mounts the (currently empty) core plugin.
+
+- insert:
+    - id: univer-workspace-harness
+      name: '@univerjs/univer-workspace-harness'
