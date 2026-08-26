@@ -20,3 +20,12 @@ minimumReleaseAgeExclude:
   - "@univer-cli/*"
   - "@univerjs/*"
   - "@univerjs-pro/*"
+
+# The workspace composes the Univer SDKs (peer react >=16.8) alongside the dsh
+# client types (react 18). Pin react to one version so @wendellhu/redi and the
+# @univerjs/* packages resolve to a single instance instead of splitting into
+# react 18/19 duplicates whose @wendellhu/redi IdentifierDecorator types no
+# longer line up.
+overrides:
+  react: 19.2.8
+  react-dom: 19.2.8

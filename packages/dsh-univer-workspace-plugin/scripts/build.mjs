@@ -45,3 +45,19 @@ await build({
     js: "return module.exports; } });",
   },
 });
+
+// The headless collaboration worker runs in a forked child process and loads
+// the whole Univer headless dependency graph. Node builtins stay external; the
+// Univer packages are bundled so the worker is self-contained.
+await build({
+  entryPoints: ["src/runtime/worker.ts"],
+  outfile: "lib/worker.js",
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node22",
+  packages: "bundle",
+  external: ["node:*"],
+  sourcemap: true,
+  logLevel: "info",
+});

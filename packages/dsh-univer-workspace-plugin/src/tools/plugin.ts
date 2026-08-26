@@ -8,6 +8,7 @@ import type { Context } from "@deepseek-ai/cordis";
 import { registerDiscoveryTools } from "./discovery.ts";
 import { registerDocumentTools } from "./documents.ts";
 import { registerWorktreeTools } from "./worktree.ts";
+import { registerEditTool } from "./edit.ts";
 
 export const name = "univer-workspace-tools";
 
@@ -19,7 +20,9 @@ export function apply(ctx: Context): void {
     const disposeDiscovery = registerDiscoveryTools(ctx);
     const disposeDocuments = registerDocumentTools(ctx);
     const disposeWorktree = registerWorktreeTools(ctx);
+    const disposeEdit = registerEditTool(ctx);
     return () => {
+      disposeEdit();
       disposeWorktree();
       disposeDocuments();
       disposeDiscovery();

@@ -21,6 +21,12 @@ export interface WorkspaceHttpClient {
   /** The effective Workspace origin this client calls. */
   readonly origin: string;
   /**
+   * The raw `workspace_session` token (the cookie value). Exposed so a
+   * sibling plugin can hand the credential across a process boundary (the
+   * headless collaboration worker pool) without reading the credential store.
+   */
+  readonly sessionToken: string;
+  /**
    * Perform an authenticated request on the Workspace origin. The user's
    * `workspace_session` cookie is attached; mutating calls also carry the
    * origin header. The request rejects when the stored credential is absent

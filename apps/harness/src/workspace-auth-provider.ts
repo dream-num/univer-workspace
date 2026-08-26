@@ -71,6 +71,7 @@ class WorkspaceAuthServiceImpl extends WorkspaceAuthService {
     const token = credential.token;
     return {
       origin,
+      sessionToken: token,
       request: (path, init) => {
         const headers = new Headers(init?.headers);
         headers.set("cookie", `${WORKSPACE_SESSION_COOKIE}=${token}`);

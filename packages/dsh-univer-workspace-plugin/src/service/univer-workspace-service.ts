@@ -8,9 +8,11 @@
 
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
+import type { CollaborationRuntimeValue } from "@univer-cli/univer-collaboration-runtime";
 import type {
   CreatedDocument, OpenedWorktreeUnit, WorktreeSummary,
 } from "../provider/workspace-api.ts";
+import type { WorkspaceRuntimeScope } from "../runtime/target.js";
 import type { WorkspaceDocument, WorkspaceDocumentOpen, WorkspaceSpace } from "../shared/wire.ts";
 
 /** The current User's accessible Univer Workspace Spaces, reconciled against dsh workspaces. */
@@ -30,6 +32,15 @@ export interface CreateDocumentInput {
   readonly parentNodeId: string | null;
   readonly name: string;
   readonly unitType: "sheet" | "doc" | "slide" | "board" | "base";
+}
+
+/** Input for running the Facade API against a Unit. */
+export interface EditUnitInput {
+  readonly scope: WorkspaceRuntimeScope;
+  readonly unitId: string;
+  readonly unitType: "sheet" | "doc" | "slide" | "board" | "base";
+  readonly revision: number;
+  readonly code: string;
 }
 
 /** The public surface of the Univer Workspace capability service. */
@@ -67,6 +78,12 @@ export abstract class UniverWorkspaceService extends Service {
 
   /** Merge a Worktree. */
   abstract mergeWorktree(userId: string, worktreeId: string): Promise<WorktreeSummary>;
+
+  /** Read one Unit's data with the Facade API. */
+  abstract readUnit(userId: string, input: EditUnitInput): Promise<CollaborationRuntimeValue>;
+
+  /** Execute a write in Worktree scope and commit the resulting changeset. */
+  abstract editUnit(userId: string, input: EditUnitInput): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }>;
 
   /**
    * Resolve a session's Space scope from its working directory. The dsh

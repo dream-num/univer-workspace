@@ -14,13 +14,16 @@ import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type {} from "@deepseek-ai/dsh-workspace";
+import type { CollaborationRuntimeValue } from "@univer-cli/univer-collaboration-runtime";
 import { spaceDirectoryPath } from "@univerjs/univer-workspace-harness/identity";
 import type { WorkspaceHttpClient } from "@univerjs/univer-workspace-harness";
 import type {} from "@univerjs/univer-workspace-harness";
 import type { WorkspaceDocument, WorkspaceSpace } from "../shared/wire.ts";
 import {
-  UniverWorkspaceService, type CreateDocumentInput, type SpaceScope,
+  UniverWorkspaceService, type CreateDocumentInput, type EditUnitInput, type SpaceScope,
 } from "../service/univer-workspace-service.ts";
+import { RuntimeManager } from "../runtime/manager.js";
+import type { WorkspaceRuntimeTarget } from "../runtime/target.js";
 import { spaceLinksDomainSpec } from "./space-links.ts";
 import {
   addWorktreeTrunkUnit, createDocument as apiCreateDocument, createWorktree as apiCreateWorktree,
@@ -31,16 +34,21 @@ import {
 export interface ServiceProviderConfig {
   /** Root under which per-user, per-Space mechanical directories live. */
   workspaceRoot: string;
+  /** Absolute file URL of the worker bundle (produced by the package build). */
+  workerUrl: URL;
 }
 
 class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   private table: ReturnType<Domain<typeof spaceLinksDomainSpec>["table"]> | undefined;
+  private readonly runtimeManager: RuntimeManager;
 
   constructor(
     ctx: Context,
     private readonly config: ServiceProviderConfig,
   ) {
     super(ctx);
+    this.runtimeManager = new RuntimeManager(config.workerUrl);
+    ctx.effect(() => () => { void this.runtimeManager.close(); }, "univer-workspace: runtime pool close");
   }
 
   async [Service.init](): Promise<void> {
@@ -119,6 +127,32 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   async mergeWorktree(userId: string, worktreeId: string) {
     const client = this.requireClient(userId);
     return await mergeWorktree(client, worktreeId);
+  }
+
+  async readUnit(userId: string, input: EditUnitInput): Promise<CollaborationRuntimeValue> {
+    const client = this.requireClient(userId);
+    const target: WorkspaceRuntimeTarget = {
+      origin: client.origin,
+      revision: input.revision,
+      scope: input.scope,
+      unitId: input.unitId,
+      unitType: input.unitType,
+      sessionToken: client.sessionToken,
+    };
+    return await this.runtimeManager.read(target, input.code);
+  }
+
+  async editUnit(userId: string, input: EditUnitInput): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }> {
+    const client = this.requireClient(userId);
+    const target: WorkspaceRuntimeTarget = {
+      origin: client.origin,
+      revision: input.revision,
+      scope: input.scope,
+      unitId: input.unitId,
+      unitType: input.unitType,
+      sessionToken: client.sessionToken,
+    };
+    return await this.runtimeManager.writeAndCommit(target, input.code);
   }
 
   private requireClient(userId: string): WorkspaceHttpClient {

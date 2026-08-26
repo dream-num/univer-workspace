@@ -27,7 +27,8 @@ export const name = "dsh-univer-workspace-plugin";
 export const inject = ["storageDomain", "workspaceAuth", "workspaceRegistry"];
 
 export function apply(ctx: Context, config: Config): void {
-  ctx.plugin(serviceProvider, { workspaceRoot: config.workspaceRoot });
+  const workerUrl = new URL("./worker.js", import.meta.url);
+  ctx.plugin(serviceProvider, { workspaceRoot: config.workspaceRoot, workerUrl });
   ctx.plugin(tools);
   ctx.plugin(webServer);
   ctx.plugin(skills);
