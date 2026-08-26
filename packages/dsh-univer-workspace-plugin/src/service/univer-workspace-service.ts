@@ -12,6 +12,9 @@ import type { CollaborationRuntimeValue } from "@univer-cli/univer-collaboration
 import type {
   CreatedDocument, OpenedWorktreeUnit, WorktreeSummary,
 } from "../provider/workspace-api.ts";
+import type {
+  ExportRequest, ExchangeTaskResult, ExchangeUnitType, ImportRequest,
+} from "../provider/exchange.ts";
 import type { WorkspaceRuntimeScope } from "../runtime/target.js";
 import type { WorkspaceDocument, WorkspaceDocumentOpen, WorkspaceSpace } from "../shared/wire.ts";
 
@@ -84,6 +87,15 @@ export abstract class UniverWorkspaceService extends Service {
 
   /** Execute a write in Worktree scope and commit the resulting changeset. */
   abstract editUnit(userId: string, input: EditUnitInput): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }>;
+
+  /** Upload an Office file and start an import task. */
+  abstract importFile(userId: string, input: { filename: string; bytes: Uint8Array; mediaType: string; type: ExchangeUnitType | "auto"; request: ImportRequest }): Promise<ExchangeTaskResult>;
+
+  /** Start an export task and await its result. */
+  abstract exportFile(userId: string, input: { type: ExchangeUnitType; request: ExportRequest }): Promise<ExchangeTaskResult>;
+
+  /** Download an exchange artifact's bytes by fileID. */
+  abstract downloadFileBytes(userId: string, fileID: string): Promise<Uint8Array>;
 
   /**
    * Resolve a session's Space scope from its working directory. The dsh

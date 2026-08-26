@@ -30,6 +30,10 @@ import {
   discardWorktree, listSpaceDocuments, listSpaces, markWorktreeReady, mergeWorktree,
   openResource, openWorktreeUnit,
 } from "./workspace-api.ts";
+import {
+  awaitTask, downloadFile, startExport, startImport, uploadFile,
+  type ExchangeTaskResult, type ExchangeUnitType, type ExportRequest, type ImportRequest,
+} from "./exchange.ts";
 
 export interface ServiceProviderConfig {
   /** Root under which per-user, per-Space mechanical directories live. */
@@ -153,6 +157,24 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
       sessionToken: client.sessionToken,
     };
     return await this.runtimeManager.writeAndCommit(target, input.code);
+  }
+
+  async importFile(userId: string, input: { filename: string; bytes: Uint8Array; mediaType: string; type: ExchangeUnitType | "auto"; request: ImportRequest }): Promise<ExchangeTaskResult> {
+    const client = this.requireClient(userId);
+    const fileID = await uploadFile(client, input.filename, input.bytes, input.mediaType);
+    const taskID = await startImport(client, input.type, { ...input.request, fileID });
+    return await awaitTask(client, taskID);
+  }
+
+  async exportFile(userId: string, input: { type: ExchangeUnitType; request: ExportRequest }): Promise<ExchangeTaskResult> {
+    const client = this.requireClient(userId);
+    const taskID = await startExport(client, input.type, input.request);
+    return await awaitTask(client, taskID);
+  }
+
+  async downloadFileBytes(userId: string, fileID: string): Promise<Uint8Array> {
+    const client = this.requireClient(userId);
+    return await downloadFile(client, fileID);
   }
 
   private requireClient(userId: string): WorkspaceHttpClient {

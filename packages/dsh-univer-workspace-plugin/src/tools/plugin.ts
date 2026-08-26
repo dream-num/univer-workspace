@@ -9,6 +9,7 @@ import { registerDiscoveryTools } from "./discovery.ts";
 import { registerDocumentTools } from "./documents.ts";
 import { registerWorktreeTools } from "./worktree.ts";
 import { registerEditTool } from "./edit.ts";
+import { registerExchangeTools } from "./exchange.ts";
 
 export const name = "univer-workspace-tools";
 
@@ -21,7 +22,9 @@ export function apply(ctx: Context): void {
     const disposeDocuments = registerDocumentTools(ctx);
     const disposeWorktree = registerWorktreeTools(ctx);
     const disposeEdit = registerEditTool(ctx);
+    const disposeExchange = registerExchangeTools(ctx);
     return () => {
+      disposeExchange();
       disposeEdit();
       disposeWorktree();
       disposeDocuments();

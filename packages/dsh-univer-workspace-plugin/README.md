@@ -17,6 +17,17 @@ session files.
 - **Discovery tool**: `univer_spaces` lists the User's Spaces through the
   harness `workspaceAuth` service, resolving the calling agent from its
   session working directory.
+- **Document tools**: `univer_documents`, `univer_open`, and `univer_create`
+  list, open, and create Univer documents through the Workspace product API.
+- **Editing**: `univer_edit` executes Facade API code in a headless
+  collaboration runtime (read against trunk/draft, write only in Worktree
+  scope with a committed changeset), managed by a forked worker pool.
+- **Review**: `univer_worktree` drives the Worktree lifecycle
+  (create/ready/merge/discard) with merge and discard forced through the
+  `tools/pre-execute` approval waterfall.
+- **Import/export**: `univer_import` and `univer_export` convert between
+  Office files in the session workspace and remote Units through the
+  Workspace exchange endpoints.
 - **Browser Space picker**: the blank-session hero shows the User's Spaces
   and picks a Space's backing dsh workspace.
 - **Bundled skill**: `univer-workspace` teaches the model the Space/document
@@ -24,10 +35,8 @@ session files.
 
 ## Not yet delivered (tracked as follow-up stages)
 
-- Document listing and opening tools, Unit authoring through the headless
-  collaboration runtime, Worktree lifecycle tools with merge/discard
-  approval, Office import/export, the turn-preview cards and floating viewer,
-  and screenshot/layout-lint rendering.
+- The turn-preview cards and floating viewer (stage 8), and
+  screenshot/layout-lint rendering (stage 9).
 
 ## Architecture boundary
 
