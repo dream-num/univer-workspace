@@ -23,9 +23,9 @@ univer-workspace-cli resources export <handle> [<handle>...] --out <directory>
 
 Understand these identities before running a mutation:
 
-- **Workspace origin**: the remote Workspace service address. It defaults to
-  `https://workspace.univer.plus/`; configure another origin only when the task targets a different
-  deployment.
+- **Workspace origin**: the remote Workspace service address of the user's own deployment.
+  Point the CLI at it with `univer-workspace-cli config set workspace.origin <origin>` before
+  connecting.
 - **Space**: the container whose visible tree is made of Nodes.
 - **Personal Space**: the authenticated user's own Space. Files here are personal Workspace files.
   A Personal Space is not a Worktree and is not the same thing as `--scope user`.
@@ -175,11 +175,11 @@ is uncertain, start a new Worktree rather than guessing.
 
 ## Connect
 
-The origin defaults to `https://workspace.univer.plus/`. Override it only when needed, then use the
+Point the CLI at the user's Workspace deployment before connecting, then use the
 two-command browser approval protocol below. Never ask the user for a password.
 
 ```bash
-# Optional override:
+# Point the CLI at the user's Workspace deployment:
 univer-workspace-cli config set workspace.origin https://workspace.example.com
 
 # Step 1: create an approval request. This command exits immediately.

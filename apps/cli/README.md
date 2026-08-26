@@ -57,24 +57,15 @@ Univer SDK.
 
 ## Install
 
-Install the CLI from the internal Univer npm registry in the environment used by the agent:
+Install the CLI in the environment used by the agent:
 
 ```bash
-npm install --global univer-workspace-cli@latest \
-  --registry=https://insider-npm-registry.univer.work/
+npm install --global univer-workspace-cli@latest
 ```
 
-Maintainers publish three internal channels: stable tag-driven `X.Y.Z` versions under
-`latest`, CI-only `X.Y.Z-insider.<suffix>` versions under `insiders`, and local-only
-`X.Y.Z-dev.<suffix>` versions under `dev`.
-The source package version is a `0.0.0`
-sentinel; the release workflow injects the selected version into both the tarball and
-the CLI runtime. Public npm Promotion is not part of this repository's current release
-workflow.
-
-The CLI connects to [Univer Workspace](https://workspace.univer.plus/) by default. To target another
-Workspace deployment, run `univer-workspace-cli config set workspace.origin <origin>`. Give the
-agent access to the executable and the intended Workspace; the bundled guidance supplies the
+Point the CLI at your own Workspace deployment with
+`univer-workspace-cli config set workspace.origin <origin>`. Give the
+agent access to the executable and that Workspace; the bundled guidance supplies the
 version-correct workflow.
 
 ## Login
@@ -120,6 +111,7 @@ to override the bundled credential.
 
 - [Univer Workspace repository](https://github.com/dream-num/univer-workspace)
 - [Univer SDK documentation](https://docs.univer.ai/)
+- [Univer Office SDK documentation](https://office.univer.ai/)
 - [Univer on GitHub](https://github.com/dream-num/univer)
 - [Workspace issue tracker](https://github.com/dream-num/univer-workspace/issues)
 - [Univer website](https://univer.ai/)

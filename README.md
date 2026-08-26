@@ -4,7 +4,7 @@
 
 **An open-source Office workspace where people and AI agents create, collaborate, and review together.**
 
-[Live Workspace](https://workspace.univer.plus/) · [Univer Docs](https://docs.univer.ai/) · [CLI guide](apps/cli/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
+[Univer Docs](https://docs.univer.ai/) · [Office SDK](https://office.univer.ai/) · [CLI guide](apps/cli/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
@@ -71,7 +71,6 @@ them. See the [CLI guide](apps/cli/README.md) for the complete product workflow.
 
 - Node.js 24 or newer
 - pnpm 10
-- Access to the internal Univer npm registry
 
 Install dependencies and prepare the application configuration:
 
@@ -105,15 +104,13 @@ in the [Workspace application guide](apps/workspace/README.md).
 
 ## Use the Workspace CLI
 
-Install the agent-facing CLI from the internal registry:
+Install the agent-facing CLI:
 
 ```bash
-npm install --global univer-workspace-cli@latest \
-  --registry=https://insider-npm-registry.univer.work/
+npm install --global univer-workspace-cli@latest
 ```
 
-The CLI targets <https://workspace.univer.plus/> by default. Point it at another
-deployment when needed, then begin browser-approved login:
+Point the CLI at your own Workspace deployment, then begin browser-approved login:
 
 ```bash
 univer-workspace-cli config set workspace.origin <origin>
@@ -198,25 +195,21 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 
 The CLI and Workspace deployment are delivered independently from the same source:
 
-- A stable `vX.Y.Z` tag on `main` publishes `univer-workspace-cli@X.Y.Z` to the
-  internal registry with the `latest` dist-tag. The source manifest remains `0.0.0`;
-  packaging injects the release version.
-- A manual workflow on `main` publishes exact `X.Y.Z-insider.<suffix>` builds to the
-  `insiders` channel. Local development releases use `X.Y.Z-dev.<suffix>` and the
-  `dev` channel.
+- A stable `vX.Y.Z` tag on `main` releases `univer-workspace-cli@X.Y.Z` with the
+  `latest` dist-tag.
 - Workspace deployment is a separate manual workflow. It builds either an existing
   stable tag or an exact commit as `sha-<commit>`. Pushing a release tag does not
   deploy the Server.
 
-Stable and insiders CLI releases validate the repository-wide SDK baseline and test
-the actual package artifact before publication. The current workflow publishes only
-to insider-npm; public npm promotion is a separate concern.
+Stable CLI releases validate the repository-wide SDK baseline and test
+the actual package artifact before publication.
 
 ## Documentation
 
 | Resource                                                            | Scope                                                                  |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | [Univer Runtime documentation](https://docs.univer.ai/)             | Browser Runtime, presets, plugins, Facade API, and editor capabilities |
+| [Univer Office SDK documentation](https://office.univer.ai/)        | Office SDK stack: Runtime, Collaboration, CLI, and Worktree            |
 | [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades           |
 | [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract             |
 | [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries               |

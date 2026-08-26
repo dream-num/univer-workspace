@@ -4,7 +4,7 @@
 
 **一个让人类与 AI Agent 共同创作、协作和审阅的开源 Office 工作空间。**
 
-[在线 Workspace](https://workspace.univer.plus/) · [Univer 文档](https://docs.univer.ai/) · [CLI 指南](apps/cli/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
+[Univer 文档](https://docs.univer.ai/) · [Office SDK 文档](https://office.univer.ai/) · [CLI 指南](apps/cli/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
@@ -69,7 +69,6 @@ Worktree 将 Agent 编辑转化为边界清晰的审阅流程：
 
 - Node.js 24 或更高版本
 - pnpm 10
-- Univer 内部 npm registry 的访问权限
 
 安装依赖并准备应用配置：
 
@@ -102,15 +101,13 @@ pnpm workspace:dev:web
 
 ## 使用 Workspace CLI
 
-从内部 registry 安装面向 Agent 的 CLI：
+安装面向 Agent 的 CLI：
 
 ```bash
-npm install --global univer-workspace-cli@latest \
-  --registry=https://insider-npm-registry.univer.work/
+npm install --global univer-workspace-cli@latest
 ```
 
-CLI 默认连接 <https://workspace.univer.plus/>。需要使用其他部署时，先修改目标 origin，再开始
-需要 Browser 确认的登录流程：
+先把 CLI 指向你自己的 Workspace 部署，再开始需要 Browser 确认的登录流程：
 
 ```bash
 univer-workspace-cli config set workspace.origin <origin>
@@ -185,21 +182,19 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 
 CLI 与 Workspace 部署基于同一份源码，但各自独立交付：
 
-- `main` 上的稳定 `vX.Y.Z` tag 会把 `univer-workspace-cli@X.Y.Z` 发布到内部 registry，并使用
-  `latest` dist-tag。源码 manifest 始终保持 `0.0.0`，发布版本由打包过程注入。
-- `main` 上的手动 workflow 使用精确的 `X.Y.Z-insider.<suffix>` 版本发布 `insiders` 通道；本地
-  开发版本使用 `X.Y.Z-dev.<suffix>` 与 `dev` 通道。
+- `main` 上的稳定 `vX.Y.Z` tag 会发布 `univer-workspace-cli@X.Y.Z`，并使用 `latest`
+  dist-tag。
 - Workspace 使用独立的手动部署 workflow，构建已有稳定 tag，或把精确 commit 标记为
   `sha-<commit>`。推送 release tag 不会部署 Server。
 
-稳定版与 insiders CLI 发布会检查整个仓库的 SDK baseline，并在发布前验证实际 package artifact。
-当前 workflow 只发布到 insider-npm；Public npm Promotion 属于独立流程。
+稳定版 CLI 发布会检查整个仓库的 SDK baseline，并在发布前验证实际 package artifact。
 
 ## 文档
 
 | 资源                                                                | 范围                                                     |
 | ------------------------------------------------------------------- | -------------------------------------------------------- |
 | [Univer Runtime 文档](https://docs.univer.ai/)                      | Browser Runtime、Preset、Plugin、Facade API 与编辑器能力 |
+| [Univer Office SDK 文档](https://office.univer.ai/)                 | Office SDK 技术栈：Runtime、Collaboration、CLI 与 Worktree |
 | [Workspace 应用指南](apps/workspace/README.md)                      | 配置、认证、存储、Docker 与升级                          |
 | [Workspace CLI 指南](apps/cli/README.md)                            | 安装、登录、Agent workflow 与 package 合同               |
 | [技术架构](apps/workspace/docs/architecture.md)                     | Browser、Server、存储、OpenAPI 与模块边界                |
