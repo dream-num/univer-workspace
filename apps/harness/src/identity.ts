@@ -40,7 +40,9 @@ export function isDirectSha256Child(workspaceRoot: string, candidate: string): b
 }
 
 /**
- * Derive and validate the per-user workspace path for a verified user id.
+ * Derive and validate the per-user directory path for a verified user id.
+ * The path is `<workspaceRoot>/<sha256(userId)>` and is a direct child of the
+ * configured root.
  */
 export function workspacePathFor(
   workspaceRoot: string,
@@ -52,6 +54,35 @@ export function workspacePathFor(
     return { ok: false, reason: "derived workspace path is not a direct SHA-256-named child of the configured workspace root" };
   }
   return { ok: true, path };
+}
+
+/**
+ * Derive the canonical per-Space directory name for an opaque Space id. Like
+ * the user directory name, it is a pure function of the id so it is stable and
+ * never influenced by client input, and the SHA-256 hex digest cannot escape
+ * its parent directory.
+ */
+export function spaceDirectoryName(spaceId: string): string {
+  return createHash("sha256").update(spaceId, "utf8").digest("hex");
+}
+
+/**
+ * Derive the per-user, per-Space directory under the workspace root. The user
+ * owns every direct child of their user directory; each child carries one
+ * Univer Workspace Space.
+ */
+export function spaceDirectoryPath(workspaceRoot: string, userId: string, spaceId: string): string {
+  return resolve(workspaceRoot, workspacePathName(userId), spaceDirectoryName(spaceId));
+}
+
+/**
+ * Whether a candidate path belongs to one user's scope: the user directory
+ * itself, or one direct child of it (a per-Space mechanical directory).
+ */
+export function isUserScopedPath(workspaceRoot: string, userId: string, candidate: string): boolean {
+  const userDir = resolve(workspaceRoot, workspacePathName(userId));
+  const normalized = resolve(candidate);
+  return normalized === userDir || dirname(normalized) === userDir;
 }
 
 /**

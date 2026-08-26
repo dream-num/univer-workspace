@@ -11,6 +11,10 @@
       "types": "./src/index.ts",
       "default": "./lib/index.js"
     },
+    "./identity": {
+      "types": "./src/identity.ts",
+      "default": "./lib/identity.js"
+    },
     "./client": {
       "types": "./src/client/index.tsx",
       "default": "./lib/client.js"

@@ -18,7 +18,7 @@ import type {} from "@deepseek-ai/dsh-host-apiproxy";
 import type {} from "@deepseek-ai/dsh-host-webserver";
 import type {} from "@deepseek-ai/dsh-workspace";
 import { parseCookies, parseSessionCookie } from "./auth.ts";
-import { workspacePathFor } from "./identity.ts";
+import { isUserScopedPath } from "./identity.ts";
 import { UWH_SESSION_PROMPT_PATH } from "./contract.ts";
 
 /** Configuration needed by the harness-owned prompt route. */
@@ -67,17 +67,16 @@ function denied(sessionId: SessionId, message: string): RpcResult<never> {
   };
 }
 
-/** Return whether the authenticated default Workspace contains the Session. */
+/** Return whether the authenticated User's scope contains the Session. */
 export function sessionBelongsToUser(
   workspaceRegistry: { list(): readonly { path: string; sessionIds: readonly string[] }[] },
   workspaceRoot: string,
   userId: string,
   sessionId: string,
 ): boolean {
-  const derived = workspacePathFor(workspaceRoot, userId);
-  if (!derived.ok) return false;
   return workspaceRegistry.list().some(workspace =>
-    workspace.path === derived.path && workspace.sessionIds.includes(sessionId),
+    isUserScopedPath(workspaceRoot, userId, workspace.path)
+    && workspace.sessionIds.includes(sessionId),
   );
 }
 

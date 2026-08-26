@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as host from "../src/index.js";
 import { parseSessionCookie, signSessionCookie } from "../src/auth.js";
-import { workspacePathFor, isDirectSha256Child, workspacePathName } from "../src/identity.js";
+import {
+  workspacePathFor, isDirectSha256Child, workspacePathName,
+  spaceDirectoryPath, isUserScopedPath,
+} from "../src/identity.js";
 import { emptyUwhState, stateKeyFor } from "../src/contract.js";
 import { readLocalState, writeLocalState, recordCreatedSession, recordTemplateFork, templateForkOf } from "../src/client/local-state.js";
 
@@ -25,6 +28,15 @@ describe("univer-workspace-harness plugin", () => {
       expect(isDirectSha256Child("/root", derived.path)).toBe(true);
       expect(workspacePathName("u-1")).toMatch(/^[0-9a-f]{64}$/);
     }
+  });
+
+  it("scopes a per-Space directory under the user directory", () => {
+    const spaceDir = spaceDirectoryPath("/root", "u-1", "sp-1");
+    expect(isUserScopedPath("/root", "u-1", spaceDir)).toBe(true);
+    expect(isUserScopedPath("/root", "u-2", spaceDir)).toBe(false);
+    expect(isUserScopedPath("/root", "u-1", "/root/elsewhere")).toBe(false);
+    // The user directory itself is in scope (template-fork container).
+    expect(isUserScopedPath("/root", "u-1", workspacePathFor("/root", "u-1").ok ? (workspacePathFor("/root", "u-1") as { path: string }).path : "")).toBe(true);
   });
 
   it("partitions browser-local state by user", () => {

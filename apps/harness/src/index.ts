@@ -54,7 +54,9 @@ export {
   buildAuthorizeUrl, callbackUrlFor, exchangeCode, extractIdentity, parseCookies, parseSessionCookie, randomPkceVerifier, randomState, signSessionCookie, workspaceAuthorizeUrl,
 } from "./auth.ts";
 export {
-  buildMeView, isBalancedLog, isDirectSha256Child, projectWorkspaceView, seedCutForSource, workspacePathFor, workspacePathName, SHA_256_HEX_LENGTH,
+  buildMeView, isBalancedLog, isDirectSha256Child, projectWorkspaceView, seedCutForSource,
+  workspacePathFor, workspacePathName, spaceDirectoryName, spaceDirectoryPath, isUserScopedPath,
+  SHA_256_HEX_LENGTH,
 } from "./identity.ts";
 export { WorkspaceAuthService, WORKSPACE_SESSION_COOKIE, type WorkspaceHttpClient } from "./workspace-auth.ts";
 export { WorkspaceSessionService } from "./workspace-session.ts";

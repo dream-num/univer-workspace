@@ -10,11 +10,11 @@
  */
 
 import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type {} from "@deepseek-ai/dsh-workspace";
+import { spaceDirectoryPath } from "@univerjs/univer-workspace-harness/identity";
 import type {} from "@univerjs/univer-workspace-harness";
 import type { WorkspaceSpace } from "../shared/wire.ts";
 import { UniverWorkspaceService, type SpaceScope } from "../service/univer-workspace-service.ts";
@@ -76,7 +76,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     for (const [key, record] of table.entries()) {
       if (record.userId === userId && record.spaceId === spaceId) return key;
     }
-    const directory = join(this.config.workspaceRoot, userId, spaceId);
+    const directory = spaceDirectoryPath(this.config.workspaceRoot, userId, spaceId);
     await mkdir(directory, { recursive: true });
     const workspace = (await this.ctx.workspaceRegistry.resolveByPath(directory))
       ?? await this.ctx.workspaceRegistry.create(directory, name);

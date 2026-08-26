@@ -23,6 +23,22 @@ await build({
   logLevel: "info",
 });
 
+// The directory-derivation helpers are shared with the capability plugin (the
+// Space ↔ dsh-workspace path contract). They are a pure function of node
+// builtins, so they ship as a standalone entry the sibling bundle imports
+// without pulling in the schemastery/cordis host composition.
+await build({
+  entryPoints: ["src/identity.ts"],
+  outfile: "lib/identity.js",
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node22",
+  external: ["node:*", "@deepseek-ai/*"],
+  sourcemap: true,
+  logLevel: "info",
+});
+
 const packageId = "@univerjs/univer-workspace-harness";
 
 await build({
