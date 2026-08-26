@@ -98,9 +98,10 @@ function narrowDocument(raw: unknown): WorkspaceDocument | undefined {
   const unitType = unitTypeRaw === "sheet" || unitTypeRaw === "doc" || unitTypeRaw === "slide" || unitTypeRaw === "board" || unitTypeRaw === "base"
     ? unitTypeRaw
     : null;
-  const unitId = resourceId !== null && kind === "univer"
-    ? (stringField((record as { resource?: { unitId?: unknown } }).resource?.unitId) ?? null)
-    : null;
+  // Node-list Resource summaries carry no unitId (the Unit descriptor is only
+  // resolved by the open endpoint), so the list answer leaves it null and
+  // consumers call univer_open per resource.
+  const unitId = null;
   return {
     nodeId,
     name,
@@ -205,20 +206,32 @@ export interface CreatedDocument {
   readonly nodeId: string;
 }
 
-function narrowCreatedDocument(raw: unknown): CreatedDocument {
+function narrowCreatedNode(raw: unknown): { readonly resourceId: string; readonly nodeId: string } {
   const record = (raw ?? {}) as { node?: unknown };
   const node = (record.node ?? null) as Record<string, unknown> | null;
-  const resource = node?.resource as Record<string, unknown> | null;
+  const resource = (node?.resource ?? null) as Record<string, unknown> | null;
   const nodeId = typeof node?.id === "string" ? node.id : undefined;
   const resourceId = typeof resource?.id === "string" ? resource.id : undefined;
-  const unitId = typeof resource?.unitId === "string" ? resource.unitId : undefined;
-  if (nodeId === undefined || resourceId === undefined || unitId === undefined) {
+  if (nodeId === undefined || resourceId === undefined || resource?.kind !== "univer") {
     throw new WorkspaceApiError("workspace resource create returned a malformed node", 502, "MALFORMED_CREATE");
   }
-  return { resourceId, unitId, nodeId };
+  return { resourceId, nodeId };
 }
 
-/** Create a Univer document (a Node carrying a Univer Resource) in a Space. */
+/** Create a Univer document (a Node carrying a Univer Resource) in a Space.
+ *
+ * The create answer's Resource summary carries no unitId — the Unit descriptor
+ * is resolved by the open endpoint — so creation here is create-then-open. A
+ * 202 answer means the Idempotency-Key's operation is still in flight; the
+ * same key is re-sent until the server replays the stored completed result.
+ */
+const CREATE_ATTEMPT_LIMIT = 20;
+const CREATE_RETRY_DELAY_MS = 250;
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => { setTimeout(resolve, ms); });
+}
+
 export async function createDocument(
   client: WorkspaceHttpClient,
   input: {
@@ -228,17 +241,32 @@ export async function createDocument(
     unitType: "sheet" | "doc" | "slide" | "board" | "base";
   },
 ): Promise<CreatedDocument> {
-  const raw = await readJson(
-    await client.request("/api/resources", jsonWithIdempotency({
-      kind: "univer",
-      spaceId: input.spaceId,
-      parentNodeId: input.parentNodeId,
-      name: input.name,
-      unitType: input.unitType,
-    })),
-    "resource create",
-  );
-  return narrowCreatedDocument(raw);
+  const body = JSON.stringify({
+    kind: "univer",
+    spaceId: input.spaceId,
+    parentNodeId: input.parentNodeId,
+    name: input.name,
+    unitType: input.unitType,
+  });
+  const headers = {
+    "content-type": "application/json",
+    "Idempotency-Key": newIdempotencyKey(),
+  };
+  let created: { resourceId: string; nodeId: string } | undefined;
+  for (let attempt = 1; ; attempt++) {
+    const response = await client.request("/api/resources", { method: "POST", headers, body });
+    if (response.status === 202) {
+      if (attempt >= CREATE_ATTEMPT_LIMIT) {
+        throw new WorkspaceApiError("workspace resource create is still pending", 504, "CREATE_PENDING");
+      }
+      await delay(CREATE_RETRY_DELAY_MS);
+      continue;
+    }
+    created = narrowCreatedNode(await readJson(response, "resource create"));
+    break;
+  }
+  const open = await openResource(client, created.resourceId);
+  return { resourceId: created.resourceId, nodeId: created.nodeId, unitId: open.unitId };
 }
 
 /** A Worktree summary as seen by the tools. */

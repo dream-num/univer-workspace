@@ -28,7 +28,9 @@ export function registerDocumentTools(ctx: Context): () => void {
   const disposers = [
     ctx.tools.register(defineTool({
       name: "univer_documents",
-      description: "List the documents (Nodes) inside one Univer Workspace Space. Pass the spaceId from univer_spaces.",
+      description:
+        "List the documents (Nodes) inside one Univer Workspace Space. Pass the spaceId from univer_spaces. "
+        + "Rows identify documents by resourceId; call univer_open with it to resolve the unitId before editing.",
       parameters: {
         spaceId: { type: "string", required: true },
       },
@@ -45,7 +47,6 @@ export function registerDocumentTools(ctx: Context): () => void {
                   nodeId: { type: "string" },
                   name: { type: "string" },
                   resourceId: { type: "string" },
-                  unitId: { type: "string" },
                   unitType: { type: "string" },
                   accessRole: { type: "string" },
                 },
@@ -56,9 +57,9 @@ export function registerDocumentTools(ctx: Context): () => void {
           additionalProperties: false,
         },
         render: (_args, value: unknown) => {
-          const record = (value ?? {}) as { documents?: { name: string; unitType: string; unitId: string }[] };
+          const record = (value ?? {}) as { documents?: { name: string; unitType: string; resourceId: string }[] };
           const docs = record.documents ?? [];
-          return text(docs.map(d => `${d.name} (${d.unitType}, unit ${d.unitId})`).join("\n") || "no documents");
+          return text(docs.map(d => `${d.name} (${d.unitType}, resource ${d.resourceId})`).join("\n") || "no documents");
         },
       },
       async execute(args, exec) {
@@ -67,12 +68,11 @@ export function registerDocumentTools(ctx: Context): () => void {
         return {
           spaceId: args.spaceId,
           documents: documents
-            .filter(d => d.resourceId !== null && d.unitId !== null && d.unitType !== null)
+            .filter(d => d.resourceId !== null && d.unitType !== null)
             .map(d => ({
               nodeId: d.nodeId,
               name: d.name,
               resourceId: d.resourceId as string,
-              unitId: d.unitId as string,
               unitType: d.unitType as string,
               accessRole: d.accessRole,
             })),
