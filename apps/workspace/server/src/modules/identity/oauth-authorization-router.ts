@@ -1,12 +1,14 @@
 import { json, Router, urlencoded } from "express"
 import { ApplicationError } from "../../middleware/errors.js";
 import type { IdentityModule } from "./identity.service.js";
+import type { User } from "./identity.types.js";
 import {
   authorizeRedirectTarget,
   defaultOAuthScope,
   issueOAuthAuthorizationCode,
   requireOAuthAuthorization,
   requireOAuthState,
+  scopeIncludesSession,
   validateOAuthClientSecret,
   validateRegisteredRedirectUri,
   type IssuedAuthorization,
@@ -29,38 +31,23 @@ export function createOAuthAuthorizationRouter(options: {
   }
 
   router.get("/authorize", (request, response) => {
-    const client = requireRegisteredClient(clients, request.query.client_id);
-    const redirectUri = validateRegisteredRedirectUri(
-      request.query.redirect_uri,
-      client.redirectUris
+    const authorizationRequest = parseAuthorizationRequest(
+      clients,
+      request.query
     );
-    const state = requireOAuthState(request.query.state);
-    const codeChallenge = requireQueryString(request.query.code_challenge);
-    const scope = requireScope(request.query.scope, client);
 
     const session = options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) {
-      const returnTo = `/api/auth/authorize?client_id=${encodeURIComponent(client.clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&code_challenge=${encodeURIComponent(codeChallenge)}&scope=${encodeURIComponent(scope)}`;
-      response.redirect(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+      response.redirect(
+        `/login?returnTo=${encodeURIComponent(
+          authorizePath(authorizationRequest)
+        )}`
+      );
       return;
     }
 
-    const now = Date.now()
-    for (const [code, pending] of options.authorizationStore) {
-      if (pending.expiresAt <= now) options.authorizationStore.delete(code)
-    }
-    const authorization = issueOAuthAuthorizationCode(
-      client.clientId,
-      state,
-      codeChallenge,
-      redirectUri,
-      scope,
-      session.user,
-      now
-    );
-    options.authorizationStore.set(authorization.code, authorization);
     response.redirect(
-      authorizeRedirectTarget({ redirectUri, state, scope }, authorization.code)
+      issueAuthorization(options, authorizationRequest, session.user)
     );
   });
 
@@ -91,6 +78,22 @@ export function createOAuthAuthorizationRouter(options: {
     });
     options.authorizationStore.delete(code);
 
+    if (scopeIncludesSession(authorization.scope)) {
+      const issued = options.identity.issueSession(user);
+      response.json({
+        access_token: issued.cookieValue,
+        token_type: "Bearer",
+        expires_in: Math.round(options.identity.sessionTtlMs / 1000),
+        user: {
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+        },
+      });
+      return;
+    }
+
     response.json({
       access_token: "",
       token_type: "Bearer",
@@ -105,6 +108,73 @@ export function createOAuthAuthorizationRouter(options: {
   });
 
   return router;
+}
+
+interface AuthorizationRequest {
+  readonly clientId: string;
+  readonly redirectUri: string;
+  readonly state: string;
+  readonly codeChallenge: string;
+  readonly scope: string;
+}
+
+function parseAuthorizationRequest(
+  clients: ReadonlyMap<string, OAuthClient>,
+  values: Record<string, unknown>
+): AuthorizationRequest {
+  const client = requireRegisteredClient(clients, values.client_id);
+  return {
+    clientId: client.clientId,
+    redirectUri: validateRegisteredRedirectUri(
+      values.redirect_uri,
+      client.redirectUris
+    ),
+    state: requireOAuthState(values.state),
+    codeChallenge: requireQueryString(values.code_challenge),
+    scope: requireScope(values.scope, client),
+  };
+}
+
+function authorizePath(request: AuthorizationRequest): string {
+  const query = new URLSearchParams({
+    client_id: request.clientId,
+    redirect_uri: request.redirectUri,
+    state: request.state,
+    code_challenge: request.codeChallenge,
+    scope: request.scope,
+  });
+  return `/api/auth/authorize?${query.toString()}`;
+}
+
+function issueAuthorization(
+  options: {
+    readonly authorizationStore: Map<string, IssuedAuthorization>;
+  },
+  authorizationRequest: AuthorizationRequest,
+  user: User
+): string {
+  const now = Date.now();
+  for (const [code, pending] of options.authorizationStore) {
+    if (pending.expiresAt <= now) options.authorizationStore.delete(code);
+  }
+  const authorization = issueOAuthAuthorizationCode(
+    authorizationRequest.clientId,
+    authorizationRequest.state,
+    authorizationRequest.codeChallenge,
+    authorizationRequest.redirectUri,
+    authorizationRequest.scope,
+    user,
+    now
+  );
+  options.authorizationStore.set(authorization.code, authorization);
+  return authorizeRedirectTarget(
+    {
+      redirectUri: authorizationRequest.redirectUri,
+      state: authorizationRequest.state,
+      scope: authorizationRequest.scope,
+    },
+    authorization.code
+  );
 }
 
 function requireRegisteredClient(

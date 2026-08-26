@@ -13,6 +13,9 @@ import { loadConfig, type WorkspaceConfig } from "../../server/src/config.js";
 const CLIENT_ID = "internal-client";
 const CLIENT_SECRET = "test-client-secret-at-least-32-characters";
 const CALLBACK_URL = "https://client.example.test/auth/callback";
+const SESSION_CLIENT_ID = "session-client";
+const SESSION_CLIENT_SECRET = "test-session-secret-at-least-32-characters";
+const SESSION_CALLBACK_URL = "https://harness.example.test/auth/callback";
 const STATE = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGH";
 const CODE_VERIFIER = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const CODE_CHALLENGE = createHash("sha256").update(CODE_VERIFIER).digest("base64url");
@@ -23,6 +26,12 @@ const OAUTH_CLIENTS_JSON = JSON.stringify({
       clientSecret: CLIENT_SECRET,
       redirectUris: [CALLBACK_URL],
       scopes: ["identity"],
+    },
+    {
+      clientId: SESSION_CLIENT_ID,
+      clientSecret: SESSION_CLIENT_SECRET,
+      redirectUris: [SESSION_CALLBACK_URL],
+      scopes: ["identity", "session"],
     },
   ],
 });
@@ -47,12 +56,17 @@ afterEach(async () => {
 describe("OAuth authorization", () => {
   it("loads registered clients from OAUTH_CLIENTS_JSON", () => {
     const config = loadConfig({ OAUTH_CLIENTS_JSON });
-    expect(config.oauthClients?.clients).toHaveLength(1);
+    expect(config.oauthClients?.clients).toHaveLength(2);
     expect(config.oauthClients?.clients[0]).toMatchObject({
       clientId: CLIENT_ID,
       clientSecret: CLIENT_SECRET,
       redirectUris: [CALLBACK_URL],
       scopes: ["identity"],
+    });
+    expect(config.oauthClients?.clients[1]).toMatchObject({
+      clientId: SESSION_CLIENT_ID,
+      redirectUris: [SESSION_CALLBACK_URL],
+      scopes: ["identity", "session"],
     });
   });
 
@@ -121,12 +135,15 @@ describe("OAuth authorization", () => {
     });
     expect(token.status).toBe(200);
     const body = (await token.json()) as {
+      readonly access_token: string;
+      readonly expires_in: number;
       readonly user: {
         readonly id: string;
         readonly username: string;
         readonly displayName: string;
       };
     };
+    expect(body.access_token).toBe("");
     expect(body.user).toMatchObject({
       id: session.user.id,
       username: "alice",
@@ -147,6 +164,81 @@ describe("OAuth authorization", () => {
     expect(replay.status).toBe(400);
     expect(await replay.json()).toMatchObject({
       error: { code: "INVALID_GRANT" },
+    });
+  });
+
+  it("exchanges a session-scope grant for a working Workspace session token", async () => {
+    const origin = await startApplication();
+    const registration = await fetch(`${origin}/api/auth/password/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: "bob",
+        displayName: "Bob",
+        password: "correct horse battery staple",
+      }),
+    });
+    const session = (await registration.json()) as {
+      readonly user: { readonly id: string };
+    };
+    const cookie = registration.headers.get("set-cookie")?.split(";", 1)[0];
+    expect(cookie).toBeTruthy();
+
+    const authorize = await fetch(
+      `${origin}/api/auth/authorize?client_id=${SESSION_CLIENT_ID}&redirect_uri=${encodeURIComponent(SESSION_CALLBACK_URL)}&state=${STATE}&code_challenge=${CODE_CHALLENGE}&scope=${encodeURIComponent("identity session")}`,
+      { headers: { cookie: cookie! }, redirect: "manual" }
+    );
+    expect(authorize.status).toBe(302);
+    const callback = new URL(authorize.headers.get("location")!);
+    expect(`${callback.origin}${callback.pathname}`).toBe(SESSION_CALLBACK_URL);
+    const code = callback.searchParams.get("code");
+    expect(code).toBeTruthy();
+
+    const token = await fetch(`${origin}/api/auth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "authorization_code",
+        code,
+        client_id: SESSION_CLIENT_ID,
+        client_secret: SESSION_CLIENT_SECRET,
+        redirect_uri: SESSION_CALLBACK_URL,
+        code_verifier: CODE_VERIFIER,
+      }),
+    });
+    expect(token.status).toBe(200);
+    const body = (await token.json()) as {
+      readonly access_token: string;
+      readonly expires_in: number;
+      readonly user: { readonly id: string };
+    };
+    expect(body.access_token).not.toBe("");
+    expect(body.expires_in).toBe(60);
+    expect(body.user.id).toBe(session.user.id);
+
+    // The issued token authenticates like a browser login session when it
+    // is presented as the workspace_session cookie.
+    const resolved = await fetch(`${origin}/api/session`, {
+      headers: { cookie: `workspace_session=${body.access_token}` },
+    });
+    expect(resolved.status).toBe(200);
+    const resolvedSession = (await resolved.json()) as {
+      readonly authenticated: boolean;
+      readonly user?: { readonly id: string };
+    };
+    expect(resolvedSession.authenticated).toBe(true);
+    expect(resolvedSession.user?.id).toBe(session.user.id);
+  });
+
+  it("rejects a session scope the client is not registered for", async () => {
+    const origin = await startApplication();
+    const response = await fetch(
+      `${origin}/api/auth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&state=${STATE}&code_challenge=${CODE_CHALLENGE}&scope=${encodeURIComponent("identity session")}`,
+      { redirect: "manual" }
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { code: "INVALID_INPUT" },
     });
   });
 
