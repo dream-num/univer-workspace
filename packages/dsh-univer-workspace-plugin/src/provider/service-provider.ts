@@ -15,11 +15,18 @@ import type { Context } from "@deepseek-ai/cordis";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type {} from "@deepseek-ai/dsh-workspace";
 import { spaceDirectoryPath } from "@univerjs/univer-workspace-harness/identity";
+import type { WorkspaceHttpClient } from "@univerjs/univer-workspace-harness";
 import type {} from "@univerjs/univer-workspace-harness";
-import type { WorkspaceSpace } from "../shared/wire.ts";
-import { UniverWorkspaceService, type SpaceScope } from "../service/univer-workspace-service.ts";
+import type { WorkspaceDocument, WorkspaceSpace } from "../shared/wire.ts";
+import {
+  UniverWorkspaceService, type CreateDocumentInput, type SpaceScope,
+} from "../service/univer-workspace-service.ts";
 import { spaceLinksDomainSpec } from "./space-links.ts";
-import { listSpaces } from "./workspace-api.ts";
+import {
+  addWorktreeTrunkUnit, createDocument as apiCreateDocument, createWorktree as apiCreateWorktree,
+  discardWorktree, listSpaceDocuments, listSpaces, markWorktreeReady, mergeWorktree,
+  openResource, openWorktreeUnit,
+} from "./workspace-api.ts";
 
 export interface ServiceProviderConfig {
   /** Root under which per-user, per-Space mechanical directories live. */
@@ -69,6 +76,58 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return record === undefined ? undefined : { userId: record.userId, spaceId: record.spaceId };
   }
 
+  async listDocuments(userId: string, spaceId: string): Promise<readonly WorkspaceDocument[]> {
+    const client = this.requireClient(userId);
+    return await listSpaceDocuments(client, spaceId);
+  }
+
+  async openDocument(userId: string, resourceId: string) {
+    const client = this.requireClient(userId);
+    return await openResource(client, resourceId);
+  }
+
+  async createDocument(userId: string, input: CreateDocumentInput) {
+    const client = this.requireClient(userId);
+    return await apiCreateDocument(client, input);
+  }
+
+  async createWorktree(userId: string, input: { name: string; summary: string | null }) {
+    const client = this.requireClient(userId);
+    return await apiCreateWorktree(client, input);
+  }
+
+  async addWorktreeTrunkUnit(userId: string, worktreeId: string, resourceId: string): Promise<void> {
+    const client = this.requireClient(userId);
+    await addWorktreeTrunkUnit(client, worktreeId, resourceId);
+  }
+
+  async openWorktreeUnit(userId: string, worktreeId: string, unitId: string, mode: "draft" | "trunk" | "mergePreview") {
+    const client = this.requireClient(userId);
+    return await openWorktreeUnit(client, worktreeId, unitId, mode);
+  }
+
+  async markWorktreeReady(userId: string, worktreeId: string) {
+    const client = this.requireClient(userId);
+    return await markWorktreeReady(client, worktreeId);
+  }
+
+  async discardWorktree(userId: string, worktreeId: string) {
+    const client = this.requireClient(userId);
+    return await discardWorktree(client, worktreeId);
+  }
+
+  async mergeWorktree(userId: string, worktreeId: string) {
+    const client = this.requireClient(userId);
+    return await mergeWorktree(client, worktreeId);
+  }
+
+  private requireClient(userId: string): WorkspaceHttpClient {
+    const client = this.ctx.workspaceAuth.clientFor(userId);
+    if (client === undefined) {
+      throw new Error("workspace credential is missing; sign in again");
+    }
+    return client;
+  }
   private async reconcileSpace(userId: string, spaceId: string, name: string): Promise<string> {
     const table = this.requireTable();
     // Reuse an existing link for this space id (same user), so the backing dsh

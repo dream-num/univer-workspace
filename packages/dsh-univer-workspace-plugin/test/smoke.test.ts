@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as host from "../src/index.js";
-import { narrowSpaces } from "../src/provider/workspace-api.js";
+import { narrowSpaces, newIdempotencyKey } from "../src/provider/workspace-api.js";
 import { spaceLinksDomainSpec } from "../src/provider/space-links.js";
 
 describe("dsh-univer-workspace-plugin", () => {
@@ -28,5 +28,12 @@ describe("dsh-univer-workspace-plugin", () => {
   it("declares a versioned space-links domain", () => {
     expect(spaceLinksDomainSpec.name).toBe("univer_workspace_space_links");
     expect(spaceLinksDomainSpec.version).toBe(1);
+  });
+
+  it("mints a valid Idempotency-Key", () => {
+    const key = newIdempotencyKey();
+    expect(key).toMatch(/^uwh-[a-z0-9]+-[A-Za-z0-9_-]+$/);
+    expect(key.length).toBeGreaterThanOrEqual(16);
+    expect(newIdempotencyKey()).not.toBe(key);
   });
 });

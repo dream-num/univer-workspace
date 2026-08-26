@@ -8,6 +8,7 @@
  * @module dsh-univer-workspace-plugin/provider/workspace-api
  */
 
+import { randomBytes } from "node:crypto";
 import type { WorkspaceHttpClient } from "@univerjs/univer-workspace-harness";
 import type { WorkspaceDocument, WorkspaceDocumentOpen } from "../shared/wire.ts";
 
@@ -178,4 +179,188 @@ export async function openResource(client: WorkspaceHttpClient, resourceId: stri
     "resource open",
   );
   return narrowOpen(raw);
+}
+
+/** A fresh Idempotency-Key for one user intent. */
+export function newIdempotencyKey(): string {
+  return `uwh-${Date.now().toString(36)}-${randomBytes(12).toString("base64url")}`;
+}
+
+/** Request headers carrying an Idempotency-Key plus JSON. */
+function jsonWithIdempotency(body: unknown): RequestInit {
+  return {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "Idempotency-Key": newIdempotencyKey(),
+    },
+    body: JSON.stringify(body),
+  };
+}
+
+/** Narrow a created resource/node answer into `{ resourceId, unitId, nodeId }`. */
+export interface CreatedDocument {
+  readonly resourceId: string;
+  readonly unitId: string;
+  readonly nodeId: string;
+}
+
+function narrowCreatedDocument(raw: unknown): CreatedDocument {
+  const record = (raw ?? {}) as { node?: unknown };
+  const node = (record.node ?? null) as Record<string, unknown> | null;
+  const resource = node?.resource as Record<string, unknown> | null;
+  const nodeId = typeof node?.id === "string" ? node.id : undefined;
+  const resourceId = typeof resource?.id === "string" ? resource.id : undefined;
+  const unitId = typeof resource?.unitId === "string" ? resource.unitId : undefined;
+  if (nodeId === undefined || resourceId === undefined || unitId === undefined) {
+    throw new WorkspaceApiError("workspace resource create returned a malformed node", 502, "MALFORMED_CREATE");
+  }
+  return { resourceId, unitId, nodeId };
+}
+
+/** Create a Univer document (a Node carrying a Univer Resource) in a Space. */
+export async function createDocument(
+  client: WorkspaceHttpClient,
+  input: {
+    spaceId: string;
+    parentNodeId: string | null;
+    name: string;
+    unitType: "sheet" | "doc" | "slide" | "board" | "base";
+  },
+): Promise<CreatedDocument> {
+  const raw = await readJson(
+    await client.request("/api/resources", jsonWithIdempotency({
+      kind: "univer",
+      spaceId: input.spaceId,
+      parentNodeId: input.parentNodeId,
+      name: input.name,
+      unitType: input.unitType,
+    })),
+    "resource create",
+  );
+  return narrowCreatedDocument(raw);
+}
+
+/** A Worktree summary as seen by the tools. */
+export interface WorktreeSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly state: "draft" | "ready" | "merging" | "merged" | "discarded";
+}
+
+function narrowWorktreeSummary(raw: unknown): WorktreeSummary {
+  const record = (raw ?? {}) as { worktree?: Record<string, unknown> };
+  const worktree = record.worktree ?? {};
+  const id = typeof worktree.id === "string" ? worktree.id : undefined;
+  const name = typeof worktree.name === "string" ? worktree.name : undefined;
+  const state = worktree.state === "draft" || worktree.state === "ready" || worktree.state === "merging" || worktree.state === "merged" || worktree.state === "discarded"
+    ? worktree.state
+    : "draft";
+  if (id === undefined || name === undefined) {
+    throw new WorkspaceApiError("workspace worktree returned a malformed summary", 502, "MALFORMED_WORKTREE");
+  }
+  return { id, name, state };
+}
+
+/** Create a User Worktree. */
+export async function createWorktree(
+  client: WorkspaceHttpClient,
+  input: { name: string; summary: string | null },
+): Promise<WorktreeSummary> {
+  const raw = await readJson(
+    await client.request("/api/worktrees", jsonWithIdempotency({
+      kind: "user",
+      name: input.name,
+      summary: input.summary,
+    })),
+    "worktree create",
+  );
+  return narrowWorktreeSummary(raw);
+}
+
+/** Add an existing trunk Resource to a Worktree. */
+export async function addWorktreeTrunkUnit(
+  client: WorkspaceHttpClient,
+  worktreeId: string,
+  resourceId: string,
+): Promise<void> {
+  await readJson(
+    await client.request(
+      `/api/worktrees/${encodeURIComponent(worktreeId)}/units`,
+      jsonWithIdempotency({ source: "trunk", resourceId }),
+    ),
+    "worktree add unit",
+  );
+}
+
+/** A Worktree Unit open descriptor. */
+export interface OpenedWorktreeUnit {
+  readonly unitId: string;
+  readonly unitType: "sheet" | "doc" | "slide" | "board" | "base";
+  readonly editorMode: "edit" | "readOnly";
+  readonly collaborationScope: { readonly kind: "trunk" | "worktree" | "mergePreview"; readonly worktreeId?: string };
+}
+
+function narrowWorktreeUnitOpen(raw: unknown): OpenedWorktreeUnit {
+  const record = (raw ?? {}) as { unit?: Record<string, unknown>; collaborationScope?: Record<string, unknown> };
+  const unit = record.unit ?? {};
+  const unitId = typeof unit.unitId === "string" ? unit.unitId : undefined;
+  const unitType = unit.unitType === "sheet" || unit.unitType === "doc" || unit.unitType === "slide" || unit.unitType === "board" || unit.unitType === "base"
+    ? unit.unitType
+    : undefined;
+  const scope = record.collaborationScope ?? {};
+  const kind = scope.kind === "worktree" || scope.kind === "mergePreview" || scope.kind === "trunk" ? scope.kind : "worktree";
+  if (unitId === undefined || unitType === undefined) {
+    throw new WorkspaceApiError("workspace worktree unit open returned a malformed descriptor", 502, "MALFORMED_WORKTREE_UNIT");
+  }
+  return {
+    unitId,
+    unitType,
+    editorMode: unit.editorMode === "readOnly" ? "readOnly" : "edit",
+    collaborationScope: { kind, ...(scope.worktreeId === undefined ? {} : { worktreeId: String(scope.worktreeId) }) },
+  };
+}
+
+/** Open a Worktree Unit in a given mode. */
+export async function openWorktreeUnit(
+  client: WorkspaceHttpClient,
+  worktreeId: string,
+  unitId: string,
+  mode: "draft" | "trunk" | "mergePreview",
+): Promise<OpenedWorktreeUnit> {
+  const raw = await readJson(
+    await client.request(
+      `/api/worktrees/${encodeURIComponent(worktreeId)}/units/${encodeURIComponent(unitId)}/open`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode }) },
+    ),
+    "worktree unit open",
+  );
+  return narrowWorktreeUnitOpen(raw);
+}
+
+/** Mark a Worktree ready to merge. */
+export async function markWorktreeReady(client: WorkspaceHttpClient, worktreeId: string): Promise<WorktreeSummary> {
+  const raw = await readJson(
+    await client.request(`/api/worktrees/${encodeURIComponent(worktreeId)}/ready`, { method: "POST" }),
+    "worktree ready",
+  );
+  return narrowWorktreeSummary(raw);
+}
+
+/** Discard a Worktree. */
+export async function discardWorktree(client: WorkspaceHttpClient, worktreeId: string): Promise<WorktreeSummary> {
+  const raw = await readJson(
+    await client.request(`/api/worktrees/${encodeURIComponent(worktreeId)}/discard`, jsonWithIdempotency({})),
+    "worktree discard",
+  );
+  return narrowWorktreeSummary(raw);
+}
+
+/** Merge a Worktree. */
+export async function mergeWorktree(client: WorkspaceHttpClient, worktreeId: string): Promise<WorktreeSummary> {
+  const raw = await readJson(
+    await client.request(`/api/worktrees/${encodeURIComponent(worktreeId)}/merge`, jsonWithIdempotency({})),
+    "worktree merge",
+  );
+  return narrowWorktreeSummary(raw);
 }

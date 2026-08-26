@@ -8,7 +8,10 @@
 
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
-import type { WorkspaceSpace } from "../shared/wire.ts";
+import type {
+  CreatedDocument, OpenedWorktreeUnit, WorktreeSummary,
+} from "../provider/workspace-api.ts";
+import type { WorkspaceDocument, WorkspaceDocumentOpen, WorkspaceSpace } from "../shared/wire.ts";
 
 /** The current User's accessible Univer Workspace Spaces, reconciled against dsh workspaces. */
 export interface ReconciledSpaces {
@@ -21,6 +24,14 @@ export interface SpaceScope {
   readonly spaceId: string;
 }
 
+/** Input for creating a Univer document. */
+export interface CreateDocumentInput {
+  readonly spaceId: string;
+  readonly parentNodeId: string | null;
+  readonly name: string;
+  readonly unitType: "sheet" | "doc" | "slide" | "board" | "base";
+}
+
 /** The public surface of the Univer Workspace capability service. */
 export abstract class UniverWorkspaceService extends Service {
   constructor(ctx: Context) {
@@ -29,6 +40,33 @@ export abstract class UniverWorkspaceService extends Service {
 
   /** List the current User's Spaces, reconciling each with a dsh workspace. */
   abstract listSpaces(userId: string): Promise<ReconciledSpaces>;
+
+  /** List a Space's root documents. */
+  abstract listDocuments(userId: string, spaceId: string): Promise<readonly WorkspaceDocument[]>;
+
+  /** Open one Resource's editor descriptor. */
+  abstract openDocument(userId: string, resourceId: string): Promise<WorkspaceDocumentOpen>;
+
+  /** Create a Univer document in a Space. */
+  abstract createDocument(userId: string, input: CreateDocumentInput): Promise<CreatedDocument>;
+
+  /** Create a User Worktree. */
+  abstract createWorktree(userId: string, input: { name: string; summary: string | null }): Promise<WorktreeSummary>;
+
+  /** Add an existing trunk Resource to a Worktree. */
+  abstract addWorktreeTrunkUnit(userId: string, worktreeId: string, resourceId: string): Promise<void>;
+
+  /** Open a Worktree Unit. */
+  abstract openWorktreeUnit(userId: string, worktreeId: string, unitId: string, mode: "draft" | "trunk" | "mergePreview"): Promise<OpenedWorktreeUnit>;
+
+  /** Mark a Worktree ready to merge. */
+  abstract markWorktreeReady(userId: string, worktreeId: string): Promise<WorktreeSummary>;
+
+  /** Discard a Worktree. */
+  abstract discardWorktree(userId: string, worktreeId: string): Promise<WorktreeSummary>;
+
+  /** Merge a Worktree. */
+  abstract mergeWorktree(userId: string, worktreeId: string): Promise<WorktreeSummary>;
 
   /**
    * Resolve a session's Space scope from its working directory. The dsh

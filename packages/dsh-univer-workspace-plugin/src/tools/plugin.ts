@@ -6,6 +6,8 @@
 
 import type { Context } from "@deepseek-ai/cordis";
 import { registerDiscoveryTools } from "./discovery.ts";
+import { registerDocumentTools } from "./documents.ts";
+import { registerWorktreeTools } from "./worktree.ts";
 
 export const name = "univer-workspace-tools";
 
@@ -13,5 +15,14 @@ export const inject = ["tools", "univerWorkspace"];
 
 /** Register every univer_ tool. */
 export function apply(ctx: Context): void {
-  ctx.effect(() => registerDiscoveryTools(ctx), "univer-workspace: discovery tools");
+  ctx.effect(() => {
+    const disposeDiscovery = registerDiscoveryTools(ctx);
+    const disposeDocuments = registerDocumentTools(ctx);
+    const disposeWorktree = registerWorktreeTools(ctx);
+    return () => {
+      disposeWorktree();
+      disposeDocuments();
+      disposeDiscovery();
+    };
+  }, "univer-workspace: tools");
 }
