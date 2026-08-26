@@ -52,15 +52,19 @@
   disabled: true
 
 # Keep the native plugin configuration cards and read-only inventory out of the
-# default composition. Models remain unavailable in every product view.
+# default composition; the harness ships its plugin set as a deployment fact.
 - id: ui-settings-plugins
   disabled: true
 
 - id: ui-settings-plugin-inventory
   disabled: true
 
-- id: ui-settings-models
-  disabled: true
+# `ui-settings-models` stays ENABLED (restated here only to record the choice):
+# unlike an org-operated product deployment that pre-provisions provider
+# credentials through the launch environment, the harness has no server-side
+# model configuration — each user brings their own API key. The Models page is
+# the only browser surface for `credentials.set` / provider profiles, which
+# persist to <DSH_HOME>/.credentials.yaml and settings.yaml respectively.
 
 # ── harness core plugin row (host half + browser half) ─────────────────────
 
