@@ -125,6 +125,29 @@ describe("Workspace Sheet presets", () => {
       license,
     });
   }, 20_000);
+
+  it("omits Thread Comment from non-trunk preset stacks", async () => {
+    Object.defineProperty(globalThis, "Path2D", {
+      configurable: true,
+      value: class Path2D {},
+    });
+    const [{ createSheetEditorPresets }] = await Promise.all([
+      import("../../web/src/features/editor/sheet-presets.js"),
+    ]);
+    const presets = createSheetEditorPresets({
+      container,
+      license,
+      universerEndpoint: endpoint,
+      threadCommentsEnabled: false,
+    });
+
+    expect(presetPluginKeys(presets)).not.toContain(
+      "UNIVER_SHEETS_THREAD_COMMENT_PLUGIN"
+    );
+    expect(presetPluginKeys(presets)).not.toContain(
+      "UNIVER_SHEETS_THREAD_COMMENT_UI_PLUGIN"
+    );
+  }, 20_000);
 });
 
 function presetPluginKeys(presets: IPreset[]): string[] {

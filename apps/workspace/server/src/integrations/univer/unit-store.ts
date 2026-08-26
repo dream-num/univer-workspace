@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import type * as BoardsModule from "@univerjs-pro/boards";
+import type * as CommentDatabaseModule from "@univerjs-pro/collaboration-comment-database-sqlite";
+import type * as CommentServiceModule from "@univerjs-pro/collaboration-comment-service";
 import type * as CollaborationDatabaseModule from "@univerjs-pro/collaboration-database-sqlite";
 import type * as CollaborationServiceModule from "@univerjs-pro/collaboration-service";
 import type * as WorktreeServiceModule from "@univerjs-pro/collaboration-worktree-service";
@@ -14,6 +16,12 @@ const moduleRequire = createRequire(import.meta.url);
 const { getBoardsEmptySnapshot } = moduleRequire(
   "@univerjs-pro/boards"
 ) as typeof BoardsModule;
+const { SQLiteCommentDatabaseAdapter } = moduleRequire(
+  "@univerjs-pro/collaboration-comment-database-sqlite"
+) as typeof CommentDatabaseModule;
+const { UniverCommentService } = moduleRequire(
+  "@univerjs-pro/collaboration-comment-service"
+) as typeof CommentServiceModule;
 const { SQLiteDatabaseAdapter } = moduleRequire(
   "@univerjs-pro/collaboration-database-sqlite"
 ) as typeof CollaborationDatabaseModule;
@@ -82,15 +90,26 @@ export interface CollaborationRuntime {
   readonly unitStore: UnitStore;
   readonly unitSnapshotStore: UnitSnapshotStore;
   readonly service: CollaborationServiceModule.UniverCollabService;
+  readonly commentService: CommentServiceModule.UniverCommentService;
   readonly worktreeService: WorktreeServiceModule.UniverCollabWorktreeService;
   dispose(): Promise<void>;
 }
 
 export function createCollaborationRuntime(
-  filename: string
+  filename: string,
+  options: {
+    readonly commentUserProvider?: CommentServiceModule.ICommentUserProvider;
+  } = {}
 ): CollaborationRuntime {
   const database = new SQLiteDatabaseAdapter({ filename });
   const service = new UniverCollabService({ dbAdapter: database });
+  const commentDatabase = new SQLiteCommentDatabaseAdapter({ filename });
+  const commentService = new UniverCommentService({
+    database: commentDatabase,
+    ...(options.commentUserProvider
+      ? { userProvider: options.commentUserProvider }
+      : {}),
+  });
   const worktreeDatabase = new SQLiteWorktreeDatabaseAdapter({ filename });
   const worktreeService = new UniverCollabWorktreeService({
     trunk: {
@@ -165,10 +184,13 @@ export function createCollaborationRuntime(
     unitStore,
     unitSnapshotStore,
     service,
+    commentService,
     worktreeService,
     async dispose() {
       await worktreeService.dispose();
       await worktreeDatabase.dispose();
+      await commentService.dispose();
+      await commentDatabase.dispose();
       await service.dispose();
       await database.dispose();
     },

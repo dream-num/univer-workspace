@@ -107,6 +107,7 @@ export interface IdentityModule {
     readonly issuedSession: IssuedSession | null;
   }>;
   unlinkDiscord(cookieHeader: string | undefined): AuthenticatedSession;
+  findUsers(userIds: readonly string[]): readonly User[];
 }
 
 export function createIdentityModule(options: {
@@ -196,6 +197,10 @@ export function createIdentityModule(options: {
     githubOAuthCookieName: GITHUB_OAUTH_COOKIE_NAME,
     discordOAuthCookieName: DISCORD_OAUTH_COOKIE_NAME,
     sessionTtlMs: options.sessionTtlMs,
+
+    findUsers(userIds) {
+      return repository.findUsers(userIds);
+    },
 
     async registerWithPassword(input) {
       const username = validUsername(input.username);

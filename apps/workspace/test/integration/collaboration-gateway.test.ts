@@ -2,7 +2,16 @@ import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { UnitAction, UniverType } from "@univerjs/protocol";
+import {
+  deserializeToCombResponse,
+  serializeCombRequest,
+} from "@univerjs-pro/collaboration-client";
+import {
+  CmdRspCode,
+  CombCmd,
+  UnitAction,
+  UniverType,
+} from "@univerjs/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createWorkspaceApplication,
@@ -11,9 +20,23 @@ import {
 
 const applications: WorkspaceApplication[] = [];
 const servers: Server[] = [];
+const sockets: WebSocket[] = [];
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
+  await Promise.all(
+    sockets.splice(0).map(
+      (socket) =>
+        new Promise<void>((resolve) => {
+          if (socket.readyState === WebSocket.CLOSED) {
+            resolve();
+            return;
+          }
+          socket.addEventListener("close", () => resolve(), { once: true });
+          socket.close();
+        })
+    )
+  );
   await Promise.all(
     servers.splice(0).map(
       (server) =>
@@ -89,7 +112,11 @@ describe("collaboration gateway", () => {
             {
               unitID: opened.resource.unitId,
               objectID: opened.resource.unitId,
-              actions: [UnitAction.View, UnitAction.Edit],
+              actions: [
+                UnitAction.View,
+                UnitAction.Comment,
+                UnitAction.Edit,
+              ],
             },
           ],
         }),
@@ -102,6 +129,7 @@ describe("collaboration gateway", () => {
           unitID: opened.resource.unitId,
           actions: [
             { action: UnitAction.View, allowed: true },
+            { action: UnitAction.Comment, allowed: true },
             { action: UnitAction.Edit, allowed: true },
           ],
         },
@@ -129,6 +157,58 @@ describe("collaboration gateway", () => {
       readonly ticket: string;
     };
     expect(ticket.ticket).toEqual(expect.any(String));
+
+    await expect(
+      fetch(
+        `${origin}/universer-api/comment/unit/${opened.resource.unitId}/list`
+      )
+    ).resolves.toMatchObject({ status: 401 });
+    const ownerConnection = await joinUnit(
+      origin,
+      cookie,
+      opened.resource.unitId
+    );
+    const addCommentResponse = await fetch(
+      `${origin}/universer-api/comment/unit/${opened.resource.unitId}/add`,
+      {
+        method: "POST",
+        headers: {
+          cookie,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          memberId: ownerConnection.memberId,
+          unitId: opened.resource.unitId,
+          content: "Gateway comment",
+          mention: [],
+        }),
+      }
+    );
+    expect(addCommentResponse.status).toBe(200);
+    const added = (await addCommentResponse.json()) as {
+      readonly comment: { readonly threadId: string };
+    };
+    expect(added.comment.threadId).toEqual(expect.any(String));
+    const ownerCommentsResponse = await fetch(
+      `${origin}/universer-api/comment/unit/${opened.resource.unitId}/list?threadId=${encodeURIComponent(added.comment.threadId)}`,
+      { headers: { cookie } }
+    );
+    expect(ownerCommentsResponse.status).toBe(200);
+    await expect(ownerCommentsResponse.json()).resolves.toMatchObject({
+      comments: {
+        [added.comment.threadId]: {
+          replies: [
+            { content: "Gateway comment", userId: issued.view.user.id },
+          ],
+        },
+      },
+      users: {
+        [issued.view.user.id]: {
+          userID: issued.view.user.id,
+          name: "Gateway User",
+        },
+      },
+    });
 
     const viewer = await application.identity.registerWithPassword({
       username: "gateway-viewer",
@@ -176,7 +256,11 @@ describe("collaboration gateway", () => {
             {
               unitID: opened.resource.unitId,
               objectID: opened.resource.unitId,
-              actions: [UnitAction.View, UnitAction.Edit],
+              actions: [
+                UnitAction.View,
+                UnitAction.Comment,
+                UnitAction.Edit,
+              ],
             },
           ],
         }),
@@ -187,6 +271,7 @@ describe("collaboration gateway", () => {
         {
           actions: [
             { action: UnitAction.View, allowed: true },
+            { action: UnitAction.Comment, allowed: true },
             { action: UnitAction.Edit, allowed: false },
           ],
         },
@@ -197,6 +282,71 @@ describe("collaboration gateway", () => {
       { headers: { cookie: viewerCookie } }
     );
     expect(viewerSnapshot.status).toBe(200);
+    const viewerCommentsResponse = await fetch(
+      `${origin}/universer-api/comment/unit/${opened.resource.unitId}/list`,
+      { headers: { cookie: viewerCookie } }
+    );
+    expect(viewerCommentsResponse.status).toBe(200);
+    await expect(viewerCommentsResponse.json()).resolves.toMatchObject({
+      comments: {
+        [added.comment.threadId]: {
+          replies: [{ content: "Gateway comment" }],
+        },
+      },
+    });
+    const viewerConnection = await joinUnit(
+      origin,
+      viewerCookie,
+      opened.resource.unitId
+    );
+    const viewerAddCommentResponse = await fetch(
+      `${origin}/universer-api/comment/unit/${opened.resource.unitId}/add`,
+      {
+        method: "POST",
+        headers: {
+          cookie: viewerCookie,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          memberId: viewerConnection.memberId,
+          unitId: opened.resource.unitId,
+          content: "Viewer must not write",
+          mention: [],
+        }),
+      }
+    );
+    expect(viewerAddCommentResponse.status).toBe(403);
+
+    const ownerDeleteConnection = await joinUnit(
+      origin,
+      cookie,
+      opened.resource.unitId
+    );
+    const ownerDeleteCommentResponse = await fetch(
+      `${origin}/universer-api/comment/unit/${opened.resource.unitId}/delete`,
+      {
+        method: "POST",
+        headers: {
+          cookie,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          memberId: ownerDeleteConnection.memberId,
+          unitId: opened.resource.unitId,
+          threadId: added.comment.threadId,
+          replyId: added.comment.threadId,
+        }),
+      }
+    );
+    const ownerDeleteCommentBody = await ownerDeleteCommentResponse.text();
+    expect(ownerDeleteCommentResponse.status, ownerDeleteCommentBody).toBe(200);
+    const commentsAfterDeleteResponse = await fetch(
+      `${origin}/universer-api/comment/unit/${opened.resource.unitId}/list?threadId=${encodeURIComponent(added.comment.threadId)}`,
+      { headers: { cookie } }
+    );
+    await expect(commentsAfterDeleteResponse.json()).resolves.toMatchObject({
+      comments: {},
+    });
 
     const disabledLinkSharingResponse = await fetch(
       `${origin}/api/nodes/${nodeId}/link-sharing`,
@@ -356,6 +506,69 @@ describe("collaboration gateway", () => {
     });
   });
 });
+
+async function joinUnit(
+  origin: string,
+  cookie: string,
+  unitId: string
+): Promise<{ readonly memberId: string }> {
+  const ticketResponse = await fetch(
+    `${origin}/universer-api/user/session-ticket`,
+    { headers: { cookie } }
+  );
+  const ticket = (await ticketResponse.json()) as { readonly ticket: string };
+  const socket = new WebSocket(
+    `${origin.replace(/^http/, "ws")}/universer-api/comb/connect?sessionTicket=${encodeURIComponent(ticket.ticket)}`
+  );
+  sockets.push(socket);
+  await new Promise<void>((resolve, reject) => {
+    socket.addEventListener("open", () => resolve(), { once: true });
+    socket.addEventListener("error", () => reject(new Error("WebSocket failed")), {
+      once: true,
+    });
+  });
+  socket.send(
+    serializeCombRequest({
+      cmd: CombCmd.HELLO,
+      routeKey: "hello",
+      routeType: "",
+    })
+  );
+  const hello = await nextCombResponse(socket);
+  expect(hello).toMatchObject({ cmd: CombCmd.HELLO, code: CmdRspCode.OK });
+  if (hello.cmd !== CombCmd.HELLO) throw new Error("HELLO response missing");
+  socket.send(
+    serializeCombRequest({
+      cmd: CombCmd.JOIN,
+      routeKey: unitId,
+      routeType: "",
+      data: { rooms: [{ roomID: unitId, args: "" }] },
+    })
+  );
+  await expect(nextCombResponse(socket)).resolves.toMatchObject({
+    cmd: CombCmd.JOIN,
+    code: CmdRspCode.OK,
+  });
+  return { memberId: hello.data.memberID };
+}
+
+function nextCombResponse(socket: WebSocket) {
+  return new Promise<ReturnType<typeof deserializeToCombResponse>>(
+    (resolve, reject) => {
+      socket.addEventListener(
+        "message",
+        (event) => {
+          try {
+            resolve(deserializeToCombResponse(event));
+          } catch (error) {
+            reject(error);
+          }
+        },
+        { once: true }
+      );
+    }
+  );
+}
 
 async function startApplication(): Promise<{
   readonly application: WorkspaceApplication;

@@ -37,7 +37,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - [`dream-num/univer-pro`](https://github.com/dream-num/univer-pro) — owns the Univer Pro content, Office exchange,
   collaboration client, and UI packages consumed by the Browser and CLI. Contract: [repository boundary](AGENTS.md).
 - [`dream-num/univer-collaboration-sdk`](https://github.com/dream-num/univer-collaboration-sdk) — owns collaboration
-  Service, revision, changeset, Worktree, persistence, Endpoint, and Transport contracts used by Workspace.
+  Service, revision, changeset, Thread Comment, Worktree, persistence, Endpoint, and Transport contracts used by Workspace.
   Contract: [repository boundary](AGENTS.md).
 - [`dream-num/univer-cli-sdk`](https://github.com/dream-num/univer-cli-sdk) — owns the target-neutral headless,
   execution, inspection, rendering, daemon, and Commander capabilities composed by Workspace CLI.
@@ -62,7 +62,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 ## Deployment and data classification
 
 - Workspace product metadata and authentication state are stored in the product SQLite database; Univer snapshot,
-  changeset, and revision data are stored separately through the Collaboration Database Adapter.
+  changeset, revision, and Thread Comment data are stored separately in component-owned tables in the Collaboration
+  SQLite file. Thread Comment anchors remain in Unit data while bodies, replies, and solved state use the Comment Adapter.
 - Uploaded Resource bytes and embedded Univer Asset bytes are stored by the configured BlobStore. Database rows
   retain their identities, metadata, and recovery state.
 - Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs, sharing state, and user-authored

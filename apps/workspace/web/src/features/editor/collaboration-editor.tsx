@@ -105,10 +105,17 @@ interface ICollaborationEditorDefinition {
   readonly theme: Theme;
   readonly createPresets: (
     container: HTMLElement,
-    license: string
+    license: string,
+    collaborationScope: NonNullable<
+      CollaborationEditorProps["collaborationScope"]
+    >
   ) => IPreset[];
   readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
-  readonly collaborationFeaturePlugins?: () => IPresetPlugin[];
+  readonly collaborationFeaturePlugins?: (
+    collaborationScope: NonNullable<
+      CollaborationEditorProps["collaborationScope"]
+    >
+  ) => IPresetPlugin[];
   readonly exchangeFeaturePlugins?: () => IPresetPlugin[];
   readonly printFeaturePlugins?: () => IPresetPlugin[];
   readonly load: (
@@ -216,7 +223,11 @@ export function createCollaborationEditor(
                   },
                 ],
               ];
-        let presets = definition.createPresets(element, license);
+        let presets = definition.createPresets(
+          element,
+          license,
+          collaborationScope
+        );
         if (licensePlugins.length > 0) {
           // createUniver registers every preset before its top-level plugins.
           // Keep License ahead of Pro feature presets so their dependency
@@ -259,7 +270,7 @@ export function createCollaborationEditor(
                 ],
               ];
         const collaborationFeaturePlugins =
-          definition.collaborationFeaturePlugins?.() ?? [];
+          definition.collaborationFeaturePlugins?.(collaborationScope) ?? [];
         const outputPlugins = createWorkspaceOutputPlugins({
           origin: window.location.origin,
           exchangeEnabled,
