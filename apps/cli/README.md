@@ -111,6 +111,7 @@ to override the bundled credential.
 
 - [Univer Workspace repository](https://github.com/dream-num/univer-workspace)
 - [Univer SDK documentation](https://docs.univer.ai/)
+- [Univer Office SDK documentation](https://office.univer.ai/)
 - [Univer on GitHub](https://github.com/dream-num/univer)
 - [Workspace issue tracker](https://github.com/dream-num/univer-workspace/issues)
 - [Univer website](https://univer.ai/)
