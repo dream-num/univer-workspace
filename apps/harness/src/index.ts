@@ -291,7 +291,13 @@ export function createCallbackHandler(ctx: Context, config: Config, loginAttempt
       });
       if (result.accessToken !== "") {
         const expiresAtMs = Date.now() + result.expiresIn * 1000;
-        await ctx.workspaceAuth.storeCredential(result.identity.userId, result.accessToken, expiresAtMs);
+        const workspaceAuth = ctx.get("workspaceAuth") as
+          | { storeCredential(userId: string, token: string, expiresAtMs: number): Promise<void> }
+          | undefined;
+        if (workspaceAuth === undefined) {
+          throw new Error("workspaceAuth service is unavailable");
+        }
+        await workspaceAuth.storeCredential(result.identity.userId, result.accessToken, expiresAtMs);
       }
       const cookie = signSessionCookie(result.identity, config.sessionSecret, config.sessionTtlMs);
       setCookie(res, config.sessionCookieName, cookie, {
@@ -302,7 +308,7 @@ export function createCallbackHandler(ctx: Context, config: Config, loginAttempt
       clearCookie(res, config.sessionCookieName + "_state", config.secureCookies);
       return redirect(res, attempt.returnTo);
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "unknown token exchange failure";
+      const detail = error instanceof Error ? `${error.message}\n${error.stack ?? ""}` : "unknown token exchange failure";
       return oauthCallbackFailure(res, 502, "oauth_token_exchange_failed", detail);
     }
   };
@@ -416,8 +422,11 @@ function sanitizeReturnTo(pathname: string): string {
  * Register all four routes plus the workspaceAuth service with the webserver.
  */
 export function apply(ctx: Context, config: Config): void {
-  ctx.plugin(workspaceAuthProvider, { workspaceOrigin: config.workspaceOrigin });
-  ctx.plugin(workspaceSessionProvider, {
+  // workspaceAuth and workspaceSession are class plugins: cordis resolves
+  // their static inject and runs [Service.init]. They register into the shared
+  // root store, so the sibling capability plugin resolves them via ctx.get.
+  ctx.plugin(workspaceAuthProvider.WorkspaceAuthProvider, { workspaceOrigin: config.workspaceOrigin });
+  ctx.plugin(workspaceSessionProvider.WorkspaceSessionProvider, {
     sessionCookieName: config.sessionCookieName,
     sessionSecret: config.sessionSecret,
   });

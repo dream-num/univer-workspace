@@ -21,7 +21,7 @@ function text(value: string): ContentBlock[] {
 async function scope(ctx: Context, exec: ToolRunContext): Promise<{ userId: string; spaceId: string }> {
   const cwd = exec.agent?.session.header.cwd;
   if (cwd === undefined || cwd === "") throw new Error("univer tools require a calling agent with a workspace");
-  const resolved = await ctx.univerWorkspace.resolveSpaceForSession(cwd);
+  const resolved = await ctx.get("univerWorkspace")!.resolveSpaceForSession(cwd);
   if (resolved === undefined) throw new Error("the calling agent's workspace is not linked to a Univer Workspace Space");
   return resolved;
 }
@@ -55,7 +55,7 @@ export function registerEditTool(ctx: Context): () => void {
       const runtimeScope: WorkspaceRuntimeScope =
         args.worktreeId === undefined ? { kind: "trunk" } : { kind: "worktree", worktreeId: args.worktreeId };
       if (args.mode === "read") {
-        const value = await ctx.univerWorkspace.readUnit(userId, {
+        const value = await ctx.get("univerWorkspace")!.readUnit(userId, {
           scope: runtimeScope,
           unitId: args.unitId,
           unitType: args.unitType,
@@ -64,7 +64,7 @@ export function registerEditTool(ctx: Context): () => void {
         });
         return { committed: false, value };
       }
-      return await ctx.univerWorkspace.editUnit(userId, {
+      return await ctx.get("univerWorkspace")!.editUnit(userId, {
         scope: runtimeScope,
         unitId: args.unitId,
         unitType: args.unitType,

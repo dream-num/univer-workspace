@@ -23,7 +23,7 @@ function text(value: string): ContentBlock[] {
 async function scope(ctx: Context, exec: ToolRunContext): Promise<{ userId: string; spaceId: string; cwd: string }> {
   const cwd = exec.agent?.session.header.cwd;
   if (cwd === undefined || cwd === "") throw new Error("univer tools require a calling agent with a workspace");
-  const resolved = await ctx.univerWorkspace.resolveSpaceForSession(cwd);
+  const resolved = await ctx.get("univerWorkspace")!.resolveSpaceForSession(cwd);
   if (resolved === undefined) throw new Error("the calling agent's workspace is not linked to a Univer Workspace Space");
   return { ...resolved, cwd };
 }
@@ -61,7 +61,7 @@ export function registerExchangeTools(ctx: Context): () => void {
         const { userId, cwd } = await scope(ctx, exec);
         const path = sessionPath(cwd, args.file);
         const bytes = new Uint8Array(await readFile(path));
-        const result = await ctx.univerWorkspace.importFile(userId, {
+        const result = await ctx.get("univerWorkspace")!.importFile(userId, {
           filename: path.split("/").pop() ?? "import",
           bytes,
           mediaType: "application/octet-stream",
@@ -98,14 +98,14 @@ export function registerExchangeTools(ctx: Context): () => void {
       },
       async execute(args, exec) {
         const { userId, cwd } = await scope(ctx, exec);
-        const result = await ctx.univerWorkspace.exportFile(userId, {
+        const result = await ctx.get("univerWorkspace")!.exportFile(userId, {
           type: args.type as ExchangeUnitType,
           request: { unitID: args.unitID, format: args.format as "xlsx" | "csv" | "docx" | "pptx" },
         });
         if (result.status !== "done" || result.export?.fileID === undefined) {
           throw new Error(result.message ?? "workspace export did not produce a file");
         }
-        const bytes = await ctx.univerWorkspace.downloadFileBytes(userId, result.export.fileID);
+        const bytes = await ctx.get("univerWorkspace")!.downloadFileBytes(userId, result.export.fileID);
         const path = sessionPath(cwd, args.file);
         await writeFile(path, bytes);
         return { status: result.status, fileID: result.export.fileID, file: args.file };

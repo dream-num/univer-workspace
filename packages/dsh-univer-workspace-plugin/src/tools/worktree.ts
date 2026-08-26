@@ -19,7 +19,7 @@ function text(value: string): ContentBlock[] {
 async function scope(ctx: Context, exec: ToolRunContext): Promise<{ userId: string; spaceId: string }> {
   const cwd = exec.agent?.session.header.cwd;
   if (cwd === undefined || cwd === "") throw new Error("univer tools require a calling agent with a workspace");
-  const resolved = await ctx.univerWorkspace.resolveSpaceForSession(cwd);
+  const resolved = await ctx.get("univerWorkspace")!.resolveSpaceForSession(cwd);
   if (resolved === undefined) throw new Error("the calling agent's workspace is not linked to a Univer Workspace Space");
   return resolved;
 }
@@ -57,18 +57,18 @@ export function registerWorktreeTools(ctx: Context): () => void {
     async execute(args, exec) {
       const { userId } = await scope(ctx, exec);
       if (args.action === "create") {
-        return await ctx.univerWorkspace.createWorktree(userId, { name: args.name ?? "Univer worktree", summary: args.summary ?? null });
+        return await ctx.get("univerWorkspace")!.createWorktree(userId, { name: args.name ?? "Univer worktree", summary: args.summary ?? null });
       }
       if (args.worktreeId === undefined) {
         throw new Error(`univer_worktree ${args.action} requires worktreeId`);
       }
       switch (args.action) {
         case "ready":
-          return await ctx.univerWorkspace.markWorktreeReady(userId, args.worktreeId);
+          return await ctx.get("univerWorkspace")!.markWorktreeReady(userId, args.worktreeId);
         case "merge":
-          return await ctx.univerWorkspace.mergeWorktree(userId, args.worktreeId);
+          return await ctx.get("univerWorkspace")!.mergeWorktree(userId, args.worktreeId);
         case "discard":
-          return await ctx.univerWorkspace.discardWorktree(userId, args.worktreeId);
+          return await ctx.get("univerWorkspace")!.discardWorktree(userId, args.worktreeId);
         case "reopen":
           // reopen is not yet exposed by the Workspace API provider; a draft
           // Worktree stays editable without it. Fail closed rather than fake it.

@@ -26,7 +26,7 @@ function jsonResponse(res: ServerResponse, status: number, body: unknown): void 
 
 /** Resolve the authenticated Workspace user for a request, or answer 401. */
 function authenticatedUser(ctx: Context, req: IncomingMessage): { userId: string; displayName: string; avatarUrl: string | null } | null {
-  const identity = ctx.workspaceSession.currentUser(req.headers.cookie);
+  const identity = ctx.get("workspaceSession")!.currentUser(req.headers.cookie);
   if (identity === undefined) return null;
   return {
     userId: identity.userId,
@@ -47,7 +47,7 @@ function createHandler(ctx: Context, config: WebServerConfig): (req: IncomingMes
         return;
       }
       try {
-        const result = await ctx.univerWorkspace.listSpaces(user.userId);
+        const result = await ctx.get("univerWorkspace")!.listSpaces(user.userId);
         jsonResponse(res, 200, { spaces: result.spaces });
       } catch (error) {
         jsonResponse(res, 502, { error: error instanceof Error ? error.message : "workspace unreachable" });

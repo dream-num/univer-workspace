@@ -53,9 +53,9 @@ const WS_TARGET_PARAM = "target";
 
 /** Resolve the authenticated User's workspace origin + session token, or undefined. */
 function resolveUpstream(ctx: Context, req: IncomingMessage): { origin: string; token: string } | undefined {
-  const identity = ctx.workspaceSession.currentUser(req.headers.cookie);
+  const identity = ctx.get("workspaceSession")!.currentUser(req.headers.cookie);
   if (identity === undefined) return undefined;
-  const client = ctx.workspaceAuth.clientFor(identity.userId);
+  const client = ctx.get("workspaceAuth")!.clientFor(identity.userId);
   if (client === undefined) return undefined;
   return { origin: client.origin, token: client.sessionToken };
 }

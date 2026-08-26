@@ -1,9 +1,7 @@
 /**
- * Concrete `workspaceAuth` service implementation and its provider plugin.
- *
- * The service opens the credentials domain on its fiber, keeps the settings
- * origin source as the authoritative origin thunk, and issues per-User HTTP
- * clients that attach the stored `workspace_session` cookie.
+ * Concrete `workspaceAuth` service, mounted as a class plugin so cordis runs
+ * `[Service.init]` to open the credentials domain and resolves storageDomain
+ * through `static inject`.
  * @module @univerjs/univer-workspace-harness/workspace-auth-provider
  */
 
@@ -34,7 +32,10 @@ const settingsSchema = z.object({
   workspaceOrigin: z.string().required(),
 });
 
-class WorkspaceAuthServiceImpl extends WorkspaceAuthService {
+/** The class-plugin provider for the workspaceAuth service. */
+export class WorkspaceAuthProvider extends WorkspaceAuthService {
+  static readonly inject = ["storageDomain"];
+
   private originSource: (() => WorkspaceAuthSettings) | undefined;
   private table: ReturnType<Domain<typeof credentialsDomainSpec>["table"]> | undefined;
 
@@ -43,6 +44,11 @@ class WorkspaceAuthServiceImpl extends WorkspaceAuthService {
     private readonly config: WorkspaceAuthConfig,
   ) {
     super(ctx);
+    const settingsEntry: WorkspaceAuthSettings = { workspaceOrigin: config.workspaceOrigin };
+    installSettingsSection(ctx, UWH_SETTINGS_NAMESPACE, settingsSchema, settingsEntry, {
+      setSource: (current) => this.setOriginSource(current),
+      onChange: () => {},
+    });
   }
 
   async [Service.init](): Promise<void> {
@@ -92,7 +98,9 @@ class WorkspaceAuthServiceImpl extends WorkspaceAuthService {
   }
 
   private readCredential(userId: string): { readonly token: string } | undefined {
-    const record = this.requireTable().get(userId);
+    const table = this.table;
+    if (table === undefined) return undefined;
+    const record = table.get(userId);
     if (record === undefined) return undefined;
     if (record.expiresAt <= Date.now()) {
       void this.clearCredential(userId);
@@ -107,18 +115,4 @@ class WorkspaceAuthServiceImpl extends WorkspaceAuthService {
     }
     return this.table;
   }
-}
-
-export const name = "univer-workspace-harness-auth";
-
-export const inject = ["storageDomain"];
-
-/** Mount the workspaceAuth service and the origin settings namespace. */
-export function apply(ctx: Context, config: WorkspaceAuthConfig): void {
-  const service = new WorkspaceAuthServiceImpl(ctx, config);
-  const settingsEntry: WorkspaceAuthSettings = { workspaceOrigin: config.workspaceOrigin };
-  installSettingsSection(ctx, UWH_SETTINGS_NAMESPACE, settingsSchema, settingsEntry, {
-    setSource: (current) => service.setOriginSource(current),
-    onChange: () => {},
-  });
 }

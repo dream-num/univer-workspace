@@ -16,7 +16,7 @@ function text(value: string): ContentBlock[] {
 async function scope(ctx: Context, exec: ToolRunContext): Promise<{ userId: string; spaceId: string }> {
   const cwd = exec.agent?.session.header.cwd;
   if (cwd === undefined || cwd === "") throw new Error("univer tools require a calling agent with a workspace");
-  const resolved = await ctx.univerWorkspace.resolveSpaceForSession(cwd);
+  const resolved = await ctx.get("univerWorkspace")!.resolveSpaceForSession(cwd);
   if (resolved === undefined) throw new Error("the calling agent's workspace is not linked to a Univer Workspace Space");
   return resolved;
 }
@@ -63,7 +63,7 @@ export function registerDocumentTools(ctx: Context): () => void {
       },
       async execute(args, exec) {
         const { userId } = await scope(ctx, exec);
-        const documents = await ctx.univerWorkspace.listDocuments(userId, args.spaceId);
+        const documents = await ctx.get("univerWorkspace")!.listDocuments(userId, args.spaceId);
         return {
           spaceId: args.spaceId,
           documents: documents
@@ -110,7 +110,7 @@ export function registerDocumentTools(ctx: Context): () => void {
       },
       async execute(args, exec) {
         const { userId } = await scope(ctx, exec);
-        return await ctx.univerWorkspace.openDocument(userId, args.resourceId);
+        return await ctx.get("univerWorkspace")!.openDocument(userId, args.resourceId);
       },
     })),
 
@@ -140,7 +140,7 @@ export function registerDocumentTools(ctx: Context): () => void {
       },
       async execute(args, exec) {
         const { userId } = await scope(ctx, exec);
-        return await ctx.univerWorkspace.createDocument(userId, {
+        return await ctx.get("univerWorkspace")!.createDocument(userId, {
           spaceId: args.spaceId,
           parentNodeId: args.parentNodeId ?? null,
           name: args.name,

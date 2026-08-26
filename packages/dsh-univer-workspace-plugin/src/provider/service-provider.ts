@@ -16,7 +16,7 @@ import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type {} from "@deepseek-ai/dsh-workspace";
 import type { CollaborationRuntimeValue } from "@univer-cli/univer-collaboration-runtime";
 import { spaceDirectoryPath } from "@univerjs/univer-workspace-harness/identity";
-import type { WorkspaceHttpClient } from "@univerjs/univer-workspace-harness";
+import type { WorkspaceAuthService, WorkspaceHttpClient } from "@univerjs/univer-workspace-harness";
 import type {} from "@univerjs/univer-workspace-harness";
 import type { WorkspaceDocument, WorkspaceSpace } from "../shared/wire.ts";
 import {
@@ -57,14 +57,8 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     ctx.effect(() => () => { void this.runtimeManager.close(); }, "univer-workspace: runtime pool close");
   }
 
-  async [Service.init](): Promise<void> {
-    const domain = await this.ctx.storageDomain.open(spaceLinksDomainSpec);
-    this.ctx.effect(() => () => { void domain.close(); }, "univer-workspace: space-links domain close");
-    this.table = domain.table("links");
-  }
-
   async listSpaces(userId: string): Promise<{ spaces: readonly WorkspaceSpace[] }> {
-    const client = this.ctx.workspaceAuth.clientFor(userId);
+    const client = this.requireWorkspaceAuth().clientFor(userId);
     if (client === undefined) {
       throw new Error("workspace credential is missing; sign in again");
     }
@@ -86,7 +80,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   async resolveSpaceForSession(cwd: string): Promise<SpaceScope | undefined> {
     const workspace = await this.ctx.workspaceRegistry.resolveByPath(cwd);
     if (workspace === undefined) return undefined;
-    const record = this.requireTable().get(workspace.id);
+    const record = (await this.requireTable()).get(workspace.id);
     return record === undefined ? undefined : { userId: record.userId, spaceId: record.spaceId };
   }
 
@@ -182,14 +176,14 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   }
 
   private requireClient(userId: string): WorkspaceHttpClient {
-    const client = this.ctx.workspaceAuth.clientFor(userId);
+    const client = this.requireWorkspaceAuth().clientFor(userId);
     if (client === undefined) {
       throw new Error("workspace credential is missing; sign in again");
     }
     return client;
   }
   private async reconcileSpace(userId: string, spaceId: string, name: string): Promise<string> {
-    const table = this.requireTable();
+    const table = await this.requireTable();
     // Reuse an existing link for this space id (same user), so the backing dsh
     // workspace stays stable across list calls and Pod restarts.
     for (const [key, record] of table.entries()) {
@@ -203,11 +197,26 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return workspace.id;
   }
 
-  private requireTable(): ReturnType<Domain<typeof spaceLinksDomainSpec>["table"]> {
-    if (this.table === undefined) {
-      throw new Error("space-links domain is not initialized");
+  private async requireTable(): Promise<ReturnType<Domain<typeof spaceLinksDomainSpec>["table"]>> {
+    if (this.table !== undefined) return this.table;
+    const storageDomain = this.ctx.get("storageDomain") as
+      | { open(spec: typeof spaceLinksDomainSpec): Promise<Domain<typeof spaceLinksDomainSpec>> }
+      | undefined;
+    if (storageDomain === undefined) {
+      throw new Error("storageDomain service is unavailable");
     }
+    const domain = await storageDomain.open(spaceLinksDomainSpec);
+    this.ctx.effect(() => () => { void domain.close(); }, "univer-workspace: space-links domain close");
+    this.table = domain.table("links");
     return this.table;
+  }
+
+  private requireWorkspaceAuth(): WorkspaceAuthService {
+    const service = this.ctx.get("workspaceAuth") as WorkspaceAuthService | undefined;
+    if (service === undefined) {
+      throw new Error("workspaceAuth service is unavailable");
+    }
+    return service;
   }
 }
 

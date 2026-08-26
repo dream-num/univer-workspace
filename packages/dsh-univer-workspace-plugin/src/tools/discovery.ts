@@ -21,7 +21,7 @@ function text(value: string): ContentBlock[] {
 /** Resolve the calling agent's `{ userId, spaceId }` for a tool execution. */
 async function toolScope(ctx: Context, exec: ToolRunContext): Promise<{ userId: string; spaceId: string }> {
   const cwd = toolWorkspaceCwd(exec);
-  const resolved = await ctx.univerWorkspace.resolveSpaceForSession(cwd);
+  const resolved = await ctx.get("univerWorkspace")!.resolveSpaceForSession(cwd);
   if (resolved === undefined) {
     throw new Error("the calling agent's workspace is not linked to a Univer Workspace Space");
   }
@@ -53,7 +53,7 @@ export function registerDiscoveryTools(ctx: Context): () => void {
       },
       async execute(_args, exec) {
         const { userId } = await toolScope(ctx, exec);
-        const result = await ctx.univerWorkspace.listSpaces(userId);
+        const result = await ctx.get("univerWorkspace")!.listSpaces(userId);
         return { spaces: result.spaces.map(s => ({ spaceId: s.spaceId, name: s.name, type: s.type, accessRole: s.accessRole })) };
       },
     })),

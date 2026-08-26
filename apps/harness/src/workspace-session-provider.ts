@@ -15,7 +15,10 @@ export interface WorkspaceSessionConfig {
   sessionSecret: string;
 }
 
-class WorkspaceSessionServiceImpl extends WorkspaceSessionService {
+/** The class-plugin provider for the workspaceSession service. */
+export class WorkspaceSessionProvider extends WorkspaceSessionService {
+  static readonly inject: string[] = [];
+
   constructor(
     ctx: Context,
     private readonly config: WorkspaceSessionConfig,
@@ -29,10 +32,4 @@ class WorkspaceSessionServiceImpl extends WorkspaceSessionService {
       this.config.sessionSecret,
     );
   }
-}
-
-export const name = "univer-workspace-harness-session";
-
-export function apply(ctx: Context, config: WorkspaceSessionConfig): void {
-  new WorkspaceSessionServiceImpl(ctx, config);
 }
