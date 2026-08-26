@@ -6,7 +6,7 @@ import { mkdir, rm } from "node:fs/promises";
 // with the @deepseek-ai/* peers (and zod, owned by dsh-storage-domain) left
 // external, and a classic-script client bundle wrapped in a ModuleLoader
 // shell whose `require` resolves React from the DSH page runtime.
-const external = ["node:*", "@deepseek-ai/*", "zod"];
+const external = ["node:*", "@deepseek-ai/*", "zod", "ws"];
 
 await rm("lib", { recursive: true, force: true });
 await mkdir("lib", { recursive: true });

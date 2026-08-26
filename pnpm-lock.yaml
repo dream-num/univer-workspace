@@ -868,6 +868,10 @@ importers:
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/dsh-univer-workspace-plugin:
+    dependencies:
+      ws:
+        specifier: 8.21.3
+        version: 8.21.3
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: 4.0.1
@@ -914,6 +918,9 @@ importers:
       '@types/react':
         specifier: 19.2.17
         version: 19.2.17
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       '@univer-cli/api-reference':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2
@@ -3335,6 +3342,9 @@ packages:
 
   '@types/serve-static@2.2.0':
     resolution: {integrity: sha512-8mam4H1NHLtu7nmtalF7eyBH14QyOASmcxHhSfEoRyr0nP/YdoesEtU+uSRvMe96TW/HPTtkoKqQLl53N7UXMQ==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@univer-cli/api-reference-command@1.0.0-beta.2':
     resolution: {integrity: sha512-g9dlNMfjfotDqTi55xCaunGVBnzKRavAtCkHwo4bSs8h/fY3IasPRojXFQ3LbITMUEDvA+pGywpkFavfBSYMkg==, tarball: https://registry.npmjs.org/@univer-cli/api-reference-command/-/api-reference-command-1.0.0-beta.2.tgz}
@@ -7934,6 +7944,10 @@ snapshots:
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
+      '@types/node': 24.10.1
+
+  '@types/ws@8.18.1':
+    dependencies:
       '@types/node': 24.10.1
 
   '@univer-cli/api-reference-command@1.0.0-beta.2(commander@15.0.0)':

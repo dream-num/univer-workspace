@@ -12,6 +12,7 @@ import * as serviceProvider from "./provider/service-provider.ts";
 import * as tools from "./tools/plugin.ts";
 import * as webServer from "./webServer/plugin.ts";
 import * as skills from "./skills/plugin.ts";
+import * as collabProxy from "./collab-proxy/plugin.ts";
 
 /** The 90-day runtime development license, used only when no config/env license is set. */
 const DEVELOPMENT_LICENSE =
@@ -40,6 +41,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.plugin(tools);
   ctx.plugin(webServer);
   ctx.plugin(skills);
+  ctx.plugin(collabProxy);
 }
 
 function resolveLicense(configured: string): string {
