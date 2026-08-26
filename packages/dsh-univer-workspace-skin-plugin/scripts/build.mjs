@@ -3,8 +3,9 @@ import { mkdir, rm } from "node:fs/promises";
 
 // DSH bundles are consumed from a dsh profile, not from this workspace, so
 // every package builds self-contained artifacts: a node ESM host bundle
-// with the @deepseek-ai/* peers left external, and a classic-script client
-// bundle whose ModuleLoader shell is written in the entry source.
+// (the skin has no host behavior, but the dsh row loader still requires a
+// node half) and a classic-script client bundle wrapped in a ModuleLoader
+// shell whose `require` resolves React from the DSH page runtime.
 const external = ["node:*", "@deepseek-ai/*"];
 
 await rm("lib", { recursive: true, force: true });
@@ -22,14 +23,25 @@ await build({
   logLevel: "info",
 });
 
+const packageId = "dsh-univer-workspace-skin-plugin";
+
 await build({
-  entryPoints: ["src/client/entry.ts"],
+  entryPoints: ["src/client/index.tsx"],
   outfile: "lib/client.js",
   bundle: true,
   platform: "browser",
-  format: "iife",
+  format: "cjs",
   target: "es2022",
+  jsx: "transform",
+  jsxFactory: "createElement",
+  jsxFragment: "Fragment",
   external: ["react", "react-dom"],
   sourcemap: true,
   logLevel: "info",
+  banner: {
+    js: `var module = { exports: {} }; var exports = module.exports;\nwindow.__ModuleLoader__.load({ id: ${JSON.stringify(packageId)}, factory: (require) => {`,
+  },
+  footer: {
+    js: "return module.exports; } });",
+  },
 });

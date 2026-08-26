@@ -1,13 +1,19 @@
 # dsh-univer-workspace-skin-plugin
 
 The browser skin plugin for DSH in Univer Workspace Harness. It aligns the
-DSH UI with the Workspace brand — theme token overrides (`--dsw-alias-*`)
-and the sidebar brand slot with the Workspace logo and product name.
+DSH shell with the Univer Workspace brand.
 
 ## Responsibilities
 
-- Look and feel only: colors, typography, logo, and brand naming of the
-  DSH shell when deployed as Univer Workspace Harness.
+- Look and feel only: overrides the DSH brand and business-accent theme
+  tokens (`--dsw-alias-brand-primary`, `--dsw-alias-state-business-*`,
+  `--dsw-specific-sidebar-nav-item-active-accent`) in both light and dark
+  modes, and replaces the sidebar brand mark and name with the Workspace
+  logo and the fixed "Univer Workspace" product name.
+
+The token overrides target only the brand/accent aliases; static neutral and
+semantic state tokens stay with the DSH design system so layout and status
+colors keep their intended meaning.
 
 ## Non-responsibilities
 
