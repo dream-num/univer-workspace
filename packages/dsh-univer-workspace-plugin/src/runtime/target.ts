@@ -23,6 +23,8 @@ export interface WorkspaceRuntimeTarget {
   readonly unitType: WorkspaceUnitType;
   /** The `workspace_session` token (the cookie value, not the header). */
   readonly sessionToken: string;
+  /** The Univer runtime license to load the headless runtime with. */
+  readonly license: string;
 }
 
 export function workspaceSnapshotPrefix(scope: WorkspaceRuntimeScope): string {

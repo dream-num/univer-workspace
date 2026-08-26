@@ -40,6 +40,8 @@ export interface ServiceProviderConfig {
   workspaceRoot: string;
   /** Absolute file URL of the worker bundle (produced by the package build). */
   workerUrl: URL;
+  /** Univer runtime license (fall back to the built-in development license when empty). */
+  license: string;
 }
 
 class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
@@ -142,6 +144,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
       unitId: input.unitId,
       unitType: input.unitType,
       sessionToken: client.sessionToken,
+      license: this.config.license,
     };
     return await this.runtimeManager.read(target, input.code);
   }
@@ -155,6 +158,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
       unitId: input.unitId,
       unitType: input.unitType,
       sessionToken: client.sessionToken,
+      license: this.config.license,
     };
     return await this.runtimeManager.writeAndCommit(target, input.code);
   }

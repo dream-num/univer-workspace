@@ -20,10 +20,6 @@ import { toUniverType, type WorkspaceRuntimeTarget } from "./target.js";
 import { WorkerHttp } from "./worker-http.js";
 import { WorkspaceSnapshotServerAdapter } from "./snapshot-adapter.js";
 
-/** The 90-day runtime development license, overridable via UNIVER_LICENSE. */
-const UNIVER_LICENSE =
-  "2088168239728517120-1-eyJpIjoiMjA4ODE2ODIzOTcyODUxNzEyMCIsInYiOiIxIiwicCI6ImtPN3hWUG5mZVFYSlY2ZjRiSk03MFk5NHdOZTZkR3VRTDNxdklqRFpZblU9IiwiZG0iOlsibG9jYWxob3N0Il0sInJ0IjozLCJmdCI6eyJ1ZiI6eyJtdSI6MjE0NzQ4MzY0NiwiZXQiOjE3OTQ3NTg0MDAsIm1tIjoyMTQ3NDgzNjQ2LCJjdSI6MjE0NzQ4MzY0Nn0sInNmIjp7ImV0IjoxNzk0NzU4NDAwLCJydiI6dHJ1ZSwicHRuIjoyMTQ3NDgzNjQ2LCJtaXMiOjIxNDc0ODM2NDYsIm1wbiI6MjE0NzQ4MzY0NiwibmMiOjIxNDc0ODM2NDYsImllYyI6MCwiZmNjIjowfSwiZGYiOnsiZXQiOjE3OTQ3NTg0MDAsInJ2Ijp0cnVlLCJtaXMiOjIxNDc0ODM2NDYsIm1wbiI6MjE0NzQ4MzY0NiwiaWVjIjowfSwid3NmIjp7ImV0IjoxNzk0NzU4NDAwLCJobiI6MjE0NzQ4MzY0Nn19LCJ1ZCI6MTc5NDc1ODQwMCwiYXQiOjE3ODY2OTMxMTAsImUiOiJkZXZlbG9wZXJAdW5pdmVyLmFpIiwiZCI6OCwibiI6MTl9-ZidzNthAEZRZ13xLQUagdaUsjaMjrr5BDf4JGx9Zzsw1PgmNLak8wuZWQ1le9eMYUyubIa5YI4JpExgdHhN1BA==-1794758400";
-
 export default defineUniverCollaborationRuntimeWorker<WorkspaceRuntimeTarget>({
   async createRuntime(init) {
     const target = init;
@@ -38,7 +34,7 @@ export default defineUniverCollaborationRuntimeWorker<WorkspaceRuntimeTarget>({
         throw new Error("workspace reference loading requires a SnapshotService resolver");
       }
       return await createStandardHeadlessUniverFactory({
-        license: process.env.UNIVER_LICENSE?.trim() || UNIVER_LICENSE,
+        license: target.license,
       })({ unitId: context.unitId, unitType: context.unitType });
     };
 
