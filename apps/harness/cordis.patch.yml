@@ -1,7 +1,114 @@
-# univer-workspace-harness bundle patch. Rows for the preloaded Univer
-# plugins and the webserver/connection overrides are added with the harness
-# core; this skeleton only mounts the (currently empty) core plugin.
+# univer-workspace-harness bundle patch. Applied after the dsh-web-app layer,
+# so it may override rows by id and insert its own.
+#
+# It removes the surfaces ordinary internal users do not expose — the
+# permission "Full Access" default selector and advanced settings pages —
+# disables the official workspace browser (the sidebar space list is owned by
+# the capability plugin), and mounts the harness core. One row activates BOTH
+# faces: the harness node half registers the OAuth login/callback and
+# identity/template-fork routes, and its package manifest declares
+# `dsh.client`, so the modules scanner loads the `./client` browser half from
+# the same row.
+
+# ── network server binding ───────────────────────────────────────────────────
+
+# The CLI rejects an explicit `--host 0.0.0.0` invocation before the profile
+# loads. This deployment sets the supported all-interfaces webserver value at
+# composition time instead, while the connection row below adds the public
+# authority to the browser trust fence.
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  inject: [webStartup]
+  config:
+    host: !!js process.env.UWH_BIND_HOST ?? '0.0.0.0'
+    port: !!js ctx.webStartup.port ?? 3080
+
+# ── hide Full Access / advanced settings ───────────────────────────────────
+
+# Restate the `connection` row so its trust fence always includes the browser
+# origin the harness is served on (the deployment's public host). A patch
+# replaces the whole row config, so the `inject` edge that resolves
+# `ctx.webRuntime` before the expression runs is restated too. The public host
+# comes from the deployment (UWH_PUBLIC_HOST); a missing/blank value is a
+# LOAD-TIME config error so DSH never silently trusts arbitrary Host headers.
+- id: connection
+  name: '@deepseek-ai/dsh-client-connection'
+  inject: [webRuntime]
+  config:
+    trustedHosts: !!js >-
+      (() => {
+        const host = process.env.UWH_PUBLIC_HOST
+        if (host === undefined || host.trim() === '') {
+          throw new Error('UWH_PUBLIC_HOST is required: the harness is served on a fixed public host; without it DSH would reject the browser request as untrusted')
+        }
+        return [host.trim(), ...ctx.webRuntime.trustedHosts]
+          .filter((value, index, values) => values.indexOf(value) === index)
+      })()
+
+# `ui-permission` is the `settings.general.item` row letting the user pick the
+# default permission preset; the `danger-full-access` preset is selectable
+# there. Hide it for the harness.
+- id: ui-permission
+  disabled: true
+
+# Keep the native plugin configuration cards and read-only inventory out of the
+# default composition. Models remain unavailable in every product view.
+- id: ui-settings-plugins
+  disabled: true
+
+- id: ui-settings-plugin-inventory
+  disabled: true
+
+- id: ui-settings-models
+  disabled: true
+
+# ── harness core plugin row (host half + browser half) ─────────────────────
 
 - insert:
     - id: univer-workspace-harness
       name: '@univerjs/univer-workspace-harness'
+      config:
+        # The configured emptyDir mount root for per-user directories. The host
+        # plugin derives each per-user directory as a direct SHA-256-named child
+        # of this root and provisions it before resolving the Workspace record.
+        workspaceRoot: !!js process.env.UWH_WORKSPACE_ROOT
+
+        # The Workspace service origin the harness authenticates against and
+        # calls. It is a deployment value overridable at runtime through the
+        # `univer-workspace-harness` settings namespace.
+        workspaceOrigin: !!js process.env.UWH_WORKSPACE_ORIGIN ?? 'https://workspace.univer.plus'
+
+        # The deployment origin the harness is served on; the OAuth callback URL
+        # is built from it, never from a client-supplied Host header.
+        publicOrigin: !!js process.env.UWH_PUBLIC_ORIGIN
+
+        # Workspace OAuth confidential client credentials, set by the
+        # deployment. The client secret and session secret are deployment
+        # secrets and never reach the browser bundle.
+        oauthClientId: !!js process.env.UWH_OAUTH_CLIENT_ID
+        oauthClientSecret: !!js process.env.UWH_OAUTH_CLIENT_SECRET
+        sessionSecret: !!js process.env.UWH_OAUTH_SESSION_SECRET
+        authorizeScope: !!js process.env.UWH_OAUTH_SCOPE ?? 'identity session'
+
+        # Workspace usernames that receive the admin flag; this only gates the
+        # additional product UI and is not a second role database.
+        adminUsernames: !!js JSON.parse(process.env.UWH_ADMIN_USERNAMES_JSON ?? '[]')
+
+        # Route paths of the harness host plugin. The callback path must match
+        # the redirect URI registered with the Workspace authorization server,
+        # so it is a deployment value; the other paths are fixed.
+        loginPath: /auth/login
+        callbackPath: !!js process.env.UWH_OAUTH_CALLBACK_PATH ?? '/auth/callback'
+        mePath: /api/uwh/me
+        templateForkPath: /api/uwh/template-fork
+
+        # HttpOnly session cookie (short-lived); Secure is set from the
+        # deployment (HTTPS). The client redirects to loginPath on a 401.
+        sessionCookieName: dsh_session
+        sessionTtlMs: !!js Number(process.env.UWH_OAUTH_SESSION_TTL_MS ?? 900000)
+        stateTtlMs: !!js Number(process.env.UWH_OAUTH_STATE_TTL_MS ?? 120000)
+        secureCookies: !!js process.env.UWH_OAUTH_SECURE_COOKIES !== 'false'
+
+        # Configured templates: stable key -> source session id; the browser
+        # forks the source once and remembers the copy per user per browser.
+        templates: !!js JSON.parse(process.env.UWH_TEMPLATES_JSON ?? '[]')
