@@ -52,8 +52,10 @@ function openIntentsOf(session: unknown): readonly ViewerOpenIntent[] {
 
 /** The floating viewer dock. */
 export function ViewerDock(props: ViewerDockProps) {
-  const session = props.useSessions((state) => state.byId[props.sessionId]);
-  const intents = useMemo(() => openIntentsOf(session), [session]);
+  // `session` arrives through the input-region owner share as a point-in-time
+  // ConversationSnapshot; the skeleton re-renders dock entries on every store
+  // change, so the intents derivation needs no separate subscription.
+  const intents = useMemo(() => openIntentsOf(props.session), [props.session]);
   const [dismissed, setDismissed] = useState<readonly string[]>([]);
   const [bootstrap, setBootstrap] = useState<ViewerBootstrap | null>(null);
 

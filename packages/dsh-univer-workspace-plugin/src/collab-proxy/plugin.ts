@@ -159,7 +159,9 @@ function createUpgradeHandler(ctx: Context): (req: IncomingMessage, socket: Dupl
 
 export const name = "univer-workspace-collab-proxy";
 
-export const inject = ["webServer", "workspaceSession", "workspaceAuth"];
+// Services resolve lazily per request via ctx.get; static cross-row injects
+// would pend this row on the harness core startup order.
+export const inject = ["webServer"];
 
 export function apply(ctx: Context): void {
   ctx.effect(() => {

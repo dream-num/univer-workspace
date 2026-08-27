@@ -63,7 +63,12 @@ function openIntentOf(data: SessionEvent<"tool/result">["data"]): ViewerOpenInte
   const unitId = typeof raw.unitId === "string" ? raw.unitId : undefined;
   const type = unitType(raw.unitType);
   const name = typeof raw.name === "string" ? raw.name : undefined;
-  if (unitId === undefined || type === undefined || name === undefined) return null;
+  // univer_open is the only tool whose rendered payload carries this exact
+  // descriptor shape (node/resource ids plus the editor mode) — requiring
+  // every field keeps other JSON-rendering tools from opening viewers.
+  const resourceId = typeof raw.resourceId === "string" ? raw.resourceId : undefined;
+  const nodeId = typeof raw.nodeId === "string" ? raw.nodeId : undefined;
+  if (unitId === undefined || type === undefined || name === undefined || resourceId === undefined || nodeId === undefined) return null;
   return {
     unitId,
     unitType: type,

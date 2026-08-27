@@ -32,7 +32,10 @@ export const Config: z<Config> = z.object({
 
 export const name = "dsh-univer-workspace-plugin";
 
-export const inject = ["storageDomain", "workspaceAuth", "workspaceRegistry"];
+// `workspaceAuth` is resolved lazily via ctx.get at call time rather than
+// declared here: a cross-row hard dependency kept this whole bundle pending
+// on the harness core row's startup order and could fail the entire boot.
+export const inject = ["storageDomain", "workspaceRegistry"];
 
 export function apply(ctx: Context, config: Config): void {
   const workerUrl = new URL("./worker.js", import.meta.url);

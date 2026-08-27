@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { mkdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, rm } from "node:fs/promises";
 
 // DSH bundles are consumed from a dsh profile, not from this workspace, so
 // every package builds self-contained artifacts: a node ESM host bundle
@@ -61,3 +61,14 @@ await build({
   sourcemap: true,
   logLevel: "info",
 });
+
+// The bundled collaboration-runtime pool forks its IPC bootstrap from the
+// directory of the module it was imported from (import.meta.url), which after
+// bundling is this package's lib/. Ship the self-contained (zero-import)
+// bootstrap beside lib/index.js so the fork resolves.
+const { fileURLToPath } = await import("node:url");
+// The pool package has no subpath export for the bootstrap; resolve the
+// public entry (dist/index.mjs) and take its sibling bootstrap.
+const poolEntryUrl = import.meta.resolve("@univer-cli/univer-collaboration-runtime-pool");
+const poolChildPath = fileURLToPath(new URL("./worker-child.mjs", poolEntryUrl));
+await copyFile(poolChildPath, fileURLToPath(new URL("../lib/worker-child.mjs", import.meta.url)));

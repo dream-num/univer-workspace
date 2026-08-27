@@ -35,6 +35,11 @@ import {
 } from "@univerjs-pro/collaboration-client-ui";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
+// Facade extensions: without these side-effect modules `univerAPI
+// .getCollaboration()` does not exist and the document cannot be loaded.
+import "@univerjs-pro/collaboration-client/facade";
+import "@univerjs-pro/embed/facade";
+import { ensureViewerStyles } from "./viewer-css.ts";
 
 /** The proxy prefix the host-side collab-proxy serves. */
 const PROXY_PREFIX = "/univer-workspace/collab";
@@ -105,6 +110,7 @@ export function CollaborationViewer({
     let disposed = false;
     let mounted: ReturnType<typeof createUniver>["univer"] | null = null;
     let readOnlyListener: { dispose(): void } | null = null;
+    const stylesDisposer = ensureViewerStyles();
 
     const mount = async () => {
       const univerLocale = locale === "zh-CN" ? LocaleType.ZH_CN : LocaleType.EN_US;
@@ -118,6 +124,9 @@ export function CollaborationViewer({
         collaboration: true,
         presets,
         plugins: [
+          // The sheet presets cover core/advanced only; the collaboration
+          // trio (core + client config with the harness proxy URLs + client
+          // UI) is added here exactly once.
           UniverCollaborationPlugin,
           [UniverCollaborationClientPlugin, viewerCollaborationConfig(readOnly)],
           [UniverCollaborationClientUIPlugin, { enableDocumentCollaborationUI: false }],
@@ -180,6 +189,7 @@ export function CollaborationViewer({
 
     return () => {
       disposed = true;
+      stylesDisposer();
       readOnlyListener?.dispose();
       mounted?.dispose();
     };

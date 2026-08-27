@@ -222,7 +222,10 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
 
 export const name = "univer-workspace-provider";
 
-export const inject = ["storageDomain", "workspaceAuth", "workspaceRegistry"];
+// `workspaceAuth` is fetched with ctx.get() inside UniverWorkspaceServiceImpl
+// at call time; a static cross-row inject here would pend this whole row on
+// the harness core's startup order and could fail the deployment boot.
+export const inject = ["storageDomain", "workspaceRegistry"];
 
 /** Mount the Univer Workspace capability service. */
 export function apply(ctx: Context, config: ServiceProviderConfig): void {

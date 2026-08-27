@@ -72,7 +72,8 @@ function createHandler(ctx: Context, config: WebServerConfig): (req: IncomingMes
 
 export const name = "univer-workspace-web";
 
-export const inject = ["webServer", "workspaceSession", "univerWorkspace"];
+// workspaceSession/univerWorkspace resolve lazily per request via ctx.get.
+export const inject = ["webServer", "univerWorkspace"];
 
 export function apply(ctx: Context, config: WebServerConfig): void {
   ctx.effect(() => ctx.webServer.register({
