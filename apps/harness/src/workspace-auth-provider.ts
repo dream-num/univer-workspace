@@ -1,7 +1,9 @@
 /**
- * Concrete `workspaceAuth` service, mounted as a class plugin so cordis runs
- * `[Service.init]` to open the credentials domain and resolves storageDomain
- * through `static inject`.
+ * Concrete `workspaceAuth` service. Constructed directly against the shared
+ * root store by the harness core (siblings resolve it via `ctx.get`); the
+ * core then calls {@link WorkspaceAuthProvider.initialize} once at startup,
+ * which opens the credentials domain the way a class-plugin mount's
+ * `[Service.init]` would.
  * @module @univerjs/univer-workspace-harness/workspace-auth-provider
  */
 
@@ -52,9 +54,24 @@ export class WorkspaceAuthProvider extends WorkspaceAuthService {
   }
 
   async [Service.init](): Promise<void> {
+    await this.openDomain();
+  }
+
+  /** Open the credentials domain exactly once. The harness core kicks this
+   * off synchronously after constructing the provider against the shared
+   * root store; every table access awaits it. */
+  readonly ready: Promise<void> = this.openDomain();
+
+  private async openDomain(): Promise<void> {
+    if (this.table !== undefined) return;
     const domain = await this.ctx.storageDomain.open(credentialsDomainSpec);
     this.ctx.effect(() => () => { void domain.close(); }, "uwh: credentials domain close");
     this.table = domain.table("credentials");
+  }
+
+  /** Kept for API symmetry with the session provider; awaits {@link ready}. */
+  async initialize(): Promise<void> {
+    await this.ready;
   }
 
   setOriginSource(source: () => WorkspaceAuthSettings): void {
@@ -90,10 +107,12 @@ export class WorkspaceAuthProvider extends WorkspaceAuthService {
   }
 
   async storeCredential(userId: string, token: string, expiresAtMs: number): Promise<void> {
+    await this.ready;
     await this.requireTable().put(userId, { token, expiresAt: expiresAtMs });
   }
 
   async clearCredential(userId: string): Promise<void> {
+    await this.ready;
     await this.requireTable().delete(userId);
   }
 

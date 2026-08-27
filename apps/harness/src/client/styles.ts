@@ -19,6 +19,8 @@ const css = `
 .uwh-banner{color:#0b5cad;background:#e7f1fb}
 .uwh-error{color:#b42318;background:#fdecea}
 .uwh-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.uwh-groupHeader{margin-top:6px;padding:4px 8px;font-size:11px;font-weight:600;color:#8a8a8a;text-transform:uppercase;letter-spacing:.04em}
+.uwh-sessionRunning{background:#2e7d32!important}
 .uwh-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:4px}
 .uwh-row:hover{background:#f2f2f2}
 .uwh-sessionRow{display:flex;align-items:center;width:100%;min-width:0;gap:8px;padding:6px 8px;border:0;border-radius:4px;background:transparent;color:inherit;cursor:pointer;text-align:left;font:inherit}

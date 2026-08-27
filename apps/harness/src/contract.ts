@@ -25,16 +25,10 @@ export const UWH_TEMPLATE_FORK_PATH = "/api/uwh/template-fork";
 /** Route path for the guarded browser prompt endpoint. */
 export const UWH_SESSION_PROMPT_PATH = "/api/uwh/session-prompt";
 
-/** Version tag written into the browser-local session state. */
-export const UWH_STATE_VERSION = 1;
-
-/** localStorage key namespace prefix (browser-local partition per user). */
-export const UWH_STATE_KEY_PREFIX = "univer-workspace-harness:v1";
-
-/** One configured template: a stable `key` the client stores its fork under,
- * the `sessionId` to fork on first use, and optional display metadata. */
+/** One configured template: a stable `key`, the `sessionId` to fork on first
+ * use, and optional display metadata. */
 export interface UwhTemplate {
-  /** Stable template key (the localStorage `templateForks` map key). */
+  /** Stable template key. */
   key: string;
   /** Source session id that is forked on first use. */
   sessionId: string;
@@ -56,15 +50,6 @@ export interface UwhIdentity {
   displayName?: string;
 }
 
-/** Browser-local session state partitioned by user id. */
-export interface UwhState {
-  version: number;
-  /** Template key -> the forked session created in THIS browser for THIS user. */
-  templateForks: Record<string, string>;
-  /** Session ids the current user created in THIS browser. */
-  createdSessionIds: string[];
-}
-
 /** Full response of the harness identity route. */
 export interface UwhMeView {
   identity: UwhIdentity;
@@ -76,16 +61,6 @@ export interface UwhMeView {
   workspaceOrigin: string;
   /** Templates configured for this deployment. */
   templates: UwhTemplate[];
-}
-
-/** Empty initial browser-local state for a user. */
-export function emptyUwhState(): UwhState {
-  return { version: UWH_STATE_VERSION, templateForks: {}, createdSessionIds: [] };
-}
-
-/** The local storage partition key for one user id. */
-export function stateKeyFor(userId: string): string {
-  return `${UWH_STATE_KEY_PREFIX}:${userId}`;
 }
 
 /** Read a branded WorkspaceId from a raw string (client never brands host ids). */

@@ -1,35 +1,32 @@
 /**
  * Harness sidebar browsing region.
  *
- * Reads the identity route on mount (returning the per-user workspace, admin
- * flag, and template config), then renders the browser-local session list for
- * THIS user: configured templates (fork-or-open the copy) and the sessions
- * this browser created.
+ * Renders the platform's LIVE workspace/session snapshots scoped to the
+ * signed-in user: every Host Workspace under the user's mechanical root
+ * directory (the per-user root itself and its per-Space children) with that
+ * Workspace's accounted sessions. No browser-local session bookkeeping —
+ * the list is the same fact source the default DSH sidebar uses, only the
+ * visible RANGE is narrowed to this user.
  */
 import { createElement, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { SessionId } from "@deepseek-ai/dsh-client-connection/client";
-import type { UwhMeView, UwhState, UwhTemplate } from "../contract.ts";
-import { emptyUwhState } from "../contract.ts";
+import type { UwhMeView, UwhTemplate } from "../contract.ts";
 import type { UwhWorkspacesProps } from "./workspaces-props.ts";
-import {
-  readLocalState, writeLocalState, recordCreatedSession, recordTemplateFork, templateForkOf,
-} from "./local-state.ts";
 
-/** One row to render: a template (forkable) or an owned session id. */
-type Row =
-  | { kind: "template"; template: UwhTemplate; sessionId: string | undefined }
-  | { kind: "session"; sessionId: string };
+/** One renderable session row derived from the live snapshot. */
+interface SessionRow {
+  readonly sessionId: SessionId;
+  readonly title: string;
+  readonly running: boolean;
+  readonly updatedAt: number;
+}
 
-/** Rows for the current view, browser-local only. */
-function rowsOf(state: UwhState | null, templates: UwhTemplate[]): Row[] {
-  const base: Row[] = templates.map(template => ({
-    kind: "template" as const,
-    template,
-    sessionId: state === null ? undefined : templateForkOf(state, template.key),
-  }));
-  const owned = (state?.createdSessionIds ?? []).map(id => ({ kind: "session" as const, sessionId: id }));
-  return [...base, ...owned];
+/** One renderable Workspace group: a user-owned dir plus its sessions. */
+interface WorkspaceGroup {
+  readonly workspaceId: string;
+  readonly title: string;
+  readonly rows: readonly SessionRow[];
 }
 
 /** Render the browsing region. */
@@ -43,25 +40,19 @@ export function Workspaces({
   open,
 }: UwhWorkspacesProps) {
   const sessions = useSessions(s => s);
-  // The workspace baseline is only a liveness/coordination fact here; the list
-  // content is browser-local, so we subscribe but render from local state.
   const workspaces = useWorkspaces(s => s);
 
   const [me, setMe] = useState<UwhMeView | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [state, setState] = useState<UwhState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const mounted = useRef(true);
 
-  // Identity + browser-local state, once per mount.
   useEffect(() => {
     mounted.current = true;
     void loadMe().then(view => {
-      if (!mounted.current) return;
-      setMe(view);
-      setState(readLocalState(window.localStorage, view.identity.userId));
+      if (mounted.current) setMe(view);
     }).catch((reason: unknown) => {
       if (mounted.current) setError(reason instanceof Error ? reason.message : String(reason));
     }).finally(() => {
@@ -70,42 +61,55 @@ export function Workspaces({
     return () => { mounted.current = false; };
   }, [loadMe]);
 
-  const persist = useCallback((next: UwhState) => {
-    setState(next);
-    if (me !== null) writeLocalState(window.localStorage, me.identity.userId, next);
-  }, [me]);
-
-  const run = useCallback(async (operation: () => Promise<string>) => {
-    if (busy) return;
+  const onTemplate = useCallback((template: UwhTemplate) => {
+    if (busy || me === null) return;
     setBusy(true);
     setError(null);
-    setBanner(null);
-    try {
-      const sessionId = await operation();
-      if (me !== null) persist(recordCreatedSession(state ?? emptyUwhState(), sessionId));
-      open(sessionId);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setBusy(false);
+    setBanner("template.forking");
+    void forkTemplate(template).then(childId => {
+      open(childId);
+    }).catch((reason: unknown) => {
+      if (mounted.current) setError(reason instanceof Error ? reason.message : String(reason));
+    }).finally(() => {
+      if (mounted.current) {
+        setBusy(false);
+        setBanner(null);
+      }
+    });
+  }, [busy, me, forkTemplate, open]);
+
+  const groups = useMemo<readonly WorkspaceGroup[]>(() => {
+    if (me === null) return [];
+    const root = me.workspace.path;
+    const archived = new Set<string>(workspaces.archivedSessionIds);
+    const scoped = (path: string): boolean => path === root || path.startsWith(`${root}/`);
+    const result: WorkspaceGroup[] = [];
+    for (const view of workspaces.items) {
+      if (!scoped(view.path)) continue;
+      const rows: SessionRow[] = [];
+      for (const id of view.sessionIds) {
+        if (archived.has(id)) continue;
+        const summary = sessions.byId[id];
+        if (summary === undefined) continue;
+        // A blank session stays invisible unless selected — the default
+        // browser's convention ("New Session" reuses blank ones).
+        if (summary.blank && id !== sessions.current) continue;
+        rows.push({
+          sessionId: id,
+          title: summary.displayTitle !== "" ? summary.displayTitle : String(id),
+          running: summary.running,
+          updatedAt: summary.updatedAt,
+        });
+      }
+      rows.sort((a, b) => b.updatedAt - a.updatedAt);
+      const title = view.title.trim() !== "" ? view.title : view.path.split("/").filter(Boolean).pop() ?? view.path;
+      result.push({ workspaceId: String(view.workspaceId), title, rows });
     }
-  }, [busy, me, persist, open, state]);
+    return result;
+  }, [me, workspaces, sessions]);
 
-  const onTemplate = useCallback((template: UwhTemplate) => {
-    if (me === null || state === null) return;
-    const existing = templateForkOf(state, template.key);
-    setBanner(existing === undefined ? "template.forking" : "template.opening");
-    void run(async () => existing ?? forkTemplate(template))
-      .then(() => { if (mounted.current) setBanner(null); });
-  }, [me, state, run, forkTemplate]);
-
-  const sessionListKey = sessions.ids.join("\u0000");
-  useEffect(() => {
-    if (me === null) return;
-    setState(readLocalState(window.localStorage, me.identity.userId));
-  }, [me, sessionListKey]);
-
-  const rows = useMemo(() => rowsOf(state, me?.templates ?? []), [state, me]);
+  const templates = me?.templates ?? [];
+  const anyRows = groups.some(group => group.rows.length > 0);
 
   return createElement("div", { className: "uwh-root" },
     !wide && createElement("button", {
@@ -114,8 +118,9 @@ export function Workspaces({
       "aria-label": "展开会话列表",
       onClick: expandSidebar,
     }, "\u2630"),
-    wide && me === null && loaded && createElement("div", { className: "uwh-status" }, error === null ? "正在读取用户信息…" : error),
-    wide && me !== null && createElement(Fragment, null,
+    wide && !loaded && createElement("div", { className: "uwh-status" }, "正在读取用户信息…"),
+    wide && loaded && error !== null && me === null && createElement("div", { className: "uwh-status uwh-error" }, error),
+    wide && loaded && me !== null && createElement(Fragment, null,
       createElement("div", { className: "uwh-header" },
         createElement("span", { className: "uwh-title" }, me.identity.username),
         me.admin && createElement("span", { className: "uwh-adminBadge" }, "管理员"),
@@ -124,39 +129,43 @@ export function Workspaces({
         createElement("span", { className: "uwh-workspaceLabel" }, "工作区"),
         createElement("code", { className: "uwh-workspacePath" }, me.workspace.path),
       ),
-      banner !== null && createElement("div", { className: "uwh-banner" }, banner === "template.forking" ? "正在从模板派生会话…" : "正在打开会话副本…"),
+      banner !== null && createElement("div", { className: "uwh-banner" }, "正在从模板派生会话…"),
       error !== null && createElement("div", { className: "uwh-error" }, error),
-      createElement("ul", { className: "uwh-list", role: "tree", "aria-label": wide ? "会话与模板列表" : undefined },
-        rows.map(row => row.kind === "template"
-          ? createElement("li", { key: `t:${row.template.key}`, className: "uwh-row" },
-              createElement("div", { className: "uwh-rowMain" },
-                createElement("span", { className: "uwh-rowTitle" }, row.template.label ?? row.template.key),
-                row.template.description !== undefined
-                  && createElement("span", { className: "uwh-rowDesc" }, row.template.description),
-              ),
-              createElement("button", {
-                type: "button",
-                className: clsx("uwh-rowButton", row.sessionId === undefined ? "" : ""),
-                onClick: () => onTemplate(row.template),
-                disabled: busy,
-              }, row.sessionId === undefined ? "从模板派生" : "打开副本"),
-            )
-          : createElement("li", { key: `s:${row.sessionId}`, className: "uwh-row" },
-              createElement("button", {
-                type: "button",
-                className: clsx("uwh-sessionRow", sessions.current === row.sessionId && "uwh-selected"),
-                onClick: () => open(row.sessionId),
-                disabled: busy,
-              },
-                createElement("span", { className: "uwh-sessionStatus", "aria-hidden": "true" }),
-                createElement("span", { className: "uwh-rowTitle" },
-                  sessions.byId[row.sessionId as SessionId]?.displayTitle ?? row.sessionId,
-                ),
-              ),
-            ),
-        ),
+      templates.length > 0 && createElement("ul", { className: "uwh-list", "aria-label": "模板" },
+        templates.map(template => createElement("li", { key: `t:${template.key}`, className: "uwh-row" },
+          createElement("div", { className: "uwh-rowMain" },
+            createElement("span", { className: "uwh-rowTitle" }, template.label ?? template.key),
+            template.description !== undefined && createElement("span", { className: "uwh-rowDesc" }, template.description),
+          ),
+          createElement("button", {
+            type: "button",
+            className: "uwh-rowButton",
+            onClick: () => onTemplate(template),
+            disabled: busy,
+          }, "从模板派生"),
+        )),
       ),
-      rows.length === 0 && createElement("div", { className: "uwh-empty" }, "暂无本地会话，请使用侧边栏的“新建会话”按钮。"),
+      groups.map(group => createElement(Fragment, { key: group.workspaceId },
+        createElement("div", { className: "uwh-groupHeader" }, group.title),
+        group.rows.length > 0 && createElement("ul", { className: "uwh-list", role: "tree", "aria-label": group.title },
+          group.rows.map(row => createElement("li", { key: row.sessionId, className: "uwh-row" },
+            createElement("button", {
+              type: "button",
+              className: clsx("uwh-sessionRow", sessions.current === row.sessionId && "uwh-selected"),
+              onClick: () => open(row.sessionId),
+            },
+              createElement("span", {
+                className: clsx("uwh-sessionStatus", row.running && "uwh-sessionRunning"),
+                "aria-hidden": "true",
+              }),
+              createElement("span", { className: "uwh-rowTitle" }, row.title),
+            ),
+          )),
+        ),
+      )),
+      !anyRows && templates.length === 0
+        ? createElement("div", { className: "uwh-empty" }, "暂无会话；使用侧栏上方的 New Session 开始。")
+        : null,
     ),
   );
 }

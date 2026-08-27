@@ -422,11 +422,19 @@ function sanitizeReturnTo(pathname: string): string {
  * Register all four routes plus the workspaceAuth service with the webserver.
  */
 export function apply(ctx: Context, config: Config): void {
-  // workspaceAuth and workspaceSession are class plugins: cordis resolves
-  // their static inject and runs [Service.init]. They register into the shared
-  // root store, so the sibling capability plugin resolves them via ctx.get.
-  ctx.plugin(workspaceAuthProvider.WorkspaceAuthProvider, { workspaceOrigin: config.workspaceOrigin });
-  ctx.plugin(workspaceSessionProvider.WorkspaceSessionProvider, {
+  // workspaceAuth and workspaceSession must be visible to SIBLING rows (the
+  // capability plugin), so their services are constructed directly against
+  // the SHARED ROOT store — synchronous on purpose: the Service base
+  // constructor publishes each provider during construction, so composition
+  // activation completes deterministically instead of pending a sibling row.
+  // The credentials domain opens asynchronously behind `workspaceAuth.ready`.
+  const workspaceAuth = new workspaceAuthProvider.WorkspaceAuthProvider(ctx.root, {
+    workspaceOrigin: config.workspaceOrigin,
+  });
+  void workspaceAuth.ready.catch((error: unknown) => {
+    console.error("[uwh] credentials domain failed to open", error);
+  });
+  new workspaceSessionProvider.WorkspaceSessionProvider(ctx.root, {
     sessionCookieName: config.sessionCookieName,
     sessionSecret: config.sessionSecret,
   });

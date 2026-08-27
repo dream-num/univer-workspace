@@ -20,7 +20,6 @@ import {
 import { Workspaces } from "./Workspaces.tsx";
 import { OriginSetting, type WorkspaceAuthSettings } from "./OriginSetting.tsx";
 import * as sessionInputGuard from "./session-input-guard.ts";
-import * as sessionRecorder from "./session-recorder.ts";
 import * as sessionRoute from "./session-route.ts";
 import { installStyles } from "./styles.ts";
 
@@ -87,7 +86,6 @@ function injected(
 /** Apply the browser plugin. */
 export function apply(ctx: ClientContext): void {
   ctx.plugin(sessionInputGuard);
-  ctx.plugin(sessionRecorder);
   ctx.plugin(sessionRoute);
   ctx.effect(() => installStyles(), "uwh: client styles");
 
