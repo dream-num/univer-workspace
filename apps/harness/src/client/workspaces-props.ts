@@ -8,8 +8,8 @@
  * @module @univerjs/univer-workspace-harness/client/workspaces-props
  */
 
-import type { PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
+import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import type { UwhInjected } from "./index.tsx";
 
 /** Full props of the sidebar-browsing component. */
-export type UwhWorkspacesProps = PropsRuntime<"sidebar.workspaces"> & UwhInjected;
+export type UwhWorkspacesProps = PropsRuntime<"sidebar.workspaces"> & PropsLocale<"univer-workspace-harness"> & UwhInjected;

@@ -7,6 +7,7 @@
  * preference row.
  */
 import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
+import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type { ConnectionHandle, IApiClient, SessionId } from "@deepseek-ai/dsh-client-connection/client";
 import type {} from "@deepseek-ai/dsh-client-ui-sidebar/client";
 import type {} from "@deepseek-ai/dsh-client-ui-layout/client";
@@ -22,6 +23,7 @@ import { OriginSetting, type WorkspaceAuthSettings } from "./OriginSetting.tsx";
 import * as sessionInputGuard from "./session-input-guard.ts";
 import * as sessionRoute from "./session-route.ts";
 import { installStyles } from "./styles.ts";
+import { en, HARNESS_LOCALE_NAMESPACE, zh } from "./locales.ts";
 
 export type { UwhWorkspacesProps } from "./workspaces-props.ts";
 
@@ -36,7 +38,7 @@ export interface UwhInjected {
 }
 
 /** Required services (cordis fiber inject). */
-export const inject = ["slots", "connection", "sessions", "modules", "settingsScope"];
+export const inject = ["slots", "connection", "sessions", "modules", "settingsScope", "locale"];
 
 /** The settings namespace name, mirrored from the host side. */
 const UWH_SETTINGS_NAMESPACE = "univer-workspace-harness";
@@ -88,6 +90,7 @@ export function apply(ctx: ClientContext): void {
   ctx.plugin(sessionInputGuard);
   ctx.plugin(sessionRoute);
   ctx.effect(() => installStyles(), "uwh: client styles");
+  ctx.effect(() => ctx.locale.register(HARNESS_LOCALE_NAMESPACE, { zh, en }), "uwh: dictionaries");
 
   const { api } = ctx.get("connection") as ConnectionHandle;
   const openSession = (sessionId: SessionId): void => {
@@ -111,6 +114,7 @@ export function apply(ctx: ClientContext): void {
     name: "sidebar.workspaces",
     // Shadows the official WorkspaceBrowser (priority 0) while leaving it live.
     priority: -1,
+    locale: HARNESS_LOCALE_NAMESPACE,
     inject: () => injected(api, openSession, loadMe),
   }, Workspaces));
 

@@ -38,6 +38,7 @@ export function Workspaces({
   loadMe,
   forkTemplate,
   open,
+  t,
 }: UwhWorkspacesProps) {
   const sessions = useSessions(s => s);
   const workspaces = useWorkspaces(s => s);
@@ -115,18 +116,18 @@ export function Workspaces({
     !wide && createElement("button", {
       type: "button",
       className: "uwh-collapsedButton",
-      "aria-label": "展开会话列表",
+      "aria-label": t("expand"),
       onClick: expandSidebar,
     }, "\u2630"),
-    wide && !loaded && createElement("div", { className: "uwh-status" }, "正在读取用户信息…"),
+    wide && !loaded && createElement("div", { className: "uwh-status" }, t("loading")),
     wide && loaded && error !== null && me === null && createElement("div", { className: "uwh-status uwh-error" }, error),
     wide && loaded && me !== null && createElement(Fragment, null,
       createElement("div", { className: "uwh-header" },
         createElement("span", { className: "uwh-title" }, me.identity.username),
-        me.admin && createElement("span", { className: "uwh-adminBadge" }, "管理员"),
+        me.admin && createElement("span", { className: "uwh-adminBadge" }, t("adminBadge")),
       ),
       createElement("div", { className: "uwh-workspaceLine" },
-        createElement("span", { className: "uwh-workspaceLabel" }, "工作区"),
+        createElement("span", { className: "uwh-workspaceLabel" }, t("workspaceLabel")),
         createElement("code", { className: "uwh-workspacePath" }, me.workspace.path),
       ),
       banner !== null && createElement("div", { className: "uwh-banner" }, "正在从模板派生会话…"),
@@ -142,7 +143,7 @@ export function Workspaces({
             className: "uwh-rowButton",
             onClick: () => onTemplate(template),
             disabled: busy,
-          }, "从模板派生"),
+          }, t("templateFork")),
         )),
       ),
       groups.map(group => createElement(Fragment, { key: group.workspaceId },
@@ -164,7 +165,7 @@ export function Workspaces({
         ),
       )),
       !anyRows && templates.length === 0
-        ? createElement("div", { className: "uwh-empty" }, "暂无会话；使用侧栏上方的 New Session 开始。")
+        ? createElement("div", { className: "uwh-empty" }, t("empty"))
         : null,
     ),
   );
