@@ -1,17 +1,23 @@
 /**
  * @dsh-univer-workspace-plugin — browser half.
  *
- * Registers the Space picker in the blank-session hero and the floating
- * document viewer in the conversation input dock. The viewer renders a Univer
- * collaboration editor directly in the DSH page (no iframe), reaching the
- * Workspace through the same-origin collaboration proxy.
+ * Registers the Space picker in the blank-session hero, the Turn-tail
+ * document card, and the floating Univer document viewer in the input dock,
+ * following the dsh-univer-office interaction model: one locale namespace
+ * backing all surfaces, additive chain contribution on the Turn tail, and a
+ * draggable live-editor window. The viewer reaches the Workspace through the
+ * same-origin collaboration proxy (no iframe).
  */
 import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
+import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type {} from "@deepseek-ai/dsh-client-ui-slots";
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import { SpacePicker } from "./SpacePicker.tsx";
 import { ViewerDock, type ViewerDockInjected } from "./ViewerDock.tsx";
+import { ViewerTurnCard, selectViewerTurnCard } from "./viewer-turn-card.tsx";
 import { viewerTurnDefinition } from "./viewer-turn-definition.ts";
+import { viewerLocaleOf, type ViewerLocale, type ViewerLocaleInjected } from "./viewer-locale.ts";
+import { en, UWH_LOCALE_NAMESPACE, zh } from "./locales.ts";
 import { installStyles } from "./styles.ts";
 
 /** Required browser services. */
@@ -62,6 +68,9 @@ async function loadViewerBootstrap(): Promise<ViewerBootstrap> {
 /** Apply the browser plugin. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => installStyles(), "univer-workspace: client styles");
+  ctx.effect(() => ctx.locale.register(UWH_LOCALE_NAMESPACE, { zh, en }), "univer-workspace: dictionaries");
+
+  const getViewerLocale = (): ViewerLocale => viewerLocaleOf(ctx.locale.getSnapshot().active);
 
   ctx.conversationEvents.register(viewerTurnDefinition);
 
@@ -71,10 +80,18 @@ export function apply(ctx: ClientContext): void {
     priority: -1,
   }, SpacePicker));
 
+  ctx.slots.inject("conversation.chat.turnTail", () => ctx.slots.register({
+    name: "conversation.chat.turnTail",
+    priority: -10,
+    locale: UWH_LOCALE_NAMESPACE,
+    select: selectViewerTurnCard,
+  }, ViewerTurnCard));
+
   ctx.slots.inject("conversation.input.dock", () => ctx.slots.register({
     name: "conversation.input.dock",
     id: "univer-workspace-viewer",
     order: 400,
-    inject: (): ViewerDockInjected => ({ loadViewerBootstrap }),
+    locale: UWH_LOCALE_NAMESPACE,
+    inject: (): ViewerDockInjected & ViewerLocaleInjected => ({ loadViewerBootstrap, getViewerLocale }),
   }, ViewerDock));
 }

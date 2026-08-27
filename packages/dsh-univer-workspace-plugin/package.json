@@ -214,7 +214,8 @@
     "@univerjs/preset-sheets-table": "1.0.0-beta.2",
     "@univerjs/preset-sheets-thread-comment": "1.0.0-beta.2",
     "@univerjs/presets": "1.0.0-beta.2",
-    "@univerjs/themes": "1.0.0-beta.2"
+    "@univerjs/themes": "1.0.0-beta.2",
+    "@deepseek-ai/dsh-client-locale": "0.1.1-rc.2"
   },
   "dsh": {
     "bundle": {
@@ -225,6 +226,7 @@
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-conversation"
       ]

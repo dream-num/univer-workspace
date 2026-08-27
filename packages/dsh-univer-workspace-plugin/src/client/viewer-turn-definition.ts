@@ -12,6 +12,7 @@
 import type {
   ConversationNodeDefinition,
 } from "@deepseek-ai/dsh-client-runtime/client";
+import type { TurnTailOwnerProps } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type { SessionEvent } from "@deepseek-ai/dsh-session/types";
 import type { WorkspaceDocumentOpen } from "../shared/wire.ts";
 
@@ -78,8 +79,7 @@ function openIntentOf(data: SessionEvent<"tool/result">["data"]): ViewerOpenInte
 }
 
 /** Project univer_open results into a replay-safe viewer intent log. */
-export const viewerTurnDefinition = {
-  kind: "univerViewer",
+export const viewerTurnDefinition = {  kind: "univerViewer",
   match(event: SessionEvent) {
     if (event.type === "turn/start") return { id: String(event.data.turn), role: "start" };
     if (event.type === "tool/result") return { id: String(event.data.turn), role: "update" };
@@ -101,7 +101,14 @@ export const viewerTurnDefinition = {
     return { ...context.state, intents: [...context.state.intents, intent] };
   },
   buildLocationData(context, scope) {
-    if (scope !== "turn" || context.state === undefined) return null;
-    return { kind: "turn", turn: context.state.turn, key: "univerViewer", value: { intents: context.state.intents } };
+    if (scope !== 'turn' || context.state === undefined) return null;
+    return { kind: 'turn', turn: context.state.turn, key: 'univerViewer', value: { intents: context.state.intents } };
   },
 } satisfies ConversationNodeDefinition<ViewerTurnState>;
+
+/** Select the Turn-tail card only when that Turn carries viewer open intents. */
+export function selectViewerTurn(owner: TurnTailOwnerProps): readonly ViewerOpenIntent[] {
+  const data = owner.turn.data.get("univerViewer");
+  if (data === undefined || data.intents === undefined || data.intents.length === 0) return [];
+  return data.intents;
+}
