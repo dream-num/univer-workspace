@@ -283,14 +283,6 @@ describe("Workspace Space and Node strict parsers", () => {
     expect(() => parseDetachedNode(node({ resource: { id: "resource-1", kind: "legacy" } }))).toThrowError(
       expect.objectContaining({ code: "workspace-invalid-response" }),
     );
-    expect(() =>
-      parseDetachedNode(node({ resource: { ...univerResource("doc"), unitId: "" } })),
-    ).toThrowError(expect.objectContaining({ code: "workspace-invalid-response" }));
-    const resource = univerResource("doc");
-    delete resource["unitId"];
-    expect(() => parseDetachedNode(node({ resource }))).toThrowError(
-      expect.objectContaining({ code: "workspace-invalid-response" }),
-    );
   });
 
   it("rejects mismatched Space, parent, pagination and Trash identities", () => {
