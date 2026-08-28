@@ -9,6 +9,7 @@ import type {
 export interface UniverResourceSummary {
   readonly id: string;
   readonly kind: "univer";
+  readonly unitId: string;
   readonly unitType: UnitType;
   readonly capabilities: ResourceCapabilities;
 }

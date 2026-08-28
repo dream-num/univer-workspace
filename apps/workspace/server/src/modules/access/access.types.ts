@@ -46,6 +46,7 @@ export interface NodeAccess {
   readonly name: string;
   readonly resourceId: string | null;
   readonly resourceKind: ResourceKind | null;
+  readonly unitId: string | null;
   readonly unitType: UnitType | null;
   readonly blobMediaType: string | null;
   readonly blobByteSize: number | null;

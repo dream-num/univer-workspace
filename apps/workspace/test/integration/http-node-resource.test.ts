@@ -98,13 +98,21 @@ describe("Node/Resource HTTP API", () => {
     expect(children.body).toMatchObject({
       parentNode: {
         id: parentBody.node.id,
-        resource: { id: parentBody.node.resource.id, unitType: "doc" },
+        resource: {
+          id: parentBody.node.resource.id,
+          unitId: parentBody.node.resource.unitId,
+          unitType: "doc",
+        },
       },
       nodes: [
         {
           id: childBody.node.id,
           parentNodeId: parentBody.node.id,
-          resource: { id: childBody.node.resource.id, unitType: "sheet" },
+          resource: {
+            id: childBody.node.resource.id,
+            unitId: childBody.node.resource.unitId,
+            unitType: "sheet",
+          },
         },
       ],
     });
@@ -224,6 +232,7 @@ interface ResourceCreateBody {
     readonly id: string;
     readonly resource: {
       readonly id: string;
+      readonly unitId: string;
       readonly unitType: string;
     };
   };

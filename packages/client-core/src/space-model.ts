@@ -29,6 +29,7 @@ export interface WorkspaceUniverResource {
   readonly capabilities: WorkspaceResourceCapabilities;
   readonly kind: "univer";
   readonly resourceId: string;
+  readonly unitId?: string;
   readonly unitType: WorkspaceUnitType;
 }
 
@@ -318,10 +319,15 @@ export function parseNodeResource(value: unknown): WorkspaceNodeResource | null 
   }
   const capabilities = parseResourceCapabilities(value["capabilities"]);
   if (value["kind"] === "univer") {
+    const unitId = value["unitId"];
+    if (unitId !== undefined && (typeof unitId !== "string" || unitId.length === 0)) {
+      throw invalidResponse("Workspace Node contains an invalid Univer Unit identity");
+    }
     return {
       capabilities,
       kind: "univer",
       resourceId: value["id"],
+      ...(unitId === undefined ? {} : { unitId }),
       unitType: parseUnitType(value["unitType"]),
     };
   }

@@ -59,7 +59,7 @@ describe("Resources", () => {
         },
         node: {
           name: "Budget",
-          resource: { unitType: "sheet" },
+          resource: { unitId: createdUnits[0], unitType: "sheet" },
         },
       },
     });

@@ -56,7 +56,11 @@ describe("Workspace Space and Node workflows", () => {
     await expect(feature.browse({ spaceId: "space-1" })).resolves.toMatchObject([
       { nodeId: "node-1", path: "/Quarterly Plan", resource: null },
       { nodeId: "node-2", path: "/Archive", resource: { kind: "blob" } },
-      { nodeId: "node-3", path: "/Budget", resource: { kind: "univer", unitType: "sheet" } },
+      {
+        nodeId: "node-3",
+        path: "/Budget",
+        resource: { kind: "univer", unitId: "unit-2", unitType: "sheet" },
+      },
     ]);
     await expect(feature.browse({ resourceKind: "blob", spaceId: "space-1" })).resolves.toMatchObject([
       { nodeId: "node-2" },
@@ -279,6 +283,20 @@ describe("Workspace Space and Node strict parsers", () => {
     expect(() => parseDetachedNode(node({ resource: { id: "resource-1", kind: "legacy" } }))).toThrowError(
       expect.objectContaining({ code: "workspace-invalid-response" }),
     );
+    expect(() =>
+      parseDetachedNode(node({ resource: { ...univerResource("doc"), unitId: "" } })),
+    ).toThrowError(expect.objectContaining({ code: "workspace-invalid-response" }));
+  });
+
+  it("accepts legacy Univer Resource summaries without a Unit identity", () => {
+    const resource = univerResource("doc");
+    delete resource["unitId"];
+    expect(parseDetachedNode(node({ resource })).resource).toMatchObject({
+      kind: "univer",
+      resourceId: "resource-2",
+      unitType: "doc",
+    });
+    expect(parseDetachedNode(node({ resource })).resource).not.toHaveProperty("unitId");
   });
 
   it("rejects mismatched Space, parent, pagination and Trash identities", () => {
@@ -360,6 +378,7 @@ function univerResource(unitType: string): Record<string, unknown> {
     capabilities: { downloadContent: false, editContent: true, openContent: true },
     id: "resource-2",
     kind: "univer",
+    unitId: "unit-2",
     unitType,
   };
 }
