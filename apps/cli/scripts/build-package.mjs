@@ -9,6 +9,7 @@ import {
 
 const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(scriptRoot, "..");
+const repositoryRoot = resolve(appRoot, "..", "..");
 const packageRoot = join(appRoot, "package-dist");
 const version = parseBuildVersion(process.argv.slice(2));
 const buildEnv = {
@@ -16,6 +17,7 @@ const buildEnv = {
   ...(version === undefined ? {} : { UNIVER_WORKSPACE_CLI_BUILD_VERSION: version }),
 };
 
+run("pnpm", ["--filter", "univer-workspace-cli^...", "run", "build"], repositoryRoot, buildEnv);
 run("pnpm", ["run", "build"], appRoot, buildEnv);
 await rm(packageRoot, { force: true, recursive: true });
 run("vite", ["build", "--config", "vite.package.config.ts"], appRoot, buildEnv);

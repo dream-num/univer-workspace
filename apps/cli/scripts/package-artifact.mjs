@@ -103,21 +103,23 @@ export function assertExactSemver(version, label = "Version") {
 
 export function resolveExternalRuntimeDependencies(appRoot, source) {
   const appRequire = createRequire(resolve(appRoot, "package.json"));
-  const renderRuntime = readPackageManifest(appRequire, "@univer-cli/univer-render-runtime");
-  const typst = readPackageManifest(appRequire, "@univer-cli/doc-typst-facade");
+  const clientCore = readPackageManifest(appRequire, "@univerjs/univer-workspace-client-core");
+  const clientCoreRequire = createRequire(clientCore.path);
+  const renderRuntime = readPackageManifest(
+    clientCoreRequire,
+    "@univer-cli/univer-render-runtime",
+  );
+  const typst = readPackageManifest(clientCoreRequire, "@univer-cli/doc-typst-facade");
   const headless = readPackageManifest(appRequire, "@univer-cli/headless-univer");
   const headlessRequire = createRequire(headless.path);
   const formula = readPackageManifest(headlessRequire, "@univerjs-pro/engine-formula-rust");
 
   return {
-    "@puppeteer/browsers": readOwnedDependency(
-      renderRuntime.manifest,
-      "@puppeteer/browsers",
-    ),
+    ...resolveRenderRuntimeDependencies(clientCore.manifest, renderRuntime.manifest),
     "@univerjs-pro/cli-assets": readOwnedDependency(source, "@univerjs-pro/cli-assets"),
-    "@univerjs-pro/doc-typst-native-binding": readOwnedDependency(
+    "@univerjs-pro/doc-typst-native-binding": resolveTypstNativeBindingVersion(
+      clientCore.manifest,
       typst.manifest,
-      "@univerjs-pro/doc-typst-native-binding",
     ),
     "@univerjs-pro/engine-formula-rust-binding": readOwnedDependency(
       formula.manifest,
@@ -127,8 +129,30 @@ export function resolveExternalRuntimeDependencies(appRoot, source) {
       source,
       "@univerjs-pro/exchange-node-binding",
     ),
-    "puppeteer-core": readOwnedDependency(renderRuntime.manifest, "puppeteer-core"),
   };
+}
+
+export function resolveRenderRuntimeDependencies(clientCore, renderRuntime) {
+  const runtimeVersion = readOwnedDependency(clientCore, "@univer-cli/univer-render-runtime");
+  if (renderRuntime.version !== runtimeVersion) {
+    throw new Error(
+      `Resolved @univer-cli/univer-render-runtime ${String(renderRuntime.version)} does not match declared ${runtimeVersion}`,
+    );
+  }
+  return {
+    "@puppeteer/browsers": readOwnedDependency(renderRuntime, "@puppeteer/browsers"),
+    "puppeteer-core": readOwnedDependency(renderRuntime, "puppeteer-core"),
+  };
+}
+
+export function resolveTypstNativeBindingVersion(clientCore, typst) {
+  const facadeVersion = readOwnedDependency(clientCore, "@univer-cli/doc-typst-facade");
+  if (typst.version !== facadeVersion) {
+    throw new Error(
+      `Resolved @univer-cli/doc-typst-facade ${String(typst.version)} does not match declared ${facadeVersion}`,
+    );
+  }
+  return readOwnedDependency(typst, "@univerjs-pro/doc-typst-native-binding");
 }
 
 function copyMetadata(source) {

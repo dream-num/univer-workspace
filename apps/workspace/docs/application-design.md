@@ -177,6 +177,8 @@ type CollaborationAction =
   | "readSnapshot"
   | "submitChangeset"
   | "connect"
+  | "readComment"
+  | "writeComment"
   | "issueSessionTicket";
 ```
 
@@ -186,6 +188,12 @@ Trunk Scope 通过 `univer_resources.unit_id` 反查 Resource，再解析所属 
 - Submit 要求 Editor 以上；
 - Node 或祖先在 Trash 中时拒绝；
 - Unit 不属于现有 Resource 时，普通 Trunk Endpoint 不可访问。
+
+Comment Endpoint 复用同一 Login Session、Unit Room 与 Access Resolver。只允许 Sheet/Doc：
+Viewer 可以读取评论，Editor 可以新增、回复、编辑和改变 solved 状态；删除要求作者本人或
+Resource Owner/Admin。评论 anchor 随 Unit 协作数据变化，正文由 Comment Adapter 保存。
+由于 Comment 协议没有 Worktree ID、revision 或合并合同，Browser 仅在 Trunk Scope 注册
+Thread Comment，Worktree 与 Merge Preview 保持关闭。
 
 Worktree 和 Merge Preview 先解析 Worktree Visibility，再校验 Trunk Resource 或激活目标
 Node 的实际访问权限。Visibility 不替代底层权限。

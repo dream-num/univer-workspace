@@ -21,11 +21,10 @@ minimumReleaseAgeExclude:
   - "@univerjs/*"
   - "@univerjs-pro/*"
 
-# The workspace composes the Univer SDKs (peer react >=16.8) alongside the dsh
-# client (react 18). Pin react to the dsh runtime version so @wendellhu/redi and
-# the @univerjs/* packages resolve to a single react-18 instance — the dsh page
-# runs react 18, and the Univer frontend peers accept it, so the in-page viewer
-# and the dsh client share one react.
+# DSH and the embedded Univer runtime share the React 18 runtime.
 overrides:
   react: 18.3.1
   react-dom: 18.3.1
+
+patchedDependencies:
+  '@univer-cli/univer-collaboration-runtime-pool@1.0.0-insiders.20260822-0c0c0dd': patches/@univer-cli__univer-collaboration-runtime-pool@1.0.0-insiders.20260822-0c0c0dd.patch

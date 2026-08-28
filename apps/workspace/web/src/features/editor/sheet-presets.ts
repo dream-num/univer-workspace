@@ -90,6 +90,7 @@ interface CreateSheetEditorPresetsOptions {
   readonly container: HTMLElement;
   readonly license?: string;
   readonly universerEndpoint: string;
+  readonly threadCommentsEnabled?: boolean;
 }
 
 /**
@@ -102,6 +103,7 @@ export function createSheetEditorPresets({
   container,
   license,
   universerEndpoint,
+  threadCommentsEnabled = true,
 }: CreateSheetEditorPresetsOptions): IPreset[] {
   return [
     UniverSheetsCorePreset({
@@ -122,7 +124,7 @@ export function createSheetEditorPresets({
     UniverSheetsNotePreset(),
     UniverSheetsSortPreset(),
     UniverSheetsTablePreset(),
-    UniverSheetsThreadCommentPreset(),
+    ...(threadCommentsEnabled ? [UniverSheetsThreadCommentPreset()] : []),
     UniverSheetsAdvancedPreset({
       license: license ?? "",
       universerEndpoint,

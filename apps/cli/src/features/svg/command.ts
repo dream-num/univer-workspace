@@ -1,38 +1,10 @@
-import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import {
-  builtinTextMeasurer,
-  compileSvgToFacade,
-  wrapSlideScript,
-  type SvgTextMeasurer,
-} from "@univer-cli/svg-facade";
-import {
-  createUniverRenderRuntime,
-  type UniverRenderRuntimeOptions,
-  type UniverTextMeasureRuntime,
-} from "@univer-cli/univer-render-runtime";
+import { writeFileSync } from "node:fs";
 import { Command, InvalidArgumentError } from "commander";
-import { executeCommand } from "../../command.js";
-import { resolveUniverLicense } from "../../config.js";
 import type {
-  WorkspaceContentExecuteInput,
+  WorkspaceCompileSvgFeature,
   WorkspaceContentExecuteResult,
-} from "../content/execution.js";
-import { createWorkspaceSvgTextMeasurer } from "./text-measurer.js";
-
-const ESTIMATE_LINT =
-  "text boxes were sized by estimation (--estimate-text-size), not by real font metrics: text can sit off-position, especially centred or right-aligned lines; recompile without the flag (with a browser) before you ship";
-
-export interface WorkspaceCompileSvgCommandOptions {
-  readonly renderPageRoot: string;
-  readonly createRuntime?: (
-    options: UniverRenderRuntimeOptions,
-  ) => Promise<UniverTextMeasureRuntime>;
-  readonly env: NodeJS.ProcessEnv;
-  readonly executeSlide: (
-    input: WorkspaceContentExecuteInput,
-  ) => Promise<WorkspaceContentExecuteResult>;
-}
+} from "@univerjs/univer-workspace-client-core";
+import { executeCommand } from "../../command.js";
 
 interface CommandOptions {
   readonly add?: boolean;
@@ -45,10 +17,14 @@ interface CommandOptions {
   readonly worktree?: string;
 }
 
+interface CommandResult extends Awaited<ReturnType<WorkspaceCompileSvgFeature["compile"]>> {
+  readonly applied?: WorkspaceContentExecuteResult;
+  readonly out?: string;
+}
+
 export function createWorkspaceCompileSvgCommand(
-  dependencies: WorkspaceCompileSvgCommandOptions,
+  feature: Pick<WorkspaceCompileSvgFeature, "apply" | "compile">,
 ): Command {
-  const createRuntime = dependencies.createRuntime ?? createUniverRenderRuntime;
   const command = new Command("compile-svg")
     .description("Compile SVG into Slide Facade code and optionally apply one page")
     .argument("<file.svg>", "SVG source file")
@@ -63,63 +39,34 @@ export function createWorkspaceCompileSvgCommand(
     .action(async (file: string, options: CommandOptions) => {
       validateOptions(command, options);
       const result = await executeCommand(command, async () => {
-        let runtimePromise: Promise<UniverTextMeasureRuntime> | undefined;
-        const textMeasurer: SvgTextMeasurer =
-          options.estimateTextSize === true
-            ? builtinTextMeasurer
-            : {
-                source: "univer-render-runtime",
-                measureLine: async (input) => {
-                  runtimePromise ??= createRuntime({
-                    renderPageRoot: dependencies.renderPageRoot,
-                    env: dependencies.env,
-                    license: resolveUniverLicense(dependencies.env),
-                  });
-                  return await createWorkspaceSvgTextMeasurer(await runtimePromise).measureLine(
-                    input,
-                  );
-                },
-              };
-        try {
-          const compiled = await compileSvgToFacade(readFileSync(file, "utf8"), {
-            assetResolver: (href) => ({ bytes: readFileSync(resolve(dirname(file), href)) }),
-            textMeasurer,
-          });
-          const lints =
-            options.estimateTextSize === true ? [...compiled.lints, ESTIMATE_LINT] : compiled.lints;
-          const mode = options.add === true ? "add" : "replace";
-          const code =
-            options.page === undefined
-              ? compiled.code
-              : wrapSlideScript(compiled.code, {
-                  page: options.page,
-                  mode,
-                  ...compiled.viewport,
-                });
-          if (options.out !== undefined) writeFileSync(options.out, `${code}\n`, "utf8");
-          const applied =
-            options.apply === true
-              ? await dependencies.executeSlide({
-                  code,
-                  unitId: options.unit as string,
-                  worktreeId: options.worktree as string,
-                })
-              : undefined;
-          return {
-            code,
-            lints,
-            mode,
-            page: options.page,
-            textMeasure: compiled.textMeasure,
-            viewport: compiled.viewport,
-            warnings: compiled.warnings,
-            ...(options.out === undefined ? {} : { out: options.out }),
-            ...(applied === undefined ? {} : { applied }),
-          };
-        } finally {
-          const runtime = await runtimePromise?.catch(() => undefined);
-          await runtime?.close();
-        }
+        const compiled = await feature.compile({
+          file,
+          ...(options.add === undefined ? {} : { add: options.add }),
+          ...(options.estimateTextSize === undefined
+            ? {}
+            : { estimateTextSize: options.estimateTextSize }),
+          ...(options.page === undefined ? {} : { page: options.page }),
+        });
+        if (options.out !== undefined) writeFileSync(options.out, `${compiled.code}\n`, "utf8");
+        const value =
+          options.apply === true
+            ? await feature.apply({
+                compiled,
+                unitId: options.unit as string,
+                worktreeId: options.worktree as string,
+              })
+            : compiled;
+        return {
+          code: value.code,
+          lints: value.lints,
+          mode: value.mode,
+          page: value.page,
+          textMeasure: value.textMeasure,
+          viewport: value.viewport,
+          warnings: value.warnings,
+          ...(options.out === undefined ? {} : { out: options.out }),
+          ...("applied" in value ? { applied: value.applied } : {}),
+        } as CommandResult;
       });
 
       if (options.json === true) {

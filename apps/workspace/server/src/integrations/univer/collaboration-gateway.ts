@@ -3,6 +3,11 @@ import {
   MemorySessionTicketStore,
   UniverCollabEndpoint,
 } from "@univerjs-pro/collaboration-endpoint";
+import { UniverCommentEndpoint } from "@univerjs-pro/collaboration-comment-endpoint";
+import type {
+  DeleteCommentMiddlewareContext,
+  IUniverCommentService,
+} from "@univerjs-pro/collaboration-comment-service";
 import {
   CollabError,
   type UniverCollabService,
@@ -18,7 +23,6 @@ import {
   ErrorCode,
   UnitAction,
   UniverType,
-  type IUser,
 } from "@univerjs/protocol";
 import { UniverCollabWorktreeEndpoint } from "@univerjs-pro/collaboration-worktree-endpoint";
 import type { UniverCollabWorktreeService } from "@univerjs-pro/collaboration-worktree-service";
@@ -37,6 +41,7 @@ import {
   WORKTREE_CHANGE_FEED_PATH,
   type WorktreeChangeFeed,
 } from "../realtime/worktree-change-feed.js";
+import { protocolUser } from "./protocol-user.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
 
@@ -49,6 +54,7 @@ export interface CollaborationGateway {
 
 export function createCollaborationGateway(options: {
   readonly service: UniverCollabService;
+  readonly commentService: IUniverCommentService;
   readonly identity: IdentityModule;
   readonly access: AccessResolver;
   readonly worktreeService: UniverCollabWorktreeService;
@@ -57,6 +63,7 @@ export function createCollaborationGateway(options: {
 }): CollaborationGateway {
   const {
     service,
+    commentService,
     identity,
     access,
     worktreeService,
@@ -65,6 +72,10 @@ export function createCollaborationGateway(options: {
   } = options;
   const ticketStore = new MemorySessionTicketStore();
   const endpoint = new UniverCollabEndpoint(service, { ticketStore });
+  const commentEndpoint = new UniverCommentEndpoint({
+    service: commentService,
+    roomHost: endpoint,
+  });
   const worktreeEndpoint = new UniverCollabWorktreeEndpoint(
     worktreeService,
     { ticketStore }
@@ -103,6 +114,29 @@ export function createCollaborationGateway(options: {
       context.userID,
       context.request.changeset.unitID
     );
+    await next();
+  });
+
+  commentService.use("listComments", async (context, next) => {
+    requireCommentAccess(access, context.userID, context.request.unitID, false);
+    await next();
+  });
+  const authorizeCommentWrite = async (
+    context: {
+      readonly userID: string;
+      readonly request: { readonly unitID: string };
+    },
+    next: () => Promise<void>
+  ) => {
+    requireCommentAccess(access, context.userID, context.request.unitID, true);
+    await next();
+  };
+  commentService.use("addComment", authorizeCommentWrite);
+  commentService.use("replyComment", authorizeCommentWrite);
+  commentService.use("setThreadSolved", authorizeCommentWrite);
+  commentService.use("editComment", authorizeCommentWrite);
+  commentService.use("deleteComment", async (context, next) => {
+    authorizeCommentDelete(access, context);
     await next();
   });
 
@@ -227,6 +261,7 @@ export function createCollaborationGateway(options: {
     context.customData.user = protocolUser(session.user);
     await next();
   });
+  transport.register(commentEndpoint);
   transport.register(worktreeEndpoint);
   transport.register(worktreeChangeFeed.endpoint(ticketStore));
   transport.register(trackConnections(endpoint, nodeAccessConnections));
@@ -436,6 +471,10 @@ function isActionAllowed(
   }
   return [
     UnitAction.View,
+    // Univer gates opening the built-in comment UI behind the workbook-level
+    // Comment action. Comment mutations are still authorized independently by
+    // the Comment endpoint and require editContent.
+    UnitAction.Comment,
     UnitAction.Print,
     UnitAction.Copy,
     UnitAction.Export,
@@ -489,21 +528,47 @@ function protocolUnitType(unitType: UnitType | null): UniverType {
   }
 }
 
-function protocolUser(user: {
-  readonly id: string;
-  readonly displayName: string;
-  readonly avatarUrl: string | null;
-}): IUser {
-  return {
-    userID: user.id,
-    name: user.displayName,
-    avatar: user.avatarUrl ?? "",
-    anonymous: false,
-    canBindAnonymous: false,
-    phone: "",
-    email: "",
-    createTimestamp: 0,
-  };
+function requireCommentAccess(
+  access: AccessResolver,
+  userId: string,
+  unitId: string,
+  write: boolean
+): ResourceAccess {
+  const resource = write
+    ? requireUnitEdit(access, userId, unitId)
+    : requireUnitAccess(access, userId, unitId);
+  if (
+    resource.kind !== "univer" ||
+    (resource.unitType !== "sheet" && resource.unitType !== "doc")
+  ) {
+    throw new CollabError(
+      "INVALID_REQUEST",
+      "Thread Comments are available only for Sheet and Doc Units."
+    );
+  }
+  return resource;
+}
+
+function authorizeCommentDelete(
+  access: AccessResolver,
+  context: DeleteCommentMiddlewareContext
+): void {
+  const resource = requireCommentAccess(
+    access,
+    context.userID,
+    context.request.unitID,
+    true
+  );
+  if (
+    context.target.authorUserID !== context.userID &&
+    resource.node.role !== "owner" &&
+    resource.node.role !== "admin"
+  ) {
+    throw new CollabError(
+      "PERMISSION_DENIED",
+      "Only the comment author or a Resource administrator can delete it."
+    );
+  }
 }
 
 function cookieHeader(context: NodeHttpTransportContext) {

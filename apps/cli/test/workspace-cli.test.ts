@@ -126,7 +126,7 @@ describe("Workspace CLI", () => {
       readonly workerPid?: string;
     }> = [];
     const collaboration = new CollaborationSocketFixture();
-    const cliAuthorization = { exchanges: 0 };
+    const cliAuthorization = { exchanges: 0, starts: 0 };
     const server = createServer((request, response) => {
       void handleWorkspaceRequest(
         request,
@@ -246,6 +246,11 @@ describe("Workspace CLI", () => {
         origin,
         subject: { id: "user-1", name: "Alice" },
       });
+      expect(cliAuthorization).toEqual({ exchanges: 2, starts: 2 });
+      for (const result of [loginInstructions, authorization, stillPending, loggedIn, identity]) {
+        expect(`${result.stdout}${result.stderr}`).not.toContain("a".repeat(43));
+        expect(`${result.stdout}${result.stderr}`).not.toContain("workspace_session=test");
+      }
 
       const api = await runCli(["api", "show", "FRange.setValues"], env);
       expect(api.stdout).toContain("FRange.setValues");
@@ -498,6 +503,7 @@ describe("Workspace CLI", () => {
 
       const loggedOut = await runCli(["logout", "--json"], env);
       expect(JSON.parse(loggedOut.stdout)).toEqual({ loggedOut: true, origin });
+      expect(`${loggedOut.stdout}${loggedOut.stderr}`).not.toContain("workspace_session=test");
       expect(JSON.parse(await readFile(sessionPath, "utf8"))).toEqual({ sessions: {} });
       expect(JSON.parse((await runCli(["daemon", "stop", "--json"], env)).stdout)).toEqual({
         socketPath,
@@ -566,7 +572,7 @@ async function handleWorkspaceRequest(
   },
   requests: Array<{ path: string; role?: string; workerPid?: string }>,
   collaboration: CollaborationSocketFixture,
-  cliAuthorization: { exchanges: number },
+  cliAuthorization: { exchanges: number; starts: number },
 ): Promise<void> {
   requests.push({
     path: request.url ?? "",
@@ -592,6 +598,7 @@ async function handleWorkspaceRequest(
     return;
   }
   if (request.method === "POST" && request.url === "/api/auth/cli/authorizations") {
+    cliAuthorization.starts += 1;
     writeJson(response, 201, {
       deviceCode: "a".repeat(43),
       userCode: "ABCD-EFGH",
@@ -643,10 +650,12 @@ async function handleWorkspaceRequest(
     writeJson(response, 200, {
       worktree: {
         id: "wt-1",
+        name: "Draft",
         state: "draft",
+        teamSpace: null,
         units: [
-          { draftHeadRevision: 1, unitId: "unit-1", unitType: "sheet" },
-          { draftHeadRevision: 1, unitId: "slide-1", unitType: "slide" },
+          runtimeUnit("unit-1", "sheet"),
+          runtimeUnit("slide-1", "slide"),
         ],
       },
     });
@@ -869,6 +878,22 @@ class CollaborationSocketPeer {
       this.send({ cmd: CombCmd.HEARTBEAT, code: CmdRspCode.OK, routeKey: "" });
     }
   }
+}
+
+function runtimeUnit(unitId: string, unitType: "sheet" | "slide"): Record<string, unknown> {
+  return {
+    activationState: "notApplicable",
+    change: "unchanged",
+    draftHeadRevision: 1,
+    mergeResult: "pending",
+    name: unitId,
+    nodeId: `node-${unitId}`,
+    resourceId: `resource-${unitId}`,
+    source: "trunk",
+    target: null,
+    unitId,
+    unitType,
+  };
 }
 
 function writeJson(

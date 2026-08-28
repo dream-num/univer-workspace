@@ -1,21 +1,98 @@
+import { Readable, Writable } from "node:stream";
 import { Command, type OutputConfiguration } from "commander";
+import type {
+  WorkspaceOpenFeature,
+  WorkspaceContentExecutionFeature,
+  WorkspaceSpaceFeature,
+  WorkspaceUnitFeature,
+  WorkspaceWorktreeFeature,
+} from "@univerjs/univer-workspace-client-core";
 import { describe, expect, it, vi } from "vitest";
 import { createAssetCommand } from "../src/features/asset/command.js";
-import type { WorkspaceAssetFeature } from "../src/features/asset/download.js";
+import type { WorkspaceAssetFeature } from "@univerjs/univer-workspace-client-core";
+import { createAuthCommands, readPassword } from "../src/features/auth/command.js";
+import type { WorkspaceAuth } from "../src/features/auth/session.js";
 import { createBlobCommand } from "../src/features/blob/command.js";
-import type { WorkspaceBlobFeature } from "../src/features/blob/transfer.js";
+import type { WorkspaceBlobFeature } from "@univerjs/univer-workspace-client-core";
 import { createContentExecuteCommand } from "../src/features/content/command.js";
-import type { WorkspaceContentExecutionFeature } from "../src/features/content/execution.js";
 import { createOpenCommand } from "../src/features/open/command.js";
-import type { WorkspaceOpenFeature } from "../src/features/open/open.js";
 import { createSpaceCommand } from "../src/features/space/command.js";
-import type { WorkspaceSpaceFeature } from "../src/features/space/space.js";
 import { createUnitCommand } from "../src/features/unit/command.js";
-import type { WorkspaceUnitFeature } from "../src/features/unit/membership.js";
 import { createWorktreeCommand } from "../src/features/worktree/command.js";
-import type { WorkspaceWorktreeFeature } from "../src/features/worktree/management.js";
 
 describe("Workspace application Commander adapters", () => {
+  it("keeps the authentication command names, options and browser default", async () => {
+    const startCliLogin = vi.fn(async () => ({
+      deviceCode: "test-device-code",
+      expiresAt: 1_787_879_400_000,
+      origin: "https://workspace.test",
+      userCode: "ABCD-EFGH",
+      verificationUrl: "https://workspace.test/cli-login?userCode=ABCD-EFGH",
+    }));
+    const commands = createAuthCommands({ startCliLogin } as unknown as WorkspaceAuth);
+    expect(commands.map((command) => command.name())).toEqual(["login", "whoami", "logout"]);
+    const login = commands[0]!;
+    const help = login.helpInformation();
+    expect(help).toContain("--complete");
+    expect(help).toContain("--username <name>");
+    expect(help).toContain("--password-stdin");
+
+    const output = await run(login, ["--json"]);
+    expect(startCliLogin).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(output)).toEqual({
+      expiresAt: "2026-08-28T01:10:00.000Z",
+      nextCommand: "univer-workspace-cli login --complete",
+      origin: "https://workspace.test",
+      status: "authorization_required",
+      userCode: "ABCD-EFGH",
+      verificationUrl: "https://workspace.test/cli-login?userCode=ABCD-EFGH",
+    });
+    expect(output).not.toContain("test-device-code");
+  });
+
+  it("rejects incompatible authentication options before entering the facade", async () => {
+    const facade = {
+      completeCliLogin: vi.fn(),
+      login: vi.fn(),
+      pendingCliLogin: vi.fn(),
+      startCliLogin: vi.fn(),
+    };
+    await expect(
+      run(createAuthCommands(facade as unknown as WorkspaceAuth)[0]!, [
+        "--complete",
+        "--username",
+        "alice",
+      ]),
+    ).rejects.toThrow(/process\.exit/u);
+    await expect(
+      run(createAuthCommands(facade as unknown as WorkspaceAuth)[0]!, ["--password-stdin"]),
+    ).rejects.toThrow(/process\.exit/u);
+    expect(facade.login).not.toHaveBeenCalled();
+    expect(facade.startCliLogin).not.toHaveBeenCalled();
+  });
+
+  it("keeps password stdin and terminal boundaries", async () => {
+    const stderr = new Writable({ write(_chunk, _encoding, callback) { callback(); } });
+    const piped = Object.assign(Readable.from([["test", "password"].join("-")]), {
+      isTTY: false,
+    });
+    await expect(readPassword("stdin", { stderr, stdin: piped })).resolves.toBe(
+      ["test", "password"].join("-"),
+    );
+    await expect(
+      readPassword("stdin", {
+        stderr,
+        stdin: Object.assign(Readable.from([]), { isTTY: true }),
+      }),
+    ).rejects.toMatchObject({ code: "workspace-password-input-invalid" });
+    await expect(
+      readPassword("interactive", {
+        stderr,
+        stdin: Object.assign(Readable.from([]), { isTTY: false }),
+      }),
+    ).rejects.toMatchObject({ code: "workspace-password-input-invalid" });
+  });
+
   it("maps every execute code source and preserves the production result envelope", async () => {
     const execute = vi.fn(async () => ({
       committed: true,

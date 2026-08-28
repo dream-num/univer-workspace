@@ -36,6 +36,19 @@ The installed package supplies the operational contract an agent needs:
 - Offline Facade API and SVG resource discovery
 - CLI help aligned with the installed SDK and command surface
 
+The repository composes storage-neutral authentication protocols, Space/Node access, local
+Node-hosted Blob/Asset transfer, runtime target and Snapshot reads, and referenced-Unit policy from the private
+`@univerjs/univer-workspace-client-core` package. Packaging builds and bundles that code into the
+self-contained CLI artifact. The CLI remains the sole owner of origin configuration, Session files,
+password input, daemon socket/control and process signals, packaged worker entry, browser binary
+install/probe/resolve, and command presentation. Client Core owns Asset image resolution, render Unit
+assembly, screenshot capture and PNG output, Slide layout lint, the render-page source, shared worker composition, runtime pool,
+content execution, embedded-image externalization, changeset commit workflow, Node-hosted Office
+exchange, and Typst compile/materialize/apply workflows; users do not install Client Core separately.
+Client Core also owns SVG source/asset compilation, text measurement, Slide page wrapping, and apply orchestration.
+The CLI continues to own Office, Typst, and SVG command presentation, local output writes, daemon transport,
+render-page artifact copy, and native binding delivery in its installable artifact.
+
 ## SDK capabilities in one CLI
 
 | Agent outcome           | Univer capabilities composed                                                  |

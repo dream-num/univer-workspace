@@ -159,7 +159,7 @@ export function createAuthCommands(auth: WorkspaceAuth): readonly Command[] {
 
 type PasswordSource = "interactive" | "stdin";
 
-async function readPassword(
+export async function readPassword(
   source: PasswordSource,
   streams: {
     readonly stderr: Writable;

@@ -251,6 +251,30 @@ export class IdentityRepository {
     return row ? toUser(row) : null;
   }
 
+  findUsers(userIds: readonly string[]): readonly User[] {
+    const uniqueUserIds = [...new Set(userIds)];
+    if (uniqueUserIds.length === 0) return [];
+    const users = new Map<string, User>();
+    for (let offset = 0; offset < uniqueUserIds.length; offset += 500) {
+      const batch = uniqueUserIds.slice(offset, offset + 500);
+      const placeholders = batch.map(() => "?").join(", ");
+      const rows = this._database.connection
+        .prepare(
+          `SELECT id, username, display_name, avatar_url
+           FROM users WHERE id IN (${placeholders})`
+        )
+        .all(...batch) as unknown as readonly UserRow[];
+      for (const row of rows) {
+        const user = toUser(row);
+        users.set(user.id, user);
+      }
+    }
+    return uniqueUserIds.flatMap((userId) => {
+      const user = users.get(userId);
+      return user ? [user] : [];
+    });
+  }
+
   findCredential(username: string): StoredCredential | null {
     const row = this._database.connection
       .prepare(

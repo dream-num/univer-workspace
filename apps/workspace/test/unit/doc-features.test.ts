@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 describe("Workspace Doc feature plugins", () => {
   it("keeps the browser replay surface aligned with the server", async () => {
@@ -101,15 +101,77 @@ describe("Workspace Doc feature plugins", () => {
     installBrowserShapeStubs();
     const [
       { UniverThreadCommentDataSourcePlugin },
-      { getThreadCommentCollaborationPlugins },
+      {
+        UniverWorkspaceDocsThreadCommentDataSourcePlugin,
+        deleteDocRootCommentBody,
+        getDocThreadCommentCollaborationPlugins,
+        getThreadCommentCollaborationPlugins,
+      },
+      { DeleteDocCommentComment },
     ] = await Promise.all([
       import("@univerjs-pro/thread-comment-datasource"),
       import("../../web/src/features/editor/thread-comment-features.js"),
+      import("@univerjs/docs-thread-comment-ui"),
     ]);
 
     expect(getThreadCommentCollaborationPlugins()).toEqual([
       UniverThreadCommentDataSourcePlugin,
     ]);
+    expect(getThreadCommentCollaborationPlugins(false)).toEqual([]);
+    expect(getDocThreadCommentCollaborationPlugins()).toEqual([
+      UniverWorkspaceDocsThreadCommentDataSourcePlugin,
+    ]);
+    expect(getDocThreadCommentCollaborationPlugins(false)).toEqual([]);
+
+    const deleteComment = vi.fn(async () => true);
+    const rootComment = {
+      id: "comment-1",
+      threadId: "thread-1",
+    };
+    const getComment = vi.fn(() => rootComment);
+
+    await expect(
+      deleteDocRootCommentBody(
+        {
+          id: DeleteDocCommentComment.id,
+          params: {
+            unitId: "doc-1",
+            commentId: rootComment.id,
+          },
+        },
+        {
+          dataSource: { deleteComment },
+          model: { getComment },
+        }
+      )
+    ).resolves.toBe(true);
+    expect(deleteComment).toHaveBeenCalledWith(
+      "doc-1",
+      "default_doc",
+      "thread-1",
+      "comment-1"
+    );
+
+    getComment.mockReturnValueOnce({
+      ...rootComment,
+      parentId: "comment-parent",
+    });
+    await expect(
+      deleteDocRootCommentBody(
+        {
+          id: DeleteDocCommentComment.id,
+          params: {
+            unitId: "doc-1",
+            commentId: rootComment.id,
+          },
+        },
+        {
+          dataSource: { deleteComment },
+          model: { getComment },
+        }
+      )
+    ).resolves.toBe(false);
+    expect(deleteComment).toHaveBeenCalledTimes(1);
   }, 20_000);
 });
 

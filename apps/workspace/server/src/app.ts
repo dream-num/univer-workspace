@@ -12,6 +12,7 @@ import {
   type UnitSnapshotStore,
   type UnitStore,
 } from "./integrations/univer/unit-store.js";
+import { protocolUser } from "./integrations/univer/protocol-user.js";
 import { createWorktreeBackend } from "./integrations/univer/worktree-store.js";
 import { LocalBlobStore, type BlobStore } from "./integrations/blob/blob-store.js";
 import {
@@ -141,16 +142,6 @@ export function createWorkspaceApplication(
   } = {}
 ): WorkspaceApplication {
   const database = openWorkspaceDatabase(config.databaseFilename);
-  let collaboration: CollaborationRuntime | null = null;
-  const unitStore =
-    dependencies.unitStore ??
-    (collaboration = createCollaborationRuntime(
-      config.collaborationDatabaseFilename
-    )).unitStore;
-  const unitSnapshotStore =
-    dependencies.unitSnapshotStore ??
-    collaboration?.unitSnapshotStore ??
-    unavailableUnitSnapshotStore();
   const oauthStateSecret =
     dependencies.oauthStateSecret ??
     config.githubOAuth?.clientSecret ??
@@ -170,6 +161,23 @@ export function createWorkspaceApplication(
         : null),
     ...(oauthStateSecret ? { oauthStateSecret } : {}),
   });
+  let collaboration: CollaborationRuntime | null = null;
+  const unitStore =
+    dependencies.unitStore ??
+    (collaboration = createCollaborationRuntime(
+      config.collaborationDatabaseFilename,
+      {
+        commentUserProvider: {
+          async getUsers(userIds) {
+            return identity.findUsers(userIds).map(protocolUser);
+          },
+        },
+      }
+    )).unitStore;
+  const unitSnapshotStore =
+    dependencies.unitSnapshotStore ??
+    collaboration?.unitSnapshotStore ??
+    unavailableUnitSnapshotStore();
   const access = createAccessResolver(new AccessRepository(database));
   const spaces = createSpacesModule({
     repository: new SpacesRepository(database),
@@ -246,6 +254,7 @@ export function createWorkspaceApplication(
   const collaborationGateway: CollaborationGateway | null = collaboration
     ? createCollaborationGateway({
         service: collaboration.service,
+        commentService: collaboration.commentService,
         identity,
         access,
         worktreeService: collaboration.worktreeService,

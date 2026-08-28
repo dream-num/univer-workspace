@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>提取 Typst Client Core</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      padding: 40px 24px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    .page { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--accent-text);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 { max-width: 840px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 800px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 840px; height: auto; }
+    .brief {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 0.9fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .card ul { padding-left: 20px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View · Change 8</p>
+      <h1>把 Typst-to-Doc workflow 移入 Client Core</h1>
+      <p class="thesis">CLI 与未来 local DSH Client Shell 复用同一次编译、确定性 Doc materialization 和 Worktree-local Unit create；各自继续拥有命令呈现与可安装 artifact。</p>
+    </header>
+
+    <section class="diagram" aria-label="Typst Client Core 架构图，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1100 580" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="typst-architecture-title typst-architecture-desc">
+        <title id="typst-architecture-title">Typst workflow 共享边界</title>
+        <desc id="typst-architecture-desc">Workspace CLI 与未来 local DSH Client Shell 调用 private Client Core Typst owner；owner 分别使用 Typst compiler、一次性 headless Doc materializer 和共享 Worktree-local Unit create，最终由 Workspace Server 创建 Unit。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1100" height="580" fill="#f5f5f5"/>
+
+        <path d="M 240 165 H 292 V 270 H 344" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 240 435 H 292 V 330 H 344" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 576 262 H 624 V 115 H 688" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 576 300 H 688" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 576 338 H 624 V 435 H 688" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 912 435 H 960" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="40" y="120" width="200" height="90" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="140" y="158" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Workspace CLI</text>
+        <text x="140" y="184" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Commander / 文件输出</text>
+
+        <rect x="40" y="390" width="200" height="90" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="140" y="428" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">future local DSH</text>
+        <text x="140" y="454" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Client Shell</text>
+
+        <rect x="344" y="230" width="232" height="140" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="460" y="278" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="19" font-weight="600" text-anchor="middle">Client Core</text>
+        <text x="460" y="308" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">Typst owner</text>
+        <text x="460" y="338" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">compile once · apply once</text>
+
+        <rect x="688" y="70" width="224" height="90" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="800" y="108" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Typst compiler</text>
+        <text x="800" y="134" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">diagnostics / native binding</text>
+
+        <rect x="688" y="255" width="224" height="90" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="800" y="293" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">headless Doc</text>
+        <text x="800" y="319" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">确定性 materialization</text>
+
+        <rect x="688" y="390" width="224" height="90" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="800" y="428" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Worktree-local Unit</text>
+        <text x="800" y="454" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">共享 create capability</text>
+
+        <rect x="960" y="390" width="120" height="90" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="1020" y="428" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="16" text-anchor="middle">Workspace</text>
+        <text x="1020" y="452" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="16" text-anchor="middle">Server</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <ul>
+          <li>迁移 compile、materialize、apply 三段 workflow。</li>
+          <li>Commander、输出文件、Session 与 daemon 留在 CLI。</li>
+          <li>不改 bundle schema、compiler、diagnostics 或 Unit create 语义。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>扩展一个 private <code>packages/client-core</code>。</li>
+          <li>Typst 使用一次性 Doc runtime，不复用 collaboration pool。</li>
+          <li>直接复用 Worktree-local Unit create，不复制可靠性算法。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <ul>
+          <li>固定 random 恢复与 runtime dispose 测试。</li>
+          <li>CLI artifact 继续交付平台 native binding。</li>
+          <li>安装 smoke 必须在 monorepo 外完成真实编译。</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer>
+      Derived from <a href="proposal.md">proposal.md</a> and <a href="design.md">design.md</a>. Markdown sources are authoritative.
+    </footer>
+  </main>
+</body>
+</html>

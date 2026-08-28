@@ -1,10 +1,12 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Config } from "@univer-cli/config";
+import { WorkspaceApplicationError as CoreWorkspaceApplicationError } from "@univerjs/univer-workspace-client-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { createWorkspaceConfig, DEFAULT_ORIGIN } from "../src/config.js";
-import { WorkspaceAuth } from "../src/features/auth/session.js";
-import { WorkspaceHttp } from "../src/transport/http.js";
+import { WorkspaceApplicationError as CliWorkspaceApplicationError } from "../src/errors.js";
+import { readWorkspaceCookie, WorkspaceAuth } from "../src/features/auth/session.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -17,6 +19,13 @@ afterEach(async () => {
 });
 
 describe("Workspace authentication and HTTP contracts", () => {
+  it("keeps the CLI error shim on the Core class identity", () => {
+    expect(CliWorkspaceApplicationError).toBe(CoreWorkspaceApplicationError);
+    expect(new CliWorkspaceApplicationError("test", "test")).toBeInstanceOf(
+      CoreWorkspaceApplicationError,
+    );
+  });
+
   it("uses the production Workspace origin by default", async () => {
     const directory = await temporaryDirectory();
     const config = createWorkspaceConfig({ UNIVER_HOME: directory });
@@ -29,14 +38,15 @@ describe("Workspace authentication and HTTP contracts", () => {
     });
   });
 
-  it("persists Sessions by normalized origin and requires displayName", async () => {
+  it("persists Sessions by normalized origin with stable bytes and modes", async () => {
     const directory = await temporaryDirectory();
     const env = { UNIVER_HOME: directory };
     const config = createWorkspaceConfig(env);
     await config.setFromText({ key: "workspace.origin", text: "https://workspace.test" });
+    const sessionPath = join(directory, "workspace-cli", "session.json");
     const auth = new WorkspaceAuth({
       config,
-      sessionPath: join(directory, "session.json"),
+      sessionPath,
       fetcher: async () =>
         new Response(
           JSON.stringify({ authenticated: true, user: { displayName: "Alice", id: "user-1" } }),
@@ -49,199 +59,319 @@ describe("Workspace authentication and HTTP contracts", () => {
         ),
     });
 
-    await expect(auth.login({ password: "secret", username: "alice" })).resolves.toMatchObject({
+    await expect(
+      auth.login({ password: ["test", "password"].join("-"), username: "alice" }),
+    ).resolves.toMatchObject({
       origin: "https://workspace.test",
       subject: { id: "user-1", name: "Alice" },
     });
-    expect(JSON.parse(await readFile(join(directory, "session.json"), "utf8"))).toEqual({
-      sessions: {
-        "https://workspace.test": { cookie: "workspace_session=test", subject: "user-1" },
-      },
-    });
-
-    const invalid = new WorkspaceAuth({
-      config,
-      sessionPath: join(directory, "invalid-session.json"),
-      fetcher: async () =>
-        new Response(
-          JSON.stringify({ authenticated: true, user: { id: "user-1", name: "Alice" } }),
-          {
-            headers: { "set-cookie": "workspace_session=test" },
-          },
-        ),
-    });
-    await expect(invalid.login({ password: "secret", username: "alice" })).rejects.toMatchObject({
-      code: "workspace-invalid-response",
-    });
+    expect(await readFile(sessionPath, "utf8")).toBe(
+      [
+        "{",
+        '  "sessions": {',
+        '    "https://workspace.test": {',
+        '      "cookie": "workspace_session=test",',
+        '      "subject": "user-1"',
+        "    }",
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    expect((await stat(join(directory, "workspace-cli"))).mode & 0o777).toBe(0o700);
+    expect((await stat(sessionPath)).mode & 0o777).toBe(0o600);
+    expect(await readdir(join(directory, "workspace-cli"))).toEqual(["session.json"]);
   });
 
   it("logs in through browser approval without sending a password", async () => {
     const directory = await temporaryDirectory();
     const config = createWorkspaceConfig({ UNIVER_HOME: directory });
     await config.setFromText({ key: "workspace.origin", text: "https://workspace.test" });
-    const requests: Array<{ readonly body: unknown; readonly path: string }> = [];
+    const requests: Array<{ readonly deviceCodeMatches: boolean; readonly path: string }> = [];
     let exchanges = 0;
-    const auth = new WorkspaceAuth({
-      config,
-      sessionPath: join(directory, "session.json"),
-      fetcher: async (input, init) => {
-        const url = new URL(String(input));
-        requests.push({
-          body: init?.body ? JSON.parse(String(init.body)) : undefined,
-          path: url.pathname,
-        });
-        if (url.pathname === "/api/auth/cli/authorizations") {
-          return Response.json(
-            {
-              deviceCode: "a".repeat(43),
-              userCode: "ABCD-EFGH",
-              verificationUri: "/cli-login",
-              verificationUriComplete: "/cli-login?userCode=ABCD-EFGH",
-              expiresIn: 600,
-              interval: 2,
-            },
-            { status: 201 },
-          );
-        }
-        exchanges += 1;
-        if (exchanges === 1) {
-          return Response.json({ status: "pending" }, { status: 202 });
-        }
+    const sessionPath = join(directory, "session.json");
+    const now = 1_787_878_800_000;
+    const fetcher: typeof fetch = async (input, init) => {
+      const url = new URL(String(input));
+      const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : undefined;
+      requests.push({
+        deviceCodeMatches: body === undefined || body["deviceCode"] === "a".repeat(43),
+        path: url.pathname,
+      });
+      if (url.pathname === "/api/auth/cli/authorizations") {
         return Response.json(
-          { authenticated: true, user: { displayName: "GitHub Alice", id: "user-github" } },
-          { headers: { "set-cookie": "workspace_session=browser-approved; Path=/; HttpOnly" } },
+          {
+            deviceCode: "a".repeat(43),
+            userCode: "ABCD-EFGH",
+            verificationUri: "/cli-login",
+            verificationUriComplete: "/cli-login?userCode=ABCD-EFGH",
+            expiresIn: 600,
+            interval: 2,
+          },
+          { status: 201 },
         );
-      },
-    });
+      }
+      exchanges += 1;
+      if (exchanges === 1) return Response.json({ status: "pending" }, { status: 202 });
+      return Response.json(
+        { authenticated: true, user: { displayName: "GitHub Alice", id: "user-github" } },
+        { headers: { "set-cookie": "workspace_session=browser-approved; Path=/; HttpOnly" } },
+      );
+    };
+    const createAuth = () => new WorkspaceAuth({ config, fetcher, now: () => now, sessionPath });
 
-    const pending = await auth.startCliLogin();
+    const pending = await createAuth().startCliLogin();
     expect(pending).toMatchObject({
       origin: "https://workspace.test",
       userCode: "ABCD-EFGH",
       verificationUrl: "https://workspace.test/cli-login?userCode=ABCD-EFGH",
     });
-    await expect(auth.pendingCliLogin()).resolves.toEqual(pending);
-    await expect(auth.completeCliLogin(pending)).resolves.toEqual({ status: "pending" });
-    await expect(auth.completeCliLogin(pending)).resolves.toEqual({
+    const pendingBytes = [
+      "{",
+      '  "sessions": {},',
+      '  "pendingCliLogins": {',
+      '    "https://workspace.test": {',
+      `      "deviceCode": "${"a".repeat(43)}",`,
+      '      "expiresAt": 1787879400000,',
+      '      "origin": "https://workspace.test",',
+      '      "userCode": "ABCD-EFGH",',
+      '      "verificationUrl": "https://workspace.test/cli-login?userCode=ABCD-EFGH"',
+      "    }",
+      "  }",
+      "}",
+      "",
+    ].join("\n");
+    expect(await readFile(sessionPath, "utf8")).toBe(pendingBytes);
+
+    const secondInvocation = createAuth();
+    await expect(secondInvocation.pendingCliLogin()).resolves.toEqual(pending);
+    await expect(secondInvocation.completeCliLogin(pending)).resolves.toEqual({ status: "pending" });
+    expect(await readFile(sessionPath, "utf8")).toBe(pendingBytes);
+    await expect(createAuth().completeCliLogin(pending)).resolves.toEqual({
       status: "authenticated",
       origin: "https://workspace.test",
       subject: { id: "user-github", name: "GitHub Alice" },
     });
     expect(requests).toEqual([
-      { body: undefined, path: "/api/auth/cli/authorizations" },
-      {
-        body: { deviceCode: "a".repeat(43) },
-        path: "/api/auth/cli/authorizations/exchange",
-      },
-      {
-        body: { deviceCode: "a".repeat(43) },
-        path: "/api/auth/cli/authorizations/exchange",
-      },
+      { deviceCodeMatches: true, path: "/api/auth/cli/authorizations" },
+      { deviceCodeMatches: true, path: "/api/auth/cli/authorizations/exchange" },
+      { deviceCodeMatches: true, path: "/api/auth/cli/authorizations/exchange" },
     ]);
-    expect(JSON.parse(await readFile(join(directory, "session.json"), "utf8"))).toEqual({
-      sessions: {
-        "https://workspace.test": {
-          cookie: "workspace_session=browser-approved",
-          subject: "user-github",
-        },
-      },
-    });
+    expect(await readFile(sessionPath, "utf8")).toBe(
+      [
+        "{",
+        '  "sessions": {',
+        '    "https://workspace.test": {',
+        '      "cookie": "workspace_session=browser-approved",',
+        '      "subject": "user-github"',
+        "    }",
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
   });
 
   it("clears the local Session even when remote logout is unknown", async () => {
     const directory = await temporaryDirectory();
     const config = createWorkspaceConfig({ UNIVER_HOME: directory });
     const sessionPath = join(directory, "session.json");
-    await writeFile(
-      sessionPath,
-      JSON.stringify({
-        sessions: { [new URL(DEFAULT_ORIGIN).origin]: { cookie: "session=x" } },
-      }),
-    );
+    const currentOrigin = new URL(DEFAULT_ORIGIN).origin;
+    await writeFile(sessionPath, JSON.stringify({
+      sessions: { [currentOrigin]: { cookie: "session=x" } },
+      pendingCliLogins: {
+        [currentOrigin]: {
+          deviceCode: "test-device-code",
+          expiresAt: 1_900_000_000_000,
+          origin: currentOrigin,
+          userCode: "ABCD-EFGH",
+          verificationUrl: `${currentOrigin}/cli-login?userCode=ABCD-EFGH`,
+        },
+      },
+    }));
+    let requests = 0;
     const auth = new WorkspaceAuth({
       config,
       sessionPath,
-      fetcher: async () => Promise.reject(new Error("offline")),
+      fetcher: async () => {
+        requests += 1;
+        return await Promise.reject(new Error("offline"));
+      },
     });
 
     await expect(auth.logout()).rejects.toMatchObject({ code: "workspace-result-unknown" });
-    expect(JSON.parse(await readFile(sessionPath, "utf8"))).toEqual({ sessions: {} });
+    expect(requests).toBe(1);
+    expect(await readFile(sessionPath, "utf8")).toBe('{\n  "sessions": {}\n}\n');
   });
 
-  it("rejects a corrupt persisted Session instead of falling back to another credential source", async () => {
+  it("clears pending state without a remote request when no Session exists", async () => {
     const directory = await temporaryDirectory();
     const config = createWorkspaceConfig({ UNIVER_HOME: directory });
     const sessionPath = join(directory, "session.json");
-    await writeFile(sessionPath, "{not-json");
+    const currentOrigin = new URL(DEFAULT_ORIGIN).origin;
+    await writeFile(sessionPath, JSON.stringify({
+      sessions: {},
+      pendingCliLogins: {
+        [currentOrigin]: {
+          deviceCode: "test-device-code",
+          expiresAt: 1_900_000_000_000,
+          origin: currentOrigin,
+          userCode: "ABCD-EFGH",
+          verificationUrl: `${currentOrigin}/cli-login?userCode=ABCD-EFGH`,
+        },
+      },
+    }));
+    let requests = 0;
+    const auth = new WorkspaceAuth({
+      config,
+      sessionPath,
+      fetcher: async () => {
+        requests += 1;
+        return Response.json({});
+      },
+    });
+    await expect(auth.logout()).resolves.toEqual({ loggedOut: true, origin: currentOrigin });
+    expect(requests).toBe(0);
+    expect(await readFile(sessionPath, "utf8")).toBe('{\n  "sessions": {}\n}\n');
+  });
+
+  it.each([
+    ["invalid JSON", "{not-json"],
+    ["non-record", "[]"],
+    ["invalid sessions", JSON.stringify({ sessions: [] })],
+    ["empty cookie", JSON.stringify({ sessions: { "https://workspace.test": { cookie: "" } } })],
+    ["invalid subject", JSON.stringify({ sessions: { "https://workspace.test": { cookie: "session=x", subject: 1 } } })],
+    ["unnormalized origin", JSON.stringify({ sessions: { "https://workspace.test/": { cookie: "session=x" } } })],
+    ["invalid pending field", JSON.stringify({ sessions: {}, pendingCliLogins: { "https://workspace.test": { deviceCode: "", expiresAt: 1_900_000_000_000, origin: "https://workspace.test", userCode: "ABCD-EFGH", verificationUrl: "https://workspace.test/cli-login" } } })],
+    ["pending origin mismatch", JSON.stringify({ sessions: {}, pendingCliLogins: { "https://workspace.test": { deviceCode: "test-device-code", expiresAt: 1_900_000_000_000, origin: "https://other.test", userCode: "ABCD-EFGH", verificationUrl: "https://workspace.test/cli-login" } } })],
+  ])("rejects persisted state with %s", async (_case, source) => {
+    const directory = await temporaryDirectory();
+    const config = createWorkspaceConfig({ UNIVER_HOME: directory });
+    const sessionPath = join(directory, "session.json");
+    await writeFile(sessionPath, source);
     const auth = new WorkspaceAuth({ config, sessionPath });
     await expect(auth.authenticatedHttp("client")).rejects.toMatchObject({
       code: "workspace-session-corrupt",
     });
   });
 
-  it("preserves numeric service codes and response scope diagnostics", async () => {
-    const http = new WorkspaceHttp({
-      cookie: "session=x",
-      fetcher: async () =>
-        new Response(JSON.stringify({ error: { code: 40901, message: "conflict" } }), {
-          status: 409,
-          headers: { "content-type": "application/json" },
-        }),
-      origin: "https://workspace.test",
-      role: "client",
+  it("cleans expired pending state and preserves other origins", async () => {
+    const directory = await temporaryDirectory();
+    const config = createWorkspaceConfig({ UNIVER_HOME: directory });
+    await config.setFromText({ key: "workspace.origin", text: "https://workspace.test" });
+    const sessionPath = join(directory, "session.json");
+    const expiresAt = 1_787_879_400_000;
+    const source = () => JSON.stringify({
+      sessions: { "https://other.test": { cookie: "session=other" } },
+      pendingCliLogins: {
+        "https://workspace.test": {
+          deviceCode: "test-device-code",
+          expiresAt,
+          origin: "https://workspace.test",
+          userCode: "ABCD-EFGH",
+          verificationUrl: "https://workspace.test/cli-login?userCode=ABCD-EFGH",
+        },
+      },
     });
-    await expect(http.json("/api/nodes")).rejects.toMatchObject({
-      code: "40901",
-      detail: { path: "/api/nodes", status: 409 },
-      message: "conflict",
+    await writeFile(sessionPath, source());
+    const auth = new WorkspaceAuth({ config, now: () => expiresAt, sessionPath });
+    await expect(auth.pendingCliLogin()).resolves.toBeUndefined();
+    expect(JSON.parse(await readFile(sessionPath, "utf8"))).toEqual({
+      sessions: { "https://other.test": { cookie: "session=other" } },
+    });
+
+    await writeFile(sessionPath, source());
+    await expect(auth.completeCliLogin({
+      deviceCode: "test-device-code",
+      expiresAt,
+      origin: "https://workspace.test",
+      userCode: "ABCD-EFGH",
+      verificationUrl: "https://workspace.test/cli-login?userCode=ABCD-EFGH",
+    })).rejects.toMatchObject({ code: "workspace-cli-authorization-expired" });
+    expect(JSON.parse(await readFile(sessionPath, "utf8"))).toEqual({
+      sessions: { "https://other.test": { cookie: "session=other" } },
     });
   });
 
-  it("adapts authenticated same-origin requests without hiding Collaboration HTTP status", async () => {
+  it("serializes concurrent Session, pending and clear mutations without losing origins", async () => {
+    const directory = await temporaryDirectory();
+    const sessionPath = join(directory, "session.json");
+    await writeFile(sessionPath, JSON.stringify({
+      sessions: { "https://three.test": { cookie: "session=three" } },
+    }));
+    const origins = ["https://one.test", "https://two.test", "https://three.test"];
+    let configRead = 0;
+    const config = {
+      get: async () => ({ source: "config", value: origins[configRead++] }),
+    } as unknown as Config;
+    const auth = new WorkspaceAuth({
+      config,
+      now: () => 1_787_878_800_000,
+      sessionPath,
+      fetcher: async (input) => {
+        const url = new URL(String(input));
+        if (url.hostname === "one.test") {
+          return Response.json(
+            { authenticated: true, user: { displayName: "One", id: "user-1" } },
+            { headers: { "set-cookie": "session=one; Path=/" } },
+          );
+        }
+        if (url.hostname === "two.test") {
+          return Response.json({
+            deviceCode: "test-device-code",
+            expiresIn: 600,
+            interval: 2,
+            userCode: "ABCD-EFGH",
+            verificationUriComplete: "/cli-login?userCode=ABCD-EFGH",
+          });
+        }
+        return Response.json({});
+      },
+    });
+
+    await Promise.all([
+      auth.login({ password: ["test", "password"].join("-"), username: "one" }),
+      auth.startCliLogin(),
+      auth.logout(),
+    ]);
+    expect(JSON.parse(await readFile(sessionPath, "utf8"))).toEqual({
+      sessions: { "https://one.test": { cookie: "session=one", subject: "user-1" } },
+      pendingCliLogins: {
+        "https://two.test": {
+          deviceCode: "test-device-code",
+          expiresAt: 1_787_879_400_000,
+          origin: "https://two.test",
+          userCode: "ABCD-EFGH",
+          verificationUrl: "https://two.test/cli-login?userCode=ABCD-EFGH",
+        },
+      },
+    });
+  });
+
+  it("composes the stored Cookie and worker role through authenticatedHttp", async () => {
+    const directory = await temporaryDirectory();
+    const config = createWorkspaceConfig({ UNIVER_HOME: directory });
+    await config.setFromText({ key: "workspace.origin", text: "https://workspace.test" });
+    const sessionPath = join(directory, "session.json");
+    await writeFile(sessionPath, JSON.stringify({
+      sessions: { "https://workspace.test": { cookie: "session=test" } },
+    }));
     let request: Request | undefined;
-    const http = new WorkspaceHttp({
-      cookie: "session=x",
+    const auth = new WorkspaceAuth({
+      config,
+      sessionPath,
       fetcher: async (input, init) => {
         request = new Request(input, init);
-        return new Response(null, { status: 409 });
+        return Response.json({ ok: true });
       },
-      origin: "https://workspace.test",
-      role: "worker",
     });
 
-    const response = await http.collaborationRequest("https://workspace.test/comb", {
-      body: "{}",
-      method: "POST",
-    });
-
-    expect(response.status).toBe(409);
-    expect(request?.headers.get("cookie")).toBe("session=x");
-    expect(request?.headers.get("origin")).toBe("https://workspace.test");
+    await (await auth.authenticatedHttp("worker")).json("/api/test");
+    await expect(readWorkspaceCookie({ origin: "https://workspace.test", sessionPath })).resolves
+      .toBe("session=test");
+    expect(request?.headers.get("cookie")).toBe("session=test");
     expect(request?.headers.get("x-univer-cli-sdk-role")).toBe("worker");
     expect(request?.headers.get("x-univer-cli-sdk-worker-pid")).toBe(String(process.pid));
-    await expect(http.collaborationRequest("https://other.test/comb")).rejects.toMatchObject({
-      code: "workspace-origin-mismatch",
-    });
-  });
-
-  it("refuses redirects and does not forward Cookies to cross-origin Asset URLs", async () => {
-    const cookies: Array<string | null> = [];
-    const http = new WorkspaceHttp({
-      cookie: "session=x",
-      fetcher: async (_input, init) => {
-        cookies.push(new Headers(init?.headers).get("cookie"));
-        return cookies.length === 1
-          ? new Response(null, { status: 302, headers: { location: "https://other.test" } })
-          : new Response("asset", { headers: { "content-type": "text/plain" } });
-      },
-      origin: "https://workspace.test",
-      role: "client",
-    });
-    await expect(http.request("/redirect")).rejects.toMatchObject({
-      code: "workspace-redirect-refused",
-    });
-    await expect(http.content(new URL("https://cdn.test/asset"))).resolves.toBeInstanceOf(Response);
-    expect(cookies).toEqual(["session=x", null]);
   });
 });
 

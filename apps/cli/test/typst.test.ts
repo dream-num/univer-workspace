@@ -1,14 +1,14 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type {
+  WorkspaceCompileTypstInput,
+  WorkspaceCompileTypstResult,
+} from "@univerjs/univer-workspace-client-core";
+import type { OutputConfiguration } from "commander";
+import { Command } from "commander";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  compileDocTypstBundle,
-  type CompileDocTypstBundleResult,
-} from "@univer-cli/doc-typst-facade";
-import { WorkspaceCompileTypstFeature } from "../src/features/typst/compile.js";
-import { HeadlessWorkspaceTypstMaterializer } from "../src/features/typst/materialize.js";
-import type { WorkspaceUnit } from "../src/features/worktree/model.js";
+import { createWorkspaceCompileTypstCommand } from "../src/features/typst/command.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -20,132 +20,160 @@ afterEach(async () => {
   );
 });
 
-const compiled: CompileDocTypstBundleResult = {
-  diagnostics: [],
-  javascript: "return Promise.resolve();",
-  previews: [],
+const compiled: WorkspaceCompileTypstResult = {
+  committed: false,
+  diagnostics: [
+    { reason: "unused", severity: "warning", sourcePath: "pages/one.typ" },
+  ],
+  javascript: "return docMigration.apply();\n",
+  previews: [{ pageId: "one", path: "previews/one.svg", sourcePath: "pages/one.typ" }],
   targetUnitId: "typst-doc",
   title: "Compiled paper",
 };
 
-const unit: WorkspaceUnit = {
-  activationState: "notApplicable",
-  change: "added",
-  draftHeadRevision: 1,
-  mergeResult: "pending",
-  name: "Runtime paper",
-  nodeId: "node-1",
-  resourceId: "resource-1",
-  source: "worktree",
-  target: { parentNodeId: "parent-1", spaceId: "space-1" },
-  type: "doc",
-  unitId: "unit-1",
-  worktreeId: "worktree-1",
-};
+describe("compile-typst command", () => {
+  it("maps compile-only input, writes exact artifacts, and preserves JSON presentation", async () => {
+    const directory = await temporaryDirectory();
+    const outputPath = join(directory, "nested", "program.js");
+    const diagnosticsPath = join(directory, "diagnostics", "typst.json");
+    const execute = vi.fn(async (_input: WorkspaceCompileTypstInput) => compiled);
 
-describe("WorkspaceCompileTypstFeature", () => {
-  it("materializes compiler output through the standard headless Doc Facade", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "workspace-typst-materialize-"));
-    temporaryDirectories.push(directory);
-    await mkdir(join(directory, "pages"));
-    await writeFile(join(directory, "pages", "one.typ"), "= Hello\n\nWorld", "utf8");
-    await writeFile(
-      join(directory, "typst.json"),
-      JSON.stringify({
-        pages: ["pages/one.typ"],
-        schemaVersion: 1,
-        targetUnitId: "materialized-doc",
-        title: "Materialized paper",
-      }),
-      "utf8",
+    const output = await run(createWorkspaceCompileTypstCommand({ execute }), [
+      " exact bundle/typst.json ",
+      "--preview-dir",
+      " preview output ",
+      "--out",
+      outputPath,
+      "--diagnostics-out",
+      diagnosticsPath,
+      "--json",
+    ]);
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledWith({
+      bundlePath: " exact bundle/typst.json ",
+      previewDir: " preview output ",
+    });
+    expect(await readFile(outputPath, "utf8")).toBe(compiled.javascript);
+    expect(await readFile(diagnosticsPath, "utf8")).toBe(
+      `${JSON.stringify({ schemaVersion: 1, diagnostics: compiled.diagnostics }, null, 2)}\n`,
     );
-
-    const output = await compileDocTypstBundle(directory);
-    const first = await new HeadlessWorkspaceTypstMaterializer().materialize(output);
-    const second = await new HeadlessWorkspaceTypstMaterializer().materialize(output);
-
-    expect(first.initialData).toMatchObject({ id: "materialized-doc", rev: 1 });
-    expect(first.initialData).toEqual(second.initialData);
-  });
-
-  it("compiles once, materializes complete UnitData, and creates one staged Doc", async () => {
-    const compile = vi.fn(async () => compiled);
-    const materialize = vi.fn(async () => ({
-      initialData: { id: "typst-doc", name: "Runtime paper", rev: 1 },
-      name: "Runtime paper",
-    }));
-    const create = vi.fn(async () => unit);
-    const feature = new WorkspaceCompileTypstFeature({
-      compile,
-      materializer: { materialize },
-      units: { create },
-    });
-
-    await expect(
-      feature.execute({
-        bundlePath: "paper",
-        previewDir: "previews",
-        apply: {
-          idempotencyKey: "request-1",
-          parentNodeId: "parent-1",
-          spaceId: "space-1",
-          worktreeId: "worktree-1",
-        },
-      }),
-    ).resolves.toEqual({ ...compiled, committed: true, unit });
-    expect(compile).toHaveBeenCalledOnce();
-    expect(compile).toHaveBeenCalledWith("paper", { previewDir: "previews" });
-    expect(materialize).toHaveBeenCalledWith({
-      javascript: compiled.javascript,
-      targetUnitId: "typst-doc",
-    });
-    expect(create).toHaveBeenCalledWith({
-      idempotencyKey: "request-1",
-      initialData: { id: "typst-doc", name: "Runtime paper", rev: 1 },
-      name: "Runtime paper",
-      parentNodeId: "parent-1",
-      spaceId: "space-1",
-      type: "doc",
-      worktreeId: "worktree-1",
-    });
-  });
-
-  it("does not materialize or create a Unit when compilation reports an error", async () => {
-    const materialize = vi.fn();
-    const create = vi.fn();
-    const feature = new WorkspaceCompileTypstFeature({
-      compile: async () => ({
-        ...compiled,
-        diagnostics: [{ reason: "unsupported", severity: "error", sourcePath: "page.typ" }],
-      }),
-      materializer: { materialize },
-      units: { create },
-    });
-
-    await expect(
-      feature.execute({
-        bundlePath: "paper",
-        apply: { spaceId: "space-1", worktreeId: "worktree-1" },
-      }),
-    ).rejects.toMatchObject({ code: "workspace-typst-diagnostics" });
-    expect(materialize).not.toHaveBeenCalled();
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it("keeps compile-only mode free of Workspace side effects", async () => {
-    const materialize = vi.fn();
-    const create = vi.fn();
-    const feature = new WorkspaceCompileTypstFeature({
-      compile: async () => compiled,
-      materializer: { materialize },
-      units: { create },
-    });
-
-    await expect(feature.execute({ bundlePath: "paper" })).resolves.toEqual({
-      ...compiled,
+    expect(JSON.parse(output)).toEqual({
       committed: false,
+      compiledTargetUnitId: "typst-doc",
+      diagnostics: compiled.diagnostics,
+      previews: compiled.previews,
+      out: outputPath,
     });
-    expect(materialize).not.toHaveBeenCalled();
-    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("maps exact apply input and preserves text presentation", async () => {
+    const result: WorkspaceCompileTypstResult = {
+      ...compiled,
+      committed: true,
+      unit: {
+        activationState: "notApplicable",
+        change: "added",
+        draftHeadRevision: 1,
+        mergeResult: "pending",
+        name: "Compiled paper",
+        nodeId: "node-1",
+        resourceId: "resource-1",
+        source: "worktree",
+        target: { parentNodeId: "parent-1", spaceId: "space-1" },
+        type: "doc",
+        unitId: "unit-1",
+        worktreeId: "worktree-1",
+      },
+    };
+    const execute = vi.fn(async (_input: WorkspaceCompileTypstInput) => result);
+
+    const output = await run(createWorkspaceCompileTypstCommand({ execute }), [
+      "bundle",
+      "--apply",
+      "--space",
+      "space-1",
+      "--worktree",
+      "worktree-1",
+      "--parent",
+      "parent-1",
+      "--idempotency-key",
+      "request-1",
+    ]);
+
+    expect(execute).toHaveBeenCalledWith({
+      apply: {
+        idempotencyKey: "request-1",
+        parentNodeId: "parent-1",
+        spaceId: "space-1",
+        worktreeId: "worktree-1",
+      },
+      bundlePath: "bundle",
+    });
+    expect(output).toBe("Created staged Doc unit-1 from typst-doc in worktree-1\n");
+  });
+
+  it.each([
+    {
+      args: ["bundle", "--apply", "--space", "space-1"],
+      message: "--apply requires --worktree and --space.",
+    },
+    {
+      args: ["bundle", "--worktree", "worktree-1"],
+      message: "Workspace target options require --apply.",
+    },
+    {
+      args: ["bundle"],
+      message: "Compile-only mode requires --out.",
+    },
+  ])("rejects invalid option combinations before execution: $message", async ({ args, message }) => {
+    const execute = vi.fn();
+    const output: string[] = [];
+
+    await expect(
+      run(createWorkspaceCompileTypstCommand({ execute }), args, output),
+    ).rejects.toMatchObject({ code: "workspace.command.failed" });
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(output.join("")).toContain(`workspace-argument-invalid: ${message}`);
+  });
+
+  it("does not write diagnostics when the program output write fails", async () => {
+    const directory = await temporaryDirectory();
+    const diagnosticsPath = join(directory, "diagnostics.json");
+    const execute = vi.fn(async (_input: WorkspaceCompileTypstInput) => compiled);
+
+    await expect(
+      run(createWorkspaceCompileTypstCommand({ execute }), [
+        "bundle",
+        "--out",
+        directory,
+        "--diagnostics-out",
+        diagnosticsPath,
+      ]),
+    ).rejects.toThrow();
+    await expect(readFile(diagnosticsPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
+
+async function temporaryDirectory(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "workspace-typst-command-"));
+  temporaryDirectories.push(directory);
+  return directory;
+}
+
+async function run(
+  command: Command,
+  args: readonly string[],
+  outputParts: string[] = [],
+): Promise<string> {
+  const configuration: OutputConfiguration = {
+    writeErr: (text) => outputParts.push(text),
+    writeOut: (text) => outputParts.push(text),
+  };
+  command.exitOverride().configureOutput(configuration);
+  const program = new Command("test").configureOutput(configuration).exitOverride();
+  program.addCommand(command);
+  await program.parseAsync([command.name(), ...args], { from: "user" });
+  return outputParts.join("");
+}

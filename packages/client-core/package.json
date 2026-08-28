@@ -1,0 +1,50 @@
+{
+  "name": "@univerjs/univer-workspace-client-core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Private Univer Workspace client workflows for Node-hosted agent clients.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./src/content-worker.ts",
+      "development": "./src/content-worker.ts",
+      "default": "./dist/content-worker.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p render-runtime/tsconfig.json --noEmit && vite build --config render-runtime/vite.config.ts",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit"
+  },
+  "dependencies": {
+    "@univer-cli/content-execution": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/doc-typst-facade": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/headless-univer": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/svg-facade": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/unit-layout-lint": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/unit-screenshot": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/univer-collaboration-runtime": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/univer-collaboration-runtime-pool": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/univer-render-page": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univer-cli/univer-render-runtime": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs-pro/collaboration": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs-pro/embed": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs-pro/exchange-node": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs/core": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs/protocol": "1.0.0-insiders.20260822-0c0c0dd"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.10"
+  }
+}

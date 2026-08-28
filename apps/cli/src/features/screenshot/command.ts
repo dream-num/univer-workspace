@@ -8,9 +8,11 @@ import {
   type UniverRenderBrowserSetupCommandDependencies,
 } from "@univer-cli/unit-screenshot-command";
 import { Option, type Command } from "commander";
+import type {
+  WorkspaceRuntimeScope,
+  WorkspaceScreenshotApplication,
+} from "@univerjs/univer-workspace-client-core";
 import { workspaceError } from "../../errors.js";
-import type { WorkspaceRuntimeScope } from "../../runtime/target.js";
-import type { WorkspaceScreenshotApplication } from "./screenshot.js";
 
 interface WorkspaceScreenshotCommandOptions {
   readonly trunk?: boolean;

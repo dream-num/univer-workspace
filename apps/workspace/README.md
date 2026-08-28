@@ -34,7 +34,11 @@ API documentation is available at:
 
 Product data is stored in `.data/univer-workspace.sqlite`. Univer unit data is
 stored separately in `.data/univer-collaboration.sqlite`, and uploaded Blob
-bytes default to `.data/univer-workspace-blobs`.
+bytes default to `.data/univer-workspace-blobs`. Sheet and Doc Thread Comment
+anchors remain in Unit snapshots and changesets; comment bodies, replies, and
+solved state use the Comment component in the same Collaboration SQLite file.
+Thread Comments are enabled only in Trunk editors because the Comment protocol
+does not define Worktree branch or merge semantics.
 
 The Univer editors import and export XLSX/CSV/TSV, DOCX, and PPTX through the
 server-side `@univerjs-pro/exchange-node` runtime. These endpoints follow the
@@ -197,6 +201,10 @@ docker run --rm \
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
 backs up and migrates supported V0 through V5 product databases to V6 automatically.
+The Collaboration Comment Adapter performs an additive, idempotent initialization
+of its own `comment=1` component schema in the existing Collaboration SQLite file;
+it does not require a product database migration command. Back up both SQLite files
+before rollout.
 For a V6 rollout, stop every old Workspace instance, start one V6 instance and
 wait for migration and health checks to succeed, then restore normal service;
 do not let V5 and V6 processes write the same SQLite file concurrently.

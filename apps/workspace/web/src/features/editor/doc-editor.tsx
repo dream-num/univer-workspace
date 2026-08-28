@@ -68,7 +68,7 @@ import {
   getDocAuthoringUIPlugins,
   getDocReplayCompatibilityPlugins,
 } from "./doc-features";
-import { getThreadCommentCollaborationPlugins } from "./thread-comment-features";
+import { getDocThreadCommentCollaborationPlugins } from "./thread-comment-features";
 
 export type DocEditorProps = CollaborationEditorProps;
 
@@ -111,10 +111,13 @@ export default createCollaborationEditor({
       UniverShapeEditorUIEnUS
     ),
   },
-  collaborationFeaturePlugins: getThreadCommentCollaborationPlugins,
+  collaborationFeaturePlugins: (collaborationScope) =>
+    getDocThreadCommentCollaborationPlugins(
+      collaborationScope.kind === "trunk"
+    ),
   exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin],
   printFeaturePlugins: () => [UniverDocsPrintPlugin],
-  createPresets: (container) => [
+  createPresets: (container, _license, collaborationScope) => [
     UniverDocsCorePreset({
       container,
       ribbonType: "grid",
@@ -123,7 +126,9 @@ export default createCollaborationEditor({
       collaboration: true,
     }),
     UniverDocsHyperLinkPreset(),
-    UniverDocsThreadCommentPreset(),
+    ...(collaborationScope.kind === "trunk"
+      ? [UniverDocsThreadCommentPreset()]
+      : []),
     {
       plugins: [
         ...getDocReplayCompatibilityPlugins(),

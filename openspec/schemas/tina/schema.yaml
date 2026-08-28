@@ -1,0 +1,117 @@
+name: tina
+version: 1
+description: Small, domain-aligned OpenSpec changes for a personal Codex workflow
+
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Motivation, scope, capability impact, and domain alignment
+    template: proposal.md
+    instruction: |
+      Create a concise proposal for one independently valuable intent.
+
+      Before writing:
+      - Read the applicable CONTEXT-MAP.md or CONTEXT.md files and related ADRs.
+      - Use their canonical vocabulary and respect their decisions.
+      - Inspect existing OpenSpec specs before declaring capabilities.
+      - If an external or version-sensitive fact is unresolved, stop and use
+        the tina-research skill before continuing.
+
+      Enforce the size gate before creating the file:
+      - one intent;
+      - no more than two new or modified capabilities;
+      - likely no more than eight coarse implementation tasks;
+      - feasible in one focused implementation session.
+      If the change exceeds a limit, do not compress it artificially. Return an
+      ordered multi-change split, explain dependencies, and wait for confirmation.
+
+      Sections:
+      - Why: the problem or opportunity and why it matters now.
+      - What Changes: concrete additions, modifications, or removals.
+      - Scope: the single intent, explicit non-goals, and size-gate result.
+      - Capabilities: exact new and modified capability paths. Use kebab-case
+        for new paths and existing paths verbatim for modified capabilities.
+      - Domain Alignment: cite applicable CONTEXT/ADR paths and explain any
+        vocabulary or decision impact. Say "No domain-model change" when true.
+      - Impact: affected code, APIs, dependencies, or systems.
+
+      A change with no behavior-level capability delta must set skip_specs: true
+      in .openspec.yaml. Do not invent requirements to satisfy validation.
+      Keep the proposal under two pages; implementation details belong in design.md.
+    requires: []
+
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Testable behavioral deltas for affected capabilities
+    template: spec.md
+    instruction: |
+      Create one delta spec per capability declared in proposal.md.
+
+      Specs define observable behavior, inputs, outputs, error conditions, and
+      external constraints. They do not contain internal class names, library
+      choices, or implementation steps.
+
+      Use these operation headers exactly:
+      - ## ADDED Requirements
+      - ## MODIFIED Requirements
+      - ## REMOVED Requirements
+      - ## RENAMED Requirements
+
+      Each requirement uses `### Requirement: <name>`, normative SHALL/MUST
+      language, and at least one `#### Scenario: <name>` with WHEN/THEN bullets.
+      For a new capability, start with a Purpose of at least 50 characters.
+      For a modified requirement, copy the entire current requirement before
+      editing it so archive does not discard existing scenarios.
+
+      Preserve proposal scope and Domain Alignment. If a requirement conflicts
+      with the Domain Model or an ADR, stop and resolve the conflict first.
+    requires:
+      - proposal
+
+  - id: design
+    generates: design.md
+    description: Technical decisions needed to implement the change
+    template: design.md
+    instruction: |
+      Create design.md only for a cross-module change, new architectural pattern
+      or dependency, significant data-model change, migration, or material
+      security/performance ambiguity. Otherwise skip it and say why.
+
+      Explain context, goals and non-goals, decisions with alternatives, risks
+      and mitigations, migration when applicable, and only genuinely deferrable
+      open questions. When a diagram would help humans understand the design or
+      decide faster, add a concise text diagram before Decisions; otherwise omit
+      it. Cite relevant ADRs instead of restating them. Resolve any question that
+      would change behavior, approach, or task breakdown before continuing.
+      Keep any text diagram semantic and concise so the post-proposal Change
+      View can redraw it without inventing information.
+    requires:
+      - proposal
+
+  - id: tasks
+    generates: tasks.md
+    description: Small implementation tasks with explicit verification
+    template: tasks.md
+    instruction: |
+      Create a dependency-ordered implementation checklist from proposal, specs,
+      and design when present.
+
+      Every task must use `- [ ] X.Y ...` and state its own verification through
+      a test, command, observable behavior, or delivered artifact. Target no more
+      than eight coarse tasks. If honest decomposition requires more, stop and
+      recommend splitting the Change instead of hiding work in oversized tasks.
+
+      Use the Domain Model's vocabulary. Do not reopen settled ADR decisions.
+      Resolve any design question that changes the task list before writing it.
+    requires:
+      - specs
+      - design
+
+apply:
+  requires: [tasks]
+  tracks: tasks.md
+  instruction: |
+    Read all context files plus applicable CONTEXT and ADR files. Implement one
+    pending task at a time, run its stated verification, then mark it complete.
+    Pause on ambiguity, scope growth, or conflict with the Domain Model. Do not
+    archive automatically; verification and archive are separate user actions.

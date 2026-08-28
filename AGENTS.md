@@ -12,8 +12,8 @@ SDK 和 Univer CLI SDK 组装成两个对外应用：
 - Univer Workspace：可部署的 Browser、产品 HTTP API、协同入口和后台任务。
 - Univer Workspace CLI：面向 Agent 的远程 Workspace 自动化应用。
 
-本仓库还包含 Browser 专用的 private reference-provider package。它是内部实现，不是第三个
-对外应用或跨仓库公共 SDK。
+本仓库还包含供 Browser 或 Node-hosted Workspace Agent Client 使用的 private packages。它们是内部
+实现，不是额外的对外应用或跨仓库公共 SDK。
 
 ## 仓库结构与职责
 
@@ -21,6 +21,7 @@ SDK 和 Univer CLI SDK 组装成两个对外应用：
 apps/workspace                 Workspace Browser、Server、HTTP contract 与部署应用
 apps/cli                       Univer Workspace CLI
 apps/harness                   Univer Workspace Harness（DSH 定制服务 + 两个预装插件）
+packages/client-core           Node-hosted Workspace Agent Client 共享能力
 packages/reference-provider   Browser 专用的 private referenced-Unit policy
 packages/dsh-univer-workspace-plugin        能力插件（远程 Unit 工具集 + headless runtime）
 packages/dsh-univer-workspace-skin-plugin   皮肤插件（workspace 品牌与 logo）
@@ -29,8 +30,10 @@ scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
 
 - `apps/workspace` 拥有 Workspace 产品模型，包括 Identity、Space、Node、Resource、ACL、Trash、
   Recent、Blob、Asset、Operation 和 Worktree 的产品级组织。
-- `apps/cli` 拥有 Workspace origin、登录 Session、远程 Resource/Worktree workflow、CLI composition
-  和面向 Agent 的交付体验。
+- `apps/cli` 拥有 Workspace origin、登录 Session、Commander composition 和面向 Agent 的 CLI 交付体验。
+- `packages/client-core` 拥有 Node-hosted Workspace Agent Client 共享的 HTTP、错误、storage-neutral 认证协议、
+  远程产品 workflow 与 worker-backed content runtime；Client Shell 注入 origin、凭据、license 与 packaged
+  worker entry，package 不读取 CLI Session 或配置。
 - `apps/harness` 拥有 Workspace Harness 服务：DSH（DeepSeek Harness）定制组装，以 Workspace OAuth
   授权用户身份提供 agent 操作远程 Workspace 文档（Unit）的能力。它预装两个仓库内开发的插件，
   本身不发布为公共 SDK。
@@ -39,7 +42,7 @@ scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
 - `packages/dsh-univer-workspace-plugin` 提供 agent 操作远程 Workspace 文档的能力（工具集、空间对账、
   headless 协同 runtime、导入导出）。代码与维护独立，通过 harness profile 预装，不发布到 npm。
 - `packages/dsh-univer-workspace-skin-plugin` 只提供 DSH 浏览器面的 workspace 外观（主题令牌与品牌）。
-- `apps/*` 可以组合 SDK 能力；`packages/*` 不得反向依赖 application。`packages/dsh-univer-workspace-plugin`
+- `apps/*` 可以组合 SDK 能力；private packages 不得反向依赖 application。`packages/dsh-univer-workspace-plugin`
   依赖 `apps/harness` 暴露的 `workspaceAuth`/`workspaceSession` 服务，通过 cordis 服务组合而非 npm 依赖。
 
 ## SDK 与仓库边界
@@ -93,7 +96,8 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 
 ## Package 与发布边界
 
-- `apps/workspace` 和 `packages/reference-provider` 是 private workspace package，不发布为公共 SDK。
+- `apps/workspace`、`packages/client-core` 和 `packages/reference-provider` 是 private workspace package，
+  不发布为公共 SDK。
 - `univer-workspace-cli` 通过仓库内 packaging workflow 生成内部安装包；不要把 source workspace
   manifest 的 `private` 状态误当成公共 npm SDK 合同。
 - `apps/cli/package.json` 的 source version 固定为 `0.0.0`；稳定 CLI 版本只来自 `vX.Y.Z` git tag，
@@ -103,7 +107,10 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
   触发，`insiders` 只由默认分支手动 CI 触发，`dev` 只允许本地触发。`latest` 和 `insiders`
   发布前必须检查整个 workspace 的单一 SDK baseline；`dev` 明确跳过该检查。
 - CLI package artifact 必须只包含运行所需代码、资源和版本匹配的 Skills，不得依赖当前 checkout。
+- CLI package workflow 必须先构建 Client Core，并把其运行时代码内联到自包含 artifact；不得把 private
+  Core 变成安装时依赖。
 - `packages/reference-provider` 不增加独立发布、版本或外部 consumer 合同。
+- `packages/client-core` 不增加独立发布、版本或外部 consumer 合同。
 - 稳定 `vX.Y.Z` tag 在被选择时是 CLI release 与 Workspace deployment 共享的不可变源码坐标；tag push
   只发布 CLI。部署 workflow 也可以不选 tag，改为手动部署 workflow dispatch 的精确 commit，并使用
   `sha-<commit>` image tag。Docker image 和 CLI artifact 的交付时机与执行流程仍然独立。

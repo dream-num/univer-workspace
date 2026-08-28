@@ -1,6 +1,6 @@
 import { Command } from "commander";
+import type { WorkspaceAssetFeature } from "@univerjs/univer-workspace-client-core";
 import { executeCommand, present, type JsonOption } from "../../command.js";
-import { WorkspaceAssetFeature } from "./download.js";
 
 export function createAssetCommand(feature: WorkspaceAssetFeature): Command {
   const root = new Command("asset").description("Download Unit-referenced Workspace Assets");
