@@ -39,13 +39,15 @@ ResourceCapabilities:
 UniverResourceSummary:
   type: object
   additionalProperties: false
-  required: [id, kind, unitType, capabilities]
+  required: [id, kind, unitId, unitType, capabilities]
   properties:
     id:
       type: string
     kind:
       type: string
       const: univer
+    unitId:
+      type: string
     unitType:
       $ref: "#/UnitType"
     capabilities:

@@ -1392,6 +1392,7 @@ export interface components {
              * @enum {string}
              */
             kind: "univer";
+            unitId: string;
             unitType: components["schemas"]["UnitType"];
             capabilities: components["schemas"]["ResourceCapabilities"];
         };

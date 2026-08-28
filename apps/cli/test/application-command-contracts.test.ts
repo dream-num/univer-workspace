@@ -149,7 +149,17 @@ describe("Workspace application Commander adapters", () => {
   });
 
   it("maps Space browse/find and Node management arguments without dropping intent", async () => {
-    const browse = vi.fn(async () => []);
+    const browse = vi.fn(async () => [
+      {
+        nodeId: "node-1",
+        resource: {
+          kind: "univer",
+          resourceId: "resource-1",
+          unitId: "unit-1",
+          unitType: "sheet",
+        },
+      },
+    ]);
     const find = vi.fn(async () => []);
     const createNode = vi.fn(async () => ({ nodeId: "node-1" }));
     const moveNode = vi.fn(async () => ({ nodeId: "node-1" }));
@@ -165,7 +175,7 @@ describe("Workspace application Commander adapters", () => {
       trashNode,
     } as unknown as WorkspaceSpaceFeature);
 
-    await run(command, [
+    const browseOutput = await run(command, [
       "browse",
       "space-1",
       "--parent",
@@ -198,6 +208,9 @@ describe("Workspace application Commander adapters", () => {
       resourceKind: "univer",
       spaceId: "space-1",
       unitType: "sheet",
+    });
+    expect(JSON.parse(browseOutput)).toMatchObject({
+      nodes: [{ resource: { resourceId: "resource-1", unitId: "unit-1" } }],
     });
     expect(find).toHaveBeenCalledWith({
       query: "quarterly plan",
