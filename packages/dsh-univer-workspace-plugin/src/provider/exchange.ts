@@ -6,7 +6,7 @@
  * @module dsh-univer-workspace-plugin/provider/exchange
  */
 
-import type { WorkspaceHttpClient } from "@univerjs/univer-workspace-harness";
+import type { WorkspaceHttpClient } from "./workspace-contract.ts";
 
 /** `FileSource.HttpImport` — the upload source the exchange router accepts. */
 const HTTP_IMPORT_SOURCE = 1;

@@ -13,7 +13,10 @@ export const inject = ["connection"];
 
 /** Route prompt calls through the harness-owned authenticated endpoint. */
 export function apply(ctx: ClientContext): void {
-  const api = (ctx.get("connection") as ConnectionHandle).api;
+  // The harness host carrier and the browser face intentionally share the
+  // Cordis key but expose different halves; the static import of the host
+  // adapter makes the merged declaration a union in this package.
+  const api = (ctx.get("connection") as unknown as ConnectionHandle).api;
   const original = api.sessions.prompt;
   api.sessions.prompt = async (payload, signal): Promise<RpcResponse<ResponseValue<"session.prompt">>> => {
     const response = await fetch(UWH_SESSION_PROMPT_PATH, {

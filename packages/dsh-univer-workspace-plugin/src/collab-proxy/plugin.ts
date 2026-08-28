@@ -24,7 +24,7 @@ import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
 import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-host-webserver";
-import type {} from "@univerjs/univer-workspace-harness";
+import type {} from "../provider/workspace-contract.ts";
 
 /** The DSH-origin prefix the browser viewer calls for HTTP forwarding. */
 const HTTP_PREFIX = "/univer-workspace/collab";
@@ -35,6 +35,7 @@ const WS_PATH = `${HTTP_PREFIX}/connect`;
 /** The Workspace API surface forwarded over HTTP; everything else is refused. */
 const FORWARD_PREFIXES = [
   "/universer-api/snapshot",
+  "/universer-api/history",
   "/universer-api/comb",
   "/universer-api/user/session-ticket",
   "/universer-api/worktrees",
@@ -129,30 +130,73 @@ function createUpgradeHandler(ctx: Context): (req: IncomingMessage, socket: Dupl
       return;
     }
     const wss = new WebSocketServer({ noServer: true });
-    wss.handleUpgrade(req, socket, head, (client) => {
-      wss.emit("connection", client, req);
-    });
     wss.on("connection", (client: WebSocket) => {
       const target = new URL(targetParam, upstream.origin);
+      // `target` identifies the upstream path. Every other query parameter is
+      // opaque to this transport bridge and is forwarded unchanged.
+      for (const [name, value] of url.searchParams) {
+        if (name !== WS_TARGET_PARAM) target.searchParams.append(name, value);
+      }
       target.protocol = target.protocol === "https:" ? "wss:" : "ws:";
       const upstreamWs = new WebSocket(target, {
         headers: { cookie: `workspace_session=${upstream.token}` },
       });
       let closed = false;
+      const pending: Buffer[] = [];
+      // Workspace's Comb endpoint accepts JSON text frames only. Some browser
+      // collaboration clients hand ws a Uint8Array, which ws marks binary;
+      // preserving that flag makes the upstream close the socket with 1003
+      // before a changeset can be persisted. Normalize only at this transport
+      // seam; the payload itself remains opaque to the proxy.
+      const sendText = (peer: WebSocket, data: WebSocket.RawData): void => {
+        const text = typeof data === "string"
+          ? data
+          : Buffer.isBuffer(data)
+            ? data.toString("utf8")
+            : data instanceof ArrayBuffer
+              ? Buffer.from(new Uint8Array(data)).toString("utf8")
+              : Buffer.concat(data).toString("utf8");
+        peer.send(text);
+      };
+      // The browser may send frames as soon as the proxy-side socket reaches
+      // OPEN. The upstream socket opens asynchronously, so queue opaque
+      // frames until it is ready instead of dropping them.
+      client.on("message", (data) => {
+        if (upstreamWs.readyState === WebSocket.OPEN) {
+          sendText(upstreamWs, data);
+        } else if (upstreamWs.readyState === WebSocket.CONNECTING) {
+          const buffered = Buffer.isBuffer(data)
+            ? data
+            : data instanceof ArrayBuffer
+              ? Buffer.from(new Uint8Array(data))
+              : Buffer.concat(data);
+          pending.push(buffered);
+        }
+      });
       const close = (): void => {
         if (closed) return;
         closed = true;
         try { client.close(); } catch { /* noop */ }
         try { upstreamWs.close(); } catch { /* noop */ }
       };
+      client.on("close", close);
+      client.on("error", close);
       upstreamWs.on("open", () => {
-        client.on("message", (data) => upstreamWs.send(data as Buffer));
-        client.on("close", close);
-        client.on("error", close);
+        for (const frame of pending.splice(0)) {
+          sendText(upstreamWs, frame);
+        }
       });
-      upstreamWs.on("message", (data) => client.send(data as Buffer));
+      upstreamWs.on("message", (data) => {
+        sendText(client, data);
+      });
       upstreamWs.on("close", close);
       upstreamWs.on("error", close);
+    });
+    // Register the listener before handleUpgrade: ws invokes the callback
+    // synchronously, so registering it afterwards loses the connection event
+    // (and leaves the browser socket open with no upstream bridge).
+    wss.handleUpgrade(req, socket, head, (client) => {
+      wss.emit("connection", client, req);
     });
   };
 }

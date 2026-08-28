@@ -25,18 +25,74 @@ session files.
 - **Review**: `univer_worktree` drives the Worktree lifecycle
   (create/ready/merge/discard) with merge and discard forced through the
   `tools/pre-execute` approval waterfall.
-- **Import/export**: `univer_import` and `univer_export` convert between
-  Office files in the session workspace and remote Units through the
-  Workspace exchange endpoints.
-- **Browser Space picker**: the blank-session hero shows the User's Spaces
-  and picks a Space's backing dsh workspace.
+- **Worktree-local Unit**: `univer_unit` implements the Workspace product's
+  `source=worktree` create contract with the calling Space as its enforced
+  scope, stable idempotency, pending-Operation polling, and complete Unit
+  response validation. The product currently has no remove/restore endpoint,
+  so `action=create` is intentionally the only advertised action.
+- **Execution sources and path safety**: `univer_execute` accepts exactly one
+  inline `code` or session-relative `codeFile`; both import/export paths use
+  canonical realpath containment checks, including symlink escapes.
+- **Import/export**: `univer_import` and `univer_export` use the pinned
+  `@univerjs-pro/exchange-node` SDK locally. Import converts the session file
+  into JSON-safe UnitData and creates a Worktree-local Unit (so it can be
+  reviewed, discarded, or merged); export synchronizes a trunk or Worktree
+  Unit and writes `.xlsx`/`.csv`/`.tsv`/`.docx`/`.pptx` bytes back to the
+  session workspace. The product trunk exchange task is intentionally not
+  used because it would bypass Worktree review semantics.
+- **Structured inspection**: `univer_inspect` uses the pinned
+  `@univer-cli/content-inspection` contract for workbook/document/
+  presentation overviews and Sheet ranges; it never executes caller-provided
+  write code.
+- **SDK reference and assets**: `univer_api` uses the pinned
+  `@univer-cli/api-reference`; `univer_resources` uses the pinned resource
+  library and a build-time copied `@univerjs-pro/cli-assets` manifest. The
+  latter is a static visual-asset catalog, not the Workspace product's
+  Resource/ACL model.
+- **Worktree parity**: `univer_worktree` supports the same
+  `create`/`ready`/`reopen`/`merge`/`discard` lifecycle as
+  `dsh-univer-office`; `reopen` delegates to the Workspace transition API
+  instead of keeping a local-only draft assumption.
+- **Browser workspace picker**: the stock DSH picker is retained. Its data is
+  the authenticated native `workspace.list` projection, so linked Spaces and
+  manually adopted child workspaces use one complete picker and one set of
+  rename/reorder/create semantics.
 - **Bundled skill**: `univer-workspace` teaches the model the Space/document
   model and the Worktree review rules.
+- **Turn preview and live viewer**: successful document/Worktree operations are
+  folded into one replay-safe turn card; while a session is running, a live
+  collaboration editor floats in the input dock, and it is removed when the
+  session completes while the historical review card remains.
+- **Unit-level history folding**: repeated references to the same remote Unit
+  (including `resourceId`/`unitId`/Worktree aliases across Turns) keep only the
+  latest embedded viewer; older Turns retain a collapsed review card.
 
 ## Not yet delivered (tracked as follow-up stages)
 
-- The turn-preview cards and floating viewer (stage 8), and
-  screenshot/layout-lint rendering (stage 9).
+- Screenshot/layout-lint/render-machine tooling (no deployable remote render
+  contract yet), and the remaining
+  Office-only gateway/file capabilities that do not have a Workspace product
+  equivalent yet.
+
+## dsh-univer-office tool audit
+
+The office plugin operates local `.univer` files, while this plugin operates
+remote Workspace Resources. The shared operations are deliberately mapped to
+the remote contract rather than accepting a local file path that the server
+cannot authorize:
+
+| dsh-univer-office | Workspace plugin | Boundary |
+| --- | --- | --- |
+| `univer_new` | `univer_new` / `univer_create` | Resource creation is a Workspace API operation; the result is opened to resolve `unitId`. |
+| `univer_unit` | `univer_unit` (`action=create`) | Worktree-local Unit creation is backed by `POST /api/worktrees/{id}/units`; remove/restore is not exposed by the current product contract. |
+| `univer_status` | `univer_status` + `univer_spaces`, `univer_documents`, `univer_open` | Status returns the selected trunk Resource or Worktree Unit/file-state; Space, Node and Unit identity remain separate remote resources. |
+| `univer_execute` | `univer_execute` (or `univer_edit` `mode=write`) | Writes are Worktree-scoped and commit a collaboration changeset; exactly one inline `code`/safe session `codeFile` is accepted. |
+| `univer_inspect` | `univer_inspect` | Uses the public content-inspection SDK over the same headless collaboration runtime; range selectors are validated before execution. |
+| `univer_worktree` | `univer_worktree` | Lifecycle and approval semantics are aligned. |
+| `univer_import` / `univer_export` | same names | Local exchange SDK conversion; import creates a Worktree-local Unit and export reads trunk/draft UnitData into a session-relative output. |
+| `univer_api` | `univer_api` (`find`/`show`) | Pinned local CLI SDK reference; read-only and independent of Workspace ACL. |
+| `univer_resources` | `univer_resources` (`registries`/`find`/`read`/`export`/`clear-cache`) | Pinned local visual-resource library; cache/export are session-relative. This is not a product Resource listing. |
+| `univer_screenshot` / `univer_lint` / `univer_compile_svg` | — | No deployable remote render contract is available yet; these remain explicit follow-up work, not silently faked tools. |
 
 ## Architecture boundary
 

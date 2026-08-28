@@ -1,308 +1,158 @@
 /**
- * The floating viewer dock: a session-scoped dock that renders one floating
- * Univer collaboration editor window per opened document. Windows support
- * header drag, edge resize, and maximize, following the dsh-univer-office
- * worktree-window interaction model; open intent comes from projected
- * `univer_open` results plus the Turn-tail card's manual open requests.
+ * The floating viewer dock: owns deliberate live-window intent across Turns —
+ * auto-opens on qualifying operations (open/new/worktree create/ready/writes),
+ * keeps windows across Turns, closes on terminal worktree states or dismiss,
+ * and honours manual open requests from the Turn-tail card. Ported from the
+ * dsh-univer-office UniverDock.
  * @module dsh-univer-workspace-plugin/client/ViewerDock
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import * as React from "react";
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
-import { CollaborationViewer } from "./collaboration-viewer.tsx";
-import { sheetViewerDefinition } from "./viewer-sheet.ts";
-import type { ViewerDefinition } from "./collaboration-viewer.tsx";
-import type { ViewerOpenIntent } from "./viewer-turn-definition.ts";
-import { OPEN_VIEWER_EVENT } from "./viewer-turn-card.tsx";
-import type { ViewerLocaleInjected } from "./viewer-locale.ts";
-import type { UwhLocaleKey } from "./locales.ts";
+import {
+  isViewerDocKey, opensFloatingWindow, outcomeOfTurnFile, turnFilesOfSession, type UniverTurnFile,
+} from "./conversation/univer-turn-definition.ts";
+import { useUniverStates } from "./hooks/use-univer-state.ts";
+import type { ViewerRuntimeProps } from "./components/review-panel.tsx";
+import { WorktreeWindow } from "./components/worktree-window.tsx";
+import { loadViewerBootstrap, type ViewerBootstrap } from "./viewer-bootstrap.ts";
+import { type ViewerLocaleInjected } from "./viewer-locale.ts";
 
-/** The injected business face supplied by the client apply closure. */
-export interface ViewerDockInjected {
-  readonly loadViewerBootstrap: () => Promise<ViewerBootstrap>;
-}
-
-export interface ViewerBootstrap {
-  readonly user: { readonly id: string; readonly displayName: string; readonly avatarUrl: string | null };
-  readonly license: string;
-}
+export type { ViewerBootstrap };
 
 export type ViewerDockProps = PropsRuntime<"conversation.input.dock">
-  & PropsLocale<"uwh">
+  & PropsLocale<"univer">
   & ViewerLocaleInjected
-  & ViewerDockInjected;
+  & ViewerRuntimeProps;
 
-const DEFINITIONS: Record<ViewerOpenIntent["unitType"], ViewerDefinition | undefined> = {
-  sheet: sheetViewerDefinition,
-  // doc/slide/board/base definitions arrive with their preset packages.
-  doc: undefined,
-  slide: undefined,
-  board: undefined,
-  base: undefined,
-};
+/** The window event the Turn-tail card dispatches for manual open requests. */
+export const OPEN_VIEWER_EVENT = "uwh:open-viewer";
 
-const MIN_WIDTH = 360;
-const MIN_HEIGHT = 260;
-const GUTTER = 8;
-const DEFAULT_WIDTH = 560;
-const DEFAULT_HEIGHT = 420;
-
-interface Rect {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
+interface OpenWindow {
+  readonly docKey: string
+  readonly worktreeId: string | null
+  readonly preferredUnitId: string | null
+  readonly label: string | null
+  readonly unitType: string | null
+  readonly readOnly: boolean
 }
 
-type ResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+/** Own deliberate live-window intent across Turns; clears on dismiss/terminal state. */
+export function ViewerDock(props: ViewerDockProps): React.ReactElement {
+  return <UniverSessionDock key={props.sessionId} {...props} />;
+}
 
-const RESIZE_DIRECTIONS: readonly ResizeDirection[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
+/** A keyed owner prevents open-window intent from crossing DSH session boundaries. */
+function UniverSessionDock(props: ViewerDockProps): React.ReactElement {
+  const cwd = props.useSessions((state) => state.byId[props.sessionId]?.cwd);
+  const turnFiles = React.useMemo(() => turnFilesOfSession(props.session, cwd), [props.session, cwd]);
+  const [open, setOpen] = React.useState<Record<string, OpenWindow>>({});
+  const seen = React.useRef(new Set<string>());
+  const running = props.session?.running === true;
 
-/** Read the viewer open intents projected for this session's completed Turns. */
-function openIntentsOf(session: unknown): readonly ViewerOpenIntent[] {
-  if (session === null || typeof session !== "object") return [];
-  const snapshot = session as { chat?: { timeline?: { turns?: ReadonlyMap<number, { data: ReadonlyMap<string, unknown> }> } } };
-  const turns = snapshot.chat?.timeline?.turns;
-  if (turns === undefined) return [];
-  const intents: ViewerOpenIntent[] = [];
-  for (const turn of turns.values()) {
-    const data = turn.data.get("univerViewer") as { intents?: readonly ViewerOpenIntent[] } | undefined;
-    if (data === undefined || data.intents === undefined) continue;
-    for (const intent of data.intents) {
-      if (!intents.some((entry) => entry.unitId === intent.unitId)) intents.push(intent);
+  React.useEffect(() => {
+    const additions: OpenWindow[] = [];
+    for (const file of turnFiles) {
+      // Legacy turn projections may contain only a unit/name key. The
+      // file-state endpoint cannot resolve those keys, so do not create a
+      // permanent Loading window for an identity that cannot be fetched.
+      if (!isViewerDocKey(file.docKey)) continue;
+      const outcome = outcomeOfTurnFile(file);
+      for (const operation of file.operations) {
+        if (!opensFloatingWindow(operation)) continue;
+        if (seen.current.has(operation.callId)) continue;
+        seen.current.add(operation.callId);
+        additions.push({
+          docKey: file.docKey,
+          worktreeId: outcome.primaryWorktreeId,
+          preferredUnitId: outcome.preferredUnitId,
+          label: outcome.preferredLabel,
+          unitType: outcome.preferredUnitType,
+          readOnly: outcome.readOnly,
+        });
+      }
     }
-  }
-  return intents;
-}
+    if (additions.length === 0) return;
+    setOpen((previous) => {
+      const next = { ...previous };
+      for (const addition of additions) next[addition.docKey] = addition;
+      return next;
+    });
+  }, [turnFiles]);
 
-function viewportSize(): { width: number; height: number } {
-  return { width: window.innerWidth, height: window.innerHeight };
-}
-
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(Math.max(value, low), Math.max(low, high));
-}
-
-function defaultRect(stackIndex: number): Rect {
-  const { width, height } = viewportSize();
-  const w = Math.min(DEFAULT_WIDTH, width - GUTTER * 2);
-  const h = Math.min(DEFAULT_HEIGHT, height - GUTTER * 2);
-  return {
-    x: clamp(width - w - 24 - stackIndex * 28, GUTTER, Math.max(GUTTER, width - w - GUTTER)),
-    y: clamp(height - h - 96 - stackIndex * 24, GUTTER, Math.max(GUTTER, height - h - GUTTER)),
-    width: w,
-    height: h,
-  };
-}
-
-function moveRect(start: Rect, dx: number, dy: number): Rect {
-  const { width, height } = viewportSize();
-  return {
-    ...start,
-    x: clamp(start.x + dx, GUTTER - start.width + 80, Math.max(GUTTER, width - GUTTER - 80)),
-    y: clamp(start.y + dy, GUTTER, Math.max(GUTTER, height - GUTTER - 48)),
-  };
-}
-
-function resizeRect(start: Rect, direction: ResizeDirection, dx: number, dy: number): Rect {
-  const { width, height } = viewportSize();
-  let left = start.x;
-  let top = start.y;
-  let right = start.x + start.width;
-  let bottom = start.y + start.height;
-  if (direction.includes("w")) left = clamp(start.x + dx, GUTTER, right - MIN_WIDTH);
-  if (direction.includes("e")) right = clamp(right + dx, left + MIN_WIDTH, width - GUTTER);
-  if (direction.includes("n")) top = clamp(start.y + dy, GUTTER, bottom - MIN_HEIGHT);
-  if (direction.includes("s")) bottom = clamp(bottom + dy, top + MIN_HEIGHT, height - GUTTER);
-  return { x: left, y: top, width: right - left, height: bottom - top };
-}
-
-/** The floating viewer dock. */
-export function ViewerDock(props: ViewerDockProps) {
-  // `session` arrives through the input-region owner share as a point-in-time
-  // ConversationSnapshot; the skeleton re-renders dock entries on every store
-  // change, so the intents derivation needs no separate subscription.
-  const session = props.session;
-  const projected = useMemo(() => openIntentsOf(session), [session]);
-  const [manual, setManual] = useState<readonly ViewerOpenIntent[]>([]);
-  const [dismissed, setDismissed] = useState<readonly string[]>([]);
-  const [bootstrap, setBootstrap] = useState<ViewerBootstrap | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    void props.loadViewerBootstrap()
-      .then((value) => {
-        if (live) setBootstrap(value);
-      })
-      .catch((reason: unknown) => {
-        console.error("univer-workspace viewer bootstrap failed", reason);
-      });
-    return () => { live = false; };
-  }, [props.loadViewerBootstrap]);
-
-  useEffect(() => {
+  React.useEffect(() => {
     const onOpen = (event: Event): void => {
-      const detail = (event as CustomEvent<ViewerOpenIntent>).detail;
-      if (detail === undefined || typeof detail.unitId !== "string") return;
-      setManual((previous) => previous.some((entry) => entry.unitId === detail.unitId) ? previous : [...previous, detail]);
-      setDismissed((previous) => previous.filter((unitId) => unitId !== detail.unitId));
+      const detail = (event as CustomEvent<ManualOpen>).detail;
+      if (detail === undefined || typeof detail.docKey !== "string") return;
+      const docKey: string = detail.docKey;
+      setOpen((previous) => ({ ...previous, [docKey]: { ...previous[docKey], ...detail, docKey } as OpenWindow }));
     };
     window.addEventListener(OPEN_VIEWER_EVENT, onOpen);
     return () => { window.removeEventListener(OPEN_VIEWER_EVENT, onOpen); };
   }, []);
 
-  const visible = useMemo(() => {
-    const merged: ViewerOpenIntent[] = [];
-    for (const intent of [...projected, ...manual]) {
-      if (dismissed.includes(intent.unitId)) continue;
-      if (!merged.some((entry) => entry.unitId === intent.unitId)) merged.push(intent);
+  // Match dsh-univer-office: the floating dock is a live-session surface. It
+  // may be restored while the session is running, but disappears when the
+  // session reaches a terminal state; the turn-tail card remains in history.
+  const watched = React.useMemo(() => running ? Object.values(open).map((target) => target.docKey) : [], [open, running]);
+  const { states } = useUniverStates(watched, 1200);
+  const byId = React.useMemo(() => {
+    const map = new Map<string, { status: string }>();
+    for (const state of Object.values(states)) {
+      for (const worktree of state.worktrees) map.set(worktree.worktreeId, { status: worktree.status });
     }
-    return merged;
-  }, [projected, manual, dismissed]);
+    return map;
+  }, [states]);
+  void byId;
 
-  if (bootstrap === null || visible.length === 0) return null;
+  // Terminal worktree states dismiss their window, mirroring office behaviour.
+  React.useEffect(() => {
+    setOpen((previous) => {
+      let changed = false;
+      const next = { ...previous };
+      for (const target of Object.values(previous)) {
+        if (target.worktreeId === null) continue;
+        const status = byId.get(target.worktreeId)?.status;
+        if (status === "merged" || status === "discarded") {
+          delete next[target.docKey];
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  }, [byId]);
 
-  return (
-    <div className="uws-viewer-dock">
-      {visible.map((intent, index) => {
-        const definition = DEFINITIONS[intent.unitType];
-        if (definition === undefined) return null;
-        return (
-          <ViewerWindow
-            key={intent.unitId}
-            intent={intent}
-            stackIndex={index}
-            bootstrap={bootstrap}
-            definition={definition}
-            t={props.t}
-            getViewerLocale={props.getViewerLocale}
-            onDismiss={() => setDismissed((previous) => [...previous, intent.unitId])}
-          />
-        );
+  if (!running) return <></>;
+  const windows = Object.values(open);
+  return <>{windows.length === 0 ? null : <div className="uvf_root">{windows.map((target, stackIndex) => {
+    const state = states[target.docKey];
+    return <WorktreeWindow
+      key={target.docKey}
+      docKey={target.docKey}
+      label={target.label}
+      unitType={target.unitType}
+      state={state}
+      worktreeId={target.worktreeId}
+      preferredUnitId={target.preferredUnitId}
+      preferredReadOnly={target.readOnly}
+      stackIndex={stackIndex}
+      t={props.t}
+      loadViewerBootstrap={props.loadViewerBootstrap}
+      getViewerLocale={props.getViewerLocale}
+      onDismiss={() => setOpen((previous) => {
+        const next = { ...previous };
+        delete next[target.docKey];
+        return next;
       })}
-    </div>
-  );
+    />;
+  })}</div>}</>;
 }
 
-function ViewerWindow(props: {
-  readonly intent: ViewerOpenIntent;
-  readonly stackIndex: number;
-  readonly bootstrap: ViewerBootstrap;
-  readonly definition: ViewerDefinition;
-  readonly t: (key: UwhLocaleKey) => string;
-  readonly getViewerLocale: ViewerLocaleInjected["getViewerLocale"];
-  readonly onDismiss: () => void;
-}) {
-  const { intent, t } = props;
-  const [rect, setRect] = useState<Rect>(() => defaultRect(props.stackIndex));
-  const [maximized, setMaximized] = useState(false);
-  const [interaction, setInteraction] = useState<string | null>(null);
-  const rectRef = useRef(rect);
-  rectRef.current = rect;
-
-  const beginPointerSession = (event: React.PointerEvent<HTMLElement>, kind: "move" | ResizeDirection): void => {
-    if (event.button !== 0 || maximized) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const view = event.currentTarget.ownerDocument.defaultView;
-    if (view === null) return;
-    const pointerId = event.pointerId;
-    const origin = { x: event.clientX, y: event.clientY };
-    const start = rectRef.current;
-    const element = event.currentTarget;
-    setInteraction(kind);
-    try { element.setPointerCapture(pointerId); } catch { /* Pointer capture is optional. */ }
-    const move = (next: PointerEvent): void => {
-      if (next.pointerId !== pointerId) return;
-      const dx = next.clientX - origin.x;
-      const dy = next.clientY - origin.y;
-      setRect(kind === "move" ? moveRect(start, dx, dy) : resizeRect(start, kind, dx, dy));
-    };
-    const finish = (next: PointerEvent): void => {
-      if (next.pointerId !== pointerId) return;
-      view.removeEventListener("pointermove", move);
-      view.removeEventListener("pointerup", finish);
-      view.removeEventListener("pointercancel", finish);
-      try { element.releasePointerCapture(pointerId); } catch { /* May already be released. */ }
-      setInteraction(null);
-    };
-    view.addEventListener("pointermove", move);
-    view.addEventListener("pointerup", finish);
-    view.addEventListener("pointercancel", finish);
-  };
-
-  const onHeaderPointerDown = (event: React.PointerEvent<HTMLElement>): void => {
-    if ((event.target as Element).closest("[data-window-control]") !== null) return;
-    beginPointerSession(event, "move");
-  };
-  const onHeaderDoubleClick = (event: React.MouseEvent<HTMLElement>): void => {
-    if ((event.target as Element).closest("[data-window-control]") === null) setMaximized((current) => !current);
-  };
-
-  const maximizedRect = (): Rect => {
-    const { width, height } = viewportSize();
-    return { x: GUTTER, y: GUTTER, width: width - GUTTER * 2, height: height - GUTTER * 2 };
-  };
-  const style: React.CSSProperties = maximized
-    ? toStyle(maximizedRect())
-    : toStyle(rect);
-
-  return (
-    <section
-      className={`uws-viewer-window${maximized ? " uws-viewer-window-max" : ""}`}
-      style={style}
-      data-interaction={interaction ?? undefined}
-      aria-label={intent.name}
-    >
-      <header className="uws-viewer-header" onPointerDown={onHeaderPointerDown} onDoubleClick={onHeaderDoubleClick}>
-        <span className="uws-viewer-title">{intent.name}</span>
-        <span className="uws-viewer-meta">{intent.unitType}{intent.readOnly ? ` · ${t("card.readonly")}` : ""}</span>
-        <span className="uws-viewer-controls">
-          <button
-            type="button"
-            className="uws-viewer-control"
-            data-window-control=""
-            aria-label={t(maximized ? "window.restore" : "window.maximize")}
-            title={t(maximized ? "window.restore" : "window.maximize")}
-            onClick={() => setMaximized((current) => !current)}
-          >
-            {maximized ? "❐" : "□"}
-          </button>
-          <button
-            type="button"
-            className="uws-viewer-control uws-viewer-controlDanger"
-            data-window-control=""
-            aria-label={t("window.close")}
-            title={t("window.close")}
-            onClick={props.onDismiss}
-          >
-            ×
-          </button>
-        </span>
-      </header>
-      <div className="uws-viewer-body">
-        <CollaborationViewer
-          unitId={intent.unitId}
-          unitType={intent.unitType}
-          readOnly={intent.readOnly}
-          user={props.bootstrap.user}
-          license={props.bootstrap.license}
-          locale={props.getViewerLocale()}
-          definition={props.definition}
-        />
-      </div>
-      {!maximized ? RESIZE_DIRECTIONS.map((direction) => (
-        <span
-          key={direction}
-          className={`uws-resizeHandle uws-resize_${direction}`}
-          data-direction={direction}
-          onPointerDown={(event) => beginPointerSession(event, direction)}
-        />
-      )) : null}
-    </section>
-  );
-}
-
-function toStyle(rect: Rect): React.CSSProperties {
-  return { left: rect.x, top: rect.y, width: rect.width, height: rect.height };
+interface ManualOpen {
+  readonly docKey?: unknown;
+  readonly worktreeId?: unknown;
+  readonly preferredUnitId?: unknown;
+  readonly label?: unknown;
+  readonly unitType?: unknown;
+  readonly readOnly?: unknown;
 }

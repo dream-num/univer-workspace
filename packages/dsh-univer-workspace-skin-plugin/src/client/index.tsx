@@ -6,10 +6,12 @@
  * stays empty; the skin is pure presentation.
  */
 import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
+import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type {} from "@deepseek-ai/dsh-client-ui-sidebar/client";
 import type {} from "@deepseek-ai/dsh-client-ui-slots";
-import { SKIN_CSS } from "./palette.ts";
+import skinCss from "./skin.css";
 import { WorkspaceBrandMark, WorkspaceBrandName } from "./Brand.tsx";
+import { installWorkspaceFavicon } from "./favicon.ts";
 
 /** Required browser services. */
 export const inject = ["slots"];
@@ -22,7 +24,7 @@ function installStyles(): () => void {
     const tag = document.createElement("style");
     tag.dataset.plugin = "dsh-univer-workspace-skin-plugin";
     tag.dataset.pluginCss = tagId;
-    tag.textContent = SKIN_CSS;
+    tag.textContent = skinCss;
     document.head.appendChild(tag);
   }
   return () => {
@@ -32,6 +34,7 @@ function installStyles(): () => void {
 
 /** Apply the browser skin plugin. */
 export function apply(ctx: ClientContext): void {
+  ctx.effect(() => installWorkspaceFavicon(), "univer-workspace-skin: favicon");
   ctx.effect(() => installStyles(), "univer-workspace-skin: token overrides");
 
   ctx.slots.inject("sidebar.brand.mark", () => ctx.slots.register({
@@ -45,4 +48,12 @@ export function apply(ctx: ClientContext): void {
     // Shadows the shell's generic text fallback (priority 0).
     priority: -1,
   }, WorkspaceBrandName));
+
+  // The blank-session hero owns a separate root-scoped brand seat.  Register
+  // the same mark there so the first frame never shows the DSH fish before a
+  // session is created.
+  ctx.slots.inject("conversation.hero.brand.mark", () => ctx.slots.register({
+    name: "conversation.hero.brand.mark",
+    priority: -1,
+  }, WorkspaceBrandMark));
 }

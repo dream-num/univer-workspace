@@ -33,7 +33,7 @@ import type { WorkspaceView } from "@deepseek-ai/dsh-client-connection/client";
 import type {} from "@deepseek-ai/dsh-host-webserver";
 import type {} from "@deepseek-ai/dsh-workspace";
 import {
-  UWH_CALLBACK_PATH, UWH_LOGIN_PATH, UWH_ME_PATH, UWH_TEMPLATE_FORK_PATH,
+  UWH_CALLBACK_PATH, UWH_LOGIN_PATH, UWH_ME_PATH, UWH_SPACES_PATH, UWH_TEMPLATE_FORK_PATH,
   type UwhIdentity, type UwhMeView, type UwhTemplate,
 } from "./contract.ts";
 import {
@@ -48,7 +48,12 @@ import {
 } from "./identity.ts";
 import * as workspaceAuthProvider from "./workspace-auth-provider.ts";
 import * as workspaceSessionProvider from "./workspace-session-provider.ts";
+import type { WorkspaceAuthService } from "./workspace-auth.ts";
 import * as sessionInputGuard from "./session-input-guard.ts";
+import { registerScopedListRoutes, trustedRequest } from "./scoped-api.ts";
+import { installScopedConnection } from "./scoped-connection.ts";
+import { WORKSPACE_FAVICON_SVG, WORKSPACE_MANIFEST_JSON } from "./favicon.ts";
+import { rewriteHarnessIndexBranding, rewriteHarnessIndexTitle } from "./title.ts";
 
 export {
   buildAuthorizeUrl, callbackUrlFor, exchangeCode, extractIdentity, parseCookies, parseSessionCookie, randomPkceVerifier, randomState, signSessionCookie, workspaceAuthorizeUrl,
@@ -60,6 +65,7 @@ export {
 } from "./identity.ts";
 export { WorkspaceAuthService, WORKSPACE_SESSION_COOKIE, type WorkspaceHttpClient } from "./workspace-auth.ts";
 export { WorkspaceSessionService } from "./workspace-session.ts";
+export { rewriteHarnessIndexBranding, rewriteHarnessIndexTitle };
 
 /** A workspace entity the idempotent handlers use. */
 export interface WorkspaceLike extends WorkspaceFacts {
@@ -109,6 +115,8 @@ export interface Config {
   stateTtlMs: number;
   /** Whether the session cookie carries the Secure attribute (HTTPS). */
   secureCookies: boolean;
+  /** Whether local/dev users may use DSH's profile-global Models settings. */
+  modelSettingsEnabled: boolean;
   /** Configured templates: stable key -> source session id + display metadata. */
   templates: UwhTemplate[];
 }
@@ -139,6 +147,7 @@ export const Config: z<Config> = z.object({
   sessionTtlMs: z.natural().max(3_600_000).default(900_000),
   stateTtlMs: z.natural().max(600_000).default(120_000),
   secureCookies: z.boolean().default(true),
+  modelSettingsEnabled: z.boolean().default(false),
   templates: templatesZ.default([]),
 });
 
@@ -148,8 +157,8 @@ export const name = "univer-workspace-harness";
 /** Required services. */
 export const inject = ["webServer", "apiProxy", "workspaceRegistry", "sessions", "sessionPersistence", "storageDomain"];
 
-/** Maximum size of the template-fork JSON request. */
-const TEMPLATE_REQUEST_MAX_BYTES = 8 * 1024;
+/** Maximum size of one Harness JSON request. */
+const JSON_REQUEST_MAX_BYTES = 8 * 1024;
 
 /** Write a JSON response with the given status. */
 function jsonResponse(res: ServerResponse, status: number, body: unknown): void {
@@ -161,6 +170,26 @@ function jsonResponse(res: ServerResponse, status: number, body: unknown): void 
 function redirect(res: ServerResponse, location: string): void {
   res.writeHead(302, { location });
   res.end();
+}
+
+/** Serve one harness-owned static brand asset without touching DSH's fallback. */
+function serveBrandAsset(
+  req: IncomingMessage,
+  res: ServerResponse,
+  contentType: string,
+  body: string,
+): void {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.writeHead(405);
+    res.end();
+    return;
+  }
+  res.writeHead(200, {
+    "content-type": contentType,
+    "cache-control": "no-cache",
+  });
+  if (req.method === "HEAD") res.end();
+  else res.end(body);
 }
 
 /** Append one cookie value to the response's Set-Cookie header. */
@@ -223,8 +252,21 @@ async function resolveAuthenticatedContext(
 }
 
 /** Build the login route handler. */
-function createLoginHandler(config: Config, loginAttempts: Map<string, LoginAttempt>, callbackUrl: string): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+export function createLoginHandler(config: Config, loginAttempts: Map<string, LoginAttempt>, callbackUrl: string): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res): Promise<void> => {
+    // The state cookie is host-only by design.  If a user enters the service
+    // through an alias (for example `localhost`) while the registered OAuth
+    // callback uses the canonical public origin (`127.0.0.1`), the browser
+    // would store the cookie on the alias and never send it to the callback
+    // host.  Canonicalize before creating an attempt so every successful flow
+    // has one origin and one cookie scope.
+    const requestHost = req.headers.host;
+    if (typeof requestHost === "string" && requestHost.trim() !== "") {
+      const publicHost = new URL(config.publicOrigin).host;
+      if (normalizeHost(requestHost) !== normalizeHost(publicHost)) {
+        return redirect(res, new URL(config.loginPath, config.publicOrigin).toString());
+      }
+    }
     const now = Date.now();
     for (const [attemptState, attempt] of loginAttempts) {
       if (attempt.expiresAt <= now) loginAttempts.delete(attemptState);
@@ -253,15 +295,23 @@ function createLoginHandler(config: Config, loginAttempts: Map<string, LoginAtte
   };
 }
 
+/** Normalize a Host header and URL host for a stable alias comparison. */
+function normalizeHost(value: string): string {
+  return value.trim().toLowerCase().replace(/\.$/u, "");
+}
+
 /** Return a non-looping, safe diagnostic for an OAuth callback failure. */
 function oauthCallbackFailure(
   res: ServerResponse,
   status: number,
   code: "oauth_state_invalid" | "oauth_token_exchange_failed",
-  detail: string,
+  diagnostic: string,
 ): void {
-  console.warn(`univer-workspace-harness: ${code}: ${detail}`);
-  jsonResponse(res, status, { error: code, detail });
+  // Diagnostics stay on the server.  The browser receives only a stable
+  // machine-readable code; stack traces, filesystem paths, and upstream
+  // OAuth details must never cross this boundary.
+  console.warn(`univer-workspace-harness: ${code}: ${diagnostic}`);
+  jsonResponse(res, status, { error: code });
 }
 
 /** Build the callback route handler. */
@@ -320,6 +370,9 @@ export function createIdentityHandler(
   config: Config,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res): Promise<void> => {
+    if (!trustedRequest(req, config.publicOrigin)) {
+      return jsonResponse(res, 403, { error: "forbidden" });
+    }
     if (req.method !== "GET") return jsonResponse(res, 405, { error: "method not allowed" });
     const context = await resolveAuthenticatedContext(client, config, req);
     if (!context.ok) return jsonResponse(res, context.status, context.error);
@@ -341,6 +394,9 @@ export function createTemplateForkHandler(
   config: Config,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res): Promise<void> => {
+    if (!trustedRequest(req, config.publicOrigin)) {
+      return jsonResponse(res, 403, { error: "forbidden" });
+    }
     if (req.method !== "POST") return jsonResponse(res, 405, { error: "method not allowed" });
     const context = await resolveAuthenticatedContext(client, config, req);
     if (!context.ok) return jsonResponse(res, context.status, context.error);
@@ -396,6 +452,139 @@ export function createTemplateForkHandler(
   };
 }
 
+interface WorkspaceApiSpaceView {
+  readonly id: string;
+  readonly name: string;
+  readonly capabilities: {
+    readonly renameSpace: boolean;
+  };
+}
+
+/** Parse the narrow Space view needed at the Harness trust boundary. */
+function workspaceApiSpaceView(value: unknown): WorkspaceApiSpaceView | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const capabilities = record.capabilities;
+  if (typeof record.id !== "string" || typeof record.name !== "string") return undefined;
+  if (capabilities === null || typeof capabilities !== "object") return undefined;
+  const renameSpace = (capabilities as Record<string, unknown>).renameSpace;
+  if (typeof renameSpace !== "boolean") return undefined;
+  return { id: record.id, name: record.name, capabilities: { renameSpace } };
+}
+
+/** Extract exactly one encoded Space id below the Harness Space prefix. */
+function requestSpaceId(req: IncomingMessage): string | undefined {
+  const pathname = new URL(req.url ?? "/", "http://x").pathname;
+  const prefix = `${UWH_SPACES_PATH}/`;
+  if (!pathname.startsWith(prefix)) return undefined;
+  const encoded = pathname.slice(prefix.length);
+  if (encoded === "" || encoded.includes("/")) return undefined;
+  try {
+    const id = decodeURIComponent(encoded);
+    if (id === "" || id.length > 200 || id.includes("/") || id.includes("\\")) return undefined;
+    return id;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Build the cookie-authenticated, capability-checked Space rename proxy. */
+export function createSpaceRenameHandler(
+  workspaceAuth: WorkspaceAuthService,
+  config: Pick<Config, "publicOrigin" | "sessionCookieName" | "sessionSecret">,
+): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  return async (req, res): Promise<void> => {
+    if (!trustedRequest(req, config.publicOrigin)) {
+      return jsonResponse(res, 403, { error: "forbidden" });
+    }
+    if (req.method !== "PATCH") return jsonResponse(res, 405, { error: "method_not_allowed" });
+    const spaceId = requestSpaceId(req);
+    if (spaceId === undefined) return jsonResponse(res, 404, { error: "space_not_found" });
+
+    const identity = parseSessionCookie(readCookie(req, config.sessionCookieName), config.sessionSecret);
+    if (identity === undefined) return jsonResponse(res, 401, { error: "authentication_required" });
+    const workspaceClient = workspaceAuth.clientFor(identity.userId);
+    if (workspaceClient === undefined) {
+      return jsonResponse(res, 401, { error: "workspace_authentication_required" });
+    }
+
+    let payload: unknown;
+    try {
+      payload = await readJsonBody(req);
+    } catch {
+      return jsonResponse(res, 400, { error: "space_name_invalid" });
+    }
+    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+      return jsonResponse(res, 400, { error: "space_name_invalid" });
+    }
+    const fields = Object.keys(payload as Record<string, unknown>);
+    const rawName = (payload as Record<string, unknown>).name;
+    if (fields.length !== 1 || fields[0] !== "name" || typeof rawName !== "string") {
+      return jsonResponse(res, 400, { error: "space_name_invalid" });
+    }
+    const name = rawName.trim();
+    if (name === "" || name.length > 100) {
+      return jsonResponse(res, 400, { error: "space_name_invalid" });
+    }
+
+    try {
+      const upstreamPath = `/api/spaces/${encodeURIComponent(spaceId)}`;
+      const currentResponse = await workspaceClient.request(upstreamPath, {
+        headers: { accept: "application/json" },
+      });
+      if (currentResponse.status === 401) {
+        return jsonResponse(res, 401, { error: "workspace_authentication_required" });
+      }
+      if (currentResponse.status === 404) {
+        return jsonResponse(res, 404, { error: "space_not_found" });
+      }
+      if (!currentResponse.ok) {
+        console.warn(`[uwh] Workspace Space lookup answered ${currentResponse.status}`);
+        return jsonResponse(res, 502, { error: "workspace_unavailable" });
+      }
+      const current = workspaceApiSpaceView(await currentResponse.json());
+      if (current === undefined || current.id !== spaceId) {
+        console.warn("[uwh] Workspace Space lookup returned an invalid payload");
+        return jsonResponse(res, 502, { error: "workspace_unavailable" });
+      }
+      if (!current.capabilities.renameSpace) {
+        return jsonResponse(res, 403, { error: "space_rename_forbidden" });
+      }
+
+      const updateResponse = await workspaceClient.request(upstreamPath, {
+        method: "PATCH",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (updateResponse.status === 400) {
+        return jsonResponse(res, 400, { error: "space_name_invalid" });
+      }
+      if (updateResponse.status === 401) {
+        return jsonResponse(res, 401, { error: "workspace_authentication_required" });
+      }
+      if (updateResponse.status === 403) {
+        return jsonResponse(res, 403, { error: "space_rename_forbidden" });
+      }
+      if (updateResponse.status === 404) {
+        return jsonResponse(res, 404, { error: "space_not_found" });
+      }
+      if (!updateResponse.ok) {
+        console.warn(`[uwh] Workspace Space update answered ${updateResponse.status}`);
+        return jsonResponse(res, 502, { error: "workspace_unavailable" });
+      }
+      const updated = workspaceApiSpaceView(await updateResponse.json());
+      if (updated === undefined || updated.id !== spaceId) {
+        console.warn("[uwh] Workspace Space update returned an invalid payload");
+        return jsonResponse(res, 502, { error: "workspace_unavailable" });
+      }
+      return jsonResponse(res, 200, { space: { spaceId: updated.id, name: updated.name } });
+    } catch (error: unknown) {
+      console.warn("[uwh] Workspace Space rename proxy failed", error);
+      return jsonResponse(res, 502, { error: "workspace_unavailable" });
+    }
+  };
+}
+
 /** Read and parse a bounded JSON request body (empty body -> `{}`). */
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
@@ -403,7 +592,7 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   for await (const chunk of req) {
     const bytes = chunk as Buffer;
     length += bytes.byteLength;
-    if (length > TEMPLATE_REQUEST_MAX_BYTES) throw new Error("request body too large");
+    if (length > JSON_REQUEST_MAX_BYTES) throw new Error("request body too large");
     chunks.push(bytes);
   }
   const text = Buffer.concat(chunks).toString("utf8");
@@ -419,9 +608,37 @@ function sanitizeReturnTo(pathname: string): string {
 }
 
 /**
- * Register all four routes plus the workspaceAuth service with the webserver.
+ * Register the Harness routes plus the workspaceAuth service with the webserver.
  */
 export function apply(ctx: Context, config: Config): void {
+  // The stock frontend ships DeepSeek title and favicon markup. Rewrite the
+  // server-rendered shell through the public webserver tap so the first paint
+  // is branded before the browser client mounts.
+  ctx.effect(
+    () => ctx.webServer.tapIndex(rewriteHarnessIndexBranding),
+    "uwh: server-rendered document branding",
+  );
+  // The stock frontend manifest and favicon are static fallback assets, so an
+  // index transform alone cannot change a direct `/manifest.webmanifest` or
+  // `/favicon.svg` request.  Exact routes keep those URLs stable while making
+  // the returned metadata and icon Workspace-owned.
+  ctx.effect(() => {
+    const disposeFavicon = ctx.webServer.register({
+      kind: "exact",
+      path: "/favicon.svg",
+      handler: (req, res) => serveBrandAsset(req, res, "image/svg+xml; charset=utf-8", WORKSPACE_FAVICON_SVG),
+    });
+    const disposeManifest = ctx.webServer.register({
+      kind: "exact",
+      path: "/manifest.webmanifest",
+      handler: (req, res) => serveBrandAsset(req, res, "application/manifest+json; charset=utf-8", WORKSPACE_MANIFEST_JSON),
+    });
+    return () => {
+      disposeManifest();
+      disposeFavicon();
+    };
+  }, "uwh: Workspace favicon and manifest assets");
+
   // workspaceAuth and workspaceSession must be visible to SIBLING rows (the
   // capability plugin), so their services are constructed directly against
   // the SHARED ROOT store — synchronous on purpose: the Service base
@@ -438,10 +655,25 @@ export function apply(ctx: Context, config: Config): void {
     sessionCookieName: config.sessionCookieName,
     sessionSecret: config.sessionSecret,
   });
+  // Replace DSH's single-user browser carrier with the same transport plus an
+  // account scope. The browser half remains statically mounted by this
+  // harness bundle; only the host transport carrier is replaced here.
+  ctx.effect(
+    () => installScopedConnection(ctx.root, {
+      workspaceRoot: config.workspaceRoot,
+      workspaceOrigin: config.workspaceOrigin,
+      publicOrigin: config.publicOrigin,
+      sessionCookieName: config.sessionCookieName,
+      sessionSecret: config.sessionSecret,
+      modelSettingsEnabled: config.modelSettingsEnabled,
+    }),
+    "uwh: authenticated DSH connection carrier",
+  );
   ctx.plugin(sessionInputGuard, {
     workspaceRoot: config.workspaceRoot,
     sessionCookieName: config.sessionCookieName,
     sessionSecret: config.sessionSecret,
+    publicOrigin: config.publicOrigin,
   });
   const client: AuthClient = {
     resolveByPath: path => ctx.workspaceRegistry.resolveByPath(path),
@@ -457,6 +689,15 @@ export function apply(ctx: Context, config: Config): void {
       ctx.webServer.register({ kind: "exact", path: config.callbackPath, handler: createCallbackHandler(ctx, config, loginAttempts, callbackUrl) }),
       ctx.webServer.register({ kind: "exact", path: config.mePath, handler: createIdentityHandler(client, config) }),
       ctx.webServer.register({ kind: "exact", path: config.templateForkPath, handler: createTemplateForkHandler(client, config) }),
+      ctx.webServer.register({ kind: "prefix", path: UWH_SPACES_PATH, handler: createSpaceRenameHandler(workspaceAuth, config) }),
+      ...registerScopedListRoutes(ctx, {
+        workspaceRoot: config.workspaceRoot,
+        workspaceOrigin: config.workspaceOrigin,
+        publicOrigin: config.publicOrigin,
+        sessionCookieName: config.sessionCookieName,
+        sessionSecret: config.sessionSecret,
+        modelSettingsEnabled: config.modelSettingsEnabled,
+      }),
     ];
     return () => {
       for (const dispose of routes) dispose();

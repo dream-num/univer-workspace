@@ -35,6 +35,7 @@ await build({
   jsx: "transform",
   jsxFactory: "createElement",
   jsxFragment: "Fragment",
+  loader: { ".css": "text" },
   external: ["react", "react-dom"],
   sourcemap: true,
   logLevel: "info",

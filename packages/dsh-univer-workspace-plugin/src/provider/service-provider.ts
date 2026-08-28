@@ -14,26 +14,26 @@ import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type {} from "@deepseek-ai/dsh-workspace";
-import type { CollaborationRuntimeValue } from "@univer-cli/univer-collaboration-runtime";
-import { spaceDirectoryPath } from "@univerjs/univer-workspace-harness/identity";
-import type { WorkspaceAuthService, WorkspaceHttpClient } from "@univerjs/univer-workspace-harness";
-import type {} from "@univerjs/univer-workspace-harness";
-import type { WorkspaceDocument, WorkspaceSpace } from "../shared/wire.ts";
+import type { CollaborationRuntimeValue, CollaborationUnitData } from "@univer-cli/univer-collaboration-runtime";
+import type { ContentInspectionResult } from "@univer-cli/content-inspection";
+import { spaceDirectoryPath, type WorkspaceAuthService, type WorkspaceHttpClient } from "./workspace-contract.ts";
+import type { DocumentListOptions, WorkspaceDocument, WorkspaceSpace } from "../shared/wire.ts";
 import {
   UniverWorkspaceService, type CreateDocumentInput, type EditUnitInput, type SpaceScope,
+  type InspectUnitInput,
 } from "../service/univer-workspace-service.ts";
 import { RuntimeManager } from "../runtime/manager.js";
 import type { WorkspaceRuntimeTarget } from "../runtime/target.js";
 import { spaceLinksDomainSpec } from "./space-links.ts";
 import {
   addWorktreeTrunkUnit, createDocument as apiCreateDocument, createWorktree as apiCreateWorktree,
+  createWorktreeLocalUnit as apiCreateWorktreeLocalUnit,
   discardWorktree, listSpaceDocuments, listSpaces, markWorktreeReady, mergeWorktree,
-  openResource, openWorktreeUnit,
+  getFileState as apiGetFileState, getWorktreeDetail, getWorktreeFileState as apiGetWorktreeFileState, openResource, openWorktreeUnit, reopenWorktree,
+  resolveUnitResource as apiResolveUnitResource,
+  type CreateWorktreeLocalUnitInput,
 } from "./workspace-api.ts";
-import {
-  awaitTask, downloadFile, startExport, startImport, uploadFile,
-  type ExchangeTaskResult, type ExchangeUnitType, type ExportRequest, type ImportRequest,
-} from "./exchange.ts";
+import { inspectionQuery } from "./inspection.ts";
 
 export interface ServiceProviderConfig {
   /** Root under which per-user, per-Space mechanical directories live. */
@@ -84,14 +84,19 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return record === undefined ? undefined : { userId: record.userId, spaceId: record.spaceId };
   }
 
-  async listDocuments(userId: string, spaceId: string): Promise<readonly WorkspaceDocument[]> {
+  async listDocuments(userId: string, spaceId: string, options?: DocumentListOptions): Promise<readonly WorkspaceDocument[]> {
     const client = this.requireClient(userId);
-    return await listSpaceDocuments(client, spaceId);
+    return await listSpaceDocuments(client, spaceId, options);
   }
 
   async openDocument(userId: string, resourceId: string) {
     const client = this.requireClient(userId);
     return await openResource(client, resourceId);
+  }
+
+  async resolveUnitResource(userId: string, unitId: string) {
+    const client = this.requireClient(userId);
+    return await apiResolveUnitResource(client, unitId);
   }
 
   async createDocument(userId: string, input: CreateDocumentInput) {
@@ -104,9 +109,19 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await apiCreateWorktree(client, input);
   }
 
-  async addWorktreeTrunkUnit(userId: string, worktreeId: string, resourceId: string): Promise<void> {
+  async getWorktreeDetail(userId: string, worktreeId: string) {
     const client = this.requireClient(userId);
-    await addWorktreeTrunkUnit(client, worktreeId, resourceId);
+    return await getWorktreeDetail(client, worktreeId);
+  }
+
+  async addWorktreeTrunkUnit(userId: string, worktreeId: string, resourceId: string) {
+    const client = this.requireClient(userId);
+    return await addWorktreeTrunkUnit(client, worktreeId, resourceId);
+  }
+
+  async createWorktreeLocalUnit(userId: string, input: CreateWorktreeLocalUnitInput) {
+    const client = this.requireClient(userId);
+    return await apiCreateWorktreeLocalUnit(client, input);
   }
 
   async openWorktreeUnit(userId: string, worktreeId: string, unitId: string, mode: "draft" | "trunk" | "mergePreview") {
@@ -129,11 +144,34 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await mergeWorktree(client, worktreeId);
   }
 
+  async reopenWorktree(userId: string, worktreeId: string) {
+    const client = this.requireClient(userId);
+    return await reopenWorktree(client, worktreeId);
+  }
+
+  async getFileState(userId: string, resourceId: string) {
+    const client = this.requireClient(userId);
+    return await apiGetFileState(client, resourceId);
+  }
+
+  async getWorktreeFileState(userId: string, worktreeId: string) {
+    const client = this.requireClient(userId);
+    return await apiGetWorktreeFileState(client, worktreeId);
+  }
+
+  async transitionWorktree(userId: string, worktreeId: string, action: "ready" | "reopen" | "merge" | "discard") {
+    const client = this.requireClient(userId);
+    if (action === "ready") return await markWorktreeReady(client, worktreeId);
+    if (action === "merge") return await mergeWorktree(client, worktreeId);
+    if (action === "discard") return await discardWorktree(client, worktreeId);
+    return await reopenWorktree(client, worktreeId);
+  }
+
   async readUnit(userId: string, input: EditUnitInput): Promise<CollaborationRuntimeValue> {
     const client = this.requireClient(userId);
     const target: WorkspaceRuntimeTarget = {
       origin: client.origin,
-      revision: input.revision,
+      revision: input.revision ?? -1,
       scope: input.scope,
       unitId: input.unitId,
       unitType: input.unitType,
@@ -143,11 +181,44 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await this.runtimeManager.read(target, input.code);
   }
 
+  async inspectUnit(userId: string, input: InspectUnitInput): Promise<ContentInspectionResult> {
+    const client = this.requireClient(userId);
+    const target: WorkspaceRuntimeTarget = {
+      origin: client.origin,
+      revision: input.revision ?? -1,
+      scope: input.scope,
+      unitId: input.unitId,
+      unitType: input.unitType,
+      sessionToken: client.sessionToken,
+      license: this.config.license,
+    };
+    return await this.runtimeManager.inspect(target, inspectionQuery(input.unitType, input.range));
+  }
+
+  async exportUnitData(userId: string, input: {
+    scope: WorkspaceRuntimeTarget["scope"];
+    unitId: string;
+    unitType: WorkspaceRuntimeTarget["unitType"];
+    revision?: number;
+  }): Promise<CollaborationUnitData> {
+    const client = this.requireClient(userId);
+    const target: WorkspaceRuntimeTarget = {
+      origin: client.origin,
+      revision: input.revision ?? -1,
+      scope: input.scope,
+      unitId: input.unitId,
+      unitType: input.unitType,
+      sessionToken: client.sessionToken,
+      license: this.config.license,
+    };
+    return await this.runtimeManager.exportUnitData(target);
+  }
+
   async editUnit(userId: string, input: EditUnitInput): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }> {
     const client = this.requireClient(userId);
     const target: WorkspaceRuntimeTarget = {
       origin: client.origin,
-      revision: input.revision,
+      revision: input.revision ?? -1,
       scope: input.scope,
       unitId: input.unitId,
       unitType: input.unitType,
@@ -155,24 +226,6 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
       license: this.config.license,
     };
     return await this.runtimeManager.writeAndCommit(target, input.code);
-  }
-
-  async importFile(userId: string, input: { filename: string; bytes: Uint8Array; mediaType: string; type: ExchangeUnitType | "auto"; request: ImportRequest }): Promise<ExchangeTaskResult> {
-    const client = this.requireClient(userId);
-    const fileID = await uploadFile(client, input.filename, input.bytes, input.mediaType);
-    const taskID = await startImport(client, input.type, { ...input.request, fileID });
-    return await awaitTask(client, taskID);
-  }
-
-  async exportFile(userId: string, input: { type: ExchangeUnitType; request: ExportRequest }): Promise<ExchangeTaskResult> {
-    const client = this.requireClient(userId);
-    const taskID = await startExport(client, input.type, input.request);
-    return await awaitTask(client, taskID);
-  }
-
-  async downloadFileBytes(userId: string, fileID: string): Promise<Uint8Array> {
-    const client = this.requireClient(userId);
-    return await downloadFile(client, fileID);
   }
 
   private requireClient(userId: string): WorkspaceHttpClient {

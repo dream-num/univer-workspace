@@ -58,9 +58,3 @@ export const BRAND_TOKEN_OVERRIDES: readonly TokenOverride[] = [
     dark: "#1e40af",
   },
 ];
-
-/** The full override stylesheet, injected after the theme base styles. */
-export const SKIN_CSS = [
-  `body{${BRAND_TOKEN_OVERRIDES.map(o => `${o.token}:${o.light}`).join(";")}}`,
-  `body[data-ds-dark-theme]{${BRAND_TOKEN_OVERRIDES.map(o => `${o.token}:${o.dark}`).join(";")}}`,
-].join("\n");

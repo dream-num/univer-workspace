@@ -1,0 +1,112 @@
+/* Embedded viewer surface. Lifecycle actions deliberately live here, inside
+   the Univer viewer topbar, instead of being duplicated by the host card. */
+.uvf_viewerTopbar {
+  width: 100%;
+  flex: none;
+  box-sizing: border-box;
+  color: var(--dsw-alias-label-primary, #172033);
+}
+
+/* WorktreeWindow uses a horizontal-capable shell for the editor surface. The
+   viewer topbar is a full-width row above the Univer canvas, never a sibling
+   column that can push a slide canvas to the right. */
+.uvf_viewerShell { flex-direction: column; }
+
+.uvf_viewerButton {
+  min-height: 32px;
+  padding: 4px 12px;
+  border-color: color-mix(in srgb, var(--uvf-color-accent) 34%, var(--uvf-color-border));
+  border-radius: var(--uvf-radius-control);
+  color: var(--uvf-color-accent);
+  background: var(--uvf-color-surface);
+  font-size: 13px;
+  line-height: 18px;
+  transition: color var(--uvf-motion-fast), background var(--uvf-motion-fast), border-color var(--uvf-motion-fast);
+}
+
+.uvf_viewerButton svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Office/shadcn variants: filled primary actions and a borderless destructive ghost. */
+.uvf_viewerButtonPrimary { border-color: var(--uvf-color-primary); color: #fff; background: var(--uvf-color-primary); box-shadow: 0 1px 2px rgb(0 0 0 / 5%); }
+.uvf_viewerButtonPrimary:hover:not(:disabled) { border-color: var(--uvf-color-primary-hover); color: #fff; background: var(--uvf-color-primary-hover); }
+.uvf_viewerButtonPrimary:active:not(:disabled) { background: var(--uvf-color-primary-active); }
+.uvf_viewerButtonGhostDanger { border-color: transparent; color: var(--uvf-color-danger); background: transparent; box-shadow: none; }
+.uvf_viewerButtonGhostDanger:hover:not(:disabled) { border-color: transparent; color: var(--uvf-color-danger); background: color-mix(in srgb, var(--uvf-color-danger) 10%, transparent); }
+.uvf_viewerButtonDestructive { border-color: var(--uvf-color-danger); color: #fff; background: var(--uvf-color-danger); box-shadow: 0 1px 2px rgb(0 0 0 / 5%); }
+.uvf_viewerButtonDestructive:hover:not(:disabled) { border-color: color-mix(in srgb, var(--uvf-color-danger) 90%, #000); color: #fff; background: color-mix(in srgb, var(--uvf-color-danger) 90%, #000); }
+
+.uvf_viewerButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--uvf-color-accent) 52%, var(--uvf-color-border));
+  background: color-mix(in srgb, var(--uvf-color-accent) 8%, var(--uvf-color-surface));
+}
+
+.uvf_viewerButtonDanger {
+  border-color: color-mix(in srgb, var(--uvf-color-danger) 30%, var(--uvf-color-border));
+  color: var(--uvf-color-danger);
+}
+
+.uvf_viewerButtonDanger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--uvf-color-danger) 8%, var(--uvf-color-surface));
+}
+
+.uvf_viewerConfirmChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 120px;
+  margin-top: 10px;
+  overflow-y: auto;
+}
+
+.uvf_viewerConfirmChip {
+  max-width: 100%;
+  padding: 2px 7px;
+  overflow: hidden;
+  border: 1px solid var(--uvf-color-border);
+  border-radius: 999px;
+  color: var(--dsw-alias-label-secondary, #566174);
+  background: color-mix(in srgb, var(--uvf-color-surface) 92%, var(--uvf-color-border));
+  font-size: 10px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uvf_viewerModal {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  width: min(384px, calc(100vw - 32px));
+  gap: 14px;
+  padding: 20px;
+  border-color: var(--uvf-color-border);
+  border-radius: var(--uvf-radius-card);
+  background: var(--uvf-color-surface);
+  box-shadow: var(--uvf-shadow-dialog);
+}
+
+.uvf_viewerModal .uvf_viewerConfirmActions {
+  grid-column: 2;
+  margin-left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 20px;
+}
+
+.uvf_viewerModal .uvf_viewerConfirmBody { gap: 0; }
+.uvf_viewerModal .uvf_viewerConfirmBody strong { font-size: 15px; line-height: 24px; }
+.uvf_viewerModal .uvf_viewerConfirmBody > span { margin-top: 2px; font-size: 13px; line-height: 20px; }
+.uvf_viewerModal .uvf_viewerConfirmBody p { margin: 12px 0 0; font-size: 14px; line-height: 21px; }
+
+@media (max-width: 680px) {
+  .uvf_viewerTopbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .uvf_viewerTopbarActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

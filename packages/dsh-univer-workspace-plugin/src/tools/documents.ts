@@ -1,153 +1,19 @@
 /**
- * Document discovery and authoring tools: list a Space's documents, open one,
- * and create a new Univer document.
+ * Registration glue for the document tool groups.
  * @module dsh-univer-workspace-plugin/tools/documents
  */
 
-import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
-import type { ToolRunContext } from "@deepseek-ai/dsh-tools";
-import type { ContentBlock } from "@deepseek-ai/dsh-llm";
+import { registerDocumentCreationTools } from "./documents-creation.ts";
+import { registerDocumentListTools } from "./documents-list.ts";
+import { registerDocumentStatusTools } from "./documents-status.ts";
 
-function text(value: string): ContentBlock[] {
-  return [{ type: "text", text: value }];
-}
-
-async function scope(ctx: Context, exec: ToolRunContext): Promise<{ userId: string; spaceId: string }> {
-  const cwd = exec.agent?.session.header.cwd;
-  if (cwd === undefined || cwd === "") throw new Error("univer tools require a calling agent with a workspace");
-  const resolved = await ctx.get("univerWorkspace")!.resolveSpaceForSession(cwd);
-  if (resolved === undefined) throw new Error("the calling agent's workspace is not linked to a Univer Workspace Space");
-  return resolved;
-}
-
-const unitTypeEnum = { type: "string" as const, enum: ["sheet", "doc", "slide", "board", "base"] as const };
-
-/** Register document tools. */
+/** Register all document tools and return one lifecycle disposer. */
 export function registerDocumentTools(ctx: Context): () => void {
   const disposers = [
-    ctx.tools.register(defineTool({
-      name: "univer_documents",
-      description:
-        "List the documents (Nodes) inside one Univer Workspace Space. Pass the spaceId from univer_spaces. "
-        + "Rows identify documents by resourceId; call univer_open with it to resolve the unitId before editing.",
-      parameters: {
-        spaceId: { type: "string", required: true },
-      },
-      output: {
-        schema: {
-          type: "object",
-          properties: {
-            spaceId: { type: "string" },
-            documents: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  nodeId: { type: "string" },
-                  name: { type: "string" },
-                  resourceId: { type: "string" },
-                  unitType: { type: "string" },
-                  accessRole: { type: "string" },
-                },
-                additionalProperties: false,
-              },
-            },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value: unknown) => {
-          const record = (value ?? {}) as { documents?: { name: string; unitType: string; resourceId: string }[] };
-          const docs = record.documents ?? [];
-          return text(docs.map(d => `${d.name} (${d.unitType}, resource ${d.resourceId})`).join("\n") || "no documents");
-        },
-      },
-      async execute(args, exec) {
-        const { userId } = await scope(ctx, exec);
-        const documents = await ctx.get("univerWorkspace")!.listDocuments(userId, args.spaceId);
-        return {
-          spaceId: args.spaceId,
-          documents: documents
-            .filter(d => d.resourceId !== null && d.unitType !== null)
-            .map(d => ({
-              nodeId: d.nodeId,
-              name: d.name,
-              resourceId: d.resourceId as string,
-              unitType: d.unitType as string,
-              accessRole: d.accessRole,
-            })),
-        };
-      },
-    })),
-
-    ctx.tools.register(defineTool({
-      name: "univer_open",
-      description: "Open a Univer document (by resourceId) to learn its unitId, unitType, and whether it is editable.",
-      parameters: {
-        resourceId: { type: "string", required: true },
-      },
-      output: {
-        schema: {
-          type: "object",
-          properties: {
-            nodeId: { type: "string" },
-            resourceId: { type: "string" },
-            unitId: { type: "string" },
-            unitType: { type: "string" },
-            name: { type: "string" },
-            spaceId: { type: "string" },
-            accessRole: { type: "string" },
-            editorMode: { type: "string" },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value: unknown) => {
-          // Emit the canonical value as JSON: the model reads the structured
-          // document descriptor, and the viewer turn-definition parses it to
-          // open the floating document window.
-          return text(JSON.stringify(value));
-        },
-      },
-      async execute(args, exec) {
-        const { userId } = await scope(ctx, exec);
-        return await ctx.get("univerWorkspace")!.openDocument(userId, args.resourceId);
-      },
-    })),
-
-    ctx.tools.register(defineTool({
-      name: "univer_create",
-      description: "Create a new Univer document (sheet/doc/slide/board/base) inside a Space.",
-      parameters: {
-        spaceId: { type: "string", required: true },
-        name: { type: "string", required: true },
-        unitType: { ...unitTypeEnum, required: true },
-        parentNodeId: { type: "string" },
-      },
-      output: {
-        schema: {
-          type: "object",
-          properties: {
-            resourceId: { type: "string" },
-            unitId: { type: "string" },
-            nodeId: { type: "string" },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value: unknown) => {
-          const record = (value ?? {}) as { unitId?: string };
-          return text(`created document (unit ${record.unitId ?? "?"})`);
-        },
-      },
-      async execute(args, exec) {
-        const { userId } = await scope(ctx, exec);
-        return await ctx.get("univerWorkspace")!.createDocument(userId, {
-          spaceId: args.spaceId,
-          parentNodeId: args.parentNodeId ?? null,
-          name: args.name,
-          unitType: args.unitType,
-        });
-      },
-    })),
+    registerDocumentListTools(ctx),
+    registerDocumentStatusTools(ctx),
+    registerDocumentCreationTools(ctx),
   ];
   return () => {
     for (const dispose of disposers) dispose();

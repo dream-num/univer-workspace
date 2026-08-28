@@ -1,9 +1,9 @@
 /**
  * Bundled skill provider for the capability plugin.
  *
- * Ships a small set of SKILL.md files that teach the model to operate remote
- * Univer Workspace Units through the univer_ tools. The provider reads the
- * files from disk relative to the bundle; candidates are statically known.
+ * Ships the eight Office-shaped SKILL.md entries that route the model to the
+ * remote Univer Workspace tools. The provider reads files from the packed
+ * bundle; candidates are statically known and never dynamically imported.
  * @module dsh-univer-workspace-plugin/skills
  */
 
@@ -22,8 +22,36 @@ const INVOCATION = { modelInvocable: true, userInvocable: true } as const;
 
 const DEFINITIONS = [
   {
-    name: "univer-workspace",
-    description: "Operate Univer Workspace documents (Units) in the Spaces the current User can access, through the univer_ tools and Worktree review. Use proactively for listing Spaces, listing or creating documents, reading document state, editing in Worktrees, importing and exporting Office files, and reviewing changes before they merge into the official version.",
+    name: "univer",
+    description: "Operate remote Univer Workspace Units with the verified Sheet workflow through the univer_ tools. Use proactively for Space and document discovery, Worktree review, Facade reads and writes, import/export, and explicit status handoff; Doc, Slide, Base, and Board metadata is discoverable, but their Viewer and authoring paths remain beta-limited.",
+  },
+  {
+    name: "univer-sheet",
+    description: "Read, create, edit, inspect, import, export, and review verified Univer Sheet Units through the Workspace univer_ tools and headless Facade API.",
+  },
+  {
+    name: "univer-doc",
+    description: "Discover Univer Doc Units and read their Workspace status through univer_open, univer_documents, and univer_status; Doc Viewer and authoring remain beta-limited until their preset is verified.",
+  },
+  {
+    name: "univer-slide",
+    description: "Discover Univer Slide Units and read their Workspace status through univer_open, univer_documents, and univer_status; Slide Viewer and authoring remain beta-limited until their preset is verified.",
+  },
+  {
+    name: "univer-base",
+    description: "Discover Univer Base Units and read their Workspace status through univer_open, univer_documents, and univer_status; Base Viewer and authoring remain beta-limited until their preset is verified.",
+  },
+  {
+    name: "univer-board",
+    description: "Discover Univer Board Units and read their Workspace status through univer_open, univer_documents, and univer_status; Board Viewer and authoring remain beta-limited until their preset is verified.",
+  },
+  {
+    name: "univer-embed",
+    description: "Inspect Workspace Unit metadata for an embed request; embed authoring and rendering are beta-limited and must not be reported as verified through the current univer_ tools.",
+  },
+  {
+    name: "univer-cross-unit-formula",
+    description: "Inspect Workspace Unit metadata for a cross-Unit formula request; cross-Unit formula authoring and calculation are beta-limited and must not be reported as verified through the current univer_ tools.",
   },
 ] as const;
 

@@ -21,14 +21,14 @@
     "typecheck": "tsc -p tsconfig.test.json --noEmit"
   },
   "peerDependencies": {
-    "@univerjs-pro/collaboration": "1.0.0-beta.2",
-    "@univerjs-pro/embed": "1.0.0-beta.2",
-    "@univerjs/core": "1.0.0-beta.2"
+    "@univerjs-pro/collaboration": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs-pro/embed": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs/core": "1.0.0-insiders.20260822-0c0c0dd"
   },
   "devDependencies": {
-    "@univerjs-pro/collaboration": "1.0.0-beta.2",
-    "@univerjs-pro/embed": "1.0.0-beta.2",
-    "@univerjs/core": "1.0.0-beta.2",
+    "@univerjs-pro/collaboration": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs-pro/embed": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs/core": "1.0.0-insiders.20260822-0c0c0dd",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   }

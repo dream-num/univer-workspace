@@ -3,8 +3,9 @@
 #
 # It removes the surfaces ordinary internal users do not expose — the
 # permission "Full Access" default selector and advanced settings pages —
-# disables the official workspace browser (the sidebar space list is owned by
-# the capability plugin), and mounts the harness core. One row activates BOTH
+# and mounts the harness core. The official DSH WorkspaceBrowser remains the
+# sidebar owner; the harness only filters its data and routes authentication-
+# aware actions. One row activates BOTH
 # faces: the harness node half registers the OAuth login/callback and
 # identity/template-fork routes, and its package manifest declares
 # `dsh.client`, so the modules scanner loads the `./client` browser half from
@@ -45,6 +46,18 @@
           .filter((value, index, values) => values.indexOf(value) === index)
       })()
 
+# Keep the stock WorkspaceBrowser's content-search branch available. The web
+# bundle deliberately defaults the SQLite query provider to `never`, which
+# leaves the sidebar with title-only search and an "unavailable" warning.
+# Harness sessions are already isolated at the list/API seam; the derived
+# index is only an implementation cache, so it can live under this profile's
+# DSH_HOME and be opened lazily on the first real query.
+- id: session-query-sqlite
+  name: '@deepseek-ai/dsh-session-query-sqlite'
+  config:
+    path: !!js dshHomePath('session-query.sqlite')
+    openAt: first-search
+
 # `ui-permission` is the `settings.general.item` row letting the user pick the
 # default permission preset; the `danger-full-access` preset is selectable
 # there. Hide it for the harness.
@@ -59,12 +72,16 @@
 - id: ui-settings-plugin-inventory
   disabled: true
 
-# `ui-settings-models` stays ENABLED (restated here only to record the choice):
-# unlike an org-operated product deployment that pre-provisions provider
-# credentials through the launch environment, the harness has no server-side
-# model configuration — each user brings their own API key. The Models page is
-# the only browser surface for `credentials.set` / provider profiles, which
-# persist to <DSH_HOME>/.credentials.yaml and settings.yaml respectively.
+# DSH's model/credential settings are profile-global, not account-scoped. The
+# default production posture keeps them deployment-managed. Local/single-user
+# profiles may opt in with UWH_MODEL_SETTINGS_ENABLED=true (or by running
+# without NODE_ENV=production) so the stock Models page can recover a key that
+# was configured in the isolated profile. The scoped API independently limits
+# the opt-in to the two model namespaces and their credential calls.
+- id: ui-settings-models
+  disabled: !!js >-
+    process.env.NODE_ENV === 'production' &&
+    process.env.UWH_MODEL_SETTINGS_ENABLED !== 'true'
 
 # ── harness core plugin row (host half + browser half) ─────────────────────
 
@@ -106,12 +123,20 @@
         mePath: /api/uwh/me
         templateForkPath: /api/uwh/template-fork
 
-        # HttpOnly session cookie (short-lived); Secure is set from the
-        # deployment (HTTPS). The client redirects to loginPath on a 401.
+        # HttpOnly session cookie (short-lived). An explicit override wins;
+        # otherwise Secure follows the configured public origin so local HTTP
+        # harnesses do not receive a cookie that the browser cannot return.
         sessionCookieName: dsh_session
         sessionTtlMs: !!js Number(process.env.UWH_OAUTH_SESSION_TTL_MS ?? 900000)
         stateTtlMs: !!js Number(process.env.UWH_OAUTH_STATE_TTL_MS ?? 120000)
-        secureCookies: !!js process.env.UWH_OAUTH_SECURE_COOKIES !== 'false'
+        secureCookies: !!js process.env.UWH_OAUTH_SECURE_COOKIES === 'true' || (process.env.UWH_OAUTH_SECURE_COOKIES !== 'false' && new URL(process.env.UWH_PUBLIC_ORIGIN).protocol === 'https:')
+
+        # DSH model settings/credentials are profile-global. Keep them off in
+        # production unless the operator explicitly opts in; dev profiles
+        # retain the native Models page for local key setup.
+        modelSettingsEnabled: !!js >-
+          process.env.UWH_MODEL_SETTINGS_ENABLED === 'true' ||
+          process.env.NODE_ENV !== 'production'
 
         # Configured templates: stable key -> source session id; the browser
         # forks the source once and remembers the copy per user per browser.

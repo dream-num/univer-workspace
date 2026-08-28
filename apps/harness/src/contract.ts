@@ -22,8 +22,36 @@ export const UWH_ME_PATH = "/api/uwh/me";
 /** Route path for the harness authenticated template-fork endpoint. */
 export const UWH_TEMPLATE_FORK_PATH = "/api/uwh/template-fork";
 
+/** Prefix for authenticated Harness operations on Workspace Spaces. */
+export const UWH_SPACES_PATH = "/api/uwh/spaces";
+
+/** Browser-facing Space catalogue owned by the capability plugin. */
+export const UNIVER_WORKSPACE_SPACES_PATH = "/univer-workspace/api/spaces";
+
 /** Route path for the guarded browser prompt endpoint. */
 export const UWH_SESSION_PROMPT_PATH = "/api/uwh/session-prompt";
+
+/** A Workspace Space reconciled to its mechanical DSH Workspace carrier. */
+export interface UwhWorkspaceSpace {
+  readonly spaceId: string;
+  readonly type: "personal" | "team";
+  readonly name: string;
+  readonly accessRole: "owner" | "admin" | "editor" | "viewer";
+  readonly dshWorkspaceId: string;
+}
+
+/** Response returned by the capability plugin's authenticated Space list. */
+export interface UwhWorkspaceSpaceList {
+  readonly spaces: readonly UwhWorkspaceSpace[];
+}
+
+/** Narrow response returned after the Harness has renamed one Space. */
+export interface UwhSpaceRenameResult {
+  readonly space: {
+    readonly spaceId: string;
+    readonly name: string;
+  };
+}
 
 /** One configured template: a stable `key`, the `sessionId` to fork on first
  * use, and optional display metadata. */

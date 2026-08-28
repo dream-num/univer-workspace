@@ -10,7 +10,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-host-webserver";
-import type {} from "@univerjs/univer-workspace-harness";
+import type {} from "../provider/workspace-contract.ts";
 
 const PREFIX = "/univer-workspace/api";
 
@@ -64,6 +64,47 @@ function createHandler(ctx: Context, config: WebServerConfig): (req: IncomingMes
         user: { id: user.userId, displayName: user.displayName, avatarUrl: user.avatarUrl },
         license: config.license,
       });
+      return;
+    }
+    if (req.method === "GET" && subPath === "/file-state") {
+      const user = authenticatedUser(ctx, req);
+      if (user === null) {
+        jsonResponse(res, 401, { error: "missing_or_invalid_session" });
+        return;
+      }
+      const resourceId = url.searchParams.get("resourceId");
+      const worktreeId = url.searchParams.get("worktreeId");
+      if ((resourceId === null || resourceId === "") && (worktreeId === null || worktreeId === "")) {
+        jsonResponse(res, 400, { error: "resourceId_or_worktreeId_required" });
+        return;
+      }
+      try {
+        const state = worktreeId !== null && worktreeId !== ""
+          ? await ctx.get("univerWorkspace")!.getWorktreeFileState(user.userId, worktreeId)
+          : await ctx.get("univerWorkspace")!.getFileState(user.userId, resourceId!);
+        jsonResponse(res, 200, state);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "workspace unreachable";
+        const apiStatus = error !== null && typeof error === "object" && "status" in error
+          && typeof error.status === "number" ? error.status : undefined;
+        const status = apiStatus === 404 || message.includes("404") || message.includes("Not Found") ? 404 : 502;
+        jsonResponse(res, status, { error: message });
+      }
+      return;
+    }
+    const actionMatch = /^\/worktrees\/([A-Za-z0-9-]+)\/(ready|reopen|merge|discard)$/.exec(subPath);
+    if (req.method === "POST" && actionMatch !== null) {
+      const user = authenticatedUser(ctx, req);
+      if (user === null) {
+        jsonResponse(res, 401, { error: "missing_or_invalid_session" });
+        return;
+      }
+      try {
+        const summary = await ctx.get("univerWorkspace")!.transitionWorktree(user.userId, actionMatch[1]!, actionMatch[2] as "ready" | "reopen" | "merge" | "discard");
+        jsonResponse(res, 200, { worktree: summary });
+      } catch (error) {
+        jsonResponse(res, 502, { error: error instanceof Error ? error.message : "workspace unreachable" });
+      }
       return;
     }
     jsonResponse(res, 404, { error: "not_found" });

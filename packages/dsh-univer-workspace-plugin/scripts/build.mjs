@@ -1,5 +1,6 @@
 import { build } from "esbuild";
 import { copyFile, mkdir, rm } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 // DSH bundles are consumed from a dsh profile, not from this workspace, so
 // every package builds self-contained artifacts: a node ESM host bundle
@@ -10,6 +11,15 @@ const external = ["node:*", "@deepseek-ai/*", "zod", "ws"];
 
 await rm("lib", { recursive: true, force: true });
 await mkdir("lib", { recursive: true });
+
+// The CLI resource-library manifest is intentionally shipped as a data file,
+// not inlined into the host JavaScript bundle (it is a large, versioned
+// catalog).  `resources.ts` resolves this sibling at runtime from the packed
+// plugin, so copy it as part of every reproducible build.
+await copyFile(
+  fileURLToPath(import.meta.resolve("@univerjs-pro/cli-assets/manifest.json")),
+  fileURLToPath(new URL("../lib/resource-manifest.json", import.meta.url)),
+);
 
 await build({
   entryPoints: ["src/index.ts"],
@@ -35,6 +45,7 @@ await build({
   jsx: "transform",
   jsxFactory: "createElement",
   jsxFragment: "Fragment",
+  loader: { ".css": "text" },
   external: ["react", "react-dom"],
   sourcemap: true,
   logLevel: "info",
@@ -66,7 +77,6 @@ await build({
 // directory of the module it was imported from (import.meta.url), which after
 // bundling is this package's lib/. Ship the self-contained (zero-import)
 // bootstrap beside lib/index.js so the fork resolves.
-const { fileURLToPath } = await import("node:url");
 // The pool package has no subpath export for the bootstrap; resolve the
 // public entry (dist/index.mjs) and take its sibling bootstrap.
 const poolEntryUrl = import.meta.resolve("@univer-cli/univer-collaboration-runtime-pool");

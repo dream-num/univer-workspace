@@ -1,12 +1,10 @@
-/** Opens hash-linked Sessions the signed-in user owns (cwd under their root). */
+/** Hash routing for the native DSH Session selection. */
 
-import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
-import type { ISessions } from "@deepseek-ai/dsh-client-runtime/client";
+import type { ClientContext, ISessions } from "@deepseek-ai/dsh-client-runtime/client";
 import type { SessionId } from "@deepseek-ai/dsh-client-connection/client";
-import { UWH_LOGIN_PATH, UWH_ME_PATH } from "../contract.ts";
 
-/** Hash prefix used by harness Session links. */
-const SESSION_HASH_PREFIX = "#/s/";
+/** Hash prefix used by Harness Session links. */
+export const SESSION_HASH_PREFIX = "#/s/";
 
 /** Client plugin name. */
 export const name = "univer-workspace-harness-session-route";
@@ -14,8 +12,13 @@ export const name = "univer-workspace-harness-session-route";
 /** Required browser service. */
 export const inject = ["sessions"];
 
+/** Build the canonical URL fragment for one Session. */
+export function sessionHashForId(sessionId: string): string {
+  return `${SESSION_HASH_PREFIX}${encodeURIComponent(sessionId)}`;
+}
+
 /** Read a Session ID from the current hash. */
-function sessionIdFromHash(hash: string): string | undefined {
+export function sessionIdFromHash(hash: string): string | undefined {
   if (!hash.startsWith(SESSION_HASH_PREFIX)) return undefined;
   const encoded = hash.slice(SESSION_HASH_PREFIX.length);
   if (encoded === "") return undefined;
@@ -28,33 +31,92 @@ function sessionIdFromHash(hash: string): string | undefined {
 }
 
 /**
- * Open a hash-linked session when it belongs to this user: the live list
- * snapshot must carry a summary whose cwd sits under the user's mechanical
- * root directory. Ownership follows the HOST facts, not browser-local state.
+ * Synchronize the browser fragment with DSH's authoritative Session list.
+ *
+ * The authenticated carrier already projects the list and downlink to the
+ * signed-in account.  This router therefore does not fetch identity or wrap
+ * the Session store; it only translates a listed id to `sessions.open()` and
+ * reflects the native `current` selection back into the URL.  Keeping both
+ * directions on the same synchronous store notification preserves the DSH
+ * `startSession → connectWorkspace → sessions.create/open` lifecycle.
  */
-async function openHashSession(sessions: ISessions, hash: string): Promise<void> {
-  const sessionId = sessionIdFromHash(hash);
-  if (sessionId === undefined) return;
-  const response = await fetch(UWH_ME_PATH, { headers: { accept: "application/json" } });
-  if (response.status === 401) {
-    window.location.assign(UWH_LOGIN_PATH);
-    return;
-  }
-  if (!response.ok) return;
-  const me = await response.json() as { identity?: { userId?: unknown }; workspace?: { path?: unknown } };
-  const root = me.workspace?.path;
-  if (typeof root !== "string" || root === "") return;
-  const summary = sessions.list.getSnapshot().byId[sessionId as SessionId];
-  if (summary === undefined) return;
-  const cwd = summary.cwd ?? "";
-  if (cwd === root || cwd.startsWith(`${root}/`)) sessions.open(sessionId as never);
-}
-
-/** Install the hashchange listener and process the initial URL. */
 export function apply(ctx: ClientContext): void {
   const sessions = ctx.sessions as unknown as ISessions;
-  const onHashChange = (): void => { void openHashSession(sessions, window.location.hash); };
+  let disposed = false;
+  let listCurrent = sessions.list.getSnapshot().current;
+  let hashNavigation = false;
+  let opening = false;
+
+  /** Open a URL target once the authenticated native list has published it. */
+  const openHashTarget = (): void => {
+    if (disposed || opening) return;
+    const target = sessionIdFromHash(window.location.hash);
+    if (target === undefined) {
+      hashNavigation = false;
+      return;
+    }
+    const snapshot = sessions.list.getSnapshot();
+    if (snapshot.byId[target as SessionId] === undefined) return;
+    if (snapshot.current === target) {
+      hashNavigation = false;
+      return;
+    }
+    opening = true;
+    try {
+      sessions.open(target as SessionId);
+    } finally {
+      opening = false;
+      if (sessions.list.getSnapshot().current === target) hashNavigation = false;
+    }
+  };
+
+  /** Reflect an authoritative native selection, including sidebar clicks. */
+  const projectCurrent = (): void => {
+    if (disposed) return;
+    const snapshot = sessions.list.getSnapshot();
+    const current = snapshot.current;
+    const changed = current !== listCurrent;
+    listCurrent = current;
+
+    // A hash navigation owns the next selection. Keep the requested fragment
+    // while its row is still arriving through the downlink/list baseline.
+    if (hashNavigation) {
+      const target = sessionIdFromHash(window.location.hash);
+      if (target === undefined) {
+        hashNavigation = false;
+      } else if (snapshot.byId[target as SessionId] !== undefined) {
+        openHashTarget();
+        return;
+      } else if (changed && current !== undefined && snapshot.byId[current] !== undefined) {
+        // The requested id is not in the authenticated list, while a native
+        // action has selected a real row. Treat the stale/unauthorized hash
+        // as inert instead of pinning the router to it forever.
+        hashNavigation = false;
+      } else {
+        return;
+      }
+    }
+
+    // A native DSH action (sidebar row, New Session, reconnect restoration)
+    // changed the authoritative current id. Project that id immediately; do
+    // not read the previous hash as an instruction and undo the action.
+    if (changed && current !== undefined && snapshot.byId[current] !== undefined) {
+      const nextHash = sessionHashForId(String(current));
+      if (window.location.hash !== nextHash) window.location.hash = nextHash;
+    }
+  };
+
+  const onHashChange = (): void => {
+    hashNavigation = sessionIdFromHash(window.location.hash) !== undefined;
+    openHashTarget();
+  };
   window.addEventListener("hashchange", onHashChange);
+  const unsubscribe = sessions.list.subscribe(projectCurrent);
   onHashChange();
-  ctx.effect(() => () => { window.removeEventListener("hashchange", onHashChange); }, "uwh: session hash route");
+  projectCurrent();
+  ctx.effect(() => () => {
+    disposed = true;
+    window.removeEventListener("hashchange", onHashChange);
+    unsubscribe();
+  }, "uwh: session hash route");
 }

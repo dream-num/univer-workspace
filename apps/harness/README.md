@@ -34,6 +34,20 @@ shipped as three DSH bundles that a dsh profile loads:
 - Any publication contract: this is a private workspace package, installed
   into a dsh profile from the repository build, never from the npm registry.
 
+## Model credentials
+
+DSH model settings and credentials are profile-global (they are not tied to a
+Workspace OAuth user). Production deployments should inject `DEEPSEEK_API_KEY`
+or another provider credential through the deployment secret and leave the
+Models settings surface disabled. Local/single-user profiles can set
+`UWH_MODEL_SETTINGS_ENABLED=true` (or run without `NODE_ENV=production`) to
+restore the stock DSH Models page; model namespaces and credential calls are
+then allowed through the harness RPC boundary. The credential provider keeps a
+file-backed value in `$DSH_HOME/.credentials.yaml`, while an inherited
+environment variable always wins and is read-only. An isolated `DSH_HOME` does
+not inherit a key from the developer's `~/.dsh`; this is intentional and keeps
+the test profile independent.
+
 ## Build
 
 `pnpm build` emits `lib/index.js` (node host bundle) and `lib/client.js`

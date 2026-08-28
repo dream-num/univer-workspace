@@ -18,7 +18,8 @@ import type {} from "@deepseek-ai/dsh-host-apiproxy";
 import type {} from "@deepseek-ai/dsh-host-webserver";
 import type {} from "@deepseek-ai/dsh-workspace";
 import { parseCookies, parseSessionCookie } from "./auth.ts";
-import { isUserScopedPath } from "./identity.ts";
+import { workspacePathFor } from "./identity.ts";
+import { canonicalPath, normalizedPath, pathInUserRoot, trustedRequest } from "./scoped-api.ts";
 import { UWH_SESSION_PROMPT_PATH } from "./contract.ts";
 
 /** Configuration needed by the harness-owned prompt route. */
@@ -29,6 +30,8 @@ export interface Config {
   sessionCookieName: string;
   /** Secret used to authenticate the harness-session cookie. */
   sessionSecret: string;
+  /** Public harness origin used for the same-site request fence as DSH RPCs. */
+  publicOrigin: string;
 }
 
 /** Stable plugin name. */
@@ -74,15 +77,70 @@ export function sessionBelongsToUser(
   userId: string,
   sessionId: string,
 ): boolean {
+  const derived = workspacePathFor(workspaceRoot, userId);
+  if (!derived.ok) return false;
   return workspaceRegistry.list().some(workspace =>
-    isUserScopedPath(workspaceRoot, userId, workspace.path)
+    pathInRoot(derived.path, workspace.path)
     && workspace.sessionIds.includes(sessionId),
   );
+}
+
+/** Separator-aware account-root check shared by the prompt guard. */
+function pathInRoot(root: string, candidate: string | undefined): boolean {
+  if (candidate === undefined || candidate === "") return false;
+  return pathInUserRoot(normalizedPath(root), normalizedPath(candidate));
+}
+
+/**
+ * Resolve ownership from the durable/live Session header as well as registry
+ * membership.  Workspace deletion deliberately leaves sessions ungrouped;
+ * those sessions must remain promptable when their cwd is still in the
+ * authenticated account root.
+ */
+async function sessionBelongsToUserAsync(
+  ctx: Context,
+  config: Config,
+  userId: string,
+  sessionId: string,
+): Promise<boolean> {
+  const derived = workspacePathFor(config.workspaceRoot, userId);
+  if (!derived.ok) return false;
+  const canonicalRoot = await canonicalPath(derived.path);
+  if (canonicalRoot === undefined) return false;
+  const registry = ctx.workspaceRegistry;
+  const attached = registry.list().find(workspace => workspace.sessionIds.some(id => String(id) === sessionId));
+  if (attached !== undefined) {
+    const attachedPath = await canonicalPath(attached.path);
+    if (attachedPath === undefined || !pathInRoot(canonicalRoot, attachedPath)) return false;
+  }
+
+  const live = (ctx.get("sessions") as unknown as {
+    get?: (id: string) => { header?: { cwd?: unknown } } | undefined;
+  } | undefined)?.get?.(sessionId);
+  const liveCwd = live?.header?.cwd;
+  if (typeof liveCwd === "string" && liveCwd !== "") {
+    const canonicalCwd = await canonicalPath(liveCwd);
+    return canonicalCwd !== undefined && pathInRoot(canonicalRoot, canonicalCwd);
+  }
+
+  const persistence = ctx.get("sessionPersistence") as unknown as {
+    list(signal?: AbortSignal): Promise<readonly { id: unknown; cwd?: unknown }[]>;
+  } | undefined;
+  if (persistence === undefined) return attached !== undefined && pathInRoot(canonicalRoot, attached.path);
+  const header = (await persistence.list()).find(candidate => candidate.id === sessionId);
+  if (header === undefined) return false;
+  if (typeof header.cwd !== "string" || header.cwd === "") return false;
+  const canonicalCwd = await canonicalPath(header.cwd);
+  return canonicalCwd !== undefined && pathInRoot(canonicalRoot, canonicalCwd);
 }
 
 /** Build the harness-owned prompt handler. */
 export function createSessionPromptHandler(ctx: Context, config: Config): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res): Promise<void> => {
+    if (!trustedRequest(req, config.publicOrigin)) {
+      jsonResponse(res, 403, { error: "forbidden" });
+      return;
+    }
     if (req.method !== "POST") {
       jsonResponse(res, 405, { error: "method_not_allowed" });
       return;
@@ -110,7 +168,7 @@ export function createSessionPromptHandler(ctx: Context, config: Config): (req: 
     }
 
     const { sessionId } = parsed.data;
-    if (!sessionBelongsToUser(ctx.workspaceRegistry, config.workspaceRoot, identity.userId, sessionId)) {
+    if (!await sessionBelongsToUserAsync(ctx, config, identity.userId, sessionId)) {
       jsonResponse(res, 200, denied(sessionId, "the Session does not belong to the authenticated user"));
       return;
     }

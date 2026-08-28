@@ -10,7 +10,13 @@ import {
   createUniverCollaborationRuntimePool,
   type UniverCollaborationRuntimeLease,
 } from "@univer-cli/univer-collaboration-runtime-pool";
-import type { CollaborationCommitResult, CollaborationRuntimeValue } from "@univer-cli/univer-collaboration-runtime";
+import { prepareContentExecutionProgram } from "@univer-cli/content-execution";
+import { inspectContent, type ContentInspectionQuery, type ContentInspectionResult } from "@univer-cli/content-inspection";
+import type {
+  CollaborationCommitResult,
+  CollaborationRuntimeValue,
+  CollaborationUnitData,
+} from "@univer-cli/univer-collaboration-runtime";
 import type { WorkspaceRuntimeTarget } from "./target.js";
 import { workspaceRuntimeKey } from "./target.js";
 
@@ -36,8 +42,43 @@ export class RuntimeManager {
     const lease = await this.acquire(target);
     try {
       await this.synchronize(lease, target);
-      const result = await lease.execute({ code, mode: "read" });
+      const result = await lease.execute({
+        code: prepareContentExecutionProgram({ code, unitId: target.unitId, unitType: target.unitType }),
+        mode: "read",
+      });
       return result.value;
+    } finally {
+      await lease.release();
+    }
+  }
+
+  /** Inspect stable structured content without exposing arbitrary write code. */
+  public async inspect(
+    target: WorkspaceRuntimeTarget,
+    query: ContentInspectionQuery,
+  ): Promise<ContentInspectionResult> {
+    const lease = await this.acquire(target);
+    try {
+      await this.synchronize(lease, target);
+      return await inspectContent(
+        {
+          unitId: lease.unitId,
+          unitType: target.unitType,
+          execute: async (input) => await lease.execute(input),
+        },
+        query,
+      );
+    } finally {
+      await lease.release();
+    }
+  }
+
+  /** Export the synchronized UnitData for local Office conversion. */
+  public async exportUnitData(target: WorkspaceRuntimeTarget): Promise<CollaborationUnitData> {
+    const lease = await this.acquire(target);
+    try {
+      await this.synchronize(lease, target);
+      return await lease.exportUnitData();
     } finally {
       await lease.release();
     }
@@ -52,7 +93,10 @@ export class RuntimeManager {
     let reusable = false;
     try {
       await this.synchronize(lease, target);
-      const executed = await lease.execute({ code, mode: "write" });
+      const executed = await lease.execute({
+        code: prepareContentExecutionProgram({ code, unitId: target.unitId, unitType: target.unitType }),
+        mode: "write",
+      });
       if (executed.mutations.length === 0) {
         reusable = true;
         return { committed: false, value: executed.value };
@@ -79,7 +123,7 @@ export class RuntimeManager {
     if (pulled.status === "conflict") {
       throw new Error(`workspace runtime conflict: ${pulled.conflict.message}`);
     }
-    if (pulled.state.baseRevision !== target.revision) {
+    if (target.revision >= 0 && pulled.state.baseRevision !== target.revision) {
       throw new Error(`workspace runtime revision ${String(pulled.state.baseRevision)} does not match selected revision ${String(target.revision)}`);
     }
   }

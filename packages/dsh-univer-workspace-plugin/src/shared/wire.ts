@@ -23,13 +23,28 @@ export interface WorkspaceSpace {
 export interface WorkspaceDocument {
   readonly nodeId: string;
   readonly name: string;
+  /** Parent organization Node; `null` means the Space root. */
+  readonly parentNodeId: string | null;
+  /** Whether this Node has children that can be listed through the API. */
+  readonly hasChildren: boolean;
+  /** Product last-update timestamp, when the server supplied one. */
+  readonly updatedAt: string | null;
   /** `univer` resource id, or `null` for a pure organization Node. */
   readonly resourceId: string | null;
+  /** Product resource kind; `null` denotes an organization-only Node. */
+  readonly resourceKind: "univer" | "blob" | null;
+  /** Blob metadata when the resource is a Blob. */
+  readonly mediaType?: string;
+  readonly byteSize?: number;
+  readonly availability?: "ready" | "quarantined";
   /** Univer Unit id, or `null` for a pure organization Node. */
   readonly unitId: string | null;
   /** Univer Unit type, or `null` for a pure organization Node. */
   readonly unitType: "sheet" | "doc" | "slide" | "board" | "base" | null;
   readonly accessRole: "owner" | "admin" | "editor" | "viewer";
+  /** Node and resource capabilities returned by the product API. */
+  readonly nodeCapabilities?: Readonly<Record<string, boolean>>;
+  readonly resourceCapabilities?: Readonly<Record<string, boolean>>;
 }
 
 /** The opened document descriptor returned by the `univer_open` tool. */
@@ -53,4 +68,17 @@ export interface SpacesResult {
 export interface DocumentsResult {
   readonly spaceId: string;
   readonly documents: readonly WorkspaceDocument[];
+}
+
+/** Server-side discovery filters accepted by the document listing tools. */
+export interface DocumentListOptions {
+  /** Return children below this Node; omitted means the Space root. */
+  readonly parentNodeId?: string | null;
+  /** Include descendants of `parentNodeId` (defaults to true). */
+  readonly recursive?: boolean;
+  /** Case-insensitive name substring. */
+  readonly query?: string;
+  /** `folder` selects organization Nodes; `all` keeps every resource kind. */
+  readonly resourceKind?: "univer" | "blob" | "folder" | "all";
+  readonly unitType?: "sheet" | "doc" | "slide" | "board" | "base";
 }
