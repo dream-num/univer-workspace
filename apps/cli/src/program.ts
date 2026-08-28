@@ -14,36 +14,41 @@ import type {
   UniverSlideLayoutRuntime,
   UniverTextMeasureRuntime,
 } from "@univer-cli/univer-render-runtime";
+import {
+  HeadlessWorkspaceTypstMaterializer,
+  WorkspaceAssetFeature,
+  WorkspaceBlobFeature,
+  WorkspaceCompileTypstFeature,
+  WorkspaceCompileSvgFeature,
+  WorkspaceContentExecutionFeature,
+  WorkspaceContentSource,
+  WorkspaceOpenFeature,
+  WorkspaceRenderUnitLoader,
+  WorkspaceScreenshotFeature,
+  WorkspaceSpaceFeature,
+  WorkspaceUnitExchangeFeature,
+  WorkspaceUnitFeature,
+  WorkspaceUnitLayoutLintFeature,
+  WorkspaceWorktreeFeature,
+} from "@univerjs/univer-workspace-client-core";
 import { Command, type OutputConfiguration } from "commander";
-import { workspaceSessionPath } from "./config.js";
+import { resolveUniverLicense, workspaceSessionPath } from "./config.js";
 import { createAssetCommand } from "./features/asset/command.js";
-import { WorkspaceAssetFeature } from "./features/asset/download.js";
 import { createAuthCommands } from "./features/auth/command.js";
 import { WorkspaceAuth } from "./features/auth/session.js";
 import { createBlobCommand } from "./features/blob/command.js";
-import { WorkspaceBlobFeature } from "./features/blob/transfer.js";
-import { WorkspaceContentSource } from "./features/content/source.js";
 import { createContentExecuteCommand } from "./features/content/command.js";
-import { WorkspaceContentExecutionFeature } from "./features/content/execution.js";
+import { createWorkspaceDaemonRuntimeOperations } from "./features/content/execution.js";
 import { createWorkspaceUnitExchangeCommands } from "./features/exchange/command.js";
-import { WorkspaceUnitExchangeFeature } from "./features/exchange/exchange.js";
 import { createWorkspaceUnitLayoutLintCommand } from "./features/lint/command.js";
-import { WorkspaceUnitLayoutLintFeature } from "./features/lint/unit-layout-lint.js";
 import { createOpenCommand } from "./features/open/command.js";
-import { WorkspaceOpenFeature } from "./features/open/open.js";
 import { createWorkspaceScreenshotCommand } from "./features/screenshot/command.js";
-import { WorkspaceScreenshotFeature } from "./features/screenshot/screenshot.js";
 import { createSkillsCommand } from "./features/skills/command.js";
 import { createSpaceCommand } from "./features/space/command.js";
-import { WorkspaceSpaceFeature } from "./features/space/space.js";
 import { createWorkspaceCompileSvgCommand } from "./features/svg/command.js";
 import { createWorkspaceCompileTypstCommand } from "./features/typst/command.js";
-import { WorkspaceCompileTypstFeature } from "./features/typst/compile.js";
-import { HeadlessWorkspaceTypstMaterializer } from "./features/typst/materialize.js";
 import { createUnitCommand } from "./features/unit/command.js";
-import { WorkspaceUnitFeature } from "./features/unit/membership.js";
 import { createWorktreeCommand } from "./features/worktree/command.js";
-import { WorkspaceWorktreeFeature } from "./features/worktree/management.js";
 import { workspaceDaemonIdentity } from "./runtime/daemon-identity.js";
 import { WORKSPACE_CLI_VERSION } from "./version.js";
 
@@ -93,13 +98,15 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     socketPath: options.socketPath,
   };
   const daemon = createDaemonClient(daemonOptions);
+  const runtimeOperations = createWorkspaceDaemonRuntimeOperations(daemon);
   const daemonControl = createDaemonControl(daemonOptions);
   const auth = new WorkspaceAuth({
     config: options.config,
     sessionPath: workspaceSessionPath(options.env),
     ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
   });
-  const worktrees = new WorkspaceWorktreeFeature(auth);
+  const authenticatedHttp = async () => await auth.authenticatedHttp("client");
+  const worktrees = new WorkspaceWorktreeFeature(authenticatedHttp);
   const openResourceLibrary = createNodeResourceLibraryFactory({
     cacheRoot: options.resourceCacheRoot,
     manifestPath: options.resourceManifestPath,
@@ -112,37 +119,52 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
           await auth.authenticatedHttp("client"),
         ).resolveEditableRuntimeTarget(input),
     },
-    daemon,
+    runtimeOperations,
   );
-  const units = new WorkspaceUnitFeature(auth);
+  const units = new WorkspaceUnitFeature(authenticatedHttp);
   const compileTypst = new WorkspaceCompileTypstFeature({
     materializer: new HeadlessWorkspaceTypstMaterializer(),
     units,
   });
   const exchange = new WorkspaceUnitExchangeFeature({
-    daemon,
+    runtime: runtimeOperations,
     createUnit: async (input) => await units.create(input),
     resolveRuntimeTarget: async (input) =>
       await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveRuntimeTarget(
         input,
       ),
   });
+  const renderUnitLoader = new WorkspaceRenderUnitLoader({
+    runtime: runtimeOperations,
+    openSource: async () => new WorkspaceContentSource(await auth.authenticatedHttp("client")),
+  });
+  const license = resolveUniverLicense(options.env);
   const screenshot = new WorkspaceScreenshotFeature({
     renderPageRoot: options.renderPageRoot,
-    daemon,
+    license,
     env: options.env,
-    openSource: async () => new WorkspaceContentSource(await auth.authenticatedHttp("client")),
+    loader: renderUnitLoader,
     ...(options.createRenderRuntime === undefined
       ? {}
       : { createRuntime: options.createRenderRuntime }),
   });
   const unitLayoutLint = new WorkspaceUnitLayoutLintFeature({
     renderPageRoot: options.renderPageRoot,
+    license,
     env: options.env,
-    source: screenshot,
+    loader: renderUnitLoader,
     ...(options.createSlideLayoutRuntime === undefined
       ? {}
       : { createRuntime: options.createSlideLayoutRuntime }),
+  });
+  const compileSvg = new WorkspaceCompileSvgFeature({
+    contentExecution,
+    renderPageRoot: options.renderPageRoot,
+    license,
+    env: options.env,
+    ...(options.createTextMeasureRuntime === undefined
+      ? {}
+      : { createRuntime: options.createTextMeasureRuntime }),
   });
   const commands = [
     createConfigCommand({ config: options.config }),
@@ -151,13 +173,21 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createResourcesCommand({ openLibrary: openResourceLibrary }),
     createSkillsCommand(options.skillDataRoot),
     ...createAuthCommands(auth),
-    createSpaceCommand(new WorkspaceSpaceFeature(auth)),
+    createSpaceCommand(
+      new WorkspaceSpaceFeature(async () => await auth.authenticatedHttp("client")),
+    ),
     createWorktreeCommand(worktrees),
     createUnitCommand(units),
     ...createWorkspaceUnitExchangeCommands(exchange),
-    createBlobCommand(new WorkspaceBlobFeature(auth)),
-    createAssetCommand(new WorkspaceAssetFeature(auth)),
-    createOpenCommand(new WorkspaceOpenFeature(auth, worktrees)),
+    createBlobCommand(
+      new WorkspaceBlobFeature(async () => await auth.authenticatedHttp("client")),
+    ),
+    createAssetCommand(
+      new WorkspaceAssetFeature(async () => await auth.authenticatedHttp("client")),
+    ),
+    createOpenCommand(
+      new WorkspaceOpenFeature(authenticatedHttp, async () => await auth.configuredOrigin()),
+    ),
     createWorkspaceScreenshotCommand({
       env: options.env,
       screenshot,
@@ -165,14 +195,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createWorkspaceUnitLayoutLintCommand(unitLayoutLint),
     createContentExecuteCommand(contentExecution),
     createWorkspaceCompileTypstCommand(compileTypst),
-    createWorkspaceCompileSvgCommand({
-      renderPageRoot: options.renderPageRoot,
-      env: options.env,
-      executeSlide: async (input) => await contentExecution.executeSlide(input),
-      ...(options.createTextMeasureRuntime === undefined
-        ? {}
-        : { createRuntime: options.createTextMeasureRuntime }),
-    }),
+    createWorkspaceCompileSvgCommand(compileSvg),
     createWorktreeContentInspectionCommand({
       acquireRuntime: async ({ unitId, worktreeID }) => {
         const source = new WorkspaceContentSource(await auth.authenticatedHttp("client"));
@@ -184,16 +207,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
           unitId: target.unitId,
           unitType: target.unitType,
           execute: async ({ code }) => {
-            const result = await daemon.request("runtime.execute-read", {
-              code,
-              target: {
-                origin: target.origin,
-                revision: target.revision,
-                scope: target.scope,
-                unitId: target.unitId,
-                unitType: target.unitType,
-              },
-            });
+            const result = await runtimeOperations.executeRead({ code, target });
             if (!isRecord(result) || !("value" in result)) {
               throw codedError("WORKSPACE_RUNTIME_RESULT_INVALID", "Runtime result is invalid");
             }
@@ -218,7 +232,7 @@ function configureOutput(command: Command, output: OutputConfiguration): void {
   for (const child of command.commands) configureOutput(child, output);
 }
 
-function isRecord(value: JsonValue): value is { readonly [key: string]: JsonValue } {
+function isRecord(value: unknown): value is { readonly [key: string]: JsonValue } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 

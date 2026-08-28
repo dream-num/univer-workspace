@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>提取 Workspace Content Runtime</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      padding: 40px 24px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    .page { width: min(1160px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow { margin-bottom: 8px; color: var(--accent-text); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+    h1 { max-width: 900px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 840px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 820px; height: auto; }
+    .brief { display: grid; grid-template-columns: 1.05fr 1fr 0.95fr; gap: 16px; margin-top: 24px; }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.65; }
+    .card ul { padding-left: 20px; }
+    .card li + li { margin-top: 6px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View · extract-content-runtime-client-core</p>
+      <h1>让 daemon 成为外壳，让 runtime 成为共享能力</h1>
+      <p class="thesis">Client Core 统一拥有 worker、pool、内容读取与可靠提交；CLI 保留原有 daemon 协议，未来 local DSH Client Shell 可直接复用同一个 runtime owner。</p>
+    </header>
+
+    <section class="diagram" aria-label="Content Runtime 所有权架构，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1100 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="content-runtime-title content-runtime-desc">
+        <title id="content-runtime-title">Workspace Content Runtime 所有权迁移</title>
+        <desc id="content-runtime-desc">Workspace CLI 通过保留的 daemon shell 委派给 Client Core；未来 local DSH shell 直接调用同一个 runtime owner。owner 管理 worker pool、只读操作和图片外置提交。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1100" height="600" fill="#f5f5f5"/>
+
+        <path d="M 260 128 H 320" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 540 128 H 568 Q 580 128 580 140 V 266 Q 580 278 592 278 H 620" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 260 448 H 568 Q 580 448 580 436 V 326 Q 580 314 592 314 H 620" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 840 270 H 856 Q 868 270 868 258 V 128 Q 868 116 880 116" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 840 304 H 880" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 840 338 H 856 Q 868 338 868 350 V 488 Q 868 500 880 500" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <g>
+          <rect x="270" y="108" width="40" height="22" rx="4" fill="#f5f5f5"/>
+          <text x="290" y="123" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="11" text-anchor="middle">RPC</text>
+        </g>
+        <g>
+          <rect x="540" y="184" width="80" height="22" rx="4" fill="#f5f5f5"/>
+          <text x="580" y="199" fill="#a8421a" font-family="ui-monospace, monospace" font-size="11" text-anchor="middle">delegate</text>
+        </g>
+        <g>
+          <rect x="534" y="374" width="92" height="22" rx="4" fill="#f5f5f5"/>
+          <text x="580" y="389" fill="#a8421a" font-family="ui-monospace, monospace" font-size="11" text-anchor="middle">direct call</text>
+        </g>
+
+        <rect x="40" y="80" width="220" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="150" y="120" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Workspace CLI</text>
+        <text x="150" y="148" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">execute / inspect / consumers</text>
+
+        <rect x="320" y="72" width="220" height="112" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="430" y="112" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">CLI daemon shell</text>
+        <text x="430" y="140" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">socket / Session / license</text>
+        <text x="430" y="162" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">RPC 与 shutdown 适配</text>
+
+        <rect x="40" y="400" width="220" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="150" y="440" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">future local DSH shell</text>
+        <text x="150" y="468" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">credential / config / lifecycle</text>
+
+        <rect x="620" y="230" width="220" height="144" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="730" y="272" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="19" font-weight="600" text-anchor="middle">Client Core</text>
+        <text x="730" y="300" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="16" text-anchor="middle">content runtime owner</text>
+        <text x="730" y="328" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">acquire / sync / close</text>
+        <text x="730" y="350" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">一个 private package</text>
+
+        <rect x="880" y="68" width="180" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="970" y="108" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">worker + pool</text>
+        <text x="970" y="136" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Snapshot / reference / collab</text>
+
+        <rect x="880" y="256" width="180" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="970" y="296" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">read / export</text>
+        <text x="970" y="324" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">同步到精确 revision</text>
+
+        <rect x="880" y="448" width="180" height="104" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="970" y="486" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">execute + commit</text>
+        <text x="970" y="514" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">image rewrite / bounded retry</text>
+        <text x="970" y="536" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">失败时 invalidate</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <ul>
+          <li>提取 worker、pool、read/export、Worktree execution 与 commit pipeline。</li>
+          <li>保留 daemon command/socket、Session 文件、license 来源和 RPC wire shape。</li>
+          <li>Office、Typst、render、screenshot/lint、SVG 与 DSH tools 留给后续 Change。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>同一 Client Core owner 暴露四项最小操作：read、export、execute-and-commit、close。</li>
+          <li>交付方提供 worker entry、credential 与 license；Core 不读取 CLI 配置。</li>
+          <li>图片外置属于 commit pipeline，不依赖 Blob/Asset file-transfer capability。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <ul>
+          <li>worker init 中的 credential/license 不得进入 RPC、结果、日志或错误 detail。</li>
+          <li>CLI worker build entry 必须继续进入自包含安装包。</li>
+          <li>提交失败会 invalidate runtime，避免复用不确定 mutation。</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer>
+      Derived from <a href="proposal.md">proposal.md</a> and <a href="design.md">design.md</a>. Markdown sources are authoritative; this page is a non-normative review projection.
+    </footer>
+  </main>
+</body>
+</html>

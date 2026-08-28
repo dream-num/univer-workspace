@@ -1,9 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import type { WorkspaceCompileTypstFeature } from "@univerjs/univer-workspace-client-core";
 import { Command } from "commander";
 import { executeCommand, present, type JsonOption } from "../../command.js";
 import { workspaceError } from "../../errors.js";
-import type { WorkspaceCompileTypstFeature } from "./compile.js";
 
 interface CompileTypstOptions extends JsonOption {
   readonly apply?: boolean;
@@ -16,7 +16,9 @@ interface CompileTypstOptions extends JsonOption {
   readonly worktree?: string;
 }
 
-export function createWorkspaceCompileTypstCommand(feature: WorkspaceCompileTypstFeature): Command {
+export function createWorkspaceCompileTypstCommand(
+  feature: Pick<WorkspaceCompileTypstFeature, "execute">,
+): Command {
   const command = new Command("compile-typst")
     .description("Compile a Typst bundle and optionally create one staged Workspace Doc")
     .argument("<bundle>", "bundle directory or typst.json path")

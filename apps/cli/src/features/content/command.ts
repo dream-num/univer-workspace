@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { Command } from "commander";
+import type { WorkspaceContentExecutionFeature } from "@univerjs/univer-workspace-client-core";
 import { executeCommand, present, type JsonOption } from "../../command.js";
 import { workspaceError } from "../../errors.js";
-import type { WorkspaceContentExecutionFeature } from "./execution.js";
 
 interface ExecuteOptions extends JsonOption {
   readonly code?: string;

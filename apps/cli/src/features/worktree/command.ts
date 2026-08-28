@@ -1,6 +1,6 @@
 import { Command } from "commander";
+import type { WorkspaceWorktreeFeature } from "@univerjs/univer-workspace-client-core";
 import { executeCommand, oneOf, present, type JsonOption } from "../../command.js";
-import { WorkspaceWorktreeFeature } from "./management.js";
 
 export function createWorktreeCommand(feature: WorkspaceWorktreeFeature): Command {
   const root = new Command("worktree").description("Manage Workspace Worktrees");

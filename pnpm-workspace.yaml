@@ -12,3 +12,6 @@ minimumReleaseAgeExclude:
   - "@univer-cli/*"
   - "@univerjs/*"
   - "@univerjs-pro/*"
+
+patchedDependencies:
+  '@univer-cli/univer-collaboration-runtime-pool@1.0.0-beta.2': patches/@univer-cli__univer-collaboration-runtime-pool@1.0.0-beta.2.patch

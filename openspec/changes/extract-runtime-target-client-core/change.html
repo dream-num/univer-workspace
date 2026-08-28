@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>提取 Workspace Runtime Target Client Core</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --soft: #7a8399;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      padding: 40px 24px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    .page { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--accent-text);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 { max-width: 860px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 800px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 760px; height: auto; }
+    .brief {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 0.9fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .card ul { padding-left: 20px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View</p>
+      <h1>提取 Runtime Target Client Core</h1>
+      <p class="thesis">把 target、Snapshot 与跨 Unit reference 的 Workspace 规则移入 private Client Core，同时让 CLI 继续拥有 Session、daemon、worker 与运行时生命周期。</p>
+    </header>
+
+    <section class="diagram" aria-label="Runtime Target Client Core 架构边界，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="runtime-core-title runtime-core-desc">
+        <title id="runtime-core-title">Runtime Target Client Core 架构边界</title>
+        <desc id="runtime-core-desc">Workspace CLI 和后续 Node-hosted 客户端复用 Client Core 的 runtime target、Snapshot 与 reference 能力；CLI 继续持有 Session、daemon、worker 和生命周期。</desc>
+        <defs>
+          <marker id="runtime-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="runtime-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1000" height="600" fill="#f5f5f5"/>
+
+        <path d="M 260 125 H 380" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#runtime-arrow)"/>
+        <path d="M 740 125 H 620" fill="none" stroke="#4f5d75" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#runtime-arrow)"/>
+        <path d="M 450 180 V 225 H 340 V 270" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#runtime-arrow-accent)"/>
+        <path d="M 550 180 V 225 H 660 V 270" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#runtime-arrow-accent)"/>
+        <path d="M 340 380 V 420 H 460 V 460" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#runtime-arrow)"/>
+        <path d="M 660 380 V 420 H 540 V 460" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#runtime-arrow)"/>
+
+        <rect x="40" y="70" width="220" height="110" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="150" y="110" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Workspace CLI Shell</text>
+        <text x="150" y="138" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Session · daemon · worker</text>
+        <text x="150" y="160" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">lifecycle 保持不变</text>
+
+        <rect x="740" y="70" width="220" height="110" rx="8" fill="#ffffff" stroke="#7a8399" stroke-dasharray="6 5"/>
+        <text x="850" y="110" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">后续 Agent Client</text>
+        <text x="850" y="140" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Node-hosted consumer</text>
+
+        <rect x="380" y="70" width="240" height="110" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="500" y="108" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Runtime Target + Source</text>
+        <text x="500" y="136" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">parse · serialize · reuse key</text>
+        <text x="500" y="158" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Worktree / Trunk resolution</text>
+
+        <rect x="220" y="270" width="240" height="110" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="340" y="310" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Snapshot Adapter</text>
+        <text x="340" y="338" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">scope-aware endpoint</text>
+        <text x="340" y="360" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">strict decode · read-only write path</text>
+
+        <rect x="540" y="270" width="240" height="110" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="660" y="310" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Reference Policy</text>
+        <text x="660" y="338" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">context · mapped fallback</text>
+        <text x="660" y="360" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">provider identity checks</text>
+
+        <rect x="380" y="460" width="240" height="80" rx="8" fill="#ffffff" stroke="#2e5aa8"/>
+        <text x="500" y="493" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Workspace Server</text>
+        <text x="500" y="520" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">/api · /universer-api</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <p>只迁移 target identity、Worktree/Trunk source、Snapshot adapter 与 reference policy。daemon/runtime pool、Session、worker lifecycle、Asset bytes、execute/commit、Office 和 render 均留待既定后续 Changes。</p>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>扩展同一个 private <code>packages/client-core</code>。</li>
+          <li>plain-JSON target contract 不依赖 daemon types。</li>
+          <li>保留两条 Snapshot 读取路径各自的错误合同。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <p>主要风险是 prerequisite exports、错误码和 target payload 漂移。迁移既有 cases，并以 CLI daemon/worker、真实 tarball verify 与 smoke 固定兼容性。</p>
+      </article>
+    </section>
+
+    <footer>
+      Derived from <a href="proposal.md">proposal.md</a> and <a href="design.md">design.md</a>. Markdown sources are authoritative; this view is non-normative.
+    </footer>
+  </main>
+</body>
+</html>

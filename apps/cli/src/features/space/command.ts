@@ -1,8 +1,11 @@
 import { Command } from "commander";
+import {
+  workspaceError,
+  type WorkspaceResourceKindFilter,
+  type WorkspaceSpaceFeature,
+  type WorkspaceUnitType,
+} from "@univerjs/univer-workspace-client-core";
 import { executeCommand, oneOf, present, type JsonOption } from "../../command.js";
-import { workspaceError } from "../../errors.js";
-import type { WorkspaceUnitType } from "./model.js";
-import { WorkspaceSpaceFeature, type WorkspaceResourceKindFilter } from "./space.js";
 
 interface BrowseOptions extends JsonOption {
   readonly parent?: string;
