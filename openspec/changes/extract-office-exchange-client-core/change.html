@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Office Exchange Client Core 决策视图</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      padding: 40px 24px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    .page { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--accent-text);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 { max-width: 900px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 820px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 840px; height: auto; }
+    .brief {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 0.9fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .card ul { padding-left: 20px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View</p>
+      <h1>提取 Office Exchange Client Core</h1>
+      <p class="thesis">Client Core 统一拥有 Office 格式策略、Workspace workflow 与 Node adapter；CLI 仅保留命令、daemon 适配和可安装 native binding 的交付责任。</p>
+    </header>
+
+    <section class="diagram" aria-label="Office Exchange 所有权架构，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1080 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="office-architecture-title office-architecture-desc">
+        <title id="office-architecture-title">Office Exchange Client Core 所有权架构</title>
+        <desc id="office-architecture-desc">Workspace CLI 和未来 local DSH shell 调用共享 Office exchange owner；owner 复用 Worktree Unit、runtime target 和 UnitData export，并调用由 Client Shell artifact 交付的平台 native binding。</desc>
+        <defs>
+          <marker id="office-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="office-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1080" height="600" fill="#f5f5f5"/>
+
+        <path d="M 260 165 H 330 V 258 H 390" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#office-arrow)"/>
+        <path d="M 260 395 H 330 V 342 H 390" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#office-arrow)"/>
+        <path d="M 690 258 H 760 V 125 H 820" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#office-arrow)"/>
+        <path d="M 690 300 H 820" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#office-arrow)"/>
+        <path d="M 690 342 H 760 V 475 H 820" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#office-arrow-accent)"/>
+        <path d="M 72 195 H 32 V 550 H 780 V 505 H 820" fill="none" stroke="#4f5d75" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#office-arrow)"/>
+
+        <rect x="72" y="115" width="188" height="100" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="166" y="157" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Workspace CLI</text>
+        <text x="166" y="184" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Commander + daemon adapter</text>
+
+        <rect x="72" y="345" width="188" height="100" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="166" y="387" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">future local DSH</text>
+        <text x="166" y="414" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">direct runtime owner</text>
+
+        <rect x="390" y="220" width="300" height="160" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="540" y="263" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="20" font-weight="600" text-anchor="middle">Client Core Office exchange</text>
+        <text x="540" y="297" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="14" text-anchor="middle">format / type / name policy</text>
+        <text x="540" y="324" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="14" text-anchor="middle">import / export workflow</text>
+        <text x="540" y="351" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="14" text-anchor="middle">Node Office adapter</text>
+
+        <rect x="820" y="80" width="200" height="90" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="920" y="117" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">Worktree Unit Core</text>
+        <text x="920" y="143" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">create local Unit</text>
+
+        <rect x="820" y="255" width="200" height="90" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="920" y="292" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">Runtime Core</text>
+        <text x="920" y="318" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">target + UnitData export</text>
+
+        <rect x="820" y="430" width="200" height="90" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="920" y="467" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" font-weight="600" text-anchor="middle">Native binding</text>
+        <text x="920" y="493" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">由 Client Shell artifact 交付</text>
+
+        <rect x="270" y="153" width="50" height="22" rx="4" fill="#f5f5f5"/>
+        <text x="295" y="169" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">调用</text>
+        <rect x="336" y="538" width="92" height="22" rx="4" fill="#f5f5f5"/>
+        <text x="382" y="554" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">artifact 交付</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <p>只迁移 Office import/export、格式与 Unit 校验和 Node adapter。保持本机 path-based I/O；不加入 Typst、render、remote filesystem、artifact store 或新文件写入语义。</p>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>复用 Changes 3、5、6 的 Unit create、target 和 UnitData export。</li>
+          <li>Client Core 不依赖 Commander 或 daemon wire type。</li>
+          <li>CLI artifact 继续显式交付 native binding。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <p>风险集中在格式校验顺序、conversion options、native dependency 外置和 bundle 自包含。现有 behavior、真实 XLSX round trip、package verify 与安装 smoke 共同锁定兼容性。</p>
+      </article>
+    </section>
+
+    <footer>
+      本页派生自 <a href="proposal.md">proposal.md</a> 与 <a href="design.md">design.md</a>；Markdown sources are authoritative.
+    </footer>
+  </main>
+</body>
+</html>

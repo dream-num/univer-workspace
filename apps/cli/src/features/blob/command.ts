@@ -1,6 +1,6 @@
 import { Command } from "commander";
+import type { WorkspaceBlobFeature } from "@univerjs/univer-workspace-client-core";
 import { executeCommand, present, type JsonOption } from "../../command.js";
-import { WorkspaceBlobFeature } from "./transfer.js";
 
 export function createBlobCommand(feature: WorkspaceBlobFeature): Command {
   const root = new Command("blob").description("Transfer Workspace Blob Resources");

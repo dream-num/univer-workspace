@@ -1,6 +1,6 @@
 import { Command } from "commander";
+import type { WorkspaceOpenFeature } from "@univerjs/univer-workspace-client-core";
 import { executeCommand, present, type JsonOption } from "../../command.js";
-import { WorkspaceOpenFeature } from "./open.js";
 
 export function createOpenCommand(feature: WorkspaceOpenFeature): Command {
   const command = new Command("open")

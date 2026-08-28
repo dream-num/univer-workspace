@@ -1,13 +1,25 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { UniverTextMeasureRuntime } from "@univer-cli/univer-render-runtime";
+import type {
+  WorkspaceApplySvgResult,
+  WorkspaceCompileSvgFeature,
+  WorkspaceCompileSvgResult,
+} from "@univerjs/univer-workspace-client-core";
 import { Command } from "commander";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkspaceCompileSvgCommand } from "../src/features/svg/command.js";
-import { UNIVER_LICENSE } from "../src/license.js";
 
 const temporaryDirectories: string[] = [];
+const compiled: WorkspaceCompileSvgResult = {
+  code: "generated();",
+  lints: ["lint-1"],
+  mode: "replace",
+  page: 2,
+  textMeasure: "builtin-estimate",
+  viewport: { height: 540, width: 960 },
+  warnings: ["warning-1"],
+};
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -16,113 +28,143 @@ afterEach(() => {
 });
 
 describe("Workspace compile-svg command", () => {
-  it("does not start a render runtime for an SVG without text", async () => {
-    const createRuntime = vi.fn();
-    const harness = createHarness({ createRuntime });
-
-    await harness.command.parseAsync([writeSvg('<svg><rect width="10" height="20"/></svg>')], {
-      from: "user",
-    });
-
-    expect(createRuntime).not.toHaveBeenCalled();
-    expect(harness.out.join("")).toContain("slide.insertShape(");
-  });
-
-  it("uses and closes one lazily-created render runtime for exact text metrics", async () => {
-    const close = vi.fn(async () => undefined);
-    const measureText = vi.fn(async () => ({
-      actualHeight: 24,
-      actualWidth: 44,
-      firstLineAscent: 18,
-      firstLineDescent: 6,
-      lineCount: 1,
-    }));
-    const runtime: UniverTextMeasureRuntime = { close, measureText };
-    const createRuntime = vi.fn(async () => runtime);
-    const harness = createHarness({ createRuntime });
-
-    await harness.command.parseAsync(
-      [writeSvg('<svg><text x="10" y="30">Hello</text></svg>'), "--json"],
-      { from: "user" },
-    );
-
-    expect(createRuntime).toHaveBeenCalledWith({
-      renderPageRoot: "/render-runtime",
-      env: {},
-        license: UNIVER_LICENSE,
-    });
-    expect(measureText).toHaveBeenCalledOnce();
-    expect(close).toHaveBeenCalledOnce();
-    expect(JSON.parse(harness.out.join(""))).toMatchObject({
-      textMeasure: "univer-render-runtime",
-    });
-  });
-
-  it("uses explicit estimation without starting a render runtime", async () => {
-    const createRuntime = vi.fn();
-    const harness = createHarness({ createRuntime });
-
-    await harness.command.parseAsync(
-      [writeSvg('<svg><text x="10" y="30">Hello</text></svg>'), "--estimate-text-size", "--json"],
-      { from: "user" },
-    );
-
-    expect(createRuntime).not.toHaveBeenCalled();
-    const result = JSON.parse(harness.out.join("")) as {
-      readonly lints: readonly string[];
-      readonly textMeasure: string;
+  it("maps command options to Core and presents complete JSON without duplicate diagnostics", async () => {
+    const applyResult: WorkspaceApplySvgResult = {
+      ...compiled,
+      applied: { committed: true, revision: 9, status: "ready", value: null },
     };
-    expect(result.textMeasure).toBe("builtin-estimate");
-    expect(result.lints.some((lint) => lint.includes("--estimate-text-size"))).toBe(true);
-  });
-
-  it("wraps and applies one page through the Slide-only application seam", async () => {
-    const executeSlide = vi.fn(async () => ({
-      committed: true,
-      revision: 9,
-      status: "ready",
-      value: null,
-    }));
-    const harness = createHarness({ executeSlide });
+    const compile = vi.fn(async () => compiled);
+    const apply = vi.fn(async () => applyResult);
+    const harness = createHarness({ apply, compile });
 
     await harness.command.parseAsync(
       [
-        writeSvg('<svg viewBox="0 0 960 540"><rect width="10" height="20"/></svg>'),
+        " page.svg ",
         "--estimate-text-size",
         "--page",
         "2",
+        "--add",
         "--apply",
         "--worktree",
-        "wt-1",
+        " wt-1 ",
         "--unit",
-        "deck-1",
+        " deck-1 ",
         "--json",
       ],
       { from: "user" },
     );
 
-    expect(executeSlide).toHaveBeenCalledWith({
-      code: expect.stringContaining("presentation.setPageSize({ width: 960, height: 540 });"),
-      unitId: "deck-1",
-      worktreeId: "wt-1",
-    });
-    expect(JSON.parse(harness.out.join(""))).toMatchObject({
-      applied: { committed: true, revision: 9, status: "ready" },
-      mode: "replace",
+    expect(compile).toHaveBeenCalledWith({
+      add: true,
+      estimateTextSize: true,
+      file: " page.svg ",
       page: 2,
     });
+    expect(apply).toHaveBeenCalledWith({
+      compiled,
+      unitId: " deck-1 ",
+      worktreeId: " wt-1 ",
+    });
+    expect(harness.out.join("")).toBe(`${JSON.stringify(applyResult, null, 2)}\n`);
+    expect(harness.err).toEqual([]);
+  });
+
+  it("writes generated code before apply and keeps text presentation", async () => {
+    const directory = temporaryDirectory();
+    const outPath = join(directory, "program.js");
+    const compile = vi.fn(async () => compiled);
+    const apply = vi.fn(async () => {
+      expect(readFileSync(outPath, "utf8")).toBe("generated();\n");
+      return {
+        ...compiled,
+        applied: { committed: false, value: null },
+      } satisfies WorkspaceApplySvgResult;
+    });
+    const harness = createHarness({ apply, compile });
+
+    await harness.command.parseAsync(
+      [
+        "page.svg",
+        "--page",
+        "2",
+        "--out",
+        outPath,
+        "--apply",
+        "--worktree",
+        "wt-1",
+        "--unit",
+        "deck-1",
+      ],
+      { from: "user" },
+    );
+
+    expect(harness.err).toEqual(["warning: warning-1\n", "lint: lint-1\n"]);
+    expect(harness.out.join("")).toBe(
+      `generated code: ${outPath}\napplied page 2 (replace); no mutation committed\n`,
+    );
+  });
+
+  it("does not apply when output writing fails", async () => {
+    const directory = temporaryDirectory();
+    const compile = vi.fn(async () => compiled);
+    const apply = vi.fn();
+    const harness = createHarness({ apply, compile });
+
+    await expect(
+      harness.command.parseAsync(
+        [
+          "page.svg",
+          "--page",
+          "2",
+          "--out",
+          join(directory, "missing", "program.js"),
+          "--apply",
+          "--worktree",
+          "wt-1",
+          "--unit",
+          "deck-1",
+        ],
+        { from: "user" },
+      ),
+    ).rejects.toMatchObject({ code: "workspace.command.failed" });
+    expect(compile).toHaveBeenCalledOnce();
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [["page.svg", "--page", "0"], "commander.invalidArgument"],
+    [["page.svg", "--add"], "workspace-argument-invalid"],
+    [["page.svg", "--out", "program.js"], "workspace-argument-invalid"],
+    [["page.svg", "--apply"], "workspace-argument-invalid"],
+    [["page.svg", "--worktree", "wt-1"], "workspace-argument-invalid"],
+  ] as const)("retains validation for %j", async (argv, code) => {
+    const compile = vi.fn();
+    const harness = createHarness({ compile });
+
+    await expect(harness.command.parseAsync([...argv], { from: "user" })).rejects.toMatchObject({
+      code,
+    });
+    expect(compile).not.toHaveBeenCalled();
+  });
+
+  it("prints raw code when no page or output is selected", async () => {
+    const raw = { ...compiled, code: "raw();", page: undefined };
+    const harness = createHarness({ compile: vi.fn(async () => raw) });
+
+    await harness.command.parseAsync(["page.svg"], { from: "user" });
+
+    expect(harness.out.join("")).toBe("raw();\n");
   });
 });
 
 function createHarness(
-  overrides: Partial<Parameters<typeof createWorkspaceCompileSvgCommand>[0]> = {},
+  overrides: Partial<Pick<WorkspaceCompileSvgFeature, "apply" | "compile">> = {},
 ): { readonly command: Command; readonly err: string[]; readonly out: string[] } {
   const err: string[] = [];
   const out: string[] = [];
   const command = createWorkspaceCompileSvgCommand({
-    renderPageRoot: "/render-runtime",
-    env: {},
-    executeSlide: vi.fn(),
+    apply: vi.fn(),
+    compile: vi.fn(async () => compiled),
     ...overrides,
   });
   command.exitOverride();
@@ -133,10 +175,8 @@ function createHarness(
   return { command, err, out };
 }
 
-function writeSvg(svg: string): string {
+function temporaryDirectory(): string {
   const directory = mkdtempSync(join(tmpdir(), "workspace-compile-svg-"));
   temporaryDirectories.push(directory);
-  const file = join(directory, "page.svg");
-  writeFileSync(file, svg, "utf8");
-  return file;
+  return directory;
 }

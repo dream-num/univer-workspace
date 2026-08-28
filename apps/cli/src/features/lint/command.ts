@@ -1,13 +1,13 @@
 import { createUnitLayoutLintCommand } from "@univer-cli/unit-layout-lint-command";
+import type { WorkspaceUnitLayoutLintFeature } from "@univerjs/univer-workspace-client-core";
 import { Command } from "commander";
-import type { WorkspaceUnitLayoutLintFeature } from "./unit-layout-lint.js";
 
 interface WorkspaceUnitLayoutLintCommandOptions {
   readonly worktree: string;
 }
 
 export function createWorkspaceUnitLayoutLintCommand(
-  feature: WorkspaceUnitLayoutLintFeature,
+  feature: Pick<WorkspaceUnitLayoutLintFeature, "lint" | "loadUnit">,
 ): Command {
   let command: Command;
   command = createUnitLayoutLintCommand({

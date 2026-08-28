@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@univer-cli/univer-collaboration-runtime-pool@1.0.0-beta.2': 619cbb56a6d5e73547fc8c3f38d38b8043e76665507057041fe9b53ee263fb77
+
 importers:
 
   .:
@@ -53,9 +56,6 @@ importers:
       '@univer-cli/daemon-command':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2(commander@15.0.0)
-      '@univer-cli/doc-typst-facade':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2
       '@univer-cli/headless-univer':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
@@ -65,18 +65,9 @@ importers:
       '@univer-cli/resource-library-command':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2(commander@15.0.0)
-      '@univer-cli/svg-facade':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2
-      '@univer-cli/unit-layout-lint':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
       '@univer-cli/unit-layout-lint-command':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2(commander@15.0.0)(react@19.2.8)(rxjs@7.8.2)
-      '@univer-cli/unit-screenshot':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
       '@univer-cli/unit-screenshot-command':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2(commander@15.0.0)(react@19.2.8)(rxjs@7.8.2)
@@ -85,10 +76,7 @@ importers:
         version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
       '@univer-cli/univer-collaboration-runtime-pool':
         specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
-      '@univer-cli/univer-render-page':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(@univer-cli/univer-render-runtime@1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+        version: 1.0.0-beta.2(patch_hash=619cbb56a6d5e73547fc8c3f38d38b8043e76665507057041fe9b53ee263fb77)(react@19.2.8)(rxjs@7.8.2)
       '@univer-cli/univer-render-runtime':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
@@ -188,9 +176,6 @@ importers:
       '@univerjs-pro/docs-table-ui':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
-      '@univerjs-pro/embed':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/embed-ui':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -206,9 +191,6 @@ importers:
       '@univerjs-pro/exchange-client':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
-      '@univerjs-pro/exchange-node':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node-binding':
         specifier: 0.1.0
         version: 0.1.0
@@ -407,6 +389,9 @@ importers:
       '@univerjs/ui':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/univer-workspace-client-core':
+        specifier: workspace:*
+        version: link:../../packages/client-core
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -798,6 +783,64 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^8.1.5
+        version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+
+  packages/client-core:
+    dependencies:
+      '@univer-cli/content-execution':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2
+      '@univer-cli/doc-typst-facade':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2
+      '@univer-cli/headless-univer':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
+      '@univer-cli/svg-facade':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2
+      '@univer-cli/unit-layout-lint':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
+      '@univer-cli/unit-screenshot':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
+      '@univer-cli/univer-collaboration-runtime':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
+      '@univer-cli/univer-collaboration-runtime-pool':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(patch_hash=619cbb56a6d5e73547fc8c3f38d38b8043e76665507057041fe9b53ee263fb77)(react@19.2.8)(rxjs@7.8.2)
+      '@univer-cli/univer-render-page':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(@univer-cli/univer-render-runtime@1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univer-cli/univer-render-runtime':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/collaboration':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/embed':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/exchange-node':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/core':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/protocol':
+        specifier: 1.0.0-beta.2
+        version: 1.0.0-beta.2
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.0.0
         version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)
       vitest:
         specifier: ^4.1.10
@@ -5389,7 +5432,7 @@ snapshots:
       - utf-8-validate
       - yauzl
 
-  '@univer-cli/univer-collaboration-runtime-pool@1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)':
+  '@univer-cli/univer-collaboration-runtime-pool@1.0.0-beta.2(patch_hash=619cbb56a6d5e73547fc8c3f38d38b8043e76665507057041fe9b53ee263fb77)(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@univer-cli/generic-keyed-instance-pool': 1.0.0-beta.2
       '@univer-cli/univer-collaboration-runtime': 1.0.0-beta.2(react@19.2.8)(rxjs@7.8.2)

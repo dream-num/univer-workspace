@@ -1,9 +1,9 @@
 import { Command } from "commander";
+import type { WorkspaceUnitExchangeFeature } from "@univerjs/univer-workspace-client-core";
 import { executeCommand, oneOf, present, type JsonOption } from "../../command.js";
-import type { WorkspaceUnitExchangeFeature } from "./exchange.js";
 
 export function createWorkspaceUnitExchangeCommands(
-  feature: WorkspaceUnitExchangeFeature,
+  feature: Pick<WorkspaceUnitExchangeFeature, "exportFile" | "importFile">,
 ): readonly Command[] {
   const importCommand = new Command("import")
     .description("Import an Office file as a Worktree-local Unit")

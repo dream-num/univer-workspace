@@ -134,6 +134,7 @@ contract.
 ```text
 apps/workspace                 Workspace Browser, Server, HTTP contract, and deployment app
 apps/cli                       Agent-ready remote Workspace automation application
+packages/client-core           Private Node-hosted Workspace Agent Client capabilities
 packages/reference-provider   Private Browser-only referenced-Unit policy
 scripts                       SDK version and local CLI release tooling
 ```
@@ -145,8 +146,12 @@ collaboration, and Worktree protocol contracts. Univer CLI SDK owns the reusable
 headless runtime, execution, inspection, and rendering capabilities.
 
 Workspace owns product identity, Spaces, hierarchy, ACLs, sharing, Trash, Recent,
-Blob storage policy, remote workflows, and deployment. The reference-provider package
-is a private Browser implementation detail, not a third public application or SDK.
+Blob storage policy, remote workflows, and deployment. Client Core shares storage-neutral authentication,
+Workspace workflows, local Node-hosted Blob/Asset transfer, and the worker-backed content runtime between
+repository applications, including Node-hosted Office exchange, Typst compile/materialize/apply, render Unit
+assembly, screenshots, PNG output, Slide layout lint, the render-page source, and the SVG
+compile/measure/apply workflow; the reference-provider package remains Browser-only.
+Both are private implementation modules, not additional public applications or SDKs.
 
 ## Architecture principles
 
@@ -212,6 +217,7 @@ the actual package artifact before publication.
 | [Univer Office SDK documentation](https://office.univer.ai/)        | Office SDK stack: Runtime, Collaboration, CLI, and Worktree            |
 | [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades           |
 | [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract             |
+| [Client Core package](packages/client-core/README.md)               | Private Node-hosted client capability boundary                          |
 | [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries               |
 | [HTTP contract](apps/workspace/contracts/http/README.md)            | Product API source and generation workflow                             |
 | [Reference-provider package](packages/reference-provider/README.md) | Private Browser referenced-Unit policy                                 |

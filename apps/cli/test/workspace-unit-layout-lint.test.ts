@@ -1,46 +1,30 @@
-import type {
-  UniverSlideLayoutCapture,
-  UniverSlideLayoutRuntime,
-} from "@univer-cli/univer-render-runtime";
+import type { WorkspaceUnitLayoutLintFeature } from "@univerjs/univer-workspace-client-core";
 import { Command } from "commander";
 import { describe, expect, it, vi } from "vitest";
 import { createWorkspaceUnitLayoutLintCommand } from "../src/features/lint/command.js";
-import { WorkspaceUnitLayoutLintFeature } from "../src/features/lint/unit-layout-lint.js";
-import { UNIVER_LICENSE } from "../src/license.js";
 
-describe("Workspace Slide layout lint", () => {
-  it("maps the explicit Worktree target and closes the browser runtime", async () => {
-    const source = {
-      loadUnit: vi.fn(async () => ({
-        unitType: "slide",
-        unitData: {
-          id: "deck-1",
-          slideOrder: ["cover"],
-          slides: { cover: { id: "cover", elements: {} } },
-        },
-      })),
+describe("Workspace Slide layout lint command", () => {
+  it("maps the explicit Worktree scope and preserves JSON output", async () => {
+    const loadUnit = vi.fn<WorkspaceUnitLayoutLintFeature["loadUnit"]>(async () => ({
+      unitType: "slide" as const,
+      unitData: {
+        id: "deck-1",
+        slideOrder: ["cover"],
+        slides: { cover: { id: "cover", elements: {} } },
+      },
+    }) as never);
+    const lint = vi.fn(async () => ({
+      kind: "unit-layout-lint" as const,
+      unitId: "deck-1",
+      unitType: "slide" as const,
+      findings: [],
+    }) as never);
+    const feature: Pick<WorkspaceUnitLayoutLintFeature, "lint" | "loadUnit"> = {
+      lint: () => ({ lint }),
+      loadUnit,
     };
-    const runtime = slideRuntime({
-      pages: [
-        {
-          page: 1,
-          pageId: "cover",
-          pageWidth: 960,
-          pageHeight: 540,
-          elements: [],
-        },
-      ],
-    });
-    const createRuntime = vi.fn(async () => runtime);
-    const command = createWorkspaceUnitLayoutLintCommand(
-      new WorkspaceUnitLayoutLintFeature({
-        renderPageRoot: "/render-runtime",
-        createRuntime,
-        env: {},
-        source,
-      }),
-    );
     const output: string[] = [];
+    const command = createWorkspaceUnitLayoutLintCommand(feature);
     command.exitOverride().configureOutput({ writeOut: (text) => output.push(text) });
     const program = new Command("test").addCommand(command);
 
@@ -48,46 +32,15 @@ describe("Workspace Slide layout lint", () => {
       from: "user",
     });
 
-    expect(source.loadUnit).toHaveBeenCalledWith({
+    expect(loadUnit).toHaveBeenCalledWith({
       scope: { kind: "worktree", worktreeId: "wt-1" },
       unitId: "deck-1",
     });
-    expect(JSON.parse(output.join(""))).toMatchObject({
+    expect(JSON.parse(output.join(""))).toEqual({
       kind: "unit-layout-lint",
       unitId: "deck-1",
       unitType: "slide",
       findings: [],
     });
-    expect(createRuntime).toHaveBeenCalledWith(
-      expect.objectContaining({
-        renderPageRoot: "/render-runtime",
-        license: UNIVER_LICENSE,
-      }),
-    );
-    expect(runtime.close).toHaveBeenCalledOnce();
-  });
-
-  it("rejects a non-Slide target before creating a browser runtime", async () => {
-    const createRuntime = vi.fn(async () => slideRuntime({ pages: [] }));
-    const feature = new WorkspaceUnitLayoutLintFeature({
-      renderPageRoot: "/render-runtime",
-      createRuntime,
-      env: {},
-      source: { loadUnit: async () => ({ unitType: "doc", unitData: { id: "doc-1" } }) },
-    });
-
-    await expect(
-      feature.loadUnit({ scope: { kind: "worktree", worktreeId: "wt-1" }, unitId: "doc-1" }),
-    ).rejects.toMatchObject({ code: "workspace-unit-layout-lint-unit-type-unsupported" });
-    expect(createRuntime).not.toHaveBeenCalled();
   });
 });
-
-function slideRuntime(
-  capture: UniverSlideLayoutCapture,
-): UniverSlideLayoutRuntime & { close(): Promise<void> } {
-  return {
-    captureSlideLayout: vi.fn(async () => capture),
-    close: vi.fn(async () => undefined),
-  };
-}

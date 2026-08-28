@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>提取截图与布局检查 Client Core</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      padding: 40px 24px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    .page { width: min(1160px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--accent-text);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 { max-width: 840px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 820px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 900px; height: auto; }
+    .brief {
+      display: grid;
+      grid-template-columns: 1.05fr 1.1fr 0.85fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.65; }
+    .card ul { padding-left: 20px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View · 09 / 10</p>
+      <h1>把浏览器截图与 Slide lint 移入 Client Core</h1>
+      <p class="thesis">一个共享 owner 负责 render Unit、browser runtime、PNG 与 Slide layout lint；Client Shell 继续负责命令、license、浏览器安装和可安装资产布局。</p>
+    </header>
+
+    <section class="diagram" aria-label="截图与布局检查所有权架构图，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1100 580" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="screenshot-lint-architecture-title screenshot-lint-architecture-desc">
+        <title id="screenshot-lint-architecture-title">截图与 Slide layout lint 的共享所有权</title>
+        <desc id="screenshot-lint-architecture-desc">Workspace CLI 与未来 local DSH Client Shell 向 Client Core 提供显式运行输入。Client Core 复用 Asset、target、reference 与 UnitData export，装配 render Unit，执行截图或 Slide layout lint，并由各 Client Shell 交付浏览器与 render page。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1100" height="580" fill="#f5f5f5"/>
+
+        <path d="M 220 194 H 248 Q 260 194 260 206 V 276 Q 260 288 272 288 H 300" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 220 394 H 248 Q 260 394 260 382 V 336 Q 260 324 272 324 H 300" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 410 136 V 240" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 520 300 H 620" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 730 444 V 360" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 840 300 H 900" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+
+        <rect x="40" y="150" width="180" height="88" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="130" y="186" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Workspace CLI</text>
+        <text x="130" y="214" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">命令 · setup · license</text>
+
+        <rect x="40" y="350" width="180" height="88" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="130" y="386" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">local DSH Shell</text>
+        <text x="130" y="414" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">未来真实 consumer</text>
+
+        <rect x="300" y="40" width="220" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="410" y="76" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" font-weight="600" text-anchor="middle">Changes 4 · 5 · 6</text>
+        <text x="410" y="102" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Asset · target/reference</text>
+        <text x="410" y="122" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">UnitData export</text>
+
+        <rect x="300" y="240" width="220" height="120" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="410" y="280" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Render Unit loader</text>
+        <text x="410" y="308" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Host · formula · Embed</text>
+        <text x="410" y="332" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Worktree Asset render copy</text>
+
+        <rect x="620" y="240" width="220" height="120" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="730" y="280" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Browser operations</text>
+        <text x="730" y="308" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">screenshot · Slide lint</text>
+        <text x="730" y="332" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">每次 create / close</text>
+
+        <rect x="620" y="444" width="220" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="730" y="482" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" font-weight="600" text-anchor="middle">Shell artifact</text>
+        <text x="730" y="508" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">render page · Puppeteer</text>
+        <text x="730" y="528" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">明确传入 asset path</text>
+
+        <rect x="900" y="240" width="160" height="120" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="980" y="280" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" font-weight="600" text-anchor="middle">结果</text>
+        <text x="980" y="308" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">安全 PNG</text>
+        <text x="980" y="332" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">结构化 findings</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <ul>
+          <li>只迁移 browser screenshot、render Unit 和 Slide layout lint。</li>
+          <li>SVG compile、字体测量与 apply 留给第 10 个 Change。</li>
+          <li>不增加 browser pool、force overwrite 或 filesystem provider。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>复用 Changes 4、5、6 的真实 operations，不复制协议。</li>
+          <li>render page source 归 Client Core；各 Client Shell 复制并传入路径。</li>
+          <li>CLI 保留 Commander、browser setup 和 license 解析。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <p>CLI artifact 必须继续包含 `dist/render-runtime`、`puppeteer-core` 与 `@puppeteer/browsers`。现有 SVG 字体测量在下一 Change 前仍使用该页面，因此 package gate 同时覆盖这个临时 consumer。</p>
+      </article>
+    </section>
+
+    <footer>
+      Derived from <a href="proposal.md">proposal.md</a> and <a href="design.md">design.md</a>. Markdown sources are authoritative.
+    </footer>
+  </main>
+</body>
+</html>
