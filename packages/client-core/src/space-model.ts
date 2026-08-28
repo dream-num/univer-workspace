@@ -29,6 +29,7 @@ export interface WorkspaceUniverResource {
   readonly capabilities: WorkspaceResourceCapabilities;
   readonly kind: "univer";
   readonly resourceId: string;
+  readonly unitId: string;
   readonly unitType: WorkspaceUnitType;
 }
 
@@ -322,6 +323,7 @@ export function parseNodeResource(value: unknown): WorkspaceNodeResource | null 
       capabilities,
       kind: "univer",
       resourceId: value["id"],
+      unitId: value["unitId"] as string,
       unitType: parseUnitType(value["unitType"]),
     };
   }

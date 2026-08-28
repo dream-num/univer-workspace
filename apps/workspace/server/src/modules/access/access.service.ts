@@ -51,6 +51,7 @@ export function createAccessResolver(
       name: row.name,
       resourceId: row.resource_id,
       resourceKind: row.resource_kind,
+      unitId: row.unit_id,
       unitType: row.unit_type,
       blobMediaType: row.blob_media_type,
       blobByteSize: row.blob_byte_size,

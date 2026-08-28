@@ -2693,6 +2693,7 @@ components:
       required:
         - id
         - kind
+        - unitId
         - unitType
         - capabilities
       properties:
@@ -2701,6 +2702,8 @@ components:
         kind:
           type: string
           const: univer
+        unitId:
+          type: string
         unitType:
           $ref: '#/components/schemas/UnitType'
         capabilities:

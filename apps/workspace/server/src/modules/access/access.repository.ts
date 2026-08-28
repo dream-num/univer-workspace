@@ -14,6 +14,7 @@ export interface ResolvedNodeRow {
   readonly name: string;
   readonly resource_id: string | null;
   readonly resource_kind: ResourceKind | null;
+  readonly unit_id: string | null;
   readonly unit_type: UnitType | null;
   readonly blob_media_type: string | null;
   readonly blob_byte_size: number | null;
@@ -158,6 +159,7 @@ export class AccessRepository {
              node.name,
              resource.id AS resource_id,
              resource.kind AS resource_kind,
+             univer.unit_id,
              univer.unit_type,
              blob.media_type AS blob_media_type,
              blob.byte_size AS blob_byte_size,

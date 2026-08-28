@@ -206,11 +206,13 @@ export function resourceSummary(access: NodeAccess): ResourceSummary | null {
   if (
     access.resourceId &&
     access.resourceKind === "univer" &&
+    access.unitId &&
     access.unitType
   ) {
     return {
       id: access.resourceId,
       kind: "univer",
+      unitId: access.unitId,
       unitType: access.unitType,
       capabilities: resourceCapabilities(access.role, "univer"),
     };
