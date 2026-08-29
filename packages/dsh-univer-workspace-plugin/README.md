@@ -57,6 +57,9 @@ session files.
   injects it into the stock DSH hero/sidebar slots. DSH still owns its native
   mechanical workspace list and session persistence; selecting a Space only
   chooses the linked DSH workspace for the next session.
+- **Capability HTTP routes**: `/api/uwh/me`, `/api/uwh/template-fork`, and
+  Space rename are registered by this plugin. The Harness only supplies the
+  authenticated `workspaceAuth`/`workspaceSession` services they consume.
 - **Bundled skill**: `univer-workspace` teaches the model the Space/document
   model and the Worktree review rules.
 - **Turn preview and live viewer**: successful document/Worktree operations are

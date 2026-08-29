@@ -13,6 +13,7 @@ import * as tools from "./tools/plugin.ts";
 import * as webServer from "./webServer/plugin.ts";
 import * as skills from "./skills/plugin.ts";
 import * as collabProxy from "./collab-proxy/plugin.ts";
+import type { WorkspaceTemplate } from "./client/workspace-contract.ts";
 
 /** The 90-day runtime development license, used only when no config/env license is set. */
 const DEVELOPMENT_LICENSE =
@@ -23,11 +24,28 @@ export interface Config {
   workspaceRoot: string;
   /** Univer runtime license for the headless runtime (empty -> fall back to the built-in development license). */
   license: string;
+  /** Workspace product origin used by capability-owned authenticated routes. */
+  workspaceOrigin: string;
+  /** Public harness origin used for same-origin request validation. */
+  publicOrigin: string;
+  /** Deployment-configured template sessions. */
+  templates: WorkspaceTemplate[];
 }
+
+const templatesZ = z.array(z.object({
+  key: z.string().required(),
+  sessionId: z.string().required(),
+  label: z.string().default(""),
+  agentPreset: z.string().default(""),
+  description: z.string().default(""),
+}));
 
 export const Config: z<Config> = z.object({
   workspaceRoot: z.string().required(),
   license: z.string().default(""),
+  workspaceOrigin: z.string().required(),
+  publicOrigin: z.string().required(),
+  templates: templatesZ.default([]),
 });
 
 export const name = "dsh-univer-workspace-plugin";
@@ -42,7 +60,13 @@ export function apply(ctx: Context, config: Config): void {
   const license = resolveLicense(config.license);
   ctx.plugin(serviceProvider, { workspaceRoot: config.workspaceRoot, license, workerUrl });
   ctx.plugin(tools);
-  ctx.plugin(webServer, { license });
+  ctx.plugin(webServer, {
+    license,
+    workspaceRoot: config.workspaceRoot,
+    workspaceOrigin: config.workspaceOrigin,
+    publicOrigin: config.publicOrigin,
+    templates: config.templates,
+  });
   ctx.plugin(skills);
   ctx.plugin(collabProxy);
 }

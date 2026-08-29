@@ -7,8 +7,9 @@ shipped as three DSH bundles that a dsh profile loads:
 - `@univerjs/univer-workspace-harness` (this package) — the service core:
   OAuth authorization-code login against the Workspace authorization
   endpoints (`session` scope), the per-User workspace session credential
-  store exposed through the `workspaceAuth` cordis service, identity and
-  session-guard routes, and the workspace origin settings namespace.
+  store exposed through the `workspaceAuth`/`workspaceSession` cordis
+  services, generic session-guard routes, and the workspace origin settings
+  namespace.
 - `dsh-univer-workspace-plugin` — the Univer capability plugin: space ↔
   dsh-workspace reconciliation and the agent toolset operating remote
   Workspace Units.
@@ -20,8 +21,10 @@ shipped as three DSH bundles that a dsh profile loads:
 - Authenticate harness users through the Workspace OAuth flow; the harness
   itself holds no permissions and every Workspace call runs as the
   authorizing User.
-- Provide `workspaceAuth` to sibling plugins: effective workspace origin and
-  per-User authenticated HTTP clients.
+- Provide `workspaceAuth` and `workspaceSession` to sibling plugins: effective
+  Workspace origin, authenticated HTTP clients, and verified browser identity.
+- Keep Workspace capability routes, Viewer UI, template actions, and Space
+  behavior in the consuming plugins; this package only composes them.
 - Own the composition patch that mounts the three bundles and the deployment
   webserver/connection rows.
 

@@ -7,6 +7,9 @@
       name: 'dsh-univer-workspace-plugin'
       config:
         workspaceRoot: !!js process.env.UWH_WORKSPACE_ROOT
+        workspaceOrigin: !!js process.env.UWH_WORKSPACE_ORIGIN ?? 'https://workspace.univer.plus'
+        publicOrigin: !!js process.env.UWH_PUBLIC_ORIGIN
+        templates: !!js JSON.parse(process.env.UWH_TEMPLATES_JSON ?? '[]')
         # The Univer runtime license. Empty/absent falls back to the built-in
         # development license; the deployment supplies the production value.
         license: !!js process.env.UWH_UNIVER_LICENSE ?? ''

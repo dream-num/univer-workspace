@@ -1,7 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
 import * as host from "../src/index.js";
-import { WORKSPACE_MANIFEST_JSON } from "../src/favicon.js";
 import { parseSessionCookie, signSessionCookie, type LoginAttempt } from "../src/auth.js";
 import {
   workspacePathFor, isDirectSha256Child, workspacePathName,
@@ -21,38 +20,6 @@ describe("univer-workspace-harness plugin", () => {
     expect(parseSessionCookie(cookie, "wrong")).toBeUndefined();
   });
 
-  it("rewrites only the published DSH index title", () => {
-    expect(host.rewriteHarnessIndexTitle("<title>DeepSeek Harness</title>")).toBe(
-      "<title>Univer Workspace Harness</title>",
-    );
-    expect(host.rewriteHarnessIndexTitle("<title>Other product</title>")).toBe(
-      "<title>Other product</title>",
-    );
-  });
-
-  it("replaces the stock favicon on the server-rendered first paint", () => {
-    const html = '<html><head><title>DeepSeek Harness</title><link rel="icon" href="/favicon.svg"><link rel="shortcut icon" href="/deepseek.svg"></head><body />';
-    const branded = host.rewriteHarnessIndexBranding(html);
-    expect(branded).toContain('<title');
-    expect(branded).toContain("Univer Workspace Harness");
-    expect(branded).toContain('id="uwh-workspace-favicon"');
-    expect(branded).toContain("data:image/svg+xml,");
-    expect(branded).not.toContain("/deepseek.svg");
-    expect((branded.match(/uwh-workspace-favicon/gu) ?? []).length).toBe(1);
-  });
-
-  it("ships Workspace-owned PWA metadata instead of the stock DSH manifest", () => {
-    const manifest = JSON.parse(WORKSPACE_MANIFEST_JSON) as {
-      name?: string;
-      short_name?: string;
-      icons?: readonly { src?: string }[];
-    };
-    expect(manifest.name).toBe("Univer Workspace Harness");
-    expect(manifest.short_name).toBe("Univer Workspace");
-    expect(manifest.icons?.[0]?.src).toBe("/favicon.svg");
-    expect(WORKSPACE_MANIFEST_JSON).not.toContain("DeepSeek Harness");
-  });
-
   it("does not expose token-exchange internals in the OAuth callback response", async () => {
     const state = "test-state";
     const loginAttempts = new Map<string, LoginAttempt>([[state, {
@@ -68,17 +35,13 @@ describe("univer-workspace-harness plugin", () => {
       oauthClientSecret: "secret",
       sessionSecret: "session-secret",
       authorizeScope: "identity session",
-      adminUsernames: [],
       loginPath: "/auth/login",
       callbackPath: "/auth/callback",
-      mePath: "/api/uwh/me",
-      templateForkPath: "/api/uwh/template-fork",
       sessionCookieName: "dsh_session",
       sessionTtlMs: 900_000,
       stateTtlMs: 120_000,
       secureCookies: false,
       modelSettingsEnabled: false,
-      templates: [],
     } satisfies host.Config;
     const request = {
       method: "GET",
@@ -119,17 +82,13 @@ describe("univer-workspace-harness plugin", () => {
       oauthClientSecret: "secret",
       sessionSecret: "session-secret",
       authorizeScope: "identity session",
-      adminUsernames: [],
       loginPath: "/auth/login",
       callbackPath: "/auth/callback",
-      mePath: "/api/uwh/me",
-      templateForkPath: "/api/uwh/template-fork",
       sessionCookieName: "dsh_session",
       sessionTtlMs: 900_000,
       stateTtlMs: 120_000,
       secureCookies: false,
       modelSettingsEnabled: false,
-      templates: [],
     } satisfies host.Config;
     const response = new FakeResponse();
     await host.createLoginHandler(config, new Map(), "http://127.0.0.1:3081/auth/callback")(

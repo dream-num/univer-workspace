@@ -37,6 +37,11 @@ export interface WorkspaceSessionService {
   currentUser(cookieHeader: string | undefined): WorkspaceSessionIdentity | undefined;
 }
 
+/** Derive the account-local mechanical DSH workspace directory. */
+export function userDirectoryPath(workspaceRoot: string, userId: string): string {
+  return resolve(workspaceRoot, createHash("sha256").update(userId, "utf8").digest("hex"));
+}
+
 /**
  * Derive the mechanical per-Space directory used by the harness.
  *

@@ -7,7 +7,7 @@
 # sidebar owner; the harness only filters its data and routes authentication-
 # aware actions. One row activates BOTH
 # faces: the harness node half registers the OAuth login/callback and
-# identity/template-fork routes, and its package manifest declares
+# authentication routes, and its package manifest declares
 # `dsh.client`, so the modules scanner loads the `./client` browser half from
 # the same row.
 
@@ -111,18 +111,11 @@
         sessionSecret: !!js process.env.UWH_OAUTH_SESSION_SECRET
         authorizeScope: !!js process.env.UWH_OAUTH_SCOPE ?? 'identity session'
 
-        # Workspace usernames that receive the admin flag; this only gates the
-        # additional product UI and is not a second role database.
-        adminUsernames: !!js JSON.parse(process.env.UWH_ADMIN_USERNAMES_JSON ?? '[]')
-
         # Route paths of the harness host plugin. The callback path must match
         # the redirect URI registered with the Workspace authorization server,
         # so it is a deployment value; the other paths are fixed.
         loginPath: /auth/login
         callbackPath: !!js process.env.UWH_OAUTH_CALLBACK_PATH ?? '/auth/callback'
-        mePath: /api/uwh/me
-        templateForkPath: /api/uwh/template-fork
-
         # HttpOnly session cookie (short-lived). An explicit override wins;
         # otherwise Secure follows the configured public origin so local HTTP
         # harnesses do not receive a cookie that the browser cannot return.
@@ -137,7 +130,3 @@
         modelSettingsEnabled: !!js >-
           process.env.UWH_MODEL_SETTINGS_ENABLED === 'true' ||
           process.env.NODE_ENV !== 'production'
-
-        # Configured templates: stable key -> source session id; the browser
-        # forks the source once and remembers the copy per user per browser.
-        templates: !!js JSON.parse(process.env.UWH_TEMPLATES_JSON ?? '[]')
