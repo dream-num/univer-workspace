@@ -160,6 +160,19 @@ export const inject = ["webServer", "apiProxy", "workspaceRegistry", "sessions",
 /** Maximum size of one Harness JSON request. */
 const JSON_REQUEST_MAX_BYTES = 8 * 1024;
 
+/** Validate deployment origins before any route/service is registered. */
+function assertHttpOrigin(value: string, field: "publicOrigin" | "workspaceOrigin"): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`univer-workspace-harness: ${field} must be an absolute http(s) URL; received ${JSON.stringify(value)}`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`univer-workspace-harness: ${field} must use http or https; received ${JSON.stringify(value)}`);
+  }
+}
+
 /** Write a JSON response with the given status. */
 function jsonResponse(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -611,6 +624,8 @@ function sanitizeReturnTo(pathname: string): string {
  * Register the Harness routes plus the workspaceAuth service with the webserver.
  */
 export function apply(ctx: Context, config: Config): void {
+  assertHttpOrigin(config.publicOrigin, "publicOrigin");
+  assertHttpOrigin(config.workspaceOrigin, "workspaceOrigin");
   // The stock frontend ships DeepSeek title and favicon markup. Rewrite the
   // server-rendered shell through the public webserver tap so the first paint
   // is branded before the browser client mounts.
