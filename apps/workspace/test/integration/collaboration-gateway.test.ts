@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import {
   deserializeToCombResponse,
   serializeCombRequest,
@@ -9,6 +10,7 @@ import {
 import {
   CmdRspCode,
   CombCmd,
+  ErrorCode,
   UnitAction,
   UniverType,
 } from "@univerjs/protocol";
@@ -54,8 +56,84 @@ afterEach(async () => {
 });
 
 describe("collaboration gateway", () => {
+  it("stores an authoritative server createTime for Trunk changesets", async () => {
+    const { application, origin, collaborationDatabaseFilename } =
+      await startApplication();
+    const issued = await application.identity.registerWithPassword({
+      username: "gateway-create-time-user",
+      displayName: "Gateway Create Time User",
+      password: "correct horse battery staple",
+    });
+    const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
+    const space = application.spaces.list(issued.view.user.id).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const created = await application.resources.create(
+      issued.view.user.id,
+      "gateway-create-time-resource-0001",
+      {
+        kind: "univer",
+        spaceId: space.id,
+        parentNodeId: null,
+        name: "Create Time Sheet",
+        unitType: "sheet",
+      }
+    );
+    if (created.status === 202) throw new Error("Resource creation is pending");
+    const resourceId = created.body.node.resource?.id;
+    if (!resourceId) throw new Error("Created Resource is missing");
+    const unitId = application.resources.open(
+      issued.view.user.id,
+      resourceId
+    ).resource.unitId;
+    const connection = await joinUnit(origin, cookie, unitId);
+    const beforeSubmit = currentUnixTimeSeconds();
+    const submitResponse = await fetch(
+      `${origin}/universer-api/comb/${UniverType.UNIVER_SHEET}/unit/${unitId}/new_changes`,
+      {
+        method: "POST",
+        headers: {
+          cookie,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          unitID: unitId,
+          memberID: connection.memberId,
+          type: UniverType.UNIVER_SHEET,
+          changeset: {
+            unitID: unitId,
+            type: UniverType.UNIVER_SHEET,
+            baseRev: 1,
+            revision: 2,
+            sid: "gateway-create-time-session",
+            reqId: 1,
+            userID: issued.view.user.id,
+            memberID: connection.memberId,
+            mutations: [],
+            createTime: 1,
+          },
+        }),
+      }
+    );
+    const afterSubmit = currentUnixTimeSeconds();
+    expect(submitResponse.status).toBe(200);
+    await expect(submitResponse.json()).resolves.toMatchObject({
+      error: { code: ErrorCode.OK },
+    });
+
+    expectUnixSecondsWithin(
+      readStoredCreateTime(
+        collaborationDatabaseFilename,
+        "collaboration_changesets",
+        unitId
+      ),
+      beforeSubmit,
+      afterSubmit
+    );
+  });
+
   it("binds the authenticated product user and Node permissions to Univer protocol", async () => {
-    const { application, origin } = await startApplication();
+    const { application, origin, collaborationDatabaseFilename } =
+      await startApplication();
     const issued = await application.identity.registerWithPassword({
       username: "gateway-user",
       displayName: "Gateway User",
@@ -446,6 +524,7 @@ describe("collaboration gateway", () => {
     );
     expect(localSnapshot.status).toBe(200);
 
+    const beforeWorktreeSubmit = currentUnixTimeSeconds();
     const submitResponse = await fetch(
       `${origin}/api/worktrees/${worktree.body.id}/units/${worktreeUnit.body.unit.unitId}/changesets`,
       {
@@ -465,20 +544,41 @@ describe("collaboration gateway", () => {
             userID: "",
             memberID: "",
             mutations: [],
+            createTime: 1,
           },
         }),
       }
     );
+    const afterWorktreeSubmit = currentUnixTimeSeconds();
     expect(submitResponse.status).toBe(200);
-    await expect(submitResponse.json()).resolves.toMatchObject({
+    const submitBody = (await submitResponse.json()) as {
+      readonly changeset: { readonly createTime?: number };
+    };
+    expect(submitBody).toMatchObject({
       status: "committed",
       changeset: {
         unitID: worktreeUnit.body.unit.unitId,
         revision: 2,
         userID: issued.view.user.id,
         memberID: `product-api:${issued.view.user.id}`,
+        createTime: expect.any(Number),
       },
     });
+    expectUnixSecondsWithin(
+      submitBody.changeset.createTime,
+      beforeWorktreeSubmit,
+      afterWorktreeSubmit
+    );
+    expectUnixSecondsWithin(
+      readStoredCreateTime(
+        collaborationDatabaseFilename,
+        "collaboration_worktree_changesets",
+        worktreeUnit.body.unit.unitId,
+        worktree.body.id
+      ),
+      beforeWorktreeSubmit,
+      afterWorktreeSubmit
+    );
     const updatedWorktree = await application.worktrees.get(
       issued.view.user.id,
       worktree.body.id
@@ -511,7 +611,7 @@ async function joinUnit(
   origin: string,
   cookie: string,
   unitId: string
-): Promise<{ readonly memberId: string }> {
+): Promise<{ readonly memberId: string; readonly socket: WebSocket }> {
   const ticketResponse = await fetch(
     `${origin}/universer-api/user/session-ticket`,
     { headers: { cookie } }
@@ -549,7 +649,7 @@ async function joinUnit(
     cmd: CombCmd.JOIN,
     code: CmdRspCode.OK,
   });
-  return { memberId: hello.data.memberID };
+  return { memberId: hello.data.memberID, socket };
 }
 
 function nextCombResponse(socket: WebSocket) {
@@ -573,14 +673,19 @@ function nextCombResponse(socket: WebSocket) {
 async function startApplication(): Promise<{
   readonly application: WorkspaceApplication;
   readonly origin: string;
+  readonly collaborationDatabaseFilename: string;
 }> {
   const directory = mkdtempSync(join(tmpdir(), "univer-gateway-"));
   temporaryDirectories.push(directory);
+  const collaborationDatabaseFilename = join(
+    directory,
+    "collaboration.sqlite"
+  );
   const application = createWorkspaceApplication({
     host: "127.0.0.1",
     port: 3020,
     databaseFilename: join(directory, "product.sqlite"),
-    collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+    collaborationDatabaseFilename,
     secureCookies: false,
     sessionTtlMs: 60_000,
   });
@@ -602,5 +707,49 @@ async function startApplication(): Promise<{
   return {
     application,
     origin: `http://127.0.0.1:${address.port}`,
+    collaborationDatabaseFilename,
   };
+}
+
+function currentUnixTimeSeconds() {
+  return Math.floor(Date.now() / 1_000);
+}
+
+function expectUnixSecondsWithin(
+  value: number | undefined,
+  minimum: number,
+  maximum: number
+) {
+  expect(value).toEqual(expect.any(Number));
+  expect(value).toBeGreaterThanOrEqual(minimum);
+  expect(value).toBeLessThanOrEqual(maximum);
+}
+
+function readStoredCreateTime(
+  filename: string,
+  table:
+    | "collaboration_changesets"
+    | "collaboration_worktree_changesets",
+  unitId: string,
+  worktreeId?: string
+) {
+  const database = new DatabaseSync(filename, { readOnly: true });
+  try {
+    const row = worktreeId
+      ? database
+          .prepare(
+            `SELECT payload_json FROM ${table} WHERE worktree_id = ? AND unit_id = ?`
+          )
+          .get(worktreeId, unitId)
+      : database
+          .prepare(`SELECT payload_json FROM ${table} WHERE unit_id = ?`)
+          .get(unitId);
+    if (!row) throw new Error("Stored changeset is missing");
+    const changeset = JSON.parse(String(row.payload_json)) as {
+      readonly createTime?: number;
+    };
+    return changeset.createTime;
+  } finally {
+    database.close();
+  }
 }
