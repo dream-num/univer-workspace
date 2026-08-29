@@ -92,6 +92,19 @@ export const zh = {
   "viewer.discardConfirm": "确认丢弃",
   "viewer.cancel": "取消",
   "viewer.confirm": "确认",
+  "workspace.templateFork": "从模板派生",
+  "workspace.templates": "模板",
+  "workspace.templateForkFailed": "模板会话创建失败，请稍后重试。",
+  "workspace.openWorkspace": "打开 Workspace",
+  "workspace.workspace": "Workspace",
+  "workspace.chooseSpace": "选择 Workspace 空间",
+  "workspace.chooseSpaceHint": "新会话将在所选空间中创建。",
+  "workspace.loadingSpaces": "正在加载空间…",
+  "workspace.spacesLoadFailed": "空间暂时无法加载，请稍后重试。",
+  "workspace.noSpaces": "暂无可用空间。",
+  "workspace.personalSpace": "个人空间",
+  "workspace.teamSpace": "团队空间",
+  "workspace.cancel": "取消",
 } as const;
 
 /** English UI strings. */
@@ -181,6 +194,19 @@ export const en = {
   "viewer.discardConfirm": "Discard",
   "viewer.cancel": "Cancel",
   "viewer.confirm": "Confirm",
+  "workspace.templateFork": "Fork template",
+  "workspace.templates": "Templates",
+  "workspace.templateForkFailed": "The template session could not be created. Try again shortly.",
+  "workspace.openWorkspace": "Open Workspace",
+  "workspace.workspace": "Workspace",
+  "workspace.chooseSpace": "Choose Workspace Space",
+  "workspace.chooseSpaceHint": "The new session will be created in the selected Space.",
+  "workspace.loadingSpaces": "Loading Spaces…",
+  "workspace.spacesLoadFailed": "Spaces are temporarily unavailable. Try again shortly.",
+  "workspace.noSpaces": "No Spaces are available.",
+  "workspace.personalSpace": "Personal Space",
+  "workspace.teamSpace": "Team Space",
+  "workspace.cancel": "Cancel",
 } satisfies Record<keyof typeof zh, string>;
 
 export type UniverLocaleKey = keyof typeof zh;

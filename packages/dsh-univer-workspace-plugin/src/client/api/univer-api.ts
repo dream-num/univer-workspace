@@ -8,9 +8,12 @@ import type { DocumentFileState, WorktreeAction } from "../../shared/state.ts";
 /** Poll collaboration state for one docKey (`res:<id>` or `wt:<id>`).
  * Only a missing DOCUMENT (res) counts as missing — a processed worktree
  * keeps its panel rendering as unavailable, mirroring office. */
-export async function getFileState(docKey: string): Promise<DocumentFileState> {
+export async function getFileState(docKey: string, signal?: AbortSignal): Promise<DocumentFileState> {
   const query = docKey.startsWith("wt:") ? `worktreeId=${encodeURIComponent(docKey.slice(3))}` : `resourceId=${encodeURIComponent(docKey.slice(4))}`;
-  const response = await fetch(`/univer-workspace/api/file-state?${query}`, { headers: { accept: "application/json" } });
+  const response = await fetch(`/univer-workspace/api/file-state?${query}`, {
+    headers: { accept: "application/json" },
+    ...(signal === undefined ? {} : { signal }),
+  });
   if (response.status === 404) {
     if (docKey.startsWith("res:")) throw new Error("missing univer document");
     throw new Error("worktree processed");

@@ -1,21 +1,20 @@
 import { useEffect, useState } from "react";
 import type { PropsLocale, PropsRuntime, InjectFace } from "@deepseek-ai/dsh-client-ui-slots";
-import type { UwhMeView, UwhTemplate } from "../contract.ts";
-import type { HarnessLocaleKey } from "./locales.ts";
+import type { WorkspaceMeView, WorkspaceTemplate } from "./workspace-contract.ts";
 
 export interface TemplateForkInjected {
-  readonly loadMe: () => Promise<UwhMeView>;
-  readonly forkTemplate: (template: UwhTemplate) => Promise<string>;
+  readonly loadMe: () => Promise<WorkspaceMeView>;
+  readonly forkTemplate: (template: WorkspaceTemplate) => Promise<string>;
   readonly openSession: (sessionId: string) => void;
 }
 
 type TemplateForkProps = PropsRuntime<"sidebar.footer.action">
-  & PropsLocale<"univer-workspace-harness">
+  & PropsLocale<"univer">
   & InjectFace<TemplateForkInjected>;
 
 /** Footer action that restores the configured template-fork entry. */
 export function TemplateForkAction({ wide, loadMe, forkTemplate, openSession, t }: TemplateForkProps) {
-  const [templates, setTemplates] = useState<readonly UwhTemplate[]>([]);
+  const [templates, setTemplates] = useState<readonly WorkspaceTemplate[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -32,7 +31,7 @@ export function TemplateForkAction({ wide, loadMe, forkTemplate, openSession, t 
 
   if (templates.length === 0) return null;
 
-  const choose = (template: UwhTemplate): void => {
+  const choose = (template: WorkspaceTemplate): void => {
     if (busy) return;
     setBusy(true);
     setError(false);
@@ -49,17 +48,17 @@ export function TemplateForkAction({ wide, loadMe, forkTemplate, openSession, t 
       <button
         type="button"
         className={`uwh-templateTrigger${wide ? "" : " uwh-templateTriggerRail"}`}
-        aria-label={t("templateFork" as HarnessLocaleKey)}
+        aria-label={t("workspace.templateFork")}
         aria-expanded={expanded}
         disabled={busy}
         onClick={() => setExpanded(value => !value)}
       >
         <span aria-hidden="true">✦</span>
-        {wide && <span>{t("templateFork" as HarnessLocaleKey)}</span>}
+        {wide && <span>{t("workspace.templateFork")}</span>}
       </button>
       {expanded && (
         <div className="uwh-templateMenu" role="menu">
-          <div className="uwh-templateMenuTitle">{t("templates" as HarnessLocaleKey)}</div>
+          <div className="uwh-templateMenuTitle">{t("workspace.templates")}</div>
           {templates.map(template => (
             <button
               key={template.key}
@@ -75,7 +74,7 @@ export function TemplateForkAction({ wide, loadMe, forkTemplate, openSession, t 
           ))}
         </div>
       )}
-      {error && <span className="uwh-templateError" role="alert">{t("templateForkFailed" as HarnessLocaleKey)}</span>}
+      {error && <span className="uwh-templateError" role="alert">{t("workspace.templateForkFailed")}</span>}
     </div>
   );
 }

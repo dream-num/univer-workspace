@@ -23,7 +23,7 @@ export function PreviewCard(props: PreviewCardProps): React.ReactElement {
     [props.matched.files],
   );
   const stateKeys = React.useMemo(() => files.map((entry) => entry.docKey), [files]);
-  const { states, missingFiles } = useUniverStates(stateKeys);
+  const { states, missingFiles, errors } = useUniverStates(stateKeys);
   const latestTurns = React.useMemo(() => latestUnitTurns(session), [session]);
 
   return <>{files.map((target) => {
@@ -41,6 +41,7 @@ export function PreviewCard(props: PreviewCardProps): React.ReactElement {
       label={outcome.preferredLabel}
       unitType={outcome.preferredUnitType}
       state={state}
+      stateError={errors[target.docKey]}
       worktreeId={worktreeId}
       preferredUnitId={outcome.preferredUnitId}
       preferredReadOnly={outcome.readOnly}

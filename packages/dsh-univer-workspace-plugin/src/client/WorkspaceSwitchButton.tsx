@@ -10,18 +10,17 @@ import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots
 import type { InjectFace } from "@deepseek-ai/dsh-client-ui-slots";
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type {} from "@deepseek-ai/dsh-client-ui-sidebar/client";
-import type { HarnessLocaleKey } from "./locales.ts";
 
 export interface WorkspaceSwitchInjected {
   readonly loadWorkspaceOrigin: () => Promise<string | undefined>;
 }
 
 type SessionProps = PropsRuntime<"conversation.session.header.utilities">
-  & PropsLocale<"univer-workspace-harness">
+  & PropsLocale<"univer">
   & InjectFace<WorkspaceSwitchInjected>;
 
 type FooterProps = PropsRuntime<"sidebar.footer.action">
-  & PropsLocale<"univer-workspace-harness">
+  & PropsLocale<"univer">
   & InjectFace<WorkspaceSwitchInjected>;
 
 /** A small external-link glyph kept independent of any host icon package. */
@@ -75,9 +74,9 @@ export function WorkspaceHeaderSwitch({ loadWorkspaceOrigin, t }: SessionProps) 
     href: origin,
     target: "_blank",
     rel: "noopener noreferrer",
-    title: t("openWorkspace" as HarnessLocaleKey),
-    "aria-label": t("openWorkspace" as HarnessLocaleKey),
-  }, createElement(ExternalIcon), createElement("span", null, t("workspace" as HarnessLocaleKey)));
+    title: t("workspace.openWorkspace"),
+    "aria-label": t("workspace.openWorkspace"),
+  }, createElement(ExternalIcon), createElement("span", null, t("workspace.workspace")));
 }
 
 /** Sidebar-footer fallback (the conversation header is hidden in the blank hero). */
@@ -89,7 +88,7 @@ export function WorkspaceFooterSwitch({ wide, loadWorkspaceOrigin, t }: FooterPr
     href: origin,
     target: "_blank",
     rel: "noopener noreferrer",
-    title: t("openWorkspace" as HarnessLocaleKey),
-    "aria-label": t("openWorkspace" as HarnessLocaleKey),
-  }, createElement(ExternalIcon), wide ? createElement("span", null, t("workspace" as HarnessLocaleKey)) : null);
+    title: t("workspace.openWorkspace"),
+    "aria-label": t("workspace.openWorkspace"),
+  }, createElement(ExternalIcon), wide ? createElement("span", null, t("workspace.workspace")) : null);
 }

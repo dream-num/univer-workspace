@@ -41,6 +41,15 @@ const HOST_EVENTS_PATH = "/api/events.host";
 const API_PATH = "/api";
 const RESPOND_PATH = "/api/respond";
 const SESSION_EXPORT_PATH = "/api/session.export";
+// These endpoints are provided by DSH's optional Cordis runner.  They are
+// still process-global host routes, so the authenticated carrier must allow
+// them through to the stock ApiProxy instead of treating them as unknown.
+// Omitting them makes the stock client emit a 404 on every inventory/manifest
+// refresh even though the runner plugin is installed in the profile.
+const DYNAMIC_CORDIS_PATHS = new Set([
+  "/api/dynamicCordisRunner/inventory",
+  "/api/dynamicCordisRunner/syncInspectManifest",
+]);
 /** Typert endpoints intentionally exposed by the authenticated carrier.
  *
  * The browser's command palette calls these through the public Typert
@@ -688,7 +697,10 @@ export function installScopedConnection(ctx: Context, config: ScopedConnectionCo
         );
         return;
       }
-      if (!SCOPED_RPC_PATHS.has(pathname) && pathname !== RESPOND_PATH && pathname !== SESSION_EXPORT_PATH) {
+      if (!SCOPED_RPC_PATHS.has(pathname)
+        && !DYNAMIC_CORDIS_PATHS.has(pathname)
+        && pathname !== RESPOND_PATH
+        && pathname !== SESSION_EXPORT_PATH) {
         rejectHttp(res, 404, "not_found");
         return;
       }

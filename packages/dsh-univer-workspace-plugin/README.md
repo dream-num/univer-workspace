@@ -49,14 +49,14 @@ session files.
   library and a build-time copied `@univerjs-pro/cli-assets` manifest. The
   latter is a static visual-asset catalog, not the Workspace product's
   Resource/ACL model.
-- **Worktree parity**: `univer_worktree` supports the same
-  `create`/`ready`/`reopen`/`merge`/`discard` lifecycle as
-  `dsh-univer-office`; `reopen` delegates to the Workspace transition API
-  instead of keeping a local-only draft assumption.
-- **Browser workspace picker**: the stock DSH picker is retained. Its data is
-  the authenticated native `workspace.list` projection, so linked Spaces and
-  manually adopted child workspaces use one complete picker and one set of
-  rename/reorder/create semantics.
+- **Worktree parity**: `univer_worktree` exposes the review lifecycle used by
+  the browser (`create` → `ready` → `merge`/`discard`). The underlying
+  transition adapter may retain compatibility with older server actions, but
+  the plugin does not invent a visible `reopen` action.
+- **Browser Space picker**: this plugin owns the Workspace Space picker and
+  injects it into the stock DSH hero/sidebar slots. DSH still owns its native
+  mechanical workspace list and session persistence; selecting a Space only
+  chooses the linked DSH workspace for the next session.
 - **Bundled skill**: `univer-workspace` teaches the model the Space/document
   model and the Worktree review rules.
 - **Turn preview and live viewer**: successful document/Worktree operations are

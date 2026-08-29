@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactElement } from "react";
-import type { UwhWorkspaceSpace } from "../contract.ts";
-import type { HarnessLocaleKey } from "./locales.ts";
+import type { WorkspaceSpace } from "./workspace-contract.ts";
+import type { UniverLocaleKey } from "./locales.ts";
 
 /** Public owner conversation of DSH's two Workspace directory-flow slots. */
 export interface SpaceDirectoryFlowOwnerProps {
@@ -13,9 +13,9 @@ export interface SpaceDirectoryFlowOwnerProps {
 }
 
 export interface SpaceDirectoryFlowInjected {
-  readonly loadSpaces: () => Promise<readonly UwhWorkspaceSpace[]>;
+  readonly loadSpaces: () => Promise<readonly WorkspaceSpace[]>;
   readonly selectSpace: (dshWorkspaceId: string) => void;
-  readonly t: (key: HarnessLocaleKey) => string;
+  readonly t: (key: UniverLocaleKey) => string;
 }
 
 declare module "@deepseek-ai/dsh-client-ui-slots" {
@@ -41,7 +41,7 @@ export function SpaceDirectoryFlow(
 ): ReactElement | null {
   const { open, busy, loadSpaces, onCancel, selectSpace, t } = props;
   const [phase, setPhase] = useState<Phase>("pending");
-  const [spaces, setSpaces] = useState<readonly UwhWorkspaceSpace[]>([]);
+  const [spaces, setSpaces] = useState<readonly WorkspaceSpace[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -83,13 +83,13 @@ export function SpaceDirectoryFlow(
       >
         <header className="uwh-spacePickerHeader">
           <div>
-            <h2 id="uwh-space-picker-title">{t("chooseSpace")}</h2>
-            <p>{t("chooseSpaceHint")}</p>
+            <h2 id="uwh-space-picker-title">{t("workspace.chooseSpace")}</h2>
+            <p>{t("workspace.chooseSpaceHint")}</p>
           </div>
           <button
             type="button"
             className="uwh-spacePickerClose"
-            aria-label={t("cancel")}
+            aria-label={t("workspace.cancel")}
             disabled={busy}
             onClick={onCancel}
           >
@@ -97,9 +97,9 @@ export function SpaceDirectoryFlow(
           </button>
         </header>
         <div className="uwh-spacePickerBody">
-          {phase === "pending" && <p className="uwh-spacePickerStatus" role="status">{t("loadingSpaces")}</p>}
-          {phase === "error" && <p className="uwh-spacePickerError" role="alert">{t("spacesLoadFailed")}</p>}
-          {phase === "ready" && spaces.length === 0 && <p className="uwh-spacePickerStatus">{t("noSpaces")}</p>}
+          {phase === "pending" && <p className="uwh-spacePickerStatus" role="status">{t("workspace.loadingSpaces")}</p>}
+          {phase === "error" && <p className="uwh-spacePickerError" role="alert">{t("workspace.spacesLoadFailed")}</p>}
+          {phase === "ready" && spaces.length === 0 && <p className="uwh-spacePickerStatus">{t("workspace.noSpaces")}</p>}
           {phase === "ready" && spaces.length > 0 && (
             <ul className="uwh-spacePickerList">
               {spaces.map(space => (
@@ -116,7 +116,7 @@ export function SpaceDirectoryFlow(
                     <span className="uwh-spacePickerIcon" aria-hidden="true">◇</span>
                     <span className="uwh-spacePickerName">{space.name}</span>
                     <span className="uwh-spacePickerType">
-                      {t(space.type === "personal" ? "personalSpace" : "teamSpace")}
+                      {t(space.type === "personal" ? "workspace.personalSpace" : "workspace.teamSpace")}
                     </span>
                   </button>
                 </li>

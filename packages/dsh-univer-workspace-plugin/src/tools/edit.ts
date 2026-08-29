@@ -161,13 +161,13 @@ export function registerEditTool(ctx: Context): () => void {
   const disposeInspect = registerUniverTool(ctx, defineTool({
     name: "univer_inspect",
     description:
-      "Inspect structured content from a remote Workspace Unit. This mirrors dsh-univer-office's univer_inspect: omit range first to discover a workbook's worksheet names, then use an exact Sheet selector such as Sheet1!A1:D20 (case-sensitive). If a selector does not match, retry without range to get the valid names. It never executes caller-provided write code.",
+      "Inspect structured content from a remote Workspace Unit. This mirrors dsh-univer-office's univer_inspect: omit range first to discover a workbook's worksheet names, then use an exact Sheet selector such as 'Sheet 1'!A1:D20 (case-sensitive; quote names containing spaces). If a selector does not match, retry without range to get the valid names. It never executes caller-provided write code.",
     parameters: {
       worktreeId: { type: "string" as const },
       unitId: { type: "string" as const, required: true },
       unitType: { ...unitTypeEnum, required: true },
       revision: { type: "integer" as const },
-      range: { type: "string" as const, description: "Optional case-sensitive Sheet range, e.g. Sheet1!A1:D20. Omit it first to discover worksheet names." },
+      range: { type: "string" as const, description: "Optional case-sensitive Sheet range, e.g. 'Sheet 1'!A1:D20. Quote worksheet names containing spaces; omit it first to discover names." },
     },
     output: {
       schema: {

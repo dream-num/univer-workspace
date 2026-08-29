@@ -1,11 +1,12 @@
 import baseCss from "./styles/workspace.css";
 import tokensCss from "./styles/tokens.css";
 import viewerCss from "./styles/viewer.css";
+import workspaceUiCss from "./harness-ui.css";
 
 // Keep the injected stylesheet composable like dsh-univer-office: product
 // chrome, design tokens, and embedded-viewer rules can evolve independently
 // while the host still installs one idempotent tag.
-const css = [tokensCss, baseCss, viewerCss].join("\n");
+const css = [tokensCss, baseCss, viewerCss, workspaceUiCss].join("\n");
 
 const TAG_ID = "dsh-univer-workspace-plugin/styles";
 

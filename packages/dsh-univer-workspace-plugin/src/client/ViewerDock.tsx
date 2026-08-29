@@ -95,7 +95,7 @@ function UniverSessionDock(props: ViewerDockProps): React.ReactElement {
   // may be restored while the session is running, but disappears when the
   // session reaches a terminal state; the turn-tail card remains in history.
   const watched = React.useMemo(() => running ? Object.values(open).map((target) => target.docKey) : [], [open, running]);
-  const { states } = useUniverStates(watched, 1200);
+  const { states, errors } = useUniverStates(watched, 1200);
   const byId = React.useMemo(() => {
     const map = new Map<string, { status: string }>();
     for (const state of Object.values(states)) {
@@ -132,6 +132,7 @@ function UniverSessionDock(props: ViewerDockProps): React.ReactElement {
       label={target.label}
       unitType={target.unitType}
       state={state}
+      stateError={errors[target.docKey]}
       worktreeId={target.worktreeId}
       preferredUnitId={target.preferredUnitId}
       preferredReadOnly={target.readOnly}

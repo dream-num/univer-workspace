@@ -1,13 +1,13 @@
 import {
-  UNIVER_WORKSPACE_SPACES_PATH,
-  UWH_LOGIN_PATH,
-  UWH_SPACES_PATH,
-  type UwhSpaceRenameResult,
-  type UwhWorkspaceSpace,
-  type UwhWorkspaceSpaceList,
-} from "../contract.ts";
+  WORKSPACE_LOGIN_PATH,
+  WORKSPACE_SPACES_PATH,
+  WORKSPACE_SPACE_MUTATION_PATH,
+  type WorkspaceSpace,
+  type WorkspaceSpaceList,
+  type WorkspaceSpaceRenameResult,
+} from "./workspace-contract.ts";
 
-function parseSpace(value: unknown): UwhWorkspaceSpace | undefined {
+function parseSpace(value: unknown): WorkspaceSpace | undefined {
   if (value === null || typeof value !== "object") return undefined;
   const record = value as Record<string, unknown>;
   if (typeof record.spaceId !== "string" || record.spaceId === "") return undefined;
@@ -26,43 +26,43 @@ function parseSpace(value: unknown): UwhWorkspaceSpace | undefined {
 }
 
 /** Load the authenticated user's product Spaces and their DSH carriers. */
-export async function fetchWorkspaceSpaces(): Promise<readonly UwhWorkspaceSpace[]> {
-  const response = await fetch(UNIVER_WORKSPACE_SPACES_PATH, {
+export async function fetchWorkspaceSpaces(): Promise<readonly WorkspaceSpace[]> {
+  const response = await fetch(WORKSPACE_SPACES_PATH, {
     credentials: "same-origin",
     headers: { accept: "application/json" },
   });
   if (response.status === 401) {
-    window.location.assign(UWH_LOGIN_PATH);
+    window.location.assign(WORKSPACE_LOGIN_PATH);
     throw new Error("authentication_required");
   }
   if (!response.ok) throw new Error("space_list_failed");
-  const payload = await response.json() as Partial<UwhWorkspaceSpaceList>;
+  const payload = await response.json() as Partial<WorkspaceSpaceList>;
   if (!Array.isArray(payload.spaces)) throw new Error("space_list_failed");
   const spaces = payload.spaces.map(parseSpace);
   if (spaces.some(space => space === undefined)) throw new Error("space_list_failed");
-  return spaces as readonly UwhWorkspaceSpace[];
+  return spaces as readonly WorkspaceSpace[];
 }
 
 /** Rename one Space through the Harness proxy; no Workspace credential enters the browser. */
-export async function renameWorkspaceSpace(spaceId: string, name: string): Promise<UwhSpaceRenameResult> {
-  const response = await fetch(`${UWH_SPACES_PATH}/${encodeURIComponent(spaceId)}`, {
+export async function renameWorkspaceSpace(spaceId: string, name: string): Promise<WorkspaceSpaceRenameResult> {
+  const response = await fetch(`${WORKSPACE_SPACE_MUTATION_PATH}/${encodeURIComponent(spaceId)}`, {
     method: "PATCH",
     credentials: "same-origin",
     headers: { accept: "application/json", "content-type": "application/json" },
     body: JSON.stringify({ name }),
   });
   if (response.status === 401) {
-    window.location.assign(UWH_LOGIN_PATH);
+    window.location.assign(WORKSPACE_LOGIN_PATH);
     throw new Error("authentication_required");
   }
   if (response.status === 400) throw new Error("space_name_invalid");
   if (response.status === 403) throw new Error("space_rename_forbidden");
   if (response.status === 404) throw new Error("space_not_found");
   if (!response.ok) throw new Error("space_rename_failed");
-  const payload = await response.json() as Partial<UwhSpaceRenameResult>;
+  const payload = await response.json() as Partial<WorkspaceSpaceRenameResult>;
   if (payload.space === undefined || payload.space.spaceId !== spaceId
     || typeof payload.space.name !== "string" || payload.space.name === "") {
     throw new Error("space_rename_failed");
   }
-  return payload as UwhSpaceRenameResult;
+  return payload as WorkspaceSpaceRenameResult;
 }

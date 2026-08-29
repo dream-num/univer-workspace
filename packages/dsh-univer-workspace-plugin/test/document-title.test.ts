@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHarnessDocumentTitle, HARNESS_PRODUCT_TITLE } from "../src/client/document-title.js";
+import { formatHarnessDocumentTitle, HARNESS_PRODUCT_TITLE } from "../src/client/document-title.ts";
 
 describe("Workspace Harness browser title", () => {
   it("uses the Workspace product title when no session is selected", () => {

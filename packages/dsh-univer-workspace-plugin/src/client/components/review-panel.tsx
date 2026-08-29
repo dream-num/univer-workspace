@@ -34,6 +34,7 @@ export function ReviewPanel(props: {
   readonly label: string | null;
   readonly unitType: string | null;
   readonly state: DocumentFileState | undefined
+  readonly stateError?: string | undefined
   readonly worktreeId: string | null;
   readonly preferredUnitId: string | null;
   readonly preferredReadOnly: boolean;
@@ -46,7 +47,7 @@ export function ReviewPanel(props: {
   const wasHistorical = React.useRef(props.historical);
   const worktree = props.worktreeId === null ? undefined : props.state?.worktrees.find((entry) => entry.worktreeId === props.worktreeId);
   const status: CardStatus = props.state === undefined
-    ? "loading"
+    ? props.stateError === undefined ? "loading" : "unavailable"
     : props.worktreeId === null
       ? "trunk"
       : worktree?.status ?? "unavailable";
@@ -120,7 +121,7 @@ export function ReviewPanel(props: {
       <div className="uvf_panelBody">
         <UnitChips units={units} selected={selectedUnit} t={props.t} onSelect={setSelected} />
         {viewer === undefined
-          ? <div className="uvf_panelUnavailable">{props.t(status === "loading" ? "dock.loading" : "dock.unavailable")}</div>
+          ? <div className="uvf_panelUnavailable" role={props.stateError === undefined ? "status" : "alert"}>{props.stateError === undefined ? props.t(status === "loading" ? "dock.loading" : "dock.unavailable") : `${props.t("window.loadFailed")}: ${props.stateError}`}</div>
           : <div className="uvf_panelFrame uvf_panelViewer">
               <PanelViewer key={viewerKey(viewer)} viewer={viewer} runtime={props} worktreeId={props.worktreeId} status={status} worktreeName={title} units={units} />
             </div>}

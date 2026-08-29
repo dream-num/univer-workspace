@@ -11,7 +11,7 @@ export type InspectableUnitType = "sheet" | "doc" | "slide" | "base" | "board";
 
 /**
  * Convert an Office-style optional range into the public SDK query model.
- * `Sheet1!A1:D20` selects a named worksheet; an unqualified range selects
+ * `'Sheet 1'!A1:D20` selects a named worksheet (quote names containing spaces); an unqualified range selects
  * worksheet index zero.  Non-Sheet Units expose only their overview query.
  */
 export function inspectionQuery(

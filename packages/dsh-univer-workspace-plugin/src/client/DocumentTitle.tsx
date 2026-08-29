@@ -1,4 +1,4 @@
-/** Browser title projection for the Workspace Harness composition. */
+/** Browser title projection for the Workspace capability composition. */
 import { useEffect, useSyncExternalStore } from "react";
 import { formatHarnessDocumentTitle } from "./document-title.ts";
 

@@ -8,6 +8,7 @@
 
 import {
   createUniverCollaborationRuntimePool,
+  type UniverCollaborationRuntimePoolEvent,
   type UniverCollaborationRuntimeLease,
 } from "@univer-cli/univer-collaboration-runtime-pool";
 import { prepareContentExecutionProgram } from "@univer-cli/content-execution";
@@ -25,11 +26,18 @@ const MAX_COMMIT_ATTEMPTS = 3;
 export class RuntimeManager {
   private readonly pool: ReturnType<typeof createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>>;
   private readonly workerUrl: URL;
+  /** Last worker-side error code observed before the pool reports a crash. */
+  private readonly workerFailures = new Map<string, string>();
 
   public constructor(workerUrl: URL) {
     this.workerUrl = workerUrl;
     this.pool = createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>({
       entry: workerUrl,
+      onEvent: (event: UniverCollaborationRuntimePoolEvent) => {
+        if (event.type === "instance-failed") {
+          this.workerFailures.set(event.key, event.errorCode);
+        }
+      },
     });
   }
 
@@ -39,17 +47,19 @@ export class RuntimeManager {
 
   /** Read one Unit's data with the Facade API. */
   public async read(target: WorkspaceRuntimeTarget, code: string): Promise<CollaborationRuntimeValue> {
-    const lease = await this.acquire(target);
-    try {
-      await this.synchronize(lease, target);
-      const result = await lease.execute({
-        code: prepareContentExecutionProgram({ code, unitId: target.unitId, unitType: target.unitType }),
-        mode: "read",
-      });
-      return result.value;
-    } finally {
-      await lease.release();
-    }
+    return await this.withDiagnosticContext(target, "read", async () => {
+      const lease = await this.acquire(target);
+      try {
+        await this.synchronize(lease, target);
+        const result = await lease.execute({
+          code: prepareContentExecutionProgram({ code, unitId: target.unitId, unitType: target.unitType }),
+          mode: "read",
+        });
+        return result.value;
+      } finally {
+        await lease.release();
+      }
+    });
   }
 
   /** Inspect stable structured content without exposing arbitrary write code. */
@@ -57,31 +67,35 @@ export class RuntimeManager {
     target: WorkspaceRuntimeTarget,
     query: ContentInspectionQuery,
   ): Promise<ContentInspectionResult> {
-    const lease = await this.acquire(target);
-    try {
-      await this.synchronize(lease, target);
-      return await inspectContent(
-        {
-          unitId: lease.unitId,
-          unitType: target.unitType,
-          execute: async (input) => await lease.execute(input),
-        },
-        query,
-      );
-    } finally {
-      await lease.release();
-    }
+    return await this.withDiagnosticContext(target, "inspect", async () => {
+      const lease = await this.acquire(target);
+      try {
+        await this.synchronize(lease, target);
+        return await inspectContent(
+          {
+            unitId: lease.unitId,
+            unitType: target.unitType,
+            execute: async (input) => await lease.execute(input),
+          },
+          query,
+        );
+      } finally {
+        await lease.release();
+      }
+    });
   }
 
   /** Export the synchronized UnitData for local Office conversion. */
   public async exportUnitData(target: WorkspaceRuntimeTarget): Promise<CollaborationUnitData> {
-    const lease = await this.acquire(target);
-    try {
-      await this.synchronize(lease, target);
-      return await lease.exportUnitData();
-    } finally {
-      await lease.release();
-    }
+    return await this.withDiagnosticContext(target, "export", async () => {
+      const lease = await this.acquire(target);
+      try {
+        await this.synchronize(lease, target);
+        return await lease.exportUnitData();
+      } finally {
+        await lease.release();
+      }
+    });
   }
 
   /** Execute a write in Worktree scope and commit the resulting changeset. */
@@ -89,29 +103,51 @@ export class RuntimeManager {
     if (target.scope.kind !== "worktree") {
       throw new Error("workspace target is not editable: execute requires a Worktree target");
     }
-    const lease = await this.acquire(target);
-    let reusable = false;
-    try {
-      await this.synchronize(lease, target);
-      const executed = await lease.execute({
-        code: prepareContentExecutionProgram({ code, unitId: target.unitId, unitType: target.unitType }),
-        mode: "write",
-      });
-      if (executed.mutations.length === 0) {
+    return await this.withDiagnosticContext(target, "write", async () => {
+      const lease = await this.acquire(target);
+      let reusable = false;
+      try {
+        await this.synchronize(lease, target);
+        const executed = await lease.execute({
+          code: prepareContentExecutionProgram({ code, unitId: target.unitId, unitType: target.unitType }),
+          mode: "write",
+        });
+        if (executed.mutations.length === 0) {
+          reusable = true;
+          return { committed: false, value: executed.value };
+        }
+        const committed = await this.commitStableChangeset(lease);
         reusable = true;
-        return { committed: false, value: executed.value };
+        return { committed: true, revision: committed.state.baseRevision, value: executed.value };
+      } finally {
+        if (reusable) await lease.release();
+        else await lease.invalidate();
       }
-      const committed = await this.commitStableChangeset(lease);
-      reusable = true;
-      return { committed: true, revision: committed.state.baseRevision, value: executed.value };
-    } finally {
-      if (reusable) await lease.release();
-      else await lease.invalidate();
-    }
+    });
   }
 
   private async acquire(target: WorkspaceRuntimeTarget): Promise<UniverCollaborationRuntimeLease> {
     return await this.pool.acquire({ init: target, key: workspaceRuntimeKey(target) });
+  }
+
+  /** Preserve the pool's worker-side failure code at the tool boundary. */
+  private async withDiagnosticContext<T>(
+    target: WorkspaceRuntimeTarget,
+    operation: string,
+    callback: () => Promise<T>,
+  ): Promise<T> {
+    const key = workspaceRuntimeKey(target);
+    try {
+      return await callback();
+    } catch (error) {
+      const workerCode = this.workerFailures.get(key);
+      this.workerFailures.delete(key);
+      if (workerCode === undefined || !(error instanceof Error)) throw error;
+      throw new Error(
+        `Univer runtime ${operation} failed for ${target.unitType} Unit ${target.unitId}: ${error.message} (worker diagnostic: ${workerCode})`,
+        { cause: error },
+      );
+    }
   }
 
   private async synchronize(lease: UniverCollaborationRuntimeLease, target: WorkspaceRuntimeTarget): Promise<void> {

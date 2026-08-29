@@ -33,6 +33,7 @@ export interface WorktreeWindowProps extends ViewerRuntimeProps {
   readonly label: string | null
   readonly unitType: string | null
   readonly state: DocumentFileState | undefined
+  readonly stateError?: string | undefined
   readonly worktreeId: string | null
   readonly preferredUnitId: string | null
   readonly preferredReadOnly: boolean
@@ -69,7 +70,7 @@ export function WorktreeWindow(props: WorktreeWindowProps): React.ReactElement {
 
   const worktree = props.worktreeId === null ? undefined : props.state?.worktrees.find((entry) => entry.worktreeId === props.worktreeId)
   const status: WorktreeStateViewAliases | "trunk" | "loading" = props.state === undefined
-    ? "loading"
+    ? props.stateError === undefined ? "loading" : "unavailable"
     : props.worktreeId === null
       ? "trunk"
       : worktree?.status ?? "unavailable"
@@ -182,7 +183,7 @@ export function WorktreeWindow(props: WorktreeWindowProps): React.ReactElement {
       <UnitChips units={units} selected={selectedUnit} t={props.t} onSelect={setSelected} />
       <div className="uvf_viewerShell">
         {viewer === undefined
-          ? <div className="uvf_note"><span>{status === "loading" ? props.t("dock.loading") : props.t("dock.unavailable")}</span></div>
+          ? <div className="uvf_note" role={props.stateError === undefined ? "status" : "alert"}><span>{props.stateError === undefined ? (status === "loading" ? props.t("dock.loading") : props.t("dock.unavailable")) : `${props.t("window.loadFailed")}: ${props.stateError}`}</span></div>
           : <PanelViewer key={viewerKey(viewer)} viewer={viewer} runtime={props} worktreeId={props.worktreeId} status={status} worktreeName={title} />}
       </div>
     </div> : null}

@@ -150,7 +150,7 @@ function publicMessage(message: string, code: string): string {
 /** Turn the common Univer worksheet lookup failure into an actionable tool error. */
 function worksheetSelectorHint(message: string): string | null {
   if (!/worksheet selector did not match(?: a worksheet| any worksheet)/iu.test(message)) return null;
-  return "No worksheet matched the requested selector. Use univer_inspect without `range` to list the workbook's worksheet names, then retry with an exact selector such as `Sheet1!A1:D20` (the name is case-sensitive).";
+  return "No worksheet matched the requested selector. Use univer_inspect without `range` to list the exact worksheet name, then retry with `<worksheet-name>!A1:D20`; worksheet names are case-sensitive, and names containing spaces must be quoted (for example `'Sheet 1'!A1:D20`).";
 }
 
 function genericMessage(code: string): string {

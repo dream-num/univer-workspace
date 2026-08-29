@@ -52,7 +52,7 @@ export interface InspectUnitInput {
   readonly unitId: string;
   readonly unitType: "sheet" | "doc" | "slide" | "base" | "board";
   readonly revision?: number;
-  /** Office-style selector, e.g. `Sheet1!A1:D20`; omitted means overview. */
+  /** Office-style selector, e.g. `'Sheet 1'!A1:D20`; omitted means overview. */
   readonly range?: string;
 }
 
