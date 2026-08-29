@@ -53,3 +53,8 @@ the test profile independent.
 `pnpm build` emits `lib/index.js` (node host bundle) and `lib/client.js`
 (browser bundle). The dsh profile assembly lives in this package's
 `scripts/` and `cordis.patch.yml`.
+
+Native addons used by the capability plugin remain external runtime
+dependencies. The Harness image installs the platform-specific packages once
+while assembling the profile; the runtime container only copies that assembled
+profile and does not download or compile binaries during startup.

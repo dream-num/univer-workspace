@@ -115,7 +115,14 @@ cannot authorize:
 `pnpm build` emits `lib/index.js` (node host bundle) and `lib/client.js`
 (browser bundle); bundled skills ship under `skills/`.
 
-The native formula engine binding is deliberately not bundled into the worker.
-`@univerjs-pro/engine-formula-rust-binding` is a production dependency of this
-plugin; the Harness image installs its platform-specific optional package once
-when the profile is assembled.
+Native/binary addons are deliberately not bundled into either the host or
+worker. Every binary used by this plugin is an explicit production dependency
+and is externalized by the build:
+
+- `@univerjs-pro/engine-formula-rust-binding` for the headless formula engine;
+- `@univerjs-pro/exchange-node-binding` for Office import/export.
+
+The consuming Harness image installs these packages once while assembling the
+profile. pnpm's `supportedArchitectures: current` policy selects only the
+container's platform binary, so runtime resolution is deterministic and does
+not depend on a transitive hoist or a bundled `.node` file.
