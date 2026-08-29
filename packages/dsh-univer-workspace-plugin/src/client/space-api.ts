@@ -35,7 +35,14 @@ export async function fetchWorkspaceSpaces(): Promise<readonly WorkspaceSpace[]>
     window.location.assign(WORKSPACE_LOGIN_PATH);
     throw new Error("authentication_required");
   }
-  if (!response.ok) throw new Error("space_list_failed");
+  if (!response.ok) {
+    let diagnosticId = "";
+    try {
+      const body = await response.json() as { diagnosticId?: unknown };
+      if (typeof body.diagnosticId === "string") diagnosticId = `:${body.diagnosticId}`;
+    } catch { /* retain stable fallback */ }
+    throw new Error(`space_list_failed${diagnosticId}`);
+  }
   const payload = await response.json() as Partial<WorkspaceSpaceList>;
   if (!Array.isArray(payload.spaces)) throw new Error("space_list_failed");
   const spaces = payload.spaces.map(parseSpace);

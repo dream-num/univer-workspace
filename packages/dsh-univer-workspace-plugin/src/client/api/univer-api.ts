@@ -18,7 +18,14 @@ export async function getFileState(docKey: string, signal?: AbortSignal): Promis
     if (docKey.startsWith("res:")) throw new Error("missing univer document");
     throw new Error("worktree processed");
   }
-  if (!response.ok) throw new Error(`file state answered ${response.status}`);
+  if (!response.ok) {
+    let diagnosticId = "";
+    try {
+      const body = await response.json() as { diagnosticId?: unknown };
+      if (typeof body.diagnosticId === "string") diagnosticId = ` (diagnostic id: ${body.diagnosticId})`;
+    } catch { /* retain status-only fallback */ }
+    throw new Error(`file state answered ${response.status}${diagnosticId}`);
+  }
   return await response.json() as DocumentFileState;
 }
 

@@ -8,6 +8,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-host-webserver";
 import type {} from "../provider/workspace-contract.ts";
@@ -19,9 +20,24 @@ export interface WebServerConfig {
   license: string;
 }
 
-function jsonResponse(res: ServerResponse, status: number, body: unknown): void {
+function jsonResponse(res: ServerResponse, status: number, body: unknown, details?: Record<string, unknown>): void {
+  let output = body;
+  if (status >= 500) {
+    const diagnosticId = randomUUID();
+    console.error(`[uwh-web] ${JSON.stringify({
+      event: "http-error",
+      diagnosticId,
+      status,
+      ...details,
+      body: typeof body === "string" ? body : undefined,
+      at: new Date().toISOString(),
+    })}`);
+    output = body !== null && typeof body === "object" && !Array.isArray(body)
+      ? { ...(body as Record<string, unknown>), diagnosticId }
+      : { error: String(body), diagnosticId };
+  }
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
-  res.end(JSON.stringify(body));
+  res.end(JSON.stringify(output));
 }
 
 /** Resolve the authenticated Workspace user for a request, or answer 401. */
@@ -50,7 +66,12 @@ function createHandler(ctx: Context, config: WebServerConfig): (req: IncomingMes
         const result = await ctx.get("univerWorkspace")!.listSpaces(user.userId);
         jsonResponse(res, 200, { spaces: result.spaces });
       } catch (error) {
-        jsonResponse(res, 502, { error: error instanceof Error ? error.message : "workspace unreachable" });
+        jsonResponse(res, 502, { error: error instanceof Error ? error.message : "workspace unreachable" }, {
+          route: "spaces",
+          userId: user.userId,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack?.slice(0, 4000) : undefined,
+        });
       }
       return;
     }
@@ -88,7 +109,14 @@ function createHandler(ctx: Context, config: WebServerConfig): (req: IncomingMes
         const apiStatus = error !== null && typeof error === "object" && "status" in error
           && typeof error.status === "number" ? error.status : undefined;
         const status = apiStatus === 404 || message.includes("404") || message.includes("Not Found") ? 404 : 502;
-        jsonResponse(res, status, { error: message });
+        jsonResponse(res, status, { error: message }, {
+          route: "file-state",
+          userId: user.userId,
+          resourceId: resourceId ?? undefined,
+          worktreeId: worktreeId ?? undefined,
+          error: message,
+          stack: error instanceof Error ? error.stack?.slice(0, 4000) : undefined,
+        });
       }
       return;
     }
@@ -103,7 +131,13 @@ function createHandler(ctx: Context, config: WebServerConfig): (req: IncomingMes
         const summary = await ctx.get("univerWorkspace")!.transitionWorktree(user.userId, actionMatch[1]!, actionMatch[2] as "ready" | "reopen" | "merge" | "discard");
         jsonResponse(res, 200, { worktree: summary });
       } catch (error) {
-        jsonResponse(res, 502, { error: error instanceof Error ? error.message : "workspace unreachable" });
+        jsonResponse(res, 502, { error: error instanceof Error ? error.message : "workspace unreachable" }, {
+          route: "worktree-transition",
+          worktreeId: actionMatch[1],
+          action: actionMatch[2],
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack?.slice(0, 4000) : undefined,
+        });
       }
       return;
     }
