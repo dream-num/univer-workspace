@@ -786,3 +786,26 @@ export function installScopedConnection(ctx: Context, config: ScopedConnectionCo
     });
   };
 }
+
+/**
+ * The stock connection plugin registers its two upgrade routes from a nested
+ * `ctx.inject(["apiProxy"])` effect.  Harness itself also depends on
+ * `apiProxy`, so both effects can become runnable in the same loader turn; a
+ * direct map lookup would then race the stock registration and abort startup.
+ * Wait for the owning effect to publish the routes, but keep a finite timeout
+ * so a genuinely incomplete DSH composition still fails with a useful error.
+ */
+export async function waitForStockConnectionRoutes(ctx: Context, timeoutMs = 5000): Promise<void> {
+  const webServer = ctx.get("webServer") as Context["webServer"];
+  const upgrades = (webServer as unknown as { upgrades?: Map<string, unknown> }).upgrades;
+  const prefixes = (webServer as unknown as { prefixes?: Map<string, unknown> }).prefixes;
+  if (upgrades === undefined || prefixes === undefined) {
+    throw new Error("uwh: DSH webServer route registries are unavailable; refusing to start without an auth boundary");
+  }
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (upgrades.has(MUX_EVENTS_PATH) && upgrades.has(HOST_EVENTS_PATH) && prefixes.has(API_PATH)) return;
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+  throw new Error("uwh: stock DSH connection routes did not register within the startup deadline");
+}

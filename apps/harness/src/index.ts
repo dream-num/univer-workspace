@@ -51,7 +51,7 @@ import * as workspaceSessionProvider from "./workspace-session-provider.ts";
 import type { WorkspaceAuthService } from "./workspace-auth.ts";
 import * as sessionInputGuard from "./session-input-guard.ts";
 import { registerScopedListRoutes, trustedRequest } from "./scoped-api.ts";
-import { installScopedConnection } from "./scoped-connection.ts";
+import { installScopedConnection, waitForStockConnectionRoutes } from "./scoped-connection.ts";
 import { WORKSPACE_FAVICON_SVG, WORKSPACE_MANIFEST_JSON } from "./favicon.ts";
 import { rewriteHarnessIndexBranding, rewriteHarnessIndexTitle } from "./title.ts";
 
@@ -659,14 +659,17 @@ export function apply(ctx: Context, config: Config): void {
   // account scope. The browser half remains statically mounted by this
   // harness bundle; only the host transport carrier is replaced here.
   ctx.effect(
-    () => installScopedConnection(ctx.root, {
-      workspaceRoot: config.workspaceRoot,
-      workspaceOrigin: config.workspaceOrigin,
-      publicOrigin: config.publicOrigin,
-      sessionCookieName: config.sessionCookieName,
-      sessionSecret: config.sessionSecret,
-      modelSettingsEnabled: config.modelSettingsEnabled,
-    }),
+    async () => {
+      await waitForStockConnectionRoutes(ctx.root);
+      return installScopedConnection(ctx.root, {
+        workspaceRoot: config.workspaceRoot,
+        workspaceOrigin: config.workspaceOrigin,
+        publicOrigin: config.publicOrigin,
+        sessionCookieName: config.sessionCookieName,
+        sessionSecret: config.sessionSecret,
+        modelSettingsEnabled: config.modelSettingsEnabled,
+      });
+    },
     "uwh: authenticated DSH connection carrier",
   );
   ctx.plugin(sessionInputGuard, {
