@@ -120,15 +120,17 @@ describe("collaboration gateway", () => {
       error: { code: ErrorCode.OK },
     });
 
+    const stored = readStoredChangesetMetadata(
+      collaborationDatabaseFilename,
+      "collaboration_changesets",
+      unitId
+    );
     expectUnixSecondsWithin(
-      readStoredCreateTime(
-        collaborationDatabaseFilename,
-        "collaboration_changesets",
-        unitId
-      ),
+      stored.createTime,
       beforeSubmit,
       afterSubmit
     );
+    expect(stored.mutationSize).toBe(2);
   });
 
   it("binds the authenticated product user and Node permissions to Univer protocol", async () => {
@@ -552,7 +554,7 @@ describe("collaboration gateway", () => {
     const afterWorktreeSubmit = currentUnixTimeSeconds();
     expect(submitResponse.status).toBe(200);
     const submitBody = (await submitResponse.json()) as {
-      readonly changeset: { readonly createTime?: number };
+      readonly changeset: { readonly createTime?: number; readonly mutationSize?: number };
     };
     expect(submitBody).toMatchObject({
       status: "committed",
@@ -562,6 +564,7 @@ describe("collaboration gateway", () => {
         userID: issued.view.user.id,
         memberID: `product-api:${issued.view.user.id}`,
         createTime: expect.any(Number),
+        mutationSize: 2,
       },
     });
     expectUnixSecondsWithin(
@@ -569,16 +572,18 @@ describe("collaboration gateway", () => {
       beforeWorktreeSubmit,
       afterWorktreeSubmit
     );
+    const stored = readStoredChangesetMetadata(
+      collaborationDatabaseFilename,
+      "collaboration_worktree_changesets",
+      worktreeUnit.body.unit.unitId,
+      worktree.body.id
+    );
     expectUnixSecondsWithin(
-      readStoredCreateTime(
-        collaborationDatabaseFilename,
-        "collaboration_worktree_changesets",
-        worktreeUnit.body.unit.unitId,
-        worktree.body.id
-      ),
+      stored.createTime,
       beforeWorktreeSubmit,
       afterWorktreeSubmit
     );
+    expect(stored.mutationSize).toBe(2);
     const updatedWorktree = await application.worktrees.get(
       issued.view.user.id,
       worktree.body.id
@@ -725,7 +730,7 @@ function expectUnixSecondsWithin(
   expect(value).toBeLessThanOrEqual(maximum);
 }
 
-function readStoredCreateTime(
+function readStoredChangesetMetadata(
   filename: string,
   table:
     | "collaboration_changesets"
@@ -745,10 +750,10 @@ function readStoredCreateTime(
           .prepare(`SELECT payload_json FROM ${table} WHERE unit_id = ?`)
           .get(unitId);
     if (!row) throw new Error("Stored changeset is missing");
-    const changeset = JSON.parse(String(row.payload_json)) as {
+    return JSON.parse(String(row.payload_json)) as {
       readonly createTime?: number;
+      readonly mutationSize?: number;
     };
-    return changeset.createTime;
   } finally {
     database.close();
   }

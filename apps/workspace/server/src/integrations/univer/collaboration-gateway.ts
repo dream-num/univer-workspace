@@ -42,6 +42,7 @@ import {
   type WorktreeChangeFeed,
 } from "../realtime/worktree-change-feed.js";
 import { protocolUser } from "./protocol-user.js";
+import { setFinalMutationSize } from "./changeset-observation.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
 const MILLISECONDS_PER_SECOND = 1_000;
@@ -116,6 +117,10 @@ export function createCollaborationGateway(options: {
       context.userID,
       context.request.changeset.unitID
     );
+    await next();
+  });
+  service.use("commitChangeset", async (context, next) => {
+    setFinalMutationSize(context.changeset);
     await next();
   });
 
@@ -217,6 +222,10 @@ export function createCollaborationGateway(options: {
   }
   worktreeService.use("submitChangeset", async (context, next) => {
     setServerChangesetCreateTime(context.request.changeset);
+    await next();
+  });
+  worktreeService.use("commitChangeset", async (context, next) => {
+    setFinalMutationSize(context.changeset);
     await next();
   });
 
