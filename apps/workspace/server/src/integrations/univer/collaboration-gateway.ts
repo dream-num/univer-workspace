@@ -44,6 +44,7 @@ import {
 import { protocolUser } from "./protocol-user.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
+const MILLISECONDS_PER_SECOND = 1_000;
 
 export interface CollaborationGateway {
   readonly router: Router;
@@ -106,6 +107,7 @@ export function createCollaborationGateway(options: {
       context.userID,
       context.request.changeset.unitID
     );
+    setServerChangesetCreateTime(context.request.changeset);
     await next();
   });
   service.use("applyChangeset", async (context, next) => {
@@ -213,6 +215,10 @@ export function createCollaborationGateway(options: {
   ] as const) {
     worktreeService.use(action, asyncWorktreeWriteAuthorization);
   }
+  worktreeService.use("submitChangeset", async (context, next) => {
+    setServerChangesetCreateTime(context.request.changeset);
+    await next();
+  });
 
   async function asyncWorktreeWriteAuthorization(
     context:
@@ -344,6 +350,12 @@ export function createCollaborationGateway(options: {
       await transport.dispose();
     },
   };
+}
+
+function setServerChangesetCreateTime(changeset: {
+  createTime?: number | undefined;
+}) {
+  changeset.createTime = Math.floor(Date.now() / MILLISECONDS_PER_SECOND);
 }
 
 function trackConnections(

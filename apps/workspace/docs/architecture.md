@@ -202,7 +202,9 @@ Worktree Service 在 Collaboration 与产品写入均完成后调用专用 Chang
 snapshot、changeset 或 revision。Tree Blob 和内嵌 Asset 共用注入的 `BlobStore`；当前实现是
 本地目录，未来可替换为 `S3BlobStore` 或迁移包装器。Univer Collaboration Database Adapter
 独立管理 snapshot、changeset 与 revision；Comment Database Adapter 在同一文件中独立管理
-评论正文、回复和 solved 状态。两者不把协作内容写入产品数据库。
+评论正文、回复和 solved 状态。Workspace 在 Trunk 和 Worktree 的 `submitChangeset` middleware 中
+以服务端当前 Unix 秒覆盖 `changeset.createTime`；该字段表示服务端开始处理本次提交的时间，
+不是数据库事务的精确提交时间。两者不把协作内容写入产品数据库。
 
 Office Exchange Module 使用已发布的 `@univerjs-pro/exchange-node` 将 Office 字节与 Univer
 数据互转。`/universer-api/exchange/**`、Exchange File Upload 和签名下载遵循 Universer
