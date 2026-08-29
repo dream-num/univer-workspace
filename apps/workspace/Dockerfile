@@ -28,7 +28,8 @@ COPY packages/reference-provider ./packages/reference-provider
 RUN pnpm --filter @univerjs/univer-workspace-reference-provider build \
     && pnpm --filter @univerjs/univer-workspace build \
     && pnpm --filter @univerjs/univer-workspace \
-      deploy --legacy --prod /app/deploy
+      deploy --legacy --prod /app/deploy \
+      --config.allow-unused-patches=true
 
 FROM node:24-bookworm-slim AS runtime
 
