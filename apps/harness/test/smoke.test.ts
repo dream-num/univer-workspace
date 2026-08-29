@@ -103,7 +103,8 @@ describe("univer-workspace-harness plugin", () => {
     }
 
     expect(response.status).toBe(502);
-    expect(JSON.parse(response.body)).toEqual({ error: "oauth_token_exchange_failed" });
+    expect(JSON.parse(response.body)).toMatchObject({ error: "oauth_token_exchange_failed" });
+    expect(JSON.parse(response.body).diagnosticId).toMatch(/^[0-9a-f-]{36}$/);
     expect(response.body).not.toContain("workspace token endpoint");
     expect(response.body).not.toContain("at ");
     expect(response.body).not.toContain("/root/");

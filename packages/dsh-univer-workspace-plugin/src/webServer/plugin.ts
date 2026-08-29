@@ -51,6 +51,16 @@ function authenticatedUser(ctx: Context, req: IncomingMessage): { userId: string
   };
 }
 
+function upstreamStatus(error: unknown): number {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/workspace credential is missing|workspace authentication required|sign in again/iu.test(message)) return 401;
+  if (error !== null && typeof error === "object" && "status" in error
+    && typeof error.status === "number" && error.status >= 400 && error.status < 600) {
+    return error.status;
+  }
+  return 502;
+}
+
 /** Build the prefix route handler. */
 function createHandler(ctx: Context, config: WebServerConfig): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res): Promise<void> => {
@@ -66,7 +76,8 @@ function createHandler(ctx: Context, config: WebServerConfig): (req: IncomingMes
         const result = await ctx.get("univerWorkspace")!.listSpaces(user.userId);
         jsonResponse(res, 200, { spaces: result.spaces });
       } catch (error) {
-        jsonResponse(res, 502, { error: error instanceof Error ? error.message : "workspace unreachable" }, {
+        const status = upstreamStatus(error);
+        jsonResponse(res, status, { error: error instanceof Error ? error.message : "workspace unreachable" }, {
           route: "spaces",
           userId: user.userId,
           error: error instanceof Error ? error.message : String(error),
@@ -108,7 +119,7 @@ function createHandler(ctx: Context, config: WebServerConfig): (req: IncomingMes
         const message = error instanceof Error ? error.message : "workspace unreachable";
         const apiStatus = error !== null && typeof error === "object" && "status" in error
           && typeof error.status === "number" ? error.status : undefined;
-        const status = apiStatus === 404 || message.includes("404") || message.includes("Not Found") ? 404 : 502;
+        const status = apiStatus === 404 || message.includes("404") || message.includes("Not Found") ? 404 : upstreamStatus(error);
         jsonResponse(res, status, { error: message }, {
           route: "file-state",
           userId: user.userId,

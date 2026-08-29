@@ -13,7 +13,8 @@ import { mkdir } from "node:fs/promises";
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
-import type {} from "@deepseek-ai/dsh-workspace";
+import type { SessionHeader } from "@deepseek-ai/dsh-session";
+import type { Workspace, WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import type { CollaborationRuntimeValue, CollaborationUnitData } from "@univer-cli/univer-collaboration-runtime";
 import type { ContentInspectionResult } from "@univer-cli/content-inspection";
 import { spaceDirectoryPath, type WorkspaceAuthService, type WorkspaceHttpClient } from "./workspace-contract.ts";
@@ -63,9 +64,13 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
       throw new Error("workspace credential is missing; sign in again");
     }
     const remote = await listSpaces(client);
+    // The registry rebuilds its header index during boot. A rolling restart
+    // can recreate the per-Space directories after that bootstrap, so attach
+    // durable session headers again once the canonical paths exist.
+    const persistedHeaders = await this.persistedSessionHeaders();
     const spaces: WorkspaceSpace[] = [];
     for (const space of remote) {
-      const dshWorkspaceId = await this.reconcileSpace(userId, space.spaceId, space.name);
+      const dshWorkspaceId = await this.reconcileSpace(userId, space.spaceId, space.name, persistedHeaders);
       spaces.push({
         spaceId: space.spaceId,
         type: space.type,
@@ -235,19 +240,54 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     }
     return client;
   }
-  private async reconcileSpace(userId: string, spaceId: string, name: string): Promise<string> {
+  private async reconcileSpace(userId: string, spaceId: string, name: string, headers: readonly SessionHeader[]): Promise<string> {
     const table = await this.requireTable();
+    const directory = spaceDirectoryPath(this.config.workspaceRoot, userId, spaceId);
+    // workspaceRoot is an ephemeral working volume in the deployment. Always
+    // recreate the deterministic directory before resolving the registry path.
+    await mkdir(directory, { recursive: true });
     // Reuse an existing link for this space id (same user), so the backing dsh
     // workspace stays stable across list calls and Pod restarts.
     for (const [key, record] of table.entries()) {
-      if (record.userId === userId && record.spaceId === spaceId) return key;
+      if (record.userId === userId && record.spaceId === spaceId) {
+        const workspace = this.ctx.workspaceRegistry.get(key as WorkspaceId)
+          ?? await this.ctx.workspaceRegistry.resolveByPath(directory);
+        if (workspace !== undefined) {
+          await this.attachPersistedSessions(workspace, directory, headers);
+          return workspace.id;
+        }
+        // A stale link can only occur when a registry record was lost or was
+        // manually removed. Recreate the mechanical workspace and repair the
+        // link atomically from the domain consumer's perspective.
+        const recreated = await this.ctx.workspaceRegistry.create(directory, name);
+        await table.delete(key);
+        await table.put(recreated.id, { userId, spaceId });
+        await this.attachPersistedSessions(recreated, directory, headers);
+        return recreated.id;
+      }
     }
-    const directory = spaceDirectoryPath(this.config.workspaceRoot, userId, spaceId);
-    await mkdir(directory, { recursive: true });
     const workspace = (await this.ctx.workspaceRegistry.resolveByPath(directory))
       ?? await this.ctx.workspaceRegistry.create(directory, name);
     await table.put(workspace.id, { userId, spaceId });
+    await this.attachPersistedSessions(workspace, directory, headers);
     return workspace.id;
+  }
+
+  private async persistedSessionHeaders(): Promise<readonly SessionHeader[]> {
+    const persistence = this.ctx.get("sessionPersistence") as
+      | { list(): Promise<readonly SessionHeader[]> }
+      | undefined;
+    if (persistence === undefined) return [];
+    return await persistence.list();
+  }
+
+  private async attachPersistedSessions(workspace: Workspace, directory: string, headers: readonly SessionHeader[]): Promise<void> {
+    const attached = new Set(workspace.sessionIds);
+    for (const header of headers) {
+      if (header.cwd !== directory || attached.has(header.id)) continue;
+      await workspace.attachSession(header.id);
+      attached.add(header.id);
+    }
   }
 
   private async requireTable(): Promise<ReturnType<Domain<typeof spaceLinksDomainSpec>["table"]>> {
@@ -278,7 +318,7 @@ export const name = "univer-workspace-provider";
 // `workspaceAuth` is fetched with ctx.get() inside UniverWorkspaceServiceImpl
 // at call time; a static cross-row inject here would pend this whole row on
 // the harness core's startup order and could fail the deployment boot.
-export const inject = ["storageDomain", "workspaceRegistry"];
+export const inject = ["storageDomain", "workspaceRegistry", "sessionPersistence"];
 
 /** Mount the Univer Workspace capability service. */
 export function apply(ctx: Context, config: ServiceProviderConfig): void {

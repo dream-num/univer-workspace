@@ -54,6 +54,7 @@ import { registerScopedListRoutes, trustedRequest } from "./scoped-api.ts";
 import { installScopedConnection, waitForStockConnectionRoutes } from "./scoped-connection.ts";
 import { WORKSPACE_FAVICON_SVG, WORKSPACE_MANIFEST_JSON } from "./favicon.ts";
 import { rewriteHarnessIndexBranding, rewriteHarnessIndexTitle } from "./title.ts";
+import { responseErrorBody } from "./diagnostics.ts";
 
 export {
   buildAuthorizeUrl, callbackUrlFor, exchangeCode, extractIdentity, parseCookies, parseSessionCookie, randomPkceVerifier, randomState, signSessionCookie, workspaceAuthorizeUrl,
@@ -176,7 +177,7 @@ function assertHttpOrigin(value: string, field: "publicOrigin" | "workspaceOrigi
 /** Write a JSON response with the given status. */
 function jsonResponse(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
-  res.end(JSON.stringify(body));
+  res.end(JSON.stringify(responseErrorBody(status, body)));
 }
 
 /** Redirect the browser to a URL. */
