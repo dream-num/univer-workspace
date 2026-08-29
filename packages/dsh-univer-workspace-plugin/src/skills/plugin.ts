@@ -23,7 +23,7 @@ const INVOCATION = { modelInvocable: true, userInvocable: true } as const;
 const DEFINITIONS = [
   {
     name: "univer",
-    description: "Operate remote Univer Workspace Units with the verified Sheet workflow through the univer_ tools. Use proactively for Space and document discovery, Worktree review, Facade reads and writes, import/export, and explicit status handoff; Doc, Slide, Base, and Board metadata is discoverable, but their Viewer and authoring paths remain beta-limited.",
+    description: "Operate remote Univer Workspace Units through the univer_ tools. Use proactively for Space and document discovery, Worktree review, Facade reads, verified Sheet writes, import/export, and explicit status handoff; Doc, Slide, Base, and Board write/Viewer paths remain beta-limited.",
   },
   {
     name: "univer-sheet",
@@ -31,19 +31,19 @@ const DEFINITIONS = [
   },
   {
     name: "univer-doc",
-    description: "Discover Univer Doc Units and read their Workspace status through univer_open, univer_documents, and univer_status; Doc Viewer and authoring remain beta-limited until their preset is verified.",
+    description: "Discover Univer Doc Units and read their Workspace status/content through univer_open, univer_documents, univer_status, and univer_edit mode=read; Doc Viewer and authoring remain beta-limited.",
   },
   {
     name: "univer-slide",
-    description: "Discover Univer Slide Units and read their Workspace status through univer_open, univer_documents, and univer_status; Slide Viewer and authoring remain beta-limited until their preset is verified.",
+    description: "Discover Univer Slide Units and read their Workspace status/content through univer_open, univer_documents, univer_status, and univer_edit mode=read; Slide Viewer and authoring remain beta-limited.",
   },
   {
     name: "univer-base",
-    description: "Discover Univer Base Units and read their Workspace status through univer_open, univer_documents, and univer_status; Base Viewer and authoring remain beta-limited until their preset is verified.",
+    description: "Discover Univer Base Units and read their Workspace status/content through univer_open, univer_documents, univer_status, and univer_edit mode=read; Base structured inspection, Viewer, and authoring remain beta-limited.",
   },
   {
     name: "univer-board",
-    description: "Discover Univer Board Units and read their Workspace status through univer_open, univer_documents, and univer_status; Board Viewer and authoring remain beta-limited until their preset is verified.",
+    description: "Discover Univer Board Units and read their Workspace status/content through univer_open, univer_documents, univer_status, and univer_edit mode=read; Board structured inspection, Viewer, and authoring remain beta-limited.",
   },
   {
     name: "univer-embed",

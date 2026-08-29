@@ -40,7 +40,8 @@ describe("bundled Workspace Skills", () => {
   it("keeps the verified-type boundary explicit", async () => {
     const core = await readSkill("univer");
     const sheet = await readSkill("univer-sheet");
-    expect(core).toContain("verified Sheet workflow");
+    expect(core).toContain("Facade read workflow for all five types");
+    expect(core).toContain("verified Sheet writes");
     expect(core).toContain("Doc, Slide, Base, and Board");
     expect(core).toContain("beta-limited");
     expect(sheet).toContain("unitType: \"sheet\"");

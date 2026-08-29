@@ -1,20 +1,23 @@
 ---
 name: univer-base
-description: Discover Univer Base Units and read their Workspace status through univer_open, univer_documents, and univer_status; Base Viewer and authoring remain beta-limited until their preset is verified.
+description: Discover Univer Base Units and read their Workspace status/content through univer_open, univer_documents, univer_status, and univer_edit mode=read; Base structured inspection, Viewer, and authoring remain beta-limited.
 ---
 
 # Univer Base Units
 
-The Workspace API can expose a Base Unit in Space and status data can be read.
-The current in-page Viewer and Base authoring preset are beta-limited, so this
-Skill does not authorize an edit or preview claim for `base`.
+The Workspace API can expose a Base Unit in Space. Its identity/status and
+minimal Facade read path are verified through `univer_open`, `univer_status`,
+and `univer_edit` mode `read`. Structured `univer_inspect` currently returns
+an explicit unsupported-capability result for Base; the in-page Viewer and
+Base authoring/write preset remain beta-limited.
 
 ## Verified actions
 
 Use `univer_spaces`, `univer_documents` (or `univer_list`), `univer_open`, and
 `univer_status` to discover a Base and confirm its `unitType`, `unitId`, and
-access mode. Keep the returned ids and stop when a Viewer or authoring
-operation reports `unsupported`/unavailable.
+access mode. You may then use `univer_edit` mode `read` for a minimal Facade
+value. Keep the returned ids and stop when a Viewer or authoring operation
+reports `unsupported`/unavailable.
 
 `univer_execute` exists in the shared tool registry, but its Base Facade path
 is not verified in this profile; do not report a Base mutation as successful

@@ -1,6 +1,6 @@
 ---
 name: univer
-description: Operate remote Univer Workspace Units with the verified Sheet workflow through the univer_ tools. Use proactively for Space and document discovery, Worktree review, Facade reads and writes, import/export, and explicit status handoff; Doc, Slide, Base, and Board metadata is discoverable, but their Viewer and authoring paths remain beta-limited.
+description: Operate remote Univer Workspace Units through the univer_ tools. Use proactively for Space and document discovery, Worktree review, Facade reads, verified Sheet writes, import/export, and explicit status handoff; Doc, Slide, Base, and Board write/Viewer paths remain beta-limited.
 ---
 
 # Univer Workspace Units
@@ -13,18 +13,23 @@ session.
 ## Current capability boundary
 
 The remote contract recognizes five Unit types: `sheet`, `doc`, `slide`,
-`base`, and `board`. The current profile has a verified embedded Viewer and
-Facade workflow only for `sheet`. The other four types may be discovered and
-identified, but their in-page Viewer/authoring paths are beta-limited and must
-be reported as unsupported rather than as a successful preview or edit.
+`base`, and `board`. The current profile has a verified `univer_open` and
+Facade read workflow for all five types. The Sheet embedded Viewer and
+Worktree write path are verified. Structured inspection is verified for
+Sheet/Doc/Slide; Board/Base must report the explicit
+`does not support structured inspection` capability result. Board/Base and
+non-Sheet Viewer/authoring paths remain beta-limited and must not be claimed
+as successful without fresh evidence.
 
 ## Available tools
 
 - Discovery: `univer_spaces`, `univer_documents`, `univer_list`, and
   `univer_open`.
 - Status and review: `univer_status` and `univer_worktree`.
-- Verified Sheet execution: `univer_edit`, `univer_inspect`, and
-  `univer_execute`.
+- Facade execution: `univer_edit` mode `read` for all five types; mode
+  `write` and `univer_execute` are verified for Sheet Worktree drafts.
+- Structured inspection: `univer_inspect` for Sheet/Doc/Slide; Board/Base
+  return an explicit unsupported-capability result.
 - Creation and exchange: `univer_new`, `univer_create`, `univer_unit`,
   `univer_import`, and `univer_export`.
 - SDK/resource lookup: `univer_api` and `univer_resources`.
@@ -40,9 +45,11 @@ call for it or claim evidence that the profile did not produce.
 2. For a write, create or select a draft with
    `univer_worktree action=create`. Keep trunk read-only and publish only
    through the explicit `ready`/`merge` review flow with user approval.
-3. For a verified Sheet, use the Facade bindings supplied by
-   `univer_edit`/`univer_execute`: `univerAPI` (also `api`) and `workbook`.
-   Read the changed values back before reporting completion.
+3. For Facade reads, use the bindings supplied by `univer_edit`:
+   `univerAPI` (also `api`) and the Unit-specific object, and report the
+   returned value. For a Sheet write, use a Worktree draft and read the
+   changed values back before reporting completion. For other types, do not
+   infer write or Viewer support from a successful `univer_open`.
 4. Import into an explicit draft Worktree and export only to a session-relative
    output path. A Worktree-local Unit is not published until review succeeds.
 
