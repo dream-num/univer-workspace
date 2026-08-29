@@ -12,6 +12,7 @@ WORKDIR /app
 RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches ./patches
 COPY apps/workspace/package.json ./apps/workspace/package.json
 COPY packages/reference-provider/package.json ./packages/reference-provider/package.json
 
