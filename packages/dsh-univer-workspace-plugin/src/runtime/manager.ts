@@ -23,6 +23,33 @@ import { workspaceRuntimeKey } from "./target.js";
 
 const MAX_COMMIT_ATTEMPTS = 3;
 
+type DiagnosticError = Error & { readonly code?: unknown };
+
+function errorDetails(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    const diagnosticError = error as DiagnosticError;
+    const cause = error.cause;
+    return {
+      name: error.name,
+      message: error.message,
+      ...(typeof diagnosticError.code === "string" ? { code: diagnosticError.code } : {}),
+      ...(error.stack === undefined ? {} : { stack: error.stack.slice(0, 4000) }),
+      ...(cause instanceof Error ? { cause: errorDetails(cause) } : {}),
+    };
+  }
+  return { message: String(error) };
+}
+
+function diagnosticId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function logRuntimeDiagnostic(payload: Record<string, unknown>): void {
+  // stderr is intentionally used: DSH and Kubernetes collect it even when
+  // the tool transport has already disconnected or a worker has crashed.
+  console.error(`[uwh-runtime] ${JSON.stringify(payload)}`);
+}
+
 export class RuntimeManager {
   private readonly pool: ReturnType<typeof createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>>;
   private readonly workerUrl: URL;
@@ -36,6 +63,12 @@ export class RuntimeManager {
       onEvent: (event: UniverCollaborationRuntimePoolEvent) => {
         if (event.type === "instance-failed") {
           this.workerFailures.set(event.key, event.errorCode);
+          logRuntimeDiagnostic({
+            event: "worker-instance-failed",
+            key: event.key,
+            errorCode: event.errorCode,
+            at: new Date().toISOString(),
+          });
         }
       },
     });
@@ -142,9 +175,26 @@ export class RuntimeManager {
     } catch (error) {
       const workerCode = this.workerFailures.get(key);
       this.workerFailures.delete(key);
-      if (workerCode === undefined || !(error instanceof Error)) throw error;
+      const id = diagnosticId();
+      logRuntimeDiagnostic({
+        event: "runtime-operation-failed",
+        diagnosticId: id,
+        operation,
+        unitType: target.unitType,
+        unitId: target.unitId,
+        scope: target.scope.kind,
+        revision: target.revision,
+        workerCode,
+        error: errorDetails(error),
+        at: new Date().toISOString(),
+      });
+      if (workerCode === undefined || !(error instanceof Error)) {
+        throw new Error(`Univer runtime ${operation} failed for ${target.unitType} Unit ${target.unitId} (diagnostic id: ${id})`, {
+          cause: error,
+        });
+      }
       throw new Error(
-        `Univer runtime ${operation} failed for ${target.unitType} Unit ${target.unitId}: ${error.message} (worker diagnostic: ${workerCode})`,
+        `Univer runtime ${operation} failed for ${target.unitType} Unit ${target.unitId}: ${error.message} (worker diagnostic: ${workerCode}; diagnostic id: ${id})`,
         { cause: error },
       );
     }

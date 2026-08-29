@@ -16,7 +16,14 @@ export class WorkerHttp {
 
   public async json(path: string): Promise<Record<string, unknown>> {
     const response = await this.request(path);
-    if (!response.ok) throw new Error(`workspace request answered ${response.status}`);
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      const detail = body.replace(/\s+/gu, " ").trim().slice(0, 800);
+      throw Object.assign(
+        new Error(`workspace request failed: GET ${path} answered ${response.status}${detail === "" ? "" : `; response: ${detail}`}`),
+        { code: `WORKSPACE_HTTP_${response.status}` },
+      );
+    }
     const value = (await response.json()) as unknown;
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new Error("workspace returned a non-object JSON payload");
