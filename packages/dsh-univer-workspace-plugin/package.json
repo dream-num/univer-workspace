@@ -39,6 +39,7 @@
     "@univerjs-pro/boards-print": "1.0.0-insiders.20260822-0c0c0dd",
     "@univerjs-pro/collaboration-embed": "1.0.0-insiders.20260822-0c0c0dd",
     "@univerjs-pro/docs-print": "1.0.0-insiders.20260822-0c0c0dd",
+    "@univerjs-pro/engine-formula-rust-binding": "1.0.0-insiders.20260819-8209aa8",
     "@univerjs-pro/exchange-node": "1.0.0-insiders.20260822-0c0c0dd",
     "@univerjs-pro/exchange-node-binding": "0.1.0",
     "@univerjs-pro/sheets-print": "1.0.0-insiders.20260822-0c0c0dd",

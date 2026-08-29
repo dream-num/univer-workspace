@@ -58,6 +58,26 @@ export function apply(ctx: ClientContext): void {
     }
     return spacesPromise;
   };
+  // The product Space registry is the source of the mechanical DSH Workspace
+  // rows.  It is rebuilt from the persisted Workspace session headers after a
+  // pod restart, so reconcile it once when this capability mounts; otherwise
+  // the stock sidebar starts with an ungrouped list and only gains titles
+  // after the user opens the picker.  The initial probe is intentionally
+  // quiet for an unauthenticated shell; opening the picker keeps the normal
+  // redirect-to-login behavior through loadSpaces().
+  ctx.effect(() => {
+    let active = true;
+    void fetchWorkspaceSpaces({ redirectOnUnauthorized: false }).then(() => {
+      if (!active) return;
+      const refresh = (ctx.workspaces as unknown as { refresh?: () => Promise<void> }).refresh;
+      if (typeof refresh === "function") void refresh();
+    }).catch(() => {
+      // Authentication and transient Workspace failures remain visible when
+      // the user explicitly opens the Space picker; startup must not replace
+      // the DSH shell with a redirect or a permanent error state.
+    });
+    return () => { active = false; };
+  }, "univer-workspace: initial Space reconciliation");
   const nativeStartSession = workspaces.startSession.bind(workspaces);
   // The stock DSH action falls back to the most-recent mechanical workspace.
   // That workspace may be an unlinked local session, which would make every

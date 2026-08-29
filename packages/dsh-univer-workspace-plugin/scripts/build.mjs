@@ -7,7 +7,17 @@ import { fileURLToPath } from "node:url";
 // with the @deepseek-ai/* peers (and zod, owned by dsh-storage-domain) left
 // external, and a classic-script client bundle wrapped in a ModuleLoader
 // shell whose `require` resolves React from the DSH page runtime.
-const external = ["node:*", "@deepseek-ai/*", "zod", "ws"];
+const external = [
+  "node:*",
+  "@deepseek-ai/*",
+  "zod",
+  "ws",
+  // Native addons are installed once by the consuming Harness image. Keep
+  // them out of both host and worker bundles so Node resolves the platform
+  // package from the plugin's production dependency boundary.
+  "@univerjs-pro/engine-formula-rust-binding",
+  "@univerjs-pro/exchange-node-binding",
+];
 
 await rm("lib", { recursive: true, force: true });
 await mkdir("lib", { recursive: true });
@@ -68,7 +78,11 @@ await build({
   format: "esm",
   target: "node22",
   packages: "bundle",
-  external: ["node:*"],
+  external: [
+    "node:*",
+    "@univerjs-pro/engine-formula-rust-binding",
+    "@univerjs-pro/exchange-node-binding",
+  ],
   sourcemap: true,
   logLevel: "info",
 });

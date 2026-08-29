@@ -26,15 +26,16 @@ function parseSpace(value: unknown): WorkspaceSpace | undefined {
 }
 
 /** Load the authenticated user's product Spaces and their DSH carriers. */
-export async function fetchWorkspaceSpaces(): Promise<readonly WorkspaceSpace[]> {
+export async function fetchWorkspaceSpaces(options: { readonly redirectOnUnauthorized?: boolean } = {}): Promise<readonly WorkspaceSpace[]> {
   const response = await fetch(WORKSPACE_SPACES_PATH, {
     credentials: "same-origin",
     headers: { accept: "application/json" },
   });
-  if (response.status === 401) {
+  if (response.status === 401 && options.redirectOnUnauthorized !== false) {
     window.location.assign(WORKSPACE_LOGIN_PATH);
     throw new Error("authentication_required");
   }
+  if (response.status === 401) throw new Error("authentication_required");
   if (!response.ok) {
     let diagnosticId = "";
     try {

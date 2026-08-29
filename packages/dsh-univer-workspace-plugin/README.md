@@ -114,3 +114,8 @@ cannot authorize:
 
 `pnpm build` emits `lib/index.js` (node host bundle) and `lib/client.js`
 (browser bundle); bundled skills ship under `skills/`.
+
+The native formula engine binding is deliberately not bundled into the worker.
+`@univerjs-pro/engine-formula-rust-binding` is a production dependency of this
+plugin; the Harness image installs its platform-specific optional package once
+when the profile is assembled.

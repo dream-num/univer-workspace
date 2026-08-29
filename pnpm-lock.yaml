@@ -961,6 +961,9 @@ importers:
       '@univerjs-pro/edit-history-viewer':
         specifier: 1.0.0-insiders.20260822-0c0c0dd
         version: 1.0.0-insiders.20260822-0c0c0dd(@types/react-dom@19.2.4(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/engine-formula-rust-binding':
+        specifier: 1.0.0-insiders.20260819-8209aa8
+        version: 1.0.0-insiders.20260819-8209aa8
       '@univerjs-pro/exchange-node':
         specifier: 1.0.0-insiders.20260822-0c0c0dd
         version: 1.0.0-insiders.20260822-0c0c0dd(react@18.3.1)(rxjs@7.8.2)
