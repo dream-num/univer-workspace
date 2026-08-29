@@ -1,15 +1,16 @@
 # Univer Workspace 仓库指南
 
 本文件适用于整个仓库。修改前先阅读根 `README.md`、目标目录的 README 和相关设计文档。
-`apps/workspace/AGENTS.md` 对 `apps/workspace/**` 提供更具体的数据库与部署约束；两者同时适用，
-冲突时以更具体且更严格的规则为准。
+`apps/workspace/AGENTS.md` 与 `apps/observer/AGENTS.md` 分别对对应应用提供更具体的数据库与部署
+约束；与本文件冲突时以更具体且更严格的规则为准。
 
 ## 项目目标
 
 本仓库拥有 Univer Workspace 产品及其配套 CLI。它将 Univer、Univer Pro、Univer Collaboration
-SDK 和 Univer CLI SDK 组装成两个对外应用：
+SDK 和 Univer CLI SDK 组装成三个对外应用：
 
 - Univer Workspace：可部署的 Browser、产品 HTTP API、协同入口和后台任务。
+- Univer Observer：独立部署、独立认证并只读访问 Workspace 数据的观测应用。
 - Univer Workspace CLI：面向 Agent 的远程 Workspace 自动化应用。
 
 本仓库还包含供 Browser 或 Node-hosted Workspace Agent Client 使用的 private packages。它们是内部
@@ -19,6 +20,7 @@ SDK 和 Univer CLI SDK 组装成两个对外应用：
 
 ```text
 apps/workspace                 Workspace Browser、Server、HTTP contract 与部署应用
+apps/observer                  独立 Observer Browser、Server、HTTP contract 与部署应用
 apps/cli                       Univer Workspace CLI
 packages/client-core           Node-hosted Workspace Agent Client 共享能力
 packages/reference-provider   Browser 专用的 private referenced-Unit policy
@@ -27,6 +29,8 @@ scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
 
 - `apps/workspace` 拥有 Workspace 产品模型，包括 Identity、Space、Node、Resource、ACL、Trash、
   Recent、Blob、Asset、Operation 和 Worktree 的产品级组织。
+- `apps/observer` 拥有 Observer Identity、Member、Session、访问历史、只读查询与展示；不得拥有或修改
+  Workspace 产品与 Collaboration 数据。
 - `apps/cli` 拥有 Workspace origin、登录 Session、Commander composition 和面向 Agent 的 CLI 交付体验。
 - `packages/client-core` 拥有 Node-hosted Workspace Agent Client 共享的 HTTP、错误、storage-neutral 认证协议、
   远程产品 workflow 与 worker-backed content runtime；Client Shell 注入 origin、凭据、license 与 packaged
@@ -74,6 +78,8 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 - Blob 与内嵌 Univer Asset 的字节由 `BlobStore` 保存，产品数据库只保存身份、元数据和恢复状态。
 - 产品数据库、Collaboration Service 与 BlobStore 之间不存在伪造的跨系统事务。跨边界写入使用
   持久化 Operation、idempotency 和 recovery 明确收敛。
+- Observer 使用独立 SQLite 保存自身身份状态，并只读打开产品与 Collaboration SQLite；不得执行
+  Workspace 或 Collaboration Schema 创建、迁移、索引和修复。
 - Browser 和 CLI 都不能信任客户端提供的 User、Role、Resource、Unit、Worktree 或 confirmed
   revision；服务端从认证 Session 与产品数据解析权威身份和权限。
 - `apps/workspace/**` 的 schema、迁移、备份、升级和部署操作必须遵守
@@ -86,12 +92,14 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 - Express 路由实现、OpenAPI 源文件、生成类型和调用方必须描述同一行为。
 - 修改 HTTP contract 时运行 `pnpm --filter @univerjs/univer-workspace api:verify`，并同步更新受影响
   的 Server、Browser、CLI、测试和文档。
+- `apps/observer/contracts/http` 是 Observer HTTP contract 的源码，其生成物位于
+  `apps/observer/generated/http`；修改时运行 `pnpm --filter @univerjs/univer-observer api:verify`。
 - TanStack Router 生成文件同样通过现有 script 生成，不手工维护生成结果。
 
 ## Package 与发布边界
 
-- `apps/workspace`、`packages/client-core` 和 `packages/reference-provider` 是 private workspace package，
-  不发布为公共 SDK。
+- `apps/workspace`、`apps/observer`、`packages/client-core` 和 `packages/reference-provider` 是 private
+  workspace package，不发布为公共 SDK。
 - `univer-workspace-cli` 通过仓库内 packaging workflow 生成内部安装包；不要把 source workspace
   manifest 的 `private` 状态误当成公共 npm SDK 合同。
 - `apps/cli/package.json` 的 source version 固定为 `0.0.0`；稳定 CLI 版本只来自 `vX.Y.Z` git tag，
@@ -118,6 +126,8 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 - `apps/workspace/docs/application-design.md` 记录产品模块和跨系统边界。
 - `apps/workspace/docs/data-model.md` 是产品数据模型、状态和持久化语义的权威说明。
 - `apps/workspace/docs/adr` 只记录已经接受的架构决策，不把临时计划写成既成事实。
+- `apps/observer/README.md` 记录独立运行、GitHub OAuth、数据挂载、Docker 和验证方式；
+  `apps/observer/docs` 记录其架构、数据模型和 ADR。
 - `apps/cli/README.md` 记录 CLI 的用户能力、安装方式与对外交付合同。
 - Package README 必须明确该 package 的职责、非职责和 consumer 边界。
 

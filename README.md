@@ -2,7 +2,7 @@
 
 # Univer Workspace
 
-**An open-source Office workspace where people and AI agents create, collaborate, and review together.**
+**An open-source Office workspace where people and AI agents create, collaborate, review, and observe together.**
 
 [Univer Docs](https://docs.univer.ai/) · [Office SDK](https://office.univer.ai/) · [CLI guide](apps/cli/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
 
@@ -41,9 +41,12 @@ flowchart LR
     Agent([AI agent]) --> CLI[Workspace CLI]
     Browser --> Server[Workspace Server]
     CLI --> Server
+    Operator([Operator]) --> Observer[Observer]
     Server --> Product[(Product data)]
     Server --> Collaboration[(Collaboration data)]
     Server --> Blobs[(Blob and asset bytes)]
+    Observer -. read only .-> Product
+    Observer -. read only .-> Collaboration
 ```
 
 The Browser is the interactive editing and review surface. The CLI gives agents a
@@ -102,6 +105,10 @@ The Server can also serve the latest built Browser from port 3020 when
 Configuration, authentication, storage, Docker, and database migration details live
 in the [Workspace application guide](apps/workspace/README.md).
 
+For deployment-level Changeset, Operation, and storage visibility, run the separately
+authenticated [Univer Observer](apps/observer/README.md). It uses its own process and
+SQLite while opening Workspace product and Collaboration data read-only.
+
 ## Use the Workspace CLI
 
 Install the agent-facing CLI:
@@ -133,6 +140,7 @@ contract.
 
 ```text
 apps/workspace                 Workspace Browser, Server, HTTP contract, and deployment app
+apps/observer                  Read-only Observer Browser, Server, HTTP contract, and deployment app
 apps/cli                       Agent-ready remote Workspace automation application
 packages/client-core           Private Node-hosted Workspace Agent Client capabilities
 packages/reference-provider   Private Browser-only referenced-Unit policy
@@ -152,6 +160,8 @@ repository applications, including Node-hosted Office exchange, Typst compile/ma
 assembly, screenshots, PNG/PDF output, Slide layout lint, the render-page source, and the SVG
 compile/measure/apply workflow; the reference-provider package remains Browser-only.
 Both are private implementation modules, not additional public applications or SDKs.
+Observer owns only its GitHub-backed member identity, sessions, access history, and
+read-only operational queries; it does not share Workspace authorization or write product data.
 
 ## Architecture principles
 
@@ -216,6 +226,7 @@ the actual package artifact before publication.
 | [Univer Runtime documentation](https://docs.univer.ai/)             | Browser Runtime, presets, plugins, Facade API, and editor capabilities |
 | [Univer Office SDK documentation](https://office.univer.ai/)        | Office SDK stack: Runtime, Collaboration, CLI, and Worktree            |
 | [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades           |
+| [Observer application guide](apps/observer/README.md)               | Read-only observation, independent authentication, and deployment      |
 | [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract             |
 | [Client Core package](packages/client-core/README.md)               | Private Node-hosted client capability boundary                          |
 | [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries               |

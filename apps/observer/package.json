@@ -1,0 +1,50 @@
+{
+  "name": "@univerjs/univer-observer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "api:lint": "redocly lint observer@v1",
+    "api:bundle": "redocly bundle observer@v1 -o generated/http/openapi.bundled.yaml",
+    "api:types": "openapi-typescript",
+    "api:generate": "pnpm api:bundle && pnpm api:types",
+    "api:verify": "pnpm api:lint && pnpm api:generate && git diff --exit-code -- generated/http",
+    "routes:generate": "tsr generate",
+    "dev:web": "vite",
+    "dev:server": "node --env-file-if-exists=.env --watch --import tsx server/src/main.ts",
+    "build:web": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build": "pnpm api:lint && pnpm api:generate && pnpm routes:generate && pnpm build:web && pnpm build:server",
+    "typecheck": "pnpm api:lint && pnpm routes:generate && tsc -p tsconfig.web.json --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "start": "node --env-file-if-exists=.env dist/server/main.js",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@scalar/express-api-reference": "^0.10.11",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@redocly/cli": "^2.41.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-router": "^1.170.18",
+    "@tanstack/router-cli": "^1.167.21",
+    "@tanstack/router-plugin": "^1.168.23",
+    "@types/express": "^5.0.6",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "openapi-typescript": "^7.13.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
+  }
+}

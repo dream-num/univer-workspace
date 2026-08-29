@@ -1,0 +1,62 @@
+openapi: 3.1.2
+info:
+  title: Univer Observer API
+  version: 0.1.0
+  summary: Univer Workspace 的独立只读观测应用接口。
+  description: |
+    Observer 使用独立 GitHub 身份与 SQLite，只读查询 Workspace 产品数据库和
+    Collaboration 数据库。除 Observer Member 管理外，不修改 Workspace 状态。
+servers:
+  - url: /
+tags:
+  - name: Observer
+    description: 部署级只读观测与 Observer Member 管理。
+security:
+  - observerCookie: []
+paths:
+  /api/status:
+    $ref: ./paths/observer.yaml#/~1api~1status
+  /api/setup:
+    $ref: ./paths/observer.yaml#/~1api~1setup
+  /api/auth/github/login:
+    $ref: ./paths/observer.yaml#/~1api~1auth~1github~1login
+  /api/auth/github/callback:
+    $ref: ./paths/observer.yaml#/~1api~1auth~1github~1callback
+  /api/session:
+    $ref: ./paths/observer.yaml#/~1api~1session
+  /api/overview:
+    $ref: ./paths/observer.yaml#/~1api~1overview
+  /api/operations:
+    $ref: ./paths/observer.yaml#/~1api~1operations
+  /api/storage:
+    $ref: ./paths/observer.yaml#/~1api~1storage
+  /api/config:
+    $ref: ./paths/observer.yaml#/~1api~1config
+  /api/filter-options:
+    $ref: ./paths/observer.yaml#/~1api~1filter-options
+  /api/changesets:
+    $ref: ./paths/observer.yaml#/~1api~1changesets
+  /api/members:
+    $ref: ./paths/observer.yaml#/~1api~1members
+  /api/members/{githubUserId}:
+    $ref: ./paths/observer.yaml#/~1api~1members~1{githubUserId}
+  /api/access-events:
+    $ref: ./paths/observer.yaml#/~1api~1access-events
+components:
+  securitySchemes:
+    observerCookie:
+      type: apiKey
+      in: cookie
+      name: univer_observer_session
+      description: 独立于 Workspace Session 的 Observer HttpOnly Session Cookie。
+  schemas:
+    Error:
+      $ref: ./schemas/common.yaml#/Error
+    ErrorResponse:
+      $ref: ./schemas/common.yaml#/ErrorResponse
+    ObserverMember:
+      $ref: ./schemas/observer.yaml#/ObserverMember
+    ObserverStatus:
+      $ref: ./schemas/observer.yaml#/ObserverStatus
+    ChangesetActivity:
+      $ref: ./schemas/observer.yaml#/ChangesetActivity

@@ -23,7 +23,10 @@
     "unlink:workspace-cli": "node scripts/unlink-workspace-cli.mjs",
     "workspace:dev:web": "pnpm --filter @univerjs/univer-workspace dev:web",
     "workspace:dev:server": "pnpm --filter @univerjs/univer-workspace dev:server",
-    "workspace:start": "pnpm --filter @univerjs/univer-workspace start"
+    "workspace:start": "pnpm --filter @univerjs/univer-workspace start",
+    "observer:dev:web": "pnpm --filter @univerjs/univer-observer dev:web",
+    "observer:dev:server": "pnpm --filter @univerjs/univer-observer dev:server",
+    "observer:start": "pnpm --filter @univerjs/univer-observer start"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
