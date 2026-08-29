@@ -42,8 +42,8 @@ const API_PATH = "/api";
 const RESPOND_PATH = "/api/respond";
 const SESSION_EXPORT_PATH = "/api/session.export";
 // These endpoints are provided by DSH's optional Cordis runner.  They are
-// still process-global host routes, so the authenticated carrier must allow
-// them through to the stock ApiProxy instead of treating them as unknown.
+// process-global Typert routes, not members of the fixed ApiProxy unary map;
+// the carrier forwards them through the stock Connection shared handler below.
 // Omitting them makes the stock client emit a 404 on every inventory/manifest
 // refresh even though the runner plugin is installed in the profile.
 const DYNAMIC_CORDIS_PATHS = new Set([
@@ -53,9 +53,9 @@ const DYNAMIC_CORDIS_PATHS = new Set([
 /** Typert endpoints intentionally exposed by the authenticated carrier.
  *
  * The browser's command palette calls these through the public Typert
- * gateway, not through the legacy `ApiProxy` method map.  Keep the allowlist
- * narrow: optional remotes (notably dynamicCordis) are not part of this
- * service's contract and must remain unavailable.
+ * gateway, not through the legacy `ApiProxy` method map. Keep this command
+ * allowlist narrow; the optional dynamicCordis routes have a separate,
+ * authenticated forwarding branch below.
  */
 const TYPERT_COMMAND_ENDPOINTS: ReadonlySet<string> = new Set([
   "commands/list",
@@ -697,8 +697,25 @@ export function installScopedConnection(ctx: Context, config: ScopedConnectionCo
         );
         return;
       }
+      if (DYNAMIC_CORDIS_PATHS.has(pathname)) {
+        const userId = sessionIdentity(req, config);
+        if (userId === undefined) {
+          rejectHttp(res, 401, "missing_or_invalid_session");
+          return;
+        }
+        await handleDynamicCordisRequest(
+          ctx,
+          config,
+          pathname,
+          req,
+          res,
+          maxBodyBytes,
+          userId,
+          getSharedTypertHandler,
+        );
+        return;
+      }
       if (!SCOPED_RPC_PATHS.has(pathname)
-        && !DYNAMIC_CORDIS_PATHS.has(pathname)
         && pathname !== RESPOND_PATH
         && pathname !== SESSION_EXPORT_PATH) {
         rejectHttp(res, 404, "not_found");
@@ -797,6 +814,83 @@ export function installScopedConnection(ctx: Context, config: ScopedConnectionCo
       console.warn("univer-workspace-harness: downlink disposer failed", error);
     });
   };
+}
+
+/**
+ * Forward a dynamic Cordis Typert request through DSH's shared gateway.  These
+ * methods are not members of the fixed ApiProxy unary map; routing them through
+ * `toFetchHandler(api)` produces a guaranteed 404 even when the host-runner
+ * service is installed.  Agent-bearing calls are checked against the current
+ * authenticated account before the generic Typert handler sees them.
+ */
+async function handleDynamicCordisRequest(
+  ctx: Context,
+  config: ScopedConnectionConfig,
+  pathname: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  maxBodyBytes: number,
+  userId: string,
+  getSharedHandler: () => FetchHandler,
+): Promise<void> {
+  let body: Buffer;
+  try {
+    body = await readBody(req, maxBodyBytes);
+  } catch {
+    rejectHttp(res, 413, "request_body_too_large");
+    return;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = body.byteLength === 0 ? undefined : JSON.parse(body.toString("utf8")) as unknown;
+  } catch {
+    parsed = undefined;
+  }
+  const agentId = typertCommandAgentId(parsed);
+  if (agentId !== undefined) {
+    let scope: Scope;
+    try {
+      scope = await buildScope(ctx, config, userId);
+    } catch {
+      rejectHttp(res, 503, "workspace_scope_unavailable");
+      return;
+    }
+    if (!ownSession(scope, agentId)) {
+      const message = object(parsed);
+      rejectForeignTypertAgent(res, message?.rpcId, agentId);
+      return;
+    }
+  }
+
+  let shared: FetchHandler;
+  try {
+    shared = getSharedHandler();
+  } catch {
+    rejectHttp(res, 503, "typert_gateway_unavailable");
+    return;
+  }
+  const abort = new AbortController();
+  const onClose = (): void => {
+    if (!res.writableEnded) abort.abort();
+  };
+  res.once("close", onClose);
+  try {
+    const url = new URL(req.url ?? pathname, "http://dsh.internal");
+    const response = await shared.fetch(new Request(url, {
+      method: req.method ?? "POST",
+      headers: requestHeaders(req),
+      ...(body.byteLength === 0 ? {} : { body: body.toString("utf8") }),
+      signal: abort.signal,
+    }));
+    await writeFetchResponse(res, response);
+  } catch (error: unknown) {
+    if (!abort.signal.aborted) {
+      rejectHttp(res, 500, `dynamic_cordis_rpc_failed:${error instanceof Error ? error.message : String(error)}`);
+    }
+  } finally {
+    res.off("close", onClose);
+  }
 }
 
 /**

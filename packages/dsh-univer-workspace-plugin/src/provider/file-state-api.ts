@@ -7,6 +7,7 @@ import type { WorkspaceHttpClient } from "./workspace-contract.ts";
 import { WorkspaceApiError } from "./api-errors.ts";
 import { openResource } from "./resources-api.ts";
 import {
+  getWorktreeDetail,
   listReviewWorktrees,
   openWorktreeUnit,
   type WorktreeStateView,
@@ -39,9 +40,17 @@ export interface DocumentFileState {
 /** FileState for a WORKTREE key: first unit anchors the trunk viewer, and the
  * worktree itself is the only related entry. */
 export async function getWorktreeFileState(client: WorkspaceHttpClient, worktreeId: string): Promise<DocumentFileState> {
-  const all = await listReviewWorktrees(client);
-  const worktree = all.find((entry) => entry.worktreeId === worktreeId);
-  if (worktree === undefined) throw new WorkspaceApiError("worktree not found", 404, "NOT_FOUND");
+  // Resolve the requested Worktree directly.  Listing both active and
+  // processed Worktrees here made one stale/corrupt historical Worktree poison
+  // every Viewer poll and multiplied the request fan-out.  The detail route
+  // already applies the authenticated user's ACL and returns a precise 404
+  // for an expired Worktree, which the browser treats as processed.
+  const worktree = await getWorktreeDetail(client, worktreeId).catch((error: unknown) => {
+    if (error instanceof WorkspaceApiError && error.status === 404) {
+      throw new WorkspaceApiError("worktree not found", 404, "NOT_FOUND");
+    }
+    throw error;
+  });
   const first = worktree.units[0];
   let viewerTarget: DocumentFileState["viewerTarget"] = null;
   let resourceId = first?.resourceId ?? "";
