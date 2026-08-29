@@ -81,4 +81,8 @@ await build({
 // public entry (dist/index.mjs) and take its sibling bootstrap.
 const poolEntryUrl = import.meta.resolve("@univer-cli/univer-collaboration-runtime-pool");
 const poolChildPath = fileURLToPath(new URL("./worker-child.mjs", poolEntryUrl));
-await copyFile(poolChildPath, fileURLToPath(new URL("../lib/worker-child.mjs", import.meta.url)));
+await copyFile(poolChildPath, fileURLToPath(new URL("../lib/worker-child-upstream.mjs", import.meta.url)));
+await copyFile(
+  fileURLToPath(new URL("../src/runtime/worker-child-bootstrap.mjs", import.meta.url)),
+  fileURLToPath(new URL("../lib/worker-child.mjs", import.meta.url)),
+);
