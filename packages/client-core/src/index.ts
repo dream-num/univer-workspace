@@ -10,6 +10,7 @@ export {
   type WorkspaceSubject,
 } from "./auth.js";
 export { WorkspaceBlobFeature } from "./blob.js";
+export { measureCanonicalJson, type CanonicalJsonMeasurement } from "./canonical-json.js";
 export { resolveWorkspaceAssetContent } from "./asset-content.js";
 export { WorkspaceAssetFeature } from "./asset.js";
 export {
@@ -70,22 +71,30 @@ export { WorkspaceOpenFeature, type WorkspaceOpenResult } from "./open.js";
 export {
   WorkspaceUnitExchangeFeature,
   type WorkspaceExportFileInput,
+  type WorkspaceExportFileControls,
   type WorkspaceExportFileResult,
+  type WorkspaceImportFileControls,
   type WorkspaceImportFileInput,
   type WorkspaceImportFileResult,
   type WorkspaceUnitExchangeDependencies,
 } from "./office-exchange.js";
+export { ExchangeError, ExchangeErrorCode } from "@univerjs-pro/exchange-node";
 export { WorkspaceUnitFeature } from "./unit.js";
 export {
   WorkspaceCompileTypstFeature,
+  projectWorkspaceTypstDependencyFailure,
   type WorkspaceCompileTypstDependencies,
   type WorkspaceCompileTypstInput,
   type WorkspaceCompileTypstResult,
   type WorkspaceTypstMaterializeInput,
   type WorkspaceTypstMaterializeResult,
   type WorkspaceTypstMaterializer,
+  type WorkspaceTypstDependencyFailure,
 } from "./typst.js";
-export { HeadlessWorkspaceTypstMaterializer } from "./typst-materialize.js";
+export {
+  HeadlessWorkspaceTypstMaterializer,
+  type HeadlessWorkspaceTypstMaterializerOptions,
+} from "./typst-materialize.js";
 export {
   WorkspaceUnitLayoutLintFeature,
   type WorkspaceUnitLayoutLintFeatureOptions,
@@ -94,6 +103,7 @@ export {
   WorkspaceContentSource,
 } from "./runtime-source.js";
 export {
+  projectWorkspaceRenderDependencyCode,
   WorkspaceRenderUnitLoader,
   type WorkspaceRenderUnitLoadInput,
   type WorkspaceRenderUnitLoaderOptions,
@@ -108,6 +118,7 @@ export {
 } from "./screenshot.js";
 export {
   createWorkspaceSvgTextMeasurer,
+  projectWorkspaceSvgDependencyCode,
   WorkspaceCompileSvgFeature,
   type WorkspaceApplySvgInput,
   type WorkspaceApplySvgResult,
@@ -123,6 +134,8 @@ export {
   type WorkspaceContentRuntimeOptions,
   type WorkspaceContentRuntimeWriteResult,
 } from "./content-runtime.js";
+export { CollaborationRuntimeError } from "@univer-cli/univer-collaboration-runtime";
+export { UniverCollaborationRuntimePoolError } from "@univer-cli/univer-collaboration-runtime-pool";
 export {
   WorkspaceContentExecutionFeature,
   type WorkspaceContentExecuteInput,

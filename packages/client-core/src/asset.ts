@@ -11,17 +11,24 @@ export class WorkspaceAssetFeature {
     readonly force?: boolean;
     readonly outputPath: string;
     readonly worktreeId: string;
-  }): Promise<Record<string, unknown>> {
+  }, signal?: AbortSignal): Promise<Record<string, unknown>> {
     const assetId = required(input.assetId, "Asset ID");
     const worktreeId = required(input.worktreeId, "Worktree ID");
-    const http = await this.authenticatedHttp();
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
     const target = await prepareDownload({
       kind: "asset",
       ...(input.force === true ? { force: true } : {}),
       outputPath: input.outputPath,
+      ...(signal === undefined ? {} : { signal }),
     });
+    let response: Response | undefined;
     try {
-      const response = await resolveWorkspaceAssetContent(http, { assetId, worktreeId });
+      response = await resolveWorkspaceAssetContent(http, {
+        assetId,
+        worktreeId,
+        ...(signal === undefined ? {} : { signal }),
+      });
       const mediaType = response.headers.get("content-type");
       if (mediaType === null || mediaType.length === 0 || response.body === null) {
         throw workspaceError(
@@ -30,7 +37,7 @@ export class WorkspaceAssetFeature {
         );
       }
       const size = contentLength(response, "Asset");
-      const written = await target.writeAndCommit(responseContent(response), size);
+      const written = await target.writeAndCommit(responseContent(response, signal), size);
       const etag = response.headers.get("etag");
       return {
         assetId,
@@ -41,6 +48,7 @@ export class WorkspaceAssetFeature {
         ...(etag === null ? {} : { etag }),
       };
     } finally {
+      await response?.body?.cancel().catch(() => undefined);
       await target.discard();
     }
   }

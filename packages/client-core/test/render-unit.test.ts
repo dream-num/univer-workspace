@@ -1,12 +1,57 @@
-import type { ScreenshotImageAsset } from "@univer-cli/unit-screenshot";
+import { UnitScreenshotError, type ScreenshotImageAsset } from "@univer-cli/unit-screenshot";
+import { UnitLayoutLintError } from "@univer-cli/unit-layout-lint";
+import { UniverRenderError } from "@univer-cli/univer-render-runtime";
 import { describe, expect, it, vi } from "vitest";
 import {
   WorkspaceRenderUnitLoader,
+  projectWorkspaceRenderDependencyCode,
   type WorkspaceRenderUnitSource,
   type WorkspaceRuntimeTarget,
 } from "../src/index.js";
 
 describe("Workspace render Unit loader", () => {
+  it("projects only real public render error constructors", () => {
+    expect(projectWorkspaceRenderDependencyCode(
+      new UnitScreenshotError("PAGE_LIMIT_EXCEEDED", "screenshot-secret"),
+    )).toBe("PAGE_LIMIT_EXCEEDED");
+    expect(projectWorkspaceRenderDependencyCode(
+      new UnitLayoutLintError("INVALID_RENDER_RESULT", "layout-secret"),
+    )).toBe("INVALID_RENDER_RESULT");
+    expect(projectWorkspaceRenderDependencyCode(
+      new UniverRenderError("BROWSER_UNAVAILABLE", "browser-secret"),
+    )).toBe("BROWSER_UNAVAILABLE");
+    for (const forged of [
+      { code: "PAGE_LIMIT_EXCEEDED", name: "UnitScreenshotError" },
+      { code: "INVALID_RENDER_RESULT", name: "UnitLayoutLintError" },
+      { code: "BROWSER_UNAVAILABLE", name: "UniverRenderError" },
+    ]) {
+      expect(projectWorkspaceRenderDependencyCode(forged)).toBeUndefined();
+    }
+  });
+
+  it("loads an already resolved target without resolving it again and keeps loadUnit compatibility", async () => {
+    const host = target("host", "slide", { kind: "worktree", worktreeId: "wt-1" });
+    const resolveRuntimeTarget = vi.fn(async () => host);
+    const source = sourceWith(host, { resolveRuntimeTarget });
+    const exportUnitData = vi.fn(async ({ target }: { target: WorkspaceRuntimeTarget }) => ({
+      id: target.unitId,
+      revision: target.revision,
+    }));
+    const loader = new WorkspaceRenderUnitLoader({
+      openSource: async () => source,
+      runtime: { exportUnitData: exportUnitData as never },
+    });
+
+    const resolved = await loader.loadResolvedTarget({ target: host });
+    expect(resolveRuntimeTarget).not.toHaveBeenCalled();
+    expect(exportUnitData).toHaveBeenLastCalledWith({ target: host });
+
+    const classic = await loader.loadUnit({ scope: host.scope, unitId: host.unitId });
+    expect(classic).toEqual(resolved);
+    expect(resolveRuntimeTarget).toHaveBeenCalledOnce();
+    expect(exportUnitData).toHaveBeenLastCalledWith({ target: host });
+  });
+
   it("loads formula references in lexical order with trim, deduplication, and self exclusion", async () => {
     const host = target("host", "board", { kind: "worktree", worktreeId: "wt-1" });
     const sourceTargets = new Map([
@@ -30,9 +75,12 @@ describe("Workspace render Unit loader", () => {
     const resolveReferencedRuntimeTarget = vi.fn(
       async ({ unitId }: { unitId: string }) => sourceTargets.get(unitId)!,
     );
-    const loader = loaderWith({
-      exportUnitData,
-      source: sourceWith(host, { resolveReferencedRuntimeTarget }),
+    const resolveRuntimeTarget = vi.fn(async () => host);
+    const source = sourceWith(host, { resolveReferencedRuntimeTarget, resolveRuntimeTarget });
+    const openSource = vi.fn(async () => source);
+    const loader = new WorkspaceRenderUnitLoader({
+      runtime: { exportUnitData: exportUnitData as never },
+      openSource,
     });
 
     await expect(loader.loadUnit({ scope: host.scope, unitId: " host " })).resolves.toEqual({
@@ -52,6 +100,10 @@ describe("Workspace render Unit loader", () => {
       "source-base",
       "source-sheet",
     ]);
+    expect(openSource).toHaveBeenCalledOnce();
+    expect(resolveRuntimeTarget).toHaveBeenCalledOnce();
+    expect(resolveReferencedRuntimeTarget).toHaveBeenCalledTimes(2);
+    expect(exportUnitData).toHaveBeenNthCalledWith(1, { target: host });
   });
 
   it.each(["doc", "slide", "board"] as const)(
@@ -336,6 +388,209 @@ describe("Workspace render Unit loader", () => {
     expect(resolveImageAsset).not.toHaveBeenCalled();
     expect(loaded.unitData).toBe(hostData);
     expect(loaded.unitData).toEqual({ id: "host", drawing: image("asset-1") });
+  });
+
+  it("starts no load work for a pre-aborted signal", async () => {
+    const openSource = vi.fn();
+    const exportUnitData = vi.fn();
+    const reason = new Error("cancel-before-render-load");
+    const controller = new AbortController();
+    controller.abort(reason);
+    const loader = new WorkspaceRenderUnitLoader({
+      runtime: { exportUnitData },
+      openSource,
+    });
+
+    await expect(
+      loader.loadUnit({ scope: { kind: "trunk" }, signal: controller.signal, unitId: "host" }),
+    ).rejects.toBe(reason);
+    expect(openSource).not.toHaveBeenCalled();
+    expect(exportUnitData).not.toHaveBeenCalled();
+  });
+
+  it.each(["source", "target", "export", "reference"] as const)(
+    "prefers the exact abort reason when %s rejects after abort",
+    async (stage) => {
+      const controller = new AbortController();
+      const reason = new Error(`cancel-during-${stage}`);
+      const dependencyFailure = new Error(`dependency-${stage}`);
+      const host = target("host", "sheet", { kind: "trunk" });
+      const calls: string[] = [];
+      const failAt = (current: typeof stage) => {
+        calls.push(current);
+        if (stage === current) {
+          controller.abort(reason);
+          throw dependencyFailure;
+        }
+      };
+      const source = sourceWith(host, {
+        resolveReferencedRuntimeTarget: async ({ unitId }) => {
+          failAt("reference");
+          return target(unitId, "sheet", host.scope);
+        },
+        resolveTrunkRuntimeTarget: async () => {
+          failAt("target");
+          return host;
+        },
+      });
+      const loader = new WorkspaceRenderUnitLoader({
+        openSource: async () => {
+          failAt("source");
+          return source;
+        },
+        runtime: {
+          exportUnitData: async ({ target }) => {
+            failAt("export");
+            return {
+              id: target.unitId,
+              ...(stage === "reference"
+                ? { resources: [externalReferences({ child: { sourceUnitId: "child" } })] }
+                : {}),
+            } as never;
+          },
+        },
+      });
+
+      await expect(
+        loader.loadUnit({ scope: host.scope, signal: controller.signal, unitId: host.unitId }),
+      ).rejects.toBe(reason);
+      expect(calls).toEqual(
+        ["source", "target", "export", "reference"].slice(0, calls.length),
+      );
+    },
+  );
+
+  it("passes one signal through source, target, UnitData, reference, and Asset loading", async () => {
+    const signal = new AbortController().signal;
+    const host = target("host", "board", { kind: "worktree", worktreeId: "wt-1" });
+    const reference = target("reference", "sheet", host.scope);
+    const calls: string[] = [];
+    const source = sourceWith(host, {
+      resolveImageAsset: async (input) => {
+        expect(input.signal).toBe(signal);
+        calls.push("asset");
+        return asset(input.assetId);
+      },
+      resolveReferencedRuntimeTarget: async (_input, observedSignal) => {
+        expect(observedSignal).toBe(signal);
+        calls.push("reference");
+        return reference;
+      },
+      resolveRuntimeTarget: async (_input, observedSignal) => {
+        expect(observedSignal).toBe(signal);
+        calls.push("target");
+        return host;
+      },
+    });
+    const openSource = vi.fn(async (observedSignal?: AbortSignal) => {
+      expect(observedSignal).toBe(signal);
+      calls.push("source");
+      return source;
+    });
+    const exportUnitData = vi.fn(async (input: {
+      signal?: AbortSignal;
+      target: WorkspaceRuntimeTarget;
+    }) => {
+      expect(input.signal).toBe(signal);
+      calls.push(`export:${input.target.unitId}`);
+      return input.target.unitId === host.unitId
+        ? {
+            id: host.unitId,
+            drawing: image("asset-1"),
+            resources: [externalReferences({ reference: { sourceUnitId: reference.unitId } })],
+          }
+        : { id: reference.unitId };
+    });
+    const loader = new WorkspaceRenderUnitLoader({
+      runtime: { exportUnitData: exportUnitData as never },
+      openSource,
+    });
+
+    await expect(loader.loadUnit({ scope: host.scope, signal, unitId: host.unitId }))
+      .resolves.toMatchObject({ unitData: { id: host.unitId } });
+    expect(calls).toEqual([
+      "source",
+      "target",
+      "export:host",
+      "reference",
+      "export:reference",
+      "asset",
+    ]);
+  });
+
+  it("awaits an active reference resolution and starts no later reference or export after abort", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-reference");
+    const host = target("host", "sheet", { kind: "trunk" });
+    const exportUnitData = vi.fn(async ({ target }: { target: WorkspaceRuntimeTarget }) => ({
+      id: target.unitId,
+      ...(target.unitId === host.unitId
+        ? {
+            resources: [
+              externalReferences({
+                first: { sourceUnitId: "first" },
+                second: { sourceUnitId: "second" },
+              }),
+            ],
+          }
+        : {}),
+    }));
+    const resolveReferencedRuntimeTarget = vi.fn(async ({ unitId }: { unitId: string }) => {
+      controller.abort(reason);
+      return target(unitId, "sheet", host.scope);
+    });
+    const loader = loaderWith({
+      exportUnitData,
+      source: sourceWith(host, { resolveReferencedRuntimeTarget }),
+    });
+
+    await expect(
+      loader.loadUnit({ scope: host.scope, signal: controller.signal, unitId: host.unitId }),
+    ).rejects.toBe(reason);
+    expect(resolveReferencedRuntimeTarget).toHaveBeenCalledOnce();
+    expect(exportUnitData).toHaveBeenCalledOnce();
+  });
+
+  it("awaits an active Asset resolution and starts no later Asset after abort", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-asset");
+    const host = target("host", "board", { kind: "worktree", worktreeId: "wt-1" });
+    const resolveImageAsset = vi.fn(async ({ assetId }: { assetId: string }) => {
+      controller.abort(reason);
+      return asset(assetId);
+    });
+    const loader = loaderWith({
+      exportUnitData: async () => ({
+        id: host.unitId,
+        first: image("asset-1"),
+        second: image("asset-2"),
+      }),
+      source: sourceWith(host, { resolveImageAsset }),
+    });
+
+    await expect(
+      loader.loadUnit({ scope: host.scope, signal: controller.signal, unitId: host.unitId }),
+    ).rejects.toBe(reason);
+    expect(resolveImageAsset).toHaveBeenCalledOnce();
+  });
+
+  it("prefers the exact abort reason when an active Asset rejects after abort", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-asset-rejection");
+    const host = target("host", "board", { kind: "worktree", worktreeId: "wt-1" });
+    const resolveImageAsset = vi.fn(async () => {
+      controller.abort(reason);
+      throw new Error("asset-dependency-secret");
+    });
+    const loader = loaderWith({
+      exportUnitData: async () => ({ id: host.unitId, image: image("asset-1") }),
+      source: sourceWith(host, { resolveImageAsset }),
+    });
+
+    await expect(
+      loader.loadUnit({ scope: host.scope, signal: controller.signal, unitId: host.unitId }),
+    ).rejects.toBe(reason);
+    expect(resolveImageAsset).toHaveBeenCalledOnce();
   });
 });
 

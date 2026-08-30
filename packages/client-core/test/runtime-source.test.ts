@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   WorkspaceContentSource,
   WorkspaceHttp,
@@ -42,6 +42,77 @@ describe("Workspace runtime source resolution", () => {
       unitId: "book-1",
       unitType: "sheet",
     });
+  });
+
+  it("stops Worktree target resolution before or after an abort-oblivious request", async () => {
+    const before = new AbortController();
+    before.abort(new Error("cancel-before-target"));
+    const untouched = vi.fn<typeof fetch>();
+    await expect(
+      contentSource(untouched).resolveRuntimeTarget(
+        { unitId: "book-1", worktreeId: "wt-1" },
+        before.signal,
+      ),
+    ).rejects.toThrow("cancel-before-target");
+    expect(untouched).not.toHaveBeenCalled();
+
+    let release!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const controller = new AbortController();
+    const request = contentSource(async () => {
+      await entered;
+      return Response.json({ worktree: rawWorktree() });
+    }).resolveRuntimeTarget(
+      { unitId: "book-1", worktreeId: "wt-1" },
+      controller.signal,
+    );
+    controller.abort(new Error("cancel-during-target"));
+    release();
+    await expect(request).rejects.toThrow("cancel-during-target");
+  });
+
+  it("starts no later Trunk probe after cancellation", async () => {
+    const controller = new AbortController();
+    const requests: string[] = [];
+    const source = contentSource(async (input) => {
+      requests.push(new URL(input instanceof Request ? input.url : input.toString()).pathname);
+      controller.abort(new Error("cancel-between-probes"));
+      return unitTypeMismatch();
+    });
+    await expect(
+      source.resolveTrunkRuntimeTarget({ unitId: "unit-1" }, controller.signal),
+    ).rejects.toThrow("cancel-between-probes");
+    expect(requests).toHaveLength(1);
+  });
+
+  it("starts no Trunk fallback after referenced Worktree resolution is cancelled", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-reference-target");
+    const requests: string[] = [];
+    const source = contentSource(async (input) => {
+      requests.push(new URL(input instanceof Request ? input.url : input.toString()).pathname);
+      controller.abort(reason);
+      return Response.json({ worktree: rawWorktree("draft", []) });
+    });
+
+    await expect(
+      source.resolveReferencedRuntimeTarget(
+        {
+          hostTarget: {
+            origin: "https://workspace.test",
+            revision: 7,
+            scope: { kind: "worktree", worktreeId: "wt-1" },
+            unitId: "host",
+            unitType: "sheet",
+          },
+          unitId: "reference",
+        },
+        controller.signal,
+      ),
+    ).rejects.toBe(reason);
+    expect(requests).toEqual(["/api/worktrees/wt-1"]);
   });
 
   it("rejects missing membership and non-Draft editability before Snapshot access", async () => {

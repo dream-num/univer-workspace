@@ -12,12 +12,17 @@ import {
   type UniverRenderRuntimeOptions,
   type UniverRenderUnit,
 } from "@univer-cli/univer-render-runtime";
-import { workspaceError } from "./errors.js";
-import type { WorkspaceRenderUnitLoader, WorkspaceRenderUnitLoadInput } from "./render-unit.js";
+import { WorkspaceApplicationError, workspaceError } from "./errors.js";
+import {
+  awaitRenderOperation,
+  type WorkspaceRenderUnitLoader,
+  type WorkspaceRenderUnitLoadInput,
+} from "./render-unit.js";
 
 export interface WorkspaceScreenshotWriteInput {
   readonly destination?: string;
   readonly result: UnitScreenshotResult;
+  readonly signal?: AbortSignal;
 }
 
 export interface WorkspaceScreenshotWrittenImage {
@@ -56,24 +61,46 @@ export class WorkspaceScreenshotFeature implements WorkspaceScreenshotApplicatio
   }
 
   public async capture(input: UnitScreenshotInput): Promise<UnitScreenshotResult> {
-    const runtime = await this.#createRuntime({
-      renderPageRoot: this.options.renderPageRoot,
-      license: this.options.license,
-      env: this.options.env,
-      ...(input.signal === undefined ? {} : { signal: input.signal }),
-    });
+    input.signal?.throwIfAborted();
+    let runtime: UniverRenderRuntime;
     try {
-      return await createUnitScreenshot({ runtime }).capture(input);
+      runtime = await this.#createRuntime({
+        renderPageRoot: this.options.renderPageRoot,
+        license: this.options.license,
+        env: this.options.env,
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
+      });
+    } catch (error) {
+      input.signal?.throwIfAborted();
+      throw error;
+    }
+    let failed = false;
+    try {
+      input.signal?.throwIfAborted();
+      return await awaitRenderOperation(createUnitScreenshot({ runtime }).capture(input), input.signal);
+    } catch (error) {
+      failed = true;
+      throw error;
     } finally {
-      await runtime.close();
+      try {
+        await runtime.close();
+      } catch (error) {
+        if (!failed) {
+          input.signal?.throwIfAborted();
+          throw error;
+        }
+      }
+      if (!failed) input.signal?.throwIfAborted();
     }
   }
 
   public async writeImages(
     input: WorkspaceScreenshotWriteInput,
   ): Promise<readonly WorkspaceScreenshotWrittenImage[]> {
+    input.signal?.throwIfAborted();
     const directory = resolve(this.#cwd, input.destination ?? "screenshots");
     await mkdir(directory, { recursive: true });
+    input.signal?.throwIfAborted();
     const outputs = input.result.images.map((image) => {
       if (basename(image.name) !== image.name || image.name === "." || image.name === "..") {
         throw workspaceError(
@@ -83,16 +110,39 @@ export class WorkspaceScreenshotFeature implements WorkspaceScreenshotApplicatio
       }
       return { image, path: join(directory, image.name) };
     });
+    input.signal?.throwIfAborted();
     for (const output of outputs) {
+      input.signal?.throwIfAborted();
       if (await pathExists(output.path)) {
         throw workspaceError(
           "workspace-screenshot-output-exists",
           `Screenshot output already exists: ${output.path}`,
         );
       }
+      input.signal?.throwIfAborted();
     }
-    for (const output of outputs) await writeExclusive(output.path, output.image.bytes);
-    return outputs.map(({ image, path }) => ({ location: path, name: image.name }));
+    const committedOutputs: WorkspaceScreenshotWrittenImage[] = [];
+    try {
+      for (const output of outputs) {
+        input.signal?.throwIfAborted();
+        await writeExclusive(output.path, output.image.bytes, input.signal, () => {
+          committedOutputs.push({ location: output.path, name: output.image.name });
+        });
+      }
+      return committedOutputs;
+    } catch (error) {
+      if (input.signal === undefined || committedOutputs.length === 0) throw error;
+      throw workspaceError(
+        "workspace-screenshot-output-partial",
+        "Some screenshot outputs were committed. Inspect the listed files before retrying.",
+        {
+          totalOutputCount: outputs.length,
+          committedOutputCount: committedOutputs.length,
+          committedOutputs,
+          causeCode: partialOutputCauseCode(error, input.signal),
+        },
+      );
+    }
   }
 }
 
@@ -106,27 +156,72 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function writeExclusive(path: string, bytes: Uint8Array): Promise<void> {
+async function writeExclusive(
+  path: string,
+  bytes: Uint8Array,
+  signal: AbortSignal | undefined,
+  committed: () => void,
+): Promise<void> {
   const temporary = join(
     dirname(path),
     `.${basename(path)}.${String(process.pid)}.${randomUUID()}.tmp`,
   );
+  let failure: unknown;
+  let failed = false;
   try {
+    signal?.throwIfAborted();
     await writeFile(temporary, bytes, { flag: "wx", mode: 0o600 });
+    signal?.throwIfAborted();
     await link(temporary, path);
+    committed();
+    signal?.throwIfAborted();
   } catch (error) {
     if (isNodeError(error) && error.code === "EEXIST") {
-      throw workspaceError(
+      failure = workspaceError(
         "workspace-screenshot-output-exists",
         `Screenshot output already exists: ${path}`,
       );
+    } else {
+      failure = error;
     }
-    throw error;
+    failed = true;
   } finally {
-    await unlink(temporary).catch((error: unknown) => {
-      if (!isNodeError(error) || error.code !== "ENOENT") throw error;
-    });
+    try {
+      signal?.throwIfAborted();
+    } catch (error) {
+      failure = error;
+      failed = true;
+    }
+    try {
+      await unlink(temporary);
+    } catch (error) {
+      if (!isNodeError(error) || error.code !== "ENOENT") {
+        failure = error;
+        failed = true;
+      }
+    }
+    try {
+      signal?.throwIfAborted();
+    } catch (error) {
+      failure = error;
+      failed = true;
+    }
   }
+  if (failed) throw failure;
+}
+
+function partialOutputCauseCode(
+  error: unknown,
+  signal: AbortSignal,
+): "ABORTED" | "workspace-screenshot-output-exists" | "workspace-screenshot-output-failed" {
+  if (signal.aborted) return "ABORTED";
+  if (
+    error instanceof WorkspaceApplicationError &&
+    error.code === "workspace-screenshot-output-exists"
+  ) {
+    return "workspace-screenshot-output-exists";
+  }
+  return "workspace-screenshot-output-failed";
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

@@ -14,6 +14,13 @@ const DEPENDENCY_FIELDS = [
 const INDEPENDENTLY_VERSIONED_PACKAGES = new Set([
   "@univerjs/icons",
   "@univerjs-pro/cli-assets",
+  "@univerjs-pro/doc-typst-native-binding",
+  "@univerjs-pro/doc-typst-native-binding-darwin-arm64",
+  "@univerjs-pro/doc-typst-native-binding-darwin-x64",
+  "@univerjs-pro/doc-typst-native-binding-linux-arm64-gnu",
+  "@univerjs-pro/doc-typst-native-binding-linux-x64-gnu",
+  "@univerjs-pro/doc-typst-native-binding-win32-x64-msvc",
+  "@univerjs-pro/engine-formula-rust-binding",
   "@univerjs-pro/exchange-node-binding",
 ]);
 const EXACT_SEMVER_PATTERN =

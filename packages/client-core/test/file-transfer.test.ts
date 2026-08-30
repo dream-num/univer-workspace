@@ -402,6 +402,37 @@ describe("Workspace application feature parity", () => {
     ).rejects.toMatchObject({ code: "workspace-invalid-response" });
   });
 
+  it("cancels an unconsumed Blob response when metadata validation fails", async () => {
+    const directory = await temporaryDirectory();
+    let cancelled = false;
+    const feature = new WorkspaceBlobFeature(
+      authFor(async (input) => {
+        const pathname = new URL(input instanceof Request ? input.url : input.toString()).pathname;
+        if (pathname.startsWith("/api/resources/")) {
+          const owningNode = node({ resource: blobResource() });
+          return jsonResponse({ node: owningNode, resource: owningNode.resource });
+        }
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { headers: { "content-length": "4", "content-type": "application/octet-stream" } },
+        );
+      }),
+    );
+
+    await expect(
+      feature.download({
+        outputPath: join(directory, "invalid.bin"),
+        resourceId: "resource-1",
+      }),
+    ).rejects.toMatchObject({ code: "workspace-invalid-response" });
+    expect(cancelled).toBe(true);
+    expect(await readdir(directory)).toEqual([]);
+  });
+
   it("rejects unavailable and mismatched Blob metadata before content download", async () => {
     const directory = await temporaryDirectory();
     const outputPath = join(directory, "blob.bin");
@@ -538,6 +569,37 @@ describe("Workspace application feature parity", () => {
     expect(await readdir(directory)).toEqual([]);
   });
 
+  it("cancels an unconsumed Asset response when metadata validation fails", async () => {
+    const directory = await temporaryDirectory();
+    let cancelled = false;
+    const feature = new WorkspaceAssetFeature(
+      authFor(async (input) =>
+        new URL(input instanceof Request ? input.url : input.toString()).pathname.endsWith(
+          "/sign-url",
+        )
+          ? jsonResponse({ error: { code: 1, message: "" }, url: "https://cdn.test/file-1" })
+          : new Response(
+              new ReadableStream<Uint8Array>({
+                cancel() {
+                  cancelled = true;
+                },
+              }),
+              { headers: { "content-length": "5" } },
+            ),
+      ),
+    );
+
+    await expect(
+      feature.download({
+        assetId: "file-1",
+        outputPath: join(directory, "invalid-asset.bin"),
+        worktreeId: "wt-1",
+      }),
+    ).rejects.toMatchObject({ code: "workspace-invalid-response" });
+    expect(cancelled).toBe(true);
+    expect(await readdir(directory)).toEqual([]);
+  });
+
   it.each([
     [
       "missing media type",
@@ -591,6 +653,199 @@ describe("Workspace application feature parity", () => {
     expect(requests).toBe(0);
     expect(authenticatedHttp).toHaveBeenCalledTimes(1);
     expect(await readFile(outputPath, "utf8")).toBe("keep");
+  });
+
+  it("cancels Blob metadata after an abort-ignoring response without returning a partial view", async () => {
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      expect(init?.signal).toBe(controller.signal);
+      controller.abort(new Error("metadata cancelled"));
+      const owningNode = node({ resource: blobResource() });
+      return jsonResponse({ node: owningNode, resource: owningNode.resource });
+    });
+    const authenticatedHttp = vi.fn(async (signal?: AbortSignal) => {
+      expect(signal).toBe(controller.signal);
+      return new WorkspaceHttp({
+        cookie: "workspace_session=test",
+        fetcher,
+        origin: "https://workspace.test",
+        role: "client",
+      });
+    });
+
+    await expect(
+      new WorkspaceBlobFeature(authenticatedHttp).get("resource-1", controller.signal),
+    ).rejects.toThrow("metadata cancelled");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops after an abort-ignoring authenticated resolver without starting Blob HTTP", async () => {
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>();
+    let release!: () => void;
+    const resolverGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const authenticatedHttp = vi.fn(async (signal?: AbortSignal) => {
+      expect(signal).toBe(controller.signal);
+      await resolverGate;
+      return new WorkspaceHttp({
+        cookie: "workspace_session=test",
+        fetcher,
+        origin: "https://workspace.test",
+        role: "client",
+      });
+    });
+
+    const pending = new WorkspaceBlobFeature(authenticatedHttp).get("resource-1", controller.signal);
+    controller.abort(new Error("resolver cancelled"));
+    release();
+    await expect(pending).rejects.toThrow("resolver cancelled");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each(["reserve", "put", "status", "complete", "readback"] as const)(
+    "preserves public Blob upload identity and stops after cancelled %s dispatch",
+    async (phase) => {
+      const directory = await temporaryDirectory();
+      const sourcePath = join(directory, "payload.bin");
+      await writeFile(sourcePath, "abc");
+      const controller = new AbortController();
+      const requests: string[] = [];
+      const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+        const request = new Request(input, init);
+        const pathname = new URL(request.url).pathname;
+        requests.push(`${request.method} ${pathname}`);
+        const cancel = () => {
+          controller.abort(new Error(`${phase} cancelled`));
+          throw controller.signal.reason;
+        };
+        if (pathname === "/api/blob-upload-sessions") {
+          if (phase === "reserve") return cancel();
+          return jsonResponse(uploadEnvelope(
+            phase === "complete" ? "uploaded" : phase === "readback" ? "completed" : "waitingForUpload",
+            { uploadTarget: phase === "put" || phase === "status" },
+          ));
+        }
+        if (pathname.endsWith("/content")) {
+          if (phase === "put") return cancel();
+          throw new Error("put response lost");
+        }
+        if (pathname === "/api/blob-upload-sessions/upload-1") return cancel();
+        if (pathname.endsWith("/complete")) return cancel();
+        if (pathname === "/api/resources/resource-1") return cancel();
+        throw new Error(`unexpected request ${request.method} ${pathname}`);
+      });
+
+      await expect(new WorkspaceBlobFeature(authFor(fetcher)).upload({
+        declaredMediaType: "application/octet-stream",
+        filePath: sourcePath,
+        idempotencyKey: "blob-key",
+        parentNodeId: "parent-1",
+        spaceId: "space-1",
+      }, controller.signal)).rejects.toMatchObject({
+        code: "workspace-result-unknown",
+        detail: {
+          byteSize: 3,
+          declaredMediaType: "application/octet-stream",
+          idempotencyKey: "blob-key",
+          name: "payload.bin",
+          originalFilename: "payload.bin",
+          parentNodeId: "parent-1",
+          sourcePath,
+          spaceId: "space-1",
+          ...(phase === "reserve"
+            ? {}
+            : {
+                state: phase === "complete"
+                  ? "uploaded"
+                  : phase === "readback"
+                    ? "completed"
+                    : "waitingForUpload",
+                uploadId: "upload-1",
+              }),
+        },
+      });
+      expect(requests).toHaveLength(phase === "status" ? 3 : 2 - Number(phase === "reserve"));
+    },
+  );
+
+  it("cancels Blob response writing and removes its private temporary output", async () => {
+    const directory = await temporaryDirectory();
+    const outputPath = join(directory, "cancelled.bin");
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(init?.signal).toBe(controller.signal);
+      const pathname = new URL(input instanceof Request ? input.url : input.toString()).pathname;
+      if (pathname.startsWith("/api/resources/")) {
+        const owningNode = node({ resource: blobResource() });
+        return jsonResponse({ node: owningNode, resource: owningNode.resource });
+      }
+      return new Response(new ReadableStream<Uint8Array>({
+        start(stream) {
+          stream.enqueue(Buffer.from("a"));
+          controller.abort(new Error("download cancelled"));
+          stream.close();
+        },
+      }), { headers: { "content-length": "3", "content-type": "application/octet-stream" } });
+    });
+
+    await expect(new WorkspaceBlobFeature(authFor(fetcher)).download({
+      outputPath,
+      resourceId: "resource-1",
+    }, controller.signal)).rejects.toThrow("download cancelled");
+    expect(await readdir(directory)).toEqual([]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes one signal through Asset sign and signed content requests", async () => {
+    const directory = await temporaryDirectory();
+    const outputPath = join(directory, "asset.bin");
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(init?.signal).toBe(controller.signal);
+      const pathname = new URL(input instanceof Request ? input.url : input.toString()).pathname;
+      return pathname.endsWith("/sign-url")
+        ? jsonResponse({ error: { code: 1, message: "" }, url: "https://cdn.test/file-1" })
+        : new Response("asset", {
+            headers: { "content-length": "5", "content-type": "application/octet-stream" },
+          });
+    });
+
+    await expect(new WorkspaceAssetFeature(authFor(fetcher)).download({
+      assetId: "file-1",
+      outputPath,
+      worktreeId: "wt-1",
+    }, controller.signal)).resolves.toMatchObject({ byteLength: 5, outputPath });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels Asset response writing and leaves no destination or temporary output", async () => {
+    const directory = await temporaryDirectory();
+    const outputPath = join(directory, "cancelled-asset.bin");
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(init?.signal).toBe(controller.signal);
+      const pathname = new URL(input instanceof Request ? input.url : input.toString()).pathname;
+      if (pathname.endsWith("/sign-url")) {
+        return jsonResponse({ error: { code: 1, message: "" }, url: "https://cdn.test/file-1" });
+      }
+      return new Response(new ReadableStream<Uint8Array>({
+        start(stream) {
+          stream.enqueue(Buffer.from("a"));
+          controller.abort(new Error("asset cancelled"));
+          stream.close();
+        },
+      }), { headers: { "content-length": "5", "content-type": "application/octet-stream" } });
+    });
+
+    await expect(new WorkspaceAssetFeature(authFor(fetcher)).download({
+      assetId: "file-1",
+      outputPath,
+      worktreeId: "wt-1",
+    }, controller.signal)).rejects.toThrow("asset cancelled");
+    expect(await readdir(directory)).toEqual([]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
 });

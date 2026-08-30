@@ -22,6 +22,7 @@ export interface StableIdentityOptions<Identity, Result> {
   readonly maxAttempts?: number;
   readonly operation: (identity: Identity) => Promise<Result>;
   readonly publicIdentity?: unknown;
+  readonly signal?: AbortSignal;
 }
 
 export async function executeWithStableIdentity<Identity, Result>(
@@ -30,6 +31,10 @@ export async function executeWithStableIdentity<Identity, Result>(
   const maxAttempts = options.maxAttempts ?? 3;
   let lastUnknown: Error | undefined;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (options.signal?.aborted) {
+      if (lastUnknown !== undefined) break;
+      options.signal.throwIfAborted();
+    }
     try {
       return await options.operation(options.identity);
     } catch (error) {

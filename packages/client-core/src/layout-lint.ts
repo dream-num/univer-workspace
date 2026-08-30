@@ -9,7 +9,7 @@ import {
   type UniverSlideLayoutRuntime,
 } from "@univer-cli/univer-render-runtime";
 import { workspaceError } from "./errors.js";
-import type { WorkspaceRenderUnitLoader } from "./render-unit.js";
+import { awaitRenderOperation, type WorkspaceRenderUnitLoader } from "./render-unit.js";
 import type { WorkspaceRuntimeScope } from "./runtime-target.js";
 
 export interface WorkspaceUnitLayoutLintFeatureOptions {
@@ -31,6 +31,7 @@ export class WorkspaceUnitLayoutLintFeature {
 
   public async loadUnit(input: {
     readonly scope: WorkspaceRuntimeScope;
+    readonly signal?: AbortSignal;
     readonly unitId: string;
   }): Promise<UnitLayoutLintSource> {
     const unit = await this.options.loader.loadUnit(input);
@@ -52,16 +53,36 @@ export class WorkspaceUnitLayoutLintFeature {
   public lint(): UnitLayoutLint {
     return {
       lint: async (input) => {
-        const runtime = await this.#createRuntime({
-          renderPageRoot: this.options.renderPageRoot,
-          env: this.options.env,
-          license: this.options.license,
-          ...(input.signal === undefined ? {} : { signal: input.signal }),
-        });
+        input.signal?.throwIfAborted();
+        let runtime: UniverSlideLayoutRuntime & { close(): Promise<void> };
         try {
-          return await createUnitLayoutLint({ runtime }).lint(input);
+          runtime = await this.#createRuntime({
+            renderPageRoot: this.options.renderPageRoot,
+            env: this.options.env,
+            license: this.options.license,
+            ...(input.signal === undefined ? {} : { signal: input.signal }),
+          });
+        } catch (error) {
+          input.signal?.throwIfAborted();
+          throw error;
+        }
+        let failed = false;
+        try {
+          input.signal?.throwIfAborted();
+          return await awaitRenderOperation(createUnitLayoutLint({ runtime }).lint(input), input.signal);
+        } catch (error) {
+          failed = true;
+          throw error;
         } finally {
-          await runtime.close();
+          try {
+            await runtime.close();
+          } catch (error) {
+            if (!failed) {
+              input.signal?.throwIfAborted();
+              throw error;
+            }
+          }
+          if (!failed) input.signal?.throwIfAborted();
         }
       },
     };

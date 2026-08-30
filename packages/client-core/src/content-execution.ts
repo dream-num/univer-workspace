@@ -6,6 +6,9 @@ import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
 
 export interface WorkspaceContentExecuteInput {
   readonly code: string;
+  readonly maxValueBytes?: number;
+  readonly maxValueDepth?: number;
+  readonly signal?: AbortSignal;
   readonly unitId: string;
   readonly worktreeId: string;
 }
@@ -21,7 +24,7 @@ export interface WorkspaceEditableTargetResolver {
   resolveEditableRuntimeTarget(input: {
     readonly unitId: string;
     readonly worktreeId: string;
-  }): Promise<WorkspaceRuntimeTarget>;
+  }, signal?: AbortSignal): Promise<WorkspaceRuntimeTarget>;
 }
 
 export class WorkspaceContentExecutionFeature {
@@ -46,10 +49,15 @@ export class WorkspaceContentExecutionFeature {
     input: WorkspaceContentExecuteInput,
     requiredUnitType?: "slide",
   ): Promise<WorkspaceContentExecuteResult> {
-    const target = await this.source.resolveEditableRuntimeTarget({
+    input.signal?.throwIfAborted();
+    const targetInput = {
       unitId: input.unitId,
       worktreeId: input.worktreeId,
-    });
+    };
+    const target = input.signal === undefined
+      ? await this.source.resolveEditableRuntimeTarget(targetInput)
+      : await this.source.resolveEditableRuntimeTarget(targetInput, input.signal);
+    input.signal?.throwIfAborted();
     if (requiredUnitType !== undefined && target.unitType !== requiredUnitType) {
       throw workspaceError(
         "WORKSPACE_CONTENT_UNIT_TYPE_UNSUPPORTED",
@@ -63,6 +71,9 @@ export class WorkspaceContentExecutionFeature {
         unitType: target.unitType,
       }),
       target,
+      ...(input.maxValueBytes === undefined ? {} : { maxValueBytes: input.maxValueBytes }),
+      ...(input.maxValueDepth === undefined ? {} : { maxValueDepth: input.maxValueDepth }),
+      ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
     if (!isRecord(result) || typeof result["committed"] !== "boolean" || !("value" in result)) {
       throw invalidResult();

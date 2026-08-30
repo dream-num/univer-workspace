@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+
+FROM node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends chromium fonts-liberation procps \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable
+
+ENV COREPACK_HOME=/corepack
+
+RUN corepack install --global pnpm@11.24.0
+
+WORKDIR /workspace
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.base.json ./
+COPY patches ./patches
+COPY apps/dsh-univer-work/package.json ./apps/dsh-univer-work/package.json
+COPY packages/client-core/package.json ./packages/client-core/package.json
+
+RUN pnpm install --frozen-lockfile \
+    --filter . \
+    --filter dsh-univer-work... \
+    --filter @univerjs/univer-workspace-client-core...
+
+RUN cp -R /root/.cache/pnpm /pnpm/cache
+
+COPY apps/dsh-univer-work ./apps/dsh-univer-work
+COPY packages/client-core ./packages/client-core
+
+RUN pnpm --filter dsh-univer-work build
+
+CMD ["sh", "-c", "mkdir -p \"$HOME\" \"$XDG_CACHE_HOME/pnpm\" /tmp/pnpm-store && cp -R /pnpm/cache/. \"$XDG_CACHE_HOME/pnpm/\" && cp -R /pnpm/store/. /tmp/pnpm-store/ && test \"$(id -u)\" -ne 0 && test ! -w /workspace && cd /workspace/apps/dsh-univer-work && exec env npm_execpath=\"$(command -v pnpm)\" node scripts/smoke-package.mjs"]

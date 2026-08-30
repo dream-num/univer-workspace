@@ -28,6 +28,7 @@
   "scripts": {
     "build": "tsc -b && node scripts/copy-render-runtime.mjs",
     "clean": "tsc -b --clean",
+    "inspect:command-surface": "tsx scripts/inspect-command-surface.ts",
     "package": "node scripts/build-package.mjs",
     "package:smoke": "node scripts/smoke-package.mjs package-dist",
     "package:verify": "node scripts/verify-package.mjs package-dist",

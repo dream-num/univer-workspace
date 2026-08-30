@@ -42,17 +42,15 @@ describe("Workspace screenshot capture", () => {
     expect(capture).toHaveBeenCalledWith(input);
   });
 
-  it.each([
-    ["ordinary failure", new Error("capture failed")],
-    ["abort", Object.assign(new Error("aborted"), { name: "AbortError" })],
-  ])("awaits close before rejecting on %s", async (_, failure) => {
+  it("awaits close before rejecting on capture failure", async () => {
+    const failure = new Error("capture failed");
     capture.mockRejectedValueOnce(failure);
     let resolveClose!: () => void;
     const close = vi.fn(async () => await new Promise<void>((resolve) => (resolveClose = resolve)));
     const createRuntime = vi.fn(async () => ({ close }) as unknown as UniverRenderRuntime);
     const feature = featureWith({ createRuntime });
     let settled = false;
-    const signal = AbortSignal.abort();
+    const signal = new AbortController().signal;
 
     const operation = feature
       .capture({ signal, unitData: { id: "book-1" }, unitType: "sheet" } as UnitScreenshotInput)
@@ -62,6 +60,155 @@ describe("Workspace screenshot capture", () => {
     resolveClose();
 
     await expect(operation).rejects.toBe(failure);
+  });
+
+  it("does not create a browser for a pre-aborted signal", async () => {
+    const createRuntime = vi.fn();
+    const feature = featureWith({ createRuntime });
+    const reason = new Error("cancel-before-browser");
+    const controller = new AbortController();
+    controller.abort(reason);
+
+    await expect(
+      feature.capture({
+        signal: controller.signal,
+        unitData: { id: "book-1" },
+        unitType: "sheet",
+      } as UnitScreenshotInput),
+    ).rejects.toBe(reason);
+    expect(createRuntime).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it("closes a browser returned after cancellation and starts no capture", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-browser-construction");
+    const close = vi.fn(async () => {
+      throw new Error("close-secret");
+    });
+    const feature = featureWith({
+      createRuntime: async () => {
+        controller.abort(reason);
+        return { close } as unknown as UniverRenderRuntime;
+      },
+    });
+
+    await expect(
+      feature.capture({
+        signal: controller.signal,
+        unitData: { id: "book-1" },
+        unitType: "sheet",
+      } as UnitScreenshotInput),
+    ).rejects.toBe(reason);
+    expect(capture).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("prefers an abort that races browser construction rejection", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-browser-construction");
+    const feature = featureWith({
+      createRuntime: async () => {
+        controller.abort(reason);
+        throw new Error("browser-dependency-secret");
+      },
+    });
+
+    await expect(
+      feature.capture({
+        signal: controller.signal,
+        unitData: { id: "book-1" },
+        unitType: "sheet",
+      } as UnitScreenshotInput),
+    ).rejects.toBe(reason);
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it("preserves an abort that races capture rejection and close rejection", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-capture-rejection");
+    capture.mockImplementationOnce(async () => {
+      controller.abort(reason);
+      throw new Error("capture-dependency-secret");
+    });
+    const close = vi.fn(async () => {
+      throw new Error("close-secret");
+    });
+    const feature = featureWith({
+      createRuntime: async () => ({ close }) as unknown as UniverRenderRuntime,
+    });
+
+    await expect(
+      feature.capture({
+        signal: controller.signal,
+        unitData: { id: "book-1" },
+        unitType: "sheet",
+      } as UnitScreenshotInput),
+    ).rejects.toBe(reason);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it.each([new Error("capture-primary"), undefined, null])(
+    "preserves capture failure %# when close also rejects",
+    async (failure) => {
+      capture.mockRejectedValueOnce(failure);
+      const close = vi.fn(async () => {
+        throw new Error("close-secret");
+      });
+      const feature = featureWith({
+        createRuntime: async () => ({ close }) as unknown as UniverRenderRuntime,
+      });
+
+      await expect(
+        feature.capture({ unitData: { id: "book-1" }, unitType: "sheet" } as UnitScreenshotInput),
+      ).rejects.toBe(failure);
+      expect(close).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("observes cancellation that becomes visible while close settles", async () => {
+    capture.mockResolvedValueOnce(screenshotResult());
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-close");
+    const close = vi.fn(async () => controller.abort(reason));
+    const feature = featureWith({
+      createRuntime: async () => ({ close }) as unknown as UniverRenderRuntime,
+    });
+
+    await expect(
+      feature.capture({
+        signal: controller.signal,
+        unitData: { id: "book-1" },
+        unitType: "sheet",
+      } as UnitScreenshotInput),
+    ).rejects.toBe(reason);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("awaits browser close when cancellation becomes visible during capture", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-capture");
+    capture.mockImplementationOnce(async () => {
+      controller.abort(reason);
+      return screenshotResult();
+    });
+    let resolveClose!: () => void;
+    const close = vi.fn(async () => await new Promise<void>((resolve) => (resolveClose = resolve)));
+    const feature = featureWith({
+      createRuntime: async () => ({ close }) as unknown as UniverRenderRuntime,
+    });
+    let settled = false;
+
+    const operation = feature.capture({
+      signal: controller.signal,
+      unitData: { id: "book-1" },
+      unitType: "sheet",
+    } as UnitScreenshotInput).finally(() => (settled = true));
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(settled).toBe(false);
+    resolveClose();
+
+    await expect(operation).rejects.toBe(reason);
   });
 
   it("does not fabricate close when runtime creation fails", async () => {

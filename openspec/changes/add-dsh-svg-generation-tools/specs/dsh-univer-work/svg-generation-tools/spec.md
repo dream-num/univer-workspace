@@ -295,7 +295,7 @@ The prebuilt tarball MUST carry the exact SVG compiler, worker and render-runtim
 
 - **WHEN** package verification walks Host/worker imports, manifests and render-page assets
 - **THEN** every dependency is inlined or exact-declared according to the existing package policy
-- **AND** no bare private Core import, CLI source/artifact, sourcemap, absolute checkout path, browser binary, font bundle, Office/Typst native asset or future Skill is included
+- **AND** no bare private Core import, CLI source/artifact, sourcemap, absolute checkout path, browser binary, font bundle or future Skill is included; the SVG reachable graph introduces no Office/Typst native asset, while the existing Office and Typst closures remain subject to their independent package verification
 
 #### Scenario: Installed compile runs
 

@@ -66,7 +66,7 @@
     <header>
       <p class="eyebrow">Tina Change View · add-dsh-svg-generation-tools</p>
       <h1>让 DSH Agent 用受约束的本地 SVG 生成 Slide</h1>
-      <p class="thesis">两个稳定工具覆盖编译、代码输出和 Draft apply；apply 可在一次组合授权后先保存并再执行同一 exact program，Client Core 继续独占 SVG 编译和 Slide execution workflow。</p>
+      <p class="thesis">两个稳定工具覆盖编译、代码输出和 Draft apply；DSH Client Shell 负责策略与生命周期，同仓 private Client Core 继续独占 SVG 编译和 Slide execution workflow。</p>
     </header>
 
     <section class="diagram" aria-label="SVG compile 与 apply 边界图，可横向滚动" tabindex="0">
@@ -102,7 +102,7 @@
         <text x="420" y="328" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">conditional approval · cancellation</text>
 
         <rect x="590" y="216" width="200" height="140" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
-        <text x="690" y="260" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Client Core SVG owner</text>
+        <text x="690" y="260" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">private Core SVG owner</text>
         <text x="690" y="290" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">source + contained assets</text>
         <text x="690" y="314" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">compile · page wrapper</text>
 
@@ -135,7 +135,7 @@
         <ul>
           <li>compile 与 apply 使用两个独立工具。</li>
           <li>代码可 inline 返回；apply 可在一次组合 approval 后先保存同一程序。</li>
-          <li>Core 只增加可选 signal、root 与 byte limits；CLI 省略时不变。</li>
+          <li>两个 Client Shell 只经同仓 private Core exports 共享 workflow。</li>
         </ul>
       </article>
       <article class="card">

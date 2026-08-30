@@ -20,12 +20,16 @@ export class WorkspaceOpenFeature {
     readonly unitId?: string;
     readonly viewerBaseUrl?: string;
     readonly worktreeId: string;
-  }): Promise<WorkspaceOpenResult> {
+  }, signal?: AbortSignal): Promise<WorkspaceOpenResult> {
+    signal?.throwIfAborted();
     const url =
       input.viewerBaseUrl === undefined
         ? parseUrl(await this.configuredOrigin())
         : parseUrl(input.viewerBaseUrl);
-    const worktree = await getWorktree(await this.authenticatedHttp(), input.worktreeId);
+    signal?.throwIfAborted();
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
+    const worktree = await getWorktree(http, input.worktreeId, signal);
     const unit = selectUnit(worktree.units, input.unitId, worktree.id);
     if (unit.worktreeId !== worktree.id) {
       throw workspaceError(

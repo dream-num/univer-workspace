@@ -4,7 +4,7 @@
 
 The current cancellation seam starts only after render Unit loading: upstream screenshot/lint inputs accept `signal`, but `WorkspaceRenderUnitLoadInput`, its target/export calls and `writeImages()` do not. DSH therefore needs one backwards-compatible Core signal path before it can truthfully forward `exec.signal` from target lookup through the browser and local publication.
 
-This Change depends on the authenticated/runtime owner from `add-dsh-content-runtime-tools` and the local execution-world/file-policy gate from `add-dsh-file-transfer-tools`. It extends those owners instead of introducing a renderer service, browser pool, file adapter or daemon.
+This Change depends on the authenticated/runtime owner from `add-dsh-content-runtime-tools` and the local execution-world/file-policy gate from `add-dsh-file-transfer-tools`. The prerequisite audit found their complete allowlists and safe-detail projectors still private even though Render must reuse them. Task 1 therefore exposes one narrow projector from each existing owner and makes the existing tools delegate to it; it does not introduce a renderer service, generic error module, browser pool, file adapter or daemon.
 
 ## Goals / Non-Goals
 
@@ -152,6 +152,8 @@ Beta.2 launches Chromium with `--no-sandbox`. The supported deployment therefore
 The Render Page uses its existing preset and bundled local assets. Font choice and fallback remain browser/host behavior; this Change packages every font/static file emitted by the Core Vite build and rejects remote asset references, but does not claim byte-identical layout across hosts with different installed fonts.
 
 ### 6. Freeze the render error boundary
+
+Task 1 exports `projectWorkspaceFileTransferDependencyFailure(error)` from `file-transfer.ts` and `projectWorkspaceContentDependencyFailure(error)` from `content-tools.ts`. Each function performs its owner's current exact constructor checks and returns only an owner-sanitized `{ code, detail? }` projection for a recognized dependency failure, or `undefined`; the existing tools delegate to the same function, with preservation tests proving their codes and details do not change. The private `stableWorkspaceCodes` and `stableContentCodes` sets remain in their owner modules. Render composes the two functions, narrows any projected detail again to the render-safe fields below, and falls back to `workspace-render-operation-failed`. No third allowlist, prefix match, generic adapter module or shared mutable registry is added.
 
 The shared adapter reuses the complete inherited Change 5 file-transfer allowlist, unchanged:
 
@@ -305,7 +307,7 @@ Source tests use real Cordis `ToolRuntime`, the mounted local filesystem/policy 
 
 ## Migration Plan
 
-1. Complete Changes 1–6 and verify their current Host owner, local file gate, content runtime/worker and Core public exports.
+1. Complete Changes 1–6, expose the two named owner-local dependency-failure projectors with existing-tool preservation tests, and verify the current Host owner, local file gate, content runtime/worker and Core public exports.
 2. Add optional Core signals and partial-output reporting with focused unsignalled CLI compatibility tests.
 3. Add the two DSH tools, screenshot approval branch, schemas, budgets, errors and lifecycle tracking.
 4. Copy/verify the render page and exact browser dependencies, then run source, browser, Client Core, CLI and isolated tarball gates.

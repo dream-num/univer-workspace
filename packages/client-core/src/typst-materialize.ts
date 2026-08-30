@@ -1,9 +1,10 @@
+import { compileFunction, createContext, runInContext } from "node:vm";
 import {
   createStandardHeadlessUniverFacade,
   createStandardHeadlessUniverFactory,
 } from "@univer-cli/headless-univer";
 import { UniverInstanceType } from "@univerjs/core";
-import { workspaceError } from "./errors.js";
+import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import type {
   WorkspaceTypstMaterializeInput,
   WorkspaceTypstMaterializeResult,
@@ -28,16 +29,36 @@ interface TypstFacade {
   getDocument(unitId: string): DocumentFacade | null;
 }
 
+export interface HeadlessWorkspaceTypstMaterializerOptions {
+  readonly license?: string;
+}
+
 /** Workspace adapter that turns a target-neutral Facade program into complete Doc UnitData. */
 export class HeadlessWorkspaceTypstMaterializer implements WorkspaceTypstMaterializer {
+  public constructor(
+    private readonly options: HeadlessWorkspaceTypstMaterializerOptions = {},
+  ) {}
+
   public async materialize(
     input: WorkspaceTypstMaterializeInput,
   ): Promise<WorkspaceTypstMaterializeResult> {
-    const univer = await createStandardHeadlessUniverFactory({ license: "" })({
-      unitId: input.targetUnitId,
-      unitType: UniverInstanceType.UNIVER_DOC,
-    });
+    input.signal?.throwIfAborted();
+    let univer: Awaited<ReturnType<ReturnType<typeof createStandardHeadlessUniverFactory>>>;
     try {
+      univer = await createStandardHeadlessUniverFactory({
+        license: this.options.license ?? "",
+      })({
+        unitId: input.targetUnitId,
+        unitType: UniverInstanceType.UNIVER_DOC,
+      });
+    } catch (error) {
+      throw this.projectFailure(error, input.signal);
+    }
+    let result: WorkspaceTypstMaterializeResult | undefined;
+    let failed = false;
+    let failure: unknown;
+    try {
+      input.signal?.throwIfAborted();
       const facade = createStandardHeadlessUniverFacade(univer) as unknown as TypstFacade;
       const createdUnitIds: string[] = [];
       let createDocumentCalls = 0;
@@ -74,12 +95,8 @@ export class HeadlessWorkspaceTypstMaterializer implements WorkspaceTypstMateria
           return Reflect.get(target, property, receiver) as unknown;
         },
       });
-      await withDeterministicRandom(input.javascript, async () => {
-        const execute = new Function("univerAPI", input.javascript) as (
-          api: TypstFacade,
-        ) => Promise<unknown>;
-        await execute(guarded);
-      });
+      await executeInDeterministicContext(input.javascript, guarded);
+      input.signal?.throwIfAborted();
       if (
         createDocumentCalls !== 1 ||
         createdUnitIds.length !== 1 ||
@@ -98,7 +115,9 @@ export class HeadlessWorkspaceTypstMaterializer implements WorkspaceTypstMateria
           `Typst program did not leave Doc ${input.targetUnitId} in the runtime.`,
         );
       }
+      input.signal?.throwIfAborted();
       const saved = document.save();
+      input.signal?.throwIfAborted();
       if (!isRecord(saved) || saved["id"] !== input.targetUnitId) {
         throw workspaceError(
           "workspace-typst-runtime-contract",
@@ -114,49 +133,76 @@ export class HeadlessWorkspaceTypstMaterializer implements WorkspaceTypstMateria
         rev: 1,
       };
       const name = nonEmptyString(initialData["name"]) ?? nonEmptyString(initialData["title"]);
-      return { initialData, ...(name === undefined ? {} : { name }) };
-    } finally {
-      univer.dispose();
+      result = { initialData, ...(name === undefined ? {} : { name }) };
+    } catch (error) {
+      failed = true;
+      failure = this.projectFailure(error, input.signal);
     }
+    try {
+      univer.dispose();
+    } catch (error) {
+      if (!failed) {
+        failed = true;
+        failure = this.projectFailure(error, input.signal);
+      }
+    }
+    if (failed) throw failure;
+    return result!;
+  }
+
+  private projectFailure(error: unknown, signal: AbortSignal | undefined): unknown {
+    if (signal?.aborted === true) {
+      try {
+        signal.throwIfAborted();
+      } catch (reason) {
+        return reason;
+      }
+    }
+    if (this.options.license === undefined || error instanceof WorkspaceApplicationError) {
+      return error;
+    }
+    return workspaceError(
+      "workspace-typst-runtime-contract",
+      "Typst materialization failed inside the disposable Doc runtime.",
+    );
   }
 }
 
-async function withDeterministicRandom<Result>(
-  seedSource: string,
-  operation: () => Promise<Result>,
-): Promise<Result> {
-  const originalRandom = Object.getOwnPropertyDescriptor(Math, "random");
-  const cryptoObject = globalThis.crypto;
-  const originalGetRandomValues = Object.getOwnPropertyDescriptor(cryptoObject, "getRandomValues");
-  const nextUint32 = createRandom(stableSeed(seedSource));
-  Object.defineProperty(Math, "random", {
-    configurable: true,
-    value: () => nextUint32() / 4_294_967_296,
-    writable: true,
-  });
-  let cryptoPatched = false;
-  try {
-    Object.defineProperty(cryptoObject, "getRandomValues", {
-      configurable: true,
-      value: <ArrayType extends ArrayBufferView | null>(view: ArrayType): ArrayType => {
-        if (view === null) return view;
-        const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-        for (let index = 0; index < bytes.length; index += 1) bytes[index] = nextUint32() & 255;
-        return view;
-      },
-    });
-    cryptoPatched = true;
-    return await operation();
-  } finally {
-    if (originalRandom === undefined) delete (Math as { random?: unknown }).random;
-    else Object.defineProperty(Math, "random", originalRandom);
-    if (cryptoPatched) {
-      if (originalGetRandomValues === undefined)
-        delete (cryptoObject as { getRandomValues?: unknown }).getRandomValues;
-      else Object.defineProperty(cryptoObject, "getRandomValues", originalGetRandomValues);
-    }
-  }
+async function executeInDeterministicContext(
+  javascript: string,
+  facade: TypstFacade,
+): Promise<void> {
+  const nextUint32 = createRandom(stableSeed(javascript));
+  const context = createContext({ __workspaceTypstNextUint32: nextUint32 });
+  runInContext(INSTALL_DETERMINISTIC_RANDOM, context);
+  const execute = compileFunction(javascript, ["univerAPI"], { parsingContext: context });
+  await execute(facade);
 }
+
+const INSTALL_DETERMINISTIC_RANDOM = `
+  ((nextUint32) => {
+    Reflect.deleteProperty(globalThis, "__workspaceTypstNextUint32");
+    Object.defineProperty(Math, "random", {
+      configurable: true,
+      value: () => nextUint32() / 4294967296,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: Object.freeze({
+        getRandomValues(view) {
+          if (view === null) return view;
+          const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+          for (let index = 0; index < bytes.length; index += 1) {
+            bytes[index] = nextUint32() & 255;
+          }
+          return view;
+        },
+      }),
+      writable: false,
+    });
+  })(globalThis.__workspaceTypstNextUint32);
+`;
 
 function createRandom(initialSeed: number): () => number {
   let state = initialSeed;

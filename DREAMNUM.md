@@ -1,6 +1,6 @@
 # dream-num/univer-workspace
 
-> Owns the Univer Workspace product and its agent-ready CLI for organizing, collaborating on, and automating Univer content.
+> Owns the Univer Workspace product, its agent-ready CLI, and its private DeepSeek Harness Client Shell.
 
 The repository source is licensed under Apache-2.0. Runtime development credentials,
 Pro SDK dependencies, and artifact delivery retain their separately defined policies.
@@ -17,6 +17,15 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   [Workspace README](apps/workspace/README.md).
 - The Workspace-specific CLI composition and agent workflow over remote Workspace Resources and Worktrees,
   including version-matched operational Skills and review handoff. See the [CLI README](apps/cli/README.md).
+- The private `dsh-univer-work` Client Shell under `apps/dsh-univer-work`. Its current contract is a prebuilt,
+  Host-only bundle for local DeepSeek Harness profiles with one DSH Credentials-backed Workspace browser
+  authentication connection, four auth tools, seven Space/Node tools, twelve Worktree/Unit/review tools, four
+  Session-cwd-confined Host-local Blob/Asset file-transfer tools, two worker-backed content inspection/approved
+  Draft execution tools, five installed API/resource discovery tools, two installed Office exchange tools, two
+  installed Typst generation tools, two installed SVG generation tools, two installed render-verification tools,
+  and eight bundled operational Skills (`core` plus seven Unit/Topic Skills); it does not
+  expose a Web Client. See the
+  [package README](apps/dsh-univer-work/README.md).
 - The private Node-hosted Workspace Client Core under `packages/client-core`, including shared Workspace HTTP,
   error, storage-neutral authentication protocol, Space/Node model, remote workflow behavior, and worker-backed
   content runtime lifecycle, including Office, Typst, rendering, and SVG workflows. It is bundled into repository
@@ -46,6 +55,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - [`dream-num/univer-cli-sdk`](https://github.com/dream-num/univer-cli-sdk) — owns the target-neutral headless,
   execution, inspection, rendering, daemon, and Commander capabilities composed by Workspace CLI.
   Contract: [repository boundary](AGENTS.md).
+- [`deepseek-ai/deepseek-harness`](https://github.com/deepseek-ai/deepseek-harness) — owns the DSH bundle,
+  Host plugin, Cordis lifecycle, and profile composition contracts consumed by `dsh-univer-work` at the frozen
+  `0.1.1-rc.2` / Cordis `4.0.1` baseline. Contract: [DSH Client Shell README](apps/dsh-univer-work/README.md).
 - [`dream-num/univer-protocol`](https://github.com/dream-num/univer-protocol) — owns the protocol types consumed by
   collaboration and content workflows. Contract: [repository boundary](AGENTS.md).
 - [`dream-num/helm-chart-private`](https://github.com/dream-num/helm-chart-private) — receives deployment handoff
@@ -62,6 +74,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - **Product data model and persistence semantics:** [Data model](apps/workspace/docs/data-model.md)
 - **Accepted architectural decisions:** [ADR directory](apps/workspace/docs/adr)
 - **CLI user and distribution contract:** [CLI README](apps/cli/README.md)
+- **Private DSH Client Shell contract:** [DSH Client Shell README](apps/dsh-univer-work/README.md)
 
 ## Deployment and data classification
 

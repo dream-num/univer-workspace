@@ -144,7 +144,7 @@
           <li>同一 Host 用 process-local queue 串行化 start、complete 与 logout。</li>
           <li>fiber disposer 先停止新调用并 abort I/O，再等待 queue 与已接受 body 收敛。</li>
           <li>logout 必须先获 human approval，远端失败也在 `finally` 清除本地 record。</li>
-          <li>private Client Core 的 reachable auth 代码内联进 Host artifact。</li>
+          <li>private Client Core 的 reachable auth 代码内联；DSH/Cordis 使用 exact optional peers，共享 Host module identity。</li>
         </ul>
       </article>
       <article class="card">

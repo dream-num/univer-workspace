@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   executeWithStableIdentity,
   isWorkspaceResultUnknown,
+  type WorkspaceApplicationError,
   workspaceError,
 } from "./errors.js";
 import type { AuthenticatedWorkspaceHttp, WorkspaceHttp } from "./http.js";
@@ -20,22 +21,28 @@ export interface ListWorktreesInput {
 export class WorkspaceWorktreeFeature {
   public constructor(private readonly authenticatedHttp: AuthenticatedWorkspaceHttp) {}
 
-  public async list(input: ListWorktreesInput): Promise<readonly WorkspaceWorktree[]> {
+  public async list(
+    input: ListWorktreesInput,
+    signal?: AbortSignal,
+  ): Promise<readonly WorkspaceWorktree[]> {
     const query = new URLSearchParams({ scope: input.view });
     if (input.scope !== undefined) query.set("kind", input.scope === "user" ? "user" : "team");
     if (input.spaceId !== undefined) query.set("teamSpaceId", input.spaceId);
-    const body = await (await this.authenticatedHttp()).json(`/api/worktrees?${query.toString()}`);
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
+    const body = await http.json(`/api/worktrees?${query.toString()}`, {
+      ...(signal === undefined ? {} : { signal }),
+    });
     if (!Array.isArray(body["items"])) {
       throw workspaceError("workspace-invalid-response", "Workspace response is missing Worktrees.");
     }
     return body["items"].map((item) => parseWorktree(item));
   }
 
-  public async get(worktreeId: string): Promise<WorkspaceWorktree> {
-    return await getWorktree(
-      await this.authenticatedHttp(),
-      requireId(worktreeId, "Worktree ID"),
-    );
+  public async get(worktreeId: string, signal?: AbortSignal): Promise<WorkspaceWorktree> {
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
+    return await getWorktree(http, requireId(worktreeId, "Worktree ID"), signal);
   }
 
   public async create(input: {
@@ -45,8 +52,9 @@ export class WorkspaceWorktreeFeature {
       | { readonly kind: "user" }
       | { readonly kind: "space"; readonly spaceId: string };
     readonly visibility?: "private" | "space";
-  }): Promise<WorkspaceWorktree> {
-    const http = await this.authenticatedHttp();
+  }, signal?: AbortSignal): Promise<WorkspaceWorktree> {
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
     const idempotencyKey = input.idempotencyKey ?? randomUUID();
     return await executeWithStableIdentity({
       identity: {
@@ -70,20 +78,25 @@ export class WorkspaceWorktreeFeature {
           },
           idempotencyKey: sameInput.idempotencyKey,
           method: "POST",
+          ...(signal === undefined ? {} : { signal }),
         });
         return parseWorktree(body);
       },
+      ...(signal === undefined ? {} : { signal }),
     });
   }
 
   public async update(
     worktreeId: string,
     input: { readonly name?: string; readonly visibility?: "private" | "space" },
+    signal?: AbortSignal,
   ): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");
-    const body = await (await this.authenticatedHttp()).json(
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
+    const body = await http.json(
       `/api/worktrees/${encodeURIComponent(id)}`,
-      { body: input, method: "PATCH" },
+      { body: input, method: "PATCH", ...(signal === undefined ? {} : { signal }) },
     );
     return parseWorktree(body["worktree"], id);
   }
@@ -91,10 +104,12 @@ export class WorkspaceWorktreeFeature {
   public async transition(
     worktreeId: string,
     action: "ready" | "reopen" | "merge" | "discard",
+    signal?: AbortSignal,
   ): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");
-    const http = await this.authenticatedHttp();
-    const current = await getWorktree(http, id);
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
+    const current = await getWorktree(http, id, signal);
     assertTransition(current, action);
     const expected: Record<typeof action, WorkspaceWorktreeState> = {
       discard: "discarded",
@@ -102,12 +117,14 @@ export class WorkspaceWorktreeFeature {
       ready: "ready",
       reopen: "draft",
     };
+    signal?.throwIfAborted();
     try {
       const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}/${action}`, {
         ...(action === "merge" || action === "discard"
           ? { idempotencyKey: stableKey(action, id) }
           : {}),
         method: "POST",
+        ...(signal === undefined ? {} : { signal }),
       });
       const result = parseWorktree(body["worktree"], id);
       if (result.state !== expected[action]) {
@@ -123,8 +140,19 @@ export class WorkspaceWorktreeFeature {
       return result;
     } catch (error) {
       if (!isWorkspaceResultUnknown(error)) throw error;
-      const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}`);
-      const confirmed = parseWorktree(body["worktree"]);
+      if (signal?.aborted) throw lifecycleUnknown(id, expected[action]);
+      let confirmed: WorkspaceWorktree;
+      try {
+        const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}`, {
+          ...(signal === undefined ? {} : { signal }),
+        });
+        confirmed = parseWorktree(body["worktree"]);
+      } catch (readError) {
+        if (signal?.aborted || isWorkspaceResultUnknown(readError)) {
+          throw lifecycleUnknown(id, expected[action]);
+        }
+        throw readError;
+      }
       if (confirmed.id === id && confirmed.state === expected[action]) return confirmed;
       throw workspaceError(
         "workspace-result-unknown",
@@ -143,8 +171,12 @@ export class WorkspaceWorktreeFeature {
 export async function getWorktree(
   http: WorkspaceHttp,
   worktreeId: string,
+  signal?: AbortSignal,
 ): Promise<WorkspaceWorktree> {
-  const body = await http.json(`/api/worktrees/${encodeURIComponent(worktreeId)}`);
+  signal?.throwIfAborted();
+  const body = await http.json(`/api/worktrees/${encodeURIComponent(worktreeId)}`, {
+    ...(signal === undefined ? {} : { signal }),
+  });
   return parseWorktree(body["worktree"], worktreeId);
 }
 
@@ -176,4 +208,15 @@ function requireId(value: string, label: string): string {
     throw workspaceError("workspace-argument-invalid", `${label} must not be empty.`);
   }
   return id;
+}
+
+function lifecycleUnknown(
+  worktreeId: string,
+  expectedState: WorkspaceWorktreeState,
+): WorkspaceApplicationError {
+  return workspaceError(
+    "workspace-result-unknown",
+    "Workspace lifecycle result could not be confirmed from the current Worktree state.",
+    { expectedState, worktreeId },
+  );
 }

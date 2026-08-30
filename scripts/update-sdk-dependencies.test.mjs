@@ -32,6 +32,8 @@ test("aligns SDK dependencies and preserves independent and workspace versions",
       "@univerjs/core": "1.0.0-insiders.old",
       "@univerjs-pro/cli-assets": "0.1.0",
       "@univerjs-pro/collaboration-service": "1.0.0-insiders.old",
+      "@univerjs-pro/doc-typst-native-binding": "1.0.0-insiders.native",
+      "@univerjs-pro/engine-formula-rust-binding": "0.2.0",
       "@univerjs-pro/exchange-node-binding": "0.1.0",
       "@univerjs/icons": "1.34.0",
       "@univerjs/local": "workspace:*",
@@ -45,6 +47,8 @@ test("aligns SDK dependencies and preserves independent and workspace versions",
       "@univerjs/docs": "1.0.0-insiders.old",
     },
     optionalDependencies: {
+      "@univerjs-pro/doc-typst-native-binding-darwin-arm64":
+        "1.0.0-insiders.native",
       "@univerjs/sheets": "1.0.0-insiders.old",
     },
   };
@@ -72,6 +76,20 @@ test("aligns SDK dependencies and preserves independent and workspace versions",
   );
   assert.equal(manifest.dependencies["@univerjs/icons"], "1.34.0");
   assert.equal(manifest.dependencies["@univerjs-pro/cli-assets"], "0.1.0");
+  assert.equal(
+    manifest.dependencies["@univerjs-pro/doc-typst-native-binding"],
+    "1.0.0-insiders.native"
+  );
+  assert.equal(
+    manifest.optionalDependencies[
+      "@univerjs-pro/doc-typst-native-binding-darwin-arm64"
+    ],
+    "1.0.0-insiders.native"
+  );
+  assert.equal(
+    manifest.dependencies["@univerjs-pro/engine-formula-rust-binding"],
+    "0.2.0"
+  );
   assert.equal(manifest.dependencies["@univerjs-pro/exchange-node-binding"], "0.1.0");
   assert.equal(manifest.dependencies["@univerjs/local"], "workspace:*");
   assert.equal(manifest.dependencies.react, "^19.0.0");

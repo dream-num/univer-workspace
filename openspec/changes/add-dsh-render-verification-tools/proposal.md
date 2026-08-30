@@ -9,6 +9,7 @@
 - 新增 `workspace_screenshot` 与 `workspace_layout_lint` 两个 operation-specific DSH tools；截图支持 Trunk/Worktree 的 Sheet、Doc、Slide、Board、Base 既有 target 和 PNG metadata，layout lint 保持 Worktree Slide、可选 page selectors 与完整 structured report。
 - 截图沿用 `add-dsh-file-transfer-tools` 的 local execution-world、Session cwd、current file-effect policy 和 one-approval gate；approved body 重新验证 policy/provider/path，向 Core 只传递 canonical Host-local output directory。layout lint 为只读且不请求本 Change 的 approval。
 - 对两个 tools 使用 closed snake_case arguments、closed canonical results、cross-field validation、参数/selector/结果预算和固定 allowlisted errors；截图在首个 PNG publication 前基于 approved canonical directory 和 safe basenames 构造并验证 exact bytes-free result，oversize/malformed capture 写零文件；PNG bytes 不进入 canonical value、Native render 或 Code Mode log。
+- 在现有 file-transfer 与 content-tools owner 中各导出一个窄的 dependency-failure projector；既有工具委托同一 projector，Render 组合它们并执行更窄的 safe-detail 投影。allowlist sets继续由原owner私有持有，不新增generic shared-error模块或第三套adapter。
 - 为现有 `workspace-client-core/screenshot-lint` 追加 optional signal，使 render target/reference、UnitData/Asset load、browser capture/lint、逐图原子写入和 cleanup 观察取消；已提交部分 PNG 时返回 structured partial-output，而不是删除、覆盖或自动重放。
 - 复用 Change 6 的 current content runtime generation、worker、credential/license resolver 与 lifecycle owner；每次 browser operation 仍创建并关闭一个 render runtime，Host dispose 等待 browser、worker、文件 finalizer 与 accepted body 全部静止。
 - 扩充预构建 tarball，复制 Client Core render page；从 exact render-runtime 的实际安装目录相对解析 Puppeteer/browser package manifests，把解析到的 concrete exact versions 写入并校验 packed manifest；从 unrelated cwd 以真实 ToolRuntime 验证截图、lint、cancellation、partial output 与 bounded dispose。
@@ -35,7 +36,7 @@
 ## Domain Alignment
 
 - `apps/workspace/CONTEXT.md` 定义 Unit、Trunk、Worktree 与 Draft；截图只读取所选 revision，layout lint 只检查 Worktree Slide，二者都不修改 Workspace content。
-- `/Users/shenweimin/github.com/dsh-plugin/dsh-univer-work/CONTEXT.md` 与 `docs/adr/0001-co-locate-workspace-agent-clients.md` 要求 Client Shell 只通过 private Workspace Client Core package exports 复用；本 Change 不导入 `apps/cli/src/*`。
+- `apps/workspace/CONTEXT.md` 定义 Workspace Agent Client、Client Shell 与 Workspace Client Core；accepted `apps/workspace/docs/adr/0007-co-locate-workspace-agent-clients.md` 要求各 Client Shell 只通过 private Client Core package exports 共享 Workspace capability。本 Change 由 DSH Client Shell 拥有 tool schema、local file approval 与 lifecycle，通过 Core exports 复用 render Unit、screenshot、PNG output、Slide layout lint 和 render-page source，不导入 `apps/cli/src/*`。
 - `openspec/changes/extract-screenshot-lint-client-core` 已将 render Unit、screenshot、PNG write、layout lint 与 render-page source 归入一个 Core capability；本 Change 修改该既有 capability，不拆成第三个 capability。
 - `add-dsh-file-transfer-tools` 与 `add-dsh-content-runtime-tools` 提供本 Change 复用的 local file gate、authenticated runtime generation、worker/license owner、safe error 和 total lifecycle。
 
@@ -43,6 +44,6 @@ No domain-model change.
 
 ## Impact
 
-实现主要影响 `apps/dsh-univer-work/**`、`packages/client-core/src/{render-unit,screenshot,layout-lint}.ts`、对应 tests、package verification/smoke 与责任文档。`dsh-univer-work` 的 artifact 增加从 Client Core build 复制的 render page；build 对 exact `@univer-cli/univer-render-runtime@1.0.0-beta.2` 的 resolved package 执行 `realpath`，从其实际安装位置解析 `puppeteer-core` 与 `@puppeteer/browsers` 的 resolved manifests，读取并写入 concrete exact versions，再在 packed artifact 中逐项核对；不复用 owner manifest 的 semver range，也不从相邻 checkout、CLI artifact 或 pnpm hoist 推断资源。
+实现主要影响 `apps/dsh-univer-work/**`、`packages/client-core/src/{render-unit,screenshot,layout-lint}.ts`、对应 tests、package verification/smoke 与责任文档。现有 file-transfer/content behavior不变，只增加owner-local projector exports与preservation tests。`dsh-univer-work` 的 artifact 增加从 Client Core build 复制的 render page；build 对 exact `@univer-cli/univer-render-runtime@1.0.0-beta.2` 的 resolved package 执行 `realpath`，从其实际安装位置解析 `puppeteer-core` 与 `@puppeteer/browsers` 的 resolved manifests，读取并写入 concrete exact versions，再在 packed artifact 中逐项核对；不复用 owner manifest 的 semver range，也不从相邻checkout、CLI artifact或pnpm hoist推断资源。
 
 Workspace CLI 继续省略 optional signal 并保留 browser setup、scope/options、presentation、render page path 与 package behavior。Workspace Server/Browser、OpenAPI、数据库、Collaboration data、CLI release/deployment 和 frozen SDK baseline 不变。

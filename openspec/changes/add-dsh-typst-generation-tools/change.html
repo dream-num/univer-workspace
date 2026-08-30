@@ -66,13 +66,13 @@
     <header>
       <p class="eyebrow">Tina Change View · add-dsh-typst-generation-tools</p>
       <h1>让 Typst bundle 进入 DSH 的本地 artifact 与 Draft 工作流</h1>
-      <p class="thesis">两个 operation tools 复用同一个 Core compile owner：compile 原子发布固定 artifact 目录，apply 通过隔离随机源的临时 Doc runtime 创建一个 Worktree-local Unit。</p>
+      <p class="thesis">两个 operation tools 复用同一个 Core compile owner：compile 从随机 mode-0700 staging 逐文件发布；公开目录失败后保留供检查，apply 用 program-local VM 保持语义内容确定。</p>
     </header>
 
     <section class="diagram" aria-label="Typst compile 与 apply 架构，可横向滚动" tabindex="0">
       <svg viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="typst-architecture-title typst-architecture-desc">
         <title id="typst-architecture-title">DSH Typst generation 架构</title>
-        <desc id="typst-architecture-desc">Session cwd 中的 Typst bundle 经本地路径检查和一次审批进入两个 DSH tools，再由 Workspace Client Core 编译。编译结果分流到私有目录并原子发布，或进入具有独立确定性随机源的临时 Doc runtime，最后创建 Worktree-local Unit。</desc>
+        <desc id="typst-architecture-desc">Session cwd 中的 Typst bundle 经本地路径检查和一次审批进入两个 DSH tools，再由 Workspace Client Core 编译。编译结果先进入随机 mode-0700 私有目录，公开阶段预占目标并逐文件发布，失败时保留 partial 目录；另一条路径进入具有独立 program-local 随机源的临时 Doc runtime，最终创建 Worktree-local Unit。</desc>
         <defs>
           <marker id="typst-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
             <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
@@ -87,12 +87,12 @@
         <path d="M 600 310 H 630 V 450 H 670" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#typst-arrow)"/>
         <path d="M 820 450 H 850" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#typst-arrow)"/>
 
-        <rect x="178" y="284" width="54" height="20" rx="4" fill="#f5f5f5"/>
+        <rect x="182" y="284" width="46" height="20" rx="4" fill="#f5f5f5"/>
         <text x="205" y="298" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="10" text-anchor="middle">gate + ask</text>
-        <rect x="614" y="218" width="96" height="24" rx="4" fill="#f5f5f5"/>
-        <text x="662" y="234" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">compile</text>
-        <rect x="608" y="378" width="108" height="24" rx="4" fill="#f5f5f5"/>
-        <text x="662" y="394" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">apply only</text>
+        <rect x="610" y="218" width="60" height="24" rx="4" fill="#f5f5f5"/>
+        <text x="640" y="234" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">compile</text>
+        <rect x="608" y="378" width="62" height="24" rx="4" fill="#f5f5f5"/>
+        <text x="639" y="394" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">apply only</text>
 
         <rect x="30" y="250" width="150" height="120" rx="8" fill="#ffffff" stroke="#4f5d75"/>
         <text x="105" y="294" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" font-weight="600" text-anchor="middle">Session cwd</text>
@@ -113,17 +113,19 @@
         <rect x="670" y="110" width="150" height="120" rx="8" fill="#ffffff" stroke="#4f5d75"/>
         <text x="745" y="154" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" font-weight="600" text-anchor="middle">私有目录</text>
         <text x="745" y="184" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">write · check · sync</text>
-        <text x="745" y="206" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">same parent</text>
+        <text x="745" y="206" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">random · mode 0700</text>
 
         <rect x="850" y="110" width="160" height="120" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
         <text x="930" y="154" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" font-weight="600" text-anchor="middle">artifact 目录</text>
-        <text x="930" y="184" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">atomic rename</text>
-        <text x="930" y="206" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">no-clobber</text>
+        <text x="930" y="180" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">mkdir 0700 reserve</text>
+        <text x="930" y="202" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">no-clobber files</text>
+        <text x="930" y="220" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">failure preserves partial</text>
 
         <rect x="670" y="390" width="150" height="120" rx="8" fill="#ffffff" stroke="#4f5d75"/>
-        <text x="745" y="434" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" font-weight="600" text-anchor="middle">临时 Doc runtime</text>
-        <text x="745" y="464" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">独立 deterministic VM</text>
-        <text x="745" y="486" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">dispose always</text>
+        <text x="745" y="426" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" font-weight="600" text-anchor="middle">临时 Doc runtime</text>
+        <text x="745" y="452" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">program-local VM</text>
+        <text x="745" y="476" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">semantic content</text>
+        <text x="745" y="498" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">dispose always</text>
 
         <rect x="850" y="390" width="160" height="120" rx="8" fill="#ffffff" stroke="#4f5d75"/>
         <text x="930" y="434" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" font-weight="600" text-anchor="middle">Unit create</text>
@@ -138,23 +140,29 @@
         <ul>
           <li>仅支持 local Host 与 Session cwd。</li>
           <li>两个 tools、两个 capabilities、八个 coarse tasks。</li>
-          <li>不含 SVG、browser、Jobs、remote FS 或通用 renderer。</li>
+          <li>Typst 路径不新增 SVG、browser、Jobs、remote FS 或通用 renderer；既有 Render closure 保持独立。</li>
         </ul>
       </article>
       <article class="card">
         <p class="label">Decisions</p>
         <ul>
           <li>固定 artifact 目录替代 Commander 多路径组合。</li>
+          <li>批准后原子预占目录并逐文件 no-clobber 发布。</li>
+          <li>只清理 identity 匹配的私有 staging；公开目录失败后完整保留。</li>
           <li>同一次 Core compile 结果用于本地输出或 staged Doc。</li>
           <li>apply 失败只返回 bounded diagnostics；本地失败产物由 compile 提供。</li>
-          <li>Node VM 只隔离 deterministic random，不宣称安全 sandbox。</li>
+          <li>Node VM 只隔离 program-local random，不宣称安全 sandbox。</li>
+          <li>语义比较忽略 SDK opaque IDs；持久化 UnitData 不改写它们。</li>
         </ul>
       </article>
       <article class="card">
         <p class="label">Risks / Impact</p>
         <ul>
           <li>native compile 不可硬取消，Host 必须等待并停止后续步骤。</li>
+          <li>等价 materialization 的 opaque IDs 可不同，不承诺 byte-identical snapshot。</li>
           <li>Unit 已确认而 artifact 失败时返回 partial side effect，不补偿重放。</li>
+          <li>发布期间目录可短暂不完整；失败返回 Session-relative inspect guidance。</li>
+          <li>首版不隔离同 UID 主动篡改；更强边界需独立 user/container。</li>
           <li>package 新增 exact Typst native binding，不新增 worker。</li>
         </ul>
       </article>

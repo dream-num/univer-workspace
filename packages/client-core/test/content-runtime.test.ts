@@ -8,6 +8,7 @@ import type {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createWorkspaceContentRuntime,
+  WorkspaceUnitExchangeFeature,
   type WorkspaceContentRuntimeOptions,
   type WorkspaceRuntimeTarget,
 } from "../src/index.js";
@@ -396,6 +397,343 @@ describe("Workspace content runtime owner", () => {
     expect(current.invalidate).not.toHaveBeenCalled();
   });
 
+  it("observes cancellation around dependency resolution and acquire without detached work", async () => {
+    const controller = new AbortController();
+    const current = lease();
+    let releaseCredential!: () => void;
+    const credentialGate = new Promise<void>((resolve) => {
+      releaseCredential = resolve;
+    });
+    const resolveLicense = vi.fn(async () => "license");
+    const acquire = vi.fn(async () => current);
+    const runtime = createRuntime({
+      acquire,
+      resolveCredential: async (_target, signal) => {
+        expect(signal).toBe(controller.signal);
+        await credentialGate;
+        return "cookie";
+      },
+      resolveLicense,
+    });
+    const operation = runtime.executeRead({ code: "return 1", signal: controller.signal, target });
+    controller.abort(new Error("cancel-credential"));
+    releaseCredential();
+    await expect(operation).rejects.toThrow("cancel-credential");
+    expect(resolveLicense).not.toHaveBeenCalled();
+    expect(acquire).not.toHaveBeenCalled();
+
+    const acquireController = new AbortController();
+    let releaseAcquire!: () => void;
+    const acquireGate = new Promise<void>((resolve) => {
+      releaseAcquire = resolve;
+    });
+    const late = lease();
+    const lateAcquire = vi.fn(async () => {
+      await acquireGate;
+      return late;
+    });
+    const second = createRuntime({ acquire: lateAcquire });
+    const acquired = second.executeRead({ code: "return 1", signal: acquireController.signal, target });
+    await vi.waitFor(() => expect(lateAcquire).toHaveBeenCalledOnce());
+    acquireController.abort(new Error("cancel-acquire"));
+    releaseAcquire();
+    await expect(acquired).rejects.toThrow("cancel-acquire");
+    expect(late.invalidate).toHaveBeenCalledOnce();
+    expect(late.getState).not.toHaveBeenCalled();
+  });
+
+  it("passes cancellation to license resolution and starts no acquire afterward", async () => {
+    const controller = new AbortController();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const acquire = vi.fn<UniverCollaborationRuntimePool<unknown>["acquire"]>();
+    const runtime = createRuntime({
+      acquire,
+      resolveLicense: async (signal) => {
+        expect(signal).toBe(controller.signal);
+        await gate;
+        return "license";
+      },
+    });
+    const operation = runtime.executeRead({ code: "read", signal: controller.signal, target });
+    await Promise.resolve();
+    controller.abort(new Error("cancel-license"));
+    release();
+    await expect(operation).rejects.toThrow("cancel-license");
+    expect(acquire).not.toHaveBeenCalled();
+  });
+
+  it("waits out the runtime-key queue before rejecting a cancelled waiter", async () => {
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const first = lease();
+    first.execute = vi.fn(async () => {
+      await readGate;
+      return { state: runtimeState(), value: null };
+    }) as unknown as typeof first.execute;
+    const acquire = vi.fn(async () => first);
+    const runtime = createRuntime({ acquire });
+    const active = runtime.executeRead({ code: "first", target });
+    await vi.waitFor(() => expect(first.execute).toHaveBeenCalledOnce());
+    const controller = new AbortController();
+    const queued = runtime.executeRead({ code: "second", signal: controller.signal, target });
+    controller.abort(new Error("cancel-queued"));
+    await Promise.resolve();
+    expect(acquire).toHaveBeenCalledOnce();
+    releaseRead();
+    await active;
+    await expect(queued).rejects.toThrow("cancel-queued");
+    expect(acquire).toHaveBeenCalledOnce();
+  });
+
+  it.each(["state", "pull", "read"] as const)(
+    "awaits an in-flight %s step and starts no later read step after cancellation",
+    async (step) => {
+      const controller = new AbortController();
+      const current = lease();
+      const original = current[step === "state" ? "getState" : step === "read" ? "execute" : "pull"];
+      (current as unknown as Record<string, unknown>)[step === "state" ? "getState" : step === "read" ? "execute" : "pull"] = vi.fn(async (...args: unknown[]) => {
+        const result = await (original as (...values: unknown[]) => Promise<unknown>)(...args);
+        controller.abort(new Error(`cancel-${step}`));
+        return result;
+      });
+      const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+
+      await expect(runtime.executeRead({ code: "read", signal: controller.signal, target }))
+        .rejects.toThrow(`cancel-${step}`);
+      if (step === "state") expect(current.pull).not.toHaveBeenCalled();
+      if (step !== "read") expect(current.execute).not.toHaveBeenCalled();
+      expect(current.release).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("validates execute values before image upload, replacement, or commit", async () => {
+    const invalidValues = [
+      { expected: "WORKSPACE_RUNTIME_RESULT_INVALID", value: 1n },
+      { expected: "WORKSPACE_RUNTIME_RESULT_INVALID", value: Number.NaN },
+      { expected: "workspace-content-limit-exceeded", value: { nested: { tooDeep: true } } },
+      { expected: "workspace-content-limit-exceeded", value: "too many bytes" },
+    ];
+    for (const fixture of invalidValues) {
+      const current = lease({
+        writeMutations: [{ data: "{}", id: "mutation-1" }],
+        writeValue: fixture.value,
+      });
+      const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+      await expect(runtime.executeAndCommit({
+        code: "edit",
+        maxValueBytes: fixture.value === "too many bytes" ? 4 : 100,
+        maxValueDepth: fixture.value === "too many bytes" ? 64 : 1,
+        target,
+      })).rejects.toMatchObject({ code: fixture.expected });
+      expect(current.replacePendingMutations).not.toHaveBeenCalled();
+      expect(current.commit).not.toHaveBeenCalled();
+      expect(current.invalidate).toHaveBeenCalledOnce();
+    }
+  });
+
+  it("invalidates a write cancelled after one confirmed image upload", async () => {
+    const controller = new AbortController();
+    const png = `data:image/png;base64,${Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString("base64")}`;
+    const current = lease({
+      writeMutations: [{ data: JSON.stringify({ imageSourceType: "BASE64", source: png }), id: "image" }],
+    });
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      controller.abort(new Error("cancel-after-upload"));
+      return Response.json({ FileId: "file-1" });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+      await expect(runtime.executeAndCommit({ code: "edit", signal: controller.signal, target }))
+        .rejects.toMatchObject({
+          code: "workspace-content-partial-side-effect",
+          detail: { confirmedUploadCount: 1, contentCommitted: false, target },
+        });
+      expect(current.replacePendingMutations).not.toHaveBeenCalled();
+      expect(current.commit).not.toHaveBeenCalled();
+      expect(current.invalidate).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("invalidates after write execution settles into cancellation before remote effects", async () => {
+    const controller = new AbortController();
+    const current = lease({ writeMutations: [{ data: "{}", id: "mutation-1" }] });
+    const originalExecute = current.execute;
+    current.execute = vi.fn(async (input) => {
+      const result = await originalExecute(input);
+      controller.abort(new Error("cancel-after-write"));
+      return result;
+    }) as unknown as typeof current.execute;
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+
+    await expect(runtime.executeAndCommit({ code: "edit", signal: controller.signal, target }))
+      .rejects.toThrow("cancel-after-write");
+    expect(current.replacePendingMutations).not.toHaveBeenCalled();
+    expect(current.commit).not.toHaveBeenCalled();
+    expect(current.invalidate).toHaveBeenCalledOnce();
+  });
+
+  it("does not start commit after cancellation following mutation replacement", async () => {
+    const controller = new AbortController();
+    const current = lease({ writeMutations: [{ data: "{}", id: "mutation-1" }] });
+    current.replacePendingMutations = vi.fn(async () => {
+      controller.abort(new Error("cancel-after-replacement"));
+      return { pendingMutationCount: 1, previousMutationCount: 0, state: runtimeState() };
+    });
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+
+    await expect(runtime.executeAndCommit({ code: "edit", signal: controller.signal, target }))
+      .rejects.toThrow("cancel-after-replacement");
+    expect(current.commit).not.toHaveBeenCalled();
+    expect(current.invalidate).toHaveBeenCalledOnce();
+  });
+
+  it("keeps changeset uncertainty dominant when cancellation stops a retry", async () => {
+    const controller = new AbortController();
+    const current = lease({
+      commitResults: [commitResult("unknown", 7), commitResult("confirmed", 8)],
+      writeMutations: [{ data: "{}", id: "mutation-1" }],
+    });
+    const originalCommit = current.commit;
+    current.commit = vi.fn(async () => {
+      const result = await originalCommit();
+      controller.abort(new Error("cancel-after-unknown"));
+      return result;
+    });
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+
+    await expect(runtime.executeAndCommit({ code: "edit", signal: controller.signal, target }))
+      .rejects.toMatchObject({
+        code: "workspace-result-unknown",
+        detail: {
+          changeset: expect.objectContaining({ reqId: 2, sid: "sid-1" }),
+          target,
+        },
+      });
+    expect(current.commit).toHaveBeenCalledOnce();
+    expect(current.execute).toHaveBeenCalledOnce();
+    expect(current.replacePendingMutations).toHaveBeenCalledOnce();
+    expect(current.invalidate).toHaveBeenCalledOnce();
+  });
+
+  it("classifies an in-flight commit rejection after cancellation as result unknown", async () => {
+    const controller = new AbortController();
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const current = lease({ writeMutations: [{ data: "{}", id: "mutation-1" }] });
+    current.commit = vi.fn(async () => {
+      entered();
+      await gate;
+      throw new Error("commit-provider-secret");
+    });
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+    const operation = runtime.executeAndCommit({ code: "edit", signal: controller.signal, target });
+    await started;
+    controller.abort(new Error("cancel-in-flight-commit"));
+    release();
+    const error = await operation.catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ code: "workspace-result-unknown", detail: { target } });
+    expect(JSON.stringify(error)).not.toContain("commit-provider-secret");
+    expect(current.commit).toHaveBeenCalledOnce();
+    expect(current.invalidate).toHaveBeenCalledOnce();
+  });
+
+  it("keeps commit unknown dominant after a confirmed image upload", async () => {
+    const controller = new AbortController();
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const png = `data:image/png;base64,${Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString("base64")}`;
+    const current = lease({
+      writeMutations: [{ data: JSON.stringify({ imageSourceType: "BASE64", source: png }), id: "image" }],
+    });
+    current.commit = vi.fn(async () => {
+      entered();
+      await gate;
+      throw new Error("unknown-after-upload-secret");
+    });
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async () => Response.json({ FileId: "file-1" })));
+    try {
+      const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+      const operation = runtime.executeAndCommit({ code: "edit", signal: controller.signal, target });
+      await started;
+      controller.abort(new Error("cancel-commit-after-upload"));
+      release();
+      const error = await operation.catch((reason: unknown) => reason);
+      expect(error).toMatchObject({ code: "workspace-result-unknown", detail: { target } });
+      expect(JSON.stringify(error)).not.toContain("unknown-after-upload-secret");
+      expect(current.execute).toHaveBeenCalledOnce();
+      expect(current.replacePendingMutations).toHaveBeenCalledOnce();
+      expect(current.commit).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("returns a confirmed commit that settles concurrently with cancellation", async () => {
+    const controller = new AbortController();
+    const current = lease({
+      commitResults: [commitResult("confirmed", 8)],
+      writeMutations: [{ data: "{}", id: "mutation-1" }],
+    });
+    const originalCommit = current.commit;
+    current.commit = vi.fn(async () => {
+      const result = await originalCommit();
+      controller.abort(new Error("late-cancel"));
+      return result;
+    });
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+
+    await expect(runtime.executeAndCommit({ code: "edit", signal: controller.signal, target }))
+      .resolves.toMatchObject({ committed: true, revision: 8 });
+    expect(current.release).toHaveBeenCalledOnce();
+  });
+
+  it("stops admission and waits for active and queued operations before closing the pool", async () => {
+    let releaseRead!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const current = lease();
+    current.execute = vi.fn(async () => {
+      await gate;
+      return { state: runtimeState(), value: null };
+    }) as unknown as typeof current.execute;
+    const close = vi.fn(async () => undefined);
+    const runtime = createRuntime({ acquire: vi.fn(async () => current), close });
+    const active = runtime.executeRead({ code: "first", target });
+    await vi.waitFor(() => expect(current.execute).toHaveBeenCalledOnce());
+    const queued = runtime.executeRead({ code: "second", target }).catch((error: unknown) => error);
+    const closing = runtime.close();
+    await expect(runtime.executeRead({ code: "late", target })).rejects.toMatchObject({
+      code: "COLLABORATION_POOL_CLOSED",
+    });
+    expect(close).not.toHaveBeenCalled();
+    releaseRead();
+    await active;
+    await expect(queued).resolves.toMatchObject({ code: "COLLABORATION_POOL_CLOSED" });
+    await closing;
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it("returns exact UnitData and releases the lease", async () => {
     const unitData = { id: "unit-1", resources: [], sheets: {}, styles: {} };
     const current = lease({ unitData });
@@ -404,6 +742,134 @@ describe("Workspace content runtime owner", () => {
     await expect(runtime.exportUnitData({ target })).resolves.toBe(unitData);
     expect(current.exportUnitData).toHaveBeenCalledOnce();
     expect(current.execute).not.toHaveBeenCalled();
+    expect(current.release).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an already-aborted UnitData export before credentials or runtime acquisition", async () => {
+    const controller = new AbortController();
+    const reason = new Error("export cancelled");
+    controller.abort(reason);
+    const acquire = vi.fn<UniverCollaborationRuntimePool<unknown>["acquire"]>();
+    const resolveCredential = vi.fn(async () => "cookie");
+    const runtime = createRuntime({ acquire, resolveCredential });
+
+    await expect(runtime.exportUnitData({ signal: controller.signal, target })).rejects.toBe(reason);
+    expect(resolveCredential).not.toHaveBeenCalled();
+    expect(acquire).not.toHaveBeenCalled();
+  });
+
+  it("checks UnitData budgets and preserves the exact value", async () => {
+    const unitData = { id: "unit-1", nested: { value: true } };
+    const current = lease({ unitData });
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+    const bytes = Buffer.byteLength(JSON.stringify(unitData));
+
+    await expect(runtime.exportUnitData({
+      maxValueBytes: bytes,
+      maxValueDepth: 2,
+      target,
+    })).resolves.toBe(unitData);
+    expect(current.exportUnitData).toHaveBeenCalledOnce();
+    expect(current.release).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["bytes", { maxValueBytes: 8 }, "export-unit-data-bytes"],
+    ["depth", { maxValueDepth: 1 }, "export-unit-data-depth"],
+  ] as const)("rejects UnitData over the %s budget after export and before return", async (_label, budget, kind) => {
+    const current = lease({ unitData: { id: "unit-1", nested: { value: true } } });
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+
+    await expect(runtime.exportUnitData({ ...budget, target })).rejects.toMatchObject({
+      code: "workspace-content-limit-exceeded",
+      detail: { kind },
+    });
+    expect(current.exportUnitData).toHaveBeenCalledOnce();
+    expect(current.release).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["bytes", { maxUnitDataBytes: 8 }, "unit-data-bytes", 8, 39],
+    ["depth", { maxUnitDataDepth: 1 }, "unit-data-depth", 1, 2],
+  ] as const)("projects the real runtime %s budget through controlled Office export", async (_label, budget, kind, limit, actual) => {
+    const current = lease({ unitData: { id: "unit-1", nested: { value: true } } });
+    const acquire = vi.fn(async () => current);
+    const runtime = createRuntime({ acquire });
+    const resolveRuntimeTarget = vi.fn(async () => target);
+    const exportToBuffer = vi.fn();
+    const writeOutput = vi.fn();
+    const feature = new WorkspaceUnitExchangeFeature({
+      createUnit: vi.fn(),
+      exportToBuffer,
+      resolveRuntimeTarget,
+      runtime,
+      writeOutput,
+    });
+
+    await expect(feature.exportFile({
+      outputPath: "output.xlsx",
+      unitId: "unit-1",
+      worktreeId: "wt-1",
+    }, {
+      atomicOutput: { force: false, maxOutputBytes: 52_428_800 },
+      ...budget,
+    })).rejects.toMatchObject({
+      code: "workspace-office-limit-exceeded",
+      detail: { actual, kind, limit },
+    });
+    expect(resolveRuntimeTarget).toHaveBeenCalledOnce();
+    expect(acquire).toHaveBeenCalledOnce();
+    expect(current.exportUnitData).toHaveBeenCalledOnce();
+    expect(current.release).toHaveBeenCalledOnce();
+    expect(exportToBuffer).not.toHaveBeenCalled();
+    expect(writeOutput).not.toHaveBeenCalled();
+    await runtime.close();
+  });
+
+  it("rejects invalid UnitData budgets before credentials or runtime acquisition", async () => {
+    const acquire = vi.fn<UniverCollaborationRuntimePool<unknown>["acquire"]>();
+    const resolveCredential = vi.fn(async () => "cookie");
+    const runtime = createRuntime({ acquire, resolveCredential });
+
+    await expect(runtime.exportUnitData({ maxValueBytes: 0, target })).rejects.toMatchObject({
+      code: "WORKSPACE_RUNTIME_RESULT_INVALID",
+    });
+    expect(resolveCredential).not.toHaveBeenCalled();
+    expect(acquire).not.toHaveBeenCalled();
+  });
+
+  it("does not invoke an accessor while validating controlled UnitData", async () => {
+    let getterCalls = 0;
+    const unitData = Object.defineProperty({ id: "unit-1" }, "secret", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return "secret";
+      },
+    });
+    const current = lease({ unitData });
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+
+    await expect(runtime.exportUnitData({ maxValueDepth: 64, target })).rejects.toMatchObject({
+      code: "WORKSPACE_RUNTIME_RESULT_INVALID",
+    });
+    expect(getterCalls).toBe(0);
+    expect(current.release).toHaveBeenCalledOnce();
+  });
+
+  it("awaits UnitData export, then stops when cancellation arrives", async () => {
+    const controller = new AbortController();
+    const current = lease();
+    current.exportUnitData = vi.fn(async () => {
+      controller.abort(new Error("runtime export cancelled"));
+      return { id: "unit-1" };
+    }) as unknown as typeof current.exportUnitData;
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+
+    await expect(runtime.exportUnitData({ signal: controller.signal, target })).rejects.toThrow(
+      "runtime export cancelled",
+    );
+    expect(current.exportUnitData).toHaveBeenCalledOnce();
     expect(current.release).toHaveBeenCalledOnce();
   });
 
@@ -719,4 +1185,16 @@ function commitResult(status: string, baseRevision: number): unknown {
     return { baseRevision, confirmedChangesets: [], knownHeadRevision: baseRevision + 1, state, status };
   }
   return { state, status };
+}
+
+function runtimeState(): CollaborationRuntimeState {
+  return {
+    awaitingChangeset: null,
+    baseRevision: 7,
+    bufferedChangesetCount: 0,
+    conflict: null,
+    connection: "online",
+    knownHeadRevision: 7,
+    pendingMutationCount: 0,
+  };
 }

@@ -486,6 +486,129 @@ describe("Workspace review URL", () => {
   });
 });
 
+describe("Workspace Worktree and Unit cancellation", () => {
+  it("passes one signal through each read family", async () => {
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(init?.signal).toBe(controller.signal);
+      if (new URL(String(input)).searchParams.has("scope")) return Response.json({ items: [] });
+      return Response.json({ worktree: rawWorktree("wt-1", "draft", [rawUnit()]) });
+    });
+    const authenticatedHttp = vi.fn(async (signal?: AbortSignal) => {
+      expect(signal).toBe(controller.signal);
+      return http(fetcher);
+    });
+    const worktreeFeature = new WorkspaceWorktreeFeature(authenticatedHttp);
+    const unitFeature = new WorkspaceUnitFeature(authenticatedHttp);
+    const openFeature = new WorkspaceOpenFeature(
+      authenticatedHttp,
+      async () => "https://workspace.test",
+    );
+
+    await expect(worktreeFeature.list({ view: "active" }, controller.signal)).resolves.toHaveLength(0);
+    await expect(worktreeFeature.get("wt-1", controller.signal)).resolves.toMatchObject({ id: "wt-1" });
+    await expect(unitFeature.list("wt-1", controller.signal)).resolves.toHaveLength(1);
+    await expect(openFeature.createUrl({ worktreeId: "wt-1" }, controller.signal)).resolves.toMatchObject({
+      unitId: "unit-1",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not dispatch mutation families when already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error("cancelled"));
+    const fetcher = vi.fn<typeof fetch>();
+    const worktreeFeature = worktrees(fetcher);
+    const unitFeature = units(fetcher);
+
+    await expect(worktreeFeature.create({ name: "Draft", scope: { kind: "user" } }, controller.signal)).rejects.toThrow("cancelled");
+    await expect(worktreeFeature.update("wt-1", { name: "Renamed" }, controller.signal)).rejects.toThrow("cancelled");
+    await expect(worktreeFeature.transition("wt-1", "ready", controller.signal)).rejects.toThrow("cancelled");
+    await expect(unitFeature.add("wt-1", "resource-1", controller.signal)).rejects.toThrow("cancelled");
+    await expect(unitFeature.create({ name: "Draft", spaceId: "space-1", type: "sheet", worktreeId: "wt-1" }, controller.signal)).rejects.toThrow("cancelled");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each(["worktree-create", "unit-add", "unit-create"] as const)(
+    "stops stable-identity retry after an uncertain %s attempt",
+    async (kind) => {
+      const controller = new AbortController();
+      const fetcher = vi.fn<typeof fetch>(async () => {
+        controller.abort(new Error("cancelled"));
+        throw new Error("response lost");
+      });
+      const result = kind === "worktree-create"
+        ? worktrees(fetcher).create({ name: "Draft", scope: { kind: "user" } }, controller.signal)
+        : kind === "unit-add"
+          ? units(fetcher).add("wt-1", "resource-1", controller.signal)
+          : units(fetcher).create({ name: "Draft", spaceId: "space-1", type: "sheet", worktreeId: "wt-1" }, controller.signal);
+
+      await expect(result).rejects.toMatchObject({ code: "workspace-result-unknown" });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("does not start lifecycle read-back after the transition aborts", async () => {
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      if ((init?.method ?? "GET") === "GET") {
+        return Response.json({ worktree: rawWorktree("wt-1", "ready") });
+      }
+      controller.abort(new Error("cancelled"));
+      throw new Error("response lost");
+    });
+
+    await expect(worktrees(fetcher).transition("wt-1", "merge", controller.signal)).rejects.toMatchObject({
+      code: "workspace-result-unknown",
+      detail: { expectedState: "merged", worktreeId: "wt-1" },
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps an abort during lifecycle read-back in result-unknown semantics", async () => {
+    const controller = new AbortController();
+    let getCount = 0;
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      if ((init?.method ?? "GET") === "POST") throw new Error("response lost");
+      getCount += 1;
+      if (getCount === 2) {
+        controller.abort(new Error("cancelled"));
+        throw controller.signal.reason;
+      }
+      return Response.json({ worktree: rawWorktree("wt-1", "ready") });
+    });
+
+    await expect(worktrees(fetcher).transition("wt-1", "merge", controller.signal)).rejects.toMatchObject({
+      code: "workspace-result-unknown",
+      detail: { expectedState: "merged", worktreeId: "wt-1" },
+    });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops an already-aborted review before resolving its origin", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error("cancelled"));
+    const authenticatedHttp = vi.fn();
+    const configuredOrigin = vi.fn(async () => "https://workspace.test");
+    const feature = new WorkspaceOpenFeature(authenticatedHttp, configuredOrigin);
+
+    await expect(feature.createUrl({ worktreeId: "wt-1" }, controller.signal)).rejects.toThrow("cancelled");
+    expect(authenticatedHttp).not.toHaveBeenCalled();
+    expect(configuredOrigin).not.toHaveBeenCalled();
+  });
+
+  it("may return a response that Core confirmed while cancellation raced", async () => {
+    const controller = new AbortController();
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      controller.abort(new Error("cancelled"));
+      return Response.json(rawWorktree("wt-created"));
+    });
+
+    await expect(worktrees(fetcher).create({ name: "Draft", scope: { kind: "user" } }, controller.signal)).resolves.toMatchObject({ id: "wt-created" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
 function worktrees(fetcher: typeof fetch): WorkspaceWorktreeFeature {
   return new WorkspaceWorktreeFeature(async () => http(fetcher));
 }

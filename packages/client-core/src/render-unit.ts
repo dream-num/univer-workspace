@@ -1,12 +1,15 @@
 import {
+  isUnitScreenshotError,
   resolveUnitScreenshotImageAssets,
   type ScreenshotImageAsset,
 } from "@univer-cli/unit-screenshot";
+import { isUnitLayoutLintError } from "@univer-cli/unit-layout-lint";
 import type {
   UniverRenderEmbeddedUnit,
   UniverRenderFormulaReferenceUnit,
   UniverRenderUnit,
 } from "@univer-cli/univer-render-runtime";
+import { isUniverRenderError } from "@univer-cli/univer-render-runtime";
 import { parseResourceRef } from "@univerjs-pro/embed";
 import { workspaceError } from "./errors.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
@@ -29,11 +32,12 @@ export interface WorkspaceRenderUnitSource {
 
 export interface WorkspaceRenderUnitLoaderOptions {
   readonly runtime: Pick<WorkspaceContentRuntimeOperations, "exportUnitData">;
-  readonly openSource: () => Promise<WorkspaceRenderUnitSource>;
+  readonly openSource: (signal?: AbortSignal) => Promise<WorkspaceRenderUnitSource>;
 }
 
 export interface WorkspaceRenderUnitLoadInput {
   readonly scope: WorkspaceRuntimeScope;
+  readonly signal?: AbortSignal;
   readonly unitId?: string;
 }
 
@@ -41,21 +45,51 @@ export class WorkspaceRenderUnitLoader {
   public constructor(private readonly options: WorkspaceRenderUnitLoaderOptions) {}
 
   public async loadUnit(input: WorkspaceRenderUnitLoadInput): Promise<UniverRenderUnit> {
+    input.signal?.throwIfAborted();
     const unitId = required(input.unitId, "--unit <unit-id> is required for Workspace screenshots");
-    const source = await this.options.openSource();
+    const source = await awaitRenderOperation(this.options.openSource(input.signal), input.signal);
     const target =
       input.scope.kind === "trunk"
-        ? await source.resolveTrunkRuntimeTarget({ unitId })
-        : await source.resolveRuntimeTarget({ unitId, worktreeId: input.scope.worktreeId });
-    const unitData = await this.exportUnitData(target);
+        ? await awaitRenderOperation(
+            source.resolveTrunkRuntimeTarget({ unitId }, input.signal),
+            input.signal,
+          )
+        : await awaitRenderOperation(
+            source.resolveRuntimeTarget(
+              { unitId, worktreeId: input.scope.worktreeId },
+              input.signal,
+            ),
+            input.signal,
+          );
+    return await this.loadResolvedTargetFromSource(source, target, input.signal);
+  }
+
+  public async loadResolvedTarget(input: {
+    readonly signal?: AbortSignal;
+    readonly target: WorkspaceRuntimeTarget;
+  }): Promise<UniverRenderUnit> {
+    input.signal?.throwIfAborted();
+    const source = await awaitRenderOperation(this.options.openSource(input.signal), input.signal);
+    return await this.loadResolvedTargetFromSource(source, input.target, input.signal);
+  }
+
+  private async loadResolvedTargetFromSource(
+    source: WorkspaceRenderUnitSource,
+    target: WorkspaceRuntimeTarget,
+    signal?: AbortSignal,
+  ): Promise<UniverRenderUnit> {
+    const input = { signal };
+    const unitData = await this.exportUnitData(target, input.signal);
     const formulaReferenceUnits: UniverRenderFormulaReferenceUnit[] = [];
     const formulaReferenceUnitIds = externalReferenceUnitIds(unitData);
     for (const referenceUnitId of formulaReferenceUnitIds) {
       if (referenceUnitId === target.unitId) continue;
-      const referenceTarget = await source.resolveReferencedRuntimeTarget({
-        hostTarget: target,
-        unitId: referenceUnitId,
-      });
+      input.signal?.throwIfAborted();
+      const referenceInput = { hostTarget: target, unitId: referenceUnitId };
+      const referenceTarget = await awaitRenderOperation(
+        source.resolveReferencedRuntimeTarget(referenceInput, input.signal),
+        input.signal,
+      );
       if (referenceTarget.unitId !== referenceUnitId) {
         throw invalidReferenceResource("resolved Unit identity does not match");
       }
@@ -69,6 +103,7 @@ export class WorkspaceRenderUnitLoader {
         unitType: referenceTarget.unitType,
         unitData: (await this.exportUnitData(
           referenceTarget,
+          input.signal,
         )) as unknown as UniverRenderFormulaReferenceUnit["unitData"],
       } as UniverRenderFormulaReferenceUnit);
     }
@@ -76,10 +111,12 @@ export class WorkspaceRenderUnitLoader {
     const embeddedUnits: UniverRenderEmbeddedUnit[] = [];
     for (const embedded of embeddedUnitReferences(unitData)) {
       if (embedded.unitId === target.unitId || formulaReferences.has(embedded.unitId)) continue;
-      const embeddedTarget = await source.resolveReferencedRuntimeTarget({
-        hostTarget: target,
-        unitId: embedded.unitId,
-      });
+      input.signal?.throwIfAborted();
+      const embeddedInput = { hostTarget: target, unitId: embedded.unitId };
+      const embeddedTarget = await awaitRenderOperation(
+        source.resolveReferencedRuntimeTarget(embeddedInput, input.signal),
+        input.signal,
+      );
       if (
         embeddedTarget.unitId !== embedded.unitId ||
         (embedded.unitType !== undefined && embeddedTarget.unitType !== embedded.unitType)
@@ -90,6 +127,7 @@ export class WorkspaceRenderUnitLoader {
         unitType: embeddedTarget.unitType,
         unitData: (await this.exportUnitData(
           embeddedTarget,
+          input.signal,
         )) as unknown as UniverRenderEmbeddedUnit["unitData"],
       } as UniverRenderEmbeddedUnit);
     }
@@ -101,14 +139,33 @@ export class WorkspaceRenderUnitLoader {
     } as unknown as UniverRenderUnit;
     if (target.scope.kind === "trunk") return renderUnit;
     const worktreeId = target.scope.worktreeId;
-    return await resolveUnitScreenshotImageAssets(renderUnit, {
-      resolve: async ({ source: assetId }) =>
-        await source.resolveImageAsset({ assetId, worktreeId }),
-    });
+    const resolver = {
+      resolve: async ({ signal, source: assetId }: { signal?: AbortSignal; source: string }) =>
+        await source.resolveImageAsset({
+          assetId,
+          worktreeId,
+          ...(signal === undefined ? {} : { signal }),
+        }),
+    };
+    return await awaitRenderOperation(
+      input.signal === undefined
+        ? resolveUnitScreenshotImageAssets(renderUnit, resolver)
+        : resolveUnitScreenshotImageAssets(renderUnit, resolver, input.signal),
+      input.signal,
+    );
   }
 
-  private async exportUnitData(target: WorkspaceRuntimeTarget): Promise<Record<string, unknown>> {
-    const result: unknown = await this.options.runtime.exportUnitData({ target });
+  private async exportUnitData(
+    target: WorkspaceRuntimeTarget,
+    signal?: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    const result: unknown = await awaitRenderOperation(
+      this.options.runtime.exportUnitData({
+        target,
+        ...(signal === undefined ? {} : { signal }),
+      }),
+      signal,
+    );
     if (!isRecord(result) || result["id"] !== target.unitId) {
       throw workspaceError(
         "workspace-screenshot-unit-data-invalid",
@@ -117,6 +174,26 @@ export class WorkspaceRenderUnitLoader {
     }
     return result;
   }
+}
+
+export async function awaitRenderOperation<T>(
+  operation: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  try {
+    const result = await operation;
+    signal?.throwIfAborted();
+    return result;
+  } catch (error) {
+    signal?.throwIfAborted();
+    throw error;
+  }
+}
+
+export function projectWorkspaceRenderDependencyCode(error: unknown): string | undefined {
+  return isUnitScreenshotError(error) || isUnitLayoutLintError(error) || isUniverRenderError(error)
+    ? error.code
+    : undefined;
 }
 
 function externalReferenceUnitIds(unitData: Record<string, unknown>): readonly string[] {

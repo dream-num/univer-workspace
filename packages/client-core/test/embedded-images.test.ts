@@ -183,7 +183,82 @@ describe("Workspace embedded image externalization", () => {
     const file = form?.get("file");
     expect(file).toMatchObject({ name: "digest.png", size: 8, type: "image/png" });
   });
+
+  it("stops after a confirmed upload and reports a partial side effect on cancellation", async () => {
+    const controller = new AbortController();
+    const upload = vi.fn<WorkspaceEmbeddedImageUploader["upload"]>(async () => {
+      controller.abort(new Error("cancel-after-first-upload"));
+      return "file-1";
+    });
+    const mutations = [signatures.png, Buffer.concat([signatures.png, Buffer.from([1])])]
+      .map((bytes, index) => mutation({
+        imageSourceType: "BASE64",
+        source: dataUri("image/png", bytes),
+        value: index,
+      }));
+
+    await expect(externalizeEmbeddedImages({
+      mutations,
+      signal: controller.signal,
+      target: runtimeTarget,
+      unitId: "unit-1",
+      uploader: { upload },
+      worktreeId: "wt-1",
+    })).rejects.toMatchObject({
+      code: "workspace-content-partial-side-effect",
+      detail: {
+        confirmedUploadCount: 1,
+        contentCommitted: false,
+        effect: "embedded-image-upload",
+        target: runtimeTarget,
+      },
+    });
+    expect(upload).toHaveBeenCalledOnce();
+  });
+
+  it("does not turn an in-flight cancelled upload into BASE64 fallback", async () => {
+    const controller = new AbortController();
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const upload = vi.fn<WorkspaceEmbeddedImageUploader["upload"]>(async () => {
+      entered();
+      await pending;
+      throw new Error("provider-cookie-sentinel");
+    });
+    const result = externalizeEmbeddedImages({
+      mutations: [mutation({ imageSourceType: "BASE64", source: dataUri("image/png", signatures.png) })],
+      signal: controller.signal,
+      target: runtimeTarget,
+      unitId: "unit-1",
+      uploader: { upload },
+      worktreeId: "wt-1",
+    });
+    await started;
+    controller.abort(new Error("cancel-upload"));
+    release();
+
+    const error = await result.catch((reason: unknown) => reason);
+    expect(error).toMatchObject({
+      code: "workspace-result-unknown",
+      detail: { effect: "embedded-image-upload", target: runtimeTarget },
+    });
+    expect(JSON.stringify(error)).not.toContain("provider-cookie-sentinel");
+  });
 });
+
+const runtimeTarget = {
+  origin: "https://workspace.test",
+  revision: 7,
+  scope: { kind: "worktree" as const, worktreeId: "wt-1" },
+  unitId: "unit-1",
+  unitType: "sheet" as const,
+};
 
 function dataUri(mediaType: string, bytes: Uint8Array): string {
   return `data:${mediaType};base64,${Buffer.from(bytes).toString("base64")}`;

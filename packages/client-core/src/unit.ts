@@ -8,8 +8,10 @@ import { parseUnit, type WorkspaceUnit } from "./worktree-model.js";
 export class WorkspaceUnitFeature {
   public constructor(private readonly authenticatedHttp: AuthenticatedWorkspaceHttp) {}
 
-  public async list(worktreeId: string): Promise<readonly WorkspaceUnit[]> {
-    const worktree = await getWorktree(await this.authenticatedHttp(), worktreeId);
+  public async list(worktreeId: string, signal?: AbortSignal): Promise<readonly WorkspaceUnit[]> {
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
+    const worktree = await getWorktree(http, worktreeId, signal);
     if (worktree.units.some((unit) => unit.worktreeId !== worktreeId)) {
       throw workspaceError(
         "workspace-result-mismatch",
@@ -19,8 +21,13 @@ export class WorkspaceUnitFeature {
     return worktree.units;
   }
 
-  public async add(worktreeId: string, resourceId: string): Promise<WorkspaceUnit> {
-    const http = await this.authenticatedHttp();
+  public async add(
+    worktreeId: string,
+    resourceId: string,
+    signal?: AbortSignal,
+  ): Promise<WorkspaceUnit> {
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
     return await executeWithStableIdentity({
       identity: { resourceId, worktreeId },
       operation: async (sameInput) => {
@@ -30,6 +37,7 @@ export class WorkspaceUnitFeature {
             body: { resourceId: sameInput.resourceId, source: "trunk" },
             idempotencyKey: stableKey("add-unit", sameInput.worktreeId, sameInput.resourceId),
             method: "POST",
+            ...(signal === undefined ? {} : { signal }),
           },
         );
         const value = body["unit"];
@@ -57,6 +65,7 @@ export class WorkspaceUnitFeature {
         }
         return unit;
       },
+      ...(signal === undefined ? {} : { signal }),
     });
   }
 
@@ -68,8 +77,9 @@ export class WorkspaceUnitFeature {
     readonly spaceId: string;
     readonly type: WorkspaceUnitType;
     readonly worktreeId: string;
-  }): Promise<WorkspaceUnit> {
-    const http = await this.authenticatedHttp();
+  }, signal?: AbortSignal): Promise<WorkspaceUnit> {
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
     const identity = { ...input, idempotencyKey: input.idempotencyKey ?? randomUUID() };
     return await executeWithStableIdentity({
       identity,
@@ -97,6 +107,7 @@ export class WorkspaceUnitFeature {
             },
             idempotencyKey: sameInput.idempotencyKey,
             method: "POST",
+            ...(signal === undefined ? {} : { signal }),
           },
         );
         const unit = parseUnit(body["unit"], sameInput.worktreeId);
@@ -114,6 +125,7 @@ export class WorkspaceUnitFeature {
         }
         return unit;
       },
+      ...(signal === undefined ? {} : { signal }),
     });
   }
 }

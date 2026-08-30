@@ -5,10 +5,12 @@ export async function resolveWorkspaceAssetContent(
   http: WorkspaceHttp,
   input: { readonly assetId: string; readonly signal?: AbortSignal; readonly worktreeId: string },
 ): Promise<Response> {
+  input.signal?.throwIfAborted();
   const body = await http.json(
     `/universer-api/worktrees/${encodeURIComponent(input.worktreeId)}/file/${encodeURIComponent(input.assetId)}/sign-url`,
     input.signal === undefined ? {} : { signal: input.signal },
   );
+  input.signal?.throwIfAborted();
   const serviceError = body["error"];
   if (
     !isWorkspaceRecord(serviceError) ||
@@ -26,10 +28,12 @@ export async function resolveWorkspaceAssetContent(
       serviceError["message"] || "Workspace Asset could not be resolved.",
     );
   }
-  return await http.content(
+  const response = await http.content(
     contentUrl(body["url"], http.origin),
     input.signal === undefined ? undefined : input.signal,
   );
+  input.signal?.throwIfAborted();
+  return response;
 }
 
 function contentUrl(value: unknown, origin: string): URL {

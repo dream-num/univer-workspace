@@ -34,8 +34,8 @@ Workspace CLI 已通过 Workspace Client Core 提供 SVG-to-Slide 编译、真�
 ## Domain Alignment
 
 - `apps/workspace/CONTEXT.md` 定义 Unit、Worktree Unit 与 Draft；apply 只修改指定 Worktree 中的 Slide Worktree Unit，不把 Node、Resource 或 Trunk 当作写入目标。
-- `/Users/shenweimin/github.com/dsh-plugin/dsh-univer-work/CONTEXT.md` 定义 Workspace Agent Client、Workspace Client Core 与 Client Shell；framework-neutral SVG workflow 留在 Core，DSH tool schema、Credentials、文件策略、approval、artifact path 与生命周期留在 Client Shell。
-- `/Users/shenweimin/github.com/dsh-plugin/dsh-univer-work/docs/adr/0001-co-locate-workspace-agent-clients.md` 要求两个 Agent clients 通过同仓 private package exports 共享能力，禁止 CLI subprocess 和应用间源码导入。
+- `apps/workspace/CONTEXT.md` 也定义 Workspace Agent Client、Workspace Client Core 与 Client Shell；`dsh-univer-work` 是独立 Workspace Agent Client 的 DSH Client Shell，framework-neutral SVG workflow 留在 private Core，DSH tool schema、Credentials、文件策略、approval、artifact path 与生命周期留在 Client Shell。
+- `apps/workspace/docs/adr/0007-co-locate-workspace-agent-clients.md` 要求 CLI 与 `dsh-univer-work` 只通过同仓 private Client Core package exports 共享能力，禁止 CLI subprocess、跨应用源码导入或复制另一套 client implementation。
 
 No domain-model change.
 

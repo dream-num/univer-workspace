@@ -6,7 +6,7 @@
 
 ### Requirement: Stable Typst compile tool
 
-The Client Shell SHALL expose `workspace_typst_compile` as a schema-validated DSH tool that compiles one supported local Typst Source Bundle once, publishes one reviewable artifact directory, and performs no Workspace mutation.
+The Client Shell SHALL expose `workspace_typst_compile` as a schema-validated DSH tool that compiles one supported local Typst Source Bundle once, publishes one no-clobber reviewable artifact directory, and performs no Workspace mutation.
 
 #### Scenario: Bundle compiles successfully
 
@@ -114,7 +114,7 @@ The Client Shell MUST reject a canonical argument record larger than 524,288 UTF
 
 ### Requirement: Local Typst path and artifact boundary
 
-Both tools MUST reuse the current DSH file-effect policy, public `LocalFileSystem` identity and calling Session cwd from Change 5, MUST keep all model-selected paths within that cwd, and MUST publish each artifact set from a private sibling directory as one no-clobber directory result.
+Both tools MUST reuse the current DSH file-effect policy, public `LocalFileSystem` identity and calling Session cwd from Change 5, MUST keep all model-selected paths within that cwd, and MUST publish each artifact set by atomically reserving its destination directory before publishing known files no-clobber from private sibling state.
 
 #### Scenario: Execution world is not local
 
@@ -126,6 +126,12 @@ Both tools MUST reuse the current DSH file-effect policy, public `LocalFileSyste
 - **WHEN** the caller Session has no cwd, the bundle/artifact path escapes it, or bundle root and artifact directory overlap
 - **THEN** the tool fails with the existing stable file/path code before approval or compilation and does not reveal Host launch paths or provider identity
 
+#### Scenario: Preflight does not derive Host paths
+
+- **WHEN** a valid model request reaches the pre-execute local policy branch
+- **THEN** the branch validates only normalized Session-relative model paths and current policy, does not explicitly call `processPath` or derive a Host path, and asks with fixed text containing no caller path
+- **AND** only the accepted body revalidates provider, Session cwd, policy and containment before converting the normalized paths to Host-local paths
+
 #### Scenario: Bundle path is accepted
 
 - **WHEN** the local gate resolves a contained directory with `typst.json` or a contained `typst.json` path
@@ -134,13 +140,28 @@ Both tools MUST reuse the current DSH file-effect policy, public `LocalFileSyste
 #### Scenario: Artifact directory is published
 
 - **WHEN** compilation and all requested writes, byte checks, file sync and cancellation checks succeed
-- **THEN** the body renames a private same-parent directory to the still-absent canonical destination and returns only Session-relative public artifact paths
+- **THEN** the body atomically creates the still-absent destination with mode `0700`, creates only the requested known child directories, publishes every known file no-clobber and syncs the completed files and directories
+- **AND** another observer MAY briefly see the reserved destination before all known files are present
 - **AND** no temporary basename or absolute Host path enters output, render, error detail, approval or plugin event content
+
+#### Scenario: Caller supplies a contained absolute artifact path
+
+- **WHEN** the caller supplies an absolute artifact destination that canonically remains inside the Session cwd
+- **THEN** every canonical artifact-directory, program, diagnostics and preview path is derived from the normalized Session-relative target
+- **AND** the caller's absolute path does not enter output, render, error detail, approval or plugin event content
 
 #### Scenario: Artifact publication fails
 
-- **WHEN** compiler, write, sync, size check, cancellation or final rename fails before publication
-- **THEN** non-cancellable cleanup removes the private directory, an existing destination remains unchanged, and the tool never retries compilation or publication automatically
+- **WHEN** compiler, write, sync, size check, cancellation, destination reservation or per-file publication fails before complete publication
+- **THEN** before public destination creation, non-cancellable cleanup removes a recorded private file only while its current identity matches and attempts non-recursive `rmdir` only for known private directories, while an existing destination remains unchanged
+- **AND** after public destination creation, the tool removes no public path, preserves the partial directory and returns a bounded structured failure containing only its Session-relative path plus inspect/no-replay guidance
+- **AND** cleanup never recursively removes a directory and the tool never retries compilation or publication automatically
+
+#### Scenario: First-version same-UID boundary
+
+- **WHEN** another process running as the same OS UID actively replaces, rewrites or races plugin-private staging or published artifact paths
+- **THEN** the tool makes no hostile same-UID isolation guarantee beyond randomized mode-`0700` staging, no-clobber publication and ordinary identity checks
+- **AND** the tool never reports complete publication after a detected identity, size or layout mismatch
 
 ### Requirement: Typst operations require one approval
 
@@ -164,7 +185,7 @@ The Client Shell MUST validate operation arguments and current local path policy
 #### Scenario: Policy changes after approval
 
 - **WHEN** local filesystem identity, Session cwd, file-effect policy or path containment differs when the accepted body rechecks it
-- **THEN** the body fails closed and does not use cached preflight state or start Core work
+- **THEN** the body fails closed and does not use cached preflight state, resolve an explicit Host path or start Core work
 
 ### Requirement: Typst diagnostic and failure secrecy
 
@@ -246,10 +267,11 @@ The prebuilt `dsh-univer-work` tarball MUST inline reachable private Core, Typst
 
 - **WHEN** package verification inspects emitted code, manifest and files
 - **THEN** the exact installed `@univer-cli/doc-typst-facade` owner selects a concrete `@univerjs-pro/doc-typst-native-binding` version and its platform optional packages, every runtime reference resolves, and exact published DSH/Cordis/native packages remain external
-- **AND** no bare private Core import, `workspace:*`, CLI source/daemon/Session, adjacent checkout fallback, system Typst command, Web Client, SVG/render/browser/font resource or second Typst worker entry is present
+- **AND** no bare private Core import, `workspace:*`, CLI source/daemon/Session, adjacent checkout fallback, system Typst command or Web Client enters the Typst reachable graph
+- **AND** Typst adds or uses no SVG capability, browser entry/resource, separate font directory or second Typst worker entry, while package verification preserves and separately validates the existing Render closure
 
 #### Scenario: Installed Typst smoke runs
 
 - **WHEN** the tarball is installed in an isolated local DSH profile and real ToolRuntime invokes both tools from an unrelated temporary Session cwd
-- **THEN** a real minimal bundle verifies native compile, structured diagnostics, deterministic licensed materialization, staged Doc identity, optional previews, fixed artifact layout, no-clobber, budgets, approval, caller/owner cancellation, result-unknown/partial-side-effect handling and bounded disposal
+- **THEN** a real minimal bundle verifies native compile, structured diagnostics, semantic-deterministic licensed materialization with preserved SDK-owned opaque identities, staged Doc identity, optional previews, fixed artifact layout, no-clobber, budgets, approval, caller/owner cancellation, result-unknown/partial-side-effect handling and bounded disposal
 - **AND** the Typst path does not use the Change 6 content worker, while no model key, real Workspace account, system Typst binary or monorepo source fallback is required
