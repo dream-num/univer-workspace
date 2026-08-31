@@ -44,6 +44,39 @@ function diagnosticId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function errorMessages(error: unknown): string[] {
+  const messages: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current !== undefined && current !== null && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof Error && current.message.trim() !== "") {
+      messages.push(current.message.trim());
+      current = current.cause;
+      continue;
+    }
+    if (typeof current === "string" && current.trim() !== "") messages.push(current.trim());
+    break;
+  }
+  return messages;
+}
+
+/** Preserve the actionable worker message when the pool reports a crash. */
+export function runtimeFailureMessage(
+  operation: string,
+  target: Pick<WorkspaceRuntimeTarget, "unitType" | "unitId">,
+  error: unknown,
+  workerCode: string | undefined,
+  id: string,
+): string {
+  const messages = errorMessages(error);
+  const detail = messages.length === 0 ? "" : `: ${messages.join("; caused by: ")}`;
+  const workerDiagnostic = workerCode === undefined
+    ? `diagnostic id: ${id}`
+    : `worker diagnostic: ${workerCode}; diagnostic id: ${id}`;
+  return `Univer runtime ${operation} failed for ${target.unitType} Unit ${target.unitId}${detail} (${workerDiagnostic})`;
+}
+
 function logRuntimeDiagnostic(payload: Record<string, unknown>): void {
   // stderr is intentionally used: DSH and Kubernetes collect it even when
   // the tool transport has already disconnected or a worker has crashed.
@@ -188,15 +221,7 @@ export class RuntimeManager {
         error: errorDetails(error),
         at: new Date().toISOString(),
       });
-      if (workerCode === undefined || !(error instanceof Error)) {
-        throw new Error(`Univer runtime ${operation} failed for ${target.unitType} Unit ${target.unitId} (diagnostic id: ${id})`, {
-          cause: error,
-        });
-      }
-      throw new Error(
-        `Univer runtime ${operation} failed for ${target.unitType} Unit ${target.unitId}: ${error.message} (worker diagnostic: ${workerCode}; diagnostic id: ${id})`,
-        { cause: error },
-      );
+      throw new Error(runtimeFailureMessage(operation, target, error, workerCode, id), { cause: error });
     }
   }
 
