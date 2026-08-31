@@ -31,30 +31,28 @@ describe("bundled Workspace Skills", () => {
       expect(source).toMatch(new RegExp(`^name: ${candidate.name}$`, "m"));
       expect(source).toMatch(new RegExp(`^description: ${escapeRegExp(candidate.description)}$`, "m"));
       expect(source.startsWith("---\n")).toBe(true);
-      expect(source).not.toContain("univer_screenshot");
-      expect(source).not.toContain("univer_lint");
-      expect(source).not.toContain("univer_compile_svg");
     }
   });
 
-  it("keeps the verified-type boundary explicit", async () => {
+  it("keeps the Office workflow contract intact", async () => {
     const core = await readSkill("univer");
     const sheet = await readSkill("univer-sheet");
-    expect(core).toContain("Facade read workflow for all five types");
-    expect(core).toContain("verified Sheet writes");
-    expect(core).toContain("Doc, Slide, Base, and Board");
-    expect(core).toContain("beta-limited");
-    expect(sheet).toContain("unitType: \"sheet\"");
-    expect(sheet).toContain("univer_execute");
+    const doc = await readSkill("univer-doc");
+    const slide = await readSkill("univer-slide");
+    const base = await readSkill("univer-base");
+    const board = await readSkill("univer-board");
+    const embed = await readSkill("univer-embed");
+    const crossUnitFormula = await readSkill("univer-cross-unit-formula");
 
-    for (const name of ["univer-doc", "univer-slide", "univer-base", "univer-board"] as const) {
-      const content = await readSkill(name);
-      expect(content).toContain("beta-limited");
-      expect(content).toContain("univer_status");
-      expect(content).toContain("do not report");
-    }
-    expect(await readSkill("univer-embed")).toContain("no verified embed");
-    expect(await readSkill("univer-cross-unit-formula")).toContain("no verified cross-Unit");
+    expect(core).toContain("univer_unit");
+    expect(sheet).toContain("univer_execute");
+    expect(doc).toContain("doc.getParagraphs()");
+    expect(slide).toContain("univer_compile_svg");
+    expect(slide).toContain("univer_screenshot");
+    expect(base).toContain("getFormulaName()");
+    expect(board).toContain("insertShape");
+    expect(embed).toContain("createEmbed");
+    expect(crossUnitFormula).toContain("buildReference()");
   });
 });
 
@@ -63,5 +61,8 @@ async function readSkill(name: string): Promise<string> {
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value
+    .replace(/[.*+?^$()|[\\]\\]/g, "\\$&")
+    .replaceAll("{", "\\{")
+    .replaceAll("}", "\\}");
 }

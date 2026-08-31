@@ -23,35 +23,35 @@ const INVOCATION = { modelInvocable: true, userInvocable: true } as const;
 const DEFINITIONS = [
   {
     name: "univer",
-    description: "Operate remote Univer Workspace Units through the univer_ tools. Use proactively for Space and document discovery, Worktree review, Facade reads, verified Sheet writes, import/export, and explicit status handoff; Doc, Slide, Base, and Board write/Viewer paths remain beta-limited.",
+    description: "Create, inspect, edit, import, export, and hand off multi-Unit .univer files through DSH tools and isolated worktrees. Use proactively for any task involving .univer files, spreadsheets or .xlsx/.csv/.tsv data, presentations or .pptx slides, .docx documents, Base databases, Board canvases, cross-Unit content, or exact Univer Facade API authoring; load this before the matching Unit skill.",
   },
   {
     name: "univer-sheet",
-    description: "Read, create, edit, inspect, import, export, and review verified Univer Sheet Units through the Workspace univer_ tools and headless Facade API.",
+    description: "Read, write, format, calculate, and verify Univer Sheet Units through DSH tools and the Lite Interface. Use proactively for spreadsheet values, formulas, ranges, tables, charts, images, formatting, validation, filters, pivots, rich text, xlsx/csv/tsv import or export, and any Sheet Unit task.",
   },
   {
     name: "univer-doc",
-    description: "Discover Univer Doc Units and read their Workspace status/content through univer_open, univer_documents, univer_status, and univer_edit mode=read; Doc Viewer and authoring remain beta-limited.",
+    description: "Read, create, edit, paginate, chart, inspect, export, and review Univer Doc Units through DSH tools and the Lite Interface. Use proactively for paragraphs, rich text, lists, tasks, tables, images, charts, headers, footers, page layout, Traditional or Modern documents, docx import/export, and any Doc Unit task.",
   },
   {
     name: "univer-slide",
-    description: "Discover Univer Slide Units and read their Workspace status/content through univer_open, univer_documents, univer_status, and univer_edit mode=read; Slide Viewer and authoring remain beta-limited.",
+    description: "Create, redesign, edit, inspect, lint, export, and review Univer Slide Units through DSH tools and the Lite Interface. Use proactively for presentations, slide decks, pages, SVG-authored layouts, shapes, text, images, tables, charts, transitions, pptx import/export, or any request whose deliverable is a presentation; generated pages should use univer_compile_svg and every changed page should use univer_lint.",
   },
   {
     name: "univer-base",
-    description: "Discover Univer Base Units and read their Workspace status/content through univer_open, univer_documents, univer_status, and univer_edit mode=read; Base structured inspection, Viewer, and authoring remain beta-limited.",
+    description: "Create, edit, calculate, inspect, export, and review Univer Base database Units through DSH tools and the Lite Interface. Use proactively for Base tables, fields, records, views, Formula fields, structured references, Sheet-backed external references, Base import/export, or any Base Unit task.",
   },
   {
     name: "univer-board",
-    description: "Discover Univer Board Units and read their Workspace status/content through univer_open, univer_documents, univer_status, and univer_edit mode=read; Board structured inspection, Viewer, and authoring remain beta-limited.",
+    description: "Create, edit, chart, inspect, and review Univer Board canvas Units through DSH tools and the Lite Interface. Use proactively for Board shapes, text, connectors, routing, images, native charts, diagrams, canvas layout, or any Board Unit task.",
   },
   {
     name: "univer-embed",
-    description: "Inspect Workspace Unit metadata for an embed request; embed authoring and rendering are beta-limited and must not be reported as verified through the current univer_ tools.",
+    description: "Embed one Univer Unit inside another through DSH tools and the Lite Interface. Use proactively when a Sheet, Doc, Slide, Base, Board, dashboard, report, presentation, database, or canvas should display or interact with content from another Unit in the same .univer file.",
   },
   {
     name: "univer-cross-unit-formula",
-    description: "Inspect Workspace Unit metadata for a cross-Unit formula request; cross-Unit formula authoring and calculation are beta-limited and must not be reported as verified through the current univer_ tools.",
+    description: "Author, calculate, update, inspect, and verify cross-Unit formulas through DSH tools and the Lite Interface. Use proactively when a Sheet cell or formula-driven Shape in a Sheet, Doc, Slide, or Board reads a Sheet range or Base table column from another Unit in the same .univer file.",
   },
 ] as const;
 
