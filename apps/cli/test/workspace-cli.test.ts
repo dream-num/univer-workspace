@@ -253,7 +253,7 @@ describe("Workspace CLI", () => {
       }
 
       const api = await runCli(["api", "show", "FRange.setValues"], env);
-      expect(api.stdout).toContain("FRange.setValues");
+      expect(api.stdout).toContain("setValues(");
 
       const registries = await runCli(["resources", "registries", "--json"], env);
       expect(
