@@ -1,3 +1,8 @@
+import { UniverSheetsHistoryUIPlugin } from "@univerjs-pro/sheets-history-ui";
+import SheetsHistoryUIEnUS from "@univerjs-pro/sheets-history-ui/locale/en-US";
+import SheetsHistoryUIZhCN from "@univerjs-pro/sheets-history-ui/locale/zh-CN";
+
+import "@univerjs-pro/sheets-history-ui/lib/index.css";
 import "@univerjs/preset-sheets-core/lib/index.css";
 import "@univerjs/preset-sheets-drawing/lib/index.css";
 import "@univerjs/preset-sheets-conditional-formatting/lib/index.css";
@@ -28,6 +33,19 @@ export type SheetEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "spreadsheet",
+  history: {
+    createPlugin: (containerId) => [
+      UniverSheetsHistoryUIPlugin,
+      {
+        historyListServerUrl: "/universer-api/history",
+        univerContainerId: containerId,
+      },
+    ],
+    locales: {
+      "zh-CN": SheetsHistoryUIZhCN,
+      "en-US": SheetsHistoryUIEnUS,
+    },
+  },
   theme: greenTheme,
   collaborationProvidedByPreset: true,
   exchangeProvidedByPreset: true,

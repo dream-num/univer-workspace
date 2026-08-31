@@ -40,6 +40,14 @@ solved state use the Comment component in the same Collaboration SQLite file.
 Thread Comments are enabled only in Trunk editors because the Comment protocol
 does not define Worktree branch or merge semantics.
 
+The same Collaboration SQLite file stores a rebuildable, persistent History
+index. A startup-only compatibility backfill indexes product-backed Units that
+predate persistent History; normal History reads never scan or repair data.
+Trunk Sheet, Doc, Slide, Base, and Board editors use the standard SDK
+version-history UI. Viewers can inspect versions, while users with content edit
+permission can restore one. Worktree and merge-preview editors do not expose
+Trunk History.
+
 The Univer editors import and export XLSX/CSV/TSV, DOCX, and PPTX through the
 server-side `@univerjs-pro/exchange-node` runtime. These endpoints follow the
 Universer Exchange shape under `/universer-api/exchange/**`; they are not part
@@ -191,10 +199,10 @@ docker run --rm \
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
 backs up and migrates supported V0 through V5 product databases to V6 automatically.
-The Collaboration Comment Adapter performs an additive, idempotent initialization
-of its own `comment=1` component schema in the existing Collaboration SQLite file;
-it does not require a product database migration command. Back up both SQLite files
-before rollout.
+The Collaboration Comment and History Adapters perform additive, idempotent
+initialization of their own `comment=1` and `history=1` component schemas in the
+existing Collaboration SQLite file; they do not require a product database
+migration command. Back up both SQLite files before rollout.
 For a V6 rollout, stop every old Workspace instance, start one V6 instance and
 wait for migration and health checks to succeed, then restore normal service;
 do not let V5 and V6 processes write the same SQLite file concurrently.

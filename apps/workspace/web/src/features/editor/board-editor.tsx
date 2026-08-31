@@ -7,6 +7,9 @@ import { UniverBoardsChartPlugin } from "@univerjs-pro/boards-chart";
 import { UniverBoardsChartUIPlugin } from "@univerjs-pro/boards-chart-ui";
 import UniverBoardsChartUIEnUS from "@univerjs-pro/boards-chart-ui/locale/en-US";
 import UniverBoardsChartUIZhCN from "@univerjs-pro/boards-chart-ui/locale/zh-CN";
+import { UniverBoardsHistoryUIPlugin } from "@univerjs-pro/boards-history-ui";
+import BoardsHistoryUIEnUS from "@univerjs-pro/boards-history-ui/locale/en-US";
+import BoardsHistoryUIZhCN from "@univerjs-pro/boards-history-ui/locale/zh-CN";
 import { UniverBoardsMindPlugin } from "@univerjs-pro/boards-mind";
 import { UniverBoardsMindUIPlugin } from "@univerjs-pro/boards-mind-ui";
 import UniverBoardsMindUIEnUS from "@univerjs-pro/boards-mind-ui/locale/en-US";
@@ -67,6 +70,7 @@ import "@univerjs-pro/ink-ui/lib/index.css";
 import "@univerjs-pro/docs-latex-ui/lib/index.css";
 import "@univerjs-pro/boards-ui/lib/index.css";
 import "@univerjs-pro/boards-chart-ui/lib/index.css";
+import "@univerjs-pro/boards-history-ui/lib/index.css";
 import "@univerjs-pro/boards-mind-ui/lib/index.css";
 import "@univerjs-pro/boards-print/lib/index.css";
 import "@univerjs-pro/boards-table-ui/lib/index.css";
@@ -81,6 +85,19 @@ export type BoardEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "board",
+  history: {
+    createPlugin: (containerId) => [
+      UniverBoardsHistoryUIPlugin,
+      {
+        historyServerUrl: "/universer-api/history",
+        univerContainerId: containerId,
+      },
+    ],
+    locales: {
+      "zh-CN": BoardsHistoryUIZhCN,
+      "en-US": BoardsHistoryUIEnUS,
+    },
+  },
   theme: redTheme,
   exchangeEnabled: false,
   hideCollaborationStatus: true,

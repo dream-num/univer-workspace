@@ -26,6 +26,8 @@ import CollaborationClientEnUS from "@univerjs-pro/collaboration-client/locale/e
 import CollaborationClientZhCN from "@univerjs-pro/collaboration-client/locale/zh-CN";
 import CollaborationClientUIEnUS from "@univerjs-pro/collaboration-client-ui/locale/en-US";
 import CollaborationClientUIZhCN from "@univerjs-pro/collaboration-client-ui/locale/zh-CN";
+import EditHistoryUIEnUS from "@univerjs-pro/edit-history-ui/locale/en-US";
+import EditHistoryUIZhCN from "@univerjs-pro/edit-history-ui/locale/zh-CN";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
 import ExchangeClientEnUS from "@univerjs-pro/exchange-client/locale/en-US";
@@ -63,6 +65,7 @@ import {
   createWorkspaceOutputPlugins,
 } from "./exchange-plugins";
 import { resolveMergeReview } from "./merge-review";
+import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
 import { resolveUniverLicense } from "./univer-license";
 import {
   withWorkspaceSnapshotServerOverride,
@@ -70,11 +73,14 @@ import {
 } from "./workspace-snapshot-server-adapter";
 
 import "@univerjs-pro/collaboration-client-ui/lib/index.css";
+import "@univerjs-pro/edit-history-ui/lib/index.css";
 import "@univerjs-pro/collaboration-client/facade";
 import "@univerjs-pro/embed/facade";
 import "@univerjs-pro/embed-ui/lib/index.css";
 import "@univerjs-pro/exchange-client/facade";
 import "@univerjs-pro/exchange-client/lib/index.css";
+
+installHistoryShapeFormulaSdkWorkaround();
 
 export interface CollaborationEditorProps {
   readonly unitId: string;
@@ -93,8 +99,14 @@ export interface CollaborationEditorProps {
   readonly readOnly?: boolean;
 }
 
+export interface WorkspaceHistoryDefinition {
+  readonly createPlugin: (containerId: string) => IPresetPlugin;
+  readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
+}
+
 interface ICollaborationEditorDefinition {
   readonly label: string;
+  readonly history: WorkspaceHistoryDefinition;
   readonly enableDocumentCollaborationUI?: boolean;
   readonly collaborationProvidedByPreset?: boolean;
   readonly exchangeProvidedByPreset?: boolean;
@@ -271,6 +283,11 @@ export function createCollaborationEditor(
               ];
         const collaborationFeaturePlugins =
           definition.collaborationFeaturePlugins?.(collaborationScope) ?? [];
+        const historyFeaturePlugins = createWorkspaceHistoryPlugins(
+          collaborationScope,
+          definition.history,
+          element.id
+        );
         const outputPlugins = createWorkspaceOutputPlugins({
           origin: window.location.origin,
           exchangeEnabled,
@@ -307,7 +324,8 @@ export function createCollaborationEditor(
                       ? ExchangeClientZhCN
                       : ExchangeClientEnUS,
                   ]
-                : [])
+                : []),
+              ...historyLocales(language, definition.history)
             ),
           },
           theme: definition.theme,
@@ -318,6 +336,7 @@ export function createCollaborationEditor(
           plugins: [
             ...collaborationPlugins,
             ...collaborationFeaturePlugins,
+            ...historyFeaturePlugins,
             ...outputPlugins,
             [
               UniverEmbedPlugin,
@@ -524,6 +543,26 @@ export function createCollaborationEditor(
       </div>
     );
   };
+}
+
+export function createWorkspaceHistoryPlugins(
+  collaborationScope: NonNullable<
+    CollaborationEditorProps["collaborationScope"]
+  >,
+  history: WorkspaceHistoryDefinition,
+  containerId: string
+): IPresetPlugin[] {
+  if (collaborationScope.kind !== "trunk") return [];
+  return [history.createPlugin(containerId)];
+}
+
+function historyLocales(
+  language: AppLanguage,
+  history: WorkspaceHistoryDefinition
+): ILanguagePack[] {
+  return language === "zh-CN"
+    ? [EditHistoryUIZhCN, history.locales[language]]
+    : [EditHistoryUIEnUS, history.locales[language]];
 }
 
 function configurePresetCollaboration(
