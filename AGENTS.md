@@ -58,6 +58,28 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 
 必须同时提交所有受影响的 manifest 和 `pnpm-lock.yaml`，不得手工只更新其中一部分。
 
+## 标准能力、兼容逻辑与 Workaround
+
+- 上游 SDK 已提供公开标准能力时，在 application composition root 直接装配其公开 Service、Adapter、
+  Endpoint、Plugin 或 Preset，并沿用 SDK 的概念与生命周期。先确认公开 exports 确实缺失，再增加
+  Workspace 自有实现；不得复制 SDK 合同，也不得只为转发装配而制造 `create*Runtime`、额外 Model、
+  Service 或 Plugin 包装层。
+- 一次性的全局初始化必须收敛到 application 的单一启动入口，并在开始接收请求前完成。普通业务代码
+  只依赖初始化完成后的能力；不得导出 `*Ready` Promise、在请求链逐层等待初始化，或让兼容逻辑成为
+  正常读写路径的一部分。
+- 为既有持久化数据补齐新派生数据或新索引属于历史数据兼容，不属于常态业务能力。此类代码必须集中在
+  明确命名的 `compatibility/` 或数据库 `migrations/` 目录，对外只暴露一个幂等入口，并且只由启动或
+  迁移流程调用一次；不得分散到 Repository、Endpoint、正常查询或写入流程中做长期 read-repair。
+- 历史数据兼容入口必须用注释说明兼容的数据范围、产生原因、幂等性、失败语义和删除条件，并用测试覆盖
+  已有数据补齐、重复执行无副作用以及全新数据不需要补偿。若它改变 schema 或已发布持久化语义，仍须
+  遵守目标应用的版本化迁移、备份和部署要求，不能用启动 backfill 代替数据库迁移。
+- 针对上游 SDK 缺陷或版本差异的临时修补必须集中在靠近 composition boundary 的 `workarounds/`
+  目录，通过一个命名明确的入口装配；正常业务模块不得散落 patch、条件分支或对上游私有实现的直接
+  依赖。Workaround 注释必须记录上游原因、受影响版本、保持的标准行为、可删除条件以及可用的 issue
+  或修复链接。
+- Workaround 只能弥合已确认的临时缺口，不能演变成并行 SDK 实现或新的应用合同。SDK 升级已经提供
+  对应标准能力时，应在同一变更中删除 workaround、兼容装配和失效测试。
+
 ## Workspace 数据与运行边界
 
 - 产品数据与 Univer 协同数据分别存储。产品数据库不得保存 snapshot、changeset 或 revision；
