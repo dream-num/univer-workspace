@@ -14,6 +14,10 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/workspace/package.json ./apps/workspace/package.json
 COPY packages/reference-provider/package.json ./packages/reference-provider/package.json
+# The lockfile applies a checked-in Univer CLI patch during install. Keep the
+# patch in the dependency-install layer so a clean Docker context has the same
+# inputs as the repository checkout.
+COPY patches ./patches
 
 RUN pnpm install \
     --frozen-lockfile \
