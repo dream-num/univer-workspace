@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { IMutation } from "@univerjs/protocol";
 import { workspaceError } from "./errors.js";
 import type { WorkspaceHttp } from "./http.js";
+import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
 import {
   rewriteWorkspaceImageReferences,
   visitWorkspaceImageReferences,
@@ -24,6 +25,7 @@ export interface WorkspaceEmbeddedImageUploader {
     readonly bytes: Uint8Array;
     readonly filename: string;
     readonly mediaType: SupportedImageMediaType;
+    readonly signal?: AbortSignal;
     readonly unitId: string;
     readonly worktreeId: string;
   }): Promise<string>;
@@ -47,7 +49,11 @@ export function createWorkspaceEmbeddedImageUploader(
       );
       const body = await http.json(
         `/universer-api/worktrees/${encodeURIComponent(input.worktreeId)}/stream/file/upload?${query.toString()}`,
-        { formBody: form, method: "POST" },
+        {
+          formBody: form,
+          method: "POST",
+          ...(input.signal === undefined ? {} : { signal: input.signal }),
+        },
       );
       if (typeof body["FileId"] !== "string" || body["FileId"].length === 0) {
         throw workspaceError(
@@ -62,6 +68,9 @@ export function createWorkspaceEmbeddedImageUploader(
 
 export async function externalizeEmbeddedImages(input: {
   readonly mutations: readonly IMutation[];
+  readonly onUploadConfirmed?: () => void;
+  readonly signal?: AbortSignal;
+  readonly target?: WorkspaceRuntimeTarget;
   readonly unitId: string;
   readonly uploader: WorkspaceEmbeddedImageUploader;
   readonly worktreeId: string;
@@ -73,19 +82,37 @@ export async function externalizeEmbeddedImages(input: {
   for (const image of imagesBySource.values()) uniqueImages.set(image.digest, image);
 
   const fileIdByDigest = new Map<string, string>();
+  let confirmedUploadCount = 0;
   for (const image of uniqueImages.values()) {
+    throwIfImageCancellation(input, confirmedUploadCount);
     try {
       const fileId = await input.uploader.upload({
         bytes: image.bytes,
         filename: `${image.digest}.${image.extension}`,
         mediaType: image.mediaType,
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
         unitId: input.unitId,
         worktreeId: input.worktreeId,
       });
-      if (fileId.length > 0) fileIdByDigest.set(image.digest, fileId);
-    } catch {
+      if (fileId.length > 0) {
+        fileIdByDigest.set(image.digest, fileId);
+        confirmedUploadCount += 1;
+        input.onUploadConfirmed?.();
+      }
+    } catch (error) {
+      if (input.signal?.aborted === true) {
+        throw workspaceError(
+          "workspace-result-unknown",
+          "The embedded image upload may have completed, but its result could not be confirmed.",
+          {
+            effect: "embedded-image-upload",
+            ...(input.target === undefined ? {} : { target: input.target }),
+          },
+        );
+      }
       // Image hosting is an optimization. Preserve BASE64 when the File API cannot store it.
     }
+    throwIfImageCancellation(input, confirmedUploadCount);
   }
   if (fileIdByDigest.size === 0) return input.mutations;
 
@@ -95,6 +122,29 @@ export async function externalizeEmbeddedImages(input: {
     if (fileId !== undefined) fileIdBySource.set(source, fileId);
   }
   return input.mutations.map((mutation) => rewriteMutation(mutation, fileIdBySource));
+}
+
+function throwIfImageCancellation(
+  input: {
+    readonly signal?: AbortSignal;
+    readonly target?: WorkspaceRuntimeTarget;
+  },
+  confirmedUploadCount: number,
+): void {
+  if (input.signal?.aborted !== true) return;
+  if (confirmedUploadCount > 0 && input.target !== undefined) {
+    throw workspaceError(
+      "workspace-content-partial-side-effect",
+      "Embedded image uploads were confirmed before content execution was cancelled.",
+      {
+        confirmedUploadCount,
+        contentCommitted: false,
+        effect: "embedded-image-upload",
+        target: input.target,
+      },
+    );
+  }
+  input.signal.throwIfAborted();
 }
 
 function collectEmbeddedImages(

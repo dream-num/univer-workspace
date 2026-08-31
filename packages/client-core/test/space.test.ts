@@ -270,6 +270,130 @@ describe("Workspace Space and Node workflows", () => {
     });
     expect(fetcher).toHaveBeenCalledOnce();
   });
+
+  it("forwards one optional signal through list, traversal, mutations and read-back", async () => {
+    const controller = new AbortController();
+    const seen: AbortSignal[] = [];
+    let directoryCalls = 0;
+    const feature = featureFor(async (input, init) => {
+      expect(init?.signal).toBe(controller.signal);
+      seen.push(init?.signal as AbortSignal);
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      if (url.pathname === "/api/spaces") {
+        return jsonResponse({ spaces: [{ id: "space-1", name: "Personal" }] });
+      }
+      if (url.pathname === "/api/nodes" && init?.method === "POST") {
+        return jsonResponse(node({ id: "created", name: "Created" }), { status: 201 });
+      }
+      if (url.pathname.endsWith("/trash")) return jsonResponse(trashBatch("node-1"));
+      if (init?.method === "PATCH") throw new Error("read back");
+      if (url.pathname === "/api/nodes/node-1") {
+        const target = node({ id: "node-1", name: "Renamed", parentNodeId: "parent-2" });
+        return jsonResponse(nodeResponse(target, [
+          { id: "parent-2", name: "Parent" },
+          { id: "node-1", name: "Renamed" },
+        ]));
+      }
+      directoryCalls += 1;
+      if (directoryCalls === 1) {
+        return jsonResponse(nodePage({
+          nextCursor: "next",
+          nodes: [node({ hasChildren: true, id: "parent", name: "Parent" })],
+        }));
+      }
+      if (directoryCalls === 2) return jsonResponse(nodePage({ nodes: [] }));
+      return jsonResponse(nodePage({
+        breadcrumbs: [{ id: "parent", name: "Parent" }],
+        nodes: [node({ id: "child", name: "Match", parentNodeId: "parent" })],
+        parentNode: node({ hasChildren: true, id: "parent", name: "Parent" }),
+      }));
+    });
+
+    await feature.list(controller.signal);
+    await feature.browse({ recursive: true, spaceId: "space-1" }, controller.signal);
+    directoryCalls = 0;
+    await feature.find({ query: "match", spaceId: "space-1" }, controller.signal);
+    await feature.createNode({ name: "Created", spaceId: "space-1" }, controller.signal);
+    await feature.renameNode({ name: "Renamed", nodeId: "node-1" }, controller.signal);
+    await feature.moveNode({ nodeId: "node-1", parentNodeId: "parent-2" }, controller.signal);
+    await feature.trashNode("node-1", controller.signal);
+
+    expect(seen.length).toBeGreaterThanOrEqual(10);
+    expect(seen.every((signal) => signal === controller.signal)).toBe(true);
+  });
+
+  it("checks cancellation between pages, descendants and mutation read-back", async () => {
+    const pageAbort = new AbortController();
+    let pageCalls = 0;
+    const pages = featureFor(async () => {
+      pageCalls += 1;
+      pageAbort.abort(new Error("stop pages"));
+      return jsonResponse(nodePage({ nextCursor: "next", nodes: [] }));
+    });
+    await expect(pages.browse({ spaceId: "space-1" }, pageAbort.signal)).rejects.toThrow("stop pages");
+    expect(pageCalls).toBe(1);
+
+    const childAbort = new AbortController();
+    let childCalls = 0;
+    const children = featureFor(async () => {
+      childCalls += 1;
+      childAbort.abort(new Error("stop children"));
+      return jsonResponse(nodePage({
+        nodes: [node({ hasChildren: true, id: "parent", name: "Parent" })],
+      }));
+    });
+    await expect(children.find({ query: "parent", spaceId: "space-1" }, childAbort.signal))
+      .rejects.toThrow("stop children");
+    expect(childCalls).toBe(1);
+
+    for (const kind of ["rename", "move"] as const) {
+      const updateAbort = new AbortController();
+      const fetcher = vi.fn<typeof fetch>(async () => {
+        updateAbort.abort(new Error(`stop ${kind}`));
+        throw new Error("response interrupted");
+      });
+      const feature = featureFor(fetcher);
+      const operation = kind === "rename"
+        ? feature.renameNode({ name: "Renamed", nodeId: "node-1" }, updateAbort.signal)
+        : feature.moveNode({ nodeId: "node-1", parentNodeId: null }, updateAbort.signal);
+      await expect(operation).rejects.toMatchObject({ code: "workspace-result-unknown" });
+      expect(fetcher).toHaveBeenCalledOnce();
+    }
+
+    for (const kind of ["create", "trash"] as const) {
+      const mutationAbort = new AbortController();
+      const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+        expect(init?.signal).toBe(mutationAbort.signal);
+        mutationAbort.abort(new Error(`stop ${kind}`));
+        throw mutationAbort.signal.reason;
+      });
+      const feature = featureFor(fetcher);
+      const operation = kind === "create"
+        ? feature.createNode({ name: "Created", spaceId: "space-1" }, mutationAbort.signal)
+        : feature.trashNode("node-1", mutationAbort.signal);
+      await expect(operation).rejects.toMatchObject({ code: "workspace-result-unknown" });
+      expect(fetcher).toHaveBeenCalledOnce();
+    }
+  });
+
+  it.each(["create", "trash"] as const)(
+    "does not dispatch %s after its authenticated resolver observes cancellation",
+    async (kind) => {
+      const controller = new AbortController();
+      const fetcher = vi.fn<typeof fetch>();
+      const feature = new WorkspaceSpaceFeature(async (signal) => {
+        expect(signal).toBe(controller.signal);
+        controller.abort(new Error("resolver cancelled"));
+        return http(fetcher);
+      });
+
+      const operation = kind === "create"
+        ? feature.createNode({ name: "Created", spaceId: "space-1" }, controller.signal)
+        : feature.trashNode("node-1", controller.signal);
+      await expect(operation).rejects.toThrow("resolver cancelled");
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("Workspace Space and Node strict parsers", () => {

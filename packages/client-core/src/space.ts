@@ -30,18 +30,22 @@ export interface BrowseSpaceInput {
 export class WorkspaceSpaceFeature {
   public constructor(private readonly authenticatedHttp: AuthenticatedWorkspaceHttp) {}
 
-  public async list(): Promise<readonly WorkspaceSpace[]> {
-    const body = await (await this.authenticatedHttp()).json("/api/spaces");
+  public async list(signal?: AbortSignal): Promise<readonly WorkspaceSpace[]> {
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
+    const body = await http.json("/api/spaces", signal === undefined ? {} : { signal });
     if (!Array.isArray(body["spaces"]))
       throw invalidResponse("Workspace response is missing Spaces");
     return body["spaces"].map(parseSpace);
   }
 
-  public async browse(input: BrowseSpaceInput): Promise<readonly WorkspaceNode[]> {
-    const http = await this.authenticatedHttp();
+  public async browse(input: BrowseSpaceInput, signal?: AbortSignal): Promise<readonly WorkspaceNode[]> {
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
     const visited = new Set<string>(input.parentNodeId === undefined ? [] : [input.parentNodeId]);
     const visit = async (parentNodeId: string | undefined): Promise<readonly WorkspaceNode[]> => {
-      const nodes = await listDirectory(http, input.spaceId, parentNodeId);
+      signal?.throwIfAborted();
+      const nodes = await listDirectory(http, input.spaceId, parentNodeId, signal);
       const discovered: WorkspaceNode[] = [];
       for (const node of nodes) {
         if (visited.has(node.nodeId)) {
@@ -50,6 +54,7 @@ export class WorkspaceSpaceFeature {
         visited.add(node.nodeId);
         if (matches(node, input.resourceKind, input.unitType)) discovered.push(node);
         if (input.recursive === true && node.hasChildren) {
+          signal?.throwIfAborted();
           discovered.push(...(await visit(node.nodeId)));
         }
       }
@@ -60,11 +65,12 @@ export class WorkspaceSpaceFeature {
 
   public async find(
     input: Omit<BrowseSpaceInput, "recursive"> & { readonly query: string },
+    signal?: AbortSignal,
   ): Promise<readonly WorkspaceNode[]> {
     const query = input.query.trim().toLowerCase();
     if (query === "")
       throw workspaceError("workspace-argument-invalid", "Space find query is required.");
-    return (await this.browse({ ...input, recursive: true })).filter((node) =>
+    return (await this.browse({ ...input, recursive: true }, signal)).filter((node) =>
       node.name.toLowerCase().includes(query),
     );
   }
@@ -73,15 +79,16 @@ export class WorkspaceSpaceFeature {
     readonly name: string;
     readonly parentNodeId?: string;
     readonly spaceId: string;
-  }): Promise<WorkspaceNodeSummary> {
+  }, signal?: AbortSignal): Promise<WorkspaceNodeSummary> {
     const name = normalizedNodeName(input.name);
     let body: Record<string, unknown>;
     try {
-      body = await (
-        await this.authenticatedHttp()
-      ).json("/api/nodes", {
+      const http = await this.authenticatedHttp(signal);
+      signal?.throwIfAborted();
+      body = await http.json("/api/nodes", {
         body: { name, parentNodeId: input.parentNodeId ?? null, spaceId: input.spaceId },
         method: "POST",
+        ...(signal === undefined ? {} : { signal }),
       });
     } catch (error) {
       if (!isWorkspaceResultUnknown(error)) throw error;
@@ -114,28 +121,31 @@ export class WorkspaceSpaceFeature {
   public async renameNode(input: {
     readonly name: string;
     readonly nodeId: string;
-  }): Promise<WorkspaceNodeSummary> {
+  }, signal?: AbortSignal): Promise<WorkspaceNodeSummary> {
     const name = normalizedNodeName(input.name);
-    return await this.updateNode({ kind: "rename", name, nodeId: input.nodeId });
+    return await this.updateNode({ kind: "rename", name, nodeId: input.nodeId }, signal);
   }
 
   public async moveNode(input: {
     readonly nodeId: string;
     readonly parentNodeId: string | null;
-  }): Promise<WorkspaceNodeSummary> {
+  }, signal?: AbortSignal): Promise<WorkspaceNodeSummary> {
     return await this.updateNode({
       kind: "move",
       nodeId: input.nodeId,
       parentNodeId: input.parentNodeId,
-    });
+    }, signal);
   }
 
-  public async trashNode(nodeId: string): Promise<WorkspaceTrashBatch> {
+  public async trashNode(nodeId: string, signal?: AbortSignal): Promise<WorkspaceTrashBatch> {
     let body: Record<string, unknown>;
     try {
-      body = await (
-        await this.authenticatedHttp()
-      ).json(`/api/nodes/${encodeURIComponent(nodeId)}/trash`, { method: "POST" });
+      const http = await this.authenticatedHttp(signal);
+      signal?.throwIfAborted();
+      body = await http.json(`/api/nodes/${encodeURIComponent(nodeId)}/trash`, {
+        method: "POST",
+        ...(signal === undefined ? {} : { signal }),
+      });
     } catch (error) {
       if (!isWorkspaceResultUnknown(error)) throw error;
       throw new WorkspaceApplicationError(
@@ -156,8 +166,10 @@ export class WorkspaceSpaceFeature {
           readonly nodeId: string;
           readonly parentNodeId: string | null;
         },
+    signal?: AbortSignal,
   ): Promise<WorkspaceNodeSummary> {
-    const http = await this.authenticatedHttp();
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
     const patch =
       input.kind === "rename" ? { name: input.name } : { parentNodeId: input.parentNodeId };
     try {
@@ -165,6 +177,7 @@ export class WorkspaceSpaceFeature {
         await http.json(`/api/nodes/${encodeURIComponent(input.nodeId)}`, {
           body: patch,
           method: "PATCH",
+          ...(signal === undefined ? {} : { signal }),
         }),
       );
       assertUpdatedNode(updated, input);
@@ -173,8 +186,12 @@ export class WorkspaceSpaceFeature {
       if (!isWorkspaceResultUnknown(error)) throw error;
       let current: WorkspaceNode;
       try {
+        signal?.throwIfAborted();
         current = parseNodeResponse(
-          await http.json(`/api/nodes/${encodeURIComponent(input.nodeId)}`),
+          await http.json(
+            `/api/nodes/${encodeURIComponent(input.nodeId)}`,
+            signal === undefined ? {} : { signal },
+          ),
           input.nodeId,
         );
       } catch (readError) {
@@ -213,6 +230,7 @@ async function listDirectory(
   http: WorkspaceHttp,
   spaceId: string,
   parentNodeId: string | undefined,
+  signal?: AbortSignal,
 ): Promise<readonly WorkspaceNode[]> {
   const base =
     parentNodeId === undefined
@@ -223,8 +241,12 @@ async function listDirectory(
   let cursor: string | null = null;
   let metadata: string | undefined;
   do {
+    signal?.throwIfAborted();
     const page = parseNodePage(
-      await http.json(cursor === null ? base : `${base}?cursor=${encodeURIComponent(cursor)}`),
+      await http.json(
+        cursor === null ? base : `${base}?cursor=${encodeURIComponent(cursor)}`,
+        signal === undefined ? {} : { signal },
+      ),
       spaceId,
       parentNodeId,
     );

@@ -6,7 +6,7 @@
 
 ## What Changes
 
-- 在 Host plugin 注册 `workspace_auth_start`、`workspace_auth_complete`、`workspace_auth_whoami` 与 `workspace_auth_logout`，保留“一次 start、等待用户明确批准、一次 complete”的非轮询语义。
+- 在 Host plugin 注册零参数 `workspace_auth_start`、`workspace_auth_complete`、`workspace_auth_whoami` 与 `workspace_auth_logout`，由 Cordis plugin Config 提供唯一 Workspace public origin，保留“一次 start、等待用户明确批准、一次 complete”的非轮询语义；bundle patch 只从 `UNIVER_WORKSPACE_ORIGIN` 注入该值，不从 DSH Host 页面或模型参数推断 Authority。
 - 用 plugin-owned `CredentialKey` 保存严格校验的 pending 或 authenticated `GrantRecord`；模型只看到 verification URL、user code、expiry、status 与 User subject，device code、cookie 和完整 grant 不进入 tool 参数、输出、普通 Config 或 Session log。
 - 建立惰性 authenticated connection resolver：每次操作重新读取并校验当前 authenticated grant，pending、过期、损坏或缺失记录均不产生 authenticated HTTP。
 - `workspace_auth_logout` 在有 authenticated grant 时先尽力调用 Workspace Server，并在 `finally` 中清除本地 record；远端失败仍保留 Workspace error/result-unknown 语义，且不得遗留可用的本地 Session。
@@ -18,7 +18,7 @@
 
 **Intent:** 在 Host-only local `dsh-univer-work` Client Shell 中交付安全、可取消、可持久化的 Workspace browser approval 与 authenticated connection owner，供后续业务 tools 惰性复用。
 
-**Non-Goals:** 不提供 password login、secret prompt、authorization flow、普通 Config/Settings credential、Web Client、Settings UI、Slot、overlay、Client→Host Remote、Jobs、业务 workflow tools、Skills、文件能力、content runtime、worker、Office、Typst、SVG、render/screenshot/lint；不修改 Workspace Server、Browser、HTTP contract、CLI Session 文件或 CLI command/output；不支持 sandbox/E2B/remote profile，不协调共享同一 credential store 的多个 live DSH Host 或任何绕过 owner Host 修改该 key 的 writer，不发布 package。
+**Non-Goals:** 不提供 password login、secret prompt、authorization flow、普通 Config/Settings credential、Web Client、Settings UI、Slot、overlay、Client→Host Remote、Jobs、业务 workflow tools、Skills、文件能力、content runtime、worker、Office、Typst、SVG、render/screenshot/lint；不从 DSH Host origin 自动发现 Workspace，也不增加多 origin/account selector；不修改 Workspace Server、Browser、HTTP contract、CLI Session 文件或 CLI command/output；不支持 sandbox/E2B/remote profile，不协调共享同一 credential store 的多个 live DSH Host 或任何绕过 owner Host 修改该 key 的 writer，不发布 package。
 
 **Size Gate:** 一个新 capability、一个修改 capability、七个 coarse tasks，可在一次 focused implementation session 内完成。该 Change 依赖 `add-dsh-univer-work-plugin-shell` 完成，不预建后续 Space/Node 或 runtime 能力。
 
@@ -43,6 +43,6 @@ No domain-model change.
 
 ## Impact
 
-实现主要影响 `apps/dsh-univer-work/**`、`packages/client-core/src/auth.ts`、Client Core auth tests、`apps/dsh-univer-work` 的安装态验证与职责文档，以及因精确 DSH/Client Core dependencies 产生的 workspace manifest/lockfile 变化。
+实现主要影响 `apps/dsh-univer-work/**`、其 Cordis bundle patch、`packages/client-core/src/auth.ts`、Client Core auth tests、`apps/dsh-univer-work` 的安装态验证与职责文档，以及因精确 DSH/Client Core dependencies 产生的 workspace manifest/lockfile 变化。
 
 `apps/cli` 只运行现有认证与 package parity gates，不改变源码行为。Workspace Server/Browser、OpenAPI、数据库、deployment、CLI release workflow 与 SDK baseline 不变。后续 DSH tools 从本 Change 的 resolver 取得 authenticated HTTP，不读取 grant 或复制 cookie parsing。

@@ -1,0 +1,1686 @@
+{
+  "operations": [
+    [
+      "workspace_api_find",
+      "api-discovery",
+      "add-dsh-api-resource-discovery-tools"
+    ],
+    [
+      "workspace_api_show",
+      "api-discovery",
+      "add-dsh-api-resource-discovery-tools"
+    ],
+    [
+      "workspace_asset_download",
+      "file-transfer",
+      "add-dsh-file-transfer-tools"
+    ],
+    [
+      "workspace_auth_complete",
+      "authentication",
+      "add-dsh-univer-work-authentication"
+    ],
+    [
+      "workspace_auth_logout",
+      "authentication",
+      "add-dsh-univer-work-authentication"
+    ],
+    [
+      "workspace_auth_start",
+      "authentication",
+      "add-dsh-univer-work-authentication"
+    ],
+    [
+      "workspace_auth_whoami",
+      "authentication",
+      "add-dsh-univer-work-authentication"
+    ],
+    [
+      "workspace_blob_download",
+      "file-transfer",
+      "add-dsh-file-transfer-tools"
+    ],
+    [
+      "workspace_blob_get",
+      "file-transfer",
+      "add-dsh-file-transfer-tools"
+    ],
+    [
+      "workspace_blob_upload",
+      "file-transfer",
+      "add-dsh-file-transfer-tools"
+    ],
+    [
+      "workspace_content_execute",
+      "content",
+      "add-dsh-content-runtime-tools"
+    ],
+    [
+      "workspace_content_inspect",
+      "content",
+      "add-dsh-content-runtime-tools"
+    ],
+    [
+      "workspace_layout_lint",
+      "render",
+      "add-dsh-render-verification-tools"
+    ],
+    [
+      "workspace_node_create",
+      "space-node",
+      "add-dsh-space-node-tools"
+    ],
+    [
+      "workspace_node_move",
+      "space-node",
+      "add-dsh-space-node-tools"
+    ],
+    [
+      "workspace_node_rename",
+      "space-node",
+      "add-dsh-space-node-tools"
+    ],
+    [
+      "workspace_node_trash",
+      "space-node",
+      "add-dsh-space-node-tools"
+    ],
+    [
+      "workspace_office_export",
+      "office",
+      "add-dsh-office-exchange-tools"
+    ],
+    [
+      "workspace_office_import",
+      "office",
+      "add-dsh-office-exchange-tools"
+    ],
+    [
+      "workspace_resource_export",
+      "resource-discovery",
+      "add-dsh-api-resource-discovery-tools"
+    ],
+    [
+      "workspace_resource_find",
+      "resource-discovery",
+      "add-dsh-api-resource-discovery-tools"
+    ],
+    [
+      "workspace_resource_registries",
+      "resource-discovery",
+      "add-dsh-api-resource-discovery-tools"
+    ],
+    [
+      "workspace_screenshot",
+      "render",
+      "add-dsh-render-verification-tools"
+    ],
+    [
+      "workspace_space_browse",
+      "space-node",
+      "add-dsh-space-node-tools"
+    ],
+    [
+      "workspace_space_find",
+      "space-node",
+      "add-dsh-space-node-tools"
+    ],
+    [
+      "workspace_space_list",
+      "space-node",
+      "add-dsh-space-node-tools"
+    ],
+    [
+      "workspace_svg_apply",
+      "svg",
+      "add-dsh-svg-generation-tools"
+    ],
+    [
+      "workspace_svg_compile",
+      "svg",
+      "add-dsh-svg-generation-tools"
+    ],
+    [
+      "workspace_typst_apply",
+      "typst",
+      "add-dsh-typst-generation-tools"
+    ],
+    [
+      "workspace_typst_compile",
+      "typst",
+      "add-dsh-typst-generation-tools"
+    ],
+    [
+      "workspace_unit_add",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_unit_create",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_unit_list",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_worktree_create",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_worktree_discard",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_worktree_get",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_worktree_list",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_worktree_merge",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_worktree_ready",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_worktree_reopen",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_worktree_review_url",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "workspace_worktree_update",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ]
+  ],
+  "skills": [
+    [
+      "base",
+      "unit-topic-skills",
+      "add-dsh-bundled-unit-topic-skills"
+    ],
+    [
+      "board",
+      "unit-topic-skills",
+      "add-dsh-bundled-unit-topic-skills"
+    ],
+    [
+      "core",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ],
+    [
+      "cross-unit-formula",
+      "unit-topic-skills",
+      "add-dsh-bundled-unit-topic-skills"
+    ],
+    [
+      "doc",
+      "unit-topic-skills",
+      "add-dsh-bundled-unit-topic-skills"
+    ],
+    [
+      "embed",
+      "unit-topic-skills",
+      "add-dsh-bundled-unit-topic-skills"
+    ],
+    [
+      "sheet",
+      "unit-topic-skills",
+      "add-dsh-bundled-unit-topic-skills"
+    ],
+    [
+      "slide",
+      "unit-topic-skills",
+      "add-dsh-bundled-unit-topic-skills"
+    ]
+  ],
+  "outcomes": [
+    [
+      "api-discovery",
+      "add-dsh-api-resource-discovery-tools"
+    ],
+    [
+      "authentication",
+      "add-dsh-univer-work-authentication"
+    ],
+    [
+      "content",
+      "add-dsh-content-runtime-tools"
+    ],
+    [
+      "file-transfer",
+      "add-dsh-file-transfer-tools"
+    ],
+    [
+      "office",
+      "add-dsh-office-exchange-tools"
+    ],
+    [
+      "render",
+      "add-dsh-render-verification-tools"
+    ],
+    [
+      "resource-discovery",
+      "add-dsh-api-resource-discovery-tools"
+    ],
+    [
+      "shell",
+      "add-dsh-univer-work-plugin-shell"
+    ],
+    [
+      "space-node",
+      "add-dsh-space-node-tools"
+    ],
+    [
+      "svg",
+      "add-dsh-svg-generation-tools"
+    ],
+    [
+      "typst",
+      "add-dsh-typst-generation-tools"
+    ],
+    [
+      "unit-topic-skills",
+      "add-dsh-bundled-unit-topic-skills"
+    ],
+    [
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools"
+    ]
+  ],
+  "runnerCases": [
+    [
+      "api-discovery.installed.code",
+      "api-discovery",
+      "add-dsh-api-resource-discovery-tools",
+      "code"
+    ],
+    [
+      "api-discovery.installed.native",
+      "api-discovery",
+      "add-dsh-api-resource-discovery-tools",
+      "native"
+    ],
+    [
+      "authentication.installed.code",
+      "authentication",
+      "add-dsh-univer-work-authentication",
+      "code"
+    ],
+    [
+      "authentication.installed.native",
+      "authentication",
+      "add-dsh-univer-work-authentication",
+      "native"
+    ],
+    [
+      "content.installed.code",
+      "content",
+      "add-dsh-content-runtime-tools",
+      "code"
+    ],
+    [
+      "content.installed.native",
+      "content",
+      "add-dsh-content-runtime-tools",
+      "native"
+    ],
+    [
+      "file-transfer.installed.code",
+      "file-transfer",
+      "add-dsh-file-transfer-tools",
+      "code"
+    ],
+    [
+      "file-transfer.installed.native",
+      "file-transfer",
+      "add-dsh-file-transfer-tools",
+      "native"
+    ],
+    [
+      "office.installed.code",
+      "office",
+      "add-dsh-office-exchange-tools",
+      "code"
+    ],
+    [
+      "office.installed.native",
+      "office",
+      "add-dsh-office-exchange-tools",
+      "native"
+    ],
+    [
+      "render.installed.code",
+      "render",
+      "add-dsh-render-verification-tools",
+      "code"
+    ],
+    [
+      "render.installed.native",
+      "render",
+      "add-dsh-render-verification-tools",
+      "native"
+    ],
+    [
+      "resource-discovery.installed.code",
+      "resource-discovery",
+      "add-dsh-api-resource-discovery-tools",
+      "code"
+    ],
+    [
+      "resource-discovery.installed.native",
+      "resource-discovery",
+      "add-dsh-api-resource-discovery-tools",
+      "native"
+    ],
+    [
+      "shell.installed.code",
+      "shell",
+      "add-dsh-univer-work-plugin-shell",
+      "code"
+    ],
+    [
+      "shell.installed.native",
+      "shell",
+      "add-dsh-univer-work-plugin-shell",
+      "native"
+    ],
+    [
+      "space-node.installed.code",
+      "space-node",
+      "add-dsh-space-node-tools",
+      "code"
+    ],
+    [
+      "space-node.installed.native",
+      "space-node",
+      "add-dsh-space-node-tools",
+      "native"
+    ],
+    [
+      "svg.installed.code",
+      "svg",
+      "add-dsh-svg-generation-tools",
+      "code"
+    ],
+    [
+      "svg.installed.native",
+      "svg",
+      "add-dsh-svg-generation-tools",
+      "native"
+    ],
+    [
+      "typst.installed.code",
+      "typst",
+      "add-dsh-typst-generation-tools",
+      "code"
+    ],
+    [
+      "typst.installed.native",
+      "typst",
+      "add-dsh-typst-generation-tools",
+      "native"
+    ],
+    [
+      "unit-topic-skills.installed.code",
+      "unit-topic-skills",
+      "add-dsh-bundled-unit-topic-skills",
+      "code"
+    ],
+    [
+      "unit-topic-skills.installed.native",
+      "unit-topic-skills",
+      "add-dsh-bundled-unit-topic-skills",
+      "native"
+    ],
+    [
+      "worktree-unit.installed.code",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools",
+      "code"
+    ],
+    [
+      "worktree-unit.installed.native",
+      "worktree-unit",
+      "add-dsh-worktree-unit-tools",
+      "native"
+    ]
+  ],
+  "safetyDimensions": [
+    [
+      "authentication.installed.code",
+      "secret-sentinel",
+      "test/authentication.test.ts",
+      "Workspace authentication tools > keeps real run_code dispatch events free of credential material"
+    ],
+    [
+      "authentication.installed.native",
+      "allowlisted-failure",
+      "test/authentication.test.ts",
+      "Workspace authentication tools > sanitizes malicious handoff and dependency errors"
+    ],
+    [
+      "authentication.installed.native",
+      "approval",
+      "test/authentication.test.ts",
+      "Workspace authentication tools > approved logout clears locally before remote success or failure settles"
+    ],
+    [
+      "authentication.installed.native",
+      "caller-cancellation",
+      "test/authentication.test.ts",
+      "Workspace authentication tools > forwards caller cancellation through the start request and drains the body"
+    ],
+    [
+      "authentication.installed.native",
+      "owner-cancellation",
+      "test/authentication.test.ts",
+      "Workspace authentication tools > aborts the in-flight start request and unregisters tools before disposal settles"
+    ],
+    [
+      "authentication.installed.native",
+      "result-unknown",
+      "test/authentication.test.ts",
+      "Workspace authentication tools > approved logout clears locally before remote success or failure settles"
+    ],
+    [
+      "authentication.installed.native",
+      "secret-sentinel",
+      "test/authentication.test.ts",
+      "Workspace authentication tools > keeps Native and Code Mode transcript projections free of credential material"
+    ],
+    [
+      "authentication.installed.native",
+      "unlisted-failure",
+      "test/authentication.test.ts",
+      "Workspace authentication tools > sanitizes malicious handoff and dependency errors"
+    ],
+    [
+      "content.installed.code",
+      "approval",
+      "test/content-tools.test.ts",
+      "Workspace content execution ToolRuntime > dispatches approved execution through real Code Mode with the canonical value"
+    ],
+    [
+      "content.installed.code",
+      "secret-sentinel",
+      "test/content-tools.test.ts",
+      "Workspace content execution ToolRuntime > dispatches approved execution through real Code Mode with the canonical value"
+    ],
+    [
+      "content.installed.native",
+      "allowlisted-failure",
+      "test/content-tools.test.ts",
+      "Workspace content execution ToolRuntime > preserves allowlisted FORBIDDEN with only safe detail"
+    ],
+    [
+      "content.installed.native",
+      "approval",
+      "test/content-tools.test.ts",
+      "Workspace content execution ToolRuntime > asks once with fixed text and returns a canonical no-mutation value"
+    ],
+    [
+      "content.installed.native",
+      "caller-cancellation",
+      "test/content-tools.test.ts",
+      "Workspace content execution ToolRuntime > settles caller cancellation before a confirmed mutation without a later result"
+    ],
+    [
+      "content.installed.native",
+      "owner-cancellation",
+      "test/content-tools.test.ts",
+      "Workspace content execution ToolRuntime > settles owner cancellation before a confirmed mutation without a later result"
+    ],
+    [
+      "content.installed.native",
+      "result-unknown",
+      "test/content-tools.test.ts",
+      "Workspace content execution ToolRuntime > preserves thrown workspace-result-unknown under caller cancellation with safe guidance"
+    ],
+    [
+      "content.installed.native",
+      "secret-sentinel",
+      "test/content-tools.test.ts",
+      "Workspace content execution ToolRuntime > maps an unlisted dependency failure to the fixed generic code"
+    ],
+    [
+      "content.installed.native",
+      "unlisted-failure",
+      "test/content-tools.test.ts",
+      "Workspace content execution ToolRuntime > maps an unlisted dependency failure to the fixed generic code"
+    ],
+    [
+      "file-transfer.installed.code",
+      "allowlisted-failure",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > keeps allowlisted and unlisted transfer failures secret-safe in Code Mode"
+    ],
+    [
+      "file-transfer.installed.code",
+      "approval",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > dispatches all four file tools through real Code Mode with paired events"
+    ],
+    [
+      "file-transfer.installed.code",
+      "secret-sentinel",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > keeps allowlisted and unlisted transfer failures secret-safe in Code Mode"
+    ],
+    [
+      "file-transfer.installed.code",
+      "unlisted-failure",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > keeps allowlisted and unlisted transfer failures secret-safe in Code Mode"
+    ],
+    [
+      "file-transfer.installed.native",
+      "allowlisted-failure",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > preserves the frozen transfer code allowlist and maps unlisted Core errors"
+    ],
+    [
+      "file-transfer.installed.native",
+      "approval",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > downloads exact Blob bytes through bare LocalFileSystem after one approval"
+    ],
+    [
+      "file-transfer.installed.native",
+      "caller-cancellation",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > classifies caller cancellation before a download writes any bytes"
+    ],
+    [
+      "file-transfer.installed.native",
+      "confirmed-partial-file",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > classifies a confirmed late local commit by caller cancellation source"
+    ],
+    [
+      "file-transfer.installed.native",
+      "non-local",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > rejects an undefined-mode non-local provider before path or approval"
+    ],
+    [
+      "file-transfer.installed.native",
+      "owner-cancellation",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > classifies owner cancellation before a download writes any bytes"
+    ],
+    [
+      "file-transfer.installed.native",
+      "result-unknown",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > preserves a complete public upload intent with null media type in direct result-unknown detail"
+    ],
+    [
+      "file-transfer.installed.native",
+      "secret-sentinel",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > projects only exact file-transfer dependency constructors and owner errors"
+    ],
+    [
+      "file-transfer.installed.native",
+      "unlisted-failure",
+      "test/file-transfer.test.ts",
+      "Workspace file-transfer tools > preserves the frozen transfer code allowlist and maps unlisted Core errors"
+    ],
+    [
+      "office.installed.code",
+      "secret-sentinel",
+      "test/office-tools.test.ts",
+      "Workspace Office error, cancellation, and lifecycle > keeps a real Code Mode conversion failure paired and secret-free"
+    ],
+    [
+      "office.installed.code",
+      "unlisted-failure",
+      "test/office-tools.test.ts",
+      "Workspace Office error, cancellation, and lifecycle > keeps a real Code Mode conversion failure paired and secret-free"
+    ],
+    [
+      "office.installed.native",
+      "allowlisted-failure",
+      "test/office-tools.test.ts",
+      "Workspace Office error, cancellation, and lifecycle > preserves the genuine shared export workspace-license-required code without private detail"
+    ],
+    [
+      "office.installed.native",
+      "approval",
+      "test/office-tools.test.ts",
+      "Workspace Office tool policy > asks for import before any filesystem work, then gates a regular contained source"
+    ],
+    [
+      "office.installed.native",
+      "caller-cancellation",
+      "test/office-tools.test.ts",
+      "Workspace Office error, cancellation, and lifecycle > classifies caller cancellation during source-read and starts no later Office step"
+    ],
+    [
+      "office.installed.native",
+      "non-local",
+      "test/office-tools.test.ts",
+      "Workspace Office tool policy > rejects non-local providers and missing or outside Session paths at the correct approval boundary"
+    ],
+    [
+      "office.installed.native",
+      "owner-cancellation",
+      "test/office-tools.test.ts",
+      "Workspace Office error, cancellation, and lifecycle > classifies owner cancellation during source-read and starts no later Office step"
+    ],
+    [
+      "office.installed.native",
+      "result-unknown",
+      "test/office-tools.test.ts",
+      "Workspace Office error, cancellation, and lifecycle > preserves post-dispatch import caller after workspace-result-unknown cancellation"
+    ],
+    [
+      "office.installed.native",
+      "secret-sentinel",
+      "test/office-tools.test.ts",
+      "Workspace Office error, cancellation, and lifecycle > projects a real import CONVERSION_FAILED converter failure without dependency material"
+    ],
+    [
+      "office.installed.native",
+      "unlisted-failure",
+      "test/office-tools.test.ts",
+      "Workspace Office error, cancellation, and lifecycle > downgrades an untrusted converter error 'PRIVATE_NATIVE_CODE'"
+    ],
+    [
+      "render.installed.code",
+      "approval",
+      "test/render-tools.test.ts",
+      "Workspace render closed contracts > runs both tools through real Code Mode without exposing PNG bytes or dependency secrets"
+    ],
+    [
+      "render.installed.code",
+      "secret-sentinel",
+      "test/render-tools.test.ts",
+      "Workspace render closed contracts > runs both tools through real Code Mode without exposing PNG bytes or dependency secrets"
+    ],
+    [
+      "render.installed.native",
+      "allowlisted-failure",
+      "test/render-tools.test.ts",
+      "Workspace render production composition > sanitizes forged browser failures with exact render codes"
+    ],
+    [
+      "render.installed.native",
+      "approval",
+      "test/render-tools.test.ts",
+      "Workspace render production composition > cancels one pending approval and settles its execution before owner disposal returns"
+    ],
+    [
+      "render.installed.native",
+      "caller-cancellation",
+      "test/render-tools.test.ts",
+      "Workspace render production composition > lets rc.2 own late successful caller cancellation and adds fixed inspection guidance"
+    ],
+    [
+      "render.installed.native",
+      "confirmed-partial-file",
+      "test/render-tools.test.ts",
+      "Workspace render production composition > narrows inherited source/runtime details and preserves only exact partial output"
+    ],
+    [
+      "render.installed.native",
+      "non-local",
+      "test/render-tools.test.ts",
+      "Workspace render closed contracts > orders screenshot preflight as policy, local proof, pure arguments, then Session containment"
+    ],
+    [
+      "render.installed.native",
+      "owner-cancellation",
+      "test/render-tools.test.ts",
+      "Workspace render production composition > waits for an accepted body, browser close, and worker generation during owner disposal"
+    ],
+    [
+      "render.installed.native",
+      "secret-sentinel",
+      "test/render-tools.test.ts",
+      "Workspace render production composition > sanitizes unlisted failures with exact render codes"
+    ],
+    [
+      "render.installed.native",
+      "unlisted-failure",
+      "test/render-tools.test.ts",
+      "Workspace render production composition > sanitizes unlisted failures with exact render codes"
+    ],
+    [
+      "resource-discovery.installed.code",
+      "approval",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > returns the confirmed canonical export through real Code Mode with paired transcript events"
+    ],
+    [
+      "resource-discovery.installed.code",
+      "secret-sentinel",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > keeps a secret-bearing export failure out of real Code Mode settlement and approval"
+    ],
+    [
+      "resource-discovery.installed.code",
+      "unlisted-failure",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > keeps a secret-bearing export failure out of real Code Mode settlement and approval"
+    ],
+    [
+      "resource-discovery.installed.native",
+      "allowlisted-failure",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > preserves only frozen thrown resource export code resource-download-http without dependency material"
+    ],
+    [
+      "resource-discovery.installed.native",
+      "approval",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > keeps export body effects at zero when approval is rejected"
+    ],
+    [
+      "resource-discovery.installed.native",
+      "caller-cancellation",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > stops after caller cancellation following one confirmed file and adds no-retry guidance"
+    ],
+    [
+      "resource-discovery.installed.native",
+      "confirmed-partial-file",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > stops after caller cancellation following one confirmed file and adds no-retry guidance"
+    ],
+    [
+      "resource-discovery.installed.native",
+      "non-local",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > rejects a non-local provider before model path interpretation or approval"
+    ],
+    [
+      "resource-discovery.installed.native",
+      "owner-cancellation",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > unregisters, aborts, and drains an accepted export through an in-flight fsync cleanup"
+    ],
+    [
+      "resource-discovery.installed.native",
+      "secret-sentinel",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > preserves only frozen thrown resource export code password=password=dataset-secret without dependency material"
+    ],
+    [
+      "resource-discovery.installed.native",
+      "unlisted-failure",
+      "test/discovery-tools.test.ts",
+      "Workspace resource export effect gate > projects fetch failure through a fixed per-handle code without URL/header/body/path/cause"
+    ],
+    [
+      "space-node.installed.code",
+      "secret-sentinel",
+      "test/space-node.test.ts",
+      "Workspace Space and Node tool contracts > executes real Code Mode dispatch without reflecting invalid arguments"
+    ],
+    [
+      "space-node.installed.native",
+      "allowlisted-failure",
+      "test/space-node.test.ts",
+      "Workspace Space and Node tool contracts > preserves frozen Server code FORBIDDEN"
+    ],
+    [
+      "space-node.installed.native",
+      "approval",
+      "test/space-node.test.ts",
+      "Workspace Space and Node tool contracts > executes four separately approved mutations and preserves Core identities"
+    ],
+    [
+      "space-node.installed.native",
+      "caller-cancellation",
+      "test/space-node.test.ts",
+      "Workspace Space and Node cancellation and lifecycle > classifies accepted read pre-request cancellation by caller"
+    ],
+    [
+      "space-node.installed.native",
+      "owner-cancellation",
+      "test/space-node.test.ts",
+      "Workspace Space and Node cancellation and lifecycle > classifies accepted read pre-request cancellation by owner"
+    ],
+    [
+      "space-node.installed.native",
+      "result-unknown",
+      "test/space-node.test.ts",
+      "Workspace Space and Node tool contracts > preserves Core read-back and mutation-unknown behavior without replay"
+    ],
+    [
+      "space-node.installed.native",
+      "secret-sentinel",
+      "test/space-node.test.ts",
+      "Workspace Space and Node tool contracts > maps provider failures and unlisted Workspace-shaped codes without reflecting causes"
+    ],
+    [
+      "space-node.installed.native",
+      "unlisted-failure",
+      "test/space-node.test.ts",
+      "Workspace Space and Node tool contracts > maps provider failures and unlisted Workspace-shaped codes without reflecting causes"
+    ],
+    [
+      "svg.installed.code",
+      "secret-sentinel",
+      "test/svg-tools.test.ts",
+      "Workspace SVG closed tools > preserves the same canonical values through installed Code Mode dispatch"
+    ],
+    [
+      "svg.installed.native",
+      "allowlisted-failure",
+      "test/svg-tools.test.ts",
+      "Workspace SVG local policy and approval > preserves one confirmed file around sanitized workspace-content-partial-side-effect content identity"
+    ],
+    [
+      "svg.installed.native",
+      "approval",
+      "test/svg-tools.test.ts",
+      "Workspace SVG local policy and approval > replaces approved compile output and saves the exact apply program before one execution"
+    ],
+    [
+      "svg.installed.native",
+      "caller-cancellation",
+      "test/svg-tools.test.ts",
+      "Workspace SVG local policy and approval > returns file-confirmed not-dispatched partial when the body observes cancellation after save"
+    ],
+    [
+      "svg.installed.native",
+      "confirmed-partial-file",
+      "test/svg-tools.test.ts",
+      "Workspace SVG local policy and approval > returns file-confirmed not-dispatched partial when the body observes cancellation after save"
+    ],
+    [
+      "svg.installed.native",
+      "non-local",
+      "test/svg-tools.test.ts",
+      "Workspace SVG local policy and approval > denies read-only output and non-local providers before approval or feature work"
+    ],
+    [
+      "svg.installed.native",
+      "owner-cancellation",
+      "test/svg-tools.test.ts",
+      "Workspace SVG local policy and approval > drains an owner-only disposal without aborting the registry caller or replaying apply"
+    ],
+    [
+      "svg.installed.native",
+      "result-unknown",
+      "test/svg-tools.test.ts",
+      "Workspace SVG local policy and approval > preserves sanitized content uncertainty without manufacturing a file partial"
+    ],
+    [
+      "svg.installed.native",
+      "secret-sentinel",
+      "test/svg-tools.test.ts",
+      "Workspace SVG local policy and approval > maps unlisted post-file failures to a closed failed partial without leaking sentinels"
+    ],
+    [
+      "svg.installed.native",
+      "unlisted-failure",
+      "test/svg-tools.test.ts",
+      "Workspace SVG local policy and approval > maps unlisted post-file failures to a closed failed partial without leaking sentinels"
+    ],
+    [
+      "typst.installed.native",
+      "allowlisted-failure",
+      "test/typst-tools.test.ts",
+      "Workspace Typst real ToolRuntime > preserves uncertain-create identity and guidance without dependency secrets"
+    ],
+    [
+      "typst.installed.native",
+      "approval",
+      "test/typst-tools.test.ts",
+      "Workspace Typst real ToolRuntime > asks once with fixed secret-safe text and returns closed canonical values"
+    ],
+    [
+      "typst.installed.native",
+      "caller-cancellation",
+      "test/typst-tools.test.ts",
+      "Workspace Typst real ToolRuntime > keeps fully confirmed compile side effects when post-execute caller cancellation becomes ABORTED"
+    ],
+    [
+      "typst.installed.native",
+      "confirmed-partial-file",
+      "test/typst-tools.test.ts",
+      "Workspace Typst real ToolRuntime > returns bounded Session-relative partial errors and never removes public artifacts"
+    ],
+    [
+      "typst.installed.native",
+      "non-local",
+      "test/typst-tools.test.ts",
+      "Workspace Typst real ToolRuntime > rejects non-local, read-only, outside, and overlapping paths before approval or compiler work"
+    ],
+    [
+      "typst.installed.native",
+      "owner-cancellation",
+      "test/authentication.test.ts",
+      "Workspace authentication tools > composes real native Typst compile and authenticated apply without compile-only credentials or license"
+    ],
+    [
+      "typst.installed.native",
+      "result-unknown",
+      "test/typst-tools.test.ts",
+      "Workspace Typst real ToolRuntime > preserves uncertain-create identity and guidance without dependency secrets"
+    ],
+    [
+      "typst.installed.native",
+      "secret-sentinel",
+      "test/typst-tools.test.ts",
+      "Workspace Typst real ToolRuntime > preserves uncertain-create identity and guidance without dependency secrets"
+    ],
+    [
+      "typst.installed.native",
+      "unlisted-failure",
+      "test/typst-tools.test.ts",
+      "Workspace Typst real ToolRuntime > keeps raced or existing destinations unchanged and cleans private state on throw or cancellation"
+    ],
+    [
+      "worktree-unit.installed.code",
+      "secret-sentinel",
+      "test/space-node.test.ts",
+      "Workspace Worktree and Unit tool contracts > keeps Code Mode invalid mutation arguments only in DSH-owned argument records"
+    ],
+    [
+      "worktree-unit.installed.native",
+      "allowlisted-failure",
+      "test/space-node.test.ts",
+      "Workspace Worktree and Unit tool contracts > preserves Worktree workflow errors and hides unlisted Server material"
+    ],
+    [
+      "worktree-unit.installed.native",
+      "approval",
+      "test/space-node.test.ts",
+      "Workspace Worktree and Unit tool contracts > executes Worktree create and update with separate one-time approvals"
+    ],
+    [
+      "worktree-unit.installed.native",
+      "caller-cancellation",
+      "test/space-node.test.ts",
+      "Workspace Worktree and Unit tool contracts > classifies Worktree/Unit mutation pre-request cancellation by caller"
+    ],
+    [
+      "worktree-unit.installed.native",
+      "owner-cancellation",
+      "test/space-node.test.ts",
+      "Workspace Worktree and Unit tool contracts > classifies Worktree/Unit mutation pre-request cancellation by owner"
+    ],
+    [
+      "worktree-unit.installed.native",
+      "result-unknown",
+      "test/space-node.test.ts",
+      "Workspace Worktree and Unit tool contracts > adds inspection guidance to uncertain workspace_worktree_create without replay"
+    ],
+    [
+      "worktree-unit.installed.native",
+      "secret-sentinel",
+      "test/space-node.test.ts",
+      "Workspace Worktree and Unit tool contracts > keeps Native invalid mutation arguments only in tool/call.arguments"
+    ],
+    [
+      "worktree-unit.installed.native",
+      "unlisted-failure",
+      "test/space-node.test.ts",
+      "Workspace Worktree and Unit tool contracts > preserves Worktree workflow errors and hides unlisted Server material"
+    ]
+  ],
+  "cliResultForms": [
+    [
+      "",
+      [],
+      [
+        "help",
+        "version"
+      ]
+    ],
+    [
+      "config",
+      [],
+      [
+        "help"
+      ]
+    ],
+    [
+      "config path",
+      [
+        "profile location"
+      ],
+      [
+        "json",
+        "path",
+        "text"
+      ]
+    ],
+    [
+      "config list",
+      [
+        "configuration entries"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "config get",
+      [
+        "configuration entry"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "config set",
+      [
+        "configuration entry"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "config unset",
+      [
+        "configuration entry"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "daemon",
+      [],
+      [
+        "help"
+      ]
+    ],
+    [
+      "daemon status",
+      [
+        "lifecycle state"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "daemon start",
+      [
+        "lifecycle state"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "daemon restart",
+      [
+        "lifecycle state"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "daemon stop",
+      [
+        "lifecycle state"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "api",
+      [
+        "Facade API entries"
+      ],
+      [
+        "text"
+      ]
+    ],
+    [
+      "api find",
+      [
+        "Facade API matches"
+      ],
+      [
+        "text"
+      ]
+    ],
+    [
+      "api show",
+      [
+        "Facade API entries"
+      ],
+      [
+        "text"
+      ]
+    ],
+    [
+      "resources",
+      [],
+      [
+        "help"
+      ]
+    ],
+    [
+      "resources registries",
+      [
+        "resource registries"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "resources find",
+      [
+        "resource matches"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "resources export",
+      [
+        "confirmed local SVG files"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "resources cache",
+      [],
+      [
+        "help"
+      ]
+    ],
+    [
+      "resources cache path",
+      [
+        "no retained cache"
+      ],
+      [
+        "json",
+        "path",
+        "text"
+      ]
+    ],
+    [
+      "resources cache clear",
+      [
+        "no retained cache"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "skills",
+      [
+        "Skill summaries"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "skills list",
+      [
+        "Skill summaries"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "skills get",
+      [
+        "Skill bodies"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "skills path",
+      [
+        "packed Skill identity"
+      ],
+      [
+        "json",
+        "path",
+        "text"
+      ]
+    ],
+    [
+      "login",
+      [
+        "browser approval or authenticated identity"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "whoami",
+      [
+        "authoritative identity"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "logout",
+      [
+        "cleared grant identity"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "space",
+      [],
+      [
+        "help"
+      ]
+    ],
+    [
+      "space list",
+      [
+        "Spaces"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "space browse",
+      [
+        "Nodes"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "space find",
+      [
+        "Nodes"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "space node",
+      [],
+      [
+        "help"
+      ]
+    ],
+    [
+      "space node create",
+      [
+        "created Node"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "space node rename",
+      [
+        "renamed Node"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "space node move",
+      [
+        "moved Node"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "space node trash",
+      [
+        "Trash batch"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "worktree",
+      [],
+      [
+        "help"
+      ]
+    ],
+    [
+      "worktree list",
+      [
+        "Worktrees"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "worktree get",
+      [
+        "Worktree"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "worktree create",
+      [
+        "created Worktree"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "worktree update",
+      [
+        "updated Worktree"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "worktree ready",
+      [
+        "authoritative Worktree state"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "worktree reopen",
+      [
+        "authoritative Worktree state"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "worktree merge",
+      [
+        "authoritative Worktree state"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "worktree discard",
+      [
+        "authoritative Worktree state"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "unit",
+      [],
+      [
+        "help"
+      ]
+    ],
+    [
+      "unit list",
+      [
+        "Worktree Units"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "unit add",
+      [
+        "added Unit"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "unit create",
+      [
+        "created Unit"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "import",
+      [
+        "imported Unit"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "export",
+      [
+        "confirmed Office file"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "blob",
+      [],
+      [
+        "help"
+      ]
+    ],
+    [
+      "blob upload",
+      [
+        "Blob Resource"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "blob get",
+      [
+        "Blob metadata"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "blob download",
+      [
+        "confirmed Blob file"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "asset",
+      [],
+      [
+        "help"
+      ]
+    ],
+    [
+      "asset download",
+      [
+        "confirmed Asset file"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "open",
+      [
+        "authoritative review URL"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "screenshot",
+      [
+        "confirmed PNG files"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "screenshot setup",
+      [
+        "browser preflight"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "lint",
+      [
+        "layout findings"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "execute",
+      [
+        "canonical execution value and commit state"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "compile-typst",
+      [
+        "compiled artifacts or created Doc"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "compile-svg",
+      [
+        "generated program or applied Slide page"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ],
+    [
+      "inspect",
+      [
+        "canonical structured content"
+      ],
+      [
+        "json",
+        "text"
+      ]
+    ]
+  ]
+}

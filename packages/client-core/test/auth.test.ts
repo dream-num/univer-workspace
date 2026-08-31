@@ -303,6 +303,36 @@ describe("Workspace authentication protocol", () => {
     });
     await expect(logout(http)).rejects.toMatchObject({ code: "workspace-result-unknown" });
   });
+
+  it.each([
+    ["browser approval start", (http: WorkspaceHttp, signal: AbortSignal) =>
+      startCliLogin(http, () => fixedNow, signal)],
+    ["browser approval completion", (http: WorkspaceHttp, signal: AbortSignal) =>
+      completeCliLogin(http, pending(), () => fixedNow, signal)],
+    ["current User lookup", (http: WorkspaceHttp, signal: AbortSignal) =>
+      whoami(http, signal)],
+    ["remote logout", (http: WorkspaceHttp, signal: AbortSignal) =>
+      logout(http, signal)],
+  ])("forwards cancellation to %s", async (_case, operation) => {
+    const controller = new AbortController();
+    let observedSignal: AbortSignal | null | undefined;
+    const http = new WorkspaceHttp({
+      cookie: "workspace_session=test",
+      fetcher: async (_input, init) => {
+        observedSignal = init?.signal;
+        return await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        });
+      },
+      origin,
+      role: "client",
+    });
+
+    const result = operation(http, controller.signal);
+    await vi.waitFor(() => expect(observedSignal).toBe(controller.signal));
+    controller.abort(new Error("test cancellation"));
+    await expect(result).rejects.toMatchObject({ code: "workspace-result-unknown" });
+  });
 });
 
 function authorizationResponse(override: Record<string, unknown> = {}): Response {

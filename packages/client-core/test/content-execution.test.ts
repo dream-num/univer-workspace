@@ -45,6 +45,78 @@ describe("Workspace content execution workflow", () => {
     });
   });
 
+  it("forwards the operation signal and execute value budget without changing prepared code", async () => {
+    const signal = new AbortController().signal;
+    const executeAndCommit = vi.fn(async () => ({ committed: false as const, value: null }));
+    const resolveEditableRuntimeTarget = vi.fn(async () => target);
+    const feature = new WorkspaceContentExecutionFeature(
+      { resolveEditableRuntimeTarget },
+      runtimeWith(executeAndCommit),
+    );
+
+    await feature.execute({
+      code: "return null;",
+      maxValueBytes: 123,
+      maxValueDepth: 7,
+      signal,
+      unitId: "book-1",
+      worktreeId: "wt-1",
+    });
+
+    expect(resolveEditableRuntimeTarget).toHaveBeenCalledWith({
+      unitId: "book-1",
+      worktreeId: "wt-1",
+    }, signal);
+    expect(executeAndCommit).toHaveBeenCalledWith(expect.objectContaining({
+      maxValueBytes: 123,
+      maxValueDepth: 7,
+      signal,
+      target,
+    }));
+  });
+
+  it("does not start runtime work after target resolution is cancelled", async () => {
+    const controller = new AbortController();
+    const executeAndCommit = vi.fn();
+    const feature = new WorkspaceContentExecutionFeature(
+      {
+        resolveEditableRuntimeTarget: async () => {
+          controller.abort(new Error("cancel-after-target"));
+          return target;
+        },
+      },
+      runtimeWith(executeAndCommit),
+    );
+
+    await expect(feature.execute({
+      code: "return null;",
+      signal: controller.signal,
+      unitId: "book-1",
+      worktreeId: "wt-1",
+    })).rejects.toThrow("cancel-after-target");
+    expect(executeAndCommit).not.toHaveBeenCalled();
+  });
+
+  it("does not resolve a target for an already-aborted execution", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error("cancel-before-target"));
+    const resolveEditableRuntimeTarget = vi.fn(async () => target);
+    const executeAndCommit = vi.fn();
+    const feature = new WorkspaceContentExecutionFeature(
+      { resolveEditableRuntimeTarget },
+      runtimeWith(executeAndCommit),
+    );
+
+    await expect(feature.execute({
+      code: "return null;",
+      signal: controller.signal,
+      unitId: "book-1",
+      worktreeId: "wt-1",
+    })).rejects.toThrow("cancel-before-target");
+    expect(resolveEditableRuntimeTarget).not.toHaveBeenCalled();
+    expect(executeAndCommit).not.toHaveBeenCalled();
+  });
+
   it("rejects a reserved binding before invoking the runtime", async () => {
     const executeAndCommit = vi.fn();
     const feature = new WorkspaceContentExecutionFeature(

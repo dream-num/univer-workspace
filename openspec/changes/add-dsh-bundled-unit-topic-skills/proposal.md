@@ -34,7 +34,7 @@
 ## Domain Alignment
 
 - `apps/workspace/CONTEXT.md` 定义 Space、Node、Resource、Unit、Trunk、Worktree 与 Draft；Skills 沿用这些产品身份，尤其不把 Blob Resource 当作 Unit，也不从 display name、URL 或 share link 推断 Source identity。
-- `/Users/shenweimin/github.com/dsh-plugin/dsh-univer-work/CONTEXT.md` 与 `/Users/shenweimin/github.com/dsh-plugin/dsh-univer-work/docs/adr/0001-co-locate-workspace-agent-clients.md` 定义 Workspace Agent Client、Workspace Client Core 与 Client Shell；本 Change 在 DSH Client Shell 内拥有指导与注册，不导入 `apps/cli/src/*`，也不把 delivery-specific Skills 放进 private Core。
+- `apps/workspace/CONTEXT.md` 定义 Workspace Agent Client、Workspace Client Core 与 Client Shell；`apps/workspace/docs/adr/0007-co-locate-workspace-agent-clients.md` 要求 CLI 与 dsh-univer-work 通过同仓 private Client Core package exports 共享能力并各自保留 Client Shell composition。本 Change 在 DSH Client Shell 内拥有指导与注册，不导入 `apps/cli/src/*`，也不把 delivery-specific Skills 放进 private Core。
 - `add-dsh-worktree-unit-tools` 已拥有 `core` Skill；认证、Space/Node、Worktree/Unit/review、Blob/Asset、content execute/inspect、Office、Typst、SVG、screenshot/layout lint 与 API/resource discovery 分别由上列十个 accepted Changes 拥有。本 Change 只描述并校验这些 owners 已批准的 exact operations，不新增 authority。
 
 No domain-model change.

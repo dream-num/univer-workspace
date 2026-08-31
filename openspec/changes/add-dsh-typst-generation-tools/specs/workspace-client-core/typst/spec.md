@@ -2,7 +2,7 @@
 
 ### Requirement: Typst operation cancellation
 
-Workspace Client Core SHALL let a Node-hosted Client Shell supply an optional `AbortSignal` to Typst compile, deterministic Doc materialization and Worktree-local Unit apply, MUST pass that signal to the shared Unit create operation, and MUST stop every later separable step after cancellation without changing callers that omit it.
+Workspace Client Core SHALL let a Node-hosted Client Shell supply an optional `AbortSignal` to Typst compile, semantic-deterministic Doc materialization and Worktree-local Unit apply, MUST pass that signal to the shared Unit create operation, and MUST stop every later separable step after cancellation without changing callers that omit it.
 
 #### Scenario: Cancellation precedes compilation
 
@@ -55,9 +55,9 @@ Workspace Client Core SHALL accept optional caller-fixed limits for generated Ja
 - **WHEN** Workspace CLI calls the existing compile/apply input without optional limits
 - **THEN** Core preserves the existing compiler result, diagnostics, materialization and Unit create behavior without imposing a new CLI limit
 
-### Requirement: Licensed and isolated-random Typst materialization
+### Requirement: Licensed and semantic-deterministic Typst materialization
 
-Workspace Client Core SHALL let a Client Shell provide an optional license to the disposable headless Doc materializer, MUST execute each exact compiler-generated program with per-invocation deterministic random intrinsics without modifying process-global random descriptors, and MUST dispose each runtime on every settled path.
+Workspace Client Core SHALL let a Client Shell provide an optional license to the disposable headless Doc materializer, MUST execute each exact compiler-generated program with per-invocation deterministic program-local random intrinsics without modifying process-global random descriptors, MUST preserve SDK-generated opaque paragraph/section/list/range identities in UnitData, and MUST dispose each runtime on every settled path.
 
 #### Scenario: Client Shell supplies a license
 
@@ -71,13 +71,20 @@ Workspace Client Core SHALL let a Client Shell provide an optional license to th
 
 #### Scenario: Concurrent materializations are requested
 
-- **WHEN** two Core-owned Typst apply operations reach deterministic materialization concurrently in one process
-- **THEN** each exact compiler-generated program receives its own same-seed `Math.random` and `crypto.getRandomValues`, produces deterministic output, and neither invocation changes the process-global descriptors or the other's sequence
+- **WHEN** two Core-owned Typst apply operations reach materialization concurrently in one process
+- **THEN** each exact compiler-generated program receives its own same-seed program-local `Math.random` and `crypto.getRandomValues`, and neither invocation changes the process-global descriptors or the other's program-local sequence
+- **AND** equivalent inputs produce equal semantic content after excluding SDK-generated opaque paragraph/section/list/range identity values, while the exact identity values MAY differ
 
 #### Scenario: Process globals are observed during materialization
 
 - **WHEN** other Host work reads process-global `Math.random` or `crypto.getRandomValues` while a Typst program executes
 - **THEN** it observes the unchanged Host functions rather than Typst's deterministic sequence
+
+#### Scenario: SDK-owned opaque identities are materialized
+
+- **WHEN** Host Facade/Core assigns paragraph, section, list or range identities while executing the compiler-generated program
+- **THEN** Core preserves those valid identities unchanged in the saved UnitData
+- **AND** it does not strip, replace or expose a runtime semantic-normalization transform
 
 #### Scenario: Generated program attempts unapproved lifecycle work
 
@@ -91,4 +98,4 @@ Workspace CLI MUST preserve its existing Typst behavior when it omits the option
 #### Scenario: Existing CLI Typst cases run
 
 - **WHEN** existing CLI compile-only, apply, diagnostics, preview, command-output and installed-package cases run against the extended Core capability
-- **THEN** compiler calls, file paths and write order, result fields, errors, Unit identity, deterministic output, native dependency selection and presentation remain compatible
+- **THEN** compiler calls, file paths and write order, result fields, errors, Unit identity, semantic content, native dependency selection and presentation remain compatible

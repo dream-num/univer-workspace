@@ -1,10 +1,22 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdtempSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  truncateSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { CompileSvgOptions, CompileSvgResult } from "@univer-cli/svg-facade";
-import type { UniverTextMeasureRuntime } from "@univer-cli/univer-render-runtime";
+import { SvgFacadeError, type CompileSvgOptions, type CompileSvgResult } from "@univer-cli/svg-facade";
+import { UniverRenderError, type UniverTextMeasureRuntime } from "@univer-cli/univer-render-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  workspaceError,
+  projectWorkspaceSvgDependencyCode,
+  WorkspaceApplicationError,
   WorkspaceCompileSvgFeature,
   type WorkspaceCompileSvgDependencies,
 } from "../src/index.js";
@@ -25,6 +37,18 @@ afterEach(() => {
 });
 
 describe("Workspace SVG compilation", () => {
+  it("projects only exact SVG facade and browser dependency constructors", () => {
+    expect(projectWorkspaceSvgDependencyCode(new SvgFacadeError("private-svg-sentinel")))
+      .toBe("SVG_FACADE_COMPILE_FAILED");
+    expect(projectWorkspaceSvgDependencyCode(
+      new UniverRenderError("BROWSER_UNAVAILABLE", "private-browser-sentinel"),
+    )).toBe("BROWSER_UNAVAILABLE");
+    for (const forged of [
+      { code: "SVG_FACADE_COMPILE_FAILED", name: "SvgFacadeError" },
+      { code: "BROWSER_UNAVAILABLE", name: "UniverRenderError" },
+      new WorkspaceApplicationError("BROWSER_UNAVAILABLE", "private-forged-sentinel"),
+    ]) expect(projectWorkspaceSvgDependencyCode(forged)).toBeUndefined();
+  });
   it("reads UTF-8 source and nested assets relative to the SVG exactly once", async () => {
     const directory = temporaryDirectory();
     const sourceDirectory = join(directory, "nested");
@@ -55,6 +79,179 @@ describe("Workspace SVG compilation", () => {
     expect(result.lints).toBe(compiled.lints);
   });
 
+  it("confines source and assets to the canonical root and counts aggregate actual bytes", async () => {
+    const directory = temporaryDirectory();
+    const sourceDirectory = join(directory, "nested");
+    mkdirSync(sourceDirectory);
+    const file = join(sourceDirectory, "page.svg");
+    const source = '<svg><image href="asset.bin"/></svg>';
+    writeFileSync(file, source);
+    writeFileSync(join(sourceDirectory, "asset.bin"), Uint8Array.from([1, 2, 3]));
+    const compile = vi.fn(async (_svg: string, options?: CompileSvgOptions) => {
+      expect([...Array.from(options?.assetResolver?.("asset.bin").bytes ?? [])]).toEqual([1, 2, 3]);
+      return compiled;
+    });
+    const feature = createFeature({ compile });
+
+    await expect(feature.compile({
+      file,
+      localRoot: directory,
+      maxAssetBytes: 3,
+      maxSourceBytes: Buffer.byteLength(source),
+    })).resolves.toMatchObject({ code: "raw();" });
+    await expect(feature.compile({
+      file,
+      localRoot: directory,
+      maxAssetBytes: 2,
+      maxSourceBytes: Buffer.byteLength(source),
+    })).rejects.toMatchObject({
+      code: "workspace-svg-limit-exceeded",
+      detail: { actual: 3, kind: "asset", limit: 2 },
+    });
+  });
+
+  it("rejects source and asset symlink escapes without consuming them", async () => {
+    const directory = temporaryDirectory();
+    const outside = temporaryDirectory();
+    const sourceOutside = join(outside, "outside.svg");
+    writeFileSync(sourceOutside, "<svg/>");
+    const sourceLink = join(directory, "source.svg");
+    symlinkSync(sourceOutside, sourceLink);
+    const feature = createFeature({ compile: vi.fn(async () => compiled) });
+
+    await expect(feature.compile({ file: sourceLink, localRoot: directory })).rejects.toMatchObject({
+      code: "workspace-svg-input-outside-root",
+    });
+
+    const file = join(directory, "page.svg");
+    const assetOutside = join(outside, "asset.bin");
+    writeFileSync(file, "<svg/>");
+    writeFileSync(assetOutside, "secret");
+    symlinkSync(assetOutside, join(directory, "asset.bin"));
+    const compile = vi.fn(async (_svg: string, options?: CompileSvgOptions) => {
+      options?.assetResolver?.("asset.bin");
+      return compiled;
+    });
+    await expect(createFeature({ compile }).compile({ file, localRoot: directory })).rejects.toMatchObject({
+      code: "workspace-svg-input-outside-root",
+    });
+  });
+
+  it("preserves stable source and asset symlinks contained by the canonical root", async () => {
+    const directory = temporaryDirectory();
+    const source = join(directory, "source.svg");
+    const sourceTarget = join(directory, "source-target.svg");
+    const asset = join(directory, "asset.bin");
+    const assetTarget = join(directory, "asset-target.bin");
+    writeFileSync(sourceTarget, '<svg><image href="asset.bin"/></svg>');
+    writeFileSync(assetTarget, "inside");
+    symlinkSync(sourceTarget, source);
+    symlinkSync(assetTarget, asset);
+    const compile = vi.fn(async (_svg: string, options?: CompileSvgOptions) => {
+      expect(options?.assetResolver?.("asset.bin").bytes.toString()).toBe("inside");
+      return compiled;
+    });
+    await expect(createFeature({ compile }).compile({ file: source, localRoot: directory }))
+      .resolves.toMatchObject({ code: "raw();" });
+  });
+
+  it("fails closed when a canonical file is replaced between validation and open", async () => {
+    const directory = temporaryDirectory();
+    const file = join(directory, "page.svg");
+    writeFileSync(file, "<svg/>");
+    const signal = signalAtCheck(4, () => {
+      renameSync(file, `${file}.old`);
+      writeFileSync(file, "<svg><text>replacement</text></svg>");
+    });
+    const compile = vi.fn();
+
+    await expect(createFeature({ compile }).compile({ file, localRoot: directory, signal })).rejects.toMatchObject({
+      code: "workspace-svg-source-unavailable",
+    });
+    expect(compile).not.toHaveBeenCalled();
+  });
+
+  it("rejects source and asset replacement with an outside symlink after realpath", async () => {
+    const directory = temporaryDirectory();
+    const outside = temporaryDirectory();
+    const file = join(directory, "page.svg");
+    const outsideSource = join(outside, "outside.svg");
+    writeFileSync(file, "<svg/>");
+    writeFileSync(outsideSource, "<svg><text>outside</text></svg>");
+    const sourceSignal = signalAtCheck(3, () => {
+      renameSync(file, `${file}.old`);
+      symlinkSync(outsideSource, file);
+    });
+    const sourceCompile = vi.fn();
+    await expect(createFeature({ compile: sourceCompile }).compile({
+      file,
+      localRoot: directory,
+      signal: sourceSignal,
+    })).rejects.toMatchObject({ code: "workspace-svg-source-unavailable" });
+    expect(sourceCompile).not.toHaveBeenCalled();
+
+    rmSync(file);
+    writeFileSync(file, '<svg><image href="asset.bin"/></svg>');
+    const asset = join(directory, "asset.bin");
+    const outsideAsset = join(outside, "outside.bin");
+    writeFileSync(asset, "inside");
+    writeFileSync(outsideAsset, "outside");
+    const assetSignal = signalAtCheck(11, () => {
+      renameSync(asset, `${asset}.old`);
+      symlinkSync(outsideAsset, asset);
+    });
+    const assetCompile = vi.fn(async (_svg: string, options?: CompileSvgOptions) => {
+      options?.assetResolver?.("asset.bin");
+      return compiled;
+    });
+    await expect(createFeature({ compile: assetCompile }).compile({
+      file,
+      localRoot: directory,
+      signal: assetSignal,
+    })).rejects.toMatchObject({ code: "workspace-svg-asset-unavailable" });
+    expect(assetCompile).toHaveBeenCalledOnce();
+  });
+
+  it("uses actual descriptor bytes for growth, shrink, and exact source boundaries", async () => {
+    const directory = temporaryDirectory();
+    const file = join(directory, "page.svg");
+    const original = "<svg/>";
+    writeFileSync(file, original);
+    const feature = createFeature({ compile: vi.fn(async () => compiled) });
+
+    await expect(feature.compile({
+      file,
+      localRoot: directory,
+      maxSourceBytes: Buffer.byteLength(original),
+    })).resolves.toMatchObject({ code: "raw();" });
+
+    const growSignal = signalAtCheck(4, () => {
+      appendFileSync(file, "x");
+    });
+    await expect(feature.compile({
+      file,
+      localRoot: directory,
+      maxSourceBytes: Buffer.byteLength(original),
+      signal: growSignal,
+    })).rejects.toMatchObject({
+      code: "workspace-svg-limit-exceeded",
+      detail: { actual: Buffer.byteLength(original) + 1, kind: "source", limit: Buffer.byteLength(original) },
+    });
+
+    writeFileSync(file, original);
+    const shrinkSignal = signalAtCheck(4, () => {
+      truncateSync(file, 3);
+    });
+    await expect(feature.compile({
+      file,
+      localRoot: directory,
+      maxSourceBytes: 3,
+      signal: shrinkSignal,
+    })).resolves.toMatchObject({
+      code: "raw();",
+    });
+  });
+
   it("propagates unreadable source before compiler or browser creation", async () => {
     const compile = vi.fn();
     const createRuntime = vi.fn();
@@ -63,6 +260,20 @@ describe("Workspace SVG compilation", () => {
     await expect(feature.compile({ file: join(temporaryDirectory(), "missing.svg") })).rejects.toMatchObject({
       code: "ENOENT",
     });
+    expect(compile).not.toHaveBeenCalled();
+    expect(createRuntime).not.toHaveBeenCalled();
+  });
+
+  it("starts no source, compiler, or browser work when already cancelled", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const compile = vi.fn();
+    const createRuntime = vi.fn();
+
+    await expect(createFeature({ compile, createRuntime }).compile({
+      file: join(temporaryDirectory(), "missing.svg"),
+      signal: controller.signal,
+    })).rejects.toMatchObject({ name: "AbortError" });
     expect(compile).not.toHaveBeenCalled();
     expect(createRuntime).not.toHaveBeenCalled();
   });
@@ -76,6 +287,28 @@ describe("Workspace SVG compilation", () => {
     const feature = createFeature({ compile });
 
     await expect(feature.compile({ file })).rejects.toMatchObject({ code: "ENOENT" });
+    expect(compile).toHaveBeenCalledOnce();
+  });
+
+  it("reads no later asset after cancellation becomes visible", async () => {
+    const directory = temporaryDirectory();
+    const file = join(directory, "page.svg");
+    writeFileSync(file, "<svg/>");
+    writeFileSync(join(directory, "first.bin"), "1");
+    writeFileSync(join(directory, "second.bin"), "2");
+    const controller = new AbortController();
+    const compile = vi.fn(async (_svg: string, options?: CompileSvgOptions) => {
+      options?.assetResolver?.("first.bin");
+      controller.abort();
+      options?.assetResolver?.("second.bin");
+      return compiled;
+    });
+
+    await expect(createFeature({ compile }).compile({
+      file,
+      localRoot: directory,
+      signal: controller.signal,
+    })).rejects.toMatchObject({ name: "AbortError" });
     expect(compile).toHaveBeenCalledOnce();
   });
 
@@ -193,6 +426,81 @@ describe("Workspace SVG compilation", () => {
 
     await expect(feature.compile({ file: writeSvg("<svg/>") })).rejects.toBe(failure);
     expect(compile).toHaveBeenCalledOnce();
+  });
+
+  it("observes cancellation after compiler and measurement settlement before later work", async () => {
+    const compilerController = new AbortController();
+    const wrap = vi.fn();
+    const compiling = createFeature({
+      compile: vi.fn(async () => {
+        compilerController.abort();
+        return compiled;
+      }),
+      wrap,
+    });
+    await expect(compiling.compile({
+      file: writeSvg("<svg/>"),
+      page: 1,
+      signal: compilerController.signal,
+    })).rejects.toMatchObject({ name: "AbortError" });
+    expect(wrap).not.toHaveBeenCalled();
+
+    const measureController = new AbortController();
+    const close = vi.fn(async () => undefined);
+    const measuring = createFeature({
+      compile: vi.fn(async (_svg: string, options?: CompileSvgOptions) => {
+        await options?.textMeasurer?.measureLine({ runs: [run("text")] });
+        return compiled;
+      }),
+      createRuntime: vi.fn(async (options) => {
+        expect(options.signal).toBe(measureController.signal);
+        return {
+          close,
+          measureText: async () => {
+            measureController.abort();
+            return {
+              actualHeight: 13,
+              actualWidth: 21,
+              firstLineAscent: 10,
+              firstLineDescent: 3,
+              lineCount: 1,
+            };
+          },
+        };
+      }),
+    });
+    await expect(measuring.compile({
+      file: writeSvg("<svg/>"),
+      signal: measureController.signal,
+    })).rejects.toMatchObject({ name: "AbortError" });
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("forwards apply cancellation and value limits once while preserving result unknown", async () => {
+    const failure = workspaceError("workspace-result-unknown", "commit result is unknown");
+    const executeSlide = vi.fn(async () => {
+      throw failure;
+    });
+    const feature = createFeature({ contentExecution: { executeSlide } });
+    const controller = new AbortController();
+
+    await expect(feature.apply({
+      compiled: { ...compiled, mode: "replace", page: 1 },
+      maxValueBytes: 123,
+      maxValueDepth: 7,
+      signal: controller.signal,
+      unitId: "deck-1",
+      worktreeId: "wt-1",
+    })).rejects.toBe(failure);
+    expect(executeSlide).toHaveBeenCalledOnce();
+    expect(executeSlide).toHaveBeenCalledWith({
+      code: "raw();",
+      maxValueBytes: 123,
+      maxValueDepth: 7,
+      signal: controller.signal,
+      unitId: "deck-1",
+      worktreeId: "wt-1",
+    });
   });
 
   it.each([
@@ -322,4 +630,16 @@ function writeSvg(svg: string): string {
 
 function run(text: string) {
   return { bold: false, fontSizePx: 16, italic: false, text };
+}
+
+function signalAtCheck(check: number, effect: () => void): AbortSignal {
+  const signal = new AbortController().signal;
+  let checks = 0;
+  Object.defineProperty(signal, "throwIfAborted", {
+    value: () => {
+      checks += 1;
+      if (checks === check) effect();
+    },
+  });
+  return signal;
 }

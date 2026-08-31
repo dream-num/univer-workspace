@@ -35,7 +35,7 @@
 ## Domain Alignment
 
 - `apps/workspace/CONTEXT.md` 定义 Space、Node、Resource、Unit、Trash、Trunk、Worktree 与 Draft；parity 矩阵按这些产品 outcome 比较，不把 Commander command、DSH tool 或本地文件当成新的产品实体。
-- `/Users/shenweimin/github.com/dsh-plugin/dsh-univer-work/CONTEXT.md` 与 `/Users/shenweimin/github.com/dsh-plugin/dsh-univer-work/docs/adr/0001-co-locate-workspace-agent-clients.md` 定义 Workspace Agent Client、Workspace Client Core 与 Client Shell；本 Change 比较两个 Client Shell 的 outcome，并保持仅通过 private package exports 共享实现的决定。
+- `apps/workspace/CONTEXT.md` 定义 Workspace Agent Client、Workspace Client Core 与 Client Shell；已接受的 `apps/workspace/docs/adr/0007-co-locate-workspace-agent-clients.md` 决定两个 Client Shell 共置于本仓库且仅通过 private Workspace Client Core exports 共享能力。本 Change 比较两个 Client Shell 的 outcome，不转移 Client Shell 或 private Core ownership。
 - `openspec/changes/add-dsh-univer-work-plugin-shell/` 以及其余十一项 `add-dsh-*` prerequisite Changes 分别拥有 package、operations、Skills 与各自 installed behavior；本 Change只验证它们的组合，不转移 ownership。
 
 No domain-model change.

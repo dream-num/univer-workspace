@@ -21,11 +21,23 @@ describe("Workspace daemon runtime operations adapter", () => {
     );
     const runtime = createWorkspaceDaemonRuntimeOperations({ request });
 
-    await expect(runtime.executeRead({ code: "return 1", target })).resolves.toMatchObject({
+    const signal = new AbortController().signal;
+    await expect(runtime.executeRead({ code: "return 1", signal, target })).resolves.toMatchObject({
       value: "read",
     });
-    await expect(runtime.exportUnitData({ target })).resolves.toEqual({ id: "book-1" });
-    await expect(runtime.executeAndCommit({ code: "edit", target })).resolves.toEqual({
+    await expect(runtime.exportUnitData({
+      maxValueBytes: 123,
+      maxValueDepth: 4,
+      signal,
+      target,
+    })).resolves.toEqual({ id: "book-1" });
+    await expect(runtime.executeAndCommit({
+      code: "edit",
+      maxValueBytes: 123,
+      maxValueDepth: 4,
+      signal,
+      target,
+    })).resolves.toEqual({
       committed: false,
       value: "write",
     });

@@ -16,6 +16,23 @@ The installable command-line client for operating a remote Univer Workspace and 
 content. It belongs to the Univer Workspace product but has its own release version.
 _Avoid_: Univer CLI, Workspace Agent
 
+## Agent clients
+
+**Workspace Agent Client**:
+A Node-hosted application through which an Agent operates a remote Univer Workspace.
+Univer Workspace CLI and dsh-univer-work are distinct Workspace Agent Clients.
+_Avoid_: Workspace Browser, universal client
+
+**Workspace Client Core**:
+The repository-internal Node-hosted capability layer shared by Workspace Agent Clients.
+It is independent of any delivery-specific command or Harness shell.
+_Avoid_: CLI library, Browser SDK, universal client
+
+**Client Shell**:
+The delivery-specific boundary that exposes Workspace Client Core capabilities and owns
+environment-specific interaction, configuration, credentials, and lifecycle.
+_Avoid_: Client Core, Workspace Server adapter
+
 ## Delivery
 
 **Stable Release Tag**:

@@ -38,14 +38,25 @@ describe("Workspace Slide layout lint", () => {
   it("maps exact Slide data and formula references", async () => {
     const unitData = { id: "deck-1", slideOrder: ["cover"], slides: {} };
     const formulaReferenceUnits = [{ unitData: { id: "sheet-1" }, unitType: "sheet" }];
+    const signal = new AbortController().signal;
+    const loadUnit = vi.fn(
+      async () => ({ formulaReferenceUnits, unitData, unitType: "slide" }) as never,
+    );
     const feature = featureWith({
-      loader: {
-        loadUnit: async () => ({ formulaReferenceUnits, unitData, unitType: "slide" }) as never,
-      },
+      loader: { loadUnit },
     });
     await expect(
-      feature.loadUnit({ scope: { kind: "worktree", worktreeId: "wt-1" }, unitId: "deck-1" }),
+      feature.loadUnit({
+        scope: { kind: "worktree", worktreeId: "wt-1" },
+        signal,
+        unitId: "deck-1",
+      }),
     ).resolves.toEqual({ formulaReferenceUnits, unitData, unitType: "slide" });
+    expect(loadUnit).toHaveBeenCalledWith({
+      scope: { kind: "worktree", worktreeId: "wt-1" },
+      signal,
+      unitId: "deck-1",
+    });
   });
 
   it("passes exact runtime/lint inputs and awaits close before success", async () => {
@@ -82,10 +93,8 @@ describe("Workspace Slide layout lint", () => {
     expect(lint).toHaveBeenCalledWith(input);
   });
 
-  it.each([
-    ["failure", new Error("lint failed")],
-    ["abort", Object.assign(new Error("aborted"), { name: "AbortError" })],
-  ])("closes before rejecting on %s", async (_, failure) => {
+  it("closes before rejecting on lint failure", async () => {
+    const failure = new Error("lint failed");
     lint.mockRejectedValueOnce(failure);
     const close = vi.fn(async () => undefined);
     const createRuntime = vi.fn(
@@ -94,12 +103,165 @@ describe("Workspace Slide layout lint", () => {
     const feature = featureWith({ createRuntime });
     await expect(
       feature.lint().lint({
-        signal: AbortSignal.abort(),
+        signal: new AbortController().signal,
         unitData: { id: "deck-1" },
         unitType: "slide",
       } as UnitLayoutLintInput),
     ).rejects.toBe(failure);
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("does not create a browser for a pre-aborted signal", async () => {
+    const createRuntime = vi.fn();
+    const feature = featureWith({ createRuntime });
+    const reason = new Error("cancel-before-browser");
+    const controller = new AbortController();
+    controller.abort(reason);
+
+    await expect(
+      feature.lint().lint({
+        signal: controller.signal,
+        unitData: { id: "deck-1" },
+        unitType: "slide",
+      } as UnitLayoutLintInput),
+    ).rejects.toBe(reason);
+    expect(createRuntime).not.toHaveBeenCalled();
+    expect(lint).not.toHaveBeenCalled();
+  });
+
+  it("closes a browser returned after cancellation and starts no lint", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-browser-construction");
+    const close = vi.fn(async () => {
+      throw new Error("close-secret");
+    });
+    const feature = featureWith({
+      createRuntime: async () => {
+        controller.abort(reason);
+        return ({ close }) as unknown as UniverSlideLayoutRuntime & { close(): Promise<void> };
+      },
+    });
+
+    await expect(
+      feature.lint().lint({
+        signal: controller.signal,
+        unitData: { id: "deck-1" },
+        unitType: "slide",
+      } as UnitLayoutLintInput),
+    ).rejects.toBe(reason);
+    expect(lint).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("prefers an abort that races browser construction rejection", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-browser-construction");
+    const feature = featureWith({
+      createRuntime: async () => {
+        controller.abort(reason);
+        throw new Error("browser-dependency-secret");
+      },
+    });
+
+    await expect(
+      feature.lint().lint({
+        signal: controller.signal,
+        unitData: { id: "deck-1" },
+        unitType: "slide",
+      } as UnitLayoutLintInput),
+    ).rejects.toBe(reason);
+    expect(lint).not.toHaveBeenCalled();
+  });
+
+  it("preserves an abort that races lint rejection and close rejection", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-lint-rejection");
+    lint.mockImplementationOnce(async () => {
+      controller.abort(reason);
+      throw new Error("lint-dependency-secret");
+    });
+    const close = vi.fn(async () => {
+      throw new Error("close-secret");
+    });
+    const feature = featureWith({
+      createRuntime: async () =>
+        ({ close }) as unknown as UniverSlideLayoutRuntime & { close(): Promise<void> },
+    });
+
+    await expect(
+      feature.lint().lint({
+        signal: controller.signal,
+        unitData: { id: "deck-1" },
+        unitType: "slide",
+      } as UnitLayoutLintInput),
+    ).rejects.toBe(reason);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it.each([new Error("lint-primary"), undefined, null])(
+    "preserves lint failure %# when close also rejects",
+    async (failure) => {
+      lint.mockRejectedValueOnce(failure);
+      const close = vi.fn(async () => {
+        throw new Error("close-secret");
+      });
+      const feature = featureWith({
+        createRuntime: async () =>
+          ({ close }) as unknown as UniverSlideLayoutRuntime & { close(): Promise<void> },
+      });
+
+      await expect(
+        feature.lint().lint({ unitData: { id: "deck-1" }, unitType: "slide" } as UnitLayoutLintInput),
+      ).rejects.toBe(failure);
+      expect(close).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("observes cancellation that becomes visible while close settles", async () => {
+    lint.mockResolvedValueOnce(lintResult());
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-close");
+    const close = vi.fn(async () => controller.abort(reason));
+    const feature = featureWith({
+      createRuntime: async () =>
+        ({ close }) as unknown as UniverSlideLayoutRuntime & { close(): Promise<void> },
+    });
+
+    await expect(
+      feature.lint().lint({
+        signal: controller.signal,
+        unitData: { id: "deck-1" },
+        unitType: "slide",
+      } as UnitLayoutLintInput),
+    ).rejects.toBe(reason);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("awaits browser close when cancellation becomes visible during lint", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel-during-lint");
+    lint.mockImplementationOnce(async () => {
+      controller.abort(reason);
+      return lintResult();
+    });
+    let resolveClose!: () => void;
+    const close = vi.fn(async () => await new Promise<void>((resolve) => (resolveClose = resolve)));
+    const feature = featureWith({
+      createRuntime: async () =>
+        ({ close }) as unknown as UniverSlideLayoutRuntime & { close(): Promise<void> },
+    });
+    let settled = false;
+
+    const operation = feature.lint().lint({
+      signal: controller.signal,
+      unitData: { id: "deck-1" },
+      unitType: "slide",
+    } as UnitLayoutLintInput).finally(() => (settled = true));
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(settled).toBe(false);
+    resolveClose();
+
+    await expect(operation).rejects.toBe(reason);
   });
 
   it("does not fabricate close when runtime construction fails", async () => {

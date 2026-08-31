@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fake = vi.hoisted(() => ({
   created: [] as Readonly<Record<string, unknown>>[],
+  disposeError: undefined as unknown,
   disposes: [] as ReturnType<typeof vi.fn>[],
   factoryError: undefined as unknown,
+  factorySettled: undefined as Promise<void> | undefined,
+  factoryStarted: undefined as (() => void) | undefined,
   factoryOptions: [] as unknown[],
   facade: undefined as unknown,
   getDocument: true,
   initInputs: [] as unknown[],
+  saveCalls: 0,
   saved: { id: "typst-doc", name: "Runtime paper", rev: 99 } as unknown,
   saveError: undefined as unknown,
 }));
@@ -18,8 +22,12 @@ vi.mock("@univer-cli/headless-univer", () => ({
     fake.factoryOptions.push(options);
     return async (input: unknown) => {
       fake.initInputs.push(input);
+      fake.factoryStarted?.();
+      await fake.factorySettled;
       if (fake.factoryError !== undefined) throw fake.factoryError;
-      const dispose = vi.fn();
+      const dispose = vi.fn(() => {
+        if (fake.disposeError !== undefined) throw fake.disposeError;
+      });
       fake.disposes.push(dispose);
       return { dispose };
     };
@@ -32,14 +40,19 @@ import { HeadlessWorkspaceTypstMaterializer } from "../src/index.js";
 beforeEach(() => {
   fake.created.length = 0;
   fake.disposes.length = 0;
+  fake.disposeError = undefined;
   fake.factoryError = undefined;
+  fake.factorySettled = undefined;
+  fake.factoryStarted = undefined;
   fake.factoryOptions.length = 0;
   fake.getDocument = true;
   fake.initInputs.length = 0;
+  fake.saveCalls = 0;
   fake.saved = { id: "typst-doc", name: "Runtime paper", rev: 99 };
   fake.saveError = undefined;
   const document = {
     save: vi.fn(() => {
+      fake.saveCalls += 1;
       if (fake.saveError !== undefined) throw fake.saveError;
       return fake.saved;
     }),
@@ -177,29 +190,49 @@ describe("Headless Workspace Typst materializer", () => {
     },
   );
 
-  it("restores complete random descriptors and fills only the supplied typed-array view", async () => {
+  it("isolates concurrent deterministic random sequences from Host globals", async () => {
     const mathBefore = Object.getOwnPropertyDescriptor(Math, "random");
     const cryptoBefore = Object.getOwnPropertyDescriptor(globalThis.crypto, "getRandomValues");
+    const bothStarted = deferred<void>();
+    const release = deferred<void>();
+    let started = 0;
+    Object.assign(fake.facade as object, {
+      waitForPeer: async () => {
+        started += 1;
+        if (started === 2) bothStarted.resolve();
+        await release.promise;
+      },
+    });
     fake.saved = { id: "typst-doc" };
     const javascript = `
       const backing = new Uint8Array([7, 7, 7, 7, 7, 7]);
       const view = new Uint8Array(backing.buffer, 2, 3);
+      const firstRandom = Math.random();
       const returned = crypto.getRandomValues(view);
-      univerAPI.createDocument({
-        id: "typst-doc",
-        bytes: Array.from(backing),
-        random: Math.random(),
-        sameView: returned === view,
+      return univerAPI.waitForPeer().then(() => {
+        univerAPI.createDocument({
+          id: "typst-doc",
+          bytes: Array.from(backing),
+          random: [firstRandom, Math.random()],
+          sameView: returned === view,
+        });
       });
     `;
 
-    await materialize(javascript);
-    const first = fake.created[0];
-    await materialize(javascript);
-    expect(fake.created[1]).toEqual(first);
-    expect(first?.["sameView"]).toBe(true);
-    expect((first?.["bytes"] as number[]).slice(0, 2)).toEqual([7, 7]);
-    expect((first?.["bytes"] as number[]).slice(5)).toEqual([7]);
+    const first = materialize(javascript);
+    const second = materialize(javascript);
+    await bothStarted.promise;
+    expect(Object.getOwnPropertyDescriptor(Math, "random")).toEqual(mathBefore);
+    expect(Object.getOwnPropertyDescriptor(globalThis.crypto, "getRandomValues")).toEqual(
+      cryptoBefore,
+    );
+    release.resolve();
+    await Promise.all([first, second]);
+    expect(fake.created[1]).toEqual(fake.created[0]);
+    const created = fake.created[0];
+    expect(created?.["sameView"]).toBe(true);
+    expect((created?.["bytes"] as number[]).slice(0, 2)).toEqual([7, 7]);
+    expect((created?.["bytes"] as number[]).slice(5)).toEqual([7]);
     expect(Object.getOwnPropertyDescriptor(Math, "random")).toEqual(mathBefore);
     expect(Object.getOwnPropertyDescriptor(globalThis.crypto, "getRandomValues")).toEqual(
       cryptoBefore,
@@ -207,23 +240,26 @@ describe("Headless Workspace Typst materializer", () => {
     expect(fake.disposes.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
   });
 
-  it("restores absent own random descriptors after program failure", async () => {
-    const mathBefore = Object.getOwnPropertyDescriptor(Math, "random")!;
+  it("does not expose or modify Host globals when a program fails", async () => {
+    const key = "__workspaceTypstHostSentinel";
+    const mathBefore = Object.getOwnPropertyDescriptor(Math, "random");
     const cryptoBefore = Object.getOwnPropertyDescriptor(globalThis.crypto, "getRandomValues");
-    delete (Math as { random?: unknown }).random;
-    if (cryptoBefore !== undefined)
-      delete (globalThis.crypto as { getRandomValues?: unknown }).getRandomValues;
+    Object.defineProperty(globalThis, key, { configurable: true, value: "host-only" });
     try {
-      await expect(materialize('throw new Error("program failed");')).rejects.toThrow(
-        "program failed",
+      await expect(materialize(`
+        if (globalThis.${key} !== undefined) throw new Error("Host global leaked");
+        if (globalThis.__workspaceTypstNextUint32 !== undefined) {
+          throw new Error("random bridge leaked");
+        }
+        throw new Error("program failed");
+      `)).rejects.toThrow("program failed");
+      expect(Object.getOwnPropertyDescriptor(Math, "random")).toEqual(mathBefore);
+      expect(Object.getOwnPropertyDescriptor(globalThis.crypto, "getRandomValues")).toEqual(
+        cryptoBefore,
       );
-      expect(Object.hasOwn(Math, "random")).toBe(false);
-      expect(Object.hasOwn(globalThis.crypto, "getRandomValues")).toBe(false);
       expect(fake.disposes[0]).toHaveBeenCalledOnce();
     } finally {
-      Object.defineProperty(Math, "random", mathBefore);
-      if (cryptoBefore !== undefined)
-        Object.defineProperty(globalThis.crypto, "getRandomValues", cryptoBefore);
+      Reflect.deleteProperty(globalThis, key);
     }
   });
 
@@ -239,13 +275,155 @@ describe("Headless Workspace Typst materializer", () => {
     await expect(materialize(createDocumentProgram("typst-doc"))).rejects.toBe(factoryFailure);
     expect(fake.disposes).toHaveLength(0);
   });
+
+  it("passes an optional license without exposing it in success or dependency failure", async () => {
+    const license = "typst-license-sentinel";
+    const result = await materialize(createDocumentProgram("typst-doc"), { license });
+    expect(fake.factoryOptions).toEqual([{ license }]);
+    expect(JSON.stringify(result)).not.toContain(license);
+
+    fake.factoryError = new Error(license);
+    const failure = await materialize(createDocumentProgram("typst-doc"), { license }).catch(
+      (error: unknown) => error,
+    );
+    expect(failure).toMatchObject({
+      code: "workspace-typst-runtime-contract",
+      message: "Typst materialization failed inside the disposable Doc runtime.",
+    });
+    expect(JSON.stringify(failure)).not.toContain(license);
+
+    fake.factoryError = undefined;
+    fake.disposeError = new Error(license);
+    const disposeFailure = await materialize(createDocumentProgram("typst-doc"), { license }).catch(
+      (error: unknown) => error,
+    );
+    expect(disposeFailure).toMatchObject({
+      code: "workspace-typst-runtime-contract",
+      message: "Typst materialization failed inside the disposable Doc runtime.",
+    });
+    expect(JSON.stringify(disposeFailure)).not.toContain(license);
+  });
+
+  it("does no runtime work for a pre-aborted signal", async () => {
+    await expect(new HeadlessWorkspaceTypstMaterializer().materialize({
+      javascript: createDocumentProgram("typst-doc"),
+      signal: AbortSignal.abort(),
+      targetUnitId: "typst-doc",
+    })).rejects.toMatchObject({ name: "AbortError" });
+    expect(fake.factoryOptions).toEqual([]);
+    expect(fake.initInputs).toEqual([]);
+    expect(fake.disposes).toEqual([]);
+  });
+
+  it("awaits a running program, then observes cancellation before save and disposes", async () => {
+    const started = deferred<void>();
+    const settled = deferred<void>();
+    Object.assign(fake.facade as object, {
+      programBarrier: {
+        settled: settled.promise,
+        started: () => started.resolve(),
+      },
+    });
+    const controller = new AbortController();
+    let completed = false;
+    const operation = new HeadlessWorkspaceTypstMaterializer().materialize({
+      javascript: `univerAPI.programBarrier.started(); return univerAPI.programBarrier.settled.then(() => univerAPI.createDocument({ id: "typst-doc" }));`,
+      signal: controller.signal,
+      targetUnitId: "typst-doc",
+    }).finally(() => {
+      completed = true;
+    });
+    await started.promise;
+    controller.abort();
+    await Promise.resolve();
+    expect(completed).toBe(false);
+    settled.resolve();
+    await expect(operation).rejects.toMatchObject({ name: "AbortError" });
+    expect(fake.created).toEqual([{ id: "typst-doc" }]);
+    expect(fake.saveCalls).toBe(0);
+    expect(fake.disposes[0]).toHaveBeenCalledOnce();
+  });
+
+  it.each(["caller", "owner"] as const)(
+    "preserves the exact licensed %s cancellation reason after a running program settles",
+    async (source) => {
+      const started = deferred<void>();
+      const settled = deferred<void>();
+      Object.assign(fake.facade as object, {
+        licensedProgramBarrier: {
+          settled: settled.promise,
+          started: () => started.resolve(),
+        },
+      });
+      const controller = new AbortController();
+      const reason = new DOMException(`${source} stopped`, "AbortError");
+      const operation = new HeadlessWorkspaceTypstMaterializer({ license: "licensed" }).materialize({
+        javascript: `univerAPI.licensedProgramBarrier.started(); return univerAPI.licensedProgramBarrier.settled;`,
+        signal: controller.signal,
+        targetUnitId: "typst-doc",
+      });
+      await started.promise;
+      controller.abort(reason);
+      settled.resolve();
+      await expect(operation).rejects.toBe(reason);
+      expect(fake.saveCalls).toBe(0);
+      expect(fake.disposes[0]).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("preserves a concurrent abort when a licensed factory later rejects", async () => {
+    const started = deferred<void>();
+    const settled = deferred<void>();
+    const license = "factory-license-sentinel";
+    fake.factoryStarted = () => started.resolve();
+    fake.factorySettled = settled.promise;
+    fake.factoryError = new Error(license);
+    const controller = new AbortController();
+    const reason = new DOMException("caller stopped", "AbortError");
+
+    const operation = new HeadlessWorkspaceTypstMaterializer({ license }).materialize({
+      javascript: createDocumentProgram("typst-doc"),
+      signal: controller.signal,
+      targetUnitId: "typst-doc",
+    });
+    await started.promise;
+    controller.abort(reason);
+    settled.resolve();
+    await expect(operation).rejects.toBe(reason);
+    expect(fake.disposes).toHaveLength(0);
+  });
+
+  it.each([undefined, null] as const)(
+    "preserves an omitted-license program rejection reason %# over cleanup",
+    async (reason) => {
+      fake.disposeError = new Error("cleanup must not replace the program reason");
+      const outcome = await materialize(`throw ${reason === null ? "null" : "undefined"};`).then(
+        () => ({ settled: "resolved" as const }),
+        (rejected: unknown) => ({ reason: rejected, settled: "rejected" as const }),
+      );
+      expect(outcome.settled).toBe("rejected");
+      expect("reason" in outcome ? outcome.reason : "missing").toBe(reason);
+      expect(fake.disposes[0]).toHaveBeenCalledOnce();
+    },
+  );
 });
 
-function materialize(javascript: string) {
-  return new HeadlessWorkspaceTypstMaterializer().materialize({
+function materialize(
+  javascript: string,
+  options: ConstructorParameters<typeof HeadlessWorkspaceTypstMaterializer>[0] = {},
+) {
+  return new HeadlessWorkspaceTypstMaterializer(options).materialize({
     javascript,
     targetUnitId: "typst-doc",
   });
+}
+
+function deferred<Value>() {
+  let resolve!: (value: Value | PromiseLike<Value>) => void;
+  const promise = new Promise<Value>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
 }
 
 function createDocumentProgram(id: string): string {

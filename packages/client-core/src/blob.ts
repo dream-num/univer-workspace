@@ -84,9 +84,12 @@ export class WorkspaceBlobFeature {
 
   public async get(
     resourceId: string,
+    signal?: AbortSignal,
   ): Promise<{ readonly node: WorkspaceNodeSummary; readonly resource: WorkspaceBlobResource }> {
     const id = requireIdentity(resourceId, "Resource ID");
-    return await getBlob(await this.authenticatedHttp(), id);
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
+    return await getBlob(http, id, signal);
   }
 
   public async upload(input: {
@@ -96,8 +99,8 @@ export class WorkspaceBlobFeature {
     readonly name?: string;
     readonly parentNodeId?: string;
     readonly spaceId: string;
-  }): Promise<Record<string, unknown>> {
-    const source = await inspectSource(input.filePath);
+  }, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    const source = await inspectSource(input.filePath, signal);
     const declaredMediaType = normalizeOptionalMediaType(input.declaredMediaType);
     const intent: UploadIntent = {
       idempotencyKey: input.idempotencyKey ?? randomUUID(),
@@ -110,37 +113,61 @@ export class WorkspaceBlobFeature {
       byteSize: source.byteSize,
       ...(declaredMediaType === undefined ? {} : { declaredMediaType }),
     };
-    const http = await this.authenticatedHttp();
-    let envelope = await executeWithStableIdentity({
-      identity: intent,
-      maxAttempts: BLOB_UPLOAD_MAX_ATTEMPTS,
-      publicIdentity: publicUploadIntent(intent, source.path),
-      operation: async (sameIntent) => await reserve(http, sameIntent),
-    });
+    signal?.throwIfAborted();
+    const http = await this.authenticatedHttp(signal);
+    signal?.throwIfAborted();
+    let envelope: UploadEnvelope;
+    let reserveDispatched = false;
+    try {
+      envelope = await executeWithStableIdentity({
+        identity: intent,
+        maxAttempts: BLOB_UPLOAD_MAX_ATTEMPTS,
+        publicIdentity: publicUploadIntent(intent, source.path),
+        operation: async (sameIntent) => {
+          reserveDispatched = true;
+          return await reserve(http, sameIntent, signal);
+        },
+        ...(signal === undefined ? {} : { signal }),
+      });
+    } catch (error) {
+      if (reserveDispatched) throwCancelledUploadUnknown(error, signal, intent, source.path);
+      throw error;
+    }
+    if (signal?.aborted) throw uploadUnknown(intent, source.path, envelope);
     assertUploadIntent(envelope, intent);
     const reserved = envelope;
 
     for (let attempt = 0; attempt < BLOB_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+      if (signal?.aborted) throw uploadUnknown(intent, source.path, envelope);
       if (envelope.upload.state === "waitingForUpload") {
-        envelope = await this.uploadBytes(http, envelope, reserved, intent, source);
+        envelope = await this.uploadBytes(http, envelope, reserved, intent, source, signal);
         continue;
       }
       if (envelope.upload.state === "verifying") {
-        envelope = await getEnvelope(http, envelope.upload.uploadId);
+        try {
+          envelope = await getEnvelope(http, envelope.upload.uploadId, signal);
+        } catch (error) {
+          throwCancelledUploadUnknown(error, signal, intent, source.path, envelope);
+        }
         assertUploadIdentity(envelope, reserved);
         assertUploadIntent(envelope, intent);
         continue;
       }
       if (envelope.upload.state === "uploaded") {
-        const completed = await this.complete(http, envelope, intent, source.path);
+        const completed = await this.complete(http, envelope, intent, source.path, signal);
         if (completed !== undefined) return completed;
-        envelope = await getEnvelope(http, envelope.upload.uploadId);
+        if (signal?.aborted) throw uploadUnknown(intent, source.path, envelope);
+        try {
+          envelope = await getEnvelope(http, envelope.upload.uploadId, signal);
+        } catch (error) {
+          throwCancelledUploadUnknown(error, signal, intent, source.path, envelope);
+        }
         assertUploadIdentity(envelope, reserved);
         assertUploadIntent(envelope, intent);
         continue;
       }
       if (envelope.upload.state === "completed") {
-        return await this.completedResult(http, envelope, intent, source.path);
+        return await this.completedResult(http, envelope, intent, source.path, signal);
       }
       throw terminalUploadError(envelope, intent, source.path);
     }
@@ -160,8 +187,8 @@ export class WorkspaceBlobFeature {
     readonly force?: boolean;
     readonly outputPath: string;
     readonly resourceId: string;
-  }): Promise<Record<string, unknown>> {
-    const view = await this.get(input.resourceId);
+  }, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    const view = await this.get(input.resourceId, signal);
     if (view.resource.availability !== "ready" || !view.resource.capabilities.downloadContent) {
       throw workspaceError(
         "workspace-blob-download-unavailable",
@@ -177,11 +204,16 @@ export class WorkspaceBlobFeature {
       kind: "blob",
       outputPath: input.outputPath,
       ...(input.force === true ? { force: true } : {}),
+      ...(signal === undefined ? {} : { signal }),
     });
+    let response: Response | undefined;
     try {
-      const response = await (
-        await this.authenticatedHttp()
-      ).request(`/api/blob-resources/${encodeURIComponent(view.resource.resourceId)}/download`);
+      const http = await this.authenticatedHttp(signal);
+      signal?.throwIfAborted();
+      response = await http.request(
+        `/api/blob-resources/${encodeURIComponent(view.resource.resourceId)}/download`,
+        signal === undefined ? {} : { signal },
+      );
       const mediaType = response.headers.get("content-type");
       if (mediaType === null || mediaType.length === 0 || response.body === null) {
         throw workspaceError(
@@ -202,7 +234,7 @@ export class WorkspaceBlobFeature {
         );
       }
       const written = await target.writeAndCommit(
-        responseContent(response),
+        responseContent(response, signal),
         view.resource.byteSize,
       );
       const etag = response.headers.get("etag");
@@ -215,6 +247,7 @@ export class WorkspaceBlobFeature {
         ...(etag === null ? {} : { etag }),
       };
     } finally {
+      await response?.body?.cancel().catch(() => undefined);
       await target.discard();
     }
   }
@@ -225,28 +258,34 @@ export class WorkspaceBlobFeature {
     reserved: UploadEnvelope,
     intent: UploadIntent,
     source: SourceFile,
+    signal?: AbortSignal,
   ): Promise<UploadEnvelope> {
     const uploadId = envelope.upload.uploadId;
     for (let attempt = 0; attempt < BLOB_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+      if (signal?.aborted) throw uploadUnknown(intent, source.path, envelope);
       try {
         await http.request(`/api/blob-upload-sessions/${encodeURIComponent(uploadId)}/content`, {
           contentLength: source.byteSize,
           contentType: "application/octet-stream",
           method: "PUT",
-          streamBody: openSource(source),
+          streamBody: openSource(source, signal),
+          ...(signal === undefined ? {} : { signal }),
         });
-        const refreshed = await getEnvelope(http, uploadId);
+        if (signal?.aborted) throw uploadUnknown(intent, source.path, envelope);
+        const refreshed = await getEnvelope(http, uploadId, signal);
         assertUploadIdentity(refreshed, reserved);
         assertUploadIntent(refreshed, intent);
         return refreshed;
       } catch (error) {
+        if (signal?.aborted) throw uploadUnknown(intent, source.path, envelope);
         if (!isWorkspaceResultUnknown(error)) throw error;
         try {
-          const refreshed = await getEnvelope(http, uploadId);
+          const refreshed = await getEnvelope(http, uploadId, signal);
           assertUploadIdentity(refreshed, reserved);
           assertUploadIntent(refreshed, intent);
           if (refreshed.upload.state !== "waitingForUpload") return refreshed;
         } catch (statusError) {
+          if (signal?.aborted) throw uploadUnknown(intent, source.path, envelope);
           if (!isWorkspaceResultUnknown(statusError)) throw statusError;
         }
       }
@@ -263,26 +302,25 @@ export class WorkspaceBlobFeature {
     envelope: UploadEnvelope,
     intent: UploadIntent,
     sourcePath: string,
+    signal?: AbortSignal,
   ): Promise<Record<string, unknown> | undefined> {
+    if (signal?.aborted) throw uploadUnknown(intent, sourcePath, envelope);
     try {
       const published = parsePublishResult(
         await http.json(
           `/api/blob-upload-sessions/${encodeURIComponent(envelope.upload.uploadId)}/complete`,
-          { method: "POST" },
+          { method: "POST", ...(signal === undefined ? {} : { signal }) },
         ),
       );
       return buildUploadResult(envelope, intent, published.operation, published.node);
     } catch (error) {
+      if (signal?.aborted) throw uploadUnknown(intent, sourcePath, envelope);
       if (!isWorkspaceResultUnknown(error)) throw error;
+      let refreshed: UploadEnvelope;
       try {
-        const refreshed = await getEnvelope(http, envelope.upload.uploadId);
-        assertUploadIdentity(refreshed, envelope);
-        assertUploadIntent(refreshed, intent);
-        if (refreshed.upload.state === "completed") {
-          return await this.completedResult(http, refreshed, intent, sourcePath);
-        }
-        return undefined;
+        refreshed = await getEnvelope(http, envelope.upload.uploadId, signal);
       } catch (statusError) {
+        if (signal?.aborted) throw uploadUnknown(intent, sourcePath, envelope);
         if (!isWorkspaceResultUnknown(statusError)) throw statusError;
         throw new WorkspaceApplicationError(
           "workspace-result-unknown",
@@ -290,6 +328,13 @@ export class WorkspaceBlobFeature {
           { ...publicUploadIntent(intent, sourcePath), uploadId: envelope.upload.uploadId },
         );
       }
+      assertUploadIdentity(refreshed, envelope);
+      assertUploadIntent(refreshed, intent);
+      if (signal?.aborted) throw uploadUnknown(intent, sourcePath, refreshed);
+      if (refreshed.upload.state === "completed") {
+        return await this.completedResult(http, refreshed, intent, sourcePath, signal);
+      }
+      return undefined;
     }
   }
 
@@ -298,11 +343,13 @@ export class WorkspaceBlobFeature {
     envelope: UploadEnvelope,
     intent: UploadIntent,
     sourcePath: string,
+    signal?: AbortSignal,
   ): Promise<Record<string, unknown>> {
     let view: Awaited<ReturnType<typeof getBlob>>;
     try {
-      view = await getBlob(http, envelope.upload.resourceId);
+      view = await getBlob(http, envelope.upload.resourceId, signal);
     } catch (error) {
+      if (signal?.aborted) throw uploadUnknown(intent, sourcePath, envelope);
       if (!isWorkspaceResultUnknown(error)) throw error;
       const cause =
         error instanceof WorkspaceApplicationError &&
@@ -335,8 +382,13 @@ export class WorkspaceBlobFeature {
 async function getBlob(
   http: WorkspaceHttp,
   resourceId: string,
+  signal?: AbortSignal,
 ): Promise<{ readonly node: WorkspaceNodeSummary; readonly resource: WorkspaceBlobResource }> {
-  const body = await http.json(`/api/resources/${encodeURIComponent(resourceId)}`);
+  const body = await http.json(
+    `/api/resources/${encodeURIComponent(resourceId)}`,
+    signal === undefined ? {} : { signal },
+  );
+  signal?.throwIfAborted();
   const node = parseDetachedNode(body["node"]);
   const resource = parseNodeResource(body["resource"]);
   if (
@@ -366,7 +418,11 @@ async function getBlob(
   return { node, resource };
 }
 
-async function reserve(http: WorkspaceHttp, intent: UploadIntent): Promise<UploadEnvelope> {
+async function reserve(
+  http: WorkspaceHttp,
+  intent: UploadIntent,
+  signal?: AbortSignal,
+): Promise<UploadEnvelope> {
   return parseEnvelope(
     await http.json("/api/blob-upload-sessions", {
       body: {
@@ -381,13 +437,21 @@ async function reserve(http: WorkspaceHttp, intent: UploadIntent): Promise<Uploa
       },
       idempotencyKey: intent.idempotencyKey,
       method: "POST",
+      ...(signal === undefined ? {} : { signal }),
     }),
   );
 }
 
-async function getEnvelope(http: WorkspaceHttp, uploadId: string): Promise<UploadEnvelope> {
+async function getEnvelope(
+  http: WorkspaceHttp,
+  uploadId: string,
+  signal?: AbortSignal,
+): Promise<UploadEnvelope> {
   const envelope = parseEnvelope(
-    await http.json(`/api/blob-upload-sessions/${encodeURIComponent(uploadId)}`),
+    await http.json(
+      `/api/blob-upload-sessions/${encodeURIComponent(uploadId)}`,
+      signal === undefined ? {} : { signal },
+    ),
   );
   if (envelope.upload.uploadId !== uploadId) {
     throw workspaceError(
@@ -644,6 +708,34 @@ function publicUploadIntent(
     byteSize: intent.byteSize,
     declaredMediaType: intent.declaredMediaType ?? null,
   };
+}
+
+function throwCancelledUploadUnknown(
+  error: unknown,
+  signal: AbortSignal | undefined,
+  intent: UploadIntent,
+  sourcePath: string,
+  envelope?: UploadEnvelope,
+): never {
+  if (signal?.aborted) throw uploadUnknown(intent, sourcePath, envelope);
+  throw error;
+}
+
+function uploadUnknown(
+  intent: UploadIntent,
+  sourcePath: string,
+  envelope?: UploadEnvelope,
+): WorkspaceApplicationError {
+  return new WorkspaceApplicationError(
+    "workspace-result-unknown",
+    "Blob upload may have changed Workspace state, but cancellation prevented confirmation.",
+    {
+      ...publicUploadIntent(intent, sourcePath),
+      ...(envelope === undefined
+        ? {}
+        : { uploadId: envelope.upload.uploadId, state: envelope.upload.state }),
+    },
+  );
 }
 
 function terminalUploadError(

@@ -14,12 +14,20 @@ SDK 和 Univer CLI SDK 组装成两个对外应用：
 
 本仓库还包含供 Browser 或 Node-hosted Workspace Agent Client 使用的 private packages。它们是内部
 实现，不是额外的对外应用或跨仓库公共 SDK。
+`apps/dsh-univer-work` 是第三个 Workspace Agent Client 的 private Client Shell；当前交付 local
+DeepSeek Harness Host bundle、plugin-owned Workspace browser authentication、四个 auth tools、七个
+Space/Node tools、十二个 Worktree/Unit/review tools、四个 Host-local Blob/Asset file-transfer tools、两个
+worker-backed content inspection/approved Draft execution tools、五个 installed API/resource discovery tools、两个
+installed Office exchange tools、两个 Typst generation tools、两个 SVG generation tools、两个
+screenshot/layout-lint tools 与八个 bundled operational Skills（`core` 加七个 Unit/Topic Skills）；不提供 Web Client，
+也没有发布渠道。
 
 ## 仓库结构与职责
 
 ```text
 apps/workspace                 Workspace Browser、Server、HTTP contract 与部署应用
 apps/cli                       Univer Workspace CLI
+apps/dsh-univer-work           private DeepSeek Harness Host-only Client Shell
 packages/client-core           Node-hosted Workspace Agent Client 共享能力
 packages/reference-provider   Browser 专用的 private referenced-Unit policy
 scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
@@ -28,6 +36,13 @@ scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
 - `apps/workspace` 拥有 Workspace 产品模型，包括 Identity、Space、Node、Resource、ACL、Trash、
   Recent、Blob、Asset、Operation 和 Worktree 的产品级组织。
 - `apps/cli` 拥有 Workspace origin、登录 Session、Commander composition 和面向 Agent 的 CLI 交付体验。
+- `apps/dsh-univer-work` 拥有 DSH bundle manifest、Cordis lifecycle、DSH Credentials 中的单一 Workspace
+  grant、四个 auth tools、七个 Space/Node tools、十二个 Worktree/Unit/review tools、八个 bundled
+  operational Skills（`core` 加七个 Unit/Topic Skills）
+  、Session-cwd-confined Host-local file transfer、两个 worker-backed content tools、五个 keyless/API-resource
+  discovery tools、两个 Office exchange tools、两个 Typst generation tools、两个 SVG generation tools、两个
+  render-verification tools 与
+  DSH-specific Client Shell；后续产品能力只能通过独立 Change 接入并复用其 authenticated HTTP resolver。
 - `packages/client-core` 拥有 Node-hosted Workspace Agent Client 共享的 HTTP、错误、storage-neutral 认证协议、
   远程产品 workflow 与 worker-backed content runtime；Client Shell 注入 origin、凭据、license 与 packaged
   worker entry，package 不读取 CLI Session 或配置。
@@ -81,8 +96,10 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 
 ## Package 与发布边界
 
-- `apps/workspace`、`packages/client-core` 和 `packages/reference-provider` 是 private workspace package，
+- `apps/workspace`、`apps/dsh-univer-work`、`packages/client-core` 和 `packages/reference-provider` 是 private workspace package，
   不发布为公共 SDK。
+- `apps/dsh-univer-work` 的 source version 固定为 `0.0.0`，只用预构建 tarball 验证 local DSH profile
+  安装；当前没有 registry、release、promotion 或 public npm 合同。
 - `univer-workspace-cli` 通过仓库内 packaging workflow 生成内部安装包；不要把 source workspace
   manifest 的 `private` 状态误当成公共 npm SDK 合同。
 - `apps/cli/package.json` 的 source version 固定为 `0.0.0`；稳定 CLI 版本只来自 `vX.Y.Z` git tag，
@@ -110,6 +127,8 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 - `apps/workspace/docs/data-model.md` 是产品数据模型、状态和持久化语义的权威说明。
 - `apps/workspace/docs/adr` 只记录已经接受的架构决策，不把临时计划写成既成事实。
 - `apps/cli/README.md` 记录 CLI 的用户能力、安装方式与对外交付合同。
+- `apps/dsh-univer-work/README.md` 记录 DSH Client Shell 的当前能力、非职责、local Host-only 范围与
+  private/no-release 状态。
 - Package README 必须明确该 package 的职责、非职责和 consumer 边界。
 
 仅当变更影响 `DREAMNUM.md` 已记录的事实时才更新该文件。其他任务无需读取、重写或顺手整理它。

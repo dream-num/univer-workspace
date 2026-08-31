@@ -134,6 +134,7 @@ contract.
 ```text
 apps/workspace                 Workspace Browser, Server, HTTP contract, and deployment app
 apps/cli                       Agent-ready remote Workspace automation application
+apps/dsh-univer-work           Private Host-only DeepSeek Harness Client Shell
 packages/client-core           Private Node-hosted Workspace Agent Client capabilities
 packages/reference-provider   Private Browser-only referenced-Unit policy
 scripts                       SDK version and local CLI release tooling
@@ -150,8 +151,25 @@ Blob storage policy, remote workflows, and deployment. Client Core shares storag
 Workspace workflows, local Node-hosted Blob/Asset transfer, and the worker-backed content runtime between
 repository applications, including Node-hosted Office exchange, Typst compile/materialize/apply, render Unit
 assembly, screenshots, PNG output, Slide layout lint, the render-page source, and the SVG
-compile/measure/apply workflow; the reference-provider package remains Browser-only.
-Both are private implementation modules, not additional public applications or SDKs.
+compile/measure/apply workflow. The private `dsh-univer-work` application currently
+owns its prebuilt local Host bundle, Cordis lifecycle, one DSH Credentials-backed
+Workspace browser authentication connection, four auth tools, seven Space/Node
+tools, twelve Worktree/Unit/review tools, five installed API/resource discovery
+tools, and eight bundled operational Skills: `core` plus seven Unit/Topic Skills.
+Content inspection and approved Draft Facade
+execution run through two worker-backed tools. Discovery queries are keyless and
+cache-free; approved visual-resource export is confined to the calling Session cwd.
+Two approval-gated Office exchange tools import and export supported Office formats.
+Two approval-gated Typst tools compile fixed local artifacts and optionally create one
+Worktree-local Doc.
+Two SVG generation tools compile Session-cwd-confined SVG and relative assets into
+editable Slide programs and optionally apply the exact program once to a Draft Slide.
+Two render-verification tools publish approved Session-cwd PNG screenshots and return
+read-only Worktree Slide layout-lint reports. A Web UI is not a current capability.
+Four separate Blob/Asset metadata, upload, and Host-local download tools provide
+Session-cwd-confined file transfer.
+The reference-provider package remains Browser-only. These internal boundaries do not
+create additional public applications or SDKs.
 
 ## Architecture principles
 
@@ -217,6 +235,7 @@ the actual package artifact before publication.
 | [Univer Office SDK documentation](https://office.univer.ai/)        | Office SDK stack: Runtime, Collaboration, CLI, and Worktree            |
 | [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades           |
 | [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract             |
+| [DSH Client Shell](apps/dsh-univer-work/README.md)                  | Private local Host bundle scope and artifact verification               |
 | [Client Core package](packages/client-core/README.md)               | Private Node-hosted client capability boundary                          |
 | [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries               |
 | [HTTP contract](apps/workspace/contracts/http/README.md)            | Product API source and generation workflow                             |
@@ -231,10 +250,11 @@ affected boundary.
 
 ## Runtime development license
 
-The Browser and CLI contain synchronized copies of the approved runtime development
-credential for local use. It rotates every 90 days and is not the repository software
-license. Set `VITE_UNIVER_LICENSE` for Browser builds or `UNIVER_LICENSE` for the CLI
-to override it.
+The Browser, CLI, and DSH Host contain synchronized copies of the approved runtime
+development credential for local use. It rotates every 90 days and is not the repository
+software license. Set `VITE_UNIVER_LICENSE` for Browser builds or `UNIVER_LICENSE` for
+the Node-hosted CLI and DSH content runtime to override it. Each application owns its
+copy and passes the credential only to its composed runtime.
 
 ## License
 

@@ -38,17 +38,29 @@ The `dsh-univer-work` Client Shell MUST store its current Workspace authenticati
 
 ### Requirement: Two-stage browser approval tools
 
-The Client Shell SHALL expose `workspace_auth_start` and `workspace_auth_complete` as schema-validated DSH tools that preserve the Workspace CLI two-stage browser approval outcomes without accepting a password or polling automatically.
+The Client Shell SHALL expose zero-argument `workspace_auth_start` and `workspace_auth_complete` as schema-validated DSH tools that preserve the Workspace CLI two-stage browser approval outcomes without accepting a password or polling automatically. The Host SHALL supply one operator-configured Workspace public origin; neither tool nor the model may select or infer the authentication Authority from the DSH Host/browser origin.
+
+#### Scenario: Configured Workspace Authority is used
+
+- **WHEN** DSH Host listens on `http://127.0.0.1:3080`, the plugin origin is `http://127.0.0.1:3020`, and `workspace_auth_start({})` runs
+- **THEN** the plugin sends the browser-approval start request only to the normalized configured Workspace origin on port 3020
+- **AND** no request is sent to the DSH Host origin on port 3080
+
+#### Scenario: Workspace Authority is not configured
+
+- **WHEN** the Host-owned origin is missing or is not a valid Workspace HTTP(S) public origin
+- **THEN** `workspace_auth_start({})` fails with `workspace-origin-invalid` before HTTP
+- **AND** it does not default to or derive an origin from the DSH Host, browser page, tool arguments, stored handoff, or credential record
 
 #### Scenario: Model starts browser approval
 
-- **WHEN** `workspace_auth_start` receives a valid Workspace HTTP(S) origin and no authenticated grant exists
+- **WHEN** `workspace_auth_start({})` resolves a valid Host-configured Workspace HTTP(S) origin and no authenticated grant exists
 - **THEN** it performs one Client Core start exchange and returns `authorization_required` with the normalized origin, user code, verification URL, and expiry
 - **AND** its result instructs the caller to wait for the user to approve before calling complete
 
 #### Scenario: Existing live pending approval is started again
 
-- **WHEN** `workspace_auth_start` receives the same origin while an unexpired pending grant already exists
+- **WHEN** `workspace_auth_start({})` resolves the same configured origin while an unexpired pending grant already exists
 - **THEN** it returns that pending approval's safe fields without creating another Server authorization
 
 #### Scenario: Existing connection is protected

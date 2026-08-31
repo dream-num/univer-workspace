@@ -43,10 +43,12 @@ export async function loginWithPassword(
 export async function startCliLogin(
   http: WorkspaceHttp,
   now: () => number = Date.now,
+  signal?: AbortSignal,
 ): Promise<PendingCliLogin> {
   const response = await http.request("/api/auth/cli/authorizations", {
     authenticated: false,
     method: "POST",
+    ...(signal === undefined ? {} : { signal }),
   });
   const body = await readWorkspaceJsonResponse(response);
   const deviceCode = requiredString(body["deviceCode"], "deviceCode");
@@ -87,6 +89,7 @@ export async function completeCliLogin(
   http: WorkspaceHttp,
   pending: PendingCliLogin,
   now: () => number = Date.now,
+  signal?: AbortSignal,
 ): Promise<CliLoginCompletion> {
   if (now() >= pending.expiresAt) {
     throw workspaceError(
@@ -104,6 +107,7 @@ export async function completeCliLogin(
     authenticated: false,
     body: { deviceCode: pending.deviceCode },
     method: "POST",
+    ...(signal === undefined ? {} : { signal }),
   });
   if (response.status === 202) {
     const body = await readWorkspaceJsonResponse(response);
@@ -120,8 +124,9 @@ export async function completeCliLogin(
 
 export async function whoami(
   http: WorkspaceHttp,
+  signal?: AbortSignal,
 ): Promise<{ readonly origin: string; readonly subject: WorkspaceSubject }> {
-  const body = await http.json("/api/session");
+  const body = await http.json("/api/session", signal === undefined ? {} : { signal });
   if (body["authenticated"] !== true) {
     throw workspaceError(
       "workspace-authentication-required",
@@ -133,8 +138,12 @@ export async function whoami(
 
 export async function logout(
   http: WorkspaceHttp,
+  signal?: AbortSignal,
 ): Promise<{ readonly loggedOut: true; readonly origin: string }> {
-  await http.request("/api/auth/logout", { method: "POST" });
+  await http.request("/api/auth/logout", {
+    method: "POST",
+    ...(signal === undefined ? {} : { signal }),
+  });
   return { loggedOut: true, origin: http.origin };
 }
 

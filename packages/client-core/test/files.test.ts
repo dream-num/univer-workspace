@@ -151,6 +151,109 @@ describe("Workspace application file safety", () => {
       code: "workspace-invalid-response",
     });
   });
+
+  it("cancels source and response streams without reporting partial success", async () => {
+    const directory = await temporaryDirectory();
+    const sourcePath = join(directory, "large.bin");
+    await writeFile(sourcePath, Buffer.alloc(256 * 1024, 1));
+    const source = await inspectSource(sourcePath);
+    const sourceController = new AbortController();
+    const sourceIterator = openSource(source, sourceController.signal)[Symbol.asyncIterator]();
+    await expect(sourceIterator.next()).resolves.toMatchObject({ done: false });
+    sourceController.abort(new Error("source cancelled"));
+    await expect(sourceIterator.next()).rejects.toThrow("source cancelled");
+
+    let streamCancelled = false;
+    const responseController = new AbortController();
+    const response = new Response(new ReadableStream<Uint8Array>({
+      cancel: () => {
+        streamCancelled = true;
+      },
+      pull: () => new Promise(() => undefined),
+    }));
+    const responseIterator = responseContent(response, responseController.signal)[Symbol.asyncIterator]();
+    const pending = responseIterator.next();
+    responseController.abort(new Error("response cancelled"));
+    await expect(pending).rejects.toThrow("response cancelled");
+    expect(streamCancelled).toBe(true);
+  });
+
+  it("removes a private temporary output when cancellation wins before publication", async () => {
+    const directory = await temporaryDirectory();
+    const outputPath = join(directory, "cancelled.bin");
+    await writeFile(outputPath, "existing");
+    const controller = new AbortController();
+    async function* cancelledContent(): AsyncIterable<Uint8Array> {
+      yield Buffer.from("replacement");
+      controller.abort(new Error("download cancelled"));
+    }
+
+    await expect(writeDownload({
+      content: cancelledContent(),
+      force: true,
+      kind: "blob",
+      outputPath,
+      signal: controller.signal,
+    })).rejects.toThrow("download cancelled");
+    expect(await readFile(outputPath, "utf8")).toBe("existing");
+    expect((await readdir(directory)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("cancels an unfinished response stream after a size failure and removes its temp", async () => {
+    const directory = await temporaryDirectory();
+    const outputPath = join(directory, "oversize.bin");
+    let cancelled = false;
+    const response = new Response(new ReadableStream<Uint8Array>({
+      cancel: () => { cancelled = true; },
+      start(controller) { controller.enqueue(Buffer.from("oversize")); },
+    }));
+    await expect(writeDownload({
+      content: responseContent(response),
+      expectedSize: 4,
+      kind: "blob",
+      outputPath,
+    })).rejects.toMatchObject({ code: "workspace-blob-size-mismatch" });
+    expect(cancelled).toBe(true);
+    expect(await readdir(directory)).toEqual([]);
+  });
+
+  it("keeps a confirmed atomic publication when cancellation arrives afterward", async () => {
+    const directory = await temporaryDirectory();
+    const outputPath = join(directory, "published.bin");
+    const controller = new AbortController();
+    let contentFinished = false;
+    let postContentChecks = 0;
+    async function* confirmedContent(): AsyncIterable<Uint8Array> {
+      yield Buffer.from("confirmed");
+      contentFinished = true;
+    }
+    const signal = new Proxy(controller.signal, {
+      get(target, property) {
+        if (property === "throwIfAborted") {
+          return () => {
+            target.throwIfAborted();
+            if (contentFinished && ++postContentChecks === 3) {
+              queueMicrotask(() => controller.abort(new Error("late cancellation")));
+            }
+          };
+        }
+        const value = Reflect.get(target, property, target) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const result = await writeDownload({
+      content: confirmedContent(),
+      expectedSize: 9,
+      kind: "asset",
+      outputPath,
+      signal,
+    });
+
+    expect(result).toEqual({ byteSize: 9, outputPath });
+    expect(controller.signal.aborted).toBe(true);
+    expect(await readFile(outputPath, "utf8")).toBe("confirmed");
+    expect((await readdir(directory)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+  });
 });
 
 async function* chunks(...values: readonly string[]): AsyncIterable<Uint8Array> {

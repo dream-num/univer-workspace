@@ -13,7 +13,7 @@ DeepSeek Harness `0.1.1-rc.2` owns caller-cancellation finalization and approval
 **Goals:**
 
 - Map the existing Worktree, Unit and review outcomes to stable DSH tools without copying Workspace protocol or Commander composition.
-- Preserve mutation approval, idempotency, read-back, result-unknown, error secrecy and cancellation across source and installed profiles.
+- Preserve the Draft/terminal approval boundary, idempotency, read-back, result-unknown, error secrecy and cancellation across source and installed profiles.
 - Ship one static `core` Skill that teaches the capabilities actually available after Changes 2–4.
 - Keep existing Workspace CLI method calls, command behavior, Skill and self-contained artifact unchanged.
 
@@ -30,7 +30,8 @@ DSH Agent ── loads core Skill ───────────────�
     │                                               │
     └── twelve closed tools                         │
            ├── four read/review ────────────────────┤
-           └── eight mutations ── validate ── ask   │
+           ├── six routine mutations ── validate   │
+           └── merge / discard ── validate ── ask  │
                                                    ▼
                             existing Host owner + authenticated resolver
                                       │ fused caller/owner signal
@@ -68,7 +69,7 @@ The Host registers this fixed surface:
 
 Worktree create rejects Space-only fields for user scope and requires `space_id` for Space scope. Update requires at least one changed field. Unit create intentionally omits Core's `initialData`: Workspace CLI does not expose it on this command, and later content tools own authoring. IDs, names and idempotency keys must be non-empty; the Server remains authoritative for permissions, target existence, Worktree visibility and lifecycle state.
 
-The closed-tool helper projects `additionalProperties: false` for model assembly. Because rc.2 policy runs earlier than ordinary schema execution, each mutation also has one small pure operation validator that accepts `unknown` and either returns the canonical typed input or throws a fixed `workspace-argument-invalid` without copying keys or values. It checks the exact root keys, primitive types, enums and operation cross-fields. The mutation policy calls it before returning `ask`; the body calls the same function again before Core. Local schema fragments cover Worktree and Unit output once inside the module; no schema compiler, validator framework or feature factory is added. Each tool calls exactly one Core public operation.
+The closed-tool helper projects `additionalProperties: false` for model assembly. Each mutation has one small pure operation validator that accepts `unknown` and either returns the canonical typed input or throws a fixed `workspace-argument-invalid` without copying keys or values. It checks the exact root keys, primitive types, enums and operation cross-fields. Every body calls it before Core; because rc.2 policy runs earlier than ordinary schema execution, the merge/discard policy also calls the same validator before returning `ask`. Local schema fragments cover Worktree and Unit output once inside the module; no schema compiler, validator framework or feature factory is added. Each tool calls exactly one Core public operation.
 
 Alternatives rejected:
 
@@ -76,15 +77,15 @@ Alternatives rejected:
 - One composite “start task” tool would choose scope and mutation ordering for the Agent, obscure intermediate identities, and make partial failure harder to reconcile.
 - Mirroring CLI `open --viewer-url` would let model input change the review origin without adding a Workspace outcome.
 
-### 2. Validate before asking for all eight remote mutations
+### 2. Ask only for terminal merge and discard
 
-One extension to the existing `tools/pre-execute` listener matches Worktree create/update/ready/reopen/discard/merge and Unit add/create. For a matched name it first selects that operation's validator, validates `exec.arguments`, and only then returns DSH `ask`. Exact-key, type, enum or cross-field failure throws one fixed Harness failure with metadata `workspace-argument-invalid`; its result/failure and plugin-owned payloads include no rejected key/value, it produces no approval interaction/event, performs no credential lookup, and does not call the remaining policy chain. DSH still retains Native `tool/call.arguments`, or both Code Mode `tool/code-dispatch-start.arguments` and settled `tool/code-dispatch.arguments`; the plugin neither owns nor rewrites those records. List/get/Unit list/review delegate immediately.
+One extension to the existing `tools/pre-execute` listener matches only Worktree merge and discard. It selects the operation validator, validates `exec.arguments`, and only then returns DSH `ask`. Worktree create/update/ready/reopen and Unit add/create bypass this approval policy and validate in their bodies before credential resolution. Exact-key, type, enum or cross-field failure throws one fixed Harness failure with metadata `workspace-argument-invalid`; its result/failure and plugin-owned payloads include no rejected key/value, it produces no approval interaction/event and performs no credential lookup. DSH still retains Native `tool/call.arguments`, or both Code Mode `tool/code-dispatch-start.arguments` and settled `tool/code-dispatch.arguments`; the plugin neither owns nor rewrites those records. List/get/Unit list/review also delegate immediately.
 
-After approval, each mutation body defensively runs the same pure validator before Core even though the args were already frozen and checked. This prevents later direct composition or policy changes from silently weakening the boundary. The body contains no approval API call, and mutation definitions remain exclusive.
+Each mutation body runs its pure validator before Core. Merge/discard therefore recheck the input accepted by policy, while the six routine mutations establish their complete validation boundary in the body. The body contains no approval API call, and mutation definitions remain exclusive.
 
 Merge and discard keep distinct names and fixed high-impact approval text naming only the exact operation. Approval interactions/events and plugin-owned payloads contain no Worktree ID, name or other caller value, so they do not make another copy beyond the DSH-owned Native record or two Code Mode records. Approval denial, cancellation, absence or unavailable interaction fails before credential resolution. The static Skill also says merge/discard require an explicit user request, but policy remains the enforcement boundary.
 
-Asking for create, update, ready, reopen and Unit mutations is conservative but consistent with Change 3: the first Host-only release obtains one-time approval for every remote state change. Separate tool names leave deployments free to apply stricter policy without a generic action discriminator.
+The Worktree is the isolation boundary for routine task preparation and same-task rework. Keeping approval on merge/discard protects the two operations that finalize or destroy remote draft state without interrupting create/update/ready/reopen and Unit staging/creation. Separate tool names leave deployments free to apply stricter policy without a generic action discriminator.
 
 ### 3. Append optional signals to the existing Core methods
 
@@ -137,7 +138,7 @@ Server:
 
 Exact safe detail fields are limited to HTTP status/path and operation identities such as Worktree, Unit, Resource, Space, parent, idempotency key, requested/actual state and Unit count. Nested requested/actual values receive their own exact projection. Worktree-local `initialData`, original messages, causes, headers, records and unknown fields never cross. Any other code or thrown value becomes `workspace-operation-failed` with fixed operation text.
 
-The pre-approval validator uses this same fixed `workspace-argument-invalid` metadata and fixed operation message but never includes detail, because its source is untrusted tool input. This extends a verified local allowlist rather than adding a generic redactor, error registry or recursive serializer.
+Every mutation validator uses this same fixed `workspace-argument-invalid` metadata and fixed operation message but never includes detail, because its source is untrusted tool input. Merge/discard apply it in policy and body; the six routine mutations apply it in the body before credentials. This extends a verified local allowlist rather than adding a generic redactor, error registry or recursive serializer.
 
 ### 6. Reuse one owner for cancellation and quiescence
 
@@ -149,7 +150,7 @@ After a mutation request starts, a Core `workspace-result-unknown` remains that 
 - update and lifecycle: inspect Worktree get;
 - Unit add/create: inspect Unit list.
 
-No guidance tells the model to replay automatically. Owner-only disposal does not abort ToolRuntime's caller signal, so an already confirmed success may remain visible while disposal drains it. The owner unregisters all tools, approval policy and Skill, marks itself non-accepting, aborts I/O and awaits accepted bodies. No Job, timer, detached retry or result cache exists.
+No guidance tells the model to replay automatically. Owner-only disposal does not abort ToolRuntime's caller signal, so an already confirmed success may remain visible while disposal drains it. The owner unregisters all tools, the two-name terminal approval policy and Skill, marks itself non-accepting, aborts I/O and awaits accepted bodies. No Job, timer, detached retry or result cache exists.
 
 ### 7. Package and explicitly register one static core Skill
 
@@ -169,15 +170,15 @@ The build includes that Markdown in the tarball and makes its validated name, de
 
 ### 8. Verify source, real DSH composition and installed closure
 
-Core tests add abort-observing cases for each read/mutation family, stable-identity retry stopping and lifecycle read-back. Existing no-signal cases remain unchanged. Plugin tests use real Cordis `ToolRuntime`, Skill registry and approval pipeline with fake credentials/HTTP to cover all twelve schemas, canonical output, eight-name approval, error allowlists, result-unknown, caller `ABORTED`, owner disposal and Skill catalog/load/dispose. For every mutation family they send unknown keys, wrong types, invalid enums and cross-field conflicts through the real runtime and assert fixed `workspace-argument-invalid`, zero approval interactions/events and zero credential/HTTP work. Native tests require the sentinel in `tool/call.arguments`; Code Mode tests require it in both `tool/code-dispatch-start.arguments` and settled `tool/code-dispatch.arguments = normalized.logged`. Approval, result/failure and every plugin-owned payload must omit it. An approved valid call proves the body-side recheck accepts the same canonical input.
+Core tests add abort-observing cases for each read/mutation family, stable-identity retry stopping and lifecycle read-back. Existing no-signal cases remain unchanged. Plugin tests use real Cordis `ToolRuntime`, Skill registry and approval pipeline with fake credentials/HTTP to cover all twelve schemas, canonical output, the two-name terminal approval policy, routine mutation no-approval execution, error allowlists, result-unknown, caller `ABORTED`, owner disposal and Skill catalog/load/dispose. For every mutation family they send unknown keys, wrong types, invalid enums and cross-field conflicts through the real runtime and assert fixed `workspace-argument-invalid`, zero approval interactions/events and zero credential/HTTP work. Native tests require the sentinel in `tool/call.arguments`; Code Mode tests require it in both `tool/code-dispatch-start.arguments` and settled `tool/code-dispatch.arguments = normalized.logged`. Approval, result/failure and every plugin-owned payload must omit it. Valid routine calls prove direct body validation; approved merge/discard calls prove the body recheck accepts the same canonical input.
 
 Package verification confirms reachable Worktree/Unit/open Core is inlined; the core Skill is present and matches the registered body; no bare private package, `workspace:*`, CLI/Server source, worker, native/browser resource or later Skill enters the tarball. The isolated keyless smoke loads the packed plugin in a fresh local profile and observes the same tools, Skill and lifecycle without a real account.
 
 ## Risks / Trade-offs
 
-- **Twelve schemas make one module verbose** -> Reuse only local model fragments; separate stable names keep validation and approval precise.
-- **Approval adds interaction to routine task setup** -> Keep one-time approval for every first-release mutation; later deployment policy can change by exact name without redesigning tools.
-- **DSH records arguments before policy and again at Code Mode settlement** -> Accept one Native or two Code Mode DSH-owned argument records as transcript authority; validate before `ask`, create no approval interaction/event on failure, and do not copy input into result/failure, approval or plugin-owned payloads.
+- **Twelve schemas make one module verbose** -> Reuse only local model fragments; separate stable names keep validation and terminal approval precise.
+- **Routine mutations change remote Draft state without approval** -> Keep them inside authoritative Worktree lifecycle and strict Core validation; retain approval for merge/discard, the two operations that finalize or destroy the draft.
+- **DSH records arguments before policy and again at Code Mode settlement** -> Accept one Native or two Code Mode DSH-owned argument records as transcript authority; validate merge/discard before `ask`, validate every routine mutation before credentials, and do not copy input into result/failure, approval or plugin-owned payloads.
 - **Cancellation after a write cannot prove remote state** -> Stop new attempts, preserve Core result-unknown/read-back semantics and instruct inspection without blind replay.
 - **A packaged Skill drifts from registered content** -> Keep one Markdown source and assert the installed catalog body against the packed file.
 - **The partial core Skill becomes stale as later tools arrive** -> Update that one source in the Change that delivers each new executable workflow; do not mention a tool before it exists.
@@ -187,7 +188,7 @@ Package verification confirms reachable Worktree/Unit/open Core is inlined; the 
 
 1. Complete and verify Changes 1–2, then revise and verify Change 3's same pre-approval validation assumption against rc.2 before this Change begins; this Change does not modify Change 3.
 2. Add optional signal propagation and cancellation tests to Client Core without changing unsignalled CLI calls.
-3. Register the twelve tools, extend approval/error handling and add focused real ToolRuntime tests.
+3. Register the twelve tools, apply the routine/terminal approval boundary, extend error handling and add focused real ToolRuntime tests.
 4. Adapt, package and explicitly register the core Skill; verify the real catalog and disposal.
 5. Extend installed artifact checks, keyless smoke, CLI parity and repository gates.
 

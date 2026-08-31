@@ -1,6 +1,6 @@
 ## Purpose
 
-定义 `dsh-univer-work` 对 Trunk 或 Worktree Unit 的结构化内容检查、对 Draft Worktree Unit 的 Facade execution，以及 approval、worker lifecycle、错误、取消和安装态交付行为。
+定义 `dsh-univer-work` 对 Trunk 或 Worktree Unit 的结构化内容检查、对 Draft Worktree Unit 的 Facade execution，以及 Draft isolation、worker lifecycle、错误、取消和安装态交付行为。
 
 ## ADDED Requirements
 
@@ -56,18 +56,18 @@ The Client Shell SHALL expose one `workspace_content_inspect` DSH tool that sele
 - **WHEN** a selector is empty, ambiguous, missing, out of bounds, or incompatible with the selected Unit
 - **THEN** the tool preserves the applicable stable inspection code and returns no partial inspection result
 
-### Requirement: Approved Draft Facade execution
+### Requirement: Draft Facade execution
 
 The Client Shell SHALL expose one `workspace_content_execute` DSH tool that executes inline Facade code only against an authoritative Draft Worktree Unit and returns a confirmed no-mutation or committed result.
 
 #### Scenario: Execution captures no mutations
 
-- **WHEN** approved code completes against the selected Draft Worktree Unit without captured mutations
+- **WHEN** code completes against the selected Draft Worktree Unit without captured mutations
 - **THEN** the tool returns `{ committed: false, value }` with the lossless JSON value and does not submit a changeset
 
 #### Scenario: Execution commits captured mutations
 
-- **WHEN** approved code captures supported mutations and the same pending changeset is confirmed
+- **WHEN** code captures supported mutations and the same pending changeset is confirmed
 - **THEN** the tool returns `{ committed: true, revision, status: 'committed', value }` only for the confirmed Worktree Unit revision
 - **AND** it does not execute the Facade code a second time
 
@@ -84,12 +84,12 @@ The Client Shell SHALL expose one `workspace_content_execute` DSH tool that exec
 #### Scenario: Facade program exceeds the code budget
 
 - **WHEN** the UTF-8 encoding of `code` exceeds `262,144` bytes
-- **THEN** the shared pure policy/body validator fails with `workspace-content-limit-exceeded` before approval, credential resolution or worker execution
+- **THEN** the shared pure body validator fails with `workspace-content-limit-exceeded` before credential resolution or worker execution
 
 #### Scenario: Execute arguments exceed the call budget
 
 - **WHEN** a single `unit_id`/`worktree_id` or the complete execute argument exceeds `524,288` canonical UTF-8 JSON bytes
-- **THEN** the shared pure policy/body validator fails with `workspace-content-limit-exceeded` before approval without copying the raw rejected argument
+- **THEN** the shared pure body validator fails with `workspace-content-limit-exceeded` before credential resolution without copying the raw rejected argument
 - **AND** this gate does not claim to remove the DSH-owned record created before policy
 
 #### Scenario: Execute value exceeds the side-effect-safe budget
@@ -147,31 +147,31 @@ Both content tools MUST expose closed parameter schemas and an honest non-recurs
 - **THEN** the application accepts every recursively valid child even though DSH uses a non-recursive projection
 - **AND** it rejects a malformed or unknown key in any deep child and rejects depth `65`
 
-### Requirement: Content execution requires one secret-safe approval
+### Requirement: Draft content execution does not request approval
 
-The Client Shell MUST validate every pure execute argument constraint available without Workspace state before returning one DSH `ask`, MUST repeat that validator in the accepted body, and MUST not request this Change's approval for inspection.
+The Client Shell MUST validate every pure execute argument constraint in the tool body before credential or runtime work, MUST execute only against an authoritative Draft Worktree Unit, and MUST request no DSH approval for inspection or execute.
 
-#### Scenario: Invalid or oversized execution fails before approval
+#### Scenario: Invalid or oversized execution fails before runtime work
 
 - **WHEN** execute has an unknown key, non-string or blank `worktree_id`, `unit_id`, or `code`, total arguments over `524,288` canonical bytes, or code over `262,144` UTF-8 bytes
-- **THEN** the pre-execute validator fails with fixed `workspace-argument-invalid` or `workspace-content-limit-exceeded` metadata and no approval interaction/event, credential read, Workspace request, worker startup, or body execution occurs
+- **THEN** the body validator fails with fixed `workspace-argument-invalid` or `workspace-content-limit-exceeded` metadata and no approval interaction/event, credential read, Workspace request, or worker startup occurs
 
-#### Scenario: Valid execution is approved once
+#### Scenario: Valid Draft execution does not ask
 
-- **WHEN** pure execute validation succeeds and DSH returns `allowed-once`
-- **THEN** the accepted body repeats the same exact validator and resolves target-dependent editability and program rules only after approval
-- **AND** the approval text contains no code, Worktree/Unit ID, selector, query, credential, license, or caller-provided value
+- **WHEN** pure execute validation succeeds
+- **THEN** the body resolves authoritative target editability and program rules without creating an approval interaction or event
+- **AND** Facade code runs only after the target is confirmed as the selected Draft Worktree Unit
 
-#### Scenario: Approval fails closed
+#### Scenario: Non-Draft execution fails closed
 
-- **WHEN** approval is rejected, cancelled, unavailable, or has no channel
-- **THEN** no authenticated resolver, Workspace request, runtime worker, Facade code, image upload, mutation replacement, or commit starts
+- **WHEN** authoritative resolution finds Trunk, a non-Draft Worktree, or a Unit outside the selected Worktree
+- **THEN** no write-mode Facade code, image upload, mutation replacement, or commit starts
 
 #### Scenario: DSH-owned arguments are inspected
 
 - **WHEN** Native or Code Mode calls execute
 - **THEN** Native `tool/call.arguments`, or Code Mode `tool/code-dispatch-start.arguments` and settled `tool/code-dispatch.arguments = normalized.logged`, retain the original code and IDs according to DSH rc.2
-- **AND** approval and plugin-owned lifecycle payloads do not copy them, while result/failure/finalizer never copy code, credential/license, rejected raw arguments, selector id/name or arbitrary query values
+- **AND** plugin-owned lifecycle payloads do not copy them, while result/failure/finalizer never copy code, credential/license, rejected raw arguments, selector id/name or arbitrary query values
 - **AND** only a recognized outcome/error may project its frozen validated public Worktree/Unit target, numeric selector kind/index or canonical A1 identity
 
 #### Scenario: Argument transcript contains different sentinel classes
@@ -249,7 +249,7 @@ Every content tool MUST fuse caller and Host-owner cancellation, pass it through
 #### Scenario: Caller cancels before body dispatch
 
 - **WHEN** the original caller signal aborts before ToolRuntime invokes a body
-- **THEN** DSH returns `ABORTED_BEFORE_DISPATCH` and no plugin validator body, resolver, approval, worker, or Workspace request runs
+- **THEN** DSH returns `ABORTED_BEFORE_DISPATCH` and no plugin validator body, resolver, worker, or Workspace request runs
 
 #### Scenario: Inspection is cancelled during worker work
 
@@ -305,7 +305,7 @@ Every content tool MUST fuse caller and Host-owner cancellation, pass it through
 
 #### Scenario: Host disposes the capability
 
-- **WHEN** the owning fiber disposes with tools, approval, credential rotation, target HTTP, worker execution, image upload, commit, runtime close, or result finalization active
+- **WHEN** the owning fiber disposes with tools, credential rotation, target HTTP, worker execution, image upload, commit, runtime close, or result finalization active
 - **THEN** it rejects and unregisters new calls, aborts owner-controlled work, closes the current runtime generation, and waits for every accepted body and close operation
 - **AND** no tool, listener, worker, lease, request, retry, timer, Job, daemon, cached content result, or detached task survives disposal
 

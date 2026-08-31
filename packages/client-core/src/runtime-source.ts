@@ -33,15 +33,22 @@ export class WorkspaceContentSource {
   public async resolveRuntimeTarget(input: {
     readonly unitId: string;
     readonly worktreeId: string;
-  }): Promise<WorkspaceRuntimeTarget> {
-    return resolveWorktreeTarget(this.http.origin, input, await getWorktree(this.http, input.worktreeId));
+  }, signal?: AbortSignal): Promise<WorkspaceRuntimeTarget> {
+    const worktree = await getWorktree(this.http, input.worktreeId, signal);
+    signal?.throwIfAborted();
+    return resolveWorktreeTarget(
+      this.http.origin,
+      input,
+      worktree,
+    );
   }
 
   public async resolveEditableRuntimeTarget(input: {
     readonly unitId: string;
     readonly worktreeId: string;
-  }): Promise<WorkspaceRuntimeTarget> {
-    const worktree = await getWorktree(this.http, input.worktreeId);
+  }, signal?: AbortSignal): Promise<WorkspaceRuntimeTarget> {
+    const worktree = await getWorktree(this.http, input.worktreeId, signal);
+    signal?.throwIfAborted();
     if (worktree.state !== "draft") {
       throw workspaceError(
         "workspace-worktree-not-editable",
@@ -54,8 +61,9 @@ export class WorkspaceContentSource {
 
   public async resolveTrunkRuntimeTarget(input: {
     readonly unitId: string;
-  }): Promise<WorkspaceRuntimeTarget> {
+  }, signal?: AbortSignal): Promise<WorkspaceRuntimeTarget> {
     for (const unitType of UNIT_TYPES) {
+      signal?.throwIfAborted();
       const candidate: WorkspaceRuntimeTarget = {
         origin: this.http.origin,
         revision: 0,
@@ -64,9 +72,11 @@ export class WorkspaceContentSource {
         unitType,
       };
       try {
-        const loaded = await this.readUnit(candidate);
+        const loaded = await this.readUnit(candidate, signal);
+        signal?.throwIfAborted();
         return { ...candidate, revision: loaded.headRevision };
       } catch (error) {
+        signal?.throwIfAborted();
         if (isStoredUnitTypeMismatch(error)) continue;
         throw error;
       }
@@ -81,15 +91,16 @@ export class WorkspaceContentSource {
   public async resolveReferencedRuntimeTarget(input: {
     readonly hostTarget: WorkspaceRuntimeTarget;
     readonly unitId: string;
-  }): Promise<WorkspaceRuntimeTarget> {
+  }, signal?: AbortSignal): Promise<WorkspaceRuntimeTarget> {
     if (input.hostTarget.scope.kind === "trunk") {
-      return await this.resolveTrunkRuntimeTarget({ unitId: input.unitId });
+      return await this.resolveTrunkRuntimeTarget({ unitId: input.unitId }, signal);
     }
     const worktreeId = input.hostTarget.scope.worktreeId;
-    const worktree = await getWorktree(this.http, worktreeId);
+    const worktree = await getWorktree(this.http, worktreeId, signal);
+    signal?.throwIfAborted();
     return worktree.units.some((unit) => unit.unitId === input.unitId)
       ? resolveWorktreeTarget(this.http.origin, { unitId: input.unitId, worktreeId }, worktree)
-      : await this.resolveTrunkRuntimeTarget({ unitId: input.unitId });
+      : await this.resolveTrunkRuntimeTarget({ unitId: input.unitId }, signal);
   }
 
   public async resolveImageAsset(input: {

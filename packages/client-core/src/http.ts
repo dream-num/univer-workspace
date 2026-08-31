@@ -7,7 +7,7 @@ export interface WorkspaceHttpOptions {
   readonly role: "client" | "worker";
 }
 
-export type AuthenticatedWorkspaceHttp = () => Promise<WorkspaceHttp>;
+export type AuthenticatedWorkspaceHttp = (signal?: AbortSignal) => Promise<WorkspaceHttp>;
 
 export interface WorkspaceRequestOptions {
   readonly authenticated?: boolean;
