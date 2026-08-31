@@ -36,7 +36,6 @@ import {
   UniverCollaborationClientUIPlugin,
 } from "@univerjs-pro/collaboration-client-ui";
 import { UniverCollaborationEmbedPlugin } from "@univerjs-pro/collaboration-embed";
-import { UniverEditHistoryLoaderPlugin } from "@univerjs-pro/edit-history-loader";
 import type { LocaleType } from "@univerjs/core";
 import { ensureViewerStyles } from "../viewer-css.ts";
 import { isViewerUnitTypeSupported } from "../viewer-types.ts";
@@ -181,12 +180,6 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
           UniverCollaborationClientUIPlugin,
           opts.unitType === "base" ? { enableDocumentCollaborationUI: false } : {},
         );
-        if (opts.unitType === "sheet" && scope.kind === "trunk") {
-          univer.registerPlugin(UniverEditHistoryLoaderPlugin, {
-            historyListServerUrl: urls.snapshotServerUrl.replace(/\/snapshot$/u, "/history"),
-            univerContainerId: opts.container,
-          });
-        }
       },
       registerAfterEmbedCore: () => {
         univer.registerPlugin(UniverCollaborationEmbedPlugin);

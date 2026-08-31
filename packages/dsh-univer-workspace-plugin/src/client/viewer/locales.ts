@@ -37,10 +37,6 @@ import UniverDrawingUIEnUS from "@univerjs/drawing-ui/locale/en-US";
 import UniverDrawingUIZhCN from "@univerjs/drawing-ui/locale/zh-CN";
 import UniverEmbedUIEnUS from "@univerjs-pro/embed-ui/locale/en-US";
 import UniverEmbedUIZhCN from "@univerjs-pro/embed-ui/locale/zh-CN";
-import UniverEditHistoryLoaderEnUS from "@univerjs-pro/edit-history-loader/locale/en-US";
-import UniverEditHistoryLoaderZhCN from "@univerjs-pro/edit-history-loader/locale/zh-CN";
-import UniverEditHistoryViewerEnUS from "@univerjs-pro/edit-history-viewer/locale/en-US";
-import UniverEditHistoryViewerZhCN from "@univerjs-pro/edit-history-viewer/locale/zh-CN";
 import UniverBasesEnUS from "@univerjs-pro/bases/locale/en-US";
 import UniverBasesZhCN from "@univerjs-pro/bases/locale/zh-CN";
 import UniverBasesUIEnUS from "@univerjs-pro/bases-ui/locale/en-US";
@@ -201,7 +197,7 @@ const zhCN = [
   UniverSheetsFormulaZhCN, UniverSheetsFormulaUIZhCN, UniverUIZhCN,
   UniverDocsUIZhCN, UniverDataValidationZhCN, UniverDocsDrawingUIZhCN,
   UniverDocsHyperLinkUIZhCN, UniverDocsThreadCommentUIZhCN, UniverDrawingUIZhCN,
-  UniverEmbedUIZhCN, UniverEditHistoryLoaderZhCN, UniverEditHistoryViewerZhCN,
+  UniverEmbedUIZhCN,
   UniverBasesZhCN, UniverBasesUIZhCN, UniverBasesExchangeZhCN,
   UniverShapeEditorUIZhCN, UniverInkUIZhCN, UniverBoardsUIZhCN,
   UniverBoardsChartUIZhCN, UniverBoardsMindUIZhCN, UniverBoardsTableUIZhCN,
@@ -237,7 +233,7 @@ const enUS = [
   UniverSheetsFormulaEnUS, UniverSheetsFormulaUIEnUS, UniverUIEnUS,
   UniverDocsUIEnUS, UniverDataValidationEnUS, UniverDocsDrawingUIEnUS,
   UniverDocsHyperLinkUIEnUS, UniverDocsThreadCommentUIEnUS, UniverDrawingUIEnUS,
-  UniverEmbedUIEnUS, UniverEditHistoryLoaderEnUS, UniverEditHistoryViewerEnUS,
+  UniverEmbedUIEnUS,
   UniverBasesEnUS, UniverBasesUIEnUS, UniverBasesExchangeEnUS,
   UniverShapeEditorUIEnUS, UniverInkUIEnUS, UniverBoardsUIEnUS,
   UniverBoardsChartUIEnUS, UniverBoardsMindUIEnUS, UniverBoardsTableUIEnUS,

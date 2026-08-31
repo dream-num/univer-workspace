@@ -2,7 +2,6 @@
 
 import { UniverCollaborationClientPlugin } from "@univerjs-pro/collaboration-client";
 import { UniverCollaborationClientUIPlugin } from "@univerjs-pro/collaboration-client-ui";
-import { UniverEditHistoryLoaderPlugin } from "@univerjs-pro/edit-history-loader";
 import { UniverSheetsCollaborationPreset } from "@univerjs/preset-sheets-collaboration";
 import { type IPreset, type IPresetPlugin } from "@univerjs/presets";
 import { PROXY_PREFIX, type ViewerMergePreviewConfig, type ViewerUrls } from "./proxy.ts";
@@ -69,17 +68,6 @@ export function configuredCollaborationPreset(
           {
             ...(pluginConfig as object),
             enableDocumentCollaborationUI: false,
-          },
-        ] as IPresetPlugin];
-      }
-      if (PluginConstructor === UniverEditHistoryLoaderPlugin) {
-        if (unitType !== "sheet") return [];
-        return [[
-          PluginConstructor,
-          {
-            ...(pluginConfig as object),
-            univerContainerId: container,
-            historyListServerUrl: urls.snapshotServerUrl.replace(/\/snapshot$/u, "/history"),
           },
         ] as IPresetPlugin];
       }
