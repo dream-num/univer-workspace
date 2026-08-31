@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dsh-univer-work Host-only 插件壳</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      padding: 40px 24px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    .page { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--accent-text);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 { max-width: 1000px; overflow-wrap: anywhere; font-size: clamp(32px, 5vw, 52px); line-height: 1.08; }
+    .thesis { max-width: 820px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 820px; height: auto; }
+    .brief {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr 0.95fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .card { min-width: 0; padding: 20px; overflow-wrap: anywhere; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .card ul { padding-left: 20px; }
+    .card li + li { margin-top: 6px; }
+    code { font-family: var(--mono); font-size: 0.92em; color: var(--ink); }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View</p>
+      <h1>dsh-univer-work Host-only 插件壳</h1>
+      <p class="thesis">先把预构建 tarball 到 Cordis fiber 的安装与生命周期链路跑通，再在后续 Changes 中接入认证、tools、Skills 和 Workspace runtime。</p>
+    </header>
+
+    <section class="diagram" aria-label="dsh-univer-work 安装与生命周期链路，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1000 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="plugin-shell-title plugin-shell-desc">
+        <title id="plugin-shell-title">dsh-univer-work Host-only plugin shell 安装链路</title>
+        <desc id="plugin-shell-desc">预构建 tarball 安装到隔离 local profile，bundle patch 插入 Loader row，Loader 解析 packed Host entry，并由 Cordis fiber 管理 load 和 dispose。</desc>
+        <defs>
+          <marker id="plugin-shell-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+        </defs>
+        <rect width="1000" height="540" fill="#f5f5f5"/>
+
+        <path d="M 268 148 H 388" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#plugin-shell-arrow)"/>
+        <path d="M 608 148 H 728" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#plugin-shell-arrow)"/>
+        <path d="M 838 196 V 340" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#plugin-shell-arrow)"/>
+        <path d="M 728 388 H 608" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#plugin-shell-arrow)"/>
+        <path d="M 388 388 H 268" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#plugin-shell-arrow)"/>
+
+        <rect x="286" y="132" width="84" height="32" rx="4" fill="#f5f5f5"/>
+        <text x="328" y="153" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle">plugin add</text>
+        <rect x="626" y="132" width="84" height="32" rx="4" fill="#f5f5f5"/>
+        <text x="668" y="153" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle">读取 patch</text>
+        <rect x="798" y="248" width="80" height="32" rx="4" fill="#f5f5f5"/>
+        <text x="838" y="269" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle">insert</text>
+        <rect x="626" y="372" width="84" height="32" rx="4" fill="#f5f5f5"/>
+        <text x="668" y="393" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle">resolve</text>
+        <rect x="274" y="372" width="108" height="32" rx="4" fill="#f5f5f5"/>
+        <text x="328" y="393" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle">load / dispose</text>
+
+        <rect x="48" y="100" width="220" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="158" y="140" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">预构建 tarball</text>
+        <text x="158" y="168" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="13" text-anchor="middle">dsh-univer-work@0.0.0</text>
+
+        <rect x="388" y="100" width="220" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="498" y="140" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">隔离 local profile</text>
+        <text x="498" y="168" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">临时 DSH_HOME</text>
+
+        <rect x="728" y="100" width="220" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="838" y="140" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Bundle layer</text>
+        <text x="838" y="168" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="13" text-anchor="middle">cordis.patch.yml</text>
+
+        <rect x="728" y="340" width="220" height="96" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="838" y="380" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Loader row</text>
+        <text x="838" y="408" fill="#a8421a" font-family="ui-monospace, monospace" font-size="13" text-anchor="middle">dsh-univer-work</text>
+
+        <rect x="388" y="340" width="220" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="498" y="380" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Packed Host entry</text>
+        <text x="498" y="408" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">预构建 ESM 输出</text>
+
+        <rect x="48" y="340" width="220" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="158" y="380" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Cordis fiber</text>
+        <text x="158" y="408" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">完整 load / dispose</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <ul>
+          <li>一个 private、Host-only、local profile package。</li>
+          <li>只交付 manifest、patch、Host entry 和安装态 smoke。</li>
+          <li>认证、Client Core、tools、Skills、Jobs 与 Web Client 全部后移。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>使用现有 TypeScript/Vitest，不新增构建框架。</li>
+          <li>Host entry 保持 inert，不预留业务服务或配置。</li>
+          <li>真实 tarball add/dump/start 是验收路径，源码 overlay 不替代它。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <ul>
+          <li>精确对齐 DSH <code>0.1.1-rc.2</code>，升级时重跑安装 smoke。</li>
+          <li>临时 <code>DSH_HOME</code> 隔离 profile，并以 deadline 约束清理。</li>
+          <li>新增 application 与领域文档；Server、Browser、CLI 和 SDK baseline 不变。</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer>
+      此页面由 <a href="proposal.md">proposal.md</a> 与 <a href="design.md">design.md</a> 派生，仅供审阅；Markdown sources 是权威来源。
+    </footer>
+  </main>
+</body>
+</html>
