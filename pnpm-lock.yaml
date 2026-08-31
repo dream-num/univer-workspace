@@ -432,6 +432,9 @@ importers:
       '@univerjs-pro/bases-history-ui':
         specifier: 1.0.0-insiders.20260829-2e3c387
         version: 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/bases-thread-comment-ui':
+        specifier: 1.0.0-insiders.20260829-2e3c387
+        version: 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/bases-ui':
         specifier: 1.0.0-insiders.20260829-2e3c387
         version: 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -460,6 +463,9 @@ importers:
         specifier: 1.0.0-insiders.20260829-2e3c387
         version: 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/boards-table-ui':
+        specifier: 1.0.0-insiders.20260829-2e3c387
+        version: 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/boards-thread-comment-ui':
         specifier: 1.0.0-insiders.20260829-2e3c387
         version: 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/boards-ui':
@@ -630,6 +636,9 @@ importers:
       '@univerjs-pro/slides-table-ui':
         specifier: 1.0.0-insiders.20260829-2e3c387
         version: 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs-pro/slides-thread-comment-ui':
+        specifier: 1.0.0-insiders.20260829-2e3c387
+        version: 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/slides-ui':
         specifier: 1.0.0-insiders.20260829-2e3c387
         version: 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -735,6 +744,9 @@ importers:
       '@univerjs/thread-comment':
         specifier: 1.0.0-insiders.20260829-2e3c387
         version: 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/thread-comment-ui':
+        specifier: 1.0.0-insiders.20260829-2e3c387
+        version: 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/ui':
         specifier: 1.0.0-insiders.20260829-2e3c387
         version: 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -2094,6 +2106,12 @@ packages:
   '@univerjs-pro/bases-history@1.0.0-insiders.20260829-2e3c387':
     resolution: {integrity: sha512-/xXLPD3PWwpAblzwR/lKQBtRvWf+ZU2cbGn1xsaFNbYhCAUD+Kivq6NIukBKSzgOlyuI8XPJNNRgLhuXbChE7A==}
 
+  '@univerjs-pro/bases-thread-comment-ui@1.0.0-insiders.20260829-2e3c387':
+    resolution: {integrity: sha512-MxzMR9DJQlrnPYb1gmR0ut/NKDxrOPKbfoaRG648lhzX8tmXt25OAfCxODGfhSz2Us1dfufIZQ4Rr6Ip76KOBA==}
+    peerDependencies:
+      react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+      rxjs: '>=7.0.0'
+
   '@univerjs-pro/bases-thread-comment@1.0.0-insiders.20260829-2e3c387':
     resolution: {integrity: sha512-gSvV/hLwU2POtrr5UtxEHcqJzV3ExS2k919XohIi0vzcAwT6dFsx+XGe7t0wuseNHe85d4M2Yg3IMJf4Y6YH2g==}
 
@@ -2149,6 +2167,12 @@ packages:
 
   '@univerjs-pro/boards-table@1.0.0-insiders.20260829-2e3c387':
     resolution: {integrity: sha512-t3shwNDcENu71tPx4qLwQeMseYaWNq2cCvXGFMK+lbO3Bi53i7dH14ByJckjXT5r2RhF1EcwYUQGXxfPdhB2ig==}
+
+  '@univerjs-pro/boards-thread-comment-ui@1.0.0-insiders.20260829-2e3c387':
+    resolution: {integrity: sha512-I4fGKQvWloPiftm3iGKvSSQ13n2aQrVw1rxobZgkLPF4tMGtfJsEbJW8XYsfj9ju2bKIhNrsEQw8y19nW/2xmA==}
+    peerDependencies:
+      react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+      rxjs: '>=7.0.0'
 
   '@univerjs-pro/boards-thread-comment@1.0.0-insiders.20260829-2e3c387':
     resolution: {integrity: sha512-4h30hmj29UNT+UnsTwGAupP9WSJwV/mfrGXpDyKYsqYj1rxbCwyqxaAavJOMHydna73A1toXEk00o7sOUgidSQ==}
@@ -2634,6 +2658,12 @@ packages:
   '@univerjs-pro/slides-table@1.0.0-insiders.20260829-2e3c387':
     resolution: {integrity: sha512-MJCrHRBg9IyB1LnSoQuRD7E3S7F4SlvHUShcDTWVLqqGMHNDRgt5sJFeVa/VuciKNFNg8WED5evVID16YrOtQg==}
 
+  '@univerjs-pro/slides-thread-comment-ui@1.0.0-insiders.20260829-2e3c387':
+    resolution: {integrity: sha512-5KzYWTR/acc+0w5ZNi4jYOBIz0IefRSGVC0n+CnQedEt8TgTILuy/v8g2eNEJ4HyD7tcWfDEEzWaK1eAwr10Sg==}
+    peerDependencies:
+      react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+      rxjs: '>=7.0.0'
+
   '@univerjs-pro/slides-thread-comment@1.0.0-insiders.20260829-2e3c387':
     resolution: {integrity: sha512-QPKWTolAzSJcKPBx6SduzPD/z+lLEEWVF3geBBKi70SeJEm2YJ5WlrdoVKkDuwTgqkDof9/WzKtHk2zBWKI/bw==}
 
@@ -2739,6 +2769,12 @@ packages:
 
   '@univerjs/icons@1.34.0':
     resolution: {integrity: sha512-W7PQQHGMg9+7Z5TRlU/BJUo2DiR4K3kVbCby+fH/HgtefBsbL1jAtwuVJfCww6DEy/qyXTG+uPk1kIQNqrzRng==, tarball: https://registry.npmjs.org/@univerjs/icons/-/icons-1.34.0.tgz}
+    peerDependencies:
+      react: '*'
+      react-dom: '*'
+
+  '@univerjs/icons@1.35.0':
+    resolution: {integrity: sha512-02/+5tGMzdYX3sLkR2QFnN5Qj5In35xzOOnnHHmphlg1zrEgMK3sNRtXfbLFM7RqrwoCrJLcH8N3RDPPWef1Ig==, tarball: https://registry.npmjs.org/@univerjs/icons/-/icons-1.35.0.tgz}
     peerDependencies:
       react: '*'
       react-dom: '*'
@@ -5791,6 +5827,26 @@ snapshots:
       - react
       - rxjs
 
+  '@univerjs-pro/bases-thread-comment-ui@1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/bases': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/bases-thread-comment': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/bases-ui': 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/license': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/core': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/design': 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs/icons': 1.35.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs/protocol': 1.0.0-insiders.20260829-2e3c387
+      '@univerjs/thread-comment': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/thread-comment-ui': 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/ui': 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      react: 19.2.8
+      rxjs: 7.8.2
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - react-dom
+
   '@univerjs-pro/bases-thread-comment@1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/bases': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
@@ -5996,6 +6052,26 @@ snapshots:
     transitivePeerDependencies:
       - react
       - rxjs
+
+  '@univerjs-pro/boards-thread-comment-ui@1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/boards': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/boards-thread-comment': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/boards-ui': 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/license': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/core': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/engine-render': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/icons': 1.35.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs/protocol': 1.0.0-insiders.20260829-2e3c387
+      '@univerjs/thread-comment': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/thread-comment-ui': 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/ui': 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      react: 19.2.8
+      rxjs: 7.8.2
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - react-dom
 
   '@univerjs-pro/boards-thread-comment@1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
@@ -7445,6 +7521,26 @@ snapshots:
     transitivePeerDependencies:
       - react
 
+  '@univerjs-pro/slides-thread-comment-ui@1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/license': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/slides': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/slides-thread-comment': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/slides-ui': 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/core': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/engine-render': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/icons': 1.35.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs/protocol': 1.0.0-insiders.20260829-2e3c387
+      '@univerjs/thread-comment': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/thread-comment-ui': 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/ui': 1.0.0-insiders.20260829-2e3c387(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      react: 19.2.8
+      rxjs: 7.8.2
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - react-dom
+
   '@univerjs-pro/slides-thread-comment@1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/license': 1.0.0-insiders.20260829-2e3c387(react@19.2.8)(rxjs@7.8.2)
@@ -7726,6 +7822,11 @@ snapshots:
       - react-dom
 
   '@univerjs/icons@1.34.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+
+  '@univerjs/icons@1.35.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)

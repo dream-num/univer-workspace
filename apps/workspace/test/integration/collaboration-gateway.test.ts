@@ -10,6 +10,7 @@ import {
 import {
   CmdRspCode,
   CombCmd,
+  CommentSolvedStatus,
   ErrorCode,
   UnitAction,
   UniverType,
@@ -56,6 +57,191 @@ afterEach(async () => {
 });
 
 describe("collaboration gateway", () => {
+  it("serves complete Thread Comment workflows for all five Trunk Unit types", async () => {
+    const { application, origin } = await startApplication();
+    const owner = await application.identity.registerWithPassword({
+      username: "comment-owner",
+      displayName: "Comment Owner",
+      password: "correct horse battery staple",
+    });
+    const collaborator = await application.identity.registerWithPassword({
+      username: "comment-collaborator",
+      displayName: "Comment Collaborator",
+      password: "correct horse battery staple",
+    });
+    const ownerCookie =
+      `${application.identity.cookieName}=${owner.cookieValue}`;
+    const collaboratorCookie =
+      `${application.identity.cookieName}=${collaborator.cookieValue}`;
+    const space = application.spaces.list(owner.view.user.id).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+
+    for (const unitType of [
+      "sheet",
+      "doc",
+      "slide",
+      "base",
+      "board",
+    ] as const) {
+      const created = await application.resources.create(
+        owner.view.user.id,
+        `comment-create-${unitType}-0001`,
+        {
+          kind: "univer",
+          spaceId: space.id,
+          parentNodeId: null,
+          name: `Comment ${unitType}`,
+          unitType,
+        }
+      );
+      if (created.status === 202) {
+        throw new Error("Resource creation is pending");
+      }
+      const resourceId = created.body.node.resource?.id;
+      if (!resourceId) throw new Error("Created Resource is missing");
+      const opened = application.resources.open(
+        owner.view.user.id,
+        resourceId
+      );
+      if (opened.resource.kind !== "univer") {
+        throw new Error("Created Resource is not a Univer Resource");
+      }
+      application.permissions.updateNodeLinkSharing(
+        owner.view.user.id,
+        created.body.node.id,
+        { enabled: true, role: "editor" }
+      );
+
+      const ownerConnection = await joinUnit(
+        origin,
+        ownerCookie,
+        opened.resource.unitId
+      );
+      const collaboratorConnection = await joinUnit(
+        origin,
+        collaboratorCookie,
+        opened.resource.unitId
+      );
+      const rootResponse = await commentWrite(origin, ownerCookie, "add", {
+        memberId: ownerConnection.memberId,
+        unitId: opened.resource.unitId,
+        content: `${unitType} root`,
+        mention: [],
+      });
+      expect(rootResponse.status).toBe(200);
+      const root = (await rootResponse.json()) as {
+        readonly comment: {
+          readonly threadId: string;
+          readonly replies: readonly [{ readonly replyId: string }];
+        };
+      };
+
+      const replyResponse = await commentWrite(
+        origin,
+        collaboratorCookie,
+        "reply",
+        {
+          memberId: collaboratorConnection.memberId,
+          unitId: opened.resource.unitId,
+          threadId: root.comment.threadId,
+          content: `${unitType} reply`,
+          mention: [],
+        }
+      );
+      expect(replyResponse.status).toBe(200);
+      const reply = (await replyResponse.json()) as {
+        readonly reply: { readonly replyId: string };
+      };
+
+      expect(
+        (
+          await commentWrite(origin, collaboratorCookie, "edit", {
+            memberId: collaboratorConnection.memberId,
+            unitId: opened.resource.unitId,
+            threadId: root.comment.threadId,
+            replyId: reply.reply.replyId,
+            content: `${unitType} reply edited`,
+            mention: [],
+          })
+        ).status
+      ).toBe(200);
+      for (const solved of [
+        CommentSolvedStatus.Solved,
+        CommentSolvedStatus.OpenOrReOpen,
+      ]) {
+        expect(
+          (
+            await commentWrite(origin, collaboratorCookie, "solved", {
+              memberId: collaboratorConnection.memberId,
+              unitId: opened.resource.unitId,
+              threadId: root.comment.threadId,
+              solved,
+            })
+          ).status
+        ).toBe(200);
+      }
+
+      const collaboratorDeleteRoot = await commentWrite(
+        origin,
+        collaboratorCookie,
+        "delete",
+        {
+          memberId: collaboratorConnection.memberId,
+          unitId: opened.resource.unitId,
+          threadId: root.comment.threadId,
+          replyId: root.comment.replies[0].replyId,
+        }
+      );
+      expect(collaboratorDeleteRoot.status).toBe(403);
+
+      const listed = await fetch(
+        `${origin}/universer-api/comment/unit/${opened.resource.unitId}/list?threadId=${encodeURIComponent(root.comment.threadId)}`,
+        { headers: { cookie: ownerCookie } }
+      );
+      expect(listed.status).toBe(200);
+      await expect(listed.json()).resolves.toMatchObject({
+        comments: {
+          [root.comment.threadId]: {
+            solved: CommentSolvedStatus.OpenOrReOpen,
+            replies: [
+              { content: `${unitType} root`, userId: owner.view.user.id },
+              {
+                replyId: reply.reply.replyId,
+                content: `${unitType} reply edited`,
+                userId: collaborator.view.user.id,
+              },
+            ],
+          },
+        },
+        users: {
+          [owner.view.user.id]: { name: "Comment Owner" },
+          [collaborator.view.user.id]: { name: "Comment Collaborator" },
+        },
+      });
+
+      expect(
+        (
+          await commentWrite(origin, collaboratorCookie, "delete", {
+            memberId: collaboratorConnection.memberId,
+            unitId: opened.resource.unitId,
+            threadId: root.comment.threadId,
+            replyId: reply.reply.replyId,
+          })
+        ).status
+      ).toBe(200);
+      expect(
+        (
+          await commentWrite(origin, ownerCookie, "delete", {
+            memberId: ownerConnection.memberId,
+            unitId: opened.resource.unitId,
+            threadId: root.comment.threadId,
+            replyId: root.comment.replies[0].replyId,
+          })
+        ).status
+      ).toBe(200);
+    }
+  });
+
   it("serves persistent standard History for all five Trunk Unit types", async () => {
     const started = await startApplication();
     let application = started.application;
@@ -800,6 +986,25 @@ describe("collaboration gateway", () => {
     });
   });
 });
+
+function commentWrite(
+  origin: string,
+  cookie: string,
+  action: "add" | "reply" | "solved" | "edit" | "delete",
+  body: Readonly<Record<string, unknown>>
+) {
+  return fetch(
+    `${origin}/universer-api/comment/unit/${String(body.unitId)}/${action}`,
+    {
+      method: "POST",
+      headers: {
+        cookie,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+}
 
 async function joinUnit(
   origin: string,

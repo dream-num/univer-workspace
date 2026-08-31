@@ -21,6 +21,9 @@ import { UniverBoardsTablePlugin } from "@univerjs-pro/boards-table";
 import { UniverBoardsTableUIPlugin } from "@univerjs-pro/boards-table-ui";
 import UniverBoardsTableUIEnUS from "@univerjs-pro/boards-table-ui/locale/en-US";
 import UniverBoardsTableUIZhCN from "@univerjs-pro/boards-table-ui/locale/zh-CN";
+import { UniverBoardsThreadCommentUIPlugin } from "@univerjs-pro/boards-thread-comment-ui";
+import BoardsThreadCommentUIEnUS from "@univerjs-pro/boards-thread-comment-ui/locale/en-US";
+import BoardsThreadCommentUIZhCN from "@univerjs-pro/boards-thread-comment-ui/locale/zh-CN";
 import { UniverBoardsUIPlugin } from "@univerjs-pro/boards-ui";
 import UniverBoardsUIEnUS from "@univerjs-pro/boards-ui/locale/en-US";
 import UniverBoardsUIZhCN from "@univerjs-pro/boards-ui/locale/zh-CN";
@@ -49,6 +52,8 @@ import { mergeLocales } from "@univerjs/presets";
 import { UniverUIPlugin } from "@univerjs/ui";
 import UniverUIEnUS from "@univerjs/ui/locale/en-US";
 import UniverUIZhCN from "@univerjs/ui/locale/zh-CN";
+import ThreadCommentUIEnUS from "@univerjs/thread-comment-ui/locale/en-US";
+import ThreadCommentUIZhCN from "@univerjs/thread-comment-ui/locale/zh-CN";
 import { redTheme } from "@univerjs/themes";
 
 import "@univerjs-pro/boards/facade";
@@ -74,11 +79,14 @@ import "@univerjs-pro/boards-history-ui/lib/index.css";
 import "@univerjs-pro/boards-mind-ui/lib/index.css";
 import "@univerjs-pro/boards-print/lib/index.css";
 import "@univerjs-pro/boards-table-ui/lib/index.css";
+import "@univerjs-pro/boards-thread-comment-ui/lib/index.css";
+import "@univerjs/thread-comment-ui/lib/index.css";
 
 import {
   createCollaborationEditor,
   type CollaborationEditorProps,
 } from "./collaboration-editor";
+import { getThreadCommentCollaborationPlugins } from "./thread-comment-features";
 import { MAX_UNIVER_IMAGE_BYTES } from "./univer-assets";
 
 export type BoardEditorProps = CollaborationEditorProps;
@@ -116,7 +124,9 @@ export default createCollaborationEditor({
       UniverBoardsChartUIZhCN,
       UniverBoardsMindUIZhCN,
       UniverBoardsPrintZhCN,
-      UniverBoardsTableUIZhCN
+      UniverBoardsTableUIZhCN,
+      ThreadCommentUIZhCN,
+      BoardsThreadCommentUIZhCN
     ),
     "en-US": mergeLocales(
       ChartUIEnUS,
@@ -132,9 +142,16 @@ export default createCollaborationEditor({
       UniverBoardsChartUIEnUS,
       UniverBoardsMindUIEnUS,
       UniverBoardsPrintEnUS,
-      UniverBoardsTableUIEnUS
+      UniverBoardsTableUIEnUS,
+      ThreadCommentUIEnUS,
+      BoardsThreadCommentUIEnUS
     ),
   },
+  collaborationFeaturePlugins: (collaborationScope) =>
+    getThreadCommentCollaborationPlugins(
+      collaborationScope.kind === "trunk",
+      UniverBoardsThreadCommentUIPlugin
+    ),
   printFeaturePlugins: () => [UniverBoardsPrintPlugin],
   createPresets: (container) => [
     {

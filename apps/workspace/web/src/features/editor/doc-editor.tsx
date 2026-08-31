@@ -71,7 +71,7 @@ import {
   getDocAuthoringUIPlugins,
   getDocReplayCompatibilityPlugins,
 } from "./doc-features";
-import { getDocThreadCommentCollaborationPlugins } from "./thread-comment-features";
+import { getDocThreadCommentCollaborationPlugins } from "./workarounds/doc-thread-comment-delete";
 
 export type DocEditorProps = CollaborationEditorProps;
 
