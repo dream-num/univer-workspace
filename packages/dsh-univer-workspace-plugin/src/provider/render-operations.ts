@@ -133,7 +133,7 @@ async function openRenderRuntime(config: RenderRuntimeConfig): Promise<UniverRen
   const renderPageRoot = env.UWH_RENDER_PAGE_ROOT?.trim() || env.UNIVER_RENDER_PAGE_ROOT?.trim();
   if (renderPageRoot === undefined || renderPageRoot === "") {
     throw new Error(
-      "Univer rendering is unavailable: configure UWH_RENDER_PAGE_ROOT (a built beta.2 render page) before using univer_lint or univer_screenshot.",
+      "Univer rendering is unavailable: configure UWH_RENDER_PAGE_ROOT (a version-matched built render page) before using univer_lint or univer_screenshot.",
     );
   }
   const license = env.UWH_UNIVER_LICENSE?.trim() || env.UNIVER_LICENSE?.trim();

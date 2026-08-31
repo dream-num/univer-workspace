@@ -72,10 +72,8 @@ session files.
 
 ## Not yet delivered (tracked as follow-up stages)
 
-- Screenshot/layout-lint/render-machine tooling (no deployable remote render
-  contract yet), and the remaining
-  Office-only gateway/file capabilities that do not have a Workspace product
-  equivalent yet.
+- The remaining Office-only gateway/file capabilities that do not have a
+  Workspace product equivalent yet.
 
 ## dsh-univer-office tool audit
 

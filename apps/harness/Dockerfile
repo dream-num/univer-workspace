@@ -49,7 +49,13 @@ RUN mkdir -p /opt/dsh/home/internal-packages \
 # would drag the dsh client's react 18 tree into the Univer react 19 graph).
 RUN mkdir -p /opt/dsh/bootstrap && cd /opt/dsh/bootstrap \
   && printf 'registry=%s\n' "$NPM_REGISTRY" > .npmrc \
-  && corepack pnpm add --prefer-offline @deepseek-ai/dsh@0.1.1-rc.2
+  && corepack pnpm add --prefer-offline \
+      --allow-build=@deepseek-ai/dsh-subprocess-local \
+      --allow-build=@google/genai \
+      --allow-build=koffi \
+      --allow-build=node-pty \
+      --allow-build=protobufjs \
+      @deepseek-ai/dsh@0.1.1-rc.2
 
 # Build the profile through the official `dsh plugin` command so the profile's
 # package.json and dsh.profile.bundles list are reconciled by the tool — never
@@ -66,7 +72,28 @@ FROM node:24-bookworm-slim AS runtime
 
 ENV NODE_ENV=production \
     DSH_HOME=/opt/dsh/home \
-    HOME=/home/dsh
+    HOME=/home/dsh \
+    UWH_RENDER_PAGE_ROOT=/opt/univer/render-runtime \
+    UWH_RENDER_BROWSER=/usr/local/bin/google-chrome \
+    AGENT_BROWSER_EXECUTABLE_PATH=/usr/local/bin/google-chrome
+
+# The render SDK needs a real browser. Install it once while building the
+# image; runtime operations only use the resulting executable and page.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends sudo \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN npm install --global --allow-scripts=agent-browser agent-browser@0.31.2 \
+  && mkdir -p /opt/agent-browser \
+  && HOME=/opt/agent-browser agent-browser install --with-deps \
+  && chrome_path="$(find /opt/agent-browser/.agent-browser/browsers -type f -name chrome -print -quit)" \
+  && test -n "${chrome_path}" \
+  && test -x "${chrome_path}" \
+  && ln -s "${chrome_path}" "${AGENT_BROWSER_EXECUTABLE_PATH}" \
+  && "${AGENT_BROWSER_EXECUTABLE_PATH}" --version \
+  && HOME=/opt/agent-browser agent-browser doctor --offline --quick \
+  && npm uninstall --global agent-browser \
+  && npm cache clean --force
 
 RUN if ! getent passwd 1000 >/dev/null; then \
       useradd -r -u 1000 -d /home/dsh -m -s /usr/sbin/nologin dsh; \
@@ -79,6 +106,13 @@ RUN if ! getent passwd 1000 >/dev/null; then \
 # so no registry credential reaches runtime.
 COPY --from=build --chown=1000:1000 /opt/dsh/bootstrap/node_modules /opt/dsh/install/node_modules
 COPY --from=build --chown=1000:1000 /opt/dsh/home /opt/dsh/home
+COPY --from=build --chown=1000:1000 /src/packages/client-core/dist/render-runtime /opt/univer/render-runtime
+
+# Fail the image build instead of shipping a harness whose screenshot tools
+# can only fail at first use.
+RUN test -s "${UWH_RENDER_PAGE_ROOT}/index.html" \
+  && test -d "${UWH_RENDER_PAGE_ROOT}/assets" \
+  && test -x "${UWH_RENDER_BROWSER}"
 
 # Launcher for the packaged dsh CLI.
 RUN printf '#!/bin/sh\nexec node /opt/dsh/install/node_modules/@deepseek-ai/dsh/lib/bin.js "$@"\n' \

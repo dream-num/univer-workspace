@@ -115,15 +115,18 @@ export class RuntimeManager {
   public async read(target: WorkspaceRuntimeTarget, code: string): Promise<CollaborationRuntimeValue> {
     return await this.withDiagnosticContext(target, "read", async () => {
       const lease = await this.acquire(target);
+      let reusable = false;
       try {
         await this.synchronize(lease, target);
         const result = await lease.execute({
           code: prepareContentExecutionProgram({ code, unitId: target.unitId, unitType: target.unitType }),
           mode: "read",
         });
+        reusable = true;
         return result.value;
       } finally {
-        await lease.release();
+        if (reusable) await lease.release();
+        else await lease.invalidate();
       }
     });
   }
@@ -135,9 +138,10 @@ export class RuntimeManager {
   ): Promise<ContentInspectionResult> {
     return await this.withDiagnosticContext(target, "inspect", async () => {
       const lease = await this.acquire(target);
+      let reusable = false;
       try {
         await this.synchronize(lease, target);
-        return await inspectContent(
+        const result = await inspectContent(
           {
             unitId: lease.unitId,
             unitType: target.unitType,
@@ -145,8 +149,11 @@ export class RuntimeManager {
           },
           query,
         );
+        reusable = true;
+        return result;
       } finally {
-        await lease.release();
+        if (reusable) await lease.release();
+        else await lease.invalidate();
       }
     });
   }
@@ -155,11 +162,15 @@ export class RuntimeManager {
   public async exportUnitData(target: WorkspaceRuntimeTarget): Promise<CollaborationUnitData> {
     return await this.withDiagnosticContext(target, "export", async () => {
       const lease = await this.acquire(target);
+      let reusable = false;
       try {
         await this.synchronize(lease, target);
-        return await lease.exportUnitData();
+        const result = await lease.exportUnitData();
+        reusable = true;
+        return result;
       } finally {
-        await lease.release();
+        if (reusable) await lease.release();
+        else await lease.invalidate();
       }
     });
   }
