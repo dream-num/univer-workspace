@@ -140,7 +140,7 @@ describe("Workspace content runtime owner", () => {
       throw new Error("old worker failed");
     });
     old.invalidate = vi.fn(async () => {
-      poolMock.options?.onEvent?.({ key, type: "destroy-start" });
+      poolMock.options?.onEvent?.({ key, reason: "invalidate", type: "destroy-start" });
       invalidationStarted();
       await allowInvalidation;
       poolMock.options?.onEvent?.({ key, reason: "invalidate", type: "evicted" });
@@ -239,7 +239,7 @@ describe("Workspace content runtime owner", () => {
       const runtime = createRuntime({ acquire, resolveCredential, resolveLicense });
 
       await runtime.executeRead({ code: "first", target });
-      poolMock.options?.onEvent?.({ key, type: "destroy-start" });
+      poolMock.options?.onEvent?.({ key, reason, type: "destroy-start" });
       await runtime.executeRead({ code: "replacement", target });
       poolMock.options?.onEvent?.({ key, reason, type: "evicted" });
       await runtime.executeRead({ code: "cache hit", target });
