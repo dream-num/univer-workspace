@@ -6,13 +6,13 @@ Client Core already exports `WorkspaceContentSource`, `WorkspaceContentExecution
 
 Workspace CLI inspection uses `@univer-cli/content-inspection` through a Commander preset. The target-neutral package already owns seven structured query/result variants and stable inspection errors; Commander only owns string selector parsing, one-based display indices and text/JSON presentation. DSH can consume the target-neutral package directly.
 
-DSH `0.1.1-rc.2` snapshots and logs caller arguments before `tools/pre-execute`, runs that policy before `defineTool` argument validation, and replaces a late successful body result with `ABORTED` when caller cancellation wins. These facts determine validation, approval and finalization below.
+DSH `0.1.1-rc.2` snapshots and logs caller arguments before `tools/pre-execute`, runs that policy before `defineTool` argument validation, and replaces a late successful body result with `ABORTED` when caller cancellation wins. These facts determine body validation and finalization below.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Expose one exact structured inspection tool and one approved Draft execution tool without Commander or daemon transport.
+- Expose one exact structured inspection tool and one Draft-isolated execution tool without Commander or daemon transport.
 - Reuse the existing Core source/runtime/worker owners and the published inspection capability.
 - Propagate cancellation as far as the frozen SDK permits, await uninterruptible work, and never start a later commit attempt after cancellation.
 - Keep credential, license, source code and dependency errors out of plugin-owned output other than the caller-owned code argument and the execute value intentionally returned by that code.
@@ -29,7 +29,7 @@ DSH `0.1.1-rc.2` snapshots and logs caller arguments before `tools/pre-execute`,
 ```text
 DSH Agent
   ├── workspace_content_inspect ───────────────────────┐
-  └── workspace_content_execute ─ validate ─ ask       │
+  └── workspace_content_execute ─ validate             │
                                                        ▼
                   shared Host owner + current runtime generation
                        │ credential + license resolvers
@@ -88,21 +88,21 @@ MAX_CONTENT_JSON_DEPTH          = 64
 
 The inspect pure validator runs in this order: root/query own keys, primitive/container types and scope cross-fields; array count; complete canonical argument bytes; each selector one-of/non-empty rule and the published beta.2 cell-A1 grammar `/^\$?([A-Za-z]+)\$?(\d+)(?::\$?([A-Za-z]+)\$?(\d+))?$/` plus its row/order semantics; then safe-integer range area and summed requested cells. This order rejects a giant string before selector syntax parsing or authenticated allocation. Within the total budget, empty, syntactically malformed, row-zero or reversed A1 is `INSPECTION_SELECTOR_INVALID` with fixed text and no raw range detail. A grammar-valid range whose column/row/area arithmetic is not safely representable, or whose safe area/sum exceeds `100,000`, is `workspace-content-limit-exceeded` with kind `worksheet-cells`.
 
-The execute pure policy/body validator runs exact own-key/type/non-empty checks, then complete canonical argument bytes, then code UTF-8 bytes, before `ask`. Thus a huge `unit_id`, `worktree_id`, selector id/name, range literal or combined argument record cannot drive plugin approval, target resolution or worker allocation beyond `MAX_CONTENT_ARGUMENT_BYTES`. DSH rc.2 has already snapshotted/logged caller arguments before policy; this gate bounds plugin-owned work and approval only and does not claim to erase or prevent the framework-owned record.
+The execute pure body validator runs exact own-key/type/non-empty checks, then complete canonical argument bytes, then code UTF-8 bytes, before credential, target or worker work. Thus a huge `unit_id`, `worktree_id`, selector id/name, range literal or combined argument record cannot drive target resolution or worker allocation beyond `MAX_CONTENT_ARGUMENT_BYTES`. DSH rc.2 has already snapshotted/logged caller arguments before the body; this gate bounds plugin-owned work and does not claim to erase or prevent the framework-owned record.
 
 Inspection validates and measures the complete canonical result before returning it. DSH passes `MAX_EXECUTE_VALUE_BYTES` into Core; Core validates the worker value as lossless JSON within depth/byte bounds before embedded-image upload, mutation replacement or commit. The shell finally validates the closed execute envelope and its `MAX_CONTENT_CANONICAL_BYTES` bound. The 608-byte envelope reserve covers the fixed confirmed/no-mutation keys, maximum safe revision and JSON punctuation. CLI omits the optional Core budget and retains existing behavior.
 
 Any exceeded count, byte or depth gate fails with `workspace-content-limit-exceeded` and exact safe detail `{ kind, limit, actual? }`; `actual` is omitted only when safe arithmetic cannot represent it. The shell never returns a truncated success, spill handle or alternate partial format. DSH's model-facing render/log spill is downstream presentation and is not treated as a Code Mode canonical-value budget.
 
-### 2. Validate execute arguments before its one approval at the earliest truthful stage
+### 2. Use Draft isolation instead of per-call approval
 
-Both definitions publish root `additionalProperties: false` and run exact own-key gates in their bodies. Because DSH policy precedes definition validation, execute also has one pure operation validator shared by policy and body. It performs the ordered shape, total-argument and code-byte checks above before returning `ask`; failure uses fixed `workspace-argument-invalid`, `INSPECTION_SELECTOR_INVALID` or `workspace-content-limit-exceeded` metadata and creates no approval interaction or raw plugin-owned argument copy. Inspection's pure body gate performs its ordered argument/selector/range/cell checks before authenticated work.
+Both definitions publish root `additionalProperties: false` and run exact own-key gates in their bodies. Execute performs the ordered shape, total-argument and code-byte checks above before credential, target or worker work; failure uses fixed `workspace-argument-invalid` or `workspace-content-limit-exceeded` metadata and creates no approval interaction or raw plugin-owned argument copy. Inspection's pure body gate performs its ordered argument/selector/range/cell checks before authenticated work.
 
-Target editability, Unit type and reserved binding checks require authoritative target resolution or the published content-execution prelude. They run after approval inside Core. The shell does not duplicate a JavaScript parser, accept a caller Unit type, or perform credential/HTTP work merely to improve the approval prompt.
+Target editability, Unit type and reserved binding checks require authoritative target resolution or the published content-execution prelude. They run inside Core before write-mode code. The shell does not duplicate a JavaScript parser or accept a caller Unit type.
 
-DSH still records Native `tool/call.arguments`, or Code Mode `tool/code-dispatch-start.arguments` and settled `tool/code-dispatch.arguments = normalized.logged`, before this validator. Those records include `code` by framework contract. Approval reason and plugin-owned lifecycle events use fixed text. Result/failure/finalizer never copy code, credential/license, an unknown or rejected raw argument, selector id/name, or arbitrary query value. A recognized successful outcome or allowlisted error may contain only the validated canonical public identities frozen by Decision 6, such as authoritative Worktree/Unit target, numeric selector kind/index or canonical cell-A1 range. Tool documentation warns that credentials and other secrets must not be embedded in Facade code because caller arguments are durable DSH input.
+DSH still records Native `tool/call.arguments`, or Code Mode `tool/code-dispatch-start.arguments` and settled `tool/code-dispatch.arguments = normalized.logged`, before this validator. Those records include `code` by framework contract. Plugin-owned lifecycle events use fixed text. Result/failure/finalizer never copy code, credential/license, an unknown or rejected raw argument, selector id/name, or arbitrary query value. A recognized successful outcome or allowlisted error may contain only the validated canonical public identities frozen by Decision 6, such as authoritative Worktree/Unit target, numeric selector kind/index or canonical cell-A1 range. Tool documentation warns that credentials and other secrets must not be embedded in Facade code because caller arguments are durable DSH input.
 
-`workspace_content_execute` always asks once, even if execution later captures no mutations: the worker evaluates caller-provided JavaScript and the operation may mutate remote content. It omits `isConcurrencySafe`; inspection remains read-only and delegates policy without requesting this Change's approval.
+`workspace_content_execute` creates no approval interaction. The authoritative Draft Worktree target, strict runtime/output limits, guarded Facade bindings and the later merge approval form the safety boundary; Trunk and non-Draft targets fail before write-mode code. Execute accepts no local path, command, credential or license field and makes no stronger sandbox claim than the packaged worker contract. It omits `isConcurrencySafe`; inspection remains read-only.
 
 ### 3. Hold one current runtime generation and retire it on credential change
 
@@ -220,9 +220,9 @@ Successful inspection and execute values are authorized content requested by the
 
 ### 7. Extend the existing fiber owner; add no daemon or background task
 
-The Changes 2–4 owner registers both tools, the execute approval listener and credential-update listener in its one Cordis effect. Every body fuses `exec.signal` with the owner signal, enters active-body tracking before authenticated/runtime work, and remains tracked until Core and worker work settles.
+The Changes 2–4 owner registers both tools and the credential-update listener in its one Cordis effect. Every body fuses `exec.signal` with the owner signal, enters active-body tracking before authenticated/runtime work, and remains tracked until Core and worker work settles.
 
-Disposal marks the owner non-accepting, explicitly unregisters the two tools/listeners, aborts the owner signal, retires/closes the current runtime generation so the worker pool can settle, and awaits both generation close and every accepted body. Runtime close is invoked once per generation. There are no process signals, daemon sockets, Jobs, timers, detached retries or second lifecycle controller.
+Disposal marks the owner non-accepting, explicitly unregisters the two tools and credential-update listener, aborts the owner signal, retires/closes the current runtime generation so the worker pool can settle, and awaits both generation close and every accepted body. Runtime close is invoked once per generation. There are no process signals, daemon sockets, Jobs, timers, detached retries or second lifecycle controller.
 
 ### 8. Build Host and worker entries as one installed closure
 
@@ -232,11 +232,11 @@ The build resolves the installed owner manifest for `@univerjs-pro/engine-formul
 
 The collaboration pool's emitted chunk expects `worker-child.mjs` beside it. Package assembly resolves the exact installed `@univer-cli/univer-collaboration-runtime-pool@1.0.0-beta.2` package and copies that published child into the matching packed chunk directory. Verification rejects missing/extra worker resources, a bare private Core import, `workspace:*`, CLI source/daemon/Session, render/Office/generation assets and adjacent checkout paths.
 
-Source tests use real Cordis `ToolRuntime`, the published inspection package, fake credential/approval and a fake Workspace/Collaboration server. The isolated tarball smoke installs the prebuilt package in a new local profile, changes to an arbitrary temporary cwd with no workspace `node_modules` or source fallback, and runs real Trunk/Worktree inspection and no-mutation/confirmed execute through `worker.js`, the colocated runtime-pool `worker-child.mjs`, the exact formula binding and packaged license/credential resolvers. It exercises cancellation/uncertainty and credential-generation replacement, then disposes without a model key or real account. Package verification also greps every emitted JavaScript/resource/manifest for absolute checkout and source paths. Source and packed Native/Code Mode transcripts assert code/credential/license/rejected-raw sentinels are never copied into plugin-owned content; separate fixtures assert only allowlisted canonical public identity may appear in a recognized result or safe error detail.
+Source tests use real Cordis `ToolRuntime`, the published inspection package, fake credentials and a fake Workspace/Collaboration server. The isolated tarball smoke installs the prebuilt package in a new local profile, changes to an arbitrary temporary cwd with no workspace `node_modules` or source fallback, and runs real Trunk/Worktree inspection and no-mutation/confirmed execute through `worker.js`, the colocated runtime-pool `worker-child.mjs`, the exact formula binding and packaged license/credential resolvers. It asserts execute creates no approval interaction, exercises cancellation/uncertainty and credential-generation replacement, then disposes without a model key or real account. Package verification also greps every emitted JavaScript/resource/manifest for absolute checkout and source paths. Source and packed Native/Code Mode transcripts assert code/credential/license/rejected-raw sentinels are never copied into plugin-owned content; separate fixtures assert only allowlisted canonical public identity may appear in a recognized result or safe error detail.
 
 ## Risks / Trade-offs
 
-- **Facade code has the existing worker's JavaScript authority** -> Require per-call human approval, accept no credential/path/command fields, keep execution in the packaged worker, and make no sandbox claim beyond the frozen SDK.
+- **Facade code has the existing worker's JavaScript authority** -> Restrict it to an authoritative Draft Worktree Unit through guarded bindings, accept no credential/path/command fields, keep execution in the packaged worker, and require the separate merge operation before Draft content reaches Trunk.
 - **Worker operations cannot observe `AbortSignal`** -> Check every separable boundary, never abandon a worker promise, close the pool on owner disposal and test that no later step starts after cancellation.
 - **Credential rotation races an active runtime** -> Retire and close one generation on the exact record event; active bodies settle through the same owner before a new generation is used.
 - **Cancellation follows a confirmed image upload** -> Preserve a structured partial-side-effect count/target, invalidate the lease, leave the unreferenced upload as an orphan candidate and require inspection before any deliberate retry; add no unsafe compensating delete.
@@ -249,7 +249,7 @@ Source tests use real Cordis `ToolRuntime`, the published inspection package, fa
 
 1. Complete and verify Changes 1–4; Change 5 may proceed independently because this Change performs no local file transfer.
 2. Add optional Core signals and focused cancellation/CLI compatibility cases without changing unsignalled calls.
-3. Add the two tools, runtime generation, license resolver, credential listener, approval, schemas, error projection and finalizers to the existing Host effect.
+3. Add the two tools, runtime generation, license resolver, credential listener, schemas, Draft isolation checks, error projection and finalizers to the existing Host effect.
 4. Add the bundled worker/runtime child closure and run source, real ToolRuntime, transcript, Client Core, CLI and isolated tarball gates.
 
 There is no persisted schema or Workspace data migration. Rollback unregisters the two tools, closes their runtime generation and removes optional-signal call sites; existing Worktrees, confirmed revisions, credentials and CLI artifacts remain valid.

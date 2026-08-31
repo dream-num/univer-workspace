@@ -27,3 +27,7 @@
 ## 7. 更新职责文档并运行兼容性 gate
 
 - [x] 7.1 更新 `apps/dsh-univer-work/README.md` 与 `packages/client-core/README.md`，记录十二个 tool names、八个 approval mutations、review origin、signal/retry/result-unknown、core Skill 与明确非职责；依次运行 Client Core `typecheck`/`test`/`build`、DSH application `typecheck`/`test`/`build`/`package:verify`/`package:smoke`、CLI Worktree/Unit/open command contracts与 `workspace-skills-command.test.ts`、`pnpm package:workspace-cli`、`pnpm typecheck`、`pnpm test`、`pnpm build` 和 `git diff --check`，确认 CLI commands/output/Session/core Skill/package、Server/OpenAPI、SDK baseline 与发布流程未改变。
+
+## 8. 收敛 Draft 审批边界
+
+- [ ] 8.1 将 Worktree create/update/ready/reopen 与 Unit add/create 从 `tools/pre-execute` approval policy 移除，只为 merge/discard 保留参数校验后的固定 `ask`；同步更新真实 ToolRuntime、transcript、package smoke、Skill/README 与 policy disposal 断言，验证六个常规 mutation 不创建 approval interaction/event、两个 terminal mutation 仍 fail closed，并运行相关 DSH tests、package gates、`openspec validate add-dsh-worktree-unit-tools --strict` 与 `git diff --check`。

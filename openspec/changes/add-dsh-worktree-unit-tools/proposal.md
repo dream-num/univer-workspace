@@ -8,11 +8,11 @@
 
 - 在 Host plugin 注册十二个 operation-specific snake_case tools：Worktree list/get/create/update/ready/reopen/merge/discard，Worktree Unit list/add/create，以及 review URL 构造。工具暴露稳定 outcome，不复用 Commander 参数或执行 CLI subprocess。
 - 每个工具采用 root `additionalProperties: false` 的 closed parameter schema、exact own-key runtime gate、closed canonical output 与 value-only rendering；参数在 credential/HTTP 前完成交叉校验，review URL 始终使用当前 authenticated grant 的 Workspace origin，不接受模型提供的 viewer origin。
-- DeepSeek Harness rc.2 在 `defineTool.execute` 参数校验前运行 `tools/pre-execute`，并在此之前把 caller/model arguments 写入 Native `tool/call.arguments` 或 Code Mode `tool/code-dispatch-start.arguments`；Code Mode settlement 还会把 `normalized.logged` 写入 `tool/code-dispatch.arguments`。八个 mutation tools 因此由同一个纯 operation validator 在 policy 返回 `ask` 前校验 exact keys、类型、enum 与交叉字段，body 再防御性复用该 validator；非法参数以固定 `workspace-argument-invalid` 失败，不新增 approval interaction/event，也不由 result/failure、approval 或 plugin-owned payload 复制参数。上述一份 Native 或两份 Code Mode DSH-owned argument records 仍按 DSH 合同保留。merge 与 discard 保持独立名称和不含参数值的固定高影响提示。三个 discovery/read tools 与 review URL 不请求本 Change 的 approval。
+- DeepSeek Harness rc.2 在 `defineTool.execute` 参数校验前运行 `tools/pre-execute`，并在此之前把 caller/model arguments 写入 Native `tool/call.arguments` 或 Code Mode `tool/code-dispatch-start.arguments`；Code Mode settlement 还会把 `normalized.logged` 写入 `tool/code-dispatch.arguments`。八个 mutation tools 复用同一个纯 operation validator 校验 exact keys、类型、enum 与交叉字段，并在 body 中防御性复验；Worktree create/update/ready/reopen 与 Unit add/create 作为常规隔离草稿工作流直接执行，只有 merge 与 discard 在 policy 校验后返回 `ask`。非法参数以固定 `workspace-argument-invalid` 失败，不新增 approval interaction/event，也不由 result/failure、approval 或 plugin-owned payload 复制参数。上述一份 Native 或两份 Code Mode DSH-owned argument records 仍按 DSH 合同保留。merge 与 discard 保持独立名称和不含参数值的固定高影响提示。三个 discovery/read tools 与 review URL 同样不请求本 Change 的 approval。
 - 复用 Change 2/3 的 authenticated resolver、Workspace error adapter与 Host lifecycle owner；每次调用贯穿 caller/owner `AbortSignal`。普通 idempotent Core retry 保留稳定 identity，但 caller abort 或 owner disposal 后不再发起新 attempt；已 dispatch write 保留 read-back或 `workspace-result-unknown`，不得由 tool 自动重放。
 - 修改 `workspace-client-core/worktree-unit`，给 Worktree、Unit 与 review URL public methods 追加向后兼容的 optional `AbortSignal`，贯穿 authenticated resolution、HTTP、stable-identity retry boundary 和 lifecycle read-back；Workspace CLI 省略 signal 时行为不变。
 - 随 package 交付首个静态 `core` Skill，并显式调用 `ctx.skills.register()`；Skill 只描述当前已交付的 authentication、Space/Node、Worktree/Unit 与 review handoff tools，保留“每个新任务创建新 Worktree、仅同任务 rework 才复用、merge/discard 必须由用户明确请求”等既有规则。
-- 扩展真实 ToolRuntime、Skill catalog、keyless transcript 与隔离 tarball smoke，验证 schemas、approval、error secrecy、cancellation/result-unknown、Skill load/dispose 和 packed Client Core/Skill closure。
+- 扩展真实 ToolRuntime、Skill catalog、keyless transcript 与隔离 tarball smoke，验证 schemas、Draft 常规操作免审批、merge/discard approval、error secrecy、cancellation/result-unknown、Skill load/dispose 和 packed Client Core/Skill closure。
 
 ## Scope
 
@@ -20,13 +20,13 @@
 
 **Non-Goals:** 不新增 Blob、Asset、本地文件输入输出、content runtime、execute/inspect、worker、Office、Typst、SVG、render/screenshot/lint、API/resource discovery 或其余七个 Skills；不提供 Web Client、Settings、Slot、Remote、Jobs 或 CLI subprocess；不修改 Workspace Server、Browser、HTTP contract、数据库、Commander command/output/Session、CLI core Skill 或发布流程；不支持 sandbox/E2B/remote profile，不发布 package。DSH review URL 不提供 CLI `--viewer-url` 覆盖。
 
-**Size Gate:** 一个新 capability、一个修改 capability、七个 coarse tasks，可在一次 focused implementation session 内完成；依赖已按真实 rc.2 顺序回修并验证的 `add-dsh-space-node-tools`，不预建后续内容与文件能力。
+**Size Gate:** 一个新 capability、一个修改 capability、八个 coarse tasks，可在一次 focused implementation session 内完成；依赖已按真实 rc.2 顺序回修并验证的 `add-dsh-space-node-tools`，不预建后续内容与文件能力。
 
 ## Capabilities
 
 ### New Capabilities
 
-- `dsh-univer-work/worktree-unit-tools`: 定义 Host-only DSH Worktree/Unit/review tools 的 schemas、approval、错误、取消、lifecycle、静态 core Skill 与安装态行为。
+- `dsh-univer-work/worktree-unit-tools`: 定义 Host-only DSH Worktree/Unit/review tools 的 schemas、Draft 与 terminal approval 边界、错误、取消、lifecycle、静态 core Skill 与安装态行为。
 
 ### Modified Capabilities
 

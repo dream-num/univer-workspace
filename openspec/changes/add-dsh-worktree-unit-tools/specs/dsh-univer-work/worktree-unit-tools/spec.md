@@ -29,18 +29,18 @@ The Client Shell SHALL expose `workspace_worktree_create` and `workspace_worktre
 
 #### Scenario: User Worktree is created
 
-- **WHEN** approved create receives a non-empty `name`, `scope: user`, and optional non-empty `idempotency_key`
+- **WHEN** create receives a non-empty `name`, `scope: user`, and optional non-empty `idempotency_key`
 - **THEN** it creates one User Worktree and returns `{ worktree }` with the validated identity
 - **AND** it rejects `space_id` or `visibility` because those fields belong to Team Worktrees
 
 #### Scenario: Team Worktree is created
 
-- **WHEN** approved create receives a non-empty `name`, `scope: space`, required non-empty `space_id`, optional `visibility: private | space`, and optional non-empty `idempotency_key`
+- **WHEN** create receives a non-empty `name`, `scope: space`, required non-empty `space_id`, optional `visibility: private | space`, and optional non-empty `idempotency_key`
 - **THEN** it requests one Team Worktree using `private` when visibility is omitted and returns the Server's strictly parsed `{ worktree }`
 
 #### Scenario: Worktree metadata is updated
 
-- **WHEN** approved update receives a non-empty `worktree_id` and at least one of a non-empty `name` or `visibility: private | space`
+- **WHEN** update receives a non-empty `worktree_id` and at least one of a non-empty `name` or `visibility: private | space`
 - **THEN** it performs one update and returns `{ worktree }` only for the requested identity
 
 #### Scenario: Worktree mutation result is unknown
@@ -54,12 +54,12 @@ The Client Shell SHALL expose `workspace_worktree_ready`, `workspace_worktree_re
 
 #### Scenario: Worktree enters review
 
-- **WHEN** approved ready receives a draft `worktree_id`
+- **WHEN** ready receives a draft `worktree_id`
 - **THEN** it returns `{ worktree }` only after the requested Worktree is confirmed in `ready` state
 
 #### Scenario: Same-task rework resumes
 
-- **WHEN** approved reopen receives a ready `worktree_id`
+- **WHEN** reopen receives a ready `worktree_id`
 - **THEN** it returns `{ worktree }` only after that Worktree is confirmed in `draft` state
 
 #### Scenario: Worktree is merged or discarded
@@ -88,12 +88,12 @@ The Client Shell SHALL expose `workspace_unit_list`, `workspace_unit_add`, and `
 
 #### Scenario: Existing Resource is staged
 
-- **WHEN** approved Unit add receives non-empty `worktree_id` and `resource_id`
+- **WHEN** Unit add receives non-empty `worktree_id` and `resource_id`
 - **THEN** it returns `{ unit }` only for a trunk-backed Unit of that Resource with no activation target and uses the existing stable Worktree/Resource identity
 
 #### Scenario: Worktree-local Unit is created
 
-- **WHEN** approved Unit create receives non-empty Worktree, target Space and name, a supported `sheet | doc | slide | base | board` type, optional non-empty parent Node, and optional non-empty idempotency key
+- **WHEN** Unit create receives non-empty Worktree, target Space and name, a supported `sheet | doc | slide | base | board` type, optional non-empty parent Node, and optional non-empty idempotency key
 - **THEN** it returns `{ unit }` only for a Worktree-local Unit whose Worktree, type, name, target Space, and parent match the request
 
 #### Scenario: Unsupported initial content is supplied
@@ -134,20 +134,20 @@ Every Worktree/Unit/review tool MUST declare only parameters for its one operati
 #### Scenario: Direct execution supplies an unknown key
 
 - **WHEN** any tool receives an own parameter key outside its declaration
-- **THEN** a read/review body gate or mutation pre-approval gate returns stable invalid-argument failure before authenticated resolution or HTTP
+- **THEN** a read/review body gate, routine mutation body gate, or terminal mutation pre-approval gate returns stable invalid-argument failure before authenticated resolution or HTTP
 - **AND** failure content does not echo the rejected key or value
 
-#### Scenario: Mutation parameters are invalid before approval
+#### Scenario: Mutation parameters are invalid before effects
 
 - **WHEN** any of the eight mutation tools receives an unknown key, wrong primitive type, invalid enum, blank required identity, or invalid cross-field combination
-- **THEN** its operation validator fails with fixed `workspace-argument-invalid` metadata before the policy returns `ask`
-- **AND** no approval interaction/event, credential read, or Workspace request occurs, and no result/failure, approval, or plugin-owned payload copies the rejected key or value
+- **THEN** its operation validator fails with fixed `workspace-argument-invalid` metadata before credential resolution or HTTP, and merge/discard fail before their policy returns `ask`
+- **AND** no approval interaction/event or Workspace request occurs, and no result/failure, approval, or plugin-owned payload copies the rejected key or value
 - **AND** only Native `tool/call.arguments`, or Code Mode `tool/code-dispatch-start.arguments` plus settled `tool/code-dispatch.arguments = normalized.logged`, may retain the original arguments as DSH-owned records
 
-#### Scenario: Approved mutation enters its body
+#### Scenario: Valid mutation enters its body
 
-- **WHEN** a mutation passes pre-approval validation and receives `allowed-once`
-- **THEN** its body defensively applies the same operation validator before calling Core and receives the same canonical typed input
+- **WHEN** a routine mutation reaches its body directly, or merge/discard receives `allowed-once`
+- **THEN** its body defensively applies the same operation validator before calling Core and receives canonical typed input
 
 #### Scenario: Canonical output is invalid
 
@@ -160,14 +160,15 @@ Every Worktree/Unit/review tool MUST declare only parameters for its one operati
 - **THEN** model-visible text summarizes only stable identities, state, target, or URL from the validated canonical value
 - **AND** the complete lossless canonical value remains available without parsing prose
 
-### Requirement: Valid Worktree and Unit mutations require approval
+### Requirement: Draft workflow mutations execute without approval
 
-The Client Shell MUST apply an operation-specific, secret-safe argument validator before requesting DSH `ask` approval for any of the eight mutation tool names, MUST reuse the same validator in the accepted body, and MUST delegate the four read/review tools to the existing policy chain.
+The Client Shell MUST execute Worktree create/update/ready/reopen and Unit add/create without requesting DSH approval, MUST request one secret-safe `ask` only for merge and discard after operation-specific validation, MUST reuse every mutation validator in its body, and MUST delegate the four read/review tools to the existing policy chain.
 
-#### Scenario: Ordinary mutation is approved once
+#### Scenario: Routine Worktree mutation does not ask
 
-- **WHEN** DSH obtains `allowed-once` for Worktree create/update/ready/reopen or Unit add/create
-- **THEN** only that accepted tool body executes with its original validated arguments
+- **WHEN** Worktree create/update/ready/reopen or Unit add/create receives valid arguments
+- **THEN** DSH invokes its body without creating an approval interaction or event
+- **AND** the body validates before credential resolution and performs only its declared Core operation
 
 #### Scenario: Merge or discard is presented for approval
 
@@ -175,16 +176,16 @@ The Client Shell MUST apply an operation-specific, secret-safe argument validato
 - **THEN** the approval request identifies the exact terminal operation with fixed wording that contains no caller-supplied value
 - **AND** neither action is reachable through update, a generic lifecycle action, or another tool name
 
-#### Scenario: Invalid mutation never requests approval
+#### Scenario: Invalid mutation has no remote effect
 
-- **WHEN** the pre-approval validator rejects mutation arguments
-- **THEN** the tool fails with stable invalid-argument metadata and no approval interaction or event is created
+- **WHEN** an operation validator rejects mutation arguments
+- **THEN** the tool fails with stable invalid-argument metadata before credential resolution or HTTP, and no approval interaction or event is created
 - **AND** its fixed failure contains no argument-derived detail
 
-#### Scenario: Approval fails closed
+#### Scenario: Terminal approval fails closed
 
-- **WHEN** approval is rejected, cancelled, unavailable, or has no channel
-- **THEN** the mutation fails before authenticated resolution or any Workspace request
+- **WHEN** merge or discard approval is rejected, cancelled, unavailable, or has no channel
+- **THEN** that terminal mutation fails before authenticated resolution or any Workspace request
 
 ### Requirement: Workspace failure fidelity and secrecy
 
@@ -196,7 +197,7 @@ The Client Shell MUST preserve only frozen allowlisted Workspace codes and exact
 - **THEN** the failure contains a fixed operation message and deterministic envelope with that code and only allowlisted operation identities/state
 - **AND** DSH failure metadata retains the same stable code
 
-#### Scenario: Pre-approval validation fails
+#### Scenario: Mutation argument validation fails
 
 - **WHEN** untrusted mutation arguments fail exact-key, type, enum, required-field, or cross-field validation
 - **THEN** the failure metadata is `workspace-argument-invalid` with a fixed operation message and no detail
@@ -248,7 +249,7 @@ Every Worktree/Unit/review tool MUST fuse caller and Host-owner cancellation, pa
 #### Scenario: Host disposes the capability
 
 - **WHEN** the plugin fiber is disposed with tools, the core Skill, approvals, credential reads, HTTP, retries, or read-back active
-- **THEN** it unregisters the twelve tools, eight-name approval policy, and `core` Skill, rejects new bodies, aborts owner-controlled I/O, and waits for every accepted body to settle
+- **THEN** it unregisters the twelve tools, two-name terminal approval policy, and `core` Skill, rejects new bodies, aborts owner-controlled I/O, and waits for every accepted body to settle
 - **AND** no request, retry, read-back, listener, Skill registration, timer, Job, or cached Workspace result survives disposal
 
 ### Requirement: Bundled core workflow Skill
@@ -283,6 +284,6 @@ The prebuilt tarball MUST inline reachable private Worktree/Unit/review Core cod
 #### Scenario: Installed tool and Skill transcript is exercised
 
 - **WHEN** a keyless tarball smoke installs the plugin into an isolated local profile
-- **THEN** it observes all twelve closed-schema tools and the loadable `core` Skill, covers invalid mutation rejection before approval, representative read, approval deny/allow, lifecycle, Unit, review, error, cancellation/result-unknown, and normal disposal outcomes
+- **THEN** it observes all twelve closed-schema tools and the loadable `core` Skill, covers invalid mutation rejection before effects, routine mutation execution without approval, terminal approval deny/allow, representative read, lifecycle, Unit, review, error, cancellation/result-unknown, and normal disposal outcomes
 - **AND** Native invalid-policy tests find the sentinel in `tool/call.arguments`, while Code Mode tests find it in both `tool/code-dispatch-start.arguments` and settled `tool/code-dispatch.arguments = normalized.logged`
 - **AND** the sentinel never appears in approval interaction/events, result/failure, or plugin-owned payloads; the smoke also finds no credential, blind-retry instruction, CLI command, or adjacent checkout path in plugin-owned output or package content

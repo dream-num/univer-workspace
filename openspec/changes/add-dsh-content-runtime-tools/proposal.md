@@ -7,10 +7,10 @@
 ## What Changes
 
 - 注册两个 DSH-native tools：`workspace_content_inspect` 对 Trunk 或 Worktree 中的 Sheet、Doc、Slide 执行 published structured inspection query；`workspace_content_execute` 对 Draft Worktree 中的 Sheet、Doc、Slide、Base、Board 执行 inline Facade code，并返回未产生 mutation 或 confirmed commit 的结构化结果。
-- 两个工具使用 closed parameter schemas、exact own-key runtime validation 与 value-only rendering。应用层固定每次 `512 KiB` canonical arguments、`256 KiB` code、`64` selectors/ranges、`100,000` requested worksheet cells、`8 MiB` canonical JSON 与 `64` 层 JSON/Slide nesting 上限；malformed A1 保留 inspection invalid，合法但 safe-area overflow 才走 limit，超限不截断成功值。inspection 对 published result 的七个 union 与递归 Slide children 做完整 closed-key 校验，DSH schema 只对无法递归表达的 children 使用如实的 `JsonValue` projection。execute 在 approval 前完成所有纯参数与 argument/code budget 校验，Core 在 upload、mutation replacement 和 commit 前校验 execute value budget，取得一次 mutation approval 后才解析 authenticated target、license、worker 与 runtime；DSH rc.2 在 policy 前拥有的 Native/Code Mode argument records 保持原样，plugin 不复制 code、credential/license 或 rejected raw arguments，recognized outcome/error 只投影冻结的 validated public identity。
+- 两个工具使用 closed parameter schemas、exact own-key runtime validation 与 value-only rendering。应用层固定每次 `512 KiB` canonical arguments、`256 KiB` code、`64` selectors/ranges、`100,000` requested worksheet cells、`8 MiB` canonical JSON 与 `64` 层 JSON/Slide nesting 上限；malformed A1 保留 inspection invalid，合法但 safe-area overflow 才走 limit，超限不截断成功值。inspection 对 published result 的七个 union 与递归 Slide children 做完整 closed-key 校验，DSH schema 只对无法递归表达的 children 使用如实的 `JsonValue` projection。execute 在 body 中先完成所有纯参数与 argument/code budget 校验，再解析 authenticated target、license、worker 与 runtime；authoritative Draft Worktree 是隔离边界，execute 不请求 DSH approval，Core 仍在 upload、mutation replacement 和 commit 前校验 execute value budget并拒绝 Trunk 或非 Draft 写入。DSH rc.2 在 tool body 前拥有的 Native/Code Mode argument records 保持原样，plugin 不复制 code、credential/license 或 rejected raw arguments，recognized outcome/error 只投影冻结的 validated public identity。
 - Host 直接持有 Client Core runtime pool，以 package-relative worker entry 启动共享 `./worker` implementation；当前 authenticated grant、应用持有的 runtime development license 与 `UNIVER_LICENSE` override 只作为 Core resolver/worker init 使用，不进入 tool 参数、结果、Session content 或普通 Config。credential record 更新会关闭旧 pool，后续 operation 重新创建 owner，避免复用旧 Login Session。
 - 修改 `workspace-client-core/content-runtime`，只给本 Change 可达的 Worktree/Trunk target resolution、content execution、runtime read/write、embedded-image externalization 与 changeset commit 追加向后兼容的 optional `AbortSignal`，并让 write operation 接受可选 execute-value byte budget。Core 在队列和每个可分割步骤前后检查 signal；上游 pool 不支持中断的 worker operation 仍被等待到收敛，取消后不开始下一步。多图 externalization 在已有 confirmed upload 后取消会抛结构化 partial-side-effect、invalidate lease 且不补偿删除/重传；in-flight upload 或 commit 抛 result-unknown。DSH rc.2 保留这些 tool-owned thrown errors，只有 caller abort 后 body 仍成功返回的 confirmed late success 转成 `ABORTED`；所有路径都不重放 Facade code。
-- 扩展 shared Host lifecycle/error policy、real ToolRuntime tests、keyless Native/Code Mode transcript、worker package closure 与 isolated tarball smoke，覆盖 approval、错误保密、caller/owner cancellation、commit uncertainty、credential rotation、worker start/close 和安装态真实 inspection/execute。
+- 扩展 shared Host lifecycle/error policy、real ToolRuntime tests、keyless Native/Code Mode transcript、worker package closure 与 isolated tarball smoke，覆盖 Draft execute 免审批、错误保密、caller/owner cancellation、commit uncertainty、credential rotation、worker start/close 和安装态真实 inspection/execute。
 
 ## Scope
 
@@ -18,13 +18,13 @@
 
 **Non-Goals:** 不复制 Commander `inspect` selector syntax、`--script`、文本 presentation、daemon command/socket/RPC 或 CLI Session；不提供 arbitrary read-code tool、Trunk write、Office import/export、Blob/Asset/local filesystem、Typst、SVG、render/screenshot/lint、API/resource discovery、额外 Skills、Jobs、Web Client、Settings、Slot、Remote、sandbox/E2B/remote profile 或 package publication；不修改 Workspace Server、Browser、HTTP/Collaboration contract、数据库、Worktree lifecycle、CLI command/output 或 SDK baseline。
 
-**Size Gate:** 一个新 capability、一个修改 capability、八个 coarse tasks；两个 tools 共用一个既有 runtime owner、一个 worker entry 和一个 lifecycle/error seam，可在一次 focused implementation session 内完成。
+**Size Gate:** 一个新 capability、一个修改 capability、九个 coarse tasks；两个 tools 共用一个既有 runtime owner、一个 worker entry 和一个 lifecycle/error seam，可在一次 focused implementation session 内完成。
 
 ## Capabilities
 
 ### New Capabilities
 
-- `dsh-univer-work/content-runtime-tools`: 定义 Host-only structured inspection 与 Draft Facade execution tools 的 schemas、approval、runtime/license/credential composition、错误、取消、worker packaging 和安装态行为。
+- `dsh-univer-work/content-runtime-tools`: 定义 Host-only structured inspection 与 Draft Facade execution tools 的 schemas、Draft isolation boundary、runtime/license/credential composition、错误、取消、worker packaging 和安装态行为。
 
 ### Modified Capabilities
 

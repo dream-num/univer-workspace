@@ -29,3 +29,7 @@
 ## 8. Preserve documentation and repository compatibility
 
 - [x] 8.1 Update the DSH and Client Core READMEs plus root runtime-license wording to describe the now-delivered inspection/execute scope, worker/license ownership, durable code-argument warning, cancellation ceiling and exclusions without claiming later Changes; run `pnpm --filter @univerjs/univer-workspace-client-core typecheck`, Core tests/build, `pnpm --filter dsh-univer-work typecheck`, test/build/package verify/smoke, relevant CLI execute/inspect/daemon tests, `pnpm package:workspace-cli`, CLI package verify/smoke, `pnpm typecheck`, `pnpm test`, `pnpm build`, `openspec validate add-dsh-content-runtime-tools --strict` and `git diff --check`, confirming Server/Browser/OpenAPI/database/deployment/CLI command/release behavior and the exact SDK baseline remain unchanged.
+
+## 9. 收敛 Draft content approval
+
+- [ ] 9.1 移除 `workspace_content_execute` 的 `tools/pre-execute` approval listener，只在 body 中按既定顺序完成 exact-key、argument/code budget 校验，再解析 authoritative Draft target 并进入 worker；同步更新真实 ToolRuntime、transcript、package smoke 与 README 断言，验证 execute 不创建 approval interaction/event、Trunk/非 Draft 仍在 write-mode code 前失败、local path/command/credential/license 字段仍被拒绝，并运行相关 DSH tests、package gates、`openspec validate add-dsh-content-runtime-tools --strict` 与 `git diff --check`。

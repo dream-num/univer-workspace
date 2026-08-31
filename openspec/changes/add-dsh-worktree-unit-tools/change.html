@@ -60,7 +60,7 @@
     <section class="diagram" aria-label="Worktree、Unit 与 review handoff 架构图，可横向滚动" tabindex="0">
       <svg viewBox="0 0 1000 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="worktree-flow-title worktree-flow-desc">
         <title id="worktree-flow-title">dsh-univer-work Worktree 与 Unit 工作流边界</title>
-        <desc id="worktree-flow-desc">Agent 加载随包 core Skill 并调用十二个稳定工具，八个 mutation 在 approval 前校验参数且在 body 再验，所有调用再经共享 Host owner、认证 resolver 与 Workspace Client Core 到达 Workspace Server 和 Browser review route。</desc>
+        <desc id="worktree-flow-desc">Agent 加载随包 core Skill 并调用十二个稳定工具，六个常规 mutation 在 body 校验后直接执行，merge 与 discard 在 approval 前校验且在 body 再验，所有调用再经共享 Host owner、认证 resolver 与 Workspace Client Core 到达 Workspace Server 和 Browser review route。</desc>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
             <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
@@ -90,8 +90,8 @@
         <rect x="270" y="260" width="190" height="140" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
         <text x="365" y="303" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="19" font-weight="600" text-anchor="middle">12 个稳定 tools</text>
         <text x="365" y="333" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">4 个 read / review</text>
-        <text x="365" y="357" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">8 个 mutation</text>
-        <text x="365" y="381" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">validate → ask → body</text>
+        <text x="365" y="357" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">6 个 routine：validate → body</text>
+        <text x="365" y="381" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">merge / discard：validate → ask</text>
 
         <rect x="530" y="260" width="180" height="140" rx="8" fill="#ffffff" stroke="#4f5d75"/>
         <text x="620" y="302" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">共享 Host owner</text>
@@ -125,7 +125,7 @@
         <p class="label">Decisions</p>
         <ul>
           <li>merge、discard 等操作各用独立 tool；不增加 generic lifecycle router。</li>
-          <li>八个 mutation 先复用纯 validator，成功后才请求一次性 approval，body 再验。</li>
+          <li>create/update/ready/reopen 与 Unit add/create 不请求 approval；merge/discard 保留固定 ask。</li>
           <li>review URL 固定使用本次 authenticated grant 的 origin。</li>
           <li>Skill 由 Host 显式注册，不增加 provider、watcher 或新依赖。</li>
         </ul>
