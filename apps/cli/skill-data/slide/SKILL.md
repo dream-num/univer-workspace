@@ -9,7 +9,10 @@ Every content command targets one remote draft explicitly with `--worktree <id>`
 
 Pages are 1-based across all CLI commands (`inspect --pages`, `screenshot --pages`, `compile-svg --page`, JSON `page`, `page-NN.png`) and share one selector grammar: `<n|n-m|id>[,…]` or `all`. Inside `execute`, facade indexes are 0-based (`getSlideByIndex`, `getSlides()[i]`). When carrying a page from CLI output into code, prefer `getSlideById(id)` — every page node and lint finding carries the page `id`.
 
-Query exact signatures and enum values with `univer-workspace-cli api show <symbol>` and `univer-workspace-cli api find <keyword>`. Use the declared common Shape names such as `ShapeTypeEnum`, `ShapeFillEnum`, and `ShapeLineTypeEnum`.
+Use `univer-workspace-cli api find <query...>` to discover API symbols, then use
+`univer-workspace-cli api show <symbol...>` for exact signatures, enum values, documentation, and
+examples. Use the declared common Shape names such as `ShapeTypeEnum`, `ShapeFillEnum`, and
+`ShapeLineTypeEnum`.
 
 ## Workspace target
 
