@@ -140,6 +140,21 @@ describe("Workspace CLI skills command", () => {
     expect(board).toContain("inspect board-element id:<element-id>");
     expect(board).not.toContain("Native `inspect` is not supported");
   });
+
+  it("bundles inspection commands accepted by the current parser", async () => {
+    const core = firstContent(await runSkills(["skills", "get", "core", "--json"]));
+    const sheet = firstContent(await runSkills(["skills", "get", "sheet", "--json"]));
+    const slide = firstContent(await runSkills(["skills", "get", "slide", "--json"]));
+
+    expect(core).toContain("--worksheet name:<sheet-name>");
+    expect(sheet).toContain("inspect range A1:C9 --worksheet name:<sheet-name>");
+    expect(sheet).toContain("requires one explicit worksheet selector");
+    expect(slide).toContain("inspect slide index:N");
+    expect(slide).toContain("inspect slide id:<id>");
+    expect(slide).toContain("Use `inspect presentation` without a selector");
+    expect(slide).not.toContain("inspect presentation --pages");
+    expect(slide).not.toContain("`inspect --pages`");
+  });
 });
 
 function firstContent(result: Record<string, unknown>): string {
