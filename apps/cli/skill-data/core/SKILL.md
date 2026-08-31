@@ -304,6 +304,7 @@ Every content command requires the full remote address:
 univer-workspace-cli execute \
   --worktree <worktree-id> --unit <unit-id> -e '…' --json
 univer-workspace-cli inspect range A1:C9 \
+  --worksheet name:<sheet-name> \
   --worktree <worktree-id> --unit <unit-id> --json
 ```
 

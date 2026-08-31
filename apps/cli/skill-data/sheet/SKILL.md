@@ -129,15 +129,15 @@ text and computed cell values.
 - Do not use `getValue()` / `getValues()` for authoritative reads. Formatted dates and currencies become display strings and booleans become `1`/`0`. Use `getCellDatas()` for stored values and `getDisplayValues()` for display text.
 - Colors must be xlsx-safe: only `"#RRGGBB"` or `"rgb(r,g,b)"`. Invalid colors can make an exported `.xlsx` unreadable and cannot be repaired by later overwriting the color.
 - Sheet tab name, Unit display name, Unit id, and resource id are distinct. Use `inspect workbook` for
-  Sheet tab names. `inspect range` accepts multiple ranges and qualified names such as
-  `Sheet2!D1:E5` or `'My Sheet'!A1`.
+  Sheet tab names. `inspect range` requires one explicit worksheet selector with a `name:`, `id:`,
+  or 1-based `index:` prefix and accepts multiple A1 ranges within that worksheet.
 - Formulas do not trigger an implicit full recalculation. Follow the recalculation recipe above before reading calculated values or exporting.
 - Copy formatted cells with a deep copy of `getCellData()` or complete explicit `ICellData`, never `getValues()` followed by `setValues()`.
 - After importing csv or tsv, check the value type and formula of every column before computing. Types are inferred per column, so one `N/A`, `-`, or `1,234` stores a whole numeric column as text, and a cell starting with `=` becomes forced text instead of a formula. Display text hides both.
 
 ## Verification
 
-- Values, types, and formulas: `univer-workspace-cli inspect range A1:C9 --worktree <id> --unit <id> --json`.
+- Values, types, and formulas: `univer-workspace-cli inspect range A1:C9 --worksheet name:<sheet-name> --worktree <id> --unit <id> --json`.
 - Styles, number formats, and rich text: read back `getCellDatas()` through `univer-workspace-cli execute --worktree <id> --unit <id>`.
 
 ## Rich text (when mixed styling inside one cell is required)
