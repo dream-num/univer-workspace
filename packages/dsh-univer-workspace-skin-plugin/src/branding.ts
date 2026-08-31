@@ -35,7 +35,6 @@ function isIconLink(tag: string): boolean {
   if (rel.some(token => token === "icon" || token.includes("icon"))) return true;
   return /favicon(?:\.|\/|\?|$)/iu.test(HREF_ATTRIBUTE.exec(tag)?.[2] ?? "");
 }
-
 /** Rewrite the stock DSH shell to the Workspace brand. */
 export function rewriteWorkspaceIndexBranding(html: string): string {
   let found = false;
@@ -55,4 +54,3 @@ export function rewriteWorkspaceIndexBranding(html: string): string {
     "$1Univer Workspace Harness$2",
   );
 }
-
