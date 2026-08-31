@@ -34,6 +34,7 @@ export type SheetEditorProps = CollaborationEditorProps;
 export default createCollaborationEditor({
   label: "spreadsheet",
   history: {
+    providedByPreset: true,
     createPlugin: (containerId) => [
       UniverSheetsHistoryUIPlugin,
       {

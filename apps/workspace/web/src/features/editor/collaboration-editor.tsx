@@ -102,6 +102,7 @@ export interface CollaborationEditorProps {
 export interface WorkspaceHistoryDefinition {
   readonly createPlugin: (containerId: string) => IPresetPlugin;
   readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
+  readonly providedByPreset?: boolean;
 }
 
 interface ICollaborationEditorDefinition {
@@ -302,7 +303,9 @@ export function createCollaborationEditor(
             presets,
             collaborationConfig,
             definition,
-            exchangeEnabled
+            exchangeEnabled,
+            collaborationScope.kind === "trunk",
+            element.id
           );
         }
         const univerLocale =
@@ -552,7 +555,12 @@ export function createWorkspaceHistoryPlugins(
   history: WorkspaceHistoryDefinition,
   containerId: string
 ): IPresetPlugin[] {
-  if (collaborationScope.kind !== "trunk") return [];
+  if (
+    collaborationScope.kind !== "trunk" ||
+    history.providedByPreset === true
+  ) {
+    return [];
+  }
   return [history.createPlugin(containerId)];
 }
 
@@ -571,16 +579,30 @@ function configurePresetCollaboration(
     ReturnType<typeof resolveCollaborationConfig>
   >["pluginConfig"],
   definition: ICollaborationEditorDefinition,
-  exchangeEnabled: boolean
+  exchangeEnabled: boolean,
+  historyEnabled: boolean,
+  containerId: string
 ): IPreset[] {
+  const presetHistoryPlugin = definition.history.providedByPreset
+    ? definition.history.createPlugin(containerId)
+    : null;
+  const presetHistoryPluginConstructor = Array.isArray(presetHistoryPlugin)
+    ? presetHistoryPlugin[0]
+    : presetHistoryPlugin;
   return configureExchangePresetPlugins(presets, exchangeEnabled).map(
     (preset) => ({
       ...preset,
-      plugins: preset.plugins.map((plugin): IPresetPlugin => {
-        if (!Array.isArray(plugin)) return plugin;
+      plugins: preset.plugins.flatMap((plugin): IPresetPlugin[] => {
+        if (!Array.isArray(plugin)) return [plugin];
         const [PluginConstructor, pluginConfig] = plugin;
+        if (
+          presetHistoryPlugin &&
+          PluginConstructor === presetHistoryPluginConstructor
+        ) {
+          return historyEnabled ? [presetHistoryPlugin] : [];
+        }
         if (PluginConstructor === UniverCollaborationClientPlugin) {
-          return [
+          return [[
             PluginConstructor,
             {
               ...(pluginConfig as object),
@@ -592,10 +614,10 @@ function configurePresetCollaboration(
               sendChangesetTimeout: 200,
               ...collaborationConfig,
             },
-          ];
+          ]];
         }
         if (PluginConstructor === UniverCollaborationClientUIPlugin) {
-          return [
+          return [[
             PluginConstructor,
             {
               ...(pluginConfig as object),
@@ -608,9 +630,9 @@ function configurePresetCollaboration(
                 ? [[DesktopCollaborationStatusDisplayController, null]]
                 : undefined,
             },
-          ];
+          ]];
         }
-        return plugin;
+        return [plugin];
       }),
     })
   );

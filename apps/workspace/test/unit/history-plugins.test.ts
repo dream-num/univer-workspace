@@ -63,6 +63,13 @@ describe("Workspace standard History plugins", () => {
           "history-editor"
         )
       ).toEqual([]);
+      expect(
+        createWorkspaceHistoryPlugins(
+          { kind: "trunk" },
+          { ...history, providedByPreset: true },
+          "history-editor"
+        )
+      ).toEqual([]);
     },
     15_000
   );
