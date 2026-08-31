@@ -45,6 +45,37 @@ describe("Workspace content execution workflow", () => {
     });
   });
 
+  it("injects the selected Base facade with the current SDK prelude", async () => {
+    const baseTarget: WorkspaceRuntimeTarget = {
+      ...target,
+      unitId: "base-1",
+      unitType: "base",
+    };
+    const executeAndCommit = vi.fn(async () => ({ committed: false as const, value: "base-1" }));
+    const feature = new WorkspaceContentExecutionFeature(
+      { resolveEditableRuntimeTarget: async () => baseTarget },
+      runtimeWith(executeAndCommit),
+    );
+
+    await expect(
+      feature.execute({
+        code: "return base.getId();",
+        unitId: "base-1",
+        worktreeId: "wt-1",
+      }),
+    ).resolves.toEqual({ committed: false, value: "base-1" });
+
+    expect(executeAndCommit).toHaveBeenCalledWith({
+      code: [
+        "const api = univerAPI;",
+        'const base = api.getBase("base-1");',
+        'if (!base) throw new Error("Cannot find base base-1");',
+        "return base.getId();",
+      ].join("\n"),
+      target: baseTarget,
+    });
+  });
+
   it("rejects a reserved binding before invoking the runtime", async () => {
     const executeAndCommit = vi.fn();
     const feature = new WorkspaceContentExecutionFeature(
@@ -59,6 +90,31 @@ describe("Workspace content execution workflow", () => {
         worktreeId: "wt-1",
       }),
     ).rejects.toMatchObject({ code: "CONTENT_EXECUTION_RESERVED_BINDING" });
+    expect(executeAndCommit).not.toHaveBeenCalled();
+  });
+
+  it("rejects redeclaring the injected Base facade before invoking the runtime", async () => {
+    const baseTarget: WorkspaceRuntimeTarget = {
+      ...target,
+      unitId: "base-1",
+      unitType: "base",
+    };
+    const executeAndCommit = vi.fn();
+    const feature = new WorkspaceContentExecutionFeature(
+      { resolveEditableRuntimeTarget: async () => baseTarget },
+      runtimeWith(executeAndCommit),
+    );
+
+    await expect(
+      feature.execute({
+        code: 'const base = api.getBase("base-1");',
+        unitId: "base-1",
+        worktreeId: "wt-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONTENT_EXECUTION_RESERVED_BINDING",
+      details: { binding: "base", unitType: "base" },
+    });
     expect(executeAndCommit).not.toHaveBeenCalled();
   });
 

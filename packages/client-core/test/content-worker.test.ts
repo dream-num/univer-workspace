@@ -61,7 +61,7 @@ describe("Workspace content runtime worker", () => {
     expect(JSON.stringify(backendOptions)).not.toContain("secret-license");
   });
 
-  it("supplies the injected license and reference provider to the headless factory", async () => {
+  it("supplies the license and Unit provider without replacing SDK data providers", async () => {
     await workspaceContentRuntimeWorker.createRuntime(init({ kind: "trunk" }));
     const factoryOptions = mocks.factory.mock.calls[0]![0] as {
       readonly createUniver: (context: unknown) => Promise<unknown>;
@@ -79,6 +79,12 @@ describe("Workspace content runtime worker", () => {
         embedPluginConfig: { resourceRefUnitProviderRegistrations: expect.any(Array) },
         license: "secret-license",
       }),
+    );
+    const headlessOptions = mocks.headless.mock.calls[0]![0] as {
+      readonly embedPluginConfig: Record<string, unknown>;
+    };
+    expect(headlessOptions.embedPluginConfig).not.toHaveProperty(
+      "resourceRefDataProviderRegistrations",
     );
   });
 
