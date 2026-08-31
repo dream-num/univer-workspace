@@ -35,8 +35,9 @@ describe("dsh-univer-work plugin shell", () => {
     expect(manifest.dsh.bundle.patch).toBe("./cordis.patch.yml");
     expect(patch.match(/^\s+- id: dsh-univer-work$/gm)).toHaveLength(1);
     expect(patch.match(/^\s+name: dsh-univer-work$/gm)).toHaveLength(1);
+    expect(patch).toContain("origin: !!js process.env.UNIVER_WORKSPACE_ORIGIN ?? ''");
     expect(patch).not.toMatch(/^\s+disabled:/m);
-    expect(Object.keys(host).sort()).toEqual(["apply", "inject", "name"]);
+    expect(Object.keys(host).sort()).toEqual(["Config", "apply", "inject", "name"]);
     expect(host.name).toBe(manifest.name);
   }, 30_000);
 
@@ -56,7 +57,7 @@ describe("dsh-univer-work plugin shell", () => {
       name: host.name,
       inject: host.inject,
       apply(child: Context) {
-          host.apply(child);
+          host.apply(child, { origin: "https://workspace.test" });
           child.effect(
             () => {
               active = true;

@@ -174,6 +174,8 @@ describe("Workspace authentication tools", () => {
       false,
       false,
     ]);
+    expect(schemas.find(({ name }) => name === "workspace_auth_start")?.parameters)
+      .toMatchObject({ properties: {}, additionalProperties: false });
     expect(JSON.stringify(schemas)).not.toMatch(/password|deviceCode|cookie|grant/i);
     expect(ctx.tools.schemas().filter(({ name }) => name.startsWith("workspace_typst_"))
       .map(({ name }) => name).sort()).toEqual(["workspace_typst_apply", "workspace_typst_compile"]);
@@ -223,7 +225,7 @@ describe("Workspace authentication tools", () => {
       const invalid = await execute(
         ctx,
         `workspace_auth_${operation}`,
-        operation === "start" ? { origin, unexpected: true } : { unexpected: true },
+        operation === "start" ? { origin } : { unexpected: true },
         operation === "logout" ? fakeAgent() : undefined,
       );
 
@@ -237,7 +239,7 @@ describe("Workspace authentication tools", () => {
       const valid = await execute(
         ctx,
         `workspace_auth_${operation}`,
-        operation === "start" ? { origin } : {},
+        {},
         operation === "logout" ? fakeAgent() : undefined,
       );
 
@@ -675,9 +677,9 @@ describe("Workspace authentication tools", () => {
 
   it("starts once, stores the pending secret, and safely reuses the live handoff", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => authorizationResponse());
-    const { ctx } = await setup(fetcher);
-    const first = await execute(ctx, "workspace_auth_start", { origin: `${origin}/` });
-    const second = await execute(ctx, "workspace_auth_start", { origin });
+    const { ctx } = await setup(fetcher, false, undefined, `${origin}/`);
+    const first = await execute(ctx, "workspace_auth_start", {});
+    const second = await execute(ctx, "workspace_auth_start", {});
 
     expect(first).toMatchObject({
       isError: false,
@@ -694,10 +696,47 @@ describe("Workspace authentication tools", () => {
     expect(parseWorkspaceGrantRecord(await ctx.credentials.readRecord(WORKSPACE_CREDENTIAL_KEY))).toEqual(pending());
   });
 
+  it("routes authentication to the Host-configured Workspace Authority, not the DSH Host", async () => {
+    const workspaceOrigin = "http://127.0.0.1:3020";
+    const requests: string[] = [];
+    const { ctx } = await setup(async (input) => {
+      requests.push(input instanceof Request ? input.url : String(input));
+      return authorizationResponse();
+    }, false, undefined, workspaceOrigin);
+
+    const result = await execute(ctx, "workspace_auth_start", {});
+
+    expect(result).toMatchObject({
+      isError: false,
+      value: {
+        origin: workspaceOrigin,
+        verificationUrl: `${workspaceOrigin}/cli-login?userCode=ABCD-EFGH`,
+      },
+    });
+    expect(requests).toEqual([`${workspaceOrigin}/api/auth/cli/authorizations`]);
+    expect(requests.every((url) => !url.startsWith("http://127.0.0.1:3080"))).toBe(true);
+  });
+
+  it.each(["", "http://127.0.0.1:3020/path"])(
+    "rejects missing or malformed Host origin %j before HTTP",
+    async (workspaceOrigin) => {
+      const fetcher = vi.fn<typeof fetch>();
+      const { ctx } = await setup(fetcher, false, undefined, workspaceOrigin);
+
+      const result = await execute(ctx, "workspace_auth_start", {});
+
+      expect(result).toMatchObject({
+        isError: true,
+        error: { info: { code: "workspace-origin-invalid" } },
+      });
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
+
   it("renders a contract-valid expiry outside the Date domain after committing the same handoff", async () => {
     const expiresIn = 8_700_000_000_000;
     const { ctx } = await setup(async () => authorizationResponse({ expiresIn }));
-    const result = await execute(ctx, "workspace_auth_start", { origin });
+    const result = await execute(ctx, "workspace_auth_start", {});
     const expiresAt = fixedNow + expiresIn * 1000;
 
     expect(result).toMatchObject({
@@ -714,7 +753,7 @@ describe("Workspace authentication tools", () => {
     const { ctx } = await setup(fetcher);
     for (const grant of [authenticated(), pending({ origin: "https://other.test", verificationUrl: "https://other.test/cli-login?userCode=ABCD-EFGH" })]) {
       await ctx.credentials.modifyRecord(WORKSPACE_CREDENTIAL_KEY, async () => grantRecord(grant));
-      const result = await execute(ctx, "workspace_auth_start", { origin });
+      const result = await execute(ctx, "workspace_auth_start", {});
       expect(result).toMatchObject({ isError: true, error: { info: { code: "workspace-authentication-conflict" } } });
     }
     expect(fetcher).not.toHaveBeenCalled();
@@ -759,8 +798,8 @@ describe("Workspace authentication tools", () => {
       return authorizationResponse();
     });
     const { ctx } = await setup(fetcher);
-    const first = execute(ctx, "workspace_auth_start", { origin });
-    const second = execute(ctx, "workspace_auth_start", { origin });
+    const first = execute(ctx, "workspace_auth_start", {});
+    const second = execute(ctx, "workspace_auth_start", {});
     await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
     release();
     await expect(Promise.all([first, second])).resolves.toMatchObject([
@@ -773,7 +812,7 @@ describe("Workspace authentication tools", () => {
   it("rejects an uncommitted post-request transition without exposing its response", async () => {
     const { ctx, credentials } = await setup(async () => authorizationResponse());
     credentials.beforeNextModify = () => credentials.seed(grantRecord(authenticated()));
-    const result = await execute(ctx, "workspace_auth_start", { origin });
+    const result = await execute(ctx, "workspace_auth_start", {});
     expect(result).toMatchObject({
       isError: true,
       error: { info: { code: "workspace-authentication-state-conflict" } },
@@ -788,7 +827,7 @@ describe("Workspace authentication tools", () => {
     const startFetcher = vi.fn<typeof fetch>(async () => authorizationResponse());
     const startSetup = await setup(startFetcher);
     startSetup.credentials.beforeNextModify = () => startSetup.credentials.seed(malformed);
-    const startResult = await execute(startSetup.ctx, "workspace_auth_start", { origin });
+    const startResult = await execute(startSetup.ctx, "workspace_auth_start", {});
 
     const completeFetcher = vi.fn<typeof fetch>(async () => Response.json(
       { authenticated: true, user: { id: "uncommitted-user", displayName: "Uncommitted" } },
@@ -823,7 +862,7 @@ describe("Workspace authentication tools", () => {
       verificationUriComplete: `${origin}/cli-login?userCode=${deviceCode}`,
     }));
     const { ctx, credentials } = await setup(fetcher);
-    const malformed = await execute(ctx, "workspace_auth_start", { origin });
+    const malformed = await execute(ctx, "workspace_auth_start", {});
     credentials.readFailure = new Error(dependencySentinel, { cause: new Error(cookie) });
     const providerFailure = await execute(ctx, "workspace_auth_whoami", {});
     const transcript = JSON.stringify([malformed, providerFailure]);
@@ -963,7 +1002,7 @@ describe("Workspace authentication tools", () => {
       const call = execute(
         ctx,
         `workspace_auth_${operation}`,
-        operation === "start" ? { origin } : {},
+        {},
         operation === "logout" ? fakeAgent() : undefined,
         controller.signal,
       );
@@ -999,7 +1038,7 @@ describe("Workspace authentication tools", () => {
       const call = execute(
         ctx,
         `workspace_auth_${operation}`,
-        operation === "start" ? { origin } : {},
+        {},
       );
       await vi.waitFor(() => expect(observed).toBeInstanceOf(AbortSignal));
       const disposal = fiber.dispose();
@@ -1050,7 +1089,7 @@ describe("Workspace authentication tools", () => {
         scenario === "start-reuse"
           ? "workspace_auth_start"
           : scenario === "whoami-authenticated" ? "workspace_auth_whoami" : "workspace_auth_complete",
-        scenario === "start-reuse" ? { origin } : {},
+        {},
         undefined,
         controller.signal,
       );
@@ -1083,7 +1122,7 @@ describe("Workspace authentication tools", () => {
       const call = execute(
         ctx,
         `workspace_auth_${operation}`,
-        operation === "start" ? { origin } : {},
+        {},
         operation === "logout" ? fakeAgent() : undefined,
         controller.signal,
       );
@@ -1132,7 +1171,7 @@ describe("Workspace authentication tools", () => {
       });
     };
     const { ctx, credentials, fiber } = await setup(fetcher, true);
-    const first = execute(ctx, "workspace_auth_start", { origin });
+    const first = execute(ctx, "workspace_auth_start", {});
     await vi.waitFor(() => expect(firstObserved).toBeInstanceOf(AbortSignal));
 
     let releaseDelete!: () => void;
@@ -1190,8 +1229,8 @@ describe("Workspace authentication tools", () => {
       const current = await setup(async () => authorizationResponse({ verificationUriComplete }));
       record(
         "workspace_auth_start",
-        { origin },
-        await execute(current.ctx, "workspace_auth_start", { origin }),
+        {},
+        await execute(current.ctx, "workspace_auth_start", {}),
       );
     }
     const transport = await setup(async () => {
@@ -1199,8 +1238,8 @@ describe("Workspace authentication tools", () => {
     });
     record(
       "workspace_auth_start",
-      { origin },
-      await execute(transport.ctx, "workspace_auth_start", { origin }),
+      {},
+      await execute(transport.ctx, "workspace_auth_start", {}),
     );
     const provider = await setup(async () => Response.json({}));
     provider.credentials.readFailure = new Error(providerSentinel, { cause: new Error(deviceCode) });
@@ -1296,8 +1335,8 @@ describe("Workspace authentication tools", () => {
     }, true);
     record(
       "workspace_auth_start",
-      { origin },
-      await execute(safe.ctx, "workspace_auth_start", { origin }),
+      {},
+      await execute(safe.ctx, "workspace_auth_start", {}),
     );
     record(
       "workspace_auth_complete",
@@ -1319,12 +1358,12 @@ describe("Workspace authentication tools", () => {
     const cancelledCall = execute(
       cancelled.ctx,
       "workspace_auth_start",
-      { origin },
+      {},
       undefined,
       cancellation.signal,
     );
     cancellation.abort(new Error("cancellation-private-sentinel"));
-    record("workspace_auth_start", { origin }, await cancelledCall);
+    record("workspace_auth_start", {}, await cancelledCall);
 
     const schemas = safe.ctx.tools.schemas().filter(({ name }) => name.startsWith("workspace_auth_"));
     const session = Session.create(SessionId("dsh-univer-work-auth-transcript"));
@@ -1364,7 +1403,7 @@ describe("Workspace authentication tools", () => {
     const providerSentinel = "code-mode-provider-private-value";
     const { ctx, credentials, runtime } = await setupCodeMode(async () => authorizationResponse());
     runtime.dispatches = [
-      { name: "workspace_auth_start", arguments: { origin } },
+      { name: "workspace_auth_start", arguments: {} },
       {
         name: "workspace_auth_whoami",
         arguments: {},
@@ -1441,6 +1480,7 @@ async function setup(
   fetcher: typeof fetch,
   approval = false,
   onApproval?: () => void,
+  workspaceOrigin = origin,
 ): Promise<{
   readonly ctx: Context;
   readonly credentials: MemoryCredentials;
@@ -1463,7 +1503,7 @@ async function setup(
     name: "dsh-univer-work-authentication-test",
     inject: ["credentials", "tools", "skills"],
     apply(child: Context) {
-      mountWorkspaceAuthentication(child, { fetcher, now: () => fixedNow });
+      mountWorkspaceAuthentication(child, { fetcher, now: () => fixedNow, workspaceOrigin });
     },
   });
   await fiber;
@@ -1486,7 +1526,7 @@ async function setupCodeMode(fetcher: typeof fetch): Promise<{
     name: "dsh-univer-work-authentication-code-test",
     inject: ["credentials", "tools", "skills"],
     apply(child: Context) {
-      mountWorkspaceAuthentication(child, { fetcher, now: () => fixedNow });
+      mountWorkspaceAuthentication(child, { fetcher, now: () => fixedNow, workspaceOrigin: origin });
     },
   });
   await fiber;

@@ -88,6 +88,7 @@ export interface WorkspaceAuthenticationOptions {
     "exportToBuffer" | "importBuffer" | "inspectSource" | "openSource" | "writeOutput">;
   readonly render?: WorkspaceRenderOptions;
   readonly svg?: Pick<WorkspaceSvgToolDependencies, "createFeature">;
+  readonly workspaceOrigin?: string;
 }
 
 const subjectSchema = {
@@ -253,13 +254,7 @@ export function mountWorkspaceAuthentication(
         ctx.tools.register(closeParameterRoot(defineTool({
           name: "workspace_auth_start",
           description: "Start one Workspace browser approval. Relay the returned URL and code, then stop until the user confirms approval.",
-          parameters: {
-            origin: {
-              type: "string",
-              required: true,
-              description: "Workspace HTTP(S) origin without path, query, credentials, or fragment.",
-            },
-          },
+          parameters: {},
           output: {
             schema: handoffSchema,
             render: (_args, value) => [{
@@ -267,8 +262,8 @@ export function mountWorkspaceAuthentication(
               text: `Open ${value.verificationUrl} and enter ${value.userCode}. Wait for the user to confirm approval before calling workspace_auth_complete. Approval expires at ${renderExpiry(value.expiresAt)}.`,
             }],
           },
-          execute: (args, exec) => owner.execute("start", exec, (signal) => owner.start(args.origin, signal)),
-        }), ["origin"])),
+          execute: (_args, exec) => owner.execute("start", exec, (signal) => owner.start(signal)),
+        }), [])),
         ctx.tools.register(closeParameterRoot(defineTool({
           name: "workspace_auth_complete",
           description: "Perform one Workspace browser-approval exchange only after the user says approval is complete. Never poll.",
@@ -434,14 +429,17 @@ class WorkspaceAuthenticationOwner {
     }
   }
 
-  public async start(origin: string, signal: AbortSignal): Promise<{
+  public async start(signal: AbortSignal): Promise<{
     readonly status: "authorization_required";
     readonly origin: string;
     readonly userCode: string;
     readonly verificationUrl: string;
     readonly expiresAt: number;
   }> {
-    const normalizedOrigin = new WorkspaceHttp({ origin, role: "client" }).origin;
+    const normalizedOrigin = new WorkspaceHttp({
+      origin: this.options.workspaceOrigin ?? "",
+      role: "client",
+    }).origin;
     return await this.mutationQueue.run(async () => {
       throwIfAborted(signal);
       let current = await this.readGrant(signal);

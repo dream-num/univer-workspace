@@ -772,6 +772,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
     const SystemPrompt = (await load("@deepseek-ai/dsh-system-prompt")).default;
     const ApprovalService = (await load("@deepseek-ai/dsh-user-approval")).default;
     const plugin = await load("dsh-univer-work");
+    const pluginConfig = { origin: ${JSON.stringify(contentRuntimeFixture.origin)} };
     const unhandledRejections = [];
     const recordUnhandledRejection = (reason) => { unhandledRejections.push(reason); };
     process.on("unhandledRejection", recordUnhandledRejection);
@@ -814,7 +815,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
     };
     assert.equal(relative(installedProfileRoot, installedPluginEntry).startsWith(".."), false);
     assert.equal(relative(installedProfileRoot, unrelatedRunCwd).startsWith(".."), true);
-    assert.deepEqual(Object.keys(plugin).sort(), ["apply", "inject", "name"]);
+    assert.deepEqual(Object.keys(plugin).sort(), ["Config", "apply", "inject", "name"]);
     const {
       MAX_RENDER_CANONICAL_BYTES,
       MAX_RENDER_CANONICAL_DEPTH,
@@ -1445,7 +1446,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
       svgApprovals.push(request.toolName);
       return Promise.resolve("allowed-once");
     });
-    const svgFiber = svgCtx.plugin(plugin);
+    const svgFiber = svgCtx.plugin(plugin, pluginConfig);
     await svgFiber;
     assert.deepEqual(svgCtx.tools.schemas().map(({ name }) => name)
       .filter((name) => name.startsWith("workspace_svg_")).sort(), [
@@ -1686,7 +1687,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
       typstApprovals.push(request.toolName);
       return Promise.resolve("allowed-once");
     });
-    const typstFiber = typstCtx.plugin(plugin);
+    const typstFiber = typstCtx.plugin(plugin, pluginConfig);
     await typstFiber;
     assert.deepEqual(typstCtx.tools.schemas().map(({ name }) => name)
       .filter((name) => name.startsWith("workspace_typst_")).sort(), [
@@ -2000,7 +2001,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
     const installedBaseSkillSource = await readFile(installedBaseSkillPath, "utf8");
     await rm(installedBaseSkillPath);
     try {
-      await assert.rejects(async () => { await ctx.plugin(plugin); }, /ENOENT|no such file/iu);
+      await assert.rejects(async () => { await ctx.plugin(plugin, pluginConfig); }, /ENOENT|no such file/iu);
       assert.deepEqual(ctx.tools.schemas().filter(({ name }) => name.startsWith("workspace_")), []);
       for (const name of bundledSkillNames) assert.equal(await ctx.skills.get(name), undefined);
     } finally {
@@ -2008,7 +2009,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
     }
     await writeFile(installedBaseSkillPath, "invalid installed Skill");
     try {
-      await assert.rejects(async () => { await ctx.plugin(plugin); }, /invalid bundled Workspace Skill definition: base/u);
+      await assert.rejects(async () => { await ctx.plugin(plugin, pluginConfig); }, /invalid bundled Workspace Skill definition: base/u);
       assert.deepEqual(ctx.tools.schemas().filter(({ name }) => name.startsWith("workspace_")), []);
       for (const name of bundledSkillNames) assert.equal(await ctx.skills.get(name), undefined);
     } finally {
@@ -2019,7 +2020,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
       listeners: processListeners(),
       resources: volatileResources(),
     };
-    const fiber = ctx.plugin(plugin);
+    const fiber = ctx.plugin(plugin, pluginConfig);
     await fiber;
     assert.equal(skillProviderRegistrations, skillProviderBaseline,
       "dsh-univer-work added a Skill provider/root/watcher owner");
@@ -2171,9 +2172,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
     assert.doesNotMatch(JSON.stringify(cancelledDiscoveryResult), /installed discovery private abort/);
     mode = "normal";
     approvalRequests.length = 0;
-    const startedAuthentication = await execute("workspace_auth_start", {
-      origin: ${JSON.stringify(contentRuntimeFixture.origin)},
-    });
+    const startedAuthentication = await execute("workspace_auth_start", {});
     assert.equal(startedAuthentication.isError, false, JSON.stringify(startedAuthentication));
     assert.equal(startedAuthentication.value.status, "authorization_required");
     assert.equal(startedAuthentication.value.origin, ${JSON.stringify(contentRuntimeFixture.origin)});
@@ -2191,7 +2190,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
       subject: { id: "user-1", name: "Installed User" },
     });
     assert.deepEqual(storedRecord, runtimeAuthenticated);
-    assert.equal((await execute("workspace_auth_start", { origin: "not-an-origin" })).isError, true);
+    assert.equal((await execute("workspace_auth_start", { origin: "http://127.0.0.1:3080" })).error.info.code, "INVALID_ARGS");
     assert.equal((await execute("workspace_auth_whoami", {})).isError, false);
 
     const sentinel = "installed-invalid-cookie-sentinel";
@@ -2323,7 +2322,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
         approvals.push(request.toolName);
         return typeof approval === "function" ? approval() : Promise.resolve(approval);
       });
-      const childFiber = child.plugin(plugin);
+      const childFiber = child.plugin(plugin, pluginConfig);
       await childFiber;
       const childExecute = async (name, args, agent = approvalAgent) => await child.tools.execute({
         arguments: args,
@@ -3481,14 +3480,14 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
       codeApprovals.push(request.toolName);
       return Promise.resolve("allowed-once");
     });
-    const codeFiber = codeCtx.plugin(plugin);
+    const codeFiber = codeCtx.plugin(plugin, pluginConfig);
     await codeFiber;
     assert.equal(codeSkillProviderRegistrations, codeSkillProviderBaseline,
       "dsh-univer-work added a Code Mode Skill provider/root/watcher owner");
     storedRecord = undefined;
     codeCtx.codeRuntime.dispatches = [{
       name: "workspace_auth_start",
-      arguments: { origin: ${JSON.stringify(contentRuntimeFixture.origin)} },
+      arguments: {},
     }, {
       name: "workspace_auth_complete",
       arguments: {},
@@ -3972,7 +3971,7 @@ async function smokeInstalledTools(profileRoot, runCwd, env, contentRuntimeFixtu
     mode = "normal";
     const completeToolNames = names;
     for (const cycle of [2, 3]) {
-      const cycleFiber = ctx.plugin(plugin);
+      const cycleFiber = ctx.plugin(plugin, pluginConfig);
       await cycleFiber;
       assert.equal(completeToolNames().length, 42, "installed cycle " + cycle + " tool total");
       assert.equal((await ctx.skills.list({ cwd: installedCwd })).filter(({ name }) =>
@@ -4068,6 +4067,7 @@ try {
     npm_config_ignore_scripts: "true",
     UNIVER_LICENSE: "installed-typst-license-sentinel",
     UNIVER_RENDER_BROWSER: testBrowser,
+    UNIVER_WORKSPACE_ORIGIN: contentRuntimeFixture.origin,
   };
   const packed = await run(process.execPath, [pnpmBin, "pack", "--json", "--pack-destination", root], {
     cwd: new URL("..", import.meta.url),
@@ -4142,6 +4142,7 @@ try {
   assert.match(dumped.stdout, /^# == dsh-univer-work$/m);
   assert.equal(dumped.stdout.match(/^\s*- id: dsh-univer-work$/gm)?.length, 1);
   assert.equal(dumped.stdout.match(/^\s+name: dsh-univer-work$/gm)?.length, 1);
+  assert.match(dumped.stdout, /^\s+origin: !!js process\.env\.UNIVER_WORKSPACE_ORIGIN \?\? ''\s*$/m);
 
   try {
     await smokeInstalledTools(

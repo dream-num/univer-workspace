@@ -1,3 +1,5 @@
 - insert:
     - id: dsh-univer-work
       name: dsh-univer-work
+      config:
+        origin: !!js process.env.UNIVER_WORKSPACE_ORIGIN ?? ''

@@ -3,159 +3,98 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>dsh-univer-work 认证边界</title>
+  <title>DSH Workspace 认证 Authority</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    :root {
-      --paper: #f5f5f5;
-      --surface: #ffffff;
-      --ink: #2d3142;
-      --muted: #4f5d75;
-      --rule: rgba(45, 49, 66, 0.14);
-      --accent: #eb6c36;
-      --accent-text: #a8421a;
-      --accent-tint: #fff0e9;
-      --link: #2e5aa8;
-      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
-      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
-    }
+    :root { --paper: #f5f5f5; --surface: #ffffff; --ink: #2d3142; --muted: #4f5d75; --rule: rgba(45, 49, 66, 0.14); --accent: #eb6c36; --accent-text: #a8421a; --accent-tint: #fff0e9; --link: #2e5aa8; --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; --mono: ui-monospace, "SFMono-Regular", Consolas, monospace; }
     * { margin: 0; padding: 0; }
-    body {
-      min-width: 320px;
-      min-height: 100vh;
-      padding: 40px 24px;
-      background: var(--paper);
-      color: var(--ink);
-      font-family: var(--sans);
-    }
+    body { min-width: 320px; min-height: 100vh; padding: 40px 24px; background: var(--paper); color: var(--ink); font-family: var(--sans); }
     .page { width: min(1120px, 100%); margin: 0 auto; }
     .eyebrow, .label, footer { font-family: var(--mono); }
-    .eyebrow {
-      margin-bottom: 8px;
-      color: var(--accent-text);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-    }
+    .eyebrow { margin-bottom: 8px; color: var(--accent-text); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
     h1 { max-width: 860px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
     .thesis { max-width: 800px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
     .diagram { overflow-x: auto; padding: 8px 0 24px; }
     .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
-    svg { display: block; width: 100%; min-width: 760px; height: auto; }
-    .brief {
-      display: grid;
-      grid-template-columns: 1.1fr 1fr 0.9fr;
-      gap: 16px;
-      margin-top: 24px;
-    }
+    svg { display: block; width: 100%; min-width: 820px; height: auto; }
+    .brief { display: grid; grid-template-columns: 1.1fr 1fr 0.9fr; gap: 16px; margin-top: 24px; }
     .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
     .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
     .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.6; }
     .card ul { padding-left: 20px; }
     footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
     footer a { color: var(--link); }
-    @media (max-width: 760px) {
-      body { padding: 24px 16px; }
-      .brief { grid-template-columns: 1fr; }
-    }
+    @media (max-width: 760px) { body { padding: 24px 16px; } .brief { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <main class="page">
     <header>
-      <p class="eyebrow">Tina Change View · add-dsh-univer-work-authentication</p>
-      <h1>认证由四个 tools 发起，秘密只留在 CredentialKey</h1>
-      <p class="thesis">DSH 复用 Client Core 的两阶段 browser approval，以一次 start、一次 complete 建立单一 Workspace 连接，并让后续操作按次读取当前 Login Session。</p>
+      <p class="eyebrow">Tina Change View</p>
+      <h1>Workspace 决定认证 Authority</h1>
+      <p class="thesis">DSH Host 只承载工具；operator 配置的 Workspace public origin 才接收认证请求，模型不能把 Host 的 3080 端口当成 Authority。</p>
     </header>
 
-    <section class="diagram" aria-label="认证与凭据架构，可横向滚动" tabindex="0">
-      <svg viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="auth-architecture-title auth-architecture-desc">
-        <title id="auth-architecture-title">dsh-univer-work 认证与凭据架构</title>
-        <desc id="auth-architecture-desc">Agent 只通过四个认证工具交换安全字段。工具调用 Client Core 与 Workspace Server，并把 pending 或 authenticated grant 存入 DSH Credentials。后续操作通过 resolver 每次读取 credential，而不缓存 cookie。</desc>
+    <section class="diagram" aria-label="认证 Authority 架构，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1080 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="auth-authority-title auth-authority-desc">
+        <title id="auth-authority-title">DSH Workspace 认证 Authority 架构</title>
+        <desc id="auth-authority-desc">operator 通过 UNIVER_WORKSPACE_ORIGIN 配置 Workspace public origin。Agent 调用 DSH Host 上的零参数认证工具，工具只向该 Workspace origin 发起请求，并将结果保存为 plugin-owned credential，后续工具通过 resolver 使用该连接。</desc>
         <defs>
-          <marker id="auth-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
-          </marker>
-          <marker id="auth-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
-          </marker>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
         </defs>
-        <rect width="1000" height="560" fill="#f5f5f5"/>
-
-        <path d="M 200 156 H 280" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#auth-arrow)"/>
-        <path d="M 470 144 H 560" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#auth-arrow)"/>
-        <path d="M 750 156 H 820" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#auth-arrow)"/>
-        <path d="M 375 212 V 350" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#auth-arrow-accent)"/>
-        <path d="M 470 406 H 560" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#auth-arrow)"/>
-        <path d="M 655 350 V 212" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#auth-arrow)"/>
-
-        <rect x="216" y="134" width="52" height="20" rx="4" fill="#f5f5f5"/>
-        <text x="242" y="148" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">安全字段</text>
-        <rect x="492" y="122" width="48" height="20" rx="4" fill="#f5f5f5"/>
-        <text x="516" y="136" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">auth API</text>
-        <rect x="766" y="134" width="40" height="20" rx="4" fill="#f5f5f5"/>
-        <text x="786" y="148" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">HTTP</text>
-        <rect x="386" y="266" width="72" height="20" rx="4" fill="#f5f5f5"/>
-        <text x="422" y="280" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">写入 grant</text>
-        <rect x="496" y="384" width="40" height="20" rx="4" fill="#f5f5f5"/>
-        <text x="516" y="398" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">每次读</text>
-        <rect x="666" y="266" width="64" height="20" rx="4" fill="#f5f5f5"/>
-        <text x="698" y="280" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">重建连接</text>
-
-        <rect x="40" y="100" width="160" height="112" rx="8" fill="#ffffff" stroke="#4f5d75"/>
-        <text x="120" y="146" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">DSH Agent</text>
-        <text x="120" y="174" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">不接触 cookie</text>
-
-        <rect x="280" y="100" width="190" height="112" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
-        <text x="375" y="138" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">4 个 auth tools</text>
-        <text x="375" y="166" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">start / complete</text>
-        <text x="375" y="188" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">whoami / logout</text>
-
-        <rect x="560" y="100" width="190" height="112" rx="8" fill="#ffffff" stroke="#4f5d75"/>
-        <text x="655" y="146" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Workspace Client Core</text>
-        <text x="655" y="174" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">strict protocol + signal</text>
-
-        <rect x="820" y="100" width="140" height="112" rx="8" fill="#ffffff" stroke="#4f5d75"/>
-        <text x="890" y="146" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Workspace</text>
-        <text x="890" y="174" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Server</text>
-
-        <rect x="280" y="350" width="190" height="112" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
-        <text x="375" y="390" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">CredentialKey grant</text>
-        <text x="375" y="418" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">pending 或 authenticated</text>
-        <text x="375" y="440" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">device code / cookie</text>
-
-        <rect x="560" y="350" width="190" height="112" rx="8" fill="#ffffff" stroke="#4f5d75"/>
-        <text x="655" y="390" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Authenticated resolver</text>
-        <text x="655" y="418" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">按操作严格解析</text>
-        <text x="655" y="440" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">不缓存 Session</text>
+        <rect width="1080" height="600" fill="#f5f5f5"/>
+        <path d="M 210 318 H 296" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 410 174 V 234" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 524 318 H 606" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 826 318 H 872" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 964 374 V 446 H 920" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 700 462 H 650 V 374" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="48" y="258" width="162" height="120" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="129" y="310" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="19" text-anchor="middle">Agent</text>
+        <text x="129" y="340" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">调用 start({})</text>
+        <rect x="300" y="72" width="220" height="102" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="410" y="112" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Cordis Config</text>
+        <text x="410" y="140" fill="#4f5d75" font-family="SFMono-Regular, monospace" font-size="12" text-anchor="middle">UNIVER_WORKSPACE_ORIGIN</text>
+        <rect x="296" y="234" width="228" height="140" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="410" y="284" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">DSH Host :3080</text>
+        <text x="410" y="316" fill="#4f5d75" font-family="SFMono-Regular, monospace" font-size="13" text-anchor="middle">workspace_auth_start({})</text>
+        <text x="410" y="344" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">不选择 Authority</text>
+        <rect x="606" y="234" width="220" height="140" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="716" y="280" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Workspace public origin</text>
+        <text x="716" y="312" fill="#4f5d75" font-family="SFMono-Regular, monospace" font-size="13" text-anchor="middle">http://127.0.0.1:3020</text>
+        <text x="716" y="342" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">认证 Authority</text>
+        <rect x="872" y="262" width="184" height="112" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="964" y="306" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">Credential record</text>
+        <text x="964" y="336" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">pending / authenticated</text>
+        <rect x="700" y="414" width="220" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="810" y="454" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">Authenticated resolver</text>
+        <text x="810" y="482" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">后续 Workspace tools</text>
+        <rect x="530" y="285" width="160" height="24" rx="4" fill="#f5f5f5"/>
+        <text x="610" y="302" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">只发往配置 origin</text>
       </svg>
     </section>
 
     <section class="brief" aria-label="决策摘要">
       <article class="card">
         <p class="label">Scope / Non-goals</p>
-        <p>新增 `dsh-univer-work/authentication`，修改 `workspace-client-core/auth` 的 optional signal。只支持 Host-only local、单一 active origin；一个 live Host 且无绕过它修改 owner key 的 writer是部署前提。不加入 password、authorization flow、Web Client、Settings、业务 tools 或 runtime。</p>
+        <p>只修改 dsh-univer-work 的认证入口、Cordis bundle patch、测试和文档。保持单 origin、两阶段 handoff、credential secrecy 与现有 Workspace Server contract；不增加 Settings UI 或 account selector。</p>
       </article>
       <article class="card">
         <p class="label">Decisions</p>
         <ul>
-          <li>DSH rc.2 没有 `authorization.begin()` 产品调用方，因此采用可用的两阶段 tools。</li>
-          <li>同一 Host 用 process-local queue 串行化 start、complete 与 logout。</li>
-          <li>fiber disposer 先停止新调用并 abort I/O，再等待 queue 与已接受 body 收敛。</li>
-          <li>logout 必须先获 human approval，远端失败也在 `finally` 清除本地 record。</li>
-          <li>private Client Core 的 reachable auth 代码内联；DSH/Cordis 使用 exact optional peers，共享 Host module identity。</li>
+          <li><code>workspace_auth_start({})</code> 使用 Host-owned <code>origin</code>。</li>
+          <li>bundle patch 从 <code>UNIVER_WORKSPACE_ORIGIN</code> 注入。</li>
+          <li>缺失或非法配置在 HTTP 前返回 <code>workspace-origin-invalid</code>。</li>
         </ul>
       </article>
       <article class="card">
-        <p class="label">Risks / Impact</p>
-        <p>取消或网络中断可能留下 `workspace-result-unknown`，禁止自动重试；credential 写入失败时丢弃 cookie。DSH rc.2 没有 owner lease/conditional delete，插件无法检测或协调其他 Host、文件或 provider writer。CLI 和 Server 行为保持不变。</p>
+        <p class="label">Risk / Verification</p>
+        <p>配置错误会阻止 start。回归测试固定 DSH Host 3080、Workspace 3020，并断言认证请求只到 3020；其他 credential、cancellation 与 package 行为保持原有 gate。</p>
       </article>
     </section>
 
-    <footer>
-      本页由 <a href="proposal.md">proposal.md</a> 与 <a href="design.md">design.md</a> 派生，仅供评审；Markdown sources 是权威来源。
-    </footer>
+    <footer>Derived from <a href="proposal.md">proposal.md</a> and <a href="design.md">design.md</a>. Markdown sources are authoritative.</footer>
   </main>
 </body>
 </html>

@@ -47,10 +47,12 @@ CredentialKey: dsh-univer-work/workspace
 
 The Host plugin registers these stable names through `defineTool()`:
 
-- `workspace_auth_start({ origin })`
+- `workspace_auth_start({})`
 - `workspace_auth_complete({})`
 - `workspace_auth_whoami({})`
 - `workspace_auth_logout({})`
+
+The plugin exports one Cordis Config field, `origin`. Its bundle patch maps `UNIVER_WORKSPACE_ORIGIN` into that field. `workspace_auth_start` reads only this Host-owned value, normalizes it through `WorkspaceHttp`, and rejects a missing or invalid value with `workspace-origin-invalid`; it never accepts an origin argument or derives one from the DSH Host/browser origin. This keeps the Workspace public origin operator-controlled while allowing local built-Server `http://127.0.0.1:3020`, Vite public origin `http://127.0.0.1:5173`, or a deployed Workspace domain according to the active topology.
 
 Start, complete, and whoami use generic call/result presentation. Logout also installs a fiber-owned `tools/pre-execute` listener that returns `ask` only for `workspace_auth_logout` and delegates every other tool to `next()`. Thus removing a usable credential requires the same DSH approval channel as other consequential calls; a headless or unavailable approval channel fails closed.
 
@@ -63,6 +65,7 @@ Alternatives rejected:
 - Registering `ctx.authorization` and a flow has no product caller in the frozen DSH baseline.
 - Adding a Web Client, Remote, Settings card, Host HTTP page, or DSH CLI command creates another capability and violates the confirmed Host-only boundary.
 - Password arguments or a secret prompt would place a password on a model/session path.
+- Accepting `origin` from the model or defaulting to the DSH Host page makes the caller choose the authentication Authority and can send the authorization request to port 3080 instead of the configured Workspace service.
 
 ### 2. Store one discriminated grant under one owner key
 
@@ -77,7 +80,7 @@ There is no version field or credential-store wrapper: this is the first private
 
 Every authenticated read also verifies the record kind, payload object, exact fields, normalized HTTP(S) origin, cookie, and User subject. Errors name only the record/state problem, never the rejected value. The extra handoff check remains in the DSH Client Shell because this Change modifies the shared Client Core auth protocol only for optional signal forwarding and preserves the CLI's frozen behavior.
 
-The single key intentionally supports one active connection. Start returns an existing live pending handoff for the same origin, but refuses to overwrite an authenticated record or a pending record for another origin. The caller uses approved logout before changing origin. This avoids an account registry and prevents a harmless start call from silently discarding a working Login Session.
+The single key intentionally supports one active connection. Start returns an existing live pending handoff for the configured origin, but refuses to overwrite an authenticated record or a pending record for another origin. The operator uses approved logout before changing the plugin configuration and restarting the Host. This avoids an account registry and prevents a harmless start call from silently discarding a working Login Session.
 
 Alternatives rejected:
 
@@ -149,6 +152,7 @@ A keyless assembled-agent snapshot inspects tool schemas plus Native/Code Mode r
 ## Risks / Trade-offs
 
 - **A model calls complete before the user replies** -> The tool performs one exchange only; pending returns immediately with explicit stop instructions, and no timer, retry, or Job exists.
+- **The Workspace origin is missing or malformed** -> Start fails with `workspace-origin-invalid` before HTTP; the operator sets `UNIVER_WORKSPACE_ORIGIN` to the Workspace public origin, and installed composition tests prove a Host on 3080 sends auth only to the configured Workspace origin on 3020.
 - **Another Host or out-of-band writer mutates the owner key** -> The local first version documents one live Host and no bypass writer as a support precondition; it cannot detect or safely coordinate that topology. Add an upstream owner lease or conditional-delete seam only when shared mutation becomes a product requirement.
 - **A successful Server exchange cannot be committed locally** -> Report the storage failure, discard the cookie, and leave the prior/local state authoritative; do not fake a cross-system transaction or print recovery material.
 - **Cancellation makes a remote result unknowable** -> Forward the signal, preserve `workspace-result-unknown`, never retry completion/logout automatically, and still finish local logout deletion.

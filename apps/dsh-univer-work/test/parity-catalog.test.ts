@@ -185,7 +185,7 @@ async function setupCatalog(shadowCore = false): Promise<{
       content: "shadowed",
     });
   }
-  const fiber = ctx.plugin({ name, inject, apply });
+  const fiber = ctx.plugin({ name, inject, apply }, { origin: "https://workspace.test" });
   await fiber;
   return { ctx, cwd, fiber };
 }
@@ -257,6 +257,7 @@ async function setupPolicyProbe(outcome: ApprovalOutcome): Promise<{
     inject,
     apply(child: Context) {
       mountWorkspaceAuthentication(child, {
+        workspaceOrigin: "https://workspace.test",
         contentRuntime: {
           createRuntime: (() => {
             heavyRuntimeEffects += 1;
@@ -333,7 +334,6 @@ function operationPolicies(): Map<string, "conditional" | "none" | "required"> {
 function probeArguments(name: string, parameters: Record<string, unknown>, cwd: string): unknown {
   const generated = sampleSchema(parameters) as Record<string, unknown>;
   const overrides: Record<string, Record<string, unknown>> = {
-    workspace_auth_start: { origin: "https://workspace.test" },
     workspace_blob_upload: { source_path: "source.bin", space_id: "space-1" },
     workspace_content_execute: { code: "return null;", unit_id: "unit-1", worktree_id: "wt-1" },
     workspace_node_move: { node_id: "node-1", parent_node_id: null },

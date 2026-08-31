@@ -481,6 +481,9 @@ importers:
       '@deepseek-ai/dsh-user-approval':
         specifier: 0.1.1-rc.2
         version: 0.1.1-rc.2(09871eaf880be2109e9d668352ef8c05)
+      '@deepseek-ai/schemastery':
+        specifier: 3.18.1
+        version: 3.18.1
       '@univer-cli/api-reference':
         specifier: 1.0.0-beta.2
         version: 1.0.0-beta.2

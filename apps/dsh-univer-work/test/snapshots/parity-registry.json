@@ -1333,15 +1333,7 @@
       "description": "Start one Workspace browser approval. Relay the returned URL and code, then stop until the user confirms approval.",
       "parameters": {
         "type": "object",
-        "properties": {
-          "origin": {
-            "type": "string",
-            "description": "Workspace HTTP(S) origin without path, query, credentials, or fragment."
-          }
-        },
-        "required": [
-          "origin"
-        ],
+        "properties": {},
         "additionalProperties": false
       },
       "output": {

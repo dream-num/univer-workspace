@@ -7,9 +7,9 @@ the returned stable IDs for every mutation.
 ## Authentication
 
 Use `workspace_auth_whoami` before remote work. If authentication is missing, call
-`workspace_auth_start` with the user's Workspace origin, relay its verification URL and code, and
-wait for browser approval. Call `workspace_auth_complete` once after approval; never poll. Call
-`workspace_auth_logout` only when the user asks to disconnect.
+`workspace_auth_start` with no arguments; the Host supplies the configured Workspace origin. Relay
+its verification URL and code, and wait for browser approval. Call `workspace_auth_complete` once
+after approval; never poll. Call `workspace_auth_logout` only when the user asks to disconnect.
 
 ## Discover content
 

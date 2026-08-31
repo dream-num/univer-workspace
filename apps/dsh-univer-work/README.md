@@ -8,8 +8,9 @@ Space/Node tools, twelve Worktree/Unit/review tools, four file-transfer tools,
 two worker-backed content tools, two Office exchange tools, two Typst generation
 tools, two SVG generation tools, two render-verification tools, and five installed discovery tools:
 
-- `workspace_auth_start({ origin })` starts one browser approval and returns only
-  its same-origin URL, user code, and expiry.
+- `workspace_auth_start({})` starts one browser approval against the
+  Host-configured Workspace public origin and returns only its same-origin URL,
+  user code, and expiry.
 - `workspace_auth_complete({})` performs one exchange after the user confirms
   approval; it never polls.
 - `workspace_auth_whoami({})` reads the Server-authoritative current User.
@@ -91,6 +92,21 @@ credential record for each operation. Client and owner cancellation propagate
 through credential resolution, HTTP, pagination, traversal, mutation, and
 read-back. Disposal stops admission, unregisters tools and listeners, aborts
 active bodies, and drains them before completing.
+
+Set `UNIVER_WORKSPACE_ORIGIN` before starting DSH. The bundle patch maps it to
+the plugin's Cordis `origin` Config; tools and model messages cannot override
+it. Use the public origin that serves Workspace for the current topology:
+
+```bash
+UNIVER_WORKSPACE_ORIGIN=http://127.0.0.1:3020 dsh --profile web
+```
+
+Port 3020 is valid when Workspace Server serves the built Browser. During Vite
+development, use `http://127.0.0.1:5173`, whose proxy forwards Workspace API
+requests to port 3020. A deployed installation uses its public Workspace
+domain. Missing or malformed configuration makes `workspace_auth_start({})`
+fail with `workspace-origin-invalid`; the plugin never defaults to the DSH Host
+origin.
 
 Worktree, Unit, and review Core methods accept an optional operation signal.
 Stable-identity create/add retries keep one identity and stop before a new

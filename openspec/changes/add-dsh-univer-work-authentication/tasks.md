@@ -27,3 +27,7 @@
 ## 7. 更新职责文档并运行兼容性 gate
 
 - [x] 7.1 更新 `apps/dsh-univer-work/README.md` 与受影响的 Client Core 职责说明，记录 single-origin、两阶段 handoff、credential secrecy、local Host-only、一个 live Host/no out-of-band owner-key writer 的支持前提、无 authorization service/UI/password 与后续 resolver owner；依次运行 `pnpm --filter @univerjs/univer-workspace-client-core typecheck`、其 `test`/`build`、`pnpm --filter dsh-univer-work typecheck`、`test`、`build`、`package:verify`、`package:smoke`、Workspace CLI auth tests 与 `pnpm package:workspace-cli`，再运行 `pnpm typecheck`、`pnpm test`、`pnpm build` 和 `git diff --check`，确认 Server/OpenAPI、CLI Session/command/output、SDK baseline 与发布流程未改变。
+
+## 8. 固定 Workspace authentication Authority
+
+- [x] 8.1 为 Host plugin 增加由 bundle patch 从 `UNIVER_WORKSPACE_ORIGIN` 注入的 Cordis `origin` Config，把 `workspace_auth_start` 改成 closed zero-argument tool 并只使用该 Host-owned public origin；缺失或非法 origin 在 HTTP 前返回 `workspace-origin-invalid`。更新 README、schema/parity/package smoke，并用 focused tests 覆盖 DSH Host `:3080` + Workspace `:3020` 时请求只到 3020、模型额外 `origin` 被拒绝、pending/single-origin/secrecy 行为不变；运行 DSH typecheck、focused/full tests、build、package verification/smoke 与 `git diff --check`。
