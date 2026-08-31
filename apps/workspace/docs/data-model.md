@@ -20,6 +20,14 @@ Sheet/Doc Thread Comment 的 anchor 属于 Unit snapshot/changeset；评论正�
 幂等创建该附加 Schema，不改变产品数据库 V6，也不要求执行产品迁移命令。评论当前只在
 Trunk 编辑器启用；Worktree 和 Merge Preview 不读取或写入 Trunk 评论。
 
+五类 Trunk Unit 的标准版本历史索引保存在同一文件的
+`collaboration_history_revisions` 表中，并由 `collaboration_schema_versions` 的 `history=1`
+组件版本管理。History Adapter 首次启动时幂等创建该附加 Schema；索引可从产品映射的 Unit、
+权威 Trunk revision 与 changeset 重建。为兼容启用 History 前的历史数据，服务启动时执行一次
+内部 backfill；正常请求不执行该逻辑。该索引不属于产品数据库 V6，也不改变其迁移路径。
+History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；Worktree 和 Merge Preview 不读取或
+写入 Trunk History。
+
 ## 核心关系
 
 ```text

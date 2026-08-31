@@ -124,6 +124,7 @@ export interface WorkspaceApplication {
   readonly blobs: BlobsModule;
   readonly univerAssets: UniverAssetsModule;
   readonly exchange: ExchangeModule;
+  initialize(): Promise<void>;
   attachWebSocket(server: Server): void;
   closeRealtime(): Promise<void>;
   close(): Promise<void>;
@@ -161,6 +162,7 @@ export function createWorkspaceApplication(
         : null),
     ...(oauthStateSecret ? { oauthStateSecret } : {}),
   });
+  const resourcesRepository = new ResourcesRepository(database);
   let collaboration: CollaborationRuntime | null = null;
   const unitStore =
     dependencies.unitStore ??
@@ -172,6 +174,12 @@ export function createWorkspaceApplication(
             return identity.findUsers(userIds).map(protocolUser);
           },
         },
+        historyUserProvider: {
+          async getUsers(userIds) {
+            return identity.findUsers(userIds).map(protocolUser);
+          },
+        },
+        existingHistoryUnits: () => resourcesRepository.listHistoryUnits(),
       }
     )).unitStore;
   const unitSnapshotStore =
@@ -188,7 +196,7 @@ export function createWorkspaceApplication(
     access,
   });
   const resources = createResourcesModule({
-    repository: new ResourcesRepository(database),
+    repository: resourcesRepository,
     access,
     unitStore,
   });
@@ -255,6 +263,7 @@ export function createWorkspaceApplication(
     ? createCollaborationGateway({
         service: collaboration.service,
         commentService: collaboration.commentService,
+        historyService: collaboration.historyService,
         identity,
         access,
         worktreeService: collaboration.worktreeService,
@@ -368,6 +377,9 @@ export function createWorkspaceApplication(
     blobs,
     univerAssets,
     exchange,
+    async initialize() {
+      await collaboration?.initialize();
+    },
     attachWebSocket(server) {
       collaborationGateway?.attachWebSocket(server);
     },

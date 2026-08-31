@@ -56,6 +56,195 @@ afterEach(async () => {
 });
 
 describe("collaboration gateway", () => {
+  it("serves persistent standard History for all five Trunk Unit types", async () => {
+    const started = await startApplication();
+    let application = started.application;
+    let origin = started.origin;
+    const { collaborationDatabaseFilename } = started;
+    const owner = await application.identity.registerWithPassword({
+      username: "history-owner",
+      displayName: "History Owner",
+      password: "correct horse battery staple",
+    });
+    const ownerId = owner.view.user.id;
+    const ownerCookie =
+      `${application.identity.cookieName}=${owner.cookieValue}`;
+    const space = application.spaces.list(ownerId).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const createdUnits: Array<{
+      readonly nodeId: string;
+      readonly unitId: string;
+      readonly unitType: "sheet" | "doc" | "slide" | "base" | "board";
+    }> = [];
+
+    for (const unitType of [
+      "sheet",
+      "doc",
+      "slide",
+      "base",
+      "board",
+    ] as const) {
+      const created = await application.resources.create(
+        ownerId,
+        `history-create-${unitType}-0001`,
+        {
+          kind: "univer",
+          spaceId: space.id,
+          parentNodeId: null,
+          name: `History ${unitType}`,
+          unitType,
+        }
+      );
+      if (created.status === 202) throw new Error("Resource creation is pending");
+      const resourceId = created.body.node.resource?.id;
+      if (!resourceId) throw new Error("Created Resource is missing");
+      const opened = application.resources.open(ownerId, resourceId);
+      if (opened.resource.kind !== "univer") {
+        throw new Error("Created Resource is not a Univer Resource");
+      }
+      createdUnits.push({
+        nodeId: created.body.node.id,
+        unitId: opened.resource.unitId,
+        unitType,
+      });
+
+      const response = await fetch(
+        `${origin}/universer-api/history/${opened.resource.unitId}/list?length=20`,
+        { headers: { cookie: ownerCookie } }
+      );
+      const body = (await response.json()) as {
+        readonly error: { readonly code: number };
+        readonly historyIds: readonly string[];
+        readonly entities: {
+          readonly datas: Readonly<
+            Record<string, { readonly unitId: string; readonly userId: string }>
+          >;
+          readonly users: Readonly<
+            Record<string, { readonly name: string }>
+          >;
+        };
+      };
+      expect(response.status).toBe(200);
+      expect(body.error.code).toBe(ErrorCode.OK);
+      expect(body.historyIds).toHaveLength(1);
+      expect(body.entities.datas[body.historyIds[0]!]).toMatchObject({
+        unitId: opened.resource.unitId,
+        userId: ownerId,
+      });
+      expect(body.entities.users[ownerId]).toMatchObject({
+        name: "History Owner",
+      });
+    }
+
+    // Simulate data created before persistent History was introduced. The
+    // compatibility backfill is startup-only; a normal read must not run it.
+    const database = new DatabaseSync(collaborationDatabaseFilename);
+    try {
+      database.prepare("DELETE FROM collaboration_history_revisions").run();
+    } finally {
+      database.close();
+    }
+    const beforeRestart = await fetch(
+      `${origin}/universer-api/history/${createdUnits[0]!.unitId}/list?length=20`,
+      { headers: { cookie: ownerCookie } }
+    );
+    expect(beforeRestart.status).toBe(200);
+    await expect(beforeRestart.json()).resolves.toMatchObject({
+      historyIds: [],
+    });
+    await stopApplication(application, started.server);
+    const restarted = await startApplication(started.directory);
+    application = restarted.application;
+    origin = restarted.origin;
+
+    for (const unit of createdUnits) {
+      const response = await fetch(
+        `${origin}/universer-api/history/${unit.unitId}/list?length=20`,
+        { headers: { cookie: ownerCookie } }
+      );
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        historyIds: [expect.any(String)],
+      });
+    }
+
+    const historyDatabase = new DatabaseSync(collaborationDatabaseFilename, {
+      readOnly: true,
+    });
+    try {
+      expect(
+        historyDatabase
+          .prepare(
+            "SELECT version FROM collaboration_schema_versions WHERE component = 'history'"
+          )
+          .get()
+      ).toMatchObject({ version: 1 });
+      expect(
+        historyDatabase
+          .prepare(
+            "SELECT COUNT(*) AS count FROM collaboration_history_revisions"
+          )
+          .get()
+      ).toMatchObject({ count: 5 });
+    } finally {
+      historyDatabase.close();
+    }
+
+    const first = createdUnits[0];
+    if (!first) throw new Error("History Unit is missing");
+    const viewer = await application.identity.registerWithPassword({
+      username: "history-viewer",
+      displayName: "History Viewer",
+      password: "correct horse battery staple",
+    });
+    application.permissions.updateNodeLinkSharing(ownerId, first.nodeId, {
+      enabled: true,
+      role: "viewer",
+    });
+    const viewerCookie =
+      `${application.identity.cookieName}=${viewer.cookieValue}`;
+    const viewerHistory = await fetch(
+      `${origin}/universer-api/history/${first.unitId}/list?length=20`,
+      { headers: { cookie: viewerCookie } }
+    );
+    expect(viewerHistory.status).toBe(200);
+    await expect(viewerHistory.json()).resolves.toMatchObject({
+      historyIds: [expect.any(String)],
+    });
+
+    const directAuthz = await fetch(
+      `${origin}/universer-api/authz/4/object/${first.unitId}/allowed`,
+      {
+        method: "POST",
+        headers: {
+          cookie: viewerCookie,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          unitID: first.unitId,
+          objectID: first.unitId,
+          actions: [
+            UnitAction.IHistory,
+            UnitAction.ViewHistory,
+            UnitAction.Edit,
+          ],
+        }),
+      }
+    );
+    expect(directAuthz.status).toBe(200);
+    await expect(directAuthz.json()).resolves.toMatchObject({
+      actions: [
+        { action: UnitAction.IHistory, allowed: true },
+        { action: UnitAction.ViewHistory, allowed: true },
+        { action: UnitAction.Edit, allowed: false },
+      ],
+    });
+
+    await expect(
+      fetch(`${origin}/universer-api/history/${first.unitId}/list?length=20`)
+    ).resolves.toMatchObject({ status: 401 });
+  });
+
   it("stores an authoritative server createTime for Trunk changesets", async () => {
     const { application, origin, collaborationDatabaseFilename } =
       await startApplication();
@@ -679,9 +868,26 @@ async function startApplication(): Promise<{
   readonly application: WorkspaceApplication;
   readonly origin: string;
   readonly collaborationDatabaseFilename: string;
+  readonly directory: string;
+  readonly server: Server;
+}>;
+async function startApplication(existingDirectory: string): Promise<{
+  readonly application: WorkspaceApplication;
+  readonly origin: string;
+  readonly collaborationDatabaseFilename: string;
+  readonly directory: string;
+  readonly server: Server;
+}>;
+async function startApplication(existingDirectory?: string): Promise<{
+  readonly application: WorkspaceApplication;
+  readonly origin: string;
+  readonly collaborationDatabaseFilename: string;
+  readonly directory: string;
+  readonly server: Server;
 }> {
-  const directory = mkdtempSync(join(tmpdir(), "univer-gateway-"));
-  temporaryDirectories.push(directory);
+  const directory =
+    existingDirectory ?? mkdtempSync(join(tmpdir(), "univer-gateway-"));
+  if (!existingDirectory) temporaryDirectories.push(directory);
   const collaborationDatabaseFilename = join(
     directory,
     "collaboration.sqlite"
@@ -694,6 +900,7 @@ async function startApplication(): Promise<{
     secureCookies: false,
     sessionTtlMs: 60_000,
   });
+  await application.initialize();
   applications.push(application);
   const server = createServer(application.app);
   application.attachWebSocket(server);
@@ -713,7 +920,23 @@ async function startApplication(): Promise<{
     application,
     origin: `http://127.0.0.1:${address.port}`,
     collaborationDatabaseFilename,
+    directory,
+    server,
   };
+}
+
+async function stopApplication(
+  application: WorkspaceApplication,
+  server: Server
+): Promise<void> {
+  const serverIndex = servers.indexOf(server);
+  if (serverIndex >= 0) servers.splice(serverIndex, 1);
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+  const applicationIndex = applications.indexOf(application);
+  if (applicationIndex >= 0) applications.splice(applicationIndex, 1);
+  await application.close();
 }
 
 function currentUnixTimeSeconds() {

@@ -12,6 +12,9 @@ import UniverSlidesChartUIZhCN from "@univerjs-pro/slides-chart-ui/locale/zh-CN"
 import { UniverSlidesExchangeClientPlugin } from "@univerjs-pro/slides-exchange-client";
 import UniverSlidesExchangeClientEnUS from "@univerjs-pro/slides-exchange-client/locale/en-US";
 import UniverSlidesExchangeClientZhCN from "@univerjs-pro/slides-exchange-client/locale/zh-CN";
+import { UniverSlidesHistoryUIPlugin } from "@univerjs-pro/slides-history-ui";
+import SlidesHistoryUIEnUS from "@univerjs-pro/slides-history-ui/locale/en-US";
+import SlidesHistoryUIZhCN from "@univerjs-pro/slides-history-ui/locale/zh-CN";
 import { UniverSlidesPrintPlugin } from "@univerjs-pro/slides-print";
 import UniverSlidesPrintEnUS from "@univerjs-pro/slides-print/locale/en-US";
 import UniverSlidesPrintZhCN from "@univerjs-pro/slides-print/locale/zh-CN";
@@ -69,6 +72,19 @@ export type SlideEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "presentation",
+  history: {
+    createPlugin: (containerId) => [
+      UniverSlidesHistoryUIPlugin,
+      {
+        historyServerUrl: "/universer-api/history",
+        univerContainerId: containerId,
+      },
+    ],
+    locales: {
+      "zh-CN": SlidesHistoryUIZhCN,
+      "en-US": SlidesHistoryUIEnUS,
+    },
+  },
   theme: purpleTheme,
   useCustomCollaborationStatus: true,
   locales: {

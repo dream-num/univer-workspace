@@ -28,6 +28,23 @@ export interface ReservedCreateResource {
 export class ResourcesRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
 
+  listHistoryUnits(): Array<{
+    readonly unitId: string;
+    readonly userId: string;
+    readonly createdAt: number;
+  }> {
+    return this._database.connection
+      .prepare(
+        `SELECT univer.unit_id, node.created_by, node.created_at
+         FROM univer_resources AS univer
+         JOIN resources AS resource ON resource.id = univer.resource_id
+         JOIN nodes AS node ON node.id = resource.node_id
+         ORDER BY univer.unit_id`
+      )
+      .all()
+      .map((row) => historyUnitSeed(row));
+  }
+
   reserveCreateResource(input: {
     readonly operationId: string;
     readonly actorUserId: string;
@@ -282,6 +299,23 @@ export class ResourcesRepository {
       )
       .run(userId, resourceId, openedAt);
   }
+}
+
+function historyUnitSeed(row: unknown): {
+  readonly unitId: string;
+  readonly userId: string;
+  readonly createdAt: number;
+} {
+  const value = row as {
+    readonly unit_id: string;
+    readonly created_by: string;
+    readonly created_at: number;
+  };
+  return {
+    unitId: value.unit_id,
+    userId: value.created_by,
+    createdAt: value.created_at,
+  };
 }
 
 export function operationView(row: OperationRow): OperationView {

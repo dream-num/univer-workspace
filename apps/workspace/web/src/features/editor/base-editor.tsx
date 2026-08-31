@@ -4,6 +4,9 @@ import UniverBasesZhCN from "@univerjs-pro/bases/locale/zh-CN";
 import { UniverBasesExchangeClientPlugin } from "@univerjs-pro/bases-exchange-client";
 import UniverBasesExchangeClientEnUS from "@univerjs-pro/bases-exchange-client/locale/en-US";
 import UniverBasesExchangeClientZhCN from "@univerjs-pro/bases-exchange-client/locale/zh-CN";
+import { UniverBasesHistoryUIPlugin } from "@univerjs-pro/bases-history-ui";
+import BasesHistoryUIEnUS from "@univerjs-pro/bases-history-ui/locale/en-US";
+import BasesHistoryUIZhCN from "@univerjs-pro/bases-history-ui/locale/zh-CN";
 import { UniverBasesUIPlugin } from "@univerjs-pro/bases-ui";
 import UniverBasesUIEnUS from "@univerjs-pro/bases-ui/locale/en-US";
 import UniverBasesUIZhCN from "@univerjs-pro/bases-ui/locale/zh-CN";
@@ -26,6 +29,7 @@ import { yellowTheme } from "@univerjs/themes";
 import "@univerjs-pro/bases/facade";
 import "@univerjs-pro/bases-exchange-client/facade";
 import "@univerjs-pro/bases-ui/facade";
+import "@univerjs-pro/bases-history-ui/lib/index.css";
 import "@univerjs/design/lib/index.css";
 import "@univerjs/ui/lib/index.css";
 import "@univerjs-pro/bases-ui/lib/index.css";
@@ -41,6 +45,19 @@ export type BaseEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "base",
+  history: {
+    createPlugin: (containerId) => [
+      UniverBasesHistoryUIPlugin,
+      {
+        historyServerUrl: "/universer-api/history",
+        univerContainerId: containerId,
+      },
+    ],
+    locales: {
+      "zh-CN": BasesHistoryUIZhCN,
+      "en-US": BasesHistoryUIEnUS,
+    },
+  },
   theme: yellowTheme,
   enableDocumentCollaborationUI: false,
   hideCollaborationStatus: true,
