@@ -673,8 +673,8 @@ importers:
         specifier: 1.0.0-insiders.20260831-796c4f4
         version: 1.0.0-insiders.20260831-796c4f4(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/icons':
-        specifier: 1.34.0
-        version: 1.34.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 1.38.0
+        version: 1.38.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@univerjs/network':
         specifier: 1.0.0-insiders.20260831-796c4f4
         version: 1.0.0-insiders.20260831-796c4f4(react@19.2.8)(rxjs@7.8.2)
@@ -2766,12 +2766,6 @@ packages:
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       rxjs: '>=7.0.0'
-
-  '@univerjs/icons@1.34.0':
-    resolution: {integrity: sha512-W7PQQHGMg9+7Z5TRlU/BJUo2DiR4K3kVbCby+fH/HgtefBsbL1jAtwuVJfCww6DEy/qyXTG+uPk1kIQNqrzRng==, tarball: https://registry.npmjs.org/@univerjs/icons/-/icons-1.34.0.tgz}
-    peerDependencies:
-      react: '*'
-      react-dom: '*'
 
   '@univerjs/icons@1.35.0':
     resolution: {integrity: sha512-02/+5tGMzdYX3sLkR2QFnN5Qj5In35xzOOnnHHmphlg1zrEgMK3sNRtXfbLFM7RqrwoCrJLcH8N3RDPPWef1Ig==, tarball: https://registry.npmjs.org/@univerjs/icons/-/icons-1.35.0.tgz}
@@ -7821,11 +7815,6 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
       - react-dom
-
-  '@univerjs/icons@1.34.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
-    dependencies:
-      react: 19.2.8
-      react-dom: 19.2.8(react@19.2.8)
 
   '@univerjs/icons@1.35.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
