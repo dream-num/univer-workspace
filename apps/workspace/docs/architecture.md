@@ -176,9 +176,9 @@ Cookie、OAuth callback 和产品 API 保持原有行为；外部 client 只通�
 
 Collaboration Gateway 同时组合 Core、Comment、History 与 Worktree Endpoint。Comment Service 使用
 同一 `COLLABORATION_DATABASE_FILE` 中由 Comment Adapter 独立拥有的表，并通过 Identity
-Module 批量解析评论作者资料。评论读取要求 Sheet/Doc 的打开权限；新增、回复、编辑和 solved
+Module 批量解析评论作者资料。五类 Unit 的评论读取都要求打开权限；新增、回复、编辑和 solved
 状态要求内容编辑权限；删除还要求评论作者或 Resource Owner/Admin。Browser 只在 Trunk Scope
-注册 Thread Comment preset 和远程 datasource。
+按 Unit 类型注册标准 Thread Comment UI 和统一远程 datasource。
 
 History Service 使用同一文件中由 History Adapter 独立拥有的派生索引，并通过 Identity Module
 批量解析版本作者。现有 Collaboration Runtime 统一装配 History Adapter、Service、live attachment

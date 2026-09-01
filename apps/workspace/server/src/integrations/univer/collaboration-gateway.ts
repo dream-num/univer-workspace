@@ -601,13 +601,10 @@ function requireCommentAccess(
   const resource = write
     ? requireUnitEdit(access, userId, unitId)
     : requireUnitAccess(access, userId, unitId);
-  if (
-    resource.kind !== "univer" ||
-    (resource.unitType !== "sheet" && resource.unitType !== "doc")
-  ) {
+  if (resource.kind !== "univer" || resource.unitType === null) {
     throw new CollabError(
       "INVALID_REQUEST",
-      "Thread Comments are available only for Sheet and Doc Units."
+      "Thread Comments are available only for Univer Units."
     );
   }
   return resource;

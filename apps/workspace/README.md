@@ -34,11 +34,11 @@ API documentation is available at:
 
 Product data is stored in `.data/univer-workspace.sqlite`. Univer unit data is
 stored separately in `.data/univer-collaboration.sqlite`, and uploaded Blob
-bytes default to `.data/univer-workspace-blobs`. Sheet and Doc Thread Comment
-anchors remain in Unit snapshots and changesets; comment bodies, replies, and
-solved state use the Comment component in the same Collaboration SQLite file.
-Thread Comments are enabled only in Trunk editors because the Comment protocol
-does not define Worktree branch or merge semantics.
+bytes default to `.data/univer-workspace-blobs`. Thread Comment anchors for
+Sheet, Doc, Slide, Base, and Board remain in Unit snapshots and changesets;
+comment bodies, replies, and solved state use the Comment component in the same
+Collaboration SQLite file. Thread Comments are enabled only in Trunk editors
+because the Comment protocol does not define Worktree branch or merge semantics.
 
 The same Collaboration SQLite file stores a rebuildable, persistent History
 index. A startup-only compatibility backfill indexes product-backed Units that
