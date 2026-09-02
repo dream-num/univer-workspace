@@ -18,22 +18,37 @@ describe("comment collaboration runtime", () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-comment-runtime-"));
     temporaryDirectories.push(directory);
     const filename = join(directory, "collaboration.sqlite");
-    const unitId = "comment-runtime-sheet";
+    const comments: Array<{
+      readonly unitId: string;
+      readonly threadId: string;
+      readonly content: string;
+    }> = [];
     let runtime = createCollaborationRuntime(filename);
-    await runtime.unitStore.createUnit({
-      unitId,
-      unitType: "sheet",
-      name: "Comment Runtime Sheet",
-      userId: "comment-author",
-    });
-    const comment = await runtime.commentService.addComment(
-      { unitID: unitId, content: "Persisted comment", mentions: [] },
-      {
-        userID: "comment-author",
-        memberID: "comment-member",
-        customData: {},
-      }
-    );
+    for (const unitType of [
+      "sheet",
+      "doc",
+      "slide",
+      "base",
+      "board",
+    ] as const) {
+      const unitId = `comment-runtime-${unitType}`;
+      const content = `Persisted ${unitType} comment`;
+      await runtime.unitStore.createUnit({
+        unitId,
+        unitType,
+        name: `Comment Runtime ${unitType}`,
+        userId: "comment-author",
+      });
+      const comment = await runtime.commentService.addComment(
+        { unitID: unitId, content, mentions: [] },
+        {
+          userID: "comment-author",
+          memberID: "comment-member",
+          customData: {},
+        }
+      );
+      comments.push({ unitId, threadId: comment.threadId, content });
+    }
     await runtime.dispose();
 
     const database = new DatabaseSync(filename);
@@ -47,28 +62,34 @@ describe("comment collaboration runtime", () => {
           )
           .get()
       ).toMatchObject({ version: 1 });
-      expect(
-        database
-          .prepare(
-            `SELECT content
-             FROM collaboration_comments
-             WHERE unit_id = ? AND thread_id = ?`
-          )
-          .get(unitId, comment.threadId)
-      ).toMatchObject({ content: "Persisted comment" });
+      for (const comment of comments) {
+        expect(
+          database
+            .prepare(
+              `SELECT content
+               FROM collaboration_comments
+               WHERE unit_id = ? AND thread_id = ?`
+            )
+            .get(comment.unitId, comment.threadId)
+        ).toMatchObject({ content: comment.content });
+      }
     } finally {
       database.close();
     }
 
     runtime = createCollaborationRuntime(filename);
-    const listed = await runtime.commentService.listComments(
-      { unitID: unitId, threadIDs: [comment.threadId] },
-      { userID: "comment-author", customData: {} }
-    );
-    expect(listed.comments[comment.threadId]).toMatchObject({
-      threadId: comment.threadId,
-      replies: [{ content: "Persisted comment", userId: "comment-author" }],
-    });
+    for (const comment of comments) {
+      const listed = await runtime.commentService.listComments(
+        { unitID: comment.unitId, threadIDs: [comment.threadId] },
+        { userID: "comment-author", customData: {} }
+      );
+      expect(listed.comments[comment.threadId]).toMatchObject({
+        threadId: comment.threadId,
+        replies: [
+          { content: comment.content, userId: "comment-author" },
+        ],
+      });
+    }
     await runtime.dispose();
   });
 });

@@ -7,6 +7,7 @@ import { shutdownServer } from "./server-lifecycle.js";
 
 const config = loadConfig();
 const application = createWorkspaceApplication(config);
+await application.initialize();
 const operationRecovery = startOperationRecovery(application.resources);
 const blobMaintenance = startBlobMaintenance(application.blobs);
 const background = {

@@ -291,6 +291,8 @@ For cross-Unit composition, also load the matching Topic Skill after the Host an
 - Embed: `univer-workspace-cli skills get embed`
 - Cross-Unit formula in a Sheet cell or formula-driven Shape:
   `univer-workspace-cli skills get cross-unit-formula`
+- Chart backed by another Unit's Sheet or Base data:
+  `univer-workspace-cli skills get embed` (see "Referencing another Unit's data from a Chart")
 
 Both Topic Skills persist the stable Source `unitId` in Host metadata and load Source data on demand;
 they do not resolve identity from a display name or require staging a read-only Source into the task
@@ -302,6 +304,7 @@ Every content command requires the full remote address:
 univer-workspace-cli execute \
   --worktree <worktree-id> --unit <unit-id> -e '…' --json
 univer-workspace-cli inspect range A1:C9 \
+  --worksheet name:<sheet-name> \
   --worktree <worktree-id> --unit <unit-id> --json
 ```
 
@@ -322,14 +325,27 @@ the managed CLI path:
 univer-workspace-cli asset download <output> --id <uuid> --worktree <worktree-id>
 ```
 
-For API discovery, use `api find <term...>` when the symbol is unknown and
-`api show <symbol...>` when it is known. Add `--unit slide` or `--unit doc` to remove Sheet noise.
-Method signatures and enum values are authoritative; do not guess.
+### Facade API lookup
+
+- When no relevant class or API symbol is known, use
+  `univer-workspace-cli api find <query...>` with API-name keywords or identifier fragments.
+- When a class is known, use `univer-workspace-cli api show <Class>` to inspect its supported APIs.
+- When a type or exact `Class.member` symbol is known, use
+  `univer-workspace-cli api show <symbol>` for its authoritative signature, documentation,
+  referenced types, and examples.
+
+`find` is case-insensitive. Each query is searched independently and returns its own matches;
+queries are not combined as AND, and `find` does not interpret intent. Pass a useful symbol returned
+by `find` directly to `show` instead of searching for that symbol again.
+
+`show` accepts one or more exact symbols. When several relevant symbols are known, pass them in one
+command. Only `find` accepts `--unit sheet|slide|doc|base|board`; use it to reduce irrelevant
+Unit-specific results while retaining shared APIs. Do not pass `--unit` to `show`, and do not guess
+signatures, parameter shapes, or enum values.
 
 `execute` injects only the selected root: Sheet → `workbook` by explicit
-`getWorkbook(unitId)`, Doc → `doc`, Slide → `presentation`, Board → `board`; Base injects
-`univerAPI` and alias `api` without a `base` alias. Never redeclare these bindings. Sheet execution
-never uses the active Workbook.
+`getWorkbook(unitId)`, Doc → `doc`, Slide → `presentation`, Base → `base`, and Board → `board`.
+Never redeclare these bindings. Sheet execution never uses the active Workbook.
 
 ## Verify and hand off
 

@@ -4,6 +4,8 @@ import type * as BoardsModule from "@univerjs-pro/boards";
 import type * as CommentDatabaseModule from "@univerjs-pro/collaboration-comment-database-sqlite";
 import type * as CommentServiceModule from "@univerjs-pro/collaboration-comment-service";
 import type * as CollaborationDatabaseModule from "@univerjs-pro/collaboration-database-sqlite";
+import type * as HistoryDatabaseModule from "@univerjs-pro/collaboration-history-database-sqlite";
+import type * as HistoryServiceModule from "@univerjs-pro/collaboration-history-service";
 import type * as CollaborationServiceModule from "@univerjs-pro/collaboration-service";
 import type * as WorktreeServiceModule from "@univerjs-pro/collaboration-worktree-service";
 import type * as WorktreeDatabaseModule from "@univerjs-pro/collaboration-worktree-database-sqlite";
@@ -11,6 +13,10 @@ import type * as SlidesModule from "@univerjs-pro/slides";
 import type * as CoreModule from "@univerjs/core";
 import type * as ProtocolModule from "@univerjs/protocol";
 import type { UnitType } from "../../modules/access/index.js";
+import {
+  type ExistingHistoryUnit,
+  backfillExistingHistory,
+} from "./history/compatibility/backfill-existing-history.js";
 
 const moduleRequire = createRequire(import.meta.url);
 const { getBoardsEmptySnapshot } = moduleRequire(
@@ -25,6 +31,12 @@ const { UniverCommentService } = moduleRequire(
 const { SQLiteDatabaseAdapter } = moduleRequire(
   "@univerjs-pro/collaboration-database-sqlite"
 ) as typeof CollaborationDatabaseModule;
+const { SQLiteHistoryDatabaseAdapter } = moduleRequire(
+  "@univerjs-pro/collaboration-history-database-sqlite"
+) as typeof HistoryDatabaseModule;
+const { UniverHistoryService } = moduleRequire(
+  "@univerjs-pro/collaboration-history-service"
+) as typeof HistoryServiceModule;
 const {
   CollabError,
   UnitSnapshotMaterializer,
@@ -91,7 +103,9 @@ export interface CollaborationRuntime {
   readonly unitSnapshotStore: UnitSnapshotStore;
   readonly service: CollaborationServiceModule.UniverCollabService;
   readonly commentService: CommentServiceModule.UniverCommentService;
+  readonly historyService: HistoryServiceModule.UniverHistoryService;
   readonly worktreeService: WorktreeServiceModule.UniverCollabWorktreeService;
+  initialize(): Promise<void>;
   dispose(): Promise<void>;
 }
 
@@ -99,10 +113,22 @@ export function createCollaborationRuntime(
   filename: string,
   options: {
     readonly commentUserProvider?: CommentServiceModule.ICommentUserProvider;
+    readonly historyUserProvider?: HistoryServiceModule.IHistoryUserProvider;
+    readonly existingHistoryUnits?: () => readonly ExistingHistoryUnit[];
   } = {}
 ): CollaborationRuntime {
   const database = new SQLiteDatabaseAdapter({ filename });
   const service = new UniverCollabService({ dbAdapter: database });
+  const historyDatabase = new SQLiteHistoryDatabaseAdapter({ filename });
+  const historyService = new UniverHistoryService({
+    collabService: service,
+    dbAdapter: historyDatabase,
+    ...(options.historyUserProvider
+      ? { userProvider: options.historyUserProvider }
+      : {}),
+  });
+  const historyAttachment = historyService.attach(service);
+
   const commentDatabase = new SQLiteCommentDatabaseAdapter({ filename });
   const commentService = new UniverCommentService({
     database: commentDatabase,
@@ -124,6 +150,14 @@ export function createCollaborationRuntime(
         const options = collaborationCallOptions(input.userId);
         const unitData = createUnitData(input);
         const created = await service.createUnitFromData(unitData, options);
+        await historyService.indexUnitCreated(
+          {
+            unitID: created.unitID,
+            type: unitData.type,
+            createdAt: Date.now(),
+          },
+          options
+        );
         const loaded = await service.getUnitLoadData(
           {
             unitID: input.unitId,
@@ -185,12 +219,26 @@ export function createCollaborationRuntime(
     unitSnapshotStore,
     service,
     commentService,
+    historyService,
     worktreeService,
+    initialize() {
+      // Startup-only compatibility for data written before persistent History
+      // was enabled. The application calls this once before accepting traffic.
+      return backfillExistingHistory({
+        collaborationDatabase: database,
+        historyDatabase,
+        historyService,
+        units: options.existingHistoryUnits?.() ?? [],
+      });
+    },
     async dispose() {
       await worktreeService.dispose();
       await worktreeDatabase.dispose();
       await commentService.dispose();
       await commentDatabase.dispose();
+      historyAttachment.dispose();
+      await historyService.dispose();
+      await historyDatabase.dispose();
       await service.dispose();
       await database.dispose();
     },

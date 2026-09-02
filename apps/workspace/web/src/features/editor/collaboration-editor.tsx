@@ -26,6 +26,8 @@ import CollaborationClientEnUS from "@univerjs-pro/collaboration-client/locale/e
 import CollaborationClientZhCN from "@univerjs-pro/collaboration-client/locale/zh-CN";
 import CollaborationClientUIEnUS from "@univerjs-pro/collaboration-client-ui/locale/en-US";
 import CollaborationClientUIZhCN from "@univerjs-pro/collaboration-client-ui/locale/zh-CN";
+import EditHistoryUIEnUS from "@univerjs-pro/edit-history-ui/locale/en-US";
+import EditHistoryUIZhCN from "@univerjs-pro/edit-history-ui/locale/zh-CN";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
 import ExchangeClientEnUS from "@univerjs-pro/exchange-client/locale/en-US";
@@ -63,6 +65,7 @@ import {
   createWorkspaceOutputPlugins,
 } from "./exchange-plugins";
 import { resolveMergeReview } from "./merge-review";
+import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
 import { resolveUniverLicense } from "./univer-license";
 import {
   withWorkspaceSnapshotServerOverride,
@@ -70,11 +73,14 @@ import {
 } from "./workspace-snapshot-server-adapter";
 
 import "@univerjs-pro/collaboration-client-ui/lib/index.css";
+import "@univerjs-pro/edit-history-ui/lib/index.css";
 import "@univerjs-pro/collaboration-client/facade";
 import "@univerjs-pro/embed/facade";
 import "@univerjs-pro/embed-ui/lib/index.css";
 import "@univerjs-pro/exchange-client/facade";
 import "@univerjs-pro/exchange-client/lib/index.css";
+
+installHistoryShapeFormulaSdkWorkaround();
 
 export interface CollaborationEditorProps {
   readonly unitId: string;
@@ -93,8 +99,15 @@ export interface CollaborationEditorProps {
   readonly readOnly?: boolean;
 }
 
+export interface WorkspaceHistoryDefinition {
+  readonly createPlugin: (containerId: string) => IPresetPlugin;
+  readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
+  readonly providedByPreset?: boolean;
+}
+
 interface ICollaborationEditorDefinition {
   readonly label: string;
+  readonly history: WorkspaceHistoryDefinition;
   readonly enableDocumentCollaborationUI?: boolean;
   readonly collaborationProvidedByPreset?: boolean;
   readonly exchangeProvidedByPreset?: boolean;
@@ -271,6 +284,11 @@ export function createCollaborationEditor(
               ];
         const collaborationFeaturePlugins =
           definition.collaborationFeaturePlugins?.(collaborationScope) ?? [];
+        const historyFeaturePlugins = createWorkspaceHistoryPlugins(
+          collaborationScope,
+          definition.history,
+          element.id
+        );
         const outputPlugins = createWorkspaceOutputPlugins({
           origin: window.location.origin,
           exchangeEnabled,
@@ -285,7 +303,9 @@ export function createCollaborationEditor(
             presets,
             collaborationConfig,
             definition,
-            exchangeEnabled
+            exchangeEnabled,
+            collaborationScope.kind === "trunk",
+            element.id
           );
         }
         const univerLocale =
@@ -307,7 +327,8 @@ export function createCollaborationEditor(
                       ? ExchangeClientZhCN
                       : ExchangeClientEnUS,
                   ]
-                : [])
+                : []),
+              ...historyLocales(language, definition.history)
             ),
           },
           theme: definition.theme,
@@ -318,6 +339,7 @@ export function createCollaborationEditor(
           plugins: [
             ...collaborationPlugins,
             ...collaborationFeaturePlugins,
+            ...historyFeaturePlugins,
             ...outputPlugins,
             [
               UniverEmbedPlugin,
@@ -526,22 +548,61 @@ export function createCollaborationEditor(
   };
 }
 
+export function createWorkspaceHistoryPlugins(
+  collaborationScope: NonNullable<
+    CollaborationEditorProps["collaborationScope"]
+  >,
+  history: WorkspaceHistoryDefinition,
+  containerId: string
+): IPresetPlugin[] {
+  if (
+    collaborationScope.kind !== "trunk" ||
+    history.providedByPreset === true
+  ) {
+    return [];
+  }
+  return [history.createPlugin(containerId)];
+}
+
+function historyLocales(
+  language: AppLanguage,
+  history: WorkspaceHistoryDefinition
+): ILanguagePack[] {
+  return language === "zh-CN"
+    ? [EditHistoryUIZhCN, history.locales[language]]
+    : [EditHistoryUIEnUS, history.locales[language]];
+}
+
 function configurePresetCollaboration(
   presets: IPreset[],
   collaborationConfig: Awaited<
     ReturnType<typeof resolveCollaborationConfig>
   >["pluginConfig"],
   definition: ICollaborationEditorDefinition,
-  exchangeEnabled: boolean
+  exchangeEnabled: boolean,
+  historyEnabled: boolean,
+  containerId: string
 ): IPreset[] {
+  const presetHistoryPlugin = definition.history.providedByPreset
+    ? definition.history.createPlugin(containerId)
+    : null;
+  const presetHistoryPluginConstructor = Array.isArray(presetHistoryPlugin)
+    ? presetHistoryPlugin[0]
+    : presetHistoryPlugin;
   return configureExchangePresetPlugins(presets, exchangeEnabled).map(
     (preset) => ({
       ...preset,
-      plugins: preset.plugins.map((plugin): IPresetPlugin => {
-        if (!Array.isArray(plugin)) return plugin;
+      plugins: preset.plugins.flatMap((plugin): IPresetPlugin[] => {
+        if (!Array.isArray(plugin)) return [plugin];
         const [PluginConstructor, pluginConfig] = plugin;
+        if (
+          presetHistoryPlugin &&
+          PluginConstructor === presetHistoryPluginConstructor
+        ) {
+          return historyEnabled ? [presetHistoryPlugin] : [];
+        }
         if (PluginConstructor === UniverCollaborationClientPlugin) {
-          return [
+          return [[
             PluginConstructor,
             {
               ...(pluginConfig as object),
@@ -553,10 +614,10 @@ function configurePresetCollaboration(
               sendChangesetTimeout: 200,
               ...collaborationConfig,
             },
-          ];
+          ]];
         }
         if (PluginConstructor === UniverCollaborationClientUIPlugin) {
-          return [
+          return [[
             PluginConstructor,
             {
               ...(pluginConfig as object),
@@ -569,9 +630,9 @@ function configurePresetCollaboration(
                 ? [[DesktopCollaborationStatusDisplayController, null]]
                 : undefined,
             },
-          ];
+          ]];
         }
-        return plugin;
+        return [plugin];
       }),
     })
   );

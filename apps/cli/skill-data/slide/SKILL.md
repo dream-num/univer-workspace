@@ -7,9 +7,16 @@ description: "Create, import, edit, inspect, compile, export, and visually verif
 
 Every content command targets one remote draft explicitly with `--worktree <id>` and `--unit <id>`. `execute` provides `univerAPI`, `api` (an alias of `univerAPI`), and `presentation` (the `FPresentation` bound by `--unit`). Do not redeclare them. Select pages with `presentation.getSlideByIndex(0)`, `presentation.getSlideById(id)`, or `presentation.getSlides()`. A Slide unit does not provide `workbook`; if it is undefined, verify the selected unit type.
 
-Pages are 1-based across all CLI commands (`inspect --pages`, `screenshot --pages`, `compile-svg --page`, JSON `page`, `page-NN.png`) and share one selector grammar: `<n|n-m|id>[,…]` or `all`. Inside `execute`, facade indexes are 0-based (`getSlideByIndex`, `getSlides()[i]`). When carrying a page from CLI output into code, prefer `getSlideById(id)` — every page node and lint finding carries the page `id`.
+CLI page indices are 1-based: structured inspection uses `inspect slide index:N` or
+`inspect slide id:<id>`, screenshot and layout lint use `--pages`, and `compile-svg` uses `--page`.
+Inside `execute`, Facade indexes are 0-based (`getSlideByIndex`, `getSlides()[i]`). When carrying a
+page from CLI output into code, prefer `getSlideById(id)` — every page node and lint finding carries
+the page `id`.
 
-Query exact signatures and enum values with `univer-workspace-cli api show <symbol>` and `univer-workspace-cli api find <keyword>`. Use the declared common Shape names such as `ShapeTypeEnum`, `ShapeFillEnum`, and `ShapeLineTypeEnum`.
+Use `univer-workspace-cli api find <query...>` to discover API symbols, then use
+`univer-workspace-cli api show <symbol...>` for exact signatures, enum values, documentation, and
+examples. Use the declared common Shape names such as `ShapeTypeEnum`, `ShapeFillEnum`, and
+`ShapeLineTypeEnum`.
 
 ## Workspace target
 
@@ -84,10 +91,10 @@ Clear every `warning` before continuing because warnings mean output was dropped
 
 ```bash
 univer-workspace-cli lint --worktree <id> --unit <id> --pages N --json
-univer-workspace-cli inspect presentation --worktree <id> --unit <id> --pages N --json
+univer-workspace-cli inspect slide index:N --worktree <id> --unit <id> --json
 ```
 
-`lint` is a standalone Slide-only command. With `--pages`, it reports only the selected page's findings. It covers three conservative rules (text off the page, text escaping an opaque card, two texts overlapping) and is tuned to almost never fire on a healthy deck, so **assume every finding is real until the evidence says otherwise**. Each finding includes the rendered ink and related geometry needed to judge that finding; `inspect presentation` provides the declared element facts. Check everything else in the screenshot against this checklist:
+`lint` is a standalone Slide-only command. With `--pages`, it reports only the selected page's findings. It covers three conservative rules (text off the page, text escaping an opaque card, two texts overlapping) and is tuned to almost never fire on a healthy deck, so **assume every finding is real until the evidence says otherwise**. Each finding includes the rendered ink and related geometry needed to judge that finding; `inspect slide index:N` provides the declared element facts for that page. Check everything else in the screenshot against this checklist:
 
 1. **Overflow** — resolve every lint finding and visually check anything sitting close to a page or card edge.
 2. **Unexpected wrapping** — compare the screenshot with the intended copy and line breaks. An extra line means the box is too narrow or the copy too long.
@@ -151,7 +158,7 @@ Preserve the registry in exported filenames. A sprite sheet previews in a browse
 
 Snapshot inspection and lint report facts, not final visual quality — you still decide what is a defect, because legitimate slide designs overlap backgrounds and decorations on purpose.
 
-`inspect presentation --pages <n>` gives each element's declared facts straight from the snapshot: `id`, `type` (plus `shapeType` like `rect`, `line`), `transform` (the box you drew, rotation included), `fill` and `stroke` (`{"type":"none"}` means the element is invisible — connector bounding boxes and transparent placeholders look like cards otherwise, so exclude them when deciding which card a text sits in), and for text an object with `content`, `align`, `color`, `opacity`. The `elements` array is in stacking order, bottom to top.
+`inspect slide index:N` gives each element's declared facts straight from the snapshot: `id`, `type` (plus `shapeType` like `rect`, `line`), `transform` (the box you drew, rotation included), `fill` and `stroke` (`{"type":"none"}` means the element is invisible — connector bounding boxes and transparent placeholders look like cards otherwise, so exclude them when deciding which card a text sits in), and for text an object with `content`, `align`, `color`, `opacity`. The `elements` array is in stacking order, bottom to top. Use `inspect presentation` without a selector only for the presentation overview.
 
 The standalone `lint` command derives three high-precision checks from browser-rendered facts (text off the page, text escaping an opaque rectangular card, two text glyph bands overlapping) and reports nothing else. Each finding includes its relevant ink evidence; there is no raw bbox command. `compile-svg` normally measures text with the real browser and fails with setup guidance when measurement is unavailable. `--estimate-text-size` is an emergency fallback for browserless environments, not a shortcut; it can shift long or aligned text significantly and must be removed before delivery.
 
@@ -313,7 +320,7 @@ For dense pages, lay out a structural skeleton and then add logical blocks. Reco
 
 ## Stacking order
 
-There is no `zIndex`. Stacking is the element order, bottom to top — the same rule as SVG document order and OOXML `spTree` — and `compile-svg` preserves your SVG's document order exactly. A normal `insertShape` lands on top; move the returned shape with `bringToFront`, `bringForward`, `sendBackward`, or `sendToBack`, or use the complete-order command below for an exact index. Only snapshot restoration through `insertElement(element, index)` accepts an insertion index. `getElements()` and the `elements` array in `inspect presentation` both list stacking order, bottom to top.
+There is no `zIndex`. Stacking is the element order, bottom to top — the same rule as SVG document order and OOXML `spTree` — and `compile-svg` preserves your SVG's document order exactly. A normal `insertShape` lands on top; move the returned shape with `bringToFront`, `bringForward`, `sendBackward`, or `sendToBack`, or use the complete-order command below for an exact index. Only snapshot restoration through `insertElement(element, index)` accepts an insertion index. `getElements()` and the `elements` array in `inspect slide index:N` both list stacking order, bottom to top.
 
 For an exact complete order, use the reorder command. Each mutation commits a Worktree revision, so
 verify it immediately:
@@ -390,7 +397,7 @@ and data; after a removal, confirm the chart is absent.
 Await insertion, data updates, replacement, and removal before `execute` returns. Verify persistence
 with a fresh
 `slide.getCharts().map((item) => ({ id: item.getId(), type: item.getType(), info: item.getInfo(), resource: item.getChartData() }))`
-read, confirm `inspect presentation --pages <n>` reports a chart element, then screenshot the page
+read, confirm `inspect slide index:N` reports a chart element, then screenshot the page
 and test the exported PPTX. Insert charts after the final full-page SVG replacement, which replaces
 every page element.
 
@@ -414,7 +421,7 @@ return slide.getTransition();
 - `direction` only applies to `Push`, `Wipe`, `Cover`, `Uncover`, `Reveal`, and `Split`; on other types it is silently dropped and does not read back.
 - `advanceOnClick`, `advanceAfterTime`, `speed`, and `sound` are stored and read back, but nothing plays them — auto-advance and transition sounds are unsupported, so say so instead of setting dead fields.
 - `setTransition()` with no argument clears the slide's transition. `presentation.applyTransitionToAll(t)` covers every slide that exists at call time, and a later per-slide `setTransition` overrides it.
-- No visual surface verifies transitions: screenshots, `inspect presentation`, and `lint` all ignore them. The `getTransition()` read-back is the only evidence; include it in your report when a task requires transitions.
+- No visual surface verifies transitions: screenshots, structured inspection, and `lint` all ignore them. The `getTransition()` read-back is the only evidence; include it in your report when a task requires transitions.
 
 ## Tables
 

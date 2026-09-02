@@ -57,3 +57,32 @@ return {
 Verify the exact persisted ResourceRef, loaded child ID/type, and Host anchor in a later read-only
 `execute`, then follow the Host screenshot and review flow. An inaccessible, missing, malformed, or
 type-incompatible Source is a load failure; do not fall back to name search or silently replace it.
+
+## Referencing another Unit's data from a Chart
+
+When a Chart on a Slide, Doc, or Board should reflect a range in a different Unit, bind the range as
+a ResourceRef instead of copying its current values. Copied values are a snapshot; a ResourceRef
+keeps the Chart connected to the Source.
+
+The Host and Source are Univer Units in the same Workspace deployment and are addressed by stable
+`unitId`. Resolve the exact input with:
+
+```bash
+univer-workspace-cli api show IResourceRefChartDataSourceInput
+```
+
+Pass the ref contents (`{ file?, unit, part }`) directly to
+`newChart(...).setSource(ref)`. For an existing live Chart, use
+`await chart.setDataSource(ref)`. Wrapping the ref as `{ source: { kind, ref } }` fails normalization
+with `RESOURCE_REF_INVALID_UNIT`.
+
+For a Worktree Host, an authorized Source staged in the same Worktree resolves from that Worktree;
+otherwise the Workspace reference policy resolves the authorized trunk Source. Do not stage a
+read-only Source merely to make the reference load.
+
+Verify that the stored `dataSource.source.kind` is `resource-ref`, then confirm the exact Source
+Unit, Sheet/Table selector, and range in a fresh readback. Workspace Viewer and execute runtimes
+materialize an authorized Source on demand; the Viewer also watches the Source data and refreshes a
+live Chart when it changes. The screenshot renderer does not currently preload a Source referenced
+only by a Chart, so that case can render a placeholder there; finish its visual review in the
+Workspace Viewer.

@@ -102,15 +102,20 @@ describe("Workspace Doc feature plugins", () => {
     const [
       { UniverThreadCommentDataSourcePlugin },
       {
+        getThreadCommentCollaborationPlugins,
+      },
+      {
         UniverWorkspaceDocsThreadCommentDataSourcePlugin,
         deleteDocRootCommentBody,
         getDocThreadCommentCollaborationPlugins,
-        getThreadCommentCollaborationPlugins,
       },
       { DeleteDocCommentComment },
     ] = await Promise.all([
       import("@univerjs-pro/thread-comment-datasource"),
       import("../../web/src/features/editor/thread-comment-features.js"),
+      import(
+        "../../web/src/features/editor/workarounds/doc-thread-comment-delete.js"
+      ),
       import("@univerjs/docs-thread-comment-ui"),
     ]);
 

@@ -4,6 +4,12 @@ import UniverBasesZhCN from "@univerjs-pro/bases/locale/zh-CN";
 import { UniverBasesExchangeClientPlugin } from "@univerjs-pro/bases-exchange-client";
 import UniverBasesExchangeClientEnUS from "@univerjs-pro/bases-exchange-client/locale/en-US";
 import UniverBasesExchangeClientZhCN from "@univerjs-pro/bases-exchange-client/locale/zh-CN";
+import { UniverBasesHistoryUIPlugin } from "@univerjs-pro/bases-history-ui";
+import BasesHistoryUIEnUS from "@univerjs-pro/bases-history-ui/locale/en-US";
+import BasesHistoryUIZhCN from "@univerjs-pro/bases-history-ui/locale/zh-CN";
+import { UniverBasesThreadCommentUIPlugin } from "@univerjs-pro/bases-thread-comment-ui";
+import BasesThreadCommentUIEnUS from "@univerjs-pro/bases-thread-comment-ui/locale/en-US";
+import BasesThreadCommentUIZhCN from "@univerjs-pro/bases-thread-comment-ui/locale/zh-CN";
 import { UniverBasesUIPlugin } from "@univerjs-pro/bases-ui";
 import UniverBasesUIEnUS from "@univerjs-pro/bases-ui/locale/en-US";
 import UniverBasesUIZhCN from "@univerjs-pro/bases-ui/locale/zh-CN";
@@ -21,26 +27,45 @@ import { UniverRPCMainThreadPlugin } from "@univerjs/rpc";
 import { UniverUIPlugin } from "@univerjs/ui";
 import UniverUIEnUS from "@univerjs/ui/locale/en-US";
 import UniverUIZhCN from "@univerjs/ui/locale/zh-CN";
+import ThreadCommentUIEnUS from "@univerjs/thread-comment-ui/locale/en-US";
+import ThreadCommentUIZhCN from "@univerjs/thread-comment-ui/locale/zh-CN";
 import { yellowTheme } from "@univerjs/themes";
 
 import "@univerjs-pro/bases/facade";
 import "@univerjs-pro/bases-exchange-client/facade";
 import "@univerjs-pro/bases-ui/facade";
+import "@univerjs-pro/bases-history-ui/lib/index.css";
+import "@univerjs-pro/bases-thread-comment-ui/lib/index.css";
 import "@univerjs/design/lib/index.css";
 import "@univerjs/ui/lib/index.css";
 import "@univerjs-pro/bases-ui/lib/index.css";
 import "@univerjs-pro/bases-exchange-client/lib/index.css";
+import "@univerjs/thread-comment-ui/lib/index.css";
 
 import {
   createCollaborationEditor,
   type CollaborationEditorProps,
 } from "./collaboration-editor";
+import { getThreadCommentCollaborationPlugins } from "./thread-comment-features";
 import { MAX_UNIVER_IMAGE_BYTES } from "./univer-assets";
 
 export type BaseEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "base",
+  history: {
+    createPlugin: (containerId) => [
+      UniverBasesHistoryUIPlugin,
+      {
+        historyServerUrl: "/universer-api/history",
+        univerContainerId: containerId,
+      },
+    ],
+    locales: {
+      "zh-CN": BasesHistoryUIZhCN,
+      "en-US": BasesHistoryUIEnUS,
+    },
+  },
   theme: yellowTheme,
   enableDocumentCollaborationUI: false,
   hideCollaborationStatus: true,
@@ -51,7 +76,9 @@ export default createCollaborationEditor({
       UniverEngineFormulaZhCN,
       UniverBasesZhCN,
       UniverBasesExchangeClientZhCN,
-      UniverBasesUIZhCN
+      UniverBasesUIZhCN,
+      ThreadCommentUIZhCN,
+      BasesThreadCommentUIZhCN
     ),
     "en-US": mergeLocales(
       UniverDesignEnUS,
@@ -59,9 +86,16 @@ export default createCollaborationEditor({
       UniverEngineFormulaEnUS,
       UniverBasesEnUS,
       UniverBasesExchangeClientEnUS,
-      UniverBasesUIEnUS
+      UniverBasesUIEnUS,
+      ThreadCommentUIEnUS,
+      BasesThreadCommentUIEnUS
     ),
   },
+  collaborationFeaturePlugins: (collaborationScope) =>
+    getThreadCommentCollaborationPlugins(
+      collaborationScope.kind === "trunk",
+      UniverBasesThreadCommentUIPlugin
+    ),
   exchangeFeaturePlugins: () => [UniverBasesExchangeClientPlugin],
   createPresets: (container) => [
     {

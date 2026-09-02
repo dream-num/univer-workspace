@@ -12,6 +12,8 @@ univer-workspace-cli unit create \
   --worktree <worktree-id> --space <space-id> \
   --type board --name <name> --json
 univer-workspace-cli unit list --worktree <worktree-id> --json
+univer-workspace-cli inspect board \
+  --worktree <worktree-id> --unit <board-id> --json
 ```
 
 Creation returns server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId` for
@@ -36,13 +38,16 @@ before batch insertion so the script follows the SDK installed with this CLI.
 
 Use `api find` and `api show` to resolve Board Facade methods and enums, especially
 `FBoard.newChart`, `FBoard.insertChart`, `FBoard.getCharts`, and `FBoard.getChart` for native charts.
-Use read-only `execute` with `board.describeElements()` or `board.save()` for model readback. A Board screenshot with
-`--json` also returns `outputs[0].layoutAnalysis` from the real browser routes:
-
-Native `inspect` is not supported for Board targets. Use read-only `execute` for model evidence and
-`screenshot --json` for rendered evidence; do not invent a Board inspect command.
+`inspect board` is a selector-free overview of ordered elements, counts, bounds, relationships, and
+text summaries. Use `inspect board-element id:<element-id> ...` for type-specific detail without
+loading the full Board snapshot. Both commands are read-only; use them before editing to discover
+existing IDs and after editing to verify persisted structure. Use a later read-only `execute` with
+`board.describeElements()` or `board.save()` when inspection omits a required model field. A Board
+screenshot with `--json` also returns `outputs[0].layoutAnalysis` from the real browser routes:
 
 ```bash
+univer-workspace-cli inspect board-element id:<element-id> \
+  --worktree <worktree-id> --unit <board-id> --json
 univer-workspace-cli screenshot \
   --worktree <worktree-id> --unit <board-id> --out <directory> --json
 univer-workspace-cli open --worktree <worktree-id> --unit <board-id>

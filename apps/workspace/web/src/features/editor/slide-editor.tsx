@@ -12,6 +12,9 @@ import UniverSlidesChartUIZhCN from "@univerjs-pro/slides-chart-ui/locale/zh-CN"
 import { UniverSlidesExchangeClientPlugin } from "@univerjs-pro/slides-exchange-client";
 import UniverSlidesExchangeClientEnUS from "@univerjs-pro/slides-exchange-client/locale/en-US";
 import UniverSlidesExchangeClientZhCN from "@univerjs-pro/slides-exchange-client/locale/zh-CN";
+import { UniverSlidesHistoryUIPlugin } from "@univerjs-pro/slides-history-ui";
+import SlidesHistoryUIEnUS from "@univerjs-pro/slides-history-ui/locale/en-US";
+import SlidesHistoryUIZhCN from "@univerjs-pro/slides-history-ui/locale/zh-CN";
 import { UniverSlidesPrintPlugin } from "@univerjs-pro/slides-print";
 import UniverSlidesPrintEnUS from "@univerjs-pro/slides-print/locale/en-US";
 import UniverSlidesPrintZhCN from "@univerjs-pro/slides-print/locale/zh-CN";
@@ -21,6 +24,9 @@ import { UniverSlidesTablePlugin } from "@univerjs-pro/slides-table";
 import { UniverSlidesTableUIPlugin } from "@univerjs-pro/slides-table-ui";
 import UniverSlidesTableUIEnUS from "@univerjs-pro/slides-table-ui/locale/en-US";
 import UniverSlidesTableUIZhCN from "@univerjs-pro/slides-table-ui/locale/zh-CN";
+import { UniverSlidesThreadCommentUIPlugin } from "@univerjs-pro/slides-thread-comment-ui";
+import SlidesThreadCommentUIEnUS from "@univerjs-pro/slides-thread-comment-ui/locale/en-US";
+import SlidesThreadCommentUIZhCN from "@univerjs-pro/slides-thread-comment-ui/locale/zh-CN";
 import { UniverSlidesUIPlugin } from "@univerjs-pro/slides-ui";
 import UniverSlidesUIEnUS from "@univerjs-pro/slides-ui/locale/en-US";
 import UniverSlidesUIZhCN from "@univerjs-pro/slides-ui/locale/zh-CN";
@@ -39,6 +45,8 @@ import { mergeLocales } from "@univerjs/presets";
 import { UniverUIPlugin } from "@univerjs/ui";
 import UniverUIEnUS from "@univerjs/ui/locale/en-US";
 import UniverUIZhCN from "@univerjs/ui/locale/zh-CN";
+import ThreadCommentUIEnUS from "@univerjs/thread-comment-ui/locale/en-US";
+import ThreadCommentUIZhCN from "@univerjs/thread-comment-ui/locale/zh-CN";
 import { purpleTheme } from "@univerjs/themes";
 
 import "@univerjs-pro/chart-ui/facade";
@@ -58,17 +66,33 @@ import "@univerjs-pro/slides-ui/lib/index.css";
 import "@univerjs-pro/slides-chart-ui/lib/index.css";
 import "@univerjs-pro/slides-print/lib/index.css";
 import "@univerjs-pro/slides-table-ui/lib/index.css";
+import "@univerjs-pro/slides-thread-comment-ui/lib/index.css";
+import "@univerjs/thread-comment-ui/lib/index.css";
 
 import {
   createCollaborationEditor,
   type CollaborationEditorProps,
 } from "./collaboration-editor";
+import { getThreadCommentCollaborationPlugins } from "./thread-comment-features";
 import { MAX_UNIVER_IMAGE_BYTES } from "./univer-assets";
 
 export type SlideEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "presentation",
+  history: {
+    createPlugin: (containerId) => [
+      UniverSlidesHistoryUIPlugin,
+      {
+        historyServerUrl: "/universer-api/history",
+        univerContainerId: containerId,
+      },
+    ],
+    locales: {
+      "zh-CN": SlidesHistoryUIZhCN,
+      "en-US": SlidesHistoryUIEnUS,
+    },
+  },
   theme: purpleTheme,
   useCustomCollaborationStatus: true,
   locales: {
@@ -85,7 +109,9 @@ export default createCollaborationEditor({
       UniverSlidesExchangeClientZhCN,
       UniverSlidesPrintZhCN,
       UniverSlidesChartUIZhCN,
-      UniverSlidesTableUIZhCN
+      UniverSlidesTableUIZhCN,
+      ThreadCommentUIZhCN,
+      SlidesThreadCommentUIZhCN
     ),
     "en-US": mergeLocales(
       ChartUIEnUS,
@@ -100,9 +126,16 @@ export default createCollaborationEditor({
       UniverSlidesExchangeClientEnUS,
       UniverSlidesPrintEnUS,
       UniverSlidesChartUIEnUS,
-      UniverSlidesTableUIEnUS
+      UniverSlidesTableUIEnUS,
+      ThreadCommentUIEnUS,
+      SlidesThreadCommentUIEnUS
     ),
   },
+  collaborationFeaturePlugins: (collaborationScope) =>
+    getThreadCommentCollaborationPlugins(
+      collaborationScope.kind === "trunk",
+      UniverSlidesThreadCommentUIPlugin
+    ),
   exchangeFeaturePlugins: () => [UniverSlidesExchangeClientPlugin],
   printFeaturePlugins: () => [UniverSlidesPrintPlugin],
   createPresets: (container) => [
