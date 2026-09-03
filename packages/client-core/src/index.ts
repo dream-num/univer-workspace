@@ -100,6 +100,13 @@ export {
   type WorkspaceRenderUnitSource,
 } from "./render-unit.js";
 export {
+  WorkspacePrintPdfFeature,
+  type WorkspacePrintPdfApplication,
+  type WorkspacePrintPdfFeatureOptions,
+  type WorkspacePrintPdfInput,
+  type WorkspacePrintPdfResult,
+} from "./print-pdf.js";
+export {
   WorkspaceScreenshotFeature,
   type WorkspaceScreenshotApplication,
   type WorkspaceScreenshotFeatureOptions,
