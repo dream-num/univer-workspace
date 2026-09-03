@@ -38,7 +38,7 @@ Understand these identities before running a mutation:
 - **Blob Resource**: `kind: "blob"`, with MIME, byte size, and availability but no `unitType` or
   `unitId`. Upload/download it directly; never add it to a Worktree.
 - **Unit**: the Collaboration content identity inside one Worktree. Use its `unitId` for execute,
-  inspect, screenshot, PDF printing, export, snapshot, and changeset operations.
+  inspect, screenshot, export, snapshot, and changeset operations.
 - **Worktree**: one task's isolated Agent workspace and draft/review boundary. Changes remain
   isolated from the normal Space file until the Worktree is merged.
 - **User-scoped Worktree**: a private Worktree owned by the authenticated user. It can contain Units
@@ -367,15 +367,6 @@ univer-workspace-cli open --worktree <worktree-id> --unit <unit-id>
 Do not merge or discard unless the user explicitly requests that consequential action. A later
 same-task correction follows the rework flow above.
 
-When the user requests a PDF deliverable, print the verified Sheet, Doc, Slide, or Board from the
-same explicit scope. Base Units are not printable, and the command refuses to replace an existing
-file:
-
-```bash
-univer-workspace-cli print-pdf <output.pdf> --worktree <worktree-id> --unit <unit-id> --json
-univer-workspace-cli print-pdf <output.pdf> --trunk --unit <unit-id> --json
-```
-
 ## Command map
 
 Use `univer-workspace-cli <command> --help` as the syntax authority.
@@ -389,7 +380,8 @@ Use `univer-workspace-cli <command> --help` as the syntax authority.
 | Inspect a known Worktree  | `worktree get`, `unit list`                                                 |
 | Continue same-task rework | `worktree reopen`                                                           |
 | Write                     | `execute`, `compile-svg`, `compile-typst`, import                           |
-| Verify/deliver output     | `inspect`, `screenshot`, `print-pdf`, export                                |
+| Verify                    | `inspect`, `screenshot`                                                     |
+| Deliver output            | `export`, `print-pdf`                                                       |
 | Hand off                  | `worktree ready`, `open`                                                    |
 | User-authorized lifecycle | `worktree merge`, `worktree discard`                                        |
 | User-authorized cleanup   | `space node trash`                                                          |

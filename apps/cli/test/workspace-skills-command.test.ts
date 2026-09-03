@@ -90,7 +90,8 @@ describe("Workspace CLI skills command", () => {
     expect(core).toContain("`show` accepts one or more exact symbols");
     expect(core).toContain("Do not pass `--unit` to `show`");
     expect(core).toContain("Chart backed by another Unit's Sheet or Base data");
-    expect(core).toContain("univer-workspace-cli print-pdf");
+    expect(core).toContain("`export`, `print-pdf`");
+    expect(core.match(/print-pdf/g)).toHaveLength(1);
     expect(core).toContain("Base → `base`");
     expect(core).not.toContain("without a `base` alias");
     expect(doc).toContain("api find <query...>");
