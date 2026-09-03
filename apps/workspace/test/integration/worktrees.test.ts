@@ -439,6 +439,44 @@ describe("Worktrees", () => {
       });
     }
   });
+
+  it("materializes referenced Base blocks for both comparison sides", async () => {
+    const application = createRealTestApplication();
+    const user = await register(application, "base-block-comparison-user");
+    const space = application.spaces.list(user.id).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const resource = await createResource(
+      application,
+      user.id,
+      space.id,
+      "base",
+      baseWithOneRecord()
+    );
+    const created = await application.worktrees.create(
+      user.id,
+      "create-base-block-comparison-worktree-0001",
+      { kind: "user", name: "Base block comparison", summary: null }
+    );
+    const added = await application.worktrees.addUnit(
+      user.id,
+      created.body.id,
+      "add-base-block-comparison-unit-0001",
+      { source: "trunk", resourceId: resource.id }
+    );
+
+    await expect(
+      application.worktrees.compareUnit(
+        user.id,
+        created.body.id,
+        added.body.unit.unitId
+      )
+    ).resolves.toMatchObject({
+      unit: { unitType: "base" },
+      left: { present: true },
+      right: { present: true },
+      diff: { summary: { total: 0 } },
+    });
+  });
 });
 
 class MemoryWorktreeBackend implements WorktreeBackend {
@@ -663,7 +701,8 @@ async function createResource(
   application: WorkspaceApplication,
   userId: string,
   spaceId: string,
-  unitType: "sheet" | "doc" | "slide" | "board" | "base" = "sheet"
+  unitType: "sheet" | "doc" | "slide" | "board" | "base" = "sheet",
+  initialData?: Readonly<Record<string, unknown>>
 ) {
   const result = await application.resources.create(
     userId,
@@ -674,10 +713,81 @@ async function createResource(
       parentNodeId: null,
       name: "Existing Sheet",
       unitType,
+      ...(initialData === undefined ? {} : { initialData }),
     }
   );
   if (result.status === 202) throw new Error("Resource creation is pending");
   const resource = result.body.node.resource;
   if (!resource) throw new Error("Created Resource is missing");
   return { id: resource.id, node: result.body.node };
+}
+
+function baseWithOneRecord(): Readonly<Record<string, unknown>> {
+  return {
+    name: "Existing Base",
+    schemaVersion: 2,
+    tableOrder: ["table-1"],
+    tables: {
+      "table-1": {
+        id: "table-1",
+        name: "People",
+        primaryFieldId: "name",
+        fieldOrder: ["__record_id", "name"],
+        fields: {
+          __record_id: {
+            id: "__record_id",
+            name: "record-id",
+            type: "recordId",
+            config: {},
+            system: true,
+            readonly: true,
+          },
+          name: {
+            id: "name",
+            name: "Name",
+            type: "text",
+            config: {},
+          },
+        },
+        records: {
+          "record-1": {
+            id: "record-1",
+            values: { __record_id: "record-1", name: "Ada" },
+            orderKey: "1",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        },
+        recordOrder: ["record-1"],
+        rowIndex: { "record-1": 0 },
+        rowId: { 0: "record-1" },
+        colIndex: { __record_id: 0, name: 1 },
+        colId: { 0: "__record_id", 1: "name" },
+        cellData: {
+          0: {
+            0: { v: "record-1", t: 1 },
+            1: { v: "Ada", t: 1 },
+          },
+        },
+        resources: { attachmentSets: {}, attachments: {} },
+        views: {
+          "view-1": {
+            id: "view-1",
+            tableId: "table-1",
+            name: "Grid",
+            type: "grid",
+            fieldOrder: ["__record_id", "name"],
+            fieldSettings: { __record_id: { hidden: true } },
+            config: { frozenFieldCount: 1 },
+          },
+        },
+        viewOrder: ["view-1"],
+        formulaName: "Table_1",
+      },
+    },
+    resources: [],
+    createdAt: 1,
+    updatedAt: 1,
+    locale: "enUS",
+  };
 }

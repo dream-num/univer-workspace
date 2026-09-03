@@ -182,11 +182,22 @@ async function materializeTrunkSide(
   userId: string
 ): Promise<MaterializedSide> {
   try {
-    const loadData = await service.getUnitLoadDataWithBlocks(
+    const callOptions = collaborationCallOptions(userId);
+    const loadData = await service.getUnitLoadData(
       { unitID: unitId, type, revision: 0 },
-      collaborationCallOptions(userId)
+      callOptions
     );
-    return await materialize(loadData, type);
+    const sheetBlocks = await referencedSheetBlocks(
+      loadData.snapshot,
+      async (blockID) =>
+        (
+          await service.getSheetBlock(
+            { unitID: unitId, type, blockID },
+            callOptions
+          )
+        ).block
+    );
+    return await materialize({ ...loadData, sheetBlocks }, type);
   } catch (error) {
     if (error instanceof CollabError && error.code === "UNIT_NOT_FOUND") {
       return { present: false };
@@ -208,28 +219,40 @@ async function materializeWorktreeSide(
     { worktreeID: worktreeId, unitID: unitId, type, revision },
     callOptions
   );
-  const sheetBlocks =
-    loadData.snapshot.workbook === undefined
-      ? []
-      : await Promise.all(
-          Object.values(loadData.snapshot.workbook.blockMeta ?? {})
-            .flatMap((metadata) => metadata.blocks)
-            .map(async (blockID) => {
-              const result = await service.getSheetBlock(
-                { worktreeID: worktreeId, unitID: unitId, type, blockID },
-                callOptions
-              );
-              return result.block;
-            })
-        );
+  const sheetBlocks = await referencedSheetBlocks(
+    loadData.snapshot,
+    async (blockID) =>
+      (
+        await service.getSheetBlock(
+          { worktreeID: worktreeId, unitID: unitId, type, blockID },
+          callOptions
+        )
+      ).block
+  );
   return await materialize(
-    {
-      ...loadData,
-      sheetBlocks: sheetBlocks.filter(
-        (block): block is ProtocolModule.ISheetBlock => block !== null
-      ),
-    },
+    { ...loadData, sheetBlocks },
     type
+  );
+}
+
+async function referencedSheetBlocks(
+  snapshot: ProtocolModule.ISnapshot,
+  loadBlock: (
+    blockID: string
+  ) => Promise<ProtocolModule.ISheetBlock | null>
+): Promise<ProtocolModule.ISheetBlock[]> {
+  if (snapshot.workbook === undefined) return [];
+  const blocks = await Promise.all(
+    [
+      ...new Set(
+        Object.values(snapshot.workbook.blockMeta ?? {}).flatMap(
+          (metadata) => metadata.blocks
+        )
+      ),
+    ].map(loadBlock)
+  );
+  return blocks.filter(
+    (block): block is ProtocolModule.ISheetBlock => block !== null
   );
 }
 

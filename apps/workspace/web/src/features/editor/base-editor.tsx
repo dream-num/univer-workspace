@@ -146,6 +146,7 @@ export default createCollaborationEditor({
             workbench: {
               collaborationStatus: false,
               footer: false,
+              ...(runtime === "local" ? { route: false } : {}),
             },
           },
         ],

@@ -67,6 +67,7 @@ import {
 } from "./exchange-plugins";
 import { resolveMergeReview } from "./merge-review";
 import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
+import { WorkspaceLocalComparisonCollaborationFacadePlugin } from "./workarounds/local-comparison-collaboration-facade";
 import { resolveUniverLicense } from "./univer-license";
 import {
   withWorkspaceSnapshotServerOverride,
@@ -357,6 +358,9 @@ export function createCollaborationEditor(
           ...(!local ? { collaboration: true as const } : {}),
           presets,
           plugins: [
+            ...(local
+              ? [WorkspaceLocalComparisonCollaborationFacadePlugin]
+              : []),
             ...collaborationPlugins,
             ...collaborationFeaturePlugins,
             ...historyFeaturePlugins,
