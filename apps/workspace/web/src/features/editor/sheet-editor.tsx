@@ -38,7 +38,7 @@ export default createCollaborationEditor({
     createPlugin: (containerId) => [
       UniverSheetsHistoryUIPlugin,
       {
-        historyListServerUrl: "/universer-api/history",
+        historyServerUrl: "/universer-api/history",
         univerContainerId: containerId,
       },
     ],
