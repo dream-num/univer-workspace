@@ -42,7 +42,7 @@ Node-hosted Blob/Asset transfer, runtime target and Snapshot reads, and referenc
 self-contained CLI artifact. The CLI remains the sole owner of origin configuration, Session files,
 password input, daemon socket/control and process signals, packaged worker entry, browser binary
 install/probe/resolve, and command presentation. Client Core owns Asset image resolution, render Unit
-assembly, screenshot capture and PNG output, Slide layout lint, the render-page source, shared worker composition, runtime pool,
+assembly, screenshot capture, PNG output, PDF printing, Slide layout lint, the render-page source, shared worker composition, runtime pool,
 content execution, embedded-image externalization, changeset commit workflow, Node-hosted Office
 exchange, and Typst compile/materialize/apply workflows; users do not install Client Core separately.
 Client Core also owns SVG source/asset compilation, text measurement, Slide page wrapping, and apply orchestration.
@@ -55,7 +55,7 @@ render-page artifact copy, and native binding delivery in its installable artifa
 | ----------------------- | ----------------------------------------------------------------------------- |
 | Author rich content     | Facade APIs across Sheet, Doc, Slide, Base, and Board                         |
 | Work in isolation       | Personal and Team Spaces, task Worktrees, stable Resource and Unit identities |
-| Verify results          | Structured inspection, headless layout capture, and PNG rendering             |
+| Verify results          | Structured inspection, layout capture, PNG rendering, and PDF printing         |
 | Exchange business files | Office import and export with original-file preservation                      |
 | Generate content        | Typst-to-Doc and SVG-to-editable-Slide compilation                            |
 | Compose across Units    | Embedded Units and cross-Unit formulas backed by Workspace identities         |
@@ -64,6 +64,14 @@ render-page artifact copy, and native binding delivery in its installable artifa
 Worktree screenshots resolve UUID-backed images through the Workspace Asset sign/content flow
 before rendering. Host, formula-reference, and embedded Unit data are rewritten only in the
 render copy, including image references serialized inside `resources[].data`.
+
+Print a Sheet, Doc, Slide, or Board from an explicit trunk or Worktree scope to a local PDF. Base
+Units are not printable, and an existing output file is never replaced:
+
+```bash
+univer-workspace-cli print-pdf ./reports/book.pdf --trunk --unit <unit-id>
+univer-workspace-cli print-pdf ./reports/review.pdf --worktree <worktree-id> --unit <unit-id>
+```
 
 Together, these capabilities show the range of products and workflows that can be built with the
 Univer SDK.
