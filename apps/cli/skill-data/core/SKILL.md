@@ -380,7 +380,8 @@ Use `univer-workspace-cli <command> --help` as the syntax authority.
 | Inspect a known Worktree  | `worktree get`, `unit list`                                                 |
 | Continue same-task rework | `worktree reopen`                                                           |
 | Write                     | `execute`, `compile-svg`, `compile-typst`, import                           |
-| Verify                    | `inspect`, `screenshot`, export                                             |
+| Verify                    | `inspect`, `screenshot`                                                     |
+| Deliver output            | `export`, `print-pdf`                                                       |
 | Hand off                  | `worktree ready`, `open`                                                    |
 | User-authorized lifecycle | `worktree merge`, `worktree discard`                                        |
 | User-authorized cleanup   | `space node trash`                                                          |

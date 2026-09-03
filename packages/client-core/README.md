@@ -16,7 +16,7 @@
   embedded-image externalization 与 changeset commit workflow。
 - 提供 Node-hosted Office import/export、格式与 Unit 类型校验、Worktree Unit/runtime 集成和默认 exchange adapter。
 - 提供 Typst bundle 编译、确定性 Doc materialization，以及可选的 Worktree Unit apply workflow。
-- 提供 render Unit 装配、browser screenshot capture、PNG 输出、Slide layout lint，以及配套 render page 构建源。
+- 提供 render Unit 装配、browser screenshot capture、PNG 输出、PDF 打印、Slide layout lint，以及配套 render page 构建源。
 - 提供本机 SVG/relative asset 编译、真实或估算字体测量、Slide page 包装与 Worktree apply workflow。
 - 通过独立 worker subpath 交付共享 worker implementation；Client Shell 显式提供 packaged worker entry、
   credential 与 license resolver。

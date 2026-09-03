@@ -28,7 +28,7 @@ Agent 在隔离的 Worktree 中工作、验证修改，再把结果交给人类�
 | 面向人类                                     | 面向 Agent                                          | 面向运维                                    |
 | -------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
 | 使用个人与团队 Space 组织内容                | 通过 Univer Facade API 创建、修改丰富的 Office 内容 | 部署一套 Browser 与 Server 应用             |
-| 共同编辑 Sheet、Doc、Slide、Base 与 Board    | 检查结构化数据、渲染截图并执行布局检查              | 自主管理产品数据、协同数据与 Blob 数据      |
+| 共同编辑 Sheet、Doc、Slide、Base 与 Board    | 检查数据、渲染截图/PDF 并执行布局检查               | 自主管理产品数据、协同数据与 Blob 数据      |
 | 通过角色与 Node 级权限控制分享和访问         | 离线发现版本匹配的 Skill 与 API                     | 接入密码、GitHub、Discord 或应用 OAuth 登录 |
 | 使用最近访问、回收站、文件导入导出与审阅视图 | 多轮修改而不影响 trunk                              | 运行具备明确恢复边界、文档完备的 HTTP API   |
 
@@ -120,7 +120,7 @@ univer-workspace-cli login
 univer-workspace-cli login --complete
 ```
 
-安装包包含版本匹配的 Skill、结构化 JSON 输出、Facade API 发现、内容检查、渲染、Office
+安装包包含版本匹配的 Skill、结构化 JSON 输出、Facade API 发现、内容检查、PNG/PDF 渲染、Office
 文件交换与 Worktree workflow。完整用法和登录合同见 [CLI 指南](apps/cli/README.md)。
 
 ## 仓库结构
@@ -128,6 +128,7 @@ univer-workspace-cli login --complete
 ```text
 apps/workspace                 Workspace Browser、Server、HTTP contract 与部署应用
 apps/cli                       面向 Agent 的远程 Workspace 自动化应用
+packages/client-core           私有的 Node-hosted Workspace Agent Client 能力
 packages/reference-provider   仅供 Browser 使用的私有 referenced-Unit policy
 scripts                       SDK 版本与 CLI 本地发布工具
 ```
@@ -137,7 +138,11 @@ Facade API 与 Office 内容能力；Univer Collaboration SDK 拥有 snapshot、
 Worktree 协议合同；Univer CLI SDK 拥有可复用的 headless runtime、执行、检查与渲染能力。
 
 Workspace 拥有产品身份、Space、目录层级、ACL、分享、回收站、最近访问、Blob 存储策略、远程
-workflow 与部署。reference-provider package 只是 Browser 的私有实现，不是第三个对外应用或 SDK。
+workflow 与部署。Client Core 在仓库应用之间共享存储无关的认证、Workspace workflow、本机
+Node-hosted Blob/Asset 传输与 worker-backed 内容 runtime，包括 Node-hosted Office exchange、Typst
+编译/materialize/apply、render Unit 装配、截图、PNG/PDF 输出、Slide layout lint、render-page 源码与
+SVG 编译/测量/apply workflow；reference-provider package 仍只供 Browser 使用。两者都是私有实现
+模块，不是额外的公开应用或 SDK。
 
 ## 架构原则
 
@@ -197,6 +202,7 @@ CLI 与 Workspace 部署基于同一份源码，但各自独立交付：
 | [Univer Office SDK 文档](https://office.univer.ai/)                 | Office SDK 技术栈：Runtime、Collaboration、CLI 与 Worktree |
 | [Workspace 应用指南](apps/workspace/README.md)                      | 配置、认证、存储、Docker 与升级                          |
 | [Workspace CLI 指南](apps/cli/README.md)                            | 安装、登录、Agent workflow 与 package 合同               |
+| [Client Core package](packages/client-core/README.md)               | 私有 Node-hosted client 能力边界                          |
 | [技术架构](apps/workspace/docs/architecture.md)                     | Browser、Server、存储、OpenAPI 与模块边界                |
 | [HTTP contract](apps/workspace/contracts/http/README.md)            | 产品 API 源文件与生成流程                                |
 | [Reference-provider package](packages/reference-provider/README.md) | Browser 私有 referenced-Unit policy                      |

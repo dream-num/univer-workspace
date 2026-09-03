@@ -183,6 +183,7 @@ describe("Workspace CLI", () => {
         "open",
         "resources",
         "screenshot",
+        "print-pdf",
         "compile-svg",
         "compile-typst",
       ]) {
