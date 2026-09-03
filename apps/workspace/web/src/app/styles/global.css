@@ -67,6 +67,17 @@
   --color-info-soft: #eef4ff;
   --color-info-soft-foreground: #1d4ed8;
 
+  /* Univer CLI comparison surfaces */
+  --color-card: #ffffff;
+  --color-card-foreground: #1d2129;
+  --color-warning-muted: #fffbeb;
+  --color-diff-insert: #15803d;
+  --color-diff-insert-muted: #dcfce7;
+  --color-diff-delete: #b91c1c;
+  --color-diff-delete-muted: #fee2e2;
+  --color-diff-update: #1d4ed8;
+  --color-diff-update-muted: #dbeafe;
+
   /* ------------------------------------------------------------------ */
   /* Unit type accents                                                   */
   /* ------------------------------------------------------------------ */
@@ -247,6 +258,32 @@
   height: 100%;
 }
 
+/* Comparison panes use the same inspection-only chrome policy as univer-cli. */
+.workspace-comparison-viewer [data-u-comp="headerbar"],
+.workspace-comparison-viewer [data-u-comp="formula-bar"],
+.workspace-comparison-viewer [data-u-comp="left-sidebar"],
+.workspace-comparison-viewer [data-u-comp="right-sidebar"],
+.workspace-comparison-viewer [data-u-comp="base-toolbar"],
+.workspace-comparison-viewer [data-u-comp="base-left-panel"],
+.workspace-comparison-viewer [data-u-comp="base-add-view-button"],
+.workspace-comparison-viewer [data-u-comp="base-table-sidebar-new-button"],
+.workspace-comparison-viewer [data-board-left-toolbar="true"],
+.workspace-comparison-viewer [data-board-top-right-menu="true"] {
+  display: none !important;
+}
+
+.workspace-comparison-viewer [data-u-comp="workbench-layout"] {
+  height: 100%;
+}
+
+.workspace-comparison-viewer [data-u-comp="left-sidebar"] + section {
+  grid-column: 2;
+}
+
+.workspace-comparison-viewer {
+  height: 100%;
+}
+
 /* ------------------------------------------------------------------ */
 /* Sonner toast alignment with the design language                     */
 /* ------------------------------------------------------------------ */
@@ -304,6 +341,16 @@
 
   --color-info-soft: #16233d;
   --color-info-soft-foreground: #8ab0fa;
+
+  --color-card: #171a21;
+  --color-card-foreground: #e2e6ee;
+  --color-warning-muted: #422006;
+  --color-diff-insert: #86efac;
+  --color-diff-insert-muted: #14532d;
+  --color-diff-delete: #fca5a5;
+  --color-diff-delete-muted: #7f1d1d;
+  --color-diff-update: #93c5fd;
+  --color-diff-update-muted: #1e3a8a;
 
   /* Unit type accents */
   --color-doc: #5f8ff0;

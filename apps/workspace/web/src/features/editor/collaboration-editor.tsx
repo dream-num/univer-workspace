@@ -102,6 +102,8 @@ export interface CollaborationEditorProps {
   /** Fully materialized UnitData for a local, non-collaborative viewer. */
   readonly materializedData?: Readonly<Record<string, unknown>>;
   readonly instanceKey?: string;
+  /** Let the surrounding comparison shell own labels, navigation, and editing chrome. */
+  readonly comparisonViewer?: boolean;
 }
 
 export interface WorkspaceHistoryDefinition {
@@ -159,6 +161,7 @@ export function createCollaborationEditor(
     readOnly = false,
     materializedData,
     instanceKey,
+    comparisonViewer = false,
   }: CollaborationEditorProps) {
     const container = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
@@ -520,7 +523,13 @@ export function createCollaborationEditor(
     ]);
 
     return (
-      <div className="univer-editor-shell">
+      <div
+        className={cn(
+          "univer-editor-shell",
+          comparisonViewer && "workspace-comparison-viewer"
+        )}
+        data-workspace-comparison-viewer={comparisonViewer ? "true" : undefined}
+      >
         {!loading &&
         !error &&
         materializedData === undefined &&

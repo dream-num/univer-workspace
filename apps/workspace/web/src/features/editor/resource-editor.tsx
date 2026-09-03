@@ -20,6 +20,7 @@ export function ResourceEditor(props: {
   readonly readOnly?: boolean;
   readonly materializedData?: Readonly<Record<string, unknown>>;
   readonly instanceKey?: string;
+  readonly comparisonViewer?: boolean;
 }) {
   const editorProps = {
     unitId: props.unitId,
@@ -39,6 +40,9 @@ export function ResourceEditor(props: {
     ...(props.instanceKey === undefined
       ? {}
       : { instanceKey: props.instanceKey }),
+    ...(props.comparisonViewer === undefined
+      ? {}
+      : { comparisonViewer: props.comparisonViewer }),
   };
   return (
     <Suspense
