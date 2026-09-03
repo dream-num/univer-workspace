@@ -13,7 +13,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   Blobs, Univer Assets, product-level Worktrees, and recoverable cross-system operations. See the
   [application design](apps/workspace/docs/application-design.md).
 - The deployable Workspace Browser and Server composition, including the product HTTP contract, authenticated
-  Collaboration Endpoint integration, local persistence layout, and deployment lifecycle. See the
+  Collaboration Endpoint integration, Unit-level Trunk-to-Worktree semantic review, local persistence layout,
+  and deployment lifecycle. See the
   [Workspace README](apps/workspace/README.md).
 - The Workspace-specific CLI composition and agent workflow over remote Workspace Resources and Worktrees,
   including version-matched operational Skills and review handoff. See the [CLI README](apps/cli/README.md).

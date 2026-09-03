@@ -156,6 +156,13 @@ details, sidebar counts, and Worktree-driven Node/Resource lists refresh without
 a page reload. The connection uses a one-time session ticket and carries no
 Worktree metadata or content.
 
+The Worktree review panel also provides a Unit-level Compare view. The product
+API materializes the current Trunk and Worktree Unit states, computes a semantic
+diff with the published Univer History comparison adapters, and returns one
+self-contained response. The Browser renders two local read-only Univer
+instances; comparison requests create no persistent session and write no
+product or Collaboration data.
+
 ## Docker
 
 Build the image from the repository root:

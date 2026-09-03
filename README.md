@@ -63,7 +63,10 @@ create Worktree
 ```
 
 Intermediate changes remain isolated from shared content until a person accepts
-them. See the [CLI guide](apps/cli/README.md) for the complete product workflow.
+them. For every Worktree Unit, the Browser can request one self-contained current
+Trunk-to-Worktree comparison package and render both read-only states alongside a
+semantic change list. See the [CLI guide](apps/cli/README.md) for the complete
+product workflow.
 
 ## Quick start
 

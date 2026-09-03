@@ -152,6 +152,8 @@ paths:
     $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1units
   /api/worktrees/{worktreeId}/units/{unitId}/open:
     $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1units~1{unitId}~1open
+  /api/worktrees/{worktreeId}/units/{unitId}/comparison:
+    $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1units~1{unitId}~1comparison
   /api/worktrees/{worktreeId}/units/{unitId}/changesets:
     $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1units~1{unitId}~1changesets
   /api/worktrees/{worktreeId}/ready:

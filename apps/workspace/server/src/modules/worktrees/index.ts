@@ -5,6 +5,8 @@ export type {
   ActivationState,
   MergeResult,
   WorktreeBackend,
+  WorktreeComparisonBackend,
+  WorktreeComparisonSide,
   WorktreeCapabilities,
   WorktreeChangesetSubmitResult,
   WorktreeDetail,
@@ -14,6 +16,7 @@ export type {
   WorktreesModule,
   WorktreeState,
   WorktreeSummary,
+  WorktreeUnitComparison,
   WorktreeUnit,
   WorktreeVisibility,
 } from "./worktrees.types.js";

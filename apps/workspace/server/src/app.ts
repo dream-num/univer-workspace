@@ -13,6 +13,7 @@ import {
   type UnitStore,
 } from "./integrations/univer/unit-store.js";
 import { protocolUser } from "./integrations/univer/protocol-user.js";
+import { createWorktreeComparisonBackend } from "./integrations/univer/worktree-comparison.js";
 import { createWorktreeBackend } from "./integrations/univer/worktree-store.js";
 import { LocalBlobStore, type BlobStore } from "./integrations/blob/blob-store.js";
 import {
@@ -88,6 +89,7 @@ import {
   createWorktreesRouter,
   WorktreesRepository,
   type WorktreeBackend,
+  type WorktreeComparisonBackend,
   type WorktreesModule,
 } from "./modules/worktrees/index.js";
 import {
@@ -136,6 +138,7 @@ export function createWorkspaceApplication(
     readonly unitStore?: UnitStore;
     readonly unitSnapshotStore?: UnitSnapshotStore;
     readonly worktreeBackend?: WorktreeBackend;
+    readonly worktreeComparisonBackend?: WorktreeComparisonBackend;
     readonly blobStore?: BlobStore;
     readonly githubOAuthProvider?: GitHubOAuthProvider;
     readonly discordOAuthProvider?: DiscordOAuthProvider;
@@ -237,6 +240,14 @@ export function createWorkspaceApplication(
       (collaboration
         ? createWorktreeBackend(collaboration.worktreeService)
         : unavailableWorktreeBackend()),
+    comparisonBackend:
+      dependencies.worktreeComparisonBackend ??
+      (collaboration
+        ? createWorktreeComparisonBackend({
+            trunk: collaboration.service,
+            worktree: collaboration.worktreeService,
+          })
+        : unavailableWorktreeComparisonBackend()),
     publishMergedAssets: (worktreeId, unitIds) =>
       univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds),
     onChanged: (change) => worktreeChangeFeed.publish(change),
@@ -438,5 +449,15 @@ function unavailableWorktreeBackend(): WorktreeBackend {
     merge: unavailable,
     discard: unavailable,
     submitChangeset: unavailable,
+  };
+}
+
+function unavailableWorktreeComparisonBackend(): WorktreeComparisonBackend {
+  return {
+    async compareUnit() {
+      throw new Error(
+        "A Worktree comparison backend is required for this application instance."
+      );
+    },
   };
 }

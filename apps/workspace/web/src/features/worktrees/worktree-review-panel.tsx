@@ -41,6 +41,7 @@ import {
   worktreesQueryKey,
 } from "./worktrees.queries";
 import { reviewActionFeedback } from "./worktree-action-feedback";
+import { WorktreeComparison } from "./worktree-comparison";
 import type { WorktreeReviewView } from "./worktree-review-search";
 
 type WorktreeDetailModel = components["schemas"]["WorktreeDetail"];
@@ -291,13 +292,17 @@ function UnitReview({
   const canViewMergePreview =
     worktree.state === "ready" && mergeReviewStatus === "preview";
   const activeView: WorktreeReviewView =
-    selectedView === "trunk" && canViewTrunk
+    selectedView === "compare"
+      ? "compare"
+      : selectedView === "trunk" && canViewTrunk
       ? "trunk"
       : selectedView === "preview" && canViewMergePreview
         ? "preview"
         : "agent";
   const canPreview =
-    activeView === "trunk" || unit.change !== "deleted";
+    activeView === "trunk" ||
+    activeView === "compare" ||
+    unit.change !== "deleted";
   const previewMode =
     activeView === "trunk"
       ? "trunk"
@@ -353,6 +358,10 @@ function UnitReview({
                 label: t("agentVersion"),
                 value: "agent",
               },
+              {
+                label: t("compareVersions"),
+                value: "compare",
+              },
               ...(canViewMergePreview
                 ? [
                     {
@@ -382,7 +391,9 @@ function UnitReview({
           {t("checkingMergePreview")}
         </Alert>
       ) : null}
-      {!canPreview ? (
+      {activeView === "compare" ? (
+        <WorktreeComparison worktreeId={worktree.id} unit={unit} />
+      ) : !canPreview ? (
         <Empty
           className="mt-[min(18vh,160px)]"
           icon={Trash2}

@@ -4,6 +4,7 @@ import {
   LifecycleStages,
   LocaleType,
   LogLevel,
+  UniverInstanceType,
   UserManagerService,
 } from "@univerjs/core";
 import {
@@ -97,6 +98,9 @@ export interface CollaborationEditorProps {
       };
   readonly mappedUnitIds?: readonly string[];
   readonly readOnly?: boolean;
+  /** Fully materialized UnitData for a local, non-collaborative viewer. */
+  readonly materializedData?: Readonly<Record<string, unknown>>;
+  readonly instanceKey?: string;
 }
 
 export interface WorkspaceHistoryDefinition {
@@ -107,6 +111,7 @@ export interface WorkspaceHistoryDefinition {
 
 interface ICollaborationEditorDefinition {
   readonly label: string;
+  readonly unitType: UniverInstanceType;
   readonly history: WorkspaceHistoryDefinition;
   readonly enableDocumentCollaborationUI?: boolean;
   readonly collaborationProvidedByPreset?: boolean;
@@ -121,7 +126,8 @@ interface ICollaborationEditorDefinition {
     license: string,
     collaborationScope: NonNullable<
       CollaborationEditorProps["collaborationScope"]
-    >
+    >,
+    runtime: "collaboration" | "local"
   ) => IPreset[];
   readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
   readonly collaborationFeaturePlugins?: (
@@ -150,6 +156,8 @@ export function createCollaborationEditor(
     collaborationScope = { kind: "trunk" },
     mappedUnitIds,
     readOnly = false,
+    materializedData,
+    instanceKey,
   }: CollaborationEditorProps) {
     const container = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
@@ -187,43 +195,48 @@ export function createCollaborationEditor(
 
       const mount = async () => {
         if (!element.id) {
-          element.id = `univer-${definition.label}-${unitId}`;
+          element.id = `univer-${definition.label}-${unitId}${
+            instanceKey ? `-${instanceKey}` : ""
+          }`;
         }
-        const resolvedCollaboration = await resolveCollaborationConfig(
-          collaborationScope,
-          unitId
-        );
+        const local = materializedData !== undefined;
+        const resolvedCollaboration = local
+          ? undefined
+          : await resolveCollaborationConfig(collaborationScope, unitId);
         if (disposed) return;
         const exchangeEnabled =
+          !local &&
           collaborationScope.kind === "trunk" &&
           definition.exchangeEnabled !== false;
-        const collaborationConfig = {
-          ...resolvedCollaboration.pluginConfig,
-          override: withWorkspaceSnapshotServerOverride(
-            resolvedCollaboration.pluginConfig.override,
-            {
-              hostScope: resolvedCollaboration.hostSnapshotScope,
-              origin: window.location.origin,
-              resolveMergePreview: loadMergeReviewResolution,
+        const collaborationConfig = resolvedCollaboration
+          ? {
+              ...resolvedCollaboration.pluginConfig,
+              override: withWorkspaceSnapshotServerOverride(
+                resolvedCollaboration.pluginConfig.override,
+                {
+                  hostScope: resolvedCollaboration.hostSnapshotScope,
+                  origin: window.location.origin,
+                  resolveMergePreview: loadMergeReviewResolution,
+                }
+              ),
             }
-          ),
-        };
-        const referenceHostContext = createReferenceHostContext(
-          collaborationScope,
-          mappedUnitIds
-        );
-        const referenceProvider =
-          createWorkspaceReferencedUnitProviderRegistration({
-            hostContext: referenceHostContext,
-            resolveSnapshotService: () => {
-              if (!mountedUniver) {
-                throw new Error(
-                  "Workspace SnapshotService is not ready."
-                );
-              }
-              return mountedUniver.__getInjector().get(SnapshotService);
-            },
-          });
+          : undefined;
+        const referenceProvider = local
+          ? undefined
+          : createWorkspaceReferencedUnitProviderRegistration({
+              hostContext: createReferenceHostContext(
+                collaborationScope,
+                mappedUnitIds
+              ),
+              resolveSnapshotService: () => {
+                if (!mountedUniver) {
+                  throw new Error(
+                    "Workspace SnapshotService is not ready."
+                  );
+                }
+                return mountedUniver.__getInjector().get(SnapshotService);
+              },
+            });
         const license = resolveUniverLicense();
         const licensePlugins: IPresetPlugin[] =
           definition.licenseProvidedByPreset
@@ -239,7 +252,8 @@ export function createCollaborationEditor(
         let presets = definition.createPresets(
           element,
           license,
-          collaborationScope
+          collaborationScope,
+          local ? "local" : "collaboration"
         );
         if (licensePlugins.length > 0) {
           // createUniver registers every preset before its top-level plugins.
@@ -248,7 +262,7 @@ export function createCollaborationEditor(
           presets = [{ plugins: licensePlugins }, ...presets];
         }
         const collaborationPlugins: IPresetPlugin[] =
-          definition.collaborationProvidedByPreset
+          local || definition.collaborationProvidedByPreset
             ? []
             : [
                 UniverCollaborationPlugin,
@@ -283,25 +297,31 @@ export function createCollaborationEditor(
                 ],
               ];
         const collaborationFeaturePlugins =
-          definition.collaborationFeaturePlugins?.(collaborationScope) ?? [];
-        const historyFeaturePlugins = createWorkspaceHistoryPlugins(
-          collaborationScope,
-          definition.history,
-          element.id
-        );
-        const outputPlugins = createWorkspaceOutputPlugins({
-          origin: window.location.origin,
-          exchangeEnabled,
-          exchangeProvidedByPreset:
-            definition.exchangeProvidedByPreset === true,
-          exchangeFeaturePlugins:
-            definition.exchangeFeaturePlugins?.() ?? [],
-          printFeaturePlugins: definition.printFeaturePlugins?.() ?? [],
-        });
-        if (definition.collaborationProvidedByPreset) {
+          local
+            ? []
+            : definition.collaborationFeaturePlugins?.(collaborationScope) ?? [];
+        const historyFeaturePlugins = local
+          ? []
+          : createWorkspaceHistoryPlugins(
+              collaborationScope,
+              definition.history,
+              element.id
+            );
+        const outputPlugins = local
+          ? []
+          : createWorkspaceOutputPlugins({
+              origin: window.location.origin,
+              exchangeEnabled,
+              exchangeProvidedByPreset:
+                definition.exchangeProvidedByPreset === true,
+              exchangeFeaturePlugins:
+                definition.exchangeFeaturePlugins?.() ?? [],
+              printFeaturePlugins: definition.printFeaturePlugins?.() ?? [],
+            });
+        if (definition.collaborationProvidedByPreset && !local) {
           presets = configurePresetCollaboration(
             presets,
-            collaborationConfig,
+            collaborationConfig ?? {},
             definition,
             exchangeEnabled,
             collaborationScope.kind === "trunk",
@@ -334,7 +354,7 @@ export function createCollaborationEditor(
           theme: definition.theme,
           darkMode: resolvedThemeRef.current === "dark",
           logLevel: LogLevel.WARN,
-          collaboration: true,
+          ...(!local ? { collaboration: true as const } : {}),
           presets,
           plugins: [
             ...collaborationPlugins,
@@ -344,9 +364,10 @@ export function createCollaborationEditor(
             [
               UniverEmbedPlugin,
               {
-                resourceRefUnitProviderRegistrations: [
-                  referenceProvider,
-                ],
+                resourceRefUnitProviderRegistrations:
+                  referenceProvider === undefined
+                    ? []
+                    : [referenceProvider],
               },
             ],
             UniverEmbedUIPlugin,
@@ -354,17 +375,19 @@ export function createCollaborationEditor(
         });
         mountedUniver = univer;
         univerAPIRef.current = univerAPI;
-        collaborationUIEventListener = univer
-          .__getInjector()
-          .get(CollaborationUIEventService)
-          .event$.subscribe((event) => {
-            if (disposed) return;
-            if (event.id === CollaborationUIEventId.PERMISSION_DENIED) {
-              setCollaborationIssue("permission");
-            } else if (event.id === CollaborationUIEventId.CONFLICT) {
-              setCollaborationIssue("conflict");
-            }
-          });
+        if (!local) {
+          collaborationUIEventListener = univer
+            .__getInjector()
+            .get(CollaborationUIEventService)
+            .event$.subscribe((event) => {
+              if (disposed) return;
+              if (event.id === CollaborationUIEventId.PERMISSION_DENIED) {
+                setCollaborationIssue("permission");
+              } else if (event.id === CollaborationUIEventId.CONFLICT) {
+                setCollaborationIssue("conflict");
+              }
+            });
+        }
         if (readOnly) {
           const installReadOnlyGuard = () => {
             if (disposed || readOnlyListener) return;
@@ -422,6 +445,14 @@ export function createCollaborationEditor(
           .get(UserManagerService)
           .setCurrentUser(protocolUser);
 
+        if (local) {
+          univer.createUnit(
+            definition.unitType,
+            structuredClone(materializedData) as never
+          );
+          setLoading(false);
+          return;
+        }
         const collaboration = univerAPI.getCollaboration();
         statusListener = univerAPI.addEvent(
           univerAPI.Event.CollaborationStatusChanged,
@@ -480,12 +511,15 @@ export function createCollaborationEditor(
       user.displayName,
       user.id,
       readOnly,
+      materializedData,
+      instanceKey,
     ]);
 
     return (
       <div className="univer-editor-shell">
         {!loading &&
         !error &&
+        materializedData === undefined &&
         collaborationStatusPresentation.showCustom ? (
           <div
             className={cn(

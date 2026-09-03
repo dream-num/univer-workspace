@@ -148,6 +148,31 @@ describe("Workspace Sheet presets", () => {
       "UNIVER_SHEETS_THREAD_COMMENT_UI_PLUGIN"
     );
   }, 20_000);
+
+  it("omits Collaboration from local comparison viewers", async () => {
+    Object.defineProperty(globalThis, "Path2D", {
+      configurable: true,
+      value: class Path2D {},
+    });
+    const { createSheetEditorPresets } = await import(
+      "../../web/src/features/editor/sheet-presets.js"
+    );
+    const presets = createSheetEditorPresets({
+      container,
+      license,
+      universerEndpoint: endpoint,
+      threadCommentsEnabled: false,
+      collaborationEnabled: false,
+    });
+
+    expect(presetPluginKeys(presets)).not.toEqual(
+      expect.arrayContaining([
+        "UNIVER_COLLABORATION_PLUGIN",
+        "UNIVER_COLLABORATION_CLIENT_PLUGIN",
+        "UNIVER_COLLABORATION_CLIENT_UI_PLUGIN",
+      ])
+    );
+  }, 20_000);
 });
 
 function presetPluginKeys(presets: IPreset[]): string[] {

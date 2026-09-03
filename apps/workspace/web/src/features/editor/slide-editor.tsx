@@ -30,7 +30,7 @@ import SlidesThreadCommentUIZhCN from "@univerjs-pro/slides-thread-comment-ui/lo
 import { UniverSlidesUIPlugin } from "@univerjs-pro/slides-ui";
 import UniverSlidesUIEnUS from "@univerjs-pro/slides-ui/locale/en-US";
 import UniverSlidesUIZhCN from "@univerjs-pro/slides-ui/locale/zh-CN";
-import { IImageIoService } from "@univerjs/core";
+import { IImageIoService, UniverInstanceType } from "@univerjs/core";
 import UniverDesignEnUS from "@univerjs/design/locale/en-US";
 import UniverDesignZhCN from "@univerjs/design/locale/zh-CN";
 import { UniverDocsPlugin } from "@univerjs/docs";
@@ -80,6 +80,7 @@ export type SlideEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "presentation",
+  unitType: UniverInstanceType.UNIVER_SLIDE,
   history: {
     createPlugin: (containerId) => [
       UniverSlidesHistoryUIPlugin,
@@ -138,7 +139,7 @@ export default createCollaborationEditor({
     ),
   exchangeFeaturePlugins: () => [UniverSlidesExchangeClientPlugin],
   printFeaturePlugins: () => [UniverSlidesPrintPlugin],
-  createPresets: (container) => [
+  createPresets: (container, _license, _collaborationScope, runtime) => [
     {
       plugins: [
         UniverRenderEnginePlugin,
@@ -157,7 +158,9 @@ export default createCollaborationEditor({
             allowImageSize: MAX_UNIVER_IMAGE_BYTES,
             // The collaboration plugin owns the remote image service. Remove
             // Drawing's local implementation to keep a single registration.
-            override: [[IImageIoService, null]],
+            ...(runtime === "collaboration"
+              ? { override: [[IImageIoService, null]] }
+              : {}),
           },
         ],
         UniverSlidesPlugin,

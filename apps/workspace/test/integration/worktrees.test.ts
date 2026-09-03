@@ -158,7 +158,7 @@ describe("Worktrees", () => {
         summary: null,
       }
     );
-    await application.worktrees.addUnit(
+    const privateUnit = await application.worktrees.addUnit(
       creator.id,
       created.body.id,
       "add-private-team-unit-0001",
@@ -172,6 +172,13 @@ describe("Worktrees", () => {
     expect(ownerView.worktree.unitCount).toBe(1);
     expect(ownerView.worktree.units).toEqual([]);
     expect(ownerView.worktree.capabilities.review).toBe(false);
+    await expect(
+      application.worktrees.compareUnit(
+        owner.id,
+        created.body.id,
+        privateUnit.body.unit.unitId
+      )
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
       application.worktrees.get(viewer.id, created.body.id)
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -327,6 +334,110 @@ describe("Worktrees", () => {
         nodeId: first.body.unit.nodeId,
       },
     });
+  });
+
+  it("builds self-contained Trunk and new-Unit comparison packages", async () => {
+    const application = createRealTestApplication();
+    const user = await register(application, "comparison-user");
+    const space = application.spaces.list(user.id).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const resource = await createResource(application, user.id, space.id);
+    const created = await application.worktrees.create(
+      user.id,
+      "create-comparison-worktree-0001",
+      { kind: "user", name: "Comparison", summary: null }
+    );
+    const existing = await application.worktrees.addUnit(
+      user.id,
+      created.body.id,
+      "add-comparison-trunk-unit-0001",
+      { source: "trunk", resourceId: resource.id }
+    );
+    const local = await application.worktrees.addUnit(
+      user.id,
+      created.body.id,
+      "add-comparison-local-unit-0001",
+      {
+        source: "worktree",
+        name: "New comparison document",
+        unitType: "doc",
+        targetSpaceId: space.id,
+        targetParentNodeId: null,
+      }
+    );
+
+    const unchanged = await application.worktrees.compareUnit(
+      user.id,
+      created.body.id,
+      existing.body.unit.unitId
+    );
+    expect(unchanged).toMatchObject({
+      unit: { unitType: "sheet" },
+      fidelity: "history",
+      left: { present: true, revision: 1 },
+      right: { present: true, revision: 1 },
+      diff: { summary: { total: 0 } },
+    });
+
+    const added = await application.worktrees.compareUnit(
+      user.id,
+      created.body.id,
+      local.body.unit.unitId
+    );
+    expect(added).toMatchObject({
+      unit: { unitType: "doc" },
+      fidelity: "snapshot",
+      left: { present: false },
+      right: { present: true, revision: 1 },
+    });
+    expect(
+      (added.diff.summary as { readonly total: number }).total
+    ).toBeGreaterThan(0);
+  });
+
+  it("materializes comparisons for every supported Univer Unit type", async () => {
+    const application = createRealTestApplication();
+    const user = await register(application, "all-comparison-types-user");
+    const space = application.spaces.list(user.id).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const created = await application.worktrees.create(
+      user.id,
+      "create-all-comparison-types-worktree-0001",
+      { kind: "user", name: "All comparison types", summary: null }
+    );
+
+    for (const unitType of [
+      "sheet",
+      "doc",
+      "slide",
+      "board",
+      "base",
+    ] as const) {
+      const resource = await createResource(
+        application,
+        user.id,
+        space.id,
+        unitType
+      );
+      const added = await application.worktrees.addUnit(
+        user.id,
+        created.body.id,
+        `add-${unitType}-comparison-unit-0001`,
+        { source: "trunk", resourceId: resource.id }
+      );
+      await expect(
+        application.worktrees.compareUnit(
+          user.id,
+          created.body.id,
+          added.body.unit.unitId
+        )
+      ).resolves.toMatchObject({
+        unit: { unitType },
+        left: { present: true },
+        right: { present: true },
+        diff: { summary: { total: 0 } },
+      });
+    }
   });
 });
 
@@ -551,7 +662,8 @@ async function register(
 async function createResource(
   application: WorkspaceApplication,
   userId: string,
-  spaceId: string
+  spaceId: string,
+  unitType: "sheet" | "doc" | "slide" | "board" | "base" = "sheet"
 ) {
   const result = await application.resources.create(
     userId,
@@ -561,7 +673,7 @@ async function createResource(
       spaceId,
       parentNodeId: null,
       name: "Existing Sheet",
-      unitType: "sheet",
+      unitType,
     }
   );
   if (result.status === 202) throw new Error("Resource creation is pending");

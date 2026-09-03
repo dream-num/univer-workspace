@@ -147,6 +147,42 @@ export interface WorktreeBackend {
   ): Promise<WorktreeChangesetSubmitResult>;
 }
 
+export interface WorktreeComparisonSide {
+  readonly present: boolean;
+  readonly revision?: number;
+  readonly data?: Readonly<Record<string, unknown>>;
+}
+
+export interface WorktreeUnitComparison {
+  readonly capturedAt: string;
+  readonly unit: {
+    readonly unitId: string;
+    readonly unitType: UnitType;
+    readonly name: string;
+  };
+  readonly fidelity: "history" | "snapshot";
+  readonly commonBaseRevision?: number;
+  readonly left: WorktreeComparisonSide;
+  readonly right: WorktreeComparisonSide;
+  readonly diff: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Builds one self-contained, read-only Trunk-to-Worktree comparison package.
+ * The package is request-scoped: Workspace does not persist comparison sessions.
+ */
+export interface WorktreeComparisonBackend {
+  compareUnit(
+    input: {
+      readonly worktreeId: string;
+      readonly unitId: string;
+      readonly unitType: UnitType;
+      readonly name: string;
+    },
+    userId: string
+  ): Promise<WorktreeUnitComparison>;
+}
+
 export type WorktreeChangesetSubmitResult =
   | {
       readonly status: "committed" | "already-committed";
@@ -214,6 +250,11 @@ export interface WorktreesModule {
           readonly worktreeId: string;
     };
   }>;
+  compareUnit(
+    userId: string,
+    worktreeId: string,
+    unitId: string
+  ): Promise<WorktreeUnitComparison>;
   submitChangeset(
     userId: string,
     worktreeId: string,

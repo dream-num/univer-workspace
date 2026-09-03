@@ -251,6 +251,40 @@
       "409":
         $ref: ../schemas/common.yaml#/Conflict
 
+/api/worktrees/{worktreeId}/units/{unitId}/comparison:
+  parameters:
+    - name: worktreeId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: unitId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Worktrees]
+    operationId: compareWorktreeUnit
+    summary: Build one current Trunk-to-Worktree comparison package for a Unit.
+    description: |
+      Materializes both current sides and computes semantic differences in one
+      request. The response is self-contained and does not create a persistent
+      comparison session.
+    responses:
+      "200":
+        description: Materialized Unit states and their semantic comparison.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/worktrees.yaml#/WorktreeUnitComparison
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
 /api/worktrees/{worktreeId}/ready:
   parameters:
     - name: worktreeId

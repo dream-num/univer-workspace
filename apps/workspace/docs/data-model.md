@@ -239,6 +239,9 @@ User Worktree 必须是 Private 且没有 Team Space；Team Worktree 必须绑�
 对尚未激活的 Worktree-local Unit，它是预留 Resource ID，此时核心 `resources` 表中还没有
 对应行。
 
+Worktree Unit Compare 是请求内计算的只读投影，不增加产品表，也不在产品数据库保存
+UnitData、diff、snapshot、changeset 或 revision。
+
 ### `worktree_node_intents`
 
 仅 Worktree-local Unit 使用，保存激活时要创建的：

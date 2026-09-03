@@ -206,6 +206,11 @@ History Endpoint 同样复用 Login Session 与 Access Resolver，但服务五�
 Worktree 和 Merge Preview 先解析 Worktree Visibility，再校验 Trunk Resource 或激活目标
 Node 的实际访问权限。Visibility 不替代底层权限。
 
+`GET /api/worktrees/{worktreeId}/units/{unitId}/comparison` 复用同一 review capability，返回
+当前 Trunk 与当前 Worktree 的最终 UnitData 以及语义 diff。它是一次性只读查询：不创建
+comparison identity，不保存结果，不提供 Worktree-to-Worktree 比较。Worktree-local Unit 的
+Trunk 侧为空；历史路径不可用时使用 snapshot fidelity。
+
 ## Recent Seam
 
 成功的 Product Resource Open 才调用 Recent Repository：

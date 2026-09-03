@@ -64,6 +64,29 @@ export function worktreeUnitOpenQueryOptions(
   });
 }
 
+export function worktreeUnitComparisonQueryOptions(
+  worktreeId: string,
+  unitId: string
+) {
+  return queryOptions({
+    queryKey: [
+      ...worktreesQueryKey,
+      "comparison",
+      worktreeId,
+      unitId,
+    ] as const,
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/worktrees/{worktreeId}/units/{unitId}/comparison",
+        { params: { path: { worktreeId, unitId } } }
+      );
+      if (error) throw apiError(error);
+      return data;
+    },
+    staleTime: 0,
+  });
+}
+
 export function worktreeUnitMergeReviewQueryOptions(
   worktreeId: string,
   unitId: string

@@ -18,6 +18,7 @@ import "@univerjs/preset-sheets-advanced/lib/index.css";
 import "@univerjs/preset-sheets-collaboration/lib/index.css";
 
 import { greenTheme } from "@univerjs/themes";
+import { UniverInstanceType } from "@univerjs/core";
 
 import {
   createCollaborationEditor,
@@ -33,6 +34,7 @@ export type SheetEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "spreadsheet",
+  unitType: UniverInstanceType.UNIVER_SHEET,
   history: {
     providedByPreset: true,
     createPlugin: (containerId) => [
@@ -52,12 +54,13 @@ export default createCollaborationEditor({
   exchangeProvidedByPreset: true,
   licenseProvidedByPreset: true,
   locales: sheetEditorLocales,
-  createPresets: (container, license, collaborationScope) =>
+  createPresets: (container, license, collaborationScope, runtime) =>
     createSheetEditorPresets({
       container,
       license,
       universerEndpoint: window.location.origin,
       threadCommentsEnabled: collaborationScope.kind === "trunk",
+      collaborationEnabled: runtime === "collaboration",
     }),
   collaborationFeaturePlugins: (collaborationScope) =>
     getThreadCommentCollaborationPlugins(

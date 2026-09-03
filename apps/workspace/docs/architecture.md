@@ -135,6 +135,11 @@ Worktree 页面使用一条用户级 `/api/worktree-events` WebSocket 接收粗�
 `worktrees` 及可能被 Worktree 合入改变的 Node、Recent、Owned、Shared Query 失效并重新读取
 权威产品 API，不把 WebSocket payload 当作产品数据。
 
+Worktree Compare 按当前选中的单个 Unit 请求一次性数据包。Server 在同一请求中物化当前
+Trunk 与 Worktree 状态并调用五类 SDK comparison adapter；Browser 使用返回的最终 UnitData
+创建两个无 Collaboration 连接的本地只读 Univer，并展示标准化变更列表。该流程不创建
+Comparison Session，也不承诺不同 Unit 请求属于同一历史切面。
+
 ## 服务端
 
 `main.ts` 读取配置、创建应用并监听端口；`app.ts` 创建 Express 实例并挂载中间件、业务
@@ -187,6 +192,10 @@ History 前的已有 Unit 补建索引。正常读取不触发扫描或修复，
 索引。History Endpoint 复用 Unit 打开权限；恢复版本仍通过普通 Collaboration changeset 写入并
 要求内容编辑权限。Browser 按 Unit 类型只为 Trunk Sheet、Doc、Slide、Base 和 Board 注册标准
 SDK History UI，Worktree 与 Merge Preview 不注册。
+
+Worktree Compare 复用 History package 公开的 injector-free comparison engine，但不是 History
+Endpoint。输入由 Collaboration Service 和 Worktree Service 在请求内物化，响应通过产品
+OpenAPI 返回；snapshot、changeset 和 revision 不进入产品数据库。
 
 Worktree Service 在 Collaboration 与产品写入均完成后调用专用 Change Feed。Change Feed
 不是通用应用 Event Bus；它只向该 Worktree 变更前后可发现的已连接用户发送不含 Worktree
