@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { IDocumentData } from "@univerjs/core";
 import type {
   IUnitComparisonItem,
   IUnitComparisonLeafChange,
@@ -7,6 +8,7 @@ import type {
 } from "@univerjs-pro/edit-history";
 import { FunctionSquare, RefreshCw, Search } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -20,6 +22,14 @@ import { Alert, Badge, Button, Spinner } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { sessionQueryOptions } from "../auth";
 import { ResourceEditor } from "../editor";
+import {
+  structuralDiffItemsFromResult,
+  type DocumentParagraphAlignment,
+  type StructuralDiffItem,
+} from "./comparison-presentation";
+import { decorateDocumentComparisonSide } from "./document-comparison-decoration";
+import { createNativeComparisonHighlightController } from "./native-comparison-highlights";
+import { decorateWorkbookComparisonSide } from "./workbook-comparison-decoration";
 import { worktreeUnitComparisonQueryOptions } from "./worktrees.queries";
 
 type WorktreeUnit = components["schemas"]["WorktreeUnit"];
@@ -245,6 +255,7 @@ function WorkbookComparisonView({
             activeSheetId={selectedSheetId}
             data={comparison.left.data}
             item={selectedItem}
+            items={diff.items}
             label={t("officialVersion")}
             revision={comparison.left.revision}
             sheetOptions={sheetOptions}
@@ -259,6 +270,7 @@ function WorkbookComparisonView({
             activeSheetId={selectedSheetId}
             data={comparison.right.data}
             item={selectedItem}
+            items={diff.items}
             label={t("agentVersion")}
             revision={comparison.right.revision}
             sheetOptions={sheetOptions}
@@ -353,6 +365,7 @@ function WorkbookDiffPane({
   activeSheetId,
   data,
   item,
+  items,
   label,
   revision,
   sheetOptions,
@@ -366,6 +379,7 @@ function WorkbookDiffPane({
   readonly activeSheetId: string | null;
   readonly data: Record<string, unknown> | undefined;
   readonly item: IUnitComparisonItem | null;
+  readonly items: readonly IUnitComparisonItem[];
   readonly label: string;
   readonly revision: number | undefined;
   readonly sheetOptions: readonly PageOption[];
@@ -378,6 +392,38 @@ function WorkbookDiffPane({
 }): ReactElement {
   const { language, t } = useI18n();
   const selectedText = item ? comparisonItemLabel(item, language) : "";
+  const presentationItems = useMemo(
+    () => structuralDiffItemsFromResult(items),
+    [items]
+  );
+  const presentedData = useMemo(() => {
+    if (data === undefined) return undefined;
+    return decorateWorkbookComparisonSide(
+      withActiveScope(data, "sheet", activeSheetId),
+      side,
+      items,
+      item?.id
+    );
+  }, [activeSheetId, data, item?.id, items, side]);
+  const installCanvasHighlights = useCallback<
+    NonNullable<
+      import("../editor/collaboration-editor").CollaborationEditorProps["onLocalUnitMounted"]
+    >
+  >(
+    ({ univer, unitId, unitType }) => {
+      const controller = createNativeComparisonHighlightController({
+        univer,
+        unitId,
+        unitType,
+        side,
+        items: presentationItems,
+        ...(item === null ? {} : { selectedItemId: item.id }),
+      });
+      void controller.refresh();
+      return controller;
+    },
+    [item, presentationItems, side]
+  );
   return (
     <section className="grid min-h-[360px] min-w-0 grid-rows-[auto_auto_auto_minmax(0,1fr)] bg-card max-[1023px]:min-h-0">
       <header className="grid h-14 grid-cols-[minmax(124px,220px)_minmax(0,1fr)] items-center gap-3 border-b border-border bg-card px-3.5">
@@ -397,16 +443,17 @@ function WorkbookDiffPane({
       />
       <WorkbookFxStrip item={item} showFormulaText={showFormulaText} side={side} />
       <div className="min-h-0 overflow-hidden">
-        {data === undefined ? (
+        {presentedData === undefined ? (
           <div className="grid h-full content-center px-6 text-center text-sm text-muted-foreground">
             {t("comparisonSnapshotUnavailable")}
           </div>
         ) : (
           <ResourceEditor
-            key={`${side}:${revision ?? 0}:${activeSheetId ?? "default"}`}
+            key={`${side}:${revision ?? 0}:${activeSheetId ?? "default"}:${item?.id ?? "all"}`}
             comparisonViewer
             instanceKey={`comparison-${side}-${activeSheetId ?? "default"}`}
-            materializedData={withActiveScope(data, "sheet", activeSheetId)}
+            materializedData={presentedData}
+            onLocalUnitMounted={installCanvasHighlights}
             readOnly
             unitId={unit.unitId}
             unitType={unit.unitType}
@@ -442,6 +489,15 @@ function NativeComparisonView({
     [diff.items, selectedPageId]
   );
   const selectedItem = items.find((item) => item.id === selectedItemId);
+  const presentationItems = useMemo(
+    () => structuralDiffItemsFromResult(items),
+    [items]
+  );
+  const paragraphAlignment =
+    diff.productContext !== undefined &&
+    "paragraphAlignment" in diff.productContext
+      ? diff.productContext.paragraphAlignment
+      : [];
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
 
@@ -470,7 +526,9 @@ function NativeComparisonView({
           <div className="grid min-h-0 grid-cols-2 gap-px bg-border max-[1023px]:h-full max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-2" data-testid="native-diff-panes">
             <NativeDiffSide
               activePageId={selectedPageId}
+              alignment={paragraphAlignment}
               data={comparison.left.data}
+              items={presentationItems}
               hostRef={leftRef}
               itemCount={items.length}
               label={t("officialVersion")}
@@ -478,6 +536,8 @@ function NativeComparisonView({
               present={comparison.left.present}
               revision={comparison.left.revision}
               side="left"
+              peerData={comparison.right.data}
+              selectedItemId={selectedItem?.id}
               sourceControl={sourceControl}
               unit={unit}
               user={user}
@@ -485,7 +545,9 @@ function NativeComparisonView({
             />
             <NativeDiffSide
               activePageId={selectedPageId}
+              alignment={paragraphAlignment}
               data={comparison.right.data}
+              items={presentationItems}
               hostRef={rightRef}
               itemCount={items.length}
               label={t("agentVersion")}
@@ -493,6 +555,8 @@ function NativeComparisonView({
               present={comparison.right.present}
               revision={comparison.right.revision}
               side="right"
+              peerData={comparison.left.data}
+              selectedItemId={selectedItem?.id}
               sourceControl={undefined}
               unit={unit}
               user={user}
@@ -563,7 +627,9 @@ function NativeDiffSidebar({
 
 function NativeDiffSide({
   activePageId,
+  alignment,
   data,
+  items,
   hostRef,
   itemCount,
   label,
@@ -571,13 +637,17 @@ function NativeDiffSide({
   present,
   revision,
   side,
+  peerData,
+  selectedItemId,
   sourceControl,
   unit,
   user,
   onSelectPage,
 }: {
   readonly activePageId: string | null;
+  readonly alignment: readonly DocumentParagraphAlignment[];
   readonly data: Record<string, unknown> | undefined;
+  readonly items: readonly StructuralDiffItem[];
   readonly hostRef: React.RefObject<HTMLDivElement | null>;
   readonly itemCount: number;
   readonly label: string;
@@ -585,12 +655,56 @@ function NativeDiffSide({
   readonly present: boolean;
   readonly revision: number | undefined;
   readonly side: "left" | "right";
+  readonly peerData: Record<string, unknown> | undefined;
+  readonly selectedItemId: string | undefined;
   readonly sourceControl: ReactNode | undefined;
   readonly unit: WorktreeUnit;
   readonly user: ComparisonViewProps["user"];
   readonly onSelectPage: (id: string) => void;
 }): ReactElement {
   const { t } = useI18n();
+  const installCanvasHighlights = useCallback<
+    NonNullable<
+      import("../editor/collaboration-editor").CollaborationEditorProps["onLocalUnitMounted"]
+    >
+  >(
+    ({ univer, unitId, unitType }) => {
+      const controller = createNativeComparisonHighlightController({
+        univer,
+        unitId,
+        unitType,
+        side,
+        items,
+        ...(selectedItemId === undefined ? {} : { selectedItemId }),
+      });
+      void controller.refresh();
+      return controller;
+    },
+    [items, selectedItemId, side]
+  );
+  const presentedData = useMemo(() => {
+    const scoped =
+      data === undefined
+        ? undefined
+        : withActiveScope(data, unit.unitType, activePageId);
+    if (
+      scoped === undefined ||
+      peerData === undefined ||
+      unit.unitType !== "doc"
+    ) {
+      return scoped;
+    }
+    return decorateDocumentComparisonSide(
+      scoped as unknown as IDocumentData,
+      peerData as unknown as IDocumentData,
+      side,
+      {
+        items,
+        alignment,
+        ...(selectedItemId === undefined ? {} : { selectedItemId }),
+      }
+    ) as unknown as Record<string, unknown>;
+  }, [activePageId, alignment, data, items, peerData, selectedItemId, side, unit.unitType]);
   return (
     <section className={cn("grid min-h-0 bg-background", pageTabs.length > 0 ? "grid-rows-[56px_auto_minmax(0,1fr)]" : "grid-rows-[56px_minmax(0,1fr)]")}>
       <header className="flex min-w-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
@@ -606,12 +720,13 @@ function NativeDiffSide({
         <ComparisonPageTabs activeId={activePageId} ariaLabel={t("comparisonChangedSlides")} options={pageTabs} onSelect={onSelectPage} />
       ) : null}
       <div ref={hostRef} className="relative min-h-0 overflow-hidden">
-        {present && data !== undefined ? (
+        {present && presentedData !== undefined ? (
           <ResourceEditor
-            key={`${side}:${revision ?? 0}:${activePageId ?? "default"}`}
+            key={`${side}:${revision ?? 0}:${activePageId ?? "default"}:${selectedItemId ?? "all"}`}
             comparisonViewer
             instanceKey={`comparison-${side}-${activePageId ?? "default"}`}
-            materializedData={withActiveScope(data, unit.unitType, activePageId)}
+            materializedData={presentedData}
+            onLocalUnitMounted={installCanvasHighlights}
             readOnly
             unitId={unit.unitId}
             unitType={unit.unitType}

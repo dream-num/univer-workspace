@@ -1,4 +1,4 @@
-import type { ILanguagePack } from "@univerjs/core";
+import type { ILanguagePack, Univer } from "@univerjs/core";
 import {
   CommandType,
   LifecycleStages,
@@ -104,6 +104,12 @@ export interface CollaborationEditorProps {
   readonly instanceKey?: string;
   /** Let the surrounding comparison shell own labels, navigation, and editing chrome. */
   readonly comparisonViewer?: boolean;
+  /** Install local-only canvas presentation after a materialized Unit has mounted. */
+  readonly onLocalUnitMounted?: (input: {
+    readonly univer: Univer;
+    readonly unitId: string;
+    readonly unitType: UniverInstanceType;
+  }) => { dispose(): void } | undefined;
 }
 
 export interface WorkspaceHistoryDefinition {
@@ -162,6 +168,7 @@ export function createCollaborationEditor(
     materializedData,
     instanceKey,
     comparisonViewer = false,
+    onLocalUnitMounted,
   }: CollaborationEditorProps) {
     const container = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
@@ -196,6 +203,7 @@ export function createCollaborationEditor(
       let collaborationUIEventListener: { unsubscribe(): void } | null = null;
       let readOnlyListener: { dispose(): void } | null = null;
       let readOnlyLifecycleListener: { dispose(): void } | null = null;
+      let localUnitMountCleanup: { dispose(): void } | undefined;
 
       const mount = async () => {
         if (!element.id) {
@@ -457,6 +465,15 @@ export function createCollaborationEditor(
             definition.unitType,
             structuredClone(materializedData) as never
           );
+          const materializedUnitId = materializedData.id;
+          localUnitMountCleanup = onLocalUnitMounted?.({
+            univer,
+            unitId:
+              typeof materializedUnitId === "string"
+                ? materializedUnitId
+                : unitId,
+            unitType: definition.unitType,
+          });
           setLoading(false);
           return;
         }
@@ -503,6 +520,7 @@ export function createCollaborationEditor(
         collaborationUIEventListener?.unsubscribe();
         readOnlyListener?.dispose();
         readOnlyLifecycleListener?.dispose();
+        localUnitMountCleanup?.dispose();
         mountedUniver?.dispose();
         univerAPIRef.current = null;
       };
@@ -520,6 +538,7 @@ export function createCollaborationEditor(
       readOnly,
       materializedData,
       instanceKey,
+      onLocalUnitMounted,
     ]);
 
     return (

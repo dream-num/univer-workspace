@@ -21,6 +21,7 @@ export function ResourceEditor(props: {
   readonly materializedData?: Readonly<Record<string, unknown>>;
   readonly instanceKey?: string;
   readonly comparisonViewer?: boolean;
+  readonly onLocalUnitMounted?: CollaborationEditorProps["onLocalUnitMounted"];
 }) {
   const editorProps = {
     unitId: props.unitId,
@@ -43,6 +44,9 @@ export function ResourceEditor(props: {
     ...(props.comparisonViewer === undefined
       ? {}
       : { comparisonViewer: props.comparisonViewer }),
+    ...(props.onLocalUnitMounted === undefined
+      ? {}
+      : { onLocalUnitMounted: props.onLocalUnitMounted }),
   };
   return (
     <Suspense
