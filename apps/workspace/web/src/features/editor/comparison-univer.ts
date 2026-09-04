@@ -159,7 +159,7 @@ async function loadComparisonRenderingDefinition(
   switch (unitType) {
     case UniverInstanceType.UNIVER_SHEET: {
       const { createSheetEditorPresets, sheetEditorLocales } = await import(
-        "./sheet-presets"
+        "./sheet-comparison-presets"
       );
       return {
         licenseProvidedByPreset: true,
