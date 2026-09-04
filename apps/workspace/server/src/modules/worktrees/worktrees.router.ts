@@ -88,6 +88,21 @@ export function createWorktreesRouter(options: {
       );
     }
   );
+  router.get(
+    "/worktrees/:worktreeId/units/:unitId/comparison",
+    async (request, response) => {
+      const user = options.identity.requireSession(
+        request.headers.cookie
+      ).user;
+      response.json(
+        await options.worktrees.compareUnit(
+          user.id,
+          request.params.worktreeId,
+          request.params.unitId
+        )
+      );
+    }
+  );
   router.post(
     "/worktrees/:worktreeId/units/:unitId/changesets",
     async (request, response) => {

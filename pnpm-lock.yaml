@@ -429,6 +429,9 @@ importers:
       '@univerjs-pro/bases-exchange-client':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/bases-history':
+        specifier: 1.0.0-insiders.20260902-a58c423
+        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/bases-history-ui':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -447,6 +450,9 @@ importers:
       '@univerjs-pro/boards-chart-ui':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/boards-history':
+        specifier: 1.0.0-insiders.20260902-a58c423
+        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/boards-history-ui':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -546,6 +552,9 @@ importers:
       '@univerjs-pro/docs-exchange-client':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/docs-history':
+        specifier: 1.0.0-insiders.20260902-a58c423
+        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/docs-history-ui':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -570,6 +579,9 @@ importers:
       '@univerjs-pro/docs-table-ui':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/edit-history':
+        specifier: 1.0.0-insiders.20260902-a58c423
+        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/edit-history-ui':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -609,6 +621,9 @@ importers:
       '@univerjs-pro/shape-editor-ui':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-history':
+        specifier: 1.0.0-insiders.20260902-a58c423
+        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/sheets-history-ui':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -624,6 +639,9 @@ importers:
       '@univerjs-pro/slides-exchange-client':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/slides-history':
+        specifier: 1.0.0-insiders.20260902-a58c423
+        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/slides-history-ui':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -736,6 +754,9 @@ importers:
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423
       '@univerjs/rpc':
+        specifier: 1.0.0-insiders.20260902-a58c423
+        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/themes':

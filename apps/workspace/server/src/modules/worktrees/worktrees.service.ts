@@ -18,6 +18,7 @@ import {
 import type {
   ActivationState,
   WorktreeBackend,
+  WorktreeComparisonBackend,
   WorktreeCapabilities,
   WorktreeDetail,
   WorktreeOperationKind,
@@ -42,6 +43,7 @@ export function createWorktreesModule(options: {
   readonly repository: WorktreesRepository;
   readonly access: AccessResolver;
   readonly backend: WorktreeBackend;
+  readonly comparisonBackend: WorktreeComparisonBackend;
   readonly publishMergedAssets: (
     worktreeId: string,
     unitIds: readonly string[]
@@ -487,6 +489,23 @@ export function createWorktreesModule(options: {
           worktreeId,
         },
       };
+    },
+
+    async compareUnit(userId, worktreeId, unitId) {
+      const value = await context(userId, worktreeId);
+      if (!value.capabilities.review) throw notFound();
+      const unit = requireMappedUnit(value, unitId);
+      return await backendCall(() =>
+        options.comparisonBackend.compareUnit(
+          {
+            worktreeId,
+            unitId,
+            unitType: unit.unitType,
+            name: unit.name,
+          },
+          userId
+        )
+      );
     },
 
     async submitChangeset(

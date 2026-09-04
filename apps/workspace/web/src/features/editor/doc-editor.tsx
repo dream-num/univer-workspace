@@ -39,6 +39,7 @@ import UniverShapeEditorUIEnUS from "@univerjs-pro/shape-editor-ui/locale/en-US"
 import UniverShapeEditorUIZhCN from "@univerjs-pro/shape-editor-ui/locale/zh-CN";
 import { mergeLocales } from "@univerjs/presets";
 import { defaultTheme } from "@univerjs/themes";
+import { UniverInstanceType } from "@univerjs/core";
 
 import "@univerjs-pro/chart-ui/facade";
 import "@univerjs-pro/docs-callout/facade";
@@ -77,6 +78,7 @@ export type DocEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "document",
+  unitType: UniverInstanceType.UNIVER_DOC,
   history: {
     createPlugin: (containerId) => [
       UniverDocsHistoryUIPlugin,
@@ -133,16 +135,16 @@ export default createCollaborationEditor({
     ),
   exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin],
   printFeaturePlugins: () => [UniverDocsPrintPlugin],
-  createPresets: (container, _license, collaborationScope) => [
+  createPresets: (container, _license, collaborationScope, runtime) => [
     UniverDocsCorePreset({
       container,
       ribbonType: "grid",
     }),
     UniverDocsDrawingPreset({
-      collaboration: true,
+      collaboration: runtime === "collaboration",
     }),
     UniverDocsHyperLinkPreset(),
-    ...(collaborationScope.kind === "trunk"
+    ...(runtime === "collaboration" && collaborationScope.kind === "trunk"
       ? [UniverDocsThreadCommentPreset()]
       : []),
     {

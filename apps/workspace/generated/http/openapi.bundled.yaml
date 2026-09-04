@@ -1779,6 +1779,40 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}/units/{unitId}/comparison:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: unitId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Worktrees
+      operationId: compareWorktreeUnit
+      summary: Build one current Trunk-to-Worktree comparison package for a Unit.
+      description: |
+        Materializes both current sides and computes semantic differences in one
+        request. The response is self-contained and does not create a persistent
+        comparison session.
+      responses:
+        '200':
+          description: Materialized Unit states and their semantic comparison.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeUnitComparison'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/worktrees/{worktreeId}/units/{unitId}/changesets:
     parameters:
       - name: worktreeId
@@ -3713,6 +3747,67 @@ components:
           $ref: '#/components/schemas/OpenedWorktreeUnit'
         collaborationScope:
           $ref: '#/components/schemas/CollaborationScope'
+    WorktreeComparisonUnit:
+      type: object
+      additionalProperties: false
+      required:
+        - unitId
+        - unitType
+        - name
+      properties:
+        unitId:
+          type: string
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        name:
+          type: string
+    WorktreeComparisonSide:
+      type: object
+      additionalProperties: false
+      required:
+        - present
+      properties:
+        present:
+          type: boolean
+        revision:
+          type: integer
+          minimum: 1
+        data:
+          type: object
+          description: Fully materialized Univer UnitData for this side.
+          additionalProperties: true
+    WorktreeUnitComparison:
+      type: object
+      additionalProperties: false
+      required:
+        - capturedAt
+        - unit
+        - fidelity
+        - left
+        - right
+        - diff
+      properties:
+        capturedAt:
+          type: string
+          format: date-time
+        unit:
+          $ref: '#/components/schemas/WorktreeComparisonUnit'
+        fidelity:
+          type: string
+          enum:
+            - history
+            - snapshot
+        commonBaseRevision:
+          type: integer
+          minimum: 1
+        left:
+          $ref: '#/components/schemas/WorktreeComparisonSide'
+        right:
+          $ref: '#/components/schemas/WorktreeComparisonSide'
+        diff:
+          type: object
+          description: Versioned, serializable semantic Unit comparison result.
+          additionalProperties: true
     ProtocolMutation:
       type: object
       additionalProperties: false

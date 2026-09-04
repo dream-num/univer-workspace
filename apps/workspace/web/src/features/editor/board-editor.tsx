@@ -37,7 +37,7 @@ import UniverInkUIEnUS from "@univerjs-pro/ink-ui/locale/en-US";
 import UniverInkUIZhCN from "@univerjs-pro/ink-ui/locale/zh-CN";
 import UniverShapeEditorUIEnUS from "@univerjs-pro/shape-editor-ui/locale/en-US";
 import UniverShapeEditorUIZhCN from "@univerjs-pro/shape-editor-ui/locale/zh-CN";
-import { IImageIoService } from "@univerjs/core";
+import { IImageIoService, UniverInstanceType } from "@univerjs/core";
 import UniverDesignEnUS from "@univerjs/design/locale/en-US";
 import UniverDesignZhCN from "@univerjs/design/locale/zh-CN";
 import { UniverDocsPlugin } from "@univerjs/docs";
@@ -93,6 +93,7 @@ export type BoardEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "board",
+  unitType: UniverInstanceType.UNIVER_BOARD,
   history: {
     createPlugin: (containerId) => [
       UniverBoardsHistoryUIPlugin,
@@ -153,7 +154,7 @@ export default createCollaborationEditor({
       UniverBoardsThreadCommentUIPlugin
     ),
   printFeaturePlugins: () => [UniverBoardsPrintPlugin],
-  createPresets: (container) => [
+  createPresets: (container, _license, _collaborationScope, runtime) => [
     {
       plugins: [
         UniverRenderEnginePlugin,
@@ -175,7 +176,9 @@ export default createCollaborationEditor({
             allowImageSize: MAX_UNIVER_IMAGE_BYTES,
             // The collaboration plugin owns the remote image service. Remove
             // Drawing's local implementation to keep a single registration.
-            override: [[IImageIoService, null]],
+            ...(runtime === "collaboration"
+              ? { override: [[IImageIoService, null]] }
+              : {}),
           },
         ],
         UniverDocsLatexPlugin,

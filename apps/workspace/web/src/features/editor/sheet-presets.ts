@@ -91,6 +91,7 @@ interface CreateSheetEditorPresetsOptions {
   readonly license?: string;
   readonly universerEndpoint: string;
   readonly threadCommentsEnabled?: boolean;
+  readonly collaborationEnabled?: boolean;
 }
 
 /**
@@ -104,6 +105,7 @@ export function createSheetEditorPresets({
   license,
   universerEndpoint,
   threadCommentsEnabled = true,
+  collaborationEnabled = true,
 }: CreateSheetEditorPresetsOptions): IPreset[] {
   return [
     UniverSheetsCorePreset({
@@ -111,7 +113,7 @@ export function createSheetEditorPresets({
       ribbonType: "grid",
     }),
     UniverSheetsDrawingPreset({
-      collaboration: true,
+      collaboration: collaborationEnabled,
       allowImageSize: MAX_UNIVER_IMAGE_BYTES,
     }),
     UniverSheetsConditionalFormattingPreset(),
@@ -132,9 +134,13 @@ export function createSheetEditorPresets({
         enforceWatermark: true,
       },
     }),
-    UniverSheetsCollaborationPreset({
-      univerContainerId: container.id,
-      universerEndpoint,
-    }),
+    ...(collaborationEnabled
+      ? [
+          UniverSheetsCollaborationPreset({
+            univerContainerId: container.id,
+            universerEndpoint,
+          }),
+        ]
+      : []),
   ];
 }

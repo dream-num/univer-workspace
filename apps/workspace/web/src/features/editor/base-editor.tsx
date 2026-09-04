@@ -15,7 +15,7 @@ import UniverBasesUIEnUS from "@univerjs-pro/bases-ui/locale/en-US";
 import UniverBasesUIZhCN from "@univerjs-pro/bases-ui/locale/zh-CN";
 import { IAttachmentIoService } from "@univerjs-pro/collaboration-client";
 import { UniverProFormulaEnginePlugin } from "@univerjs-pro/engine-formula";
-import { IImageIoService } from "@univerjs/core";
+import { IImageIoService, UniverInstanceType } from "@univerjs/core";
 import UniverDesignEnUS from "@univerjs/design/locale/en-US";
 import UniverDesignZhCN from "@univerjs/design/locale/zh-CN";
 import { UniverDrawingPlugin } from "@univerjs/drawing";
@@ -53,6 +53,7 @@ export type BaseEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "base",
+  unitType: UniverInstanceType.UNIVER_BASE,
   history: {
     createPlugin: (containerId) => [
       UniverBasesHistoryUIPlugin,
@@ -97,7 +98,7 @@ export default createCollaborationEditor({
       UniverBasesThreadCommentUIPlugin
     ),
   exchangeFeaturePlugins: () => [UniverBasesExchangeClientPlugin],
-  createPresets: (container) => [
+  createPresets: (container, _license, _collaborationScope, runtime) => [
     {
       plugins: [
         UniverRenderEnginePlugin,
@@ -130,17 +131,22 @@ export default createCollaborationEditor({
             allowImageSize: MAX_UNIVER_IMAGE_BYTES,
             // The collaboration plugin owns the remote image service. Remove
             // Drawing's local implementation to keep a single registration.
-            override: [[IImageIoService, null]],
+            ...(runtime === "collaboration"
+              ? { override: [[IImageIoService, null]] }
+              : {}),
           },
         ],
         UniverBasesPlugin,
         [
           UniverBasesUIPlugin,
           {
-            override: [[IAttachmentIoService, null]],
+            ...(runtime === "collaboration"
+              ? { override: [[IAttachmentIoService, null]] }
+              : {}),
             workbench: {
               collaborationStatus: false,
               footer: false,
+              ...(runtime === "local" ? { route: false } : {}),
             },
           },
         ],

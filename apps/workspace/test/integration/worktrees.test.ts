@@ -158,7 +158,7 @@ describe("Worktrees", () => {
         summary: null,
       }
     );
-    await application.worktrees.addUnit(
+    const privateUnit = await application.worktrees.addUnit(
       creator.id,
       created.body.id,
       "add-private-team-unit-0001",
@@ -172,6 +172,13 @@ describe("Worktrees", () => {
     expect(ownerView.worktree.unitCount).toBe(1);
     expect(ownerView.worktree.units).toEqual([]);
     expect(ownerView.worktree.capabilities.review).toBe(false);
+    await expect(
+      application.worktrees.compareUnit(
+        owner.id,
+        created.body.id,
+        privateUnit.body.unit.unitId
+      )
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
       application.worktrees.get(viewer.id, created.body.id)
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -326,6 +333,148 @@ describe("Worktrees", () => {
         unitId: first.body.unit.unitId,
         nodeId: first.body.unit.nodeId,
       },
+    });
+  });
+
+  it("builds self-contained Trunk and new-Unit comparison packages", async () => {
+    const application = createRealTestApplication();
+    const user = await register(application, "comparison-user");
+    const space = application.spaces.list(user.id).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const resource = await createResource(application, user.id, space.id);
+    const created = await application.worktrees.create(
+      user.id,
+      "create-comparison-worktree-0001",
+      { kind: "user", name: "Comparison", summary: null }
+    );
+    const existing = await application.worktrees.addUnit(
+      user.id,
+      created.body.id,
+      "add-comparison-trunk-unit-0001",
+      { source: "trunk", resourceId: resource.id }
+    );
+    const local = await application.worktrees.addUnit(
+      user.id,
+      created.body.id,
+      "add-comparison-local-unit-0001",
+      {
+        source: "worktree",
+        name: "New comparison document",
+        unitType: "doc",
+        targetSpaceId: space.id,
+        targetParentNodeId: null,
+      }
+    );
+
+    const unchanged = await application.worktrees.compareUnit(
+      user.id,
+      created.body.id,
+      existing.body.unit.unitId
+    );
+    expect(unchanged).toMatchObject({
+      unit: { unitType: "sheet" },
+      fidelity: "history",
+      left: { present: true, revision: 1 },
+      right: { present: true, revision: 1 },
+      diff: { summary: { total: 0 } },
+    });
+
+    const added = await application.worktrees.compareUnit(
+      user.id,
+      created.body.id,
+      local.body.unit.unitId
+    );
+    expect(added).toMatchObject({
+      unit: { unitType: "doc" },
+      fidelity: "snapshot",
+      left: { present: false },
+      right: { present: true, revision: 1 },
+    });
+    expect(
+      (added.diff.summary as { readonly total: number }).total
+    ).toBeGreaterThan(0);
+  });
+
+  it("materializes comparisons for every supported Univer Unit type", async () => {
+    const application = createRealTestApplication();
+    const user = await register(application, "all-comparison-types-user");
+    const space = application.spaces.list(user.id).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const created = await application.worktrees.create(
+      user.id,
+      "create-all-comparison-types-worktree-0001",
+      { kind: "user", name: "All comparison types", summary: null }
+    );
+
+    for (const unitType of [
+      "sheet",
+      "doc",
+      "slide",
+      "board",
+      "base",
+    ] as const) {
+      const resource = await createResource(
+        application,
+        user.id,
+        space.id,
+        unitType
+      );
+      const added = await application.worktrees.addUnit(
+        user.id,
+        created.body.id,
+        `add-${unitType}-comparison-unit-0001`,
+        { source: "trunk", resourceId: resource.id }
+      );
+      await expect(
+        application.worktrees.compareUnit(
+          user.id,
+          created.body.id,
+          added.body.unit.unitId
+        )
+      ).resolves.toMatchObject({
+        unit: { unitType },
+        left: { present: true },
+        right: { present: true },
+        diff: { summary: { total: 0 } },
+      });
+    }
+  });
+
+  it("materializes referenced Base blocks for both comparison sides", async () => {
+    const application = createRealTestApplication();
+    const user = await register(application, "base-block-comparison-user");
+    const space = application.spaces.list(user.id).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const resource = await createResource(
+      application,
+      user.id,
+      space.id,
+      "base",
+      baseWithOneRecord()
+    );
+    const created = await application.worktrees.create(
+      user.id,
+      "create-base-block-comparison-worktree-0001",
+      { kind: "user", name: "Base block comparison", summary: null }
+    );
+    const added = await application.worktrees.addUnit(
+      user.id,
+      created.body.id,
+      "add-base-block-comparison-unit-0001",
+      { source: "trunk", resourceId: resource.id }
+    );
+
+    await expect(
+      application.worktrees.compareUnit(
+        user.id,
+        created.body.id,
+        added.body.unit.unitId
+      )
+    ).resolves.toMatchObject({
+      unit: { unitType: "base" },
+      left: { present: true },
+      right: { present: true },
+      diff: { summary: { total: 0 } },
     });
   });
 });
@@ -551,7 +700,9 @@ async function register(
 async function createResource(
   application: WorkspaceApplication,
   userId: string,
-  spaceId: string
+  spaceId: string,
+  unitType: "sheet" | "doc" | "slide" | "board" | "base" = "sheet",
+  initialData?: Readonly<Record<string, unknown>>
 ) {
   const result = await application.resources.create(
     userId,
@@ -561,11 +712,82 @@ async function createResource(
       spaceId,
       parentNodeId: null,
       name: "Existing Sheet",
-      unitType: "sheet",
+      unitType,
+      ...(initialData === undefined ? {} : { initialData }),
     }
   );
   if (result.status === 202) throw new Error("Resource creation is pending");
   const resource = result.body.node.resource;
   if (!resource) throw new Error("Created Resource is missing");
   return { id: resource.id, node: result.body.node };
+}
+
+function baseWithOneRecord(): Readonly<Record<string, unknown>> {
+  return {
+    name: "Existing Base",
+    schemaVersion: 2,
+    tableOrder: ["table-1"],
+    tables: {
+      "table-1": {
+        id: "table-1",
+        name: "People",
+        primaryFieldId: "name",
+        fieldOrder: ["__record_id", "name"],
+        fields: {
+          __record_id: {
+            id: "__record_id",
+            name: "record-id",
+            type: "recordId",
+            config: {},
+            system: true,
+            readonly: true,
+          },
+          name: {
+            id: "name",
+            name: "Name",
+            type: "text",
+            config: {},
+          },
+        },
+        records: {
+          "record-1": {
+            id: "record-1",
+            values: { __record_id: "record-1", name: "Ada" },
+            orderKey: "1",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        },
+        recordOrder: ["record-1"],
+        rowIndex: { "record-1": 0 },
+        rowId: { 0: "record-1" },
+        colIndex: { __record_id: 0, name: 1 },
+        colId: { 0: "__record_id", 1: "name" },
+        cellData: {
+          0: {
+            0: { v: "record-1", t: 1 },
+            1: { v: "Ada", t: 1 },
+          },
+        },
+        resources: { attachmentSets: {}, attachments: {} },
+        views: {
+          "view-1": {
+            id: "view-1",
+            tableId: "table-1",
+            name: "Grid",
+            type: "grid",
+            fieldOrder: ["__record_id", "name"],
+            fieldSettings: { __record_id: { hidden: true } },
+            config: { frozenFieldCount: 1 },
+          },
+        },
+        viewOrder: ["view-1"],
+        formulaName: "Table_1",
+      },
+    },
+    resources: [],
+    createdAt: 1,
+    updatedAt: 1,
+    locale: "enUS",
+  };
 }

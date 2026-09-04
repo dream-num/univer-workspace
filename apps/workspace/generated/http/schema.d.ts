@@ -1033,6 +1033,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/worktrees/{worktreeId}/units/{unitId}/comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Build one current Trunk-to-Worktree comparison package for a Unit.
+         * @description Materializes both current sides and computes semantic differences in one
+         *     request. The response is self-contained and does not create a persistent
+         *     comparison session.
+         */
+        get: operations["compareWorktreeUnit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/worktrees/{worktreeId}/units/{unitId}/changesets": {
         parameters: {
             query?: never;
@@ -1731,6 +1756,33 @@ export interface components {
         WorktreeUnitOpenView: {
             unit: components["schemas"]["OpenedWorktreeUnit"];
             collaborationScope: components["schemas"]["CollaborationScope"];
+        };
+        WorktreeComparisonUnit: {
+            unitId: string;
+            unitType: components["schemas"]["UnitType"];
+            name: string;
+        };
+        WorktreeComparisonSide: {
+            present: boolean;
+            revision?: number;
+            /** @description Fully materialized Univer UnitData for this side. */
+            data?: {
+                [key: string]: unknown;
+            };
+        };
+        WorktreeUnitComparison: {
+            /** Format: date-time */
+            capturedAt: string;
+            unit: components["schemas"]["WorktreeComparisonUnit"];
+            /** @enum {string} */
+            fidelity: "history" | "snapshot";
+            commonBaseRevision?: number;
+            left: components["schemas"]["WorktreeComparisonSide"];
+            right: components["schemas"]["WorktreeComparisonSide"];
+            /** @description Versioned, serializable semantic Unit comparison result. */
+            diff: {
+                [key: string]: unknown;
+            };
         };
         ProtocolMutation: {
             id: string;
@@ -3704,6 +3756,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorktreeUnitOpenView"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    compareWorktreeUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Materialized Unit states and their semantic comparison. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorktreeUnitComparison"];
                 };
             };
             401: components["responses"]["Unauthorized"];
