@@ -1,6 +1,7 @@
 import type {
   IUnitComparisonItem,
   IUnitComparisonLeafChange,
+  IUnitComparisonResult,
 } from "@univerjs-pro/edit-history";
 
 export type ComparisonSide = "left" | "right";
@@ -64,6 +65,18 @@ export interface DocumentComparisonRow {
   readonly moved: boolean;
   readonly left: DocumentComparisonParagraph | null;
   readonly right: DocumentComparisonParagraph | null;
+}
+
+const EMPTY_DOCUMENT_PARAGRAPH_ALIGNMENT: readonly DocumentParagraphAlignment[] = [];
+
+/** Non-Doc comparisons reuse one empty value so item selection cannot remount the viewer. */
+export function documentParagraphAlignmentFromResult(
+  result: Pick<IUnitComparisonResult, "productContext">
+): readonly DocumentParagraphAlignment[] {
+  return result.productContext !== undefined &&
+    "paragraphAlignment" in result.productContext
+    ? result.productContext.paragraphAlignment
+    : EMPTY_DOCUMENT_PARAGRAPH_ALIGNMENT;
 }
 
 /** Adapt the public Pro History packet to the canvas model used by univer-cli. */

@@ -6,7 +6,10 @@ import {
 import { DocsUnitComparisonAdapter } from "@univerjs-pro/docs-history";
 import type { IUnitComparisonItem } from "@univerjs-pro/edit-history";
 import { describe, expect, it } from "vitest";
-import { structuralDiffItemsFromResult } from "../../web/src/features/worktrees/comparison-presentation.js";
+import {
+  documentParagraphAlignmentFromResult,
+  structuralDiffItemsFromResult,
+} from "../../web/src/features/worktrees/comparison-presentation.js";
 import { decorateDocumentComparisonSide } from "../../web/src/features/worktrees/document-comparison-decoration.js";
 import { decorateWorkbookComparisonSide } from "../../web/src/features/worktrees/workbook-comparison-decoration.js";
 import { comparisonSheetSelection } from "../../web/src/features/worktrees/workbook-comparison-selection.js";
@@ -57,6 +60,13 @@ function coloredText(data: IDocumentData) {
 }
 
 describe("comparison canvas decoration", () => {
+  it("keeps non-Doc alignment stable across selection renders", () => {
+    const result = { productContext: undefined };
+    expect(documentParagraphAlignmentFromResult(result)).toBe(
+      documentParagraphAlignmentFromResult(result)
+    );
+  });
+
   it("uses SDK character segments to paint document replacements", () => {
     const left = renderDocumentSide(
       document("Ship in August"),

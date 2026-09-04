@@ -13,8 +13,16 @@ import type {
   IUnitComparisonResult,
   IUnitComparisonScope,
 } from "@univerjs-pro/edit-history";
+import { IBoardUIStateService } from "@univerjs-pro/boards-ui";
 import { ISlideDrawingStateService } from "@univerjs-pro/slides-ui";
-import { FunctionSquare, RefreshCw, Search } from "lucide-react";
+import {
+  BookOpen,
+  ChevronRight,
+  FunctionSquare,
+  RefreshCw,
+  Search,
+  Table2,
+} from "lucide-react";
 import { FWorkbook } from "@univerjs/sheets/facade";
 import {
   useCallback,
@@ -31,7 +39,9 @@ import { Alert, Badge, Button, Spinner } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { sessionQueryOptions } from "../auth";
 import { ResourceEditor } from "../editor";
+import type { LocalUnitPresentationController } from "../editor/collaboration-editor";
 import {
+  documentParagraphAlignmentFromResult,
   structuralDiffItemsFromResult,
   type DocumentParagraphAlignment,
   type StructuralDiffItem,
@@ -45,6 +55,7 @@ import {
 import { decorateWorkbookComparisonSide } from "./workbook-comparison-decoration";
 import { comparisonSheetSelection } from "./workbook-comparison-selection";
 import { worktreeUnitComparisonQueryOptions } from "./worktrees.queries";
+import { BaseTableDiffViewer } from "./base-table-diff-viewer";
 
 type WorktreeUnit = components["schemas"]["WorktreeUnit"];
 type Comparison = components["schemas"]["WorktreeUnitComparison"];
@@ -138,6 +149,16 @@ export function WorktreeComparison({
     <div className="flex min-h-[480px] flex-1 overflow-hidden">
       {unit.unitType === "sheet" ? (
         <WorkbookComparisonView {...props} />
+      ) : unit.unitType === "base" ? (
+        <BaseTableDiffViewer
+          fidelity={value.fidelity}
+          items={structuralDiffItemsFromResult(diff.items)}
+          left={value.left.data}
+          leftLabel={t("officialVersion")}
+          leftSourceControl={sourceControl}
+          right={value.right.data}
+          rightLabel={t("agentVersion")}
+        />
       ) : (
         <NativeComparisonView {...props} />
       )}
@@ -255,10 +276,12 @@ function WorkbookComparisonView({
         </header>
         <div className="grid min-h-0 grid-cols-[268px_minmax(0,1fr)_minmax(0,1fr)] gap-px overflow-hidden bg-border max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-2">
           <WorkbookSidebar
+            activeSheetId={selectedSheetId}
             items={visibleItems}
             language={language}
             query={searchQuery}
             selectedItemId={selectedItemId}
+            sheetOptions={sheetOptions}
             tab={sidebarTab}
             onClear={() => setSelectedItemId(null)}
             onQueryChange={setSearchQuery}
@@ -302,20 +325,24 @@ function WorkbookComparisonView({
 }
 
 function WorkbookSidebar({
+  activeSheetId,
   items,
   language,
   query,
   selectedItemId,
+  sheetOptions,
   tab,
   onClear,
   onQueryChange,
   onSelect,
   onTabChange,
 }: {
+  readonly activeSheetId: string | null;
   readonly items: readonly IUnitComparisonItem[];
   readonly language: AppLanguage;
   readonly query: string;
   readonly selectedItemId: string | null;
+  readonly sheetOptions: readonly PageOption[];
   readonly tab: SidebarTab;
   readonly onClear: () => void;
   readonly onQueryChange: (query: string) => void;
@@ -323,6 +350,17 @@ function WorkbookSidebar({
   readonly onTabChange: (tab: SidebarTab) => void;
 }): ReactElement {
   const { t } = useI18n();
+  const tree = useMemo(
+    () =>
+      buildWorkbookSidebarTree({
+        activeSheetId,
+        items,
+        language,
+        sheetOptions,
+        tab,
+      }),
+    [activeSheetId, items, language, sheetOptions, tab]
+  );
   return (
     <aside
       className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-[color-mix(in_srgb,var(--color-muted)_52%,var(--color-card))] max-[1023px]:hidden"
@@ -353,18 +391,19 @@ function WorkbookSidebar({
         </label>
       </header>
       <div className="min-h-0 overflow-auto px-3 py-3">
-        {items.length === 0 ? (
+        {tree.length === 0 ? (
           <div className="grid content-center gap-2 rounded-lg border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
             {t("comparisonNoItemsInScope")}
           </div>
         ) : (
-          <div className="grid gap-1.5">
-            {items.map((item) => (
-              <DiffItemButton
-                item={item}
-                key={item.id}
+          <div className="grid gap-1">
+            {tree.map((node) => (
+              <WorkbookSidebarTreeNode
+                forceOpen={query.trim().length > 0}
+                key={node.id}
                 language={language}
-                selected={selectedItemId === item.id}
+                node={node}
+                selectedItemId={selectedItemId}
                 onSelect={onSelect}
               />
             ))}
@@ -373,6 +412,211 @@ function WorkbookSidebar({
       </div>
     </aside>
   );
+}
+
+interface WorkbookSidebarTreeNodeData {
+  readonly id: string;
+  readonly label: string;
+  readonly type: "root" | "group" | "item";
+  readonly item?: IUnitComparisonItem;
+  readonly children?: readonly WorkbookSidebarTreeNodeData[];
+}
+
+function buildWorkbookSidebarTree(input: {
+  readonly activeSheetId: string | null;
+  readonly items: readonly IUnitComparisonItem[];
+  readonly language: AppLanguage;
+  readonly sheetOptions: readonly PageOption[];
+  readonly tab: SidebarTab;
+}): WorkbookSidebarTreeNodeData[] {
+  if (input.items.length === 0) return [];
+  const rootLabel =
+    input.tab === "workbook"
+      ? input.language === "zh-CN"
+        ? "工作簿"
+        : "Workbook"
+      : input.sheetOptions.find((sheet) => sheet.id === input.activeSheetId)
+          ?.label ??
+        (input.language === "zh-CN" ? "工作表" : "Worksheet");
+  const groups = new Map<string, IUnitComparisonItem[]>();
+  for (const item of input.items) {
+    const values = groups.get(item.entityType) ?? [];
+    values.push(item);
+    groups.set(item.entityType, values);
+  }
+  const children = [...groups.entries()].map(([entityType, items]) => ({
+    id: `group:${entityType}`,
+    label: `${comparisonEntityGroupLabel(entityType, input.language)} (${items.length})`,
+    type: "group" as const,
+    children:
+      entityType === "cell"
+        ? buildCellRowNodes(items, input.language)
+        : items.map((item) => ({
+            id: `item:${item.id}`,
+            label: comparisonItemLabel(item, input.language),
+            type: "item" as const,
+            item,
+          })),
+  }));
+  return [
+    {
+      id: `root:${input.tab}:${input.activeSheetId ?? "workbook"}`,
+      label: rootLabel,
+      type: "root",
+      children,
+    },
+  ];
+}
+
+function buildCellRowNodes(
+  items: readonly IUnitComparisonItem[],
+  language: AppLanguage
+): WorkbookSidebarTreeNodeData[] {
+  const rows = new Map<string, IUnitComparisonItem[]>();
+  for (const item of items) {
+    const address =
+      item.locations.right?.stableId ??
+      item.locations.left?.stableId ??
+      item.stableId;
+    const row = /^(?:[^!]+!)?[A-Z]+(\d+)$/iu.exec(address)?.[1] ?? "?";
+    const values = rows.get(row) ?? [];
+    values.push(item);
+    rows.set(row, values);
+  }
+  return [...rows.entries()]
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([row, rowItems]) => ({
+      id: `row:${row}`,
+      label: `${language === "zh-CN" ? "第" : "Row "}${row}${
+        language === "zh-CN" ? " 行" : ""
+      } (${rowItems.length})`,
+      type: "group",
+      children: rowItems.map((item) => ({
+        id: `item:${item.id}`,
+        label: comparisonItemLabel(item, language),
+        type: "item",
+        item,
+      })),
+    }));
+}
+
+function WorkbookSidebarTreeNode({
+  forceOpen,
+  language,
+  node,
+  selectedItemId,
+  onSelect,
+}: {
+  readonly forceOpen: boolean;
+  readonly language: AppLanguage;
+  readonly node: WorkbookSidebarTreeNodeData;
+  readonly selectedItemId: string | null;
+  readonly onSelect: (item: IUnitComparisonItem) => void;
+}): ReactElement {
+  const containsSelected =
+    selectedItemId !== null && workbookTreeContains(node, selectedItemId);
+  const [expanded, setExpanded] = useState(node.type === "root");
+  if (node.type === "item" && node.item !== undefined) {
+    const selected = node.item.id === selectedItemId;
+    return (
+      <button
+        className={cn(
+          "grid w-full grid-cols-[14px_minmax(0,1fr)] gap-x-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/25",
+          selected ? "bg-accent text-foreground" : "hover:bg-accent/70"
+        )}
+        data-diff-sidebar-selected={selected ? "true" : undefined}
+        type="button"
+        onClick={() => onSelect(node.item!)}
+      >
+        <span
+          aria-hidden="true"
+          className={cn(
+            "mt-[6px] size-1.5 rounded-full bg-current",
+            node.item.kind === "insert"
+              ? "text-diff-insert"
+              : node.item.kind === "delete"
+                ? "text-diff-delete"
+                : "text-diff-update"
+          )}
+        />
+        <span className="min-w-0 truncate text-[12px] font-medium">
+          {node.label}
+        </span>
+        {node.item.changes.slice(0, 4).map((change, index) => (
+          <span
+            className="col-start-2 truncate text-[11px] text-muted-foreground"
+            key={`${node.id}:${index}`}
+            title={change.path.join(".")}
+          >
+            {change.path.at(-1) ?? comparisonEntityLabel(node.item!.entityType, language)}: {formatValue(change.before)} → {formatValue(change.after)}
+          </span>
+        ))}
+      </button>
+    );
+  }
+  const open = forceOpen || expanded || containsSelected;
+  const RootIcon = node.id.startsWith("root:workbook") ? BookOpen : Table2;
+  return (
+    <details
+      className="group/tree min-w-0"
+      open={open}
+      onToggle={(event) => {
+        if (!forceOpen && !containsSelected) setExpanded(event.currentTarget.open);
+      }}
+    >
+      <summary
+        className={cn(
+          "flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-semibold text-foreground outline-none hover:bg-accent/70 focus-visible:ring-2 focus-visible:ring-ring/25 [&::-webkit-details-marker]:hidden",
+          node.type === "root" && "mb-1 text-[13px]"
+        )}
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/tree:rotate-90"
+        />
+        {node.type === "root" ? (
+          <RootIcon
+            aria-hidden="true"
+            className="size-3.5 shrink-0 text-muted-foreground"
+          />
+        ) : null}
+        <span className="min-w-0 truncate">{node.label}</span>
+      </summary>
+      {open ? (
+        <div className={cn("grid gap-0.5", node.type === "root" ? "ml-5" : "ml-4")}>
+          {node.children?.map((child) => (
+            <WorkbookSidebarTreeNode
+              forceOpen={forceOpen}
+              key={child.id}
+              language={language}
+              node={child}
+              selectedItemId={selectedItemId}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
+function workbookTreeContains(
+  node: WorkbookSidebarTreeNodeData,
+  itemId: string
+): boolean {
+  return (
+    node.item?.id === itemId ||
+    node.children?.some((child) => workbookTreeContains(child, itemId)) === true
+  );
+}
+
+function comparisonEntityGroupLabel(
+  entityType: string,
+  language: AppLanguage
+): string {
+  const single = comparisonEntityLabel(entityType, language);
+  if (language === "zh-CN") return single;
+  return `${single}${single.endsWith("s") ? "" : "s"}`;
 }
 
 function WorkbookDiffPane({
@@ -450,7 +694,7 @@ function WorkbookDiffPane({
           selectedHighlight?.dispose();
           controller.dispose();
         },
-        setSelectedItem: (itemId) => controller.setSelectedItem(itemId),
+        setComparisonSelection: (itemId) => controller.setSelectedItem(itemId),
         setSheetSelection: (selection) => {
           selectedHighlight?.dispose();
           selectedHighlight = null;
@@ -547,23 +791,122 @@ function NativeComparisonView({
     () => structuralDiffItemsFromResult(items),
     [items]
   );
-  const paragraphAlignment =
-    diff.productContext !== undefined &&
-    "paragraphAlignment" in diff.productContext
-      ? diff.productContext.paragraphAlignment
-      : [];
+  const paragraphAlignment = documentParagraphAlignmentFromResult(diff);
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
+  const leftHandleRef = useRef<LocalUnitPresentationController | null>(null);
+  const rightHandleRef = useRef<LocalUnitPresentationController | null>(null);
+  const boardViewportCleanupRef = useRef<() => void>(() => undefined);
+  const reconnectBoardViewport = useCallback(() => {
+    boardViewportCleanupRef.current();
+    boardViewportCleanupRef.current = () => undefined;
+    if (
+      unit.unitType !== "board" ||
+      leftHandleRef.current === null ||
+      rightHandleRef.current === null
+    ) {
+      return;
+    }
+    boardViewportCleanupRef.current = scheduleLinkedBoardViewport(
+      leftRef.current,
+      rightRef.current,
+      leftHandleRef.current,
+      rightHandleRef.current
+    );
+  }, [unit.unitType]);
+  const setLeftHandle = useCallback(
+    (handle: LocalUnitPresentationController | null) => {
+      leftHandleRef.current = handle;
+      reconnectBoardViewport();
+    },
+    [reconnectBoardViewport]
+  );
+  const setRightHandle = useCallback(
+    (handle: LocalUnitPresentationController | null) => {
+      rightHandleRef.current = handle;
+      reconnectBoardViewport();
+    },
+    [reconnectBoardViewport]
+  );
+
+  const focusItem = useCallback((item: IUnitComparisonItem): void => {
+    setSelectedItemId(item.id);
+    const pageId = slidePageIdOfDiffItem(item);
+    if (pageId !== null) setActivePageId(pageId);
+    void Promise.all([
+      leftHandleRef.current?.setComparisonSelection?.(item.id),
+      rightHandleRef.current?.setComparisonSelection?.(item.id),
+    ]).then(() =>
+      Promise.all([
+        leftHandleRef.current?.focusComparisonTarget?.(
+          structuralDiffFocusTarget(
+            structuralDiffItemsFromResult([item])[0]!,
+            "left"
+          )
+        ),
+        rightHandleRef.current?.focusComparisonTarget?.(
+          structuralDiffFocusTarget(
+            structuralDiffItemsFromResult([item])[0]!,
+            "right"
+          )
+        ),
+      ])
+    );
+  }, []);
+
+  const clearFocusedItem = useCallback((): void => {
+    setSelectedItemId(undefined);
+    void Promise.all([
+      leftHandleRef.current?.setComparisonSelection?.(undefined),
+      rightHandleRef.current?.setComparisonSelection?.(undefined),
+    ]);
+  }, []);
+
+  const focusPage = useCallback(
+    (pageId: string): void => {
+      setActivePageId(pageId);
+      const pageItems = filterItemsByScope(diff.items, pageId);
+      const pageItem =
+        pageItems.find((item) => item.entityType === "slide-element") ??
+        pageItems.find((item) => item.entityType === "slide");
+      setSelectedItemId(pageItem?.id);
+      void Promise.all([
+        leftHandleRef.current?.setComparisonSelection?.(pageItem?.id),
+        rightHandleRef.current?.setComparisonSelection?.(pageItem?.id),
+      ]).then(() =>
+        Promise.all([
+          leftHandleRef.current?.focusComparisonTarget?.({
+            category: "slide",
+            stableId: pageId,
+          }),
+          rightHandleRef.current?.focusComparisonTarget?.({
+            category: "slide",
+            stableId: pageId,
+          }),
+        ])
+      );
+    },
+    [diff.items]
+  );
 
   useEffect(() => {
     setSelectedItemId(undefined);
     setActivePageId(pageTabs[0]?.id ?? null);
   }, [diff.comparisonId]);
 
-  useEffect(
-    () => attachLinkedWheelNavigation(leftRef.current, rightRef.current),
-    [comparison.left.data, comparison.right.data, selectedPageId]
-  );
+  useEffect(() => {
+    if (unit.unitType === "board") {
+      reconnectBoardViewport();
+      return () => boardViewportCleanupRef.current();
+    }
+    return attachLinkedWheelNavigation(leftRef.current, rightRef.current);
+  }, [
+    comparison.left.data,
+    comparison.right.data,
+    reconnectBoardViewport,
+    selectedPageId,
+    unit.unitType,
+  ]);
 
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-muted/30 p-2">
@@ -573,8 +916,8 @@ function NativeComparisonView({
           items={items}
           language={language}
           selectedItemId={selectedItem?.id}
-          onClear={() => setSelectedItemId(undefined)}
-          onSelect={(item) => setSelectedItemId(item.id)}
+          onClear={clearFocusedItem}
+          onSelect={focusItem}
         />
         <div className="grid min-h-0 grid-rows-[minmax(0,1fr)] bg-card">
           <div className="grid min-h-0 grid-cols-2 gap-px bg-border max-[1023px]:h-full max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-2" data-testid="native-diff-panes">
@@ -591,11 +934,11 @@ function NativeComparisonView({
               revision={comparison.left.revision}
               side="left"
               peerData={comparison.right.data}
-              selectedItemId={selectedItem?.id}
               sourceControl={sourceControl}
               unit={unit}
               user={user}
-              onSelectPage={setActivePageId}
+              onPresentationChange={setLeftHandle}
+              onSelectPage={focusPage}
             />
             <NativeDiffSide
               activePageId={selectedPageId}
@@ -610,11 +953,11 @@ function NativeComparisonView({
               revision={comparison.right.revision}
               side="right"
               peerData={comparison.left.data}
-              selectedItemId={selectedItem?.id}
               sourceControl={undefined}
               unit={unit}
               user={user}
-              onSelectPage={setActivePageId}
+              onPresentationChange={setRightHandle}
+              onSelectPage={focusPage}
             />
           </div>
         </div>
@@ -692,10 +1035,10 @@ function NativeDiffSide({
   revision,
   side,
   peerData,
-  selectedItemId,
   sourceControl,
   unit,
   user,
+  onPresentationChange,
   onSelectPage,
 }: {
   readonly activePageId: string | null;
@@ -710,10 +1053,12 @@ function NativeDiffSide({
   readonly revision: number | undefined;
   readonly side: "left" | "right";
   readonly peerData: Record<string, unknown> | undefined;
-  readonly selectedItemId: string | undefined;
   readonly sourceControl: ReactNode | undefined;
   readonly unit: WorktreeUnit;
   readonly user: ComparisonViewProps["user"];
+  readonly onPresentationChange: (
+    handle: LocalUnitPresentationController | null
+  ) => void;
   readonly onSelectPage: (id: string) => void;
 }): ReactElement {
   const { t } = useI18n();
@@ -742,6 +1087,10 @@ function NativeDiffSide({
         unitType === UniverInstanceType.UNIVER_SLIDE
           ? injector.get(ISlideDrawingStateService)
           : undefined;
+      const boardUIStateService =
+        unitType === UniverInstanceType.UNIVER_BOARD
+          ? injector.get(IBoardUIStateService)
+          : undefined;
       const decorateDocument = (itemId: string | undefined): IDocumentData | undefined => {
         if (
           unit.unitType !== "doc" ||
@@ -766,9 +1115,12 @@ function NativeDiffSide({
           }
         );
       };
-      return {
-        dispose: () => controller.dispose(),
-        setSelectedItem: async (itemId) => {
+      const presentation: LocalUnitPresentationController = {
+        dispose: () => {
+          controller.dispose();
+          onPresentationChange(null);
+        },
+        setComparisonSelection: async (itemId) => {
           const decorated = decorateDocument(itemId);
           if (documentModel != null && decorated !== undefined) {
             documentModel.reset(decorated);
@@ -777,13 +1129,13 @@ function NativeDiffSide({
             );
           }
           await controller.setSelectedItem(itemId);
-          const selectedItem = items.find((candidate) => candidate.id === itemId);
-          if (selectedItem === undefined) return;
+        },
+        focusComparisonTarget: async (target) => {
           const focused = await focusPreviewComparisonTarget(
             univerAPI,
             unitType,
             containerId,
-            structuralDiffFocusTarget(selectedItem, side),
+            target,
             {
               selectSlideElement: (slideId, elementId) =>
                 slideDrawingStateService?.selectDrawings(
@@ -794,10 +1146,46 @@ function NativeDiffSide({
             }
           );
           if (focused) await controller.refresh();
+          return focused;
+        },
+        getBoardViewport: () => {
+          if (boardUIStateService === undefined) return null;
+          const state = boardUIStateService.getState();
+          return {
+            zoomRatio: state.zoomRatio,
+            panOffset: { ...state.viewportPanOffset },
+          };
+        },
+        setBoardViewport: (viewport) => {
+          boardUIStateService?.setViewportTransform({
+            zoomRatio: viewport.zoomRatio,
+            panOffset: { ...viewport.panOffset },
+          });
+        },
+        subscribeBoardViewport: (listener) => {
+          if (boardUIStateService === undefined) return () => undefined;
+          const subscription = boardUIStateService.state$.subscribe((state) => {
+            listener({
+              zoomRatio: state.zoomRatio,
+              panOffset: { ...state.viewportPanOffset },
+            });
+          });
+          return () => subscription.unsubscribe();
         },
       };
+      onPresentationChange(presentation);
+      return presentation;
     },
-    [activePageId, alignment, data, items, peerData, side, unit.unitType]
+    [
+      activePageId,
+      alignment,
+      data,
+      items,
+      onPresentationChange,
+      peerData,
+      side,
+      unit.unitType,
+    ]
   );
   const presentedData = useMemo(() => {
     const scoped =
@@ -841,7 +1229,6 @@ function NativeDiffSide({
             key={`${side}:${revision ?? 0}:${activePageId ?? "default"}`}
             comparisonViewer
             instanceKey={`comparison-${side}-${activePageId ?? "default"}`}
-            localSelectedItemId={selectedItemId}
             materializedData={presentedData}
             onLocalUnitMounted={installCanvasHighlights}
             readOnly
@@ -1306,6 +1693,132 @@ function withActiveScope(
   if (unitType === "slide") return { ...data, activeSlideId: activeId };
   if (unitType === "board") return { ...data, activePageId: activeId };
   return data;
+}
+
+function slidePageIdOfDiffItem(item: IUnitComparisonItem): string | null {
+  if (item.scope?.entityType === "slide") return item.scope.stableId;
+  if (item.entityType === "slide") return item.stableId;
+  if (item.entityType === "slide-element") return item.parentStableId ?? null;
+  return null;
+}
+
+function scheduleLinkedBoardViewport(
+  leftRoot: HTMLDivElement | null,
+  rightRoot: HTMLDivElement | null,
+  left: LocalUnitPresentationController,
+  right: LocalUnitPresentationController
+): () => void {
+  let disposed = false;
+  let disposeLinked = (): void => undefined;
+  void waitForNativeCanvases([leftRoot, rightRoot], () => disposed).then(() => {
+    if (disposed) return;
+    disposeLinked = attachLinkedBoardViewport(leftRoot, rightRoot, left, right);
+  });
+  return () => {
+    disposed = true;
+    disposeLinked();
+  };
+}
+
+async function waitForNativeCanvases(
+  roots: readonly (HTMLDivElement | null)[],
+  cancelled: () => boolean
+): Promise<void> {
+  const expectedRoots = roots.filter(
+    (root): root is HTMLDivElement => root !== null
+  );
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (cancelled()) return;
+    if (expectedRoots.every((root) => root.querySelector("canvas") !== null)) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      return;
+    }
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+}
+
+function attachLinkedBoardViewport(
+  leftRoot: HTMLDivElement | null,
+  rightRoot: HTMLDivElement | null,
+  left: LocalUnitPresentationController,
+  right: LocalUnitPresentationController
+): () => void {
+  if (
+    leftRoot === null ||
+    rightRoot === null ||
+    left.getBoardViewport === undefined ||
+    right.getBoardViewport === undefined ||
+    left.setBoardViewport === undefined ||
+    right.setBoardViewport === undefined ||
+    left.subscribeBoardViewport === undefined ||
+    right.subscribeBoardViewport === undefined ||
+    left.getBoardViewport() === null ||
+    right.getBoardViewport() === null
+  ) {
+    return () => undefined;
+  }
+  let syncing = false;
+  let disposed = false;
+  const copy = (
+    source: LocalUnitPresentationController,
+    target: LocalUnitPresentationController
+  ): void => {
+    if (disposed || syncing) return;
+    const viewport = source.getBoardViewport?.();
+    if (viewport === null || viewport === undefined) return;
+    syncing = true;
+    try {
+      target.setBoardViewport?.(viewport);
+    } finally {
+      syncing = false;
+    }
+  };
+  const scheduleCopy = (
+    source: LocalUnitPresentationController,
+    target: LocalUnitPresentationController
+  ): void => {
+    requestAnimationFrame(() => copy(source, target));
+  };
+  scheduleCopy(left, right);
+  const relay = (
+    source: LocalUnitPresentationController,
+    target: LocalUnitPresentationController
+  ): (() => void) =>
+    source.subscribeBoardViewport!((viewport) => {
+      if (syncing) return;
+      syncing = true;
+      try {
+        target.setBoardViewport?.(viewport);
+      } finally {
+        syncing = false;
+      }
+    });
+  const attachInteraction = (
+    root: HTMLDivElement,
+    source: LocalUnitPresentationController,
+    target: LocalUnitPresentationController
+  ): (() => void) => {
+    const listener = (): void => scheduleCopy(source, target);
+    root.addEventListener("click", listener, true);
+    root.addEventListener("pointerup", listener, true);
+    root.addEventListener("wheel", listener, true);
+    return () => {
+      root.removeEventListener("click", listener, true);
+      root.removeEventListener("pointerup", listener, true);
+      root.removeEventListener("wheel", listener, true);
+    };
+  };
+  const disposeLeft = relay(left, right);
+  const disposeRight = relay(right, left);
+  const disposeLeftInteraction = attachInteraction(leftRoot, left, right);
+  const disposeRightInteraction = attachInteraction(rightRoot, right, left);
+  return () => {
+    disposed = true;
+    disposeLeft();
+    disposeRight();
+    disposeLeftInteraction();
+    disposeRightInteraction();
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

@@ -127,8 +127,22 @@ export interface LocalSheetSelection {
 
 export interface LocalUnitPresentationController {
   dispose(): void;
-  setSelectedItem?(itemId: string | undefined): void | Promise<void>;
+  setComparisonSelection?(itemId: string | undefined): void | Promise<void>;
+  focusComparisonTarget?(target: LocalComparisonFocusTarget): boolean | Promise<boolean>;
+  getBoardViewport?(): LocalBoardViewport | null;
+  setBoardViewport?(viewport: LocalBoardViewport): void;
+  subscribeBoardViewport?(listener: (viewport: LocalBoardViewport) => void): () => void;
   setSheetSelection?(selection: LocalSheetSelection | undefined): void;
+}
+
+export interface LocalComparisonFocusTarget {
+  readonly category: string;
+  readonly stableId: string;
+}
+
+export interface LocalBoardViewport {
+  readonly zoomRatio: number;
+  readonly panOffset: { readonly x: number; readonly y: number };
 }
 
 export interface WorkspaceHistoryDefinition {
@@ -219,7 +233,7 @@ export function createCollaborationEditor(
 
     useEffect(() => {
       Promise.resolve(
-        localPresentationRef.current?.setSelectedItem?.(localSelectedItemId)
+        localPresentationRef.current?.setComparisonSelection?.(localSelectedItemId)
       ).catch((error: unknown) => {
         console.error("Failed to update local comparison selection", error);
       });
@@ -516,7 +530,7 @@ export function createCollaborationEditor(
             unitType: definition.unitType,
           });
           localPresentationRef.current = localUnitMountCleanup ?? null;
-          await localUnitMountCleanup?.setSelectedItem?.(
+          await localUnitMountCleanup?.setComparisonSelection?.(
             localSelectedItemIdRef.current
           );
           localUnitMountCleanup?.setSheetSelection?.(
