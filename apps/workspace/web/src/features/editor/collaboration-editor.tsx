@@ -108,7 +108,9 @@ export interface CollaborationEditorProps {
   readonly localSheetSelection?: LocalSheetSelection;
   /** Install local-only canvas presentation after a materialized Unit has mounted. */
   readonly onLocalUnitMounted?: (input: {
+    readonly containerId: string;
     readonly univer: Univer;
+    readonly univerAPI: FUniver;
     readonly unitId: string;
     readonly unitType: UniverInstanceType;
   }) => LocalUnitPresentationController | undefined;
@@ -504,7 +506,9 @@ export function createCollaborationEditor(
           );
           const materializedUnitId = materializedData.id;
           localUnitMountCleanup = onLocalUnitMounted?.({
+            containerId: element.id,
             univer,
+            univerAPI,
             unitId:
               typeof materializedUnitId === "string"
                 ? materializedUnitId

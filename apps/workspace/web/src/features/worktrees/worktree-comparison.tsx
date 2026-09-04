@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
+  DocumentDataModel,
   IUniverInstanceService,
   UniverInstanceType,
   type IDocumentData,
@@ -12,6 +13,7 @@ import type {
   IUnitComparisonResult,
   IUnitComparisonScope,
 } from "@univerjs-pro/edit-history";
+import { ISlideDrawingStateService } from "@univerjs-pro/slides-ui";
 import { FunctionSquare, RefreshCw, Search } from "lucide-react";
 import { FWorkbook } from "@univerjs/sheets/facade";
 import {
@@ -36,6 +38,10 @@ import {
 } from "./comparison-presentation";
 import { decorateDocumentComparisonSide } from "./document-comparison-decoration";
 import { createNativeComparisonHighlightController } from "./native-comparison-highlights";
+import {
+  focusPreviewComparisonTarget,
+  structuralDiffFocusTarget,
+} from "./preview-comparison-focus";
 import { decorateWorkbookComparisonSide } from "./workbook-comparison-decoration";
 import { comparisonSheetSelection } from "./workbook-comparison-selection";
 import { worktreeUnitComparisonQueryOptions } from "./worktrees.queries";
@@ -716,7 +722,7 @@ function NativeDiffSide({
       import("../editor/collaboration-editor").CollaborationEditorProps["onLocalUnitMounted"]
     >
   >(
-    ({ univer, unitId, unitType }) => {
+    ({ containerId, univer, univerAPI, unitId, unitType }) => {
       const controller = createNativeComparisonHighlightController({
         univer,
         unitId,
@@ -725,9 +731,73 @@ function NativeDiffSide({
         items,
       });
       void controller.refresh();
-      return controller;
+      const injector = univer.__getInjector();
+      const documentModel =
+        unitType === UniverInstanceType.UNIVER_DOC
+          ? injector
+              .get(IUniverInstanceService)
+              .getUnit<DocumentDataModel>(unitId, UniverInstanceType.UNIVER_DOC)
+          : null;
+      const slideDrawingStateService =
+        unitType === UniverInstanceType.UNIVER_SLIDE
+          ? injector.get(ISlideDrawingStateService)
+          : undefined;
+      const decorateDocument = (itemId: string | undefined): IDocumentData | undefined => {
+        if (
+          unit.unitType !== "doc" ||
+          data === undefined ||
+          peerData === undefined
+        ) {
+          return undefined;
+        }
+        const source = withActiveScope(
+          data,
+          unit.unitType,
+          activePageId
+        ) as unknown as IDocumentData;
+        return decorateDocumentComparisonSide(
+          source,
+          peerData as unknown as IDocumentData,
+          side,
+          {
+            items,
+            alignment,
+            ...(itemId === undefined ? {} : { selectedItemId: itemId }),
+          }
+        );
+      };
+      return {
+        dispose: () => controller.dispose(),
+        setSelectedItem: async (itemId) => {
+          const decorated = decorateDocument(itemId);
+          if (documentModel != null && decorated !== undefined) {
+            documentModel.reset(decorated);
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() => resolve())
+            );
+          }
+          await controller.setSelectedItem(itemId);
+          const selectedItem = items.find((candidate) => candidate.id === itemId);
+          if (selectedItem === undefined) return;
+          const focused = await focusPreviewComparisonTarget(
+            univerAPI,
+            unitType,
+            containerId,
+            structuralDiffFocusTarget(selectedItem, side),
+            {
+              selectSlideElement: (slideId, elementId) =>
+                slideDrawingStateService?.selectDrawings(
+                  { unitId, subUnitId: slideId },
+                  [elementId],
+                  elementId
+                ),
+            }
+          );
+          if (focused) await controller.refresh();
+        },
+      };
     },
-    [items, side]
+    [activePageId, alignment, data, items, peerData, side, unit.unitType]
   );
   const presentedData = useMemo(() => {
     const scoped =
