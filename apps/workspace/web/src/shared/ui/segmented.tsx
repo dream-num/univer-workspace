@@ -18,6 +18,7 @@ export function Segmented<Value extends string = string>({
   options,
   size = "md",
   className,
+  itemClassName,
   "aria-label": ariaLabel,
 }: {
   readonly value: Value;
@@ -25,6 +26,7 @@ export function Segmented<Value extends string = string>({
   readonly options: readonly SegmentedOption<Value>[];
   readonly size?: "sm" | "md";
   readonly className?: string;
+  readonly itemClassName?: string;
   readonly "aria-label"?: string;
 }) {
   return (
@@ -52,7 +54,8 @@ export function Segmented<Value extends string = string>({
             "data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-xs",
             "disabled:pointer-events-none disabled:opacity-50",
             "[&_svg]:size-3.5",
-            size === "sm" ? "h-7 px-2.5 text-[13px]" : "h-8 px-3 text-sm"
+            size === "sm" ? "h-7 px-2.5 text-[13px]" : "h-8 px-3 text-sm",
+            itemClassName
           )}
         >
           {option.label}

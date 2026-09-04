@@ -52,6 +52,12 @@ import {
 } from "./worktrees.queries";
 import { reviewActionFeedback } from "./worktree-action-feedback";
 import {
+  resolveReviewView,
+  reviewModeForView,
+  reviewViewForMode,
+  type WorktreeReviewMode,
+} from "./worktree-review-presentation";
+import {
   DEFAULT_WORKTREE_REVIEW_VIEW,
   type WorktreeReviewView,
 } from "./worktree-review-search";
@@ -81,7 +87,7 @@ export function WorktreeReviewPanel({
   readonly selectedView?: WorktreeReviewView;
   readonly onSelectedViewChange?: (view: WorktreeReviewView) => void;
 }) {
-  const { language, t } = useI18n();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const selectedUnit =
     selectedUnitId === undefined || selectedUnitId === null
@@ -115,6 +121,23 @@ export function WorktreeReviewPanel({
   const hasMergeConflict = mergeReviewQueries.some(
     (query) => query.data === "conflict"
   );
+  const selectedMergeReviewQuery = selectedUnit
+    ? mergeReviewByUnitId.get(selectedUnit.unitId)
+    : undefined;
+  const activeView = selectedUnit
+    ? resolveReviewView(
+        worktree,
+        selectedUnit,
+        selectedView,
+        selectedMergeReviewQuery?.data
+      )
+    : selectedView;
+  const showReviewViewControl =
+    worktree.capabilities.review && selectedUnit !== undefined;
+  const hasReviewActions =
+    worktree.capabilities.discard ||
+    worktree.capabilities.markReady ||
+    worktree.capabilities.merge;
 
   const action = useMutation({
     mutationFn: async (value: ReviewAction) => {
@@ -163,32 +186,33 @@ export function WorktreeReviewPanel({
 
   return (
     <article className="flex h-full min-h-0 flex-col">
-      <header className="flex shrink-0 flex-wrap items-start justify-between gap-4 border-b border-border px-5 py-4 max-[980px]:flex-col">
-        <div className="min-w-0 max-w-3xl">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h3 className="m-0 truncate text-base font-semibold tracking-tight">
-              {worktree.name}
-            </h3>
-            <Badge variant={worktreeStateVariant(worktree.state)}>
-              {worktreeStateLabel(worktree.state, t)}
-            </Badge>
-          </div>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            {worktree.kind === "team"
-              ? worktree.teamSpace?.name
-              : t("personalSpace")}
-            {" · "}
-            {worktree.creator.displayName}
-            {" · "}
-            {formatDateTime(worktree.updatedAt, language)}
-          </p>
-          {worktree.summary ? (
-            <p className="mt-1.5 text-[13px] text-muted-foreground">
-              {worktree.summary}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+      <header
+        className={cn(
+          "grid shrink-0 grid-cols-1 items-center gap-x-4 gap-y-2 border-b border-border px-5 py-2",
+          (showReviewViewControl || hasReviewActions) &&
+            "@min-[480px]/review:grid-cols-[minmax(0,1fr)_auto]",
+          showReviewViewControl &&
+            hasReviewActions &&
+            "@min-[600px]/review:grid-cols-[minmax(0,1fr)_auto_max-content] @min-[600px]/review:py-1 @min-[680px]/review:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
+        )}
+      >
+        <ReviewTitle worktree={worktree} unit={selectedUnit} />
+        {showReviewViewControl ? (
+          <ReviewViewControl
+            activeView={activeView}
+            hasActions={hasReviewActions}
+            {...(onSelectedViewChange === undefined
+              ? {}
+              : { onSelectedViewChange })}
+          />
+        ) : null}
+        <div
+          className={cn(
+            "flex min-w-0 max-w-full flex-wrap items-center gap-2 empty:hidden @min-[480px]/review:col-start-2 @min-[480px]/review:row-start-1 @min-[480px]/review:justify-self-end",
+            showReviewViewControl &&
+              "@min-[600px]/review:col-start-3 @min-[600px]/review:max-w-none @min-[600px]/review:flex-nowrap @min-[600px]/review:justify-end"
+          )}
+        >
           {worktree.capabilities.discard ? (
             <ConfirmDialog
               title={t("discardChangesConfirm")}
@@ -200,6 +224,7 @@ export function WorktreeReviewPanel({
               trigger={
                 <Button
                   variant="destructive-ghost"
+                  size="sm"
                   disabled={action.isPending}
                 >
                   <Trash2 />
@@ -216,7 +241,7 @@ export function WorktreeReviewPanel({
               cancelText={t("cancel")}
               onConfirm={() => action.mutate("markReady")}
               trigger={
-                <Button disabled={action.isPending}>
+                <Button size="sm" disabled={action.isPending}>
                   <Send />
                   {t("submitForReview")}
                 </Button>
@@ -226,7 +251,7 @@ export function WorktreeReviewPanel({
           {worktree.capabilities.merge && hasMergeConflict ? (
             <Tooltip content={t("mergeConflictBlocksMerge")}>
               <span className="inline-flex">
-                <Button disabled>
+                <Button size="sm" disabled>
                   <CheckCircle2 />
                   {t("confirmMerge")}
                 </Button>
@@ -240,7 +265,10 @@ export function WorktreeReviewPanel({
               cancelText={t("cancel")}
               onConfirm={() => action.mutate("merge")}
               trigger={
-                <Button disabled={action.isPending || mergeReviewPending}>
+                <Button
+                  size="sm"
+                  disabled={action.isPending || mergeReviewPending}
+                >
                   <CheckCircle2 />
                   {t("confirmMerge")}
                 </Button>
@@ -261,17 +289,10 @@ export function WorktreeReviewPanel({
           key={`${worktree.id}:${selectedUnit.unitId}`}
           worktree={worktree}
           unit={selectedUnit}
-          selectedView={selectedView}
-          mergeReviewStatus={
-            mergeReviewByUnitId.get(selectedUnit.unitId)?.data
-          }
-          mergeReviewPending={
-            mergeReviewByUnitId.get(selectedUnit.unitId)?.isPending ??
-            false
-          }
-          mergeReviewFailed={
-            mergeReviewByUnitId.get(selectedUnit.unitId)?.isError ?? false
-          }
+          activeView={activeView}
+          mergeReviewStatus={selectedMergeReviewQuery?.data}
+          mergeReviewPending={selectedMergeReviewQuery?.isPending ?? false}
+          mergeReviewFailed={selectedMergeReviewQuery?.isError ?? false}
           {...(onSelectedViewChange === undefined
             ? {}
             : { onSelectedViewChange })}
@@ -284,7 +305,7 @@ export function WorktreeReviewPanel({
 function UnitReview({
   worktree,
   unit,
-  selectedView,
+  activeView,
   mergeReviewStatus,
   mergeReviewPending,
   mergeReviewFailed,
@@ -292,7 +313,7 @@ function UnitReview({
 }: {
   readonly worktree: WorktreeDetailModel;
   readonly unit: WorktreeUnit;
-  readonly selectedView: WorktreeReviewView;
+  readonly activeView: WorktreeReviewView;
   readonly mergeReviewStatus: MergeReviewStatus | undefined;
   readonly mergeReviewPending: boolean;
   readonly mergeReviewFailed: boolean;
@@ -300,18 +321,6 @@ function UnitReview({
 }) {
   const { language, t } = useI18n();
   const { resolvedTheme } = useTheme();
-  const canViewTrunk =
-    unit.source === "trunk" || unit.activationState === "completed";
-  const canViewMergePreview =
-    worktree.state === "ready" && mergeReviewStatus === "preview";
-  const activeView: WorktreeReviewView =
-    selectedView === "trunk" && canViewTrunk
-      ? "trunk"
-      : selectedView === "preview" && canViewMergePreview
-        ? "preview"
-        : selectedView === "agent"
-          ? "agent"
-          : "comparison";
   const comparisonQuery = useQuery({
     ...worktreeUnitComparisonQueryOptions(worktree.id, unit.unitId),
     enabled: activeView === "comparison",
@@ -345,68 +354,33 @@ function UnitReview({
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4.5 py-3 max-[980px]:flex-col max-[980px]:items-start">
-        <div className="flex items-center gap-2">
-          <UnitTypeIcon type={unit.unitType} />
-          <UnitChangeIcon change={unit.change} />
-          <span className="text-[13px] text-muted-foreground">
-            {unitChangeLabel(unit.change, t)}
-            {" · "}
-            {unitTypeLabel(unit.unitType, t)}
-          </span>
-          {unit.mergeResult !== "pending" ? (
-            <Badge
-              variant={
-                unit.mergeResult === "merged" ||
-                unit.mergeResult === "unchanged"
-                  ? "success"
-                  : "danger"
-              }
-            >
-              {t("mergeResultLabel", {
-                value: t(unit.mergeResult),
-              })}
-            </Badge>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Badge variant="outline">{t("readOnlyPreview")}</Badge>
-          <Segmented
-            size="sm"
-            aria-label={t("readOnlyPreview")}
-            value={activeView}
-            onValueChange={(value) =>
-              onSelectedViewChange?.(value as WorktreeReviewView)
-            }
-            options={[
-              {
-                label: t("compareChanges"),
-                value: "comparison",
-              },
-              {
-                label: t("officialVersion"),
-                value: "trunk",
-                disabled: !canViewTrunk,
-              },
-              {
-                label: t("agentVersion"),
-                value: "agent",
-              },
-              ...(canViewMergePreview
-                ? [
-                    {
-                      label: t("mergePreview"),
-                      value: "preview" as const,
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        </div>
-      </div>
       {mergeReviewStatus === "preview" ? (
         <Alert className="mx-4.5 mt-3" variant="info">
-          {t("trunkAdvancedPreviewReady")}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="min-w-0 flex-1">
+              {t("trunkAdvancedPreviewReady")}
+            </span>
+            {activeView !== "comparison" ? (
+              <div data-testid="merge-preview-control">
+                <Segmented<"preview" | "agent">
+                  size="sm"
+                  aria-label={t("mergePreview")}
+                  value={activeView === "preview" ? "preview" : "agent"}
+                  onValueChange={(value) => onSelectedViewChange?.(value)}
+                  options={[
+                    {
+                      label: t("mergePreview"),
+                      value: "preview",
+                    },
+                    {
+                      label: t("agentVersion"),
+                      value: "agent",
+                    },
+                  ]}
+                />
+              </div>
+            ) : null}
+          </div>
         </Alert>
       ) : mergeReviewStatus === "conflict" ? (
         <Alert className="mx-4.5 mt-3" variant="warning">
@@ -465,6 +439,103 @@ function UnitReview({
         </div>
       )}
     </section>
+  );
+}
+
+function ReviewTitle({
+  worktree,
+  unit,
+}: {
+  readonly worktree: WorktreeDetailModel;
+  readonly unit: WorktreeUnit | undefined;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex min-w-0 items-center gap-2.5" data-testid="review-title">
+      {unit ? <UnitTypeIcon type={unit.unitType} /> : null}
+      <div className="flex min-w-0 items-baseline gap-1.5">
+        <h3
+          className="m-0 min-w-0 truncate text-sm font-semibold tracking-tight"
+          title={worktree.name}
+        >
+          {worktree.name}
+        </h3>
+        {unit ? (
+          <span
+            className="hidden min-w-0 max-w-[40%] shrink-0 truncate text-xs text-muted-foreground @min-[760px]/review:inline"
+            title={unit.name}
+          >
+            · {unit.name}
+          </span>
+        ) : null}
+      </div>
+      {unit ? (
+        <Badge variant={unitChangeVariant(unit.change)}>
+          {unitChangeLabel(unit.change, t)}
+        </Badge>
+      ) : (
+        <Badge variant={worktreeStateVariant(worktree.state)}>
+          {worktreeStateLabel(worktree.state, t)}
+        </Badge>
+      )}
+      {unit && unit.mergeResult !== "pending" ? (
+        <Badge
+          variant={
+            unit.mergeResult === "merged" || unit.mergeResult === "unchanged"
+              ? "success"
+              : "danger"
+          }
+        >
+          {t("mergeResultLabel", {
+            value: t(unit.mergeResult),
+          })}
+        </Badge>
+      ) : null}
+    </div>
+  );
+}
+
+function ReviewViewControl({
+  activeView,
+  hasActions,
+  onSelectedViewChange,
+}: {
+  readonly activeView: WorktreeReviewView;
+  readonly hasActions: boolean;
+  readonly onSelectedViewChange?: (view: WorktreeReviewView) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div
+      className={cn(
+        "min-w-0 w-full @min-[480px]/review:w-auto",
+        hasActions
+          ? "@min-[480px]/review:col-span-2 @min-[480px]/review:justify-self-center @min-[600px]/review:col-span-1 @min-[600px]/review:col-start-2 @min-[600px]/review:row-start-1"
+          : "@min-[480px]/review:col-start-2 @min-[480px]/review:row-start-1 @min-[480px]/review:justify-self-end"
+      )}
+      data-testid="view-compare-center"
+    >
+      <Segmented<WorktreeReviewMode>
+        size="sm"
+        aria-label={t("readOnlyPreview")}
+        className="h-12 w-full bg-muted/80 p-0.5 shadow-xs @min-[480px]/review:h-8"
+        itemClassName="h-11 min-w-0 flex-1 basis-0 px-5 py-0 text-[13px] @min-[480px]/review:h-7 @min-[480px]/review:min-w-[72px] @min-[480px]/review:flex-none"
+        value={reviewModeForView(activeView)}
+        onValueChange={(value) =>
+          onSelectedViewChange?.(reviewViewForMode(value))
+        }
+        options={[
+          {
+            label: t("reviewView"),
+            value: "view",
+          },
+          {
+            label: t("reviewCompare"),
+            value: "compare",
+          },
+        ]}
+      />
+    </div>
   );
 }
 
@@ -559,6 +630,13 @@ export function worktreeStateVariant(state: WorktreeState): BadgeVariant {
   return "default";
 }
 
+function unitChangeVariant(change: UnitChange): BadgeVariant {
+  if (change === "modified") return "brand";
+  if (change === "added") return "success";
+  if (change === "deleted") return "danger";
+  return "default";
+}
+
 function unitChangeLabel(change: UnitChange, t: Translator): string {
   if (change === "modified") return t("documentModified");
   if (change === "added") return t("documentAdded");
@@ -571,16 +649,6 @@ function unitTypeLabel(
   t: Translator
 ): string {
   return t(type);
-}
-
-function formatDateTime(
-  value: string,
-  language: "zh-CN" | "en-US"
-): string {
-  return new Intl.DateTimeFormat(language, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 type Translator = (
