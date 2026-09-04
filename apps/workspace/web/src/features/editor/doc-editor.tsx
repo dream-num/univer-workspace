@@ -39,6 +39,8 @@ import UniverShapeEditorUIEnUS from "@univerjs-pro/shape-editor-ui/locale/en-US"
 import UniverShapeEditorUIZhCN from "@univerjs-pro/shape-editor-ui/locale/zh-CN";
 import { mergeLocales } from "@univerjs/presets";
 import { defaultTheme } from "@univerjs/themes";
+import type { ILanguagePack } from "@univerjs/core";
+import type { IPreset } from "@univerjs/presets";
 
 import "@univerjs-pro/chart-ui/facade";
 import "@univerjs-pro/docs-callout/facade";
@@ -75,6 +77,71 @@ import { getDocThreadCommentCollaborationPlugins } from "./workarounds/doc-threa
 
 export type DocEditorProps = CollaborationEditorProps;
 
+export const docEditorLocales: Readonly<
+  Record<"zh-CN" | "en-US", ILanguagePack>
+> = {
+  "zh-CN": mergeLocales(
+    ChartUIZhCN,
+    EngineChartZhCN,
+    UniverPresetDocsCoreZhCN,
+    UniverPresetDocsDrawingZhCN,
+    UniverPresetDocsHyperLinkZhCN,
+    UniverPresetDocsThreadCommentZhCN,
+    UniverDocsCalloutUIZhCN,
+    UniverDocsChartUIZhCN,
+    UniverDocsCodeUIZhCN,
+    UniverDocsExchangeClientZhCN,
+    UniverDocsLatexUIZhCN,
+    UniverDocsPrintZhCN,
+    UniverDocsShapeUIZhCN,
+    UniverDocsTableUIZhCN,
+    UniverShapeEditorUIZhCN
+  ),
+  "en-US": mergeLocales(
+    ChartUIEnUS,
+    EngineChartEnUS,
+    UniverPresetDocsCoreEnUS,
+    UniverPresetDocsDrawingEnUS,
+    UniverPresetDocsHyperLinkEnUS,
+    UniverPresetDocsThreadCommentEnUS,
+    UniverDocsCalloutUIEnUS,
+    UniverDocsChartUIEnUS,
+    UniverDocsCodeUIEnUS,
+    UniverDocsExchangeClientEnUS,
+    UniverDocsLatexUIEnUS,
+    UniverDocsPrintEnUS,
+    UniverDocsShapeUIEnUS,
+    UniverDocsTableUIEnUS,
+    UniverShapeEditorUIEnUS
+  ),
+};
+
+export function createDocComparisonPresets(
+  container: HTMLElement
+): IPreset[] {
+  return [
+    UniverDocsCorePreset({
+      container,
+      ribbonType: "grid",
+      header: false,
+      toolbar: false,
+      footer: false,
+      contextMenu: false,
+      disableAutoFocus: true,
+    }),
+    UniverDocsDrawingPreset({
+      collaboration: false,
+    }),
+    UniverDocsHyperLinkPreset(),
+    {
+      plugins: [
+        ...getDocReplayCompatibilityPlugins(),
+        ...getDocAuthoringUIPlugins(),
+      ],
+    },
+  ];
+}
+
 export default createCollaborationEditor({
   label: "document",
   history: {
@@ -91,42 +158,7 @@ export default createCollaborationEditor({
     },
   },
   theme: defaultTheme,
-  locales: {
-    "zh-CN": mergeLocales(
-      ChartUIZhCN,
-      EngineChartZhCN,
-      UniverPresetDocsCoreZhCN,
-      UniverPresetDocsDrawingZhCN,
-      UniverPresetDocsHyperLinkZhCN,
-      UniverPresetDocsThreadCommentZhCN,
-      UniverDocsCalloutUIZhCN,
-      UniverDocsChartUIZhCN,
-      UniverDocsCodeUIZhCN,
-      UniverDocsExchangeClientZhCN,
-      UniverDocsLatexUIZhCN,
-      UniverDocsPrintZhCN,
-      UniverDocsShapeUIZhCN,
-      UniverDocsTableUIZhCN,
-      UniverShapeEditorUIZhCN
-    ),
-    "en-US": mergeLocales(
-      ChartUIEnUS,
-      EngineChartEnUS,
-      UniverPresetDocsCoreEnUS,
-      UniverPresetDocsDrawingEnUS,
-      UniverPresetDocsHyperLinkEnUS,
-      UniverPresetDocsThreadCommentEnUS,
-      UniverDocsCalloutUIEnUS,
-      UniverDocsChartUIEnUS,
-      UniverDocsCodeUIEnUS,
-      UniverDocsExchangeClientEnUS,
-      UniverDocsLatexUIEnUS,
-      UniverDocsPrintEnUS,
-      UniverDocsShapeUIEnUS,
-      UniverDocsTableUIEnUS,
-      UniverShapeEditorUIEnUS
-    ),
-  },
+  locales: docEditorLocales,
   collaborationFeaturePlugins: (collaborationScope) =>
     getDocThreadCommentCollaborationPlugins(
       collaborationScope.kind === "trunk"

@@ -35,7 +35,10 @@ import {
   worktreeListQueryOptions,
   worktreeQueryOptions,
 } from "./worktrees.queries";
-import type { WorktreeReviewView } from "./worktree-review-search";
+import {
+  DEFAULT_WORKTREE_REVIEW_VIEW,
+  type WorktreeReviewView,
+} from "./worktree-review-search";
 
 type WorktreeSummary = components["schemas"]["WorktreeSummary"];
 type WorktreeDetail = components["schemas"]["WorktreeDetail"];
@@ -60,7 +63,7 @@ export function WorktreeDashboard({
   searchQuery = "",
   selectedWorktreeId,
   selectedUnitId,
-  selectedView = "agent",
+  selectedView = DEFAULT_WORKTREE_REVIEW_VIEW,
   onSelectionChange,
 }: {
   readonly searchQuery?: string;
@@ -182,7 +185,7 @@ export function WorktreeDashboard({
 
   const selectDocument = (
     document: ReviewDocument,
-    view: WorktreeReviewView = "agent"
+    view: WorktreeReviewView = DEFAULT_WORKTREE_REVIEW_VIEW
   ) =>
     onSelectionChange?.({
       worktreeId: document.worktree.id,

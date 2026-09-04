@@ -90,8 +90,8 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 
 ## Package 与发布边界
 
-- `apps/workspace`、`packages/client-core` 和 `packages/reference-provider` 是 private workspace package，
-  不发布为公共 SDK。
+- `apps/workspace`、`packages/client-core`、`packages/reference-provider` 和
+  `packages/unit-comparison-viewer` 是 private workspace package，不发布为公共 SDK。
 - `univer-workspace-cli` 通过仓库内 packaging workflow 生成内部安装包；不要把 source workspace
   manifest 的 `private` 状态误当成公共 npm SDK 合同。
 - `apps/cli/package.json` 的 source version 固定为 `0.0.0`；稳定 CLI 版本只来自 `vX.Y.Z` git tag，
@@ -105,6 +105,8 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
   Core 变成安装时依赖。
 - `packages/reference-provider` 不增加独立发布、版本或外部 consumer 合同。
 - `packages/client-core` 不增加独立发布、版本或外部 consumer 合同。
+- `packages/unit-comparison-viewer` 不拥有数据请求、wire payload 解码或 Univer Runtime 装配；宿主只向其
+  传入已解码 UnitData、comparison result 和 Univer factory。
 - 稳定 `vX.Y.Z` tag 在被选择时是 CLI release 与 Workspace deployment 共享的不可变源码坐标；tag push
   只发布 CLI。部署 workflow 也可以不选 tag，改为手动部署 workflow dispatch 的精确 commit，并使用
   `sha-<commit>` image tag。Docker image 和 CLI artifact 的交付时机与执行流程仍然独立。
@@ -153,3 +155,8 @@ pnpm package:workspace-cli
 - 不把尚未实现的能力写成当前事实。
 - 修复跨 SDK 问题前先判断所有权位于本仓库还是上游 SDK，并向用户说明判断依据。
 - 不自行创建 Git commit、发布 artifact、推送 image 或触发部署；只有用户明确要求时才执行。
+
+## Unit Comparison Viewer 同步
+
+目前没有适合放置应用级共享组件的统一位置。临时方案是 `univer-workspace`、`univer-cli` 与 DSH plugin
+各自保留 `packages/unit-comparison-viewer`；修改该 package 时必须同步所有副本。

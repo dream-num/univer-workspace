@@ -30,7 +30,7 @@ import SlidesThreadCommentUIZhCN from "@univerjs-pro/slides-thread-comment-ui/lo
 import { UniverSlidesUIPlugin } from "@univerjs-pro/slides-ui";
 import UniverSlidesUIEnUS from "@univerjs-pro/slides-ui/locale/en-US";
 import UniverSlidesUIZhCN from "@univerjs-pro/slides-ui/locale/zh-CN";
-import { IImageIoService } from "@univerjs/core";
+import { IImageIoService, type ILanguagePack } from "@univerjs/core";
 import UniverDesignEnUS from "@univerjs/design/locale/en-US";
 import UniverDesignZhCN from "@univerjs/design/locale/zh-CN";
 import { UniverDocsPlugin } from "@univerjs/docs";
@@ -41,7 +41,7 @@ import { UniverDrawingPlugin } from "@univerjs/drawing";
 import UniverDrawingUIEnUS from "@univerjs/drawing-ui/locale/en-US";
 import UniverDrawingUIZhCN from "@univerjs/drawing-ui/locale/zh-CN";
 import { UniverRenderEnginePlugin } from "@univerjs/engine-render";
-import { mergeLocales } from "@univerjs/presets";
+import { mergeLocales, type IPreset } from "@univerjs/presets";
 import { UniverUIPlugin } from "@univerjs/ui";
 import UniverUIEnUS from "@univerjs/ui/locale/en-US";
 import UniverUIZhCN from "@univerjs/ui/locale/zh-CN";
@@ -78,6 +78,82 @@ import { MAX_UNIVER_IMAGE_BYTES } from "./univer-assets";
 
 export type SlideEditorProps = CollaborationEditorProps;
 
+export const slideEditorLocales: Readonly<
+  Record<"zh-CN" | "en-US", ILanguagePack>
+> = {
+  "zh-CN": mergeLocales(
+    ChartUIZhCN,
+    EngineChartZhCN,
+    UniverDesignZhCN,
+    UniverUIZhCN,
+    UniverDocsUIZhCN,
+    UniverDrawingUIZhCN,
+    UniverSlidesZhCN,
+    UniverShapeEditorUIZhCN,
+    UniverSlidesUIZhCN,
+    UniverSlidesExchangeClientZhCN,
+    UniverSlidesPrintZhCN,
+    UniverSlidesChartUIZhCN,
+    UniverSlidesTableUIZhCN,
+    ThreadCommentUIZhCN,
+    SlidesThreadCommentUIZhCN
+  ),
+  "en-US": mergeLocales(
+    ChartUIEnUS,
+    EngineChartEnUS,
+    UniverDesignEnUS,
+    UniverUIEnUS,
+    UniverDocsUIEnUS,
+    UniverDrawingUIEnUS,
+    UniverSlidesEnUS,
+    UniverShapeEditorUIEnUS,
+    UniverSlidesUIEnUS,
+    UniverSlidesExchangeClientEnUS,
+    UniverSlidesPrintEnUS,
+    UniverSlidesChartUIEnUS,
+    UniverSlidesTableUIEnUS,
+    ThreadCommentUIEnUS,
+    SlidesThreadCommentUIEnUS
+  ),
+};
+
+export function createSlideComparisonPresets(
+  container: HTMLElement
+): IPreset[] {
+  return [
+    {
+      plugins: [
+        UniverRenderEnginePlugin,
+        [
+          UniverUIPlugin,
+          {
+            container,
+            ribbonType: "grid",
+            header: false,
+            toolbar: false,
+            footer: false,
+            disableAutoFocus: true,
+          },
+        ],
+        UniverDocsPlugin,
+        UniverDocsUIPlugin,
+        [
+          UniverDrawingPlugin,
+          {
+            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
+          },
+        ],
+        UniverSlidesPlugin,
+        UniverSlidesUIPlugin,
+        UniverSlidesChartPlugin,
+        UniverSlidesChartUIPlugin,
+        UniverSlidesTablePlugin,
+        UniverSlidesTableUIPlugin,
+      ],
+    },
+  ];
+}
+
 export default createCollaborationEditor({
   label: "presentation",
   history: {
@@ -95,42 +171,7 @@ export default createCollaborationEditor({
   },
   theme: purpleTheme,
   useCustomCollaborationStatus: true,
-  locales: {
-    "zh-CN": mergeLocales(
-      ChartUIZhCN,
-      EngineChartZhCN,
-      UniverDesignZhCN,
-      UniverUIZhCN,
-      UniverDocsUIZhCN,
-      UniverDrawingUIZhCN,
-      UniverSlidesZhCN,
-      UniverShapeEditorUIZhCN,
-      UniverSlidesUIZhCN,
-      UniverSlidesExchangeClientZhCN,
-      UniverSlidesPrintZhCN,
-      UniverSlidesChartUIZhCN,
-      UniverSlidesTableUIZhCN,
-      ThreadCommentUIZhCN,
-      SlidesThreadCommentUIZhCN
-    ),
-    "en-US": mergeLocales(
-      ChartUIEnUS,
-      EngineChartEnUS,
-      UniverDesignEnUS,
-      UniverUIEnUS,
-      UniverDocsUIEnUS,
-      UniverDrawingUIEnUS,
-      UniverSlidesEnUS,
-      UniverShapeEditorUIEnUS,
-      UniverSlidesUIEnUS,
-      UniverSlidesExchangeClientEnUS,
-      UniverSlidesPrintEnUS,
-      UniverSlidesChartUIEnUS,
-      UniverSlidesTableUIEnUS,
-      ThreadCommentUIEnUS,
-      SlidesThreadCommentUIEnUS
-    ),
-  },
+  locales: slideEditorLocales,
   collaborationFeaturePlugins: (collaborationScope) =>
     getThreadCommentCollaborationPlugins(
       collaborationScope.kind === "trunk",

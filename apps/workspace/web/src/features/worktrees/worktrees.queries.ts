@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import type { UnitComparisonViewerValue } from "@univer/unit-comparison-viewer";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import {
@@ -91,6 +92,45 @@ export function worktreeUnitMergeReviewQueryOptions(
         >[0];
       };
       return resolveMergeReviewStatus(body.evaluation);
+    },
+  });
+}
+
+export interface WorktreeUnitComparisonPayload {
+  readonly result: UnitComparisonViewerValue["result"];
+  readonly left: {
+    readonly revision?: number;
+    readonly unitData: unknown | null;
+  };
+  readonly right: {
+    readonly revision?: number;
+    readonly unitData: unknown | null;
+  };
+}
+
+export function worktreeUnitComparisonQueryOptions(
+  worktreeId: string,
+  unitId: string
+) {
+  return queryOptions({
+    queryKey: [
+      ...worktreesQueryKey,
+      "comparison",
+      worktreeId,
+      unitId,
+    ] as const,
+    staleTime: Infinity,
+    queryFn: async (): Promise<WorktreeUnitComparisonPayload> => {
+      const response = await fetch(
+        `/universer-api/worktrees/${encodeURIComponent(
+          worktreeId
+        )}/units/${encodeURIComponent(unitId)}/comparison`,
+        { credentials: "include" }
+      );
+      if (!response.ok) {
+        throw new Error("The Unit comparison could not be prepared.");
+      }
+      return (await response.json()) as WorktreeUnitComparisonPayload;
     },
   });
 }

@@ -45,6 +45,7 @@ import {
 } from "../realtime/worktree-change-feed.js";
 import { protocolUser } from "./protocol-user.js";
 import { setFinalMutationSize } from "./changeset-observation.js";
+import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
 const MILLISECONDS_PER_SECOND = 1_000;
@@ -347,6 +348,33 @@ export function createCollaborationGateway(options: {
           access.resolveUnit(userId, unitId)
         ),
       });
+    }
+  );
+  router.get(
+    "/worktrees/:worktreeId/units/:unitId/comparison",
+    async (request, response) => {
+      const userId = response.locals.session.user.id as string;
+      const detail = await worktrees.get(userId, request.params.worktreeId);
+      const unit = detail.worktree.units.find(
+        (candidate) => candidate.unitId === request.params.unitId
+      );
+      if (!unit) {
+        response.status(404).json({ message: "Worktree Unit not found." });
+        return;
+      }
+      response.json(
+        await createWorkspaceUnitComparison({
+          service,
+          worktreeService,
+          userId,
+          worktreeId: request.params.worktreeId,
+          unitId: unit.unitId,
+          unitName: unit.name,
+          unitType: unit.unitType,
+          source: unit.source,
+          change: unit.change,
+        })
+      );
     }
   );
   router.use(((request, response) => {
