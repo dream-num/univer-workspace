@@ -104,12 +104,29 @@ export interface CollaborationEditorProps {
   readonly instanceKey?: string;
   /** Let the surrounding comparison shell own labels, navigation, and editing chrome. */
   readonly comparisonViewer?: boolean;
+  readonly localSelectedItemId?: string;
+  readonly localSheetSelection?: LocalSheetSelection;
   /** Install local-only canvas presentation after a materialized Unit has mounted. */
   readonly onLocalUnitMounted?: (input: {
     readonly univer: Univer;
     readonly unitId: string;
     readonly unitType: UniverInstanceType;
-  }) => { dispose(): void } | undefined;
+  }) => LocalUnitPresentationController | undefined;
+}
+
+export interface LocalSheetSelection {
+  readonly sheetId: string;
+  readonly startRow: number;
+  readonly endRow: number;
+  readonly startColumn: number;
+  readonly endColumn: number;
+  readonly kind: "delete" | "insert" | "update";
+}
+
+export interface LocalUnitPresentationController {
+  dispose(): void;
+  setSelectedItem?(itemId: string | undefined): void | Promise<void>;
+  setSheetSelection?(selection: LocalSheetSelection | undefined): void;
 }
 
 export interface WorkspaceHistoryDefinition {
@@ -168,6 +185,8 @@ export function createCollaborationEditor(
     materializedData,
     instanceKey,
     comparisonViewer = false,
+    localSelectedItemId,
+    localSheetSelection,
     onLocalUnitMounted,
   }: CollaborationEditorProps) {
     const container = useRef<HTMLDivElement>(null);
@@ -181,14 +200,32 @@ export function createCollaborationEditor(
     const { resolvedTheme } = useTheme();
     const resolvedThemeRef = useRef(resolvedTheme);
     const univerAPIRef = useRef<FUniver | null>(null);
+    const localPresentationRef =
+      useRef<LocalUnitPresentationController | null>(null);
+    const localSelectedItemIdRef = useRef(localSelectedItemId);
+    const localSheetSelectionRef = useRef(localSheetSelection);
     const mappedUnitIdsKey = mappedUnitIds?.join("\u0000") ?? "";
     resolvedThemeRef.current = resolvedTheme;
+    localSelectedItemIdRef.current = localSelectedItemId;
+    localSheetSelectionRef.current = localSheetSelection;
 
     useEffect(() => {
       if (univerAPIRef.current) {
         syncUniverTheme(univerAPIRef.current, resolvedTheme);
       }
     }, [resolvedTheme]);
+
+    useEffect(() => {
+      Promise.resolve(
+        localPresentationRef.current?.setSelectedItem?.(localSelectedItemId)
+      ).catch((error: unknown) => {
+        console.error("Failed to update local comparison selection", error);
+      });
+    }, [localSelectedItemId]);
+
+    useEffect(() => {
+      localPresentationRef.current?.setSheetSelection?.(localSheetSelection);
+    }, [localSheetSelection]);
 
     useEffect(() => {
       const element = container.current;
@@ -203,7 +240,7 @@ export function createCollaborationEditor(
       let collaborationUIEventListener: { unsubscribe(): void } | null = null;
       let readOnlyListener: { dispose(): void } | null = null;
       let readOnlyLifecycleListener: { dispose(): void } | null = null;
-      let localUnitMountCleanup: { dispose(): void } | undefined;
+      let localUnitMountCleanup: LocalUnitPresentationController | undefined;
 
       const mount = async () => {
         if (!element.id) {
@@ -474,6 +511,13 @@ export function createCollaborationEditor(
                 : unitId,
             unitType: definition.unitType,
           });
+          localPresentationRef.current = localUnitMountCleanup ?? null;
+          await localUnitMountCleanup?.setSelectedItem?.(
+            localSelectedItemIdRef.current
+          );
+          localUnitMountCleanup?.setSheetSelection?.(
+            localSheetSelectionRef.current
+          );
           setLoading(false);
           return;
         }
@@ -520,6 +564,9 @@ export function createCollaborationEditor(
         collaborationUIEventListener?.unsubscribe();
         readOnlyListener?.dispose();
         readOnlyLifecycleListener?.dispose();
+        if (localPresentationRef.current === localUnitMountCleanup) {
+          localPresentationRef.current = null;
+        }
         localUnitMountCleanup?.dispose();
         mountedUniver?.dispose();
         univerAPIRef.current = null;

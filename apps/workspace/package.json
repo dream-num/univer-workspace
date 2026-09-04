@@ -145,6 +145,7 @@
     "@univerjs/presets": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/protocol": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/rpc": "1.0.0-insiders.20260902-a58c423",
+    "@univerjs/sheets": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/themes": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/thread-comment": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/thread-comment-ui": "1.0.0-insiders.20260902-a58c423",

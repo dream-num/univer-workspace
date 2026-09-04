@@ -21,6 +21,8 @@ export function ResourceEditor(props: {
   readonly materializedData?: Readonly<Record<string, unknown>>;
   readonly instanceKey?: string;
   readonly comparisonViewer?: boolean;
+  readonly localSelectedItemId?: CollaborationEditorProps["localSelectedItemId"];
+  readonly localSheetSelection?: CollaborationEditorProps["localSheetSelection"];
   readonly onLocalUnitMounted?: CollaborationEditorProps["onLocalUnitMounted"];
 }) {
   const editorProps = {
@@ -44,6 +46,12 @@ export function ResourceEditor(props: {
     ...(props.comparisonViewer === undefined
       ? {}
       : { comparisonViewer: props.comparisonViewer }),
+    ...(props.localSelectedItemId === undefined
+      ? {}
+      : { localSelectedItemId: props.localSelectedItemId }),
+    ...(props.localSheetSelection === undefined
+      ? {}
+      : { localSheetSelection: props.localSheetSelection }),
     ...(props.onLocalUnitMounted === undefined
       ? {}
       : { onLocalUnitMounted: props.onLocalUnitMounted }),

@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { structuralDiffItemsFromResult } from "../../web/src/features/worktrees/comparison-presentation.js";
 import { decorateDocumentComparisonSide } from "../../web/src/features/worktrees/document-comparison-decoration.js";
 import { decorateWorkbookComparisonSide } from "../../web/src/features/worktrees/workbook-comparison-decoration.js";
+import { comparisonSheetSelection } from "../../web/src/features/worktrees/workbook-comparison-selection.js";
 
 function document(text: string): IDocumentData {
   return {
@@ -114,5 +115,66 @@ describe("comparison canvas decoration", () => {
       "rgba(37, 99, 235, 0.24)"
     );
     expect(source.sheets.page.cellData[1][1]).toEqual({ v: 5.5 });
+  });
+
+  it("maps each side of a Sheet diff to its own selection", () => {
+    const item = {
+      id: "cell:page:update:B2:C3",
+      stableId: "cell-1",
+      parentStableId: "page",
+      scope: { entityType: "worksheet", stableId: "page" },
+      kind: "update",
+      entityType: "cell",
+      path: ["cell", "page", "cell-1"],
+      moved: false,
+      changes: [],
+      locations: {
+        left: { path: [], stableId: "B2" },
+        right: { path: [], stableId: "C3" },
+      },
+    } as IUnitComparisonItem;
+
+    expect(comparisonSheetSelection(item, "left")).toEqual({
+      sheetId: "page",
+      startRow: 1,
+      endRow: 1,
+      startColumn: 1,
+      endColumn: 1,
+      kind: "update",
+    });
+    expect(comparisonSheetSelection(item, "right")).toEqual({
+      sheetId: "page",
+      startRow: 2,
+      endRow: 2,
+      startColumn: 2,
+      endColumn: 2,
+      kind: "update",
+    });
+  });
+
+  it("does not select the missing side of an inserted Sheet item", () => {
+    const item = {
+      id: "cell:page:insert:A5",
+      stableId: "A5",
+      parentStableId: "page",
+      scope: { entityType: "worksheet", stableId: "page" },
+      kind: "insert",
+      entityType: "cell",
+      path: ["cell", "page", "A5"],
+      moved: false,
+      changes: [],
+      locations: {
+        left: null,
+        right: { path: [], stableId: "A5" },
+      },
+    } as IUnitComparisonItem;
+
+    expect(comparisonSheetSelection(item, "left")).toBeUndefined();
+    expect(comparisonSheetSelection(item, "right")).toMatchObject({
+      sheetId: "page",
+      startRow: 4,
+      startColumn: 0,
+      kind: "insert",
+    });
   });
 });

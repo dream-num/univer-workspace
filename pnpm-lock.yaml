@@ -756,6 +756,9 @@ importers:
       '@univerjs/rpc':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets':
+        specifier: 1.0.0-insiders.20260902-a58c423
+        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/themes':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423

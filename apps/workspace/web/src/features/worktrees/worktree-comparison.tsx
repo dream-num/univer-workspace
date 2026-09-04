@@ -1,5 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import type { IDocumentData } from "@univerjs/core";
+import {
+  IUniverInstanceService,
+  UniverInstanceType,
+  type IDocumentData,
+  type IDisposable,
+  type Workbook,
+} from "@univerjs/core";
 import type {
   IUnitComparisonItem,
   IUnitComparisonLeafChange,
@@ -7,6 +13,7 @@ import type {
   IUnitComparisonScope,
 } from "@univerjs-pro/edit-history";
 import { FunctionSquare, RefreshCw, Search } from "lucide-react";
+import { FWorkbook } from "@univerjs/sheets/facade";
 import {
   useCallback,
   useEffect,
@@ -30,6 +37,7 @@ import {
 import { decorateDocumentComparisonSide } from "./document-comparison-decoration";
 import { createNativeComparisonHighlightController } from "./native-comparison-highlights";
 import { decorateWorkbookComparisonSide } from "./workbook-comparison-decoration";
+import { comparisonSheetSelection } from "./workbook-comparison-selection";
 import { worktreeUnitComparisonQueryOptions } from "./worktrees.queries";
 
 type WorktreeUnit = components["schemas"]["WorktreeUnit"];
@@ -392,6 +400,10 @@ function WorkbookDiffPane({
 }): ReactElement {
   const { language, t } = useI18n();
   const selectedText = item ? comparisonItemLabel(item, language) : "";
+  const sheetSelection = useMemo(
+    () => comparisonSheetSelection(item, side),
+    [item, side]
+  );
   const presentationItems = useMemo(
     () => structuralDiffItemsFromResult(items),
     [items]
@@ -402,9 +414,8 @@ function WorkbookDiffPane({
       withActiveScope(data, "sheet", activeSheetId),
       side,
       items,
-      item?.id
     );
-  }, [activeSheetId, data, item?.id, items, side]);
+  }, [activeSheetId, data, items, side]);
   const installCanvasHighlights = useCallback<
     NonNullable<
       import("../editor/collaboration-editor").CollaborationEditorProps["onLocalUnitMounted"]
@@ -417,12 +428,47 @@ function WorkbookDiffPane({
         unitType,
         side,
         items: presentationItems,
-        ...(item === null ? {} : { selectedItemId: item.id }),
       });
       void controller.refresh();
-      return controller;
+      const workbookModel = univer
+        .__getInjector()
+        .get(IUniverInstanceService)
+        .getUnit<Workbook>(unitId, UniverInstanceType.UNIVER_SHEET);
+      const workbook =
+        workbookModel === null || workbookModel === undefined
+          ? null
+          : univer.__getInjector().createInstance(FWorkbook, workbookModel);
+      let selectedHighlight: IDisposable | null = null;
+      return {
+        dispose: () => {
+          selectedHighlight?.dispose();
+          controller.dispose();
+        },
+        setSelectedItem: (itemId) => controller.setSelectedItem(itemId),
+        setSheetSelection: (selection) => {
+          selectedHighlight?.dispose();
+          selectedHighlight = null;
+          if (workbook === null || selection === undefined) return;
+          const sheet = workbook.getSheetBySheetId(selection.sheetId);
+          if (sheet === null) return;
+          const range = sheet.getRange(
+            selection.startRow,
+            selection.startColumn,
+            selection.endRow - selection.startRow + 1,
+            selection.endColumn - selection.startColumn + 1
+          );
+          sheet.activate();
+          sheet.setActiveSelection(range);
+          selectedHighlight = sheet.highlightRanges([range], {
+            fill: selectedSheetFill(selection.kind),
+            stroke: selectedSheetStroke(selection.kind),
+            strokeWidth: 3,
+            widgetSize: 0,
+          });
+        },
+      };
     },
-    [item, presentationItems, side]
+    [presentationItems, side]
   );
   return (
     <section className="grid min-h-[360px] min-w-0 grid-rows-[auto_auto_auto_minmax(0,1fr)] bg-card max-[1023px]:min-h-0">
@@ -449,9 +495,11 @@ function WorkbookDiffPane({
           </div>
         ) : (
           <ResourceEditor
-            key={`${side}:${revision ?? 0}:${activeSheetId ?? "default"}:${item?.id ?? "all"}`}
+            key={`${side}:${revision ?? 0}:${activeSheetId ?? "default"}`}
             comparisonViewer
             instanceKey={`comparison-${side}-${activeSheetId ?? "default"}`}
+            localSelectedItemId={item?.id}
+            localSheetSelection={sheetSelection}
             materializedData={presentedData}
             onLocalUnitMounted={installCanvasHighlights}
             readOnly
@@ -675,12 +723,11 @@ function NativeDiffSide({
         unitType,
         side,
         items,
-        ...(selectedItemId === undefined ? {} : { selectedItemId }),
       });
       void controller.refresh();
       return controller;
     },
-    [items, selectedItemId, side]
+    [items, side]
   );
   const presentedData = useMemo(() => {
     const scoped =
@@ -701,10 +748,9 @@ function NativeDiffSide({
       {
         items,
         alignment,
-        ...(selectedItemId === undefined ? {} : { selectedItemId }),
       }
     ) as unknown as Record<string, unknown>;
-  }, [activePageId, alignment, data, items, peerData, selectedItemId, side, unit.unitType]);
+  }, [activePageId, alignment, data, items, peerData, side, unit.unitType]);
   return (
     <section className={cn("grid min-h-0 bg-background", pageTabs.length > 0 ? "grid-rows-[56px_auto_minmax(0,1fr)]" : "grid-rows-[56px_minmax(0,1fr)]")}>
       <header className="flex min-w-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
@@ -722,9 +768,10 @@ function NativeDiffSide({
       <div ref={hostRef} className="relative min-h-0 overflow-hidden">
         {present && presentedData !== undefined ? (
           <ResourceEditor
-            key={`${side}:${revision ?? 0}:${activePageId ?? "default"}:${selectedItemId ?? "all"}`}
+            key={`${side}:${revision ?? 0}:${activePageId ?? "default"}`}
             comparisonViewer
             instanceKey={`comparison-${side}-${activePageId ?? "default"}`}
+            localSelectedItemId={selectedItemId}
             materializedData={presentedData}
             onLocalUnitMounted={installCanvasHighlights}
             readOnly
@@ -1014,6 +1061,22 @@ function comparisonSheetOptions(
   const sheetScopes = diff.scopes.filter((scope) => scope.entityType === "worksheet");
   if (sheetScopes.length > 0) return sheetScopes.map(scopeOption);
   return workbookSheetOptions(right ?? left);
+}
+
+function selectedSheetFill(kind: DiffKind): string {
+  return kind === "delete"
+    ? "rgba(239,68,68,0.40)"
+    : kind === "insert"
+      ? "rgba(34,197,94,0.40)"
+      : "rgba(59,130,246,0.36)";
+}
+
+function selectedSheetStroke(kind: DiffKind): string {
+  return kind === "delete"
+    ? "rgba(220,38,38,0.86)"
+    : kind === "insert"
+      ? "rgba(22,163,74,0.86)"
+      : "rgba(37,99,235,0.86)";
 }
 
 function workbookSheetOptions(data: Record<string, unknown> | undefined): PageOption[] {
