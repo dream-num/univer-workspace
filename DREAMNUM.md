@@ -65,7 +65,6 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - **Product data model and persistence semantics:** [Data model](apps/workspace/docs/data-model.md)
 - **Accepted architectural decisions:** [ADR directory](apps/workspace/docs/adr)
 - **CLI user and distribution contract:** [CLI README](apps/cli/README.md)
-- **Unit comparison UI boundary:** [Unit Comparison Viewer README](packages/unit-comparison-viewer/README.md)
 
 ## Deployment and data classification
 
