@@ -241,6 +241,8 @@ const messages = {
     officialVersion: "正式版本",
     mergePreview: "合入预览",
     compareChanges: "变更对比",
+    reviewView: "查看",
+    reviewCompare: "对比",
     comparisonFailed: "无法生成变更对比，请稍后重试。",
     trunkAdvancedPreviewReady:
       "正式版本已有新更新，系统已自动合并并生成预览。请确认合入结果。",
@@ -584,6 +586,8 @@ const messages = {
     officialVersion: "Official version",
     mergePreview: "Merge preview",
     compareChanges: "Compare changes",
+    reviewView: "View",
+    reviewCompare: "Compare",
     comparisonFailed: "The change comparison could not be prepared. Try again later.",
     trunkAdvancedPreviewReady:
       "The official version has new updates. An automatic merge preview is ready for review.",
