@@ -1,0 +1,268 @@
+/api/status:
+  get:
+    tags: [Observer]
+    operationId: getObserverStatus
+    summary: 获取独立 Observer Console 的初始化与登录状态。
+    security: []
+    responses:
+      "200":
+        description: Observer 状态。
+        content:
+          application/json:
+            schema: { $ref: ../schemas/observer.yaml#/ObserverStatus }
+
+/api/setup:
+  post:
+    tags: [Observer]
+    operationId: startObserverSetup
+    summary: 使用一次性安装 Token 开始首位 Member 的 GitHub OAuth。
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [token]
+            properties:
+              token: { type: string, minLength: 32 }
+    responses:
+      "200":
+        description: GitHub 授权地址。
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [authorizationUrl]
+              properties:
+                authorizationUrl: { type: string, format: uri }
+      "403": { $ref: ../schemas/common.yaml#/Forbidden }
+      "409": { $ref: ../schemas/common.yaml#/Conflict }
+
+/api/auth/github/login:
+  get:
+    tags: [Observer]
+    operationId: startObserverGitHubLogin
+    summary: 开始 Observer Member 的 GitHub OAuth 登录。
+    security: []
+    parameters:
+      - name: returnTo
+        in: query
+        schema: { type: string }
+    responses:
+      "302": { description: 跳转到 GitHub。 }
+      "409": { $ref: ../schemas/common.yaml#/Conflict }
+
+/api/auth/github/callback:
+  get:
+    tags: [Observer]
+    operationId: finishObserverGitHubLogin
+    summary: 完成 Observer GitHub OAuth。
+    security: []
+    parameters:
+      - { name: code, in: query, schema: { type: string } }
+      - { name: state, in: query, schema: { type: string } }
+      - { name: error, in: query, schema: { type: string } }
+    responses:
+      "302": { description: 返回 Observer Console。 }
+
+/api/session:
+  delete:
+    tags: [Observer]
+    operationId: logoutObserver
+    summary: 退出 Observer Session。
+    security: [{ observerCookie: [] }]
+    responses:
+      "204": { description: 已退出。 }
+
+/api/overview:
+  get:
+    tags: [Observer]
+    operationId: getObserverOverview
+    summary: 获取部署总览。
+    security: [{ observerCookie: [] }]
+    responses:
+      "200":
+        description: 部署总览。
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }
+
+/api/operations:
+  get:
+    tags: [Observer]
+    operationId: getObserverOperations
+    summary: 获取只读 Operation 状态与错误码分布。
+    security: [{ observerCookie: [] }]
+    responses:
+      "200":
+        description: Operation 摘要。
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }
+
+/api/storage:
+  get:
+    tags: [Observer]
+    operationId: getObserverStorage
+    summary: 获取只读存储摘要。
+    security: [{ observerCookie: [] }]
+    responses:
+      "200":
+        description: 存储摘要。
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }
+
+/api/config:
+  get:
+    tags: [Observer]
+    operationId: getObserverConfig
+    summary: 获取脱敏配置摘要。
+    security: [{ observerCookie: [] }]
+    responses:
+      "200":
+        description: 脱敏配置。
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }
+
+/api/changesets:
+  get:
+    tags: [Observer]
+    operationId: getObserverChangesets
+    summary: 查询 Changeset Count、Mutation Count 或 Mutation Size 活动。
+    security: [{ observerCookie: [] }]
+    parameters:
+      - { name: from, in: query, schema: { type: string } }
+      - { name: to, in: query, schema: { type: string } }
+      - { name: userId, in: query, schema: { type: string } }
+      - { name: unitId, in: query, schema: { type: string } }
+      - name: scope
+        in: query
+        schema: { type: string, enum: [all, trunk, worktree], default: all }
+      - name: measure
+        in: query
+        schema: { type: string, enum: [changesetCount, mutationCount, mutationSize], default: changesetCount }
+    responses:
+      "200":
+        description: Changeset 活动与服务端查询耗时。
+        headers:
+          Server-Timing:
+            schema: { type: string }
+        content:
+          application/json:
+            schema: { $ref: ../schemas/observer.yaml#/ChangesetActivity }
+      "400": { $ref: ../schemas/common.yaml#/BadRequest }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }
+      "503": { $ref: ../schemas/common.yaml#/ServiceUnavailable }
+      "504": { $ref: ../schemas/common.yaml#/GatewayTimeout }
+
+/api/filter-options:
+  get:
+    tags: [Observer]
+    operationId: getObserverFilterOptions
+    summary: 获取 Changeset User 与 Unit 筛选选项。
+    security: [{ observerCookie: [] }]
+    parameters:
+      - name: search
+        in: query
+        schema: { type: string, maxLength: 100 }
+    responses:
+      "200":
+        description: 最多各 100 个 User 与 Unit 的只读元数据。
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }
+
+/api/members:
+  get:
+    tags: [Observer]
+    operationId: listObserverMembers
+    summary: 列出 Observer Member。
+    security: [{ observerCookie: [] }]
+    responses:
+      "200":
+        description: Member 列表。
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [members]
+              properties:
+                members:
+                  type: array
+                  items: { $ref: ../schemas/observer.yaml#/ObserverMember }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }
+  post:
+    tags: [Observer]
+    operationId: addObserverMember
+    summary: 通过 GitHub Login 或个人主页添加 Member。
+    security: [{ observerCookie: [] }]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [githubLogin]
+            properties:
+              githubLogin: { type: string }
+    responses:
+      "201":
+        description: 已添加。
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [member]
+              properties:
+                member: { $ref: ../schemas/observer.yaml#/ObserverMember }
+      "400": { $ref: ../schemas/common.yaml#/BadRequest }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }
+      "404": { $ref: ../schemas/common.yaml#/NotFound }
+
+/api/members/{githubUserId}:
+  parameters:
+    - name: githubUserId
+      in: path
+      required: true
+      schema: { type: string }
+  delete:
+    tags: [Observer]
+    operationId: removeObserverMember
+    summary: 移除 Member 并撤销其全部 Observer Session。
+    security: [{ observerCookie: [] }]
+    responses:
+      "204": { description: 已移除。 }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }
+      "404": { $ref: ../schemas/common.yaml#/NotFound }
+      "409": { $ref: ../schemas/common.yaml#/Conflict }
+
+/api/access-events:
+  get:
+    tags: [Observer]
+    operationId: listObserverAccessEvents
+    summary: 获取不可修改的 Observer Member 变更历史。
+    security: [{ observerCookie: [] }]
+    parameters:
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+    responses:
+      "200":
+        description: 访问历史。
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }

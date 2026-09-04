@@ -1,0 +1,96 @@
+ObserverMember:
+  type: object
+  additionalProperties: false
+  required: [githubUserId, githubLogin, displayName, avatarUrl, addedByGithubUserId, createdAt, updatedAt]
+  properties:
+    githubUserId: { type: string }
+    githubLogin: { type: string }
+    displayName: { type: string }
+    avatarUrl: { type: [string, "null"], format: uri }
+    addedByGithubUserId: { type: [string, "null"] }
+    createdAt: { type: integer }
+    updatedAt: { type: integer }
+
+ObserverStatus:
+  type: object
+  additionalProperties: false
+  required: [initialized, setupTokenConfigured, githubOAuthEnabled, authenticated]
+  properties:
+    initialized: { type: boolean }
+    setupTokenConfigured: { type: boolean }
+    githubOAuthEnabled: { type: boolean }
+    authenticated: { type: boolean }
+    member:
+      $ref: "#/ObserverMember"
+
+ActivityTotals:
+  type: object
+  additionalProperties: false
+  required: [changesetCount, mutationCount, mutationSize]
+  properties:
+    changesetCount: { type: integer, minimum: 0 }
+    mutationCount: { type: integer, minimum: 0 }
+    mutationSize: { type: integer, minimum: 0 }
+
+ActivityBucket:
+  allOf:
+    - $ref: "#/ActivityTotals"
+    - type: object
+      required: [start]
+      properties:
+        start: { type: integer }
+
+ActivityRank:
+  allOf:
+    - $ref: "#/ActivityTotals"
+    - type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        username: { type: [string, "null"] }
+        displayName: { type: [string, "null"] }
+        avatarUrl: { type: [string, "null"] }
+        name: { type: [string, "null"] }
+        spaceName: { type: [string, "null"] }
+        unitType: { type: [string, "null"] }
+
+ChangesetActivity:
+  type: object
+  additionalProperties: true
+  required:
+    - bucketMs
+    - buckets
+    - totals
+    - users
+    - units
+    - mutationSizePresentCount
+    - mutationSizeMissingCount
+    - missingCreateTimeCount
+    - latestChangesetTime
+    - meta
+  properties:
+    bucketMs: { type: integer }
+    buckets:
+      type: array
+      items: { $ref: "#/ActivityBucket" }
+    totals: { $ref: "#/ActivityTotals" }
+    users:
+      type: array
+      items: { $ref: "#/ActivityRank" }
+    units:
+      type: array
+      items: { $ref: "#/ActivityRank" }
+    mutationSizePresentCount: { type: integer }
+    mutationSizeMissingCount: { type: integer }
+    missingCreateTimeCount: { type: integer }
+    latestChangesetTime: { type: [integer, "null"] }
+    meta:
+      type: object
+      additionalProperties: false
+      required: [collaborationQueryMs, productEnrichmentMs, totalServerMs, generatedAt, latestChangesetTime]
+      properties:
+        collaborationQueryMs: { type: number }
+        productEnrichmentMs: { type: number }
+        totalServerMs: { type: number }
+        generatedAt: { type: string, format: date-time }
+        latestChangesetTime: { type: [string, "null"], format: date-time }

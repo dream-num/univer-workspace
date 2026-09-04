@@ -1,0 +1,638 @@
+openapi: 3.1.2
+info:
+  title: Univer Observer API
+  version: 0.1.0
+  summary: Univer Workspace 的独立只读观测应用接口。
+  description: |
+    Observer 使用独立 GitHub 身份与 SQLite，只读查询 Workspace 产品数据库和
+    Collaboration 数据库。除 Observer Member 管理外，不修改 Workspace 状态。
+servers:
+  - url: /
+security:
+  - observerCookie: []
+tags:
+  - name: Observer
+    description: 部署级只读观测与 Observer Member 管理。
+paths:
+  /api/status:
+    get:
+      tags:
+        - Observer
+      operationId: getObserverStatus
+      summary: 获取独立 Observer Console 的初始化与登录状态。
+      security: []
+      responses:
+        '200':
+          description: Observer 状态。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObserverStatus'
+  /api/setup:
+    post:
+      tags:
+        - Observer
+      operationId: startObserverSetup
+      summary: 使用一次性安装 Token 开始首位 Member 的 GitHub OAuth。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  minLength: 32
+      responses:
+        '200':
+          description: GitHub 授权地址。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - authorizationUrl
+                properties:
+                  authorizationUrl:
+                    type: string
+                    format: uri
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/auth/github/login:
+    get:
+      tags:
+        - Observer
+      operationId: startObserverGitHubLogin
+      summary: 开始 Observer Member 的 GitHub OAuth 登录。
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          schema:
+            type: string
+      responses:
+        '302':
+          description: 跳转到 GitHub。
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/auth/github/callback:
+    get:
+      tags:
+        - Observer
+      operationId: finishObserverGitHubLogin
+      summary: 完成 Observer GitHub OAuth。
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+      responses:
+        '302':
+          description: 返回 Observer Console。
+  /api/session:
+    delete:
+      tags:
+        - Observer
+      operationId: logoutObserver
+      summary: 退出 Observer Session。
+      security:
+        - observerCookie: []
+      responses:
+        '204':
+          description: 已退出。
+  /api/overview:
+    get:
+      tags:
+        - Observer
+      operationId: getObserverOverview
+      summary: 获取部署总览。
+      security:
+        - observerCookie: []
+      responses:
+        '200':
+          description: 部署总览。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/operations:
+    get:
+      tags:
+        - Observer
+      operationId: getObserverOperations
+      summary: 获取只读 Operation 状态与错误码分布。
+      security:
+        - observerCookie: []
+      responses:
+        '200':
+          description: Operation 摘要。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/storage:
+    get:
+      tags:
+        - Observer
+      operationId: getObserverStorage
+      summary: 获取只读存储摘要。
+      security:
+        - observerCookie: []
+      responses:
+        '200':
+          description: 存储摘要。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/config:
+    get:
+      tags:
+        - Observer
+      operationId: getObserverConfig
+      summary: 获取脱敏配置摘要。
+      security:
+        - observerCookie: []
+      responses:
+        '200':
+          description: 脱敏配置。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/filter-options:
+    get:
+      tags:
+        - Observer
+      operationId: getObserverFilterOptions
+      summary: 获取 Changeset User 与 Unit 筛选选项。
+      security:
+        - observerCookie: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: 最多各 100 个 User 与 Unit 的只读元数据。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/changesets:
+    get:
+      tags:
+        - Observer
+      operationId: getObserverChangesets
+      summary: 查询 Changeset Count、Mutation Count 或 Mutation Size 活动。
+      security:
+        - observerCookie: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: unitId
+          in: query
+          schema:
+            type: string
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum:
+              - all
+              - trunk
+              - worktree
+            default: all
+        - name: measure
+          in: query
+          schema:
+            type: string
+            enum:
+              - changesetCount
+              - mutationCount
+              - mutationSize
+            default: changesetCount
+      responses:
+        '200':
+          description: Changeset 活动与服务端查询耗时。
+          headers:
+            Server-Timing:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangesetActivity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+  /api/members:
+    get:
+      tags:
+        - Observer
+      operationId: listObserverMembers
+      summary: 列出 Observer Member。
+      security:
+        - observerCookie: []
+      responses:
+        '200':
+          description: Member 列表。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - members
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ObserverMember'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Observer
+      operationId: addObserverMember
+      summary: 通过 GitHub Login 或个人主页添加 Member。
+      security:
+        - observerCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - githubLogin
+              properties:
+                githubLogin:
+                  type: string
+      responses:
+        '201':
+          description: 已添加。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - member
+                properties:
+                  member:
+                    $ref: '#/components/schemas/ObserverMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/members/{githubUserId}:
+    parameters:
+      - name: githubUserId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      tags:
+        - Observer
+      operationId: removeObserverMember
+      summary: 移除 Member 并撤销其全部 Observer Session。
+      security:
+        - observerCookie: []
+      responses:
+        '204':
+          description: 已移除。
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/access-events:
+    get:
+      tags:
+        - Observer
+      operationId: listObserverAccessEvents
+      summary: 获取不可修改的 Observer Member 变更历史。
+      security:
+        - observerCookie: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: 访问历史。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    observerCookie:
+      type: apiKey
+      in: cookie
+      name: univer_observer_session
+      description: 独立于 Workspace Session 的 Observer HttpOnly Session Cookie。
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: 稳定的机器可读错误码。
+        message:
+          type: string
+          description: 面向操作者的诊断信息。
+        field:
+          type: string
+          description: 与错误相关的输入字段。
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/Error'
+    ObserverMember:
+      type: object
+      additionalProperties: false
+      required:
+        - githubUserId
+        - githubLogin
+        - displayName
+        - avatarUrl
+        - addedByGithubUserId
+        - createdAt
+        - updatedAt
+      properties:
+        githubUserId:
+          type: string
+        githubLogin:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type:
+            - string
+            - 'null'
+          format: uri
+        addedByGithubUserId:
+          type:
+            - string
+            - 'null'
+        createdAt:
+          type: integer
+        updatedAt:
+          type: integer
+    ObserverStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - initialized
+        - setupTokenConfigured
+        - githubOAuthEnabled
+        - authenticated
+      properties:
+        initialized:
+          type: boolean
+        setupTokenConfigured:
+          type: boolean
+        githubOAuthEnabled:
+          type: boolean
+        authenticated:
+          type: boolean
+        member:
+          $ref: '#/components/schemas/ObserverMember'
+    ChangesetActivity:
+      type: object
+      additionalProperties: true
+      required:
+        - bucketMs
+        - buckets
+        - totals
+        - users
+        - units
+        - mutationSizePresentCount
+        - mutationSizeMissingCount
+        - missingCreateTimeCount
+        - latestChangesetTime
+        - meta
+      properties:
+        bucketMs:
+          type: integer
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityBucket'
+        totals:
+          $ref: '#/components/schemas/ActivityTotals'
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityRank'
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityRank'
+        mutationSizePresentCount:
+          type: integer
+        mutationSizeMissingCount:
+          type: integer
+        missingCreateTimeCount:
+          type: integer
+        latestChangesetTime:
+          type:
+            - integer
+            - 'null'
+        meta:
+          type: object
+          additionalProperties: false
+          required:
+            - collaborationQueryMs
+            - productEnrichmentMs
+            - totalServerMs
+            - generatedAt
+            - latestChangesetTime
+          properties:
+            collaborationQueryMs:
+              type: number
+            productEnrichmentMs:
+              type: number
+            totalServerMs:
+              type: number
+            generatedAt:
+              type: string
+              format: date-time
+            latestChangesetTime:
+              type:
+                - string
+                - 'null'
+              format: date-time
+    ActivityTotals:
+      type: object
+      additionalProperties: false
+      required:
+        - changesetCount
+        - mutationCount
+        - mutationSize
+      properties:
+        changesetCount:
+          type: integer
+          minimum: 0
+        mutationCount:
+          type: integer
+          minimum: 0
+        mutationSize:
+          type: integer
+          minimum: 0
+    ActivityBucket:
+      allOf:
+        - $ref: '#/components/schemas/ActivityTotals'
+        - type: object
+          required:
+            - start
+          properties:
+            start:
+              type: integer
+    ActivityRank:
+      allOf:
+        - $ref: '#/components/schemas/ActivityTotals'
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+            username:
+              type:
+                - string
+                - 'null'
+            displayName:
+              type:
+                - string
+                - 'null'
+            avatarUrl:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            spaceName:
+              type:
+                - string
+                - 'null'
+            unitType:
+              type:
+                - string
+                - 'null'
+  responses:
+    Forbidden:
+      description: 当前 GitHub Identity 没有 Observer 权限。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: 请求与当前 Observer 状态冲突。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: 需要有效的 Observer Session。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: 请求参数无效。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: 查询并发容量暂时耗尽。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    GatewayTimeout:
+      description: 只读数据库查询超过配置的时间限制。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 资源不存在。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

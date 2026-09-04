@@ -1,6 +1,6 @@
 # dream-num/univer-workspace
 
-> Owns the Univer Workspace product and its agent-ready CLI for organizing, collaborating on, and automating Univer content.
+> Owns the Univer Workspace product, its independent Observer, and its agent-ready CLI.
 
 The repository source is licensed under Apache-2.0. Runtime development credentials,
 Pro SDK dependencies, and artifact delivery retain their separately defined policies.
@@ -15,6 +15,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - The deployable Workspace Browser and Server composition, including the product HTTP contract, authenticated
   Collaboration Endpoint integration, local persistence layout, and deployment lifecycle. See the
   [Workspace README](apps/workspace/README.md).
+- The independently deployed and authenticated Observer for deployment-level read-only product, Operation, storage,
+  and Collaboration changeset activity, including its member lifecycle and immutable access history. See the
+  [Observer README](apps/observer/README.md).
 - The Workspace-specific CLI composition and agent workflow over remote Workspace Resources and Worktrees,
   including version-matched operational Skills and review handoff. See the [CLI README](apps/cli/README.md).
 - The private Node-hosted Workspace Client Core under `packages/client-core`, including shared Workspace HTTP,
@@ -29,6 +32,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - **Univer Workspace** — the deployable Browser and Server application, product HTTP API, authenticated
   collaboration entry points, and background recovery processes. Contract: [Workspace README](apps/workspace/README.md)
   and [OpenAPI source](apps/workspace/contracts/http/openapi.yaml).
+- **Univer Observer** — the separately deployed Browser and Server application that owns Observer authentication and
+  reads Workspace product and Collaboration persistence without writing it. Contract:
+  [Observer README](apps/observer/README.md) and [Observer OpenAPI](apps/observer/contracts/http/openapi.yaml).
 - **Univer Workspace CLI** — the internally packaged `univer-workspace-cli` application for agent-driven remote
   Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, with browser-approved
   passwordless CLI session handoff for password and external-identity users. Contract:
@@ -37,7 +43,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 ## Depends on
 
 - [`dream-num/univer`](https://github.com/dream-num/univer) — owns the core Unit model, Facade APIs, mutations,
-  rendering, and `@univerjs/*` packages composed by both applications. Contract: [repository boundary](AGENTS.md).
+  rendering, and `@univerjs/*` packages composed by Workspace and CLI. Contract: [repository boundary](AGENTS.md).
 - [`dream-num/univer-pro`](https://github.com/dream-num/univer-pro) — owns the Univer Pro content, Office exchange,
   collaboration client, and UI packages consumed by the Browser and CLI. Contract: [repository boundary](AGENTS.md).
 - [`dream-num/univer-collaboration-sdk`](https://github.com/dream-num/univer-collaboration-sdk) — owns collaboration
@@ -61,6 +67,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - **Application module boundaries:** [Application design](apps/workspace/docs/application-design.md)
 - **Product data model and persistence semantics:** [Data model](apps/workspace/docs/data-model.md)
 - **Accepted architectural decisions:** [ADR directory](apps/workspace/docs/adr)
+- **Observer runtime and deployment:** [Observer README](apps/observer/README.md)
+- **Observer architecture and data model:** [Observer docs](apps/observer/docs/architecture.md)
 - **CLI user and distribution contract:** [CLI README](apps/cli/README.md)
 
 ## Deployment and data classification
@@ -68,6 +76,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - Workspace product metadata and authentication state are stored in the product SQLite database; Univer snapshot,
   changeset, revision, and Thread Comment data are stored separately in component-owned tables in the Collaboration
   SQLite file. Thread Comment anchors remain in Unit data while bodies, replies, and solved state use the Comment Adapter.
+- Observer member identities, session secret hashes, and immutable access events are stored in a third independent
+  Observer SQLite database. Activity is queried read-only from authoritative product and Collaboration
+  databases and is not copied into an analytics store.
 - Uploaded Resource bytes and embedded Univer Asset bytes are stored by the configured BlobStore. Database rows
   retain their identities, metadata, and recovery state.
 - Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs, sharing state, and user-authored
@@ -76,18 +87,22 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   persisted login session and does not pass a browser cookie, password, or OAuth access token through the agent.
 - OAuth secrets, trusted Bot credentials, registry credentials, production licenses, and deployment credentials are
   environment or build configuration and must not be committed to the repository.
+- The Observer setup token is deployment-supplied secret configuration used only to authorize the first GitHub
+  member setup; the repository contains no default member identity, and the token loses authority after initialization.
 - Stable `vX.Y.Z` tags are immutable source coordinates shared by the stable CLI release and Workspace deployments
   that select a release tag. Tag push publishes only the CLI; deployment remains a separate manual workflow.
 - Workspace images use either the selected release tag or `sha-<commit>` for an untagged workflow dispatch and are
   handed off to the private deployment repository; database migration and rollout ordering remain part of the
   Workspace application contract.
+- Observer is built as its own image and can share a host with Workspace, but runs as a separate process with a
+  read-only Workspace data mount and a distinct writable Observer data volume.
 
 ## Update contract
 
 Update this file in the same change when any of these facts change:
 
 - repository responsibilities or ownership boundaries;
-- either of the two externally provided applications or their contracts;
+- any of the three externally provided applications or their contracts;
 - outgoing cross-repository dependencies;
 - public APIs, protocols, events, images, artifacts, or deployment handoff;
 - persistence layout, protected data classification, or credential handling.

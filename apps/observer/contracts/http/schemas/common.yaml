@@ -1,0 +1,64 @@
+Error:
+  type: object
+  additionalProperties: false
+  required: [code, message]
+  properties:
+    code:
+      type: string
+      description: 稳定的机器可读错误码。
+    message:
+      type: string
+      description: 面向操作者的诊断信息。
+    field:
+      type: string
+      description: 与错误相关的输入字段。
+
+ErrorResponse:
+  type: object
+  additionalProperties: false
+  required: [error]
+  properties:
+    error:
+      $ref: "#/Error"
+
+BadRequest:
+  description: 请求参数无效。
+  content:
+    application/json:
+      schema: { $ref: "#/ErrorResponse" }
+
+Unauthorized:
+  description: 需要有效的 Observer Session。
+  content:
+    application/json:
+      schema: { $ref: "#/ErrorResponse" }
+
+Forbidden:
+  description: 当前 GitHub Identity 没有 Observer 权限。
+  content:
+    application/json:
+      schema: { $ref: "#/ErrorResponse" }
+
+NotFound:
+  description: 资源不存在。
+  content:
+    application/json:
+      schema: { $ref: "#/ErrorResponse" }
+
+Conflict:
+  description: 请求与当前 Observer 状态冲突。
+  content:
+    application/json:
+      schema: { $ref: "#/ErrorResponse" }
+
+ServiceUnavailable:
+  description: 查询并发容量暂时耗尽。
+  content:
+    application/json:
+      schema: { $ref: "#/ErrorResponse" }
+
+GatewayTimeout:
+  description: 只读数据库查询超过配置的时间限制。
+  content:
+    application/json:
+      schema: { $ref: "#/ErrorResponse" }

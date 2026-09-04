@@ -403,6 +403,70 @@ importers:
         specifier: ^4.1.10
         version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
+  apps/observer:
+    dependencies:
+      '@scalar/express-api-reference':
+        specifier: ^0.10.11
+        version: 0.10.14
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1(supports-color@10.2.2)
+    devDependencies:
+      '@fontsource-variable/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@redocly/cli':
+        specifier: ^2.41.0
+        version: 2.46.2
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+      '@tanstack/react-query':
+        specifier: ^5.101.4
+        version: 5.101.4(react@19.2.8)
+      '@tanstack/react-router':
+        specifier: ^1.170.18
+        version: 1.170.31(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/router-cli':
+        specifier: ^1.167.21
+        version: 1.167.32(supports-color@10.2.2)
+      '@tanstack/router-plugin':
+        specifier: ^1.168.23
+        version: 1.168.34(@tanstack/react-router@1.170.31(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(esbuild@0.28.2)(rolldown@1.2.5)(supports-color@10.2.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.4(@types/react@19.2.18)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.4
+        version: 6.1.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+      openapi-typescript:
+        specifier: ^7.13.0
+        version: 7.13.0(typescript@5.9.3)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.8(react@19.2.8)
+      tsx:
+        specifier: ^4.23.1
+        version: 4.23.12
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.1.5
+        version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+
   apps/workspace:
     dependencies:
       '@base-ui/react':
