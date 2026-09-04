@@ -293,6 +293,9 @@ export function WorktreeReviewPanel({
           mergeReviewStatus={selectedMergeReviewQuery?.data}
           mergeReviewPending={selectedMergeReviewQuery?.isPending ?? false}
           mergeReviewFailed={selectedMergeReviewQuery?.isError ?? false}
+          {...(onSelectedViewChange === undefined
+            ? {}
+            : { onSelectedViewChange })}
         />
       )}
     </article>
@@ -306,6 +309,7 @@ function UnitReview({
   mergeReviewStatus,
   mergeReviewPending,
   mergeReviewFailed,
+  onSelectedViewChange,
 }: {
   readonly worktree: WorktreeDetailModel;
   readonly unit: WorktreeUnit;
@@ -313,6 +317,7 @@ function UnitReview({
   readonly mergeReviewStatus: MergeReviewStatus | undefined;
   readonly mergeReviewPending: boolean;
   readonly mergeReviewFailed: boolean;
+  readonly onSelectedViewChange?: (view: WorktreeReviewView) => void;
 }) {
   const { language, t } = useI18n();
   const { resolvedTheme } = useTheme();
@@ -351,7 +356,31 @@ function UnitReview({
     <section className="flex min-h-0 min-w-0 flex-1 flex-col">
       {mergeReviewStatus === "preview" ? (
         <Alert className="mx-4.5 mt-3" variant="info">
-          {t("trunkAdvancedPreviewReady")}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="min-w-0 flex-1">
+              {t("trunkAdvancedPreviewReady")}
+            </span>
+            {activeView !== "comparison" ? (
+              <div data-testid="merge-preview-control">
+                <Segmented<"preview" | "agent">
+                  size="sm"
+                  aria-label={t("mergePreview")}
+                  value={activeView === "preview" ? "preview" : "agent"}
+                  onValueChange={(value) => onSelectedViewChange?.(value)}
+                  options={[
+                    {
+                      label: t("mergePreview"),
+                      value: "preview",
+                    },
+                    {
+                      label: t("agentVersion"),
+                      value: "agent",
+                    },
+                  ]}
+                />
+              </div>
+            ) : null}
+          </div>
         </Alert>
       ) : mergeReviewStatus === "conflict" ? (
         <Alert className="mx-4.5 mt-3" variant="warning">
