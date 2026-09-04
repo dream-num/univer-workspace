@@ -1,8 +1,14 @@
 import {
   useMutation,
   useQueries,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { LocaleType } from "@univerjs/core";
+import {
+  UnitComparisonViewer,
+  type UnitComparisonViewerValue,
+} from "@univer/unit-comparison-viewer";
 import {
   CheckCircle2,
   Database,
@@ -31,12 +37,16 @@ import {
   ConfirmDialog,
   Empty,
   Segmented,
+  Spinner,
   Tooltip,
   toast,
 } from "../../shared/ui";
+import { useTheme } from "../../shared/theme";
 import { cn } from "../../shared/utils/cn";
 import type { MergeReviewStatus } from "../editor/merge-review";
+import { createComparisonUniver } from "../editor/comparison-univer";
 import {
+  worktreeUnitComparisonQueryOptions,
   worktreeUnitMergeReviewQueryOptions,
   worktreesQueryKey,
 } from "./worktrees.queries";
@@ -60,7 +70,7 @@ type BadgeVariant =
 export function WorktreeReviewPanel({
   worktree,
   selectedUnitId,
-  selectedView = "agent",
+  selectedView = "comparison",
   onSelectedViewChange,
 }: {
   readonly worktree: WorktreeDetailModel;
@@ -285,7 +295,8 @@ function UnitReview({
   readonly mergeReviewFailed: boolean;
   readonly onSelectedViewChange?: (view: WorktreeReviewView) => void;
 }) {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
+  const { resolvedTheme } = useTheme();
   const canViewTrunk =
     unit.source === "trunk" || unit.activationState === "completed";
   const canViewMergePreview =
@@ -295,9 +306,30 @@ function UnitReview({
       ? "trunk"
       : selectedView === "preview" && canViewMergePreview
         ? "preview"
-        : "agent";
+        : selectedView === "agent"
+          ? "agent"
+          : "comparison";
+  const comparisonQuery = useQuery({
+    ...worktreeUnitComparisonQueryOptions(worktree.id, unit.unitId),
+    enabled: activeView === "comparison",
+  });
+  const comparison = comparisonQuery.data
+    ? ({
+        result: comparisonQuery.data.result,
+        left: {
+          label: t("officialVersion"),
+          ...comparisonQuery.data.left,
+        },
+        right: {
+          label: t("agentVersion"),
+          ...comparisonQuery.data.right,
+        },
+      } as UnitComparisonViewerValue)
+    : null;
   const canPreview =
-    activeView === "trunk" || unit.change !== "deleted";
+    activeView === "comparison" ||
+    activeView === "trunk" ||
+    unit.change !== "deleted";
   const previewMode =
     activeView === "trunk"
       ? "trunk"
@@ -345,6 +377,10 @@ function UnitReview({
             }
             options={[
               {
+                label: t("compareChanges"),
+                value: "comparison",
+              },
+              {
                 label: t("officialVersion"),
                 value: "trunk",
                 disabled: !canViewTrunk,
@@ -382,7 +418,32 @@ function UnitReview({
           {t("checkingMergePreview")}
         </Alert>
       ) : null}
-      {!canPreview ? (
+      {activeView === "comparison" ? (
+        <div className="flex min-h-[480px] flex-1 flex-col overflow-hidden">
+          {comparisonQuery.isPending ? (
+            <div className="grid h-full place-items-center">
+              <Spinner />
+            </div>
+          ) : comparisonQuery.isError || comparison === null ? (
+            <Empty
+              className="my-auto"
+              title={t("comparisonFailed")}
+            />
+          ) : (
+            <UnitComparisonViewer
+              key={`${comparison.result.comparisonId}:${unit.unitId}`}
+              comparison={comparison}
+              createUniver={createComparisonUniver}
+              locale={
+                language === "zh-CN"
+                  ? LocaleType.ZH_CN
+                  : LocaleType.EN_US
+              }
+              darkMode={resolvedTheme === "dark"}
+            />
+          )}
+        </div>
+      ) : !canPreview ? (
         <Empty
           className="mt-[min(18vh,160px)]"
           icon={Trash2}

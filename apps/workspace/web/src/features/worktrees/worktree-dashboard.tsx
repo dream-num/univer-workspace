@@ -60,7 +60,7 @@ export function WorktreeDashboard({
   searchQuery = "",
   selectedWorktreeId,
   selectedUnitId,
-  selectedView = "agent",
+  selectedView = "comparison",
   onSelectionChange,
 }: {
   readonly searchQuery?: string;
@@ -182,7 +182,7 @@ export function WorktreeDashboard({
 
   const selectDocument = (
     document: ReviewDocument,
-    view: WorktreeReviewView = "agent"
+    view: WorktreeReviewView = "comparison"
   ) =>
     onSelectionChange?.({
       worktreeId: document.worktree.id,

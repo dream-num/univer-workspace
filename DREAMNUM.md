@@ -23,6 +23,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   applications and is not a separately published SDK.
 - The private Browser reference-provider policy under `packages/reference-provider`. It is an internal module,
   not a separately provided application or a cross-repository SDK contract.
+- The private read-only Unit comparison UI under `packages/unit-comparison-viewer`, including decoded-UnitData
+  rendering and its host-injected Univer runtime boundary. Until an application-level shared component home is
+  available, changes remain synchronized with the copies in `dream-num/univer-cli` and the DSH plugin.
 
 ## Provides
 
@@ -62,6 +65,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - **Product data model and persistence semantics:** [Data model](apps/workspace/docs/data-model.md)
 - **Accepted architectural decisions:** [ADR directory](apps/workspace/docs/adr)
 - **CLI user and distribution contract:** [CLI README](apps/cli/README.md)
+- **Unit comparison UI boundary:** [Unit Comparison Viewer README](packages/unit-comparison-viewer/README.md)
 
 ## Deployment and data classification
 

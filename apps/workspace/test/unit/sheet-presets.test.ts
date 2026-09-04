@@ -148,6 +148,41 @@ describe("Workspace Sheet presets", () => {
       "UNIVER_SHEETS_THREAD_COMMENT_UI_PLUGIN"
     );
   }, 20_000);
+
+  it("creates a local hidden-chrome stack for comparison panes", async () => {
+    Object.defineProperty(globalThis, "Path2D", {
+      configurable: true,
+      value: class Path2D {},
+    });
+    const [{ createSheetEditorPresets }] = await Promise.all([
+      import("../../web/src/features/editor/sheet-presets.js"),
+    ]);
+    const presets = createSheetEditorPresets({
+      container,
+      license,
+      universerEndpoint: endpoint,
+      collaborationEnabled: false,
+      threadCommentsEnabled: false,
+      workbenchChrome: "hidden",
+    });
+
+    expect(presetPluginKeys(presets)).not.toEqual(
+      expect.arrayContaining([
+        "UNIVER_COLLABORATION_PLUGIN",
+        "UNIVER_COLLABORATION_CLIENT_PLUGIN",
+        "UNIVER_SHEETS_THREAD_COMMENT_PLUGIN",
+      ])
+    );
+    expect(pluginOptions(presets, "UNIVER_UI_PLUGIN")).toMatchObject({
+      header: false,
+      toolbar: false,
+      contextMenu: false,
+      disableAutoFocus: true,
+    });
+    expect(pluginOptions(presets, "UNIVER_DRAWING_PLUGIN")).toMatchObject({
+      override: [],
+    });
+  }, 20_000);
 });
 
 function presetPluginKeys(presets: IPreset[]): string[] {

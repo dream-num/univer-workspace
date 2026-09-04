@@ -965,6 +965,31 @@ describe("collaboration gateway", () => {
     );
     expect(updatedWorktree.worktree.units[0]?.draftHeadRevision).toBe(2);
 
+    const comparisonResponse = await fetch(
+      `${origin}/universer-api/worktrees/${worktree.body.id}/units/${worktreeUnit.body.unit.unitId}/comparison`,
+      { headers: { cookie } }
+    );
+    expect(comparisonResponse.status).toBe(200);
+    await expect(comparisonResponse.json()).resolves.toMatchObject({
+      result: {
+        schemaVersion: 1,
+        unit: {
+          unitId: worktreeUnit.body.unit.unitId,
+          type: UniverType.UNIVER_SHEET,
+        },
+        page: { hasMore: false },
+        productContext: { kind: "sheet" },
+      },
+      left: {
+        revision: 1,
+        unitData: { id: worktreeUnit.body.unit.unitId },
+      },
+      right: {
+        revision: 2,
+        unitData: { id: worktreeUnit.body.unit.unitId },
+      },
+    });
+
     await application.worktrees.markReady(
       issued.view.user.id,
       worktree.body.id

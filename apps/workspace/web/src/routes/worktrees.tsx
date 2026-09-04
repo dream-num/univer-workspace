@@ -33,7 +33,7 @@ export const Route = createFileRoute("/worktrees")({
 
 function WorktreesPage() {
   const { t } = useI18n();
-  const { worktree, unit, view = "agent" } = Route.useSearch();
+  const { worktree, unit, view = "comparison" } = Route.useSearch();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
 

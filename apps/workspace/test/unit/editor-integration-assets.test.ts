@@ -16,6 +16,15 @@ const globalStyles = readFileSync(
 
 describe("editor integration assets", () => {
   it("loads shared styles before manual Plugin Mode product styles", () => {
+    expect(globalStyles).toContain('@import "tailwindcss";');
+    expect(globalStyles).toContain(
+      '@import "@univer/unit-comparison-viewer/styles.css";'
+    );
+    expect(globalStyles.indexOf('@import "tailwindcss";')).toBeLessThan(
+      globalStyles.indexOf(
+        '@import "@univer/unit-comparison-viewer/styles.css";'
+      )
+    );
     expectImportsInOrder(editorSources.base, [
       "@univerjs/design/lib/index.css",
       "@univerjs/ui/lib/index.css",

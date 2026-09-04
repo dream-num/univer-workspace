@@ -136,6 +136,7 @@ apps/workspace                 Workspace Browser, Server, HTTP contract, and dep
 apps/cli                       Agent-ready remote Workspace automation application
 packages/client-core           Private Node-hosted Workspace Agent Client capabilities
 packages/reference-provider   Private Browser-only referenced-Unit policy
+packages/unit-comparison-viewer  Private read-only Unit comparison UI
 scripts                       SDK version and local CLI release tooling
 ```
 
@@ -150,8 +151,8 @@ Blob storage policy, remote workflows, and deployment. Client Core shares storag
 Workspace workflows, local Node-hosted Blob/Asset transfer, and the worker-backed content runtime between
 repository applications, including Node-hosted Office exchange, Typst compile/materialize/apply, render Unit
 assembly, screenshots, PNG/PDF output, Slide layout lint, the render-page source, and the SVG
-compile/measure/apply workflow; the reference-provider package remains Browser-only.
-Both are private implementation modules, not additional public applications or SDKs.
+compile/measure/apply workflow; the reference-provider and Unit comparison viewer packages remain
+Browser-only. These packages are private implementation modules, not additional public applications or SDKs.
 
 ## Architecture principles
 
@@ -221,6 +222,7 @@ the actual package artifact before publication.
 | [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries               |
 | [HTTP contract](apps/workspace/contracts/http/README.md)            | Product API source and generation workflow                             |
 | [Reference-provider package](packages/reference-provider/README.md) | Private Browser referenced-Unit policy                                 |
+| [Unit comparison viewer](packages/unit-comparison-viewer/README.md) | Private read-only comparison UI and host integration boundary          |
 
 ## Contributing
 

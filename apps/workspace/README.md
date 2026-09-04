@@ -48,6 +48,13 @@ version-history UI. Viewers can inspect versions, while users with content edit
 permission can restore one. Worktree and merge-preview editors do not expose
 Trunk History.
 
+Worktree review opens a structured, read-only side-by-side comparison by
+default. The Server materializes and decodes the authoritative Trunk and draft
+states, computes semantic differences with the matching History SDK adapter,
+and returns them through the authenticated internal `/universer-api` boundary.
+The Browser supplies its own Univer presets and plugins to the comparison
+viewer; official, agent, and merge-preview iframe views remain available.
+
 The Univer editors import and export XLSX/CSV/TSV, DOCX, and PPTX through the
 server-side `@univerjs-pro/exchange-node` runtime. These endpoints follow the
 Universer Exchange shape under `/universer-api/exchange/**`; they are not part

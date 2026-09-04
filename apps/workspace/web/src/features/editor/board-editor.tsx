@@ -37,7 +37,7 @@ import UniverInkUIEnUS from "@univerjs-pro/ink-ui/locale/en-US";
 import UniverInkUIZhCN from "@univerjs-pro/ink-ui/locale/zh-CN";
 import UniverShapeEditorUIEnUS from "@univerjs-pro/shape-editor-ui/locale/en-US";
 import UniverShapeEditorUIZhCN from "@univerjs-pro/shape-editor-ui/locale/zh-CN";
-import { IImageIoService } from "@univerjs/core";
+import { IImageIoService, type ILanguagePack } from "@univerjs/core";
 import UniverDesignEnUS from "@univerjs/design/locale/en-US";
 import UniverDesignZhCN from "@univerjs/design/locale/zh-CN";
 import { UniverDocsPlugin } from "@univerjs/docs";
@@ -48,7 +48,7 @@ import { UniverDrawingPlugin } from "@univerjs/drawing";
 import UniverDrawingUIEnUS from "@univerjs/drawing-ui/locale/en-US";
 import UniverDrawingUIZhCN from "@univerjs/drawing-ui/locale/zh-CN";
 import { UniverRenderEnginePlugin } from "@univerjs/engine-render";
-import { mergeLocales } from "@univerjs/presets";
+import { mergeLocales, type IPreset } from "@univerjs/presets";
 import { UniverUIPlugin } from "@univerjs/ui";
 import UniverUIEnUS from "@univerjs/ui/locale/en-US";
 import UniverUIZhCN from "@univerjs/ui/locale/zh-CN";
@@ -91,6 +91,90 @@ import { MAX_UNIVER_IMAGE_BYTES } from "./univer-assets";
 
 export type BoardEditorProps = CollaborationEditorProps;
 
+export const boardEditorLocales: Readonly<
+  Record<"zh-CN" | "en-US", ILanguagePack>
+> = {
+  "zh-CN": mergeLocales(
+    ChartUIZhCN,
+    EngineChartZhCN,
+    UniverDesignZhCN,
+    UniverUIZhCN,
+    UniverDocsUIZhCN,
+    UniverDocsLatexUIZhCN,
+    UniverDrawingUIZhCN,
+    UniverInkUIZhCN,
+    UniverShapeEditorUIZhCN,
+    UniverBoardsUIZhCN,
+    UniverBoardsChartUIZhCN,
+    UniverBoardsMindUIZhCN,
+    UniverBoardsPrintZhCN,
+    UniverBoardsTableUIZhCN,
+    ThreadCommentUIZhCN,
+    BoardsThreadCommentUIZhCN
+  ),
+  "en-US": mergeLocales(
+    ChartUIEnUS,
+    EngineChartEnUS,
+    UniverDesignEnUS,
+    UniverUIEnUS,
+    UniverDocsUIEnUS,
+    UniverDocsLatexUIEnUS,
+    UniverDrawingUIEnUS,
+    UniverInkUIEnUS,
+    UniverShapeEditorUIEnUS,
+    UniverBoardsUIEnUS,
+    UniverBoardsChartUIEnUS,
+    UniverBoardsMindUIEnUS,
+    UniverBoardsPrintEnUS,
+    UniverBoardsTableUIEnUS,
+    ThreadCommentUIEnUS,
+    BoardsThreadCommentUIEnUS
+  ),
+};
+
+export function createBoardComparisonPresets(
+  container: HTMLElement
+): IPreset[] {
+  return [
+    {
+      plugins: [
+        UniverRenderEnginePlugin,
+        [
+          UniverUIPlugin,
+          {
+            container,
+            ribbonType: "grid",
+            header: false,
+            toolbar: false,
+            footer: false,
+            disableAutoFocus: true,
+          },
+        ],
+        UniverDocsPlugin,
+        UniverDocsUIPlugin,
+        [
+          UniverDrawingPlugin,
+          {
+            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
+          },
+        ],
+        UniverDocsLatexPlugin,
+        UniverDocsLatexUIPlugin,
+        UniverBoardsPlugin,
+        UniverInkPlugin,
+        UniverInkUIPlugin,
+        UniverBoardsUIPlugin,
+        UniverBoardsChartPlugin,
+        UniverBoardsChartUIPlugin,
+        UniverBoardsMindPlugin,
+        UniverBoardsMindUIPlugin,
+        UniverBoardsTablePlugin,
+        UniverBoardsTableUIPlugin,
+      ],
+    },
+  ];
+}
+
 export default createCollaborationEditor({
   label: "board",
   history: {
@@ -109,44 +193,7 @@ export default createCollaborationEditor({
   theme: redTheme,
   exchangeEnabled: false,
   hideCollaborationStatus: true,
-  locales: {
-    "zh-CN": mergeLocales(
-      ChartUIZhCN,
-      EngineChartZhCN,
-      UniverDesignZhCN,
-      UniverUIZhCN,
-      UniverDocsUIZhCN,
-      UniverDocsLatexUIZhCN,
-      UniverDrawingUIZhCN,
-      UniverInkUIZhCN,
-      UniverShapeEditorUIZhCN,
-      UniverBoardsUIZhCN,
-      UniverBoardsChartUIZhCN,
-      UniverBoardsMindUIZhCN,
-      UniverBoardsPrintZhCN,
-      UniverBoardsTableUIZhCN,
-      ThreadCommentUIZhCN,
-      BoardsThreadCommentUIZhCN
-    ),
-    "en-US": mergeLocales(
-      ChartUIEnUS,
-      EngineChartEnUS,
-      UniverDesignEnUS,
-      UniverUIEnUS,
-      UniverDocsUIEnUS,
-      UniverDocsLatexUIEnUS,
-      UniverDrawingUIEnUS,
-      UniverInkUIEnUS,
-      UniverShapeEditorUIEnUS,
-      UniverBoardsUIEnUS,
-      UniverBoardsChartUIEnUS,
-      UniverBoardsMindUIEnUS,
-      UniverBoardsPrintEnUS,
-      UniverBoardsTableUIEnUS,
-      ThreadCommentUIEnUS,
-      BoardsThreadCommentUIEnUS
-    ),
-  },
+  locales: boardEditorLocales,
   collaborationFeaturePlugins: (collaborationScope) =>
     getThreadCommentCollaborationPlugins(
       collaborationScope.kind === "trunk",

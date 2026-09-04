@@ -127,6 +127,13 @@ shared → features → routes → app
 视觉封装。Univer 编辑器相关的创建、销毁、协同 Scope 和只读状态全部封装在
 `features/editor`。
 
+Worktree 审阅默认使用 `packages/unit-comparison-viewer` 展示结构化双栏比较。该 package 只消费
+已解码的 UnitData 和语义 comparison result，不请求数据或装配 Univer Runtime；Web 通过
+`features/editor/comparison-univer.ts` 注入与应用编辑器一致的渲染 preset、locale、theme 和只读
+命令边界。Server 在已认证的 `/universer-api/worktrees/:worktreeId/units/:unitId/comparison` 内部端点
+物化 Trunk 与 Worktree 状态、解码五类 Unit，并通过对应 History SDK adapter 生成比较结果。该端点
+属于 Univer 应用内部集成边界，不进入产品 OpenAPI。
+
 TanStack Query 管理 Session、Node、Resource、Recent、Trash、Permission、Worktree 和 Operation
 等服务端状态。Dialog、表单输入和当前选中项使用 React 本地状态，不引入额外全局状态库。
 
@@ -246,7 +253,8 @@ contracts/http/openapi.yaml + paths + schemas
 
 ## 约束
 
-- 不把单一 Workspace 应用继续拆成更多内部 packages。
+- 不为单一 Workspace 应用内的普通 Feature 增加 package；跨应用同步的独立组件必须有明确的 consumer
+  和宿主集成边界。
 - 不做 SSR。
 - 不引入 Redux、Zustand 或 MobX。
 - 不使用完整 FSD 七层。

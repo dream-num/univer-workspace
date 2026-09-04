@@ -32,6 +32,12 @@ describe("parseWorktreeDashboardSearch", () => {
       expect(parseWorktreeDashboardSearch({ view })).toEqual({});
     }
   );
+
+  it("accepts the comparison review view", () => {
+    expect(parseWorktreeDashboardSearch({ view: "comparison" })).toEqual({
+      view: "comparison",
+    });
+  });
 });
 
 describe("reviewViewForOpenMode", () => {

@@ -15,14 +15,14 @@ import UniverBasesUIEnUS from "@univerjs-pro/bases-ui/locale/en-US";
 import UniverBasesUIZhCN from "@univerjs-pro/bases-ui/locale/zh-CN";
 import { IAttachmentIoService } from "@univerjs-pro/collaboration-client";
 import { UniverProFormulaEnginePlugin } from "@univerjs-pro/engine-formula";
-import { IImageIoService } from "@univerjs/core";
+import { IImageIoService, type ILanguagePack } from "@univerjs/core";
 import UniverDesignEnUS from "@univerjs/design/locale/en-US";
 import UniverDesignZhCN from "@univerjs/design/locale/zh-CN";
 import { UniverDrawingPlugin } from "@univerjs/drawing";
 import UniverEngineFormulaEnUS from "@univerjs/engine-formula/locale/en-US";
 import UniverEngineFormulaZhCN from "@univerjs/engine-formula/locale/zh-CN";
 import { UniverRenderEnginePlugin } from "@univerjs/engine-render";
-import { mergeLocales } from "@univerjs/presets";
+import { mergeLocales, type IPreset } from "@univerjs/presets";
 import { UniverRPCMainThreadPlugin } from "@univerjs/rpc";
 import { UniverUIPlugin } from "@univerjs/ui";
 import UniverUIEnUS from "@univerjs/ui/locale/en-US";
@@ -51,6 +51,84 @@ import { MAX_UNIVER_IMAGE_BYTES } from "./univer-assets";
 
 export type BaseEditorProps = CollaborationEditorProps;
 
+export const baseEditorLocales: Readonly<
+  Record<"zh-CN" | "en-US", ILanguagePack>
+> = {
+  "zh-CN": mergeLocales(
+    UniverDesignZhCN,
+    UniverUIZhCN,
+    UniverEngineFormulaZhCN,
+    UniverBasesZhCN,
+    UniverBasesExchangeClientZhCN,
+    UniverBasesUIZhCN,
+    ThreadCommentUIZhCN,
+    BasesThreadCommentUIZhCN
+  ),
+  "en-US": mergeLocales(
+    UniverDesignEnUS,
+    UniverUIEnUS,
+    UniverEngineFormulaEnUS,
+    UniverBasesEnUS,
+    UniverBasesExchangeClientEnUS,
+    UniverBasesUIEnUS,
+    ThreadCommentUIEnUS,
+    BasesThreadCommentUIEnUS
+  ),
+};
+
+export function createBaseComparisonPresets(
+  container: HTMLElement
+): IPreset[] {
+  return [
+    {
+      plugins: [
+        UniverRenderEnginePlugin,
+        [
+          UniverProFormulaEnginePlugin,
+          {
+            notExecuteFormula: true,
+          },
+        ],
+        [
+          UniverUIPlugin,
+          {
+            container,
+            ribbonType: "grid",
+            header: false,
+            toolbar: false,
+            footer: false,
+            disableAutoFocus: true,
+          },
+        ],
+        [
+          UniverRPCMainThreadPlugin,
+          {
+            workerURL: new Worker(new URL("./base-worker.ts", import.meta.url), {
+              type: "module",
+            }),
+          },
+        ],
+        [
+          UniverDrawingPlugin,
+          {
+            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
+          },
+        ],
+        UniverBasesPlugin,
+        [
+          UniverBasesUIPlugin,
+          {
+            workbench: {
+              collaborationStatus: false,
+              footer: false,
+            },
+          },
+        ],
+      ],
+    },
+  ];
+}
+
 export default createCollaborationEditor({
   label: "base",
   history: {
@@ -69,28 +147,7 @@ export default createCollaborationEditor({
   theme: yellowTheme,
   enableDocumentCollaborationUI: false,
   hideCollaborationStatus: true,
-  locales: {
-    "zh-CN": mergeLocales(
-      UniverDesignZhCN,
-      UniverUIZhCN,
-      UniverEngineFormulaZhCN,
-      UniverBasesZhCN,
-      UniverBasesExchangeClientZhCN,
-      UniverBasesUIZhCN,
-      ThreadCommentUIZhCN,
-      BasesThreadCommentUIZhCN
-    ),
-    "en-US": mergeLocales(
-      UniverDesignEnUS,
-      UniverUIEnUS,
-      UniverEngineFormulaEnUS,
-      UniverBasesEnUS,
-      UniverBasesExchangeClientEnUS,
-      UniverBasesUIEnUS,
-      ThreadCommentUIEnUS,
-      BasesThreadCommentUIEnUS
-    ),
-  },
+  locales: baseEditorLocales,
   collaborationFeaturePlugins: (collaborationScope) =>
     getThreadCommentCollaborationPlugins(
       collaborationScope.kind === "trunk",

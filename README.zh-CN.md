@@ -130,6 +130,7 @@ apps/workspace                 Workspace Browser、Server、HTTP contract 与部
 apps/cli                       面向 Agent 的远程 Workspace 自动化应用
 packages/client-core           私有的 Node-hosted Workspace Agent Client 能力
 packages/reference-provider   仅供 Browser 使用的私有 referenced-Unit policy
+packages/unit-comparison-viewer  私有的只读 Unit 比较 UI
 scripts                       SDK 版本与 CLI 本地发布工具
 ```
 
@@ -141,8 +142,8 @@ Workspace 拥有产品身份、Space、目录层级、ACL、分享、回收站�
 workflow 与部署。Client Core 在仓库应用之间共享存储无关的认证、Workspace workflow、本机
 Node-hosted Blob/Asset 传输与 worker-backed 内容 runtime，包括 Node-hosted Office exchange、Typst
 编译/materialize/apply、render Unit 装配、截图、PNG/PDF 输出、Slide layout lint、render-page 源码与
-SVG 编译/测量/apply workflow；reference-provider package 仍只供 Browser 使用。两者都是私有实现
-模块，不是额外的公开应用或 SDK。
+SVG 编译/测量/apply workflow；reference-provider 与 Unit comparison viewer package 仍只供 Browser
+使用。这些 package 都是私有实现模块，不是额外的公开应用或 SDK。
 
 ## 架构原则
 
@@ -206,6 +207,7 @@ CLI 与 Workspace 部署基于同一份源码，但各自独立交付：
 | [技术架构](apps/workspace/docs/architecture.md)                     | Browser、Server、存储、OpenAPI 与模块边界                |
 | [HTTP contract](apps/workspace/contracts/http/README.md)            | 产品 API 源文件与生成流程                                |
 | [Reference-provider package](packages/reference-provider/README.md) | Browser 私有 referenced-Unit policy                      |
+| [Unit comparison viewer](packages/unit-comparison-viewer/README.zh-CN.md) | 私有只读比较 UI 与宿主集成边界                       |
 
 ## 参与贡献
 

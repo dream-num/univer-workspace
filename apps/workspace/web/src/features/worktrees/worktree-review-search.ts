@@ -1,4 +1,8 @@
-export type WorktreeReviewView = "trunk" | "agent" | "preview";
+export type WorktreeReviewView =
+  | "comparison"
+  | "trunk"
+  | "agent"
+  | "preview";
 
 export interface WorktreeDashboardSearch {
   readonly worktree?: string;
@@ -35,6 +39,7 @@ function optionalReviewView(
   value: unknown
 ): Readonly<{ view?: WorktreeReviewView }> {
   return value === "agent" ||
+    value === "comparison" ||
     value === "trunk" ||
     value === "preview"
     ? { view: value }
