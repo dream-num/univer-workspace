@@ -23,6 +23,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   applications and is not a separately published SDK.
 - The private Browser reference-provider policy under `packages/reference-provider`. It is an internal module,
   not a separately provided application or a cross-repository SDK contract.
+- The Univer Workspace Harness service under `apps/harness`: a DSH (DeepSeek Harness) based agent service
+  that authenticates against Workspace as an OAuth client and operates the User's remote Workspace documents
+  through two repository-built plugins (`dsh-univer-workspace-plugin`, `dsh-univer-workspace-skin-plugin`).
 
 ## Provides
 
@@ -33,6 +36,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, with browser-approved
   passwordless CLI session handoff for password and external-identity users. Contract:
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli.yml).
+- **Univer Workspace Harness** — a deployable DSH web service whose profile preloads the harness core and the
+  two Univer plugins; it authenticates a User through the Workspace OAuth `session` scope and acts with that
+  User's permissions. Contract: [harness README](apps/harness/README.md) and the image build in
+  `apps/harness/Dockerfile`.
 
 ## Depends on
 
@@ -72,6 +79,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   retain their identities, metadata, and recovery state.
 - Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs, sharing state, and user-authored
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
+- The harness stores each authorizing User's Workspace session token in a DSH storage domain (protected
+  credential data, mirroring the CLI session-file precedent); the token is used server-side to call Workspace
+  product and collaboration APIs as that User and never reaches the browser bundle.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal
   persisted login session and does not pass a browser cookie, password, or OAuth access token through the agent.
 - OAuth secrets, trusted Bot credentials, registry credentials, production licenses, and deployment credentials are

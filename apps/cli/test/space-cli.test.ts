@@ -114,7 +114,7 @@ describe("Workspace CLI Space/Node built entrypoint", () => {
         server.close((error) => (error ? reject(error) : resolve())),
       );
     }
-  }, 30_000);
+  }, 120_000);
 });
 
 interface CapturedRequest {

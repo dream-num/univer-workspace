@@ -47,7 +47,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Exchange a one-time authorization code for a registered client identity. */
+        /**
+         * Exchange a one-time authorization code for a registered client identity.
+         * @description When the granted scope includes `session`, the response also carries a
+         *     Workspace login session token in `access_token`; the client presents
+         *     it as the `workspace_session` cookie on product and collaboration
+         *     endpoints, acting with the authorizing User's permissions until it
+         *     expires. Identity-only grants return an empty `access_token`.
+         */
         post: operations["oauthToken"];
         delete?: never;
         options?: never;
@@ -1948,15 +1955,23 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The registered client identity. */
+            /** @description The registered client identity and, for `session` grants, a login session token. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
+                        /**
+                         * @description Workspace session token for `session` grants, empty
+                         *     string for identity-only grants.
+                         */
                         access_token?: string;
                         token_type?: string;
+                        /**
+                         * @description Seconds until the issued session expires for `session`
+                         *     grants.
+                         */
                         expires_in?: number;
                         user?: components["schemas"]["User"];
                     };

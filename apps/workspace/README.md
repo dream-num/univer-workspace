@@ -142,6 +142,16 @@ Existing Workspace login, OAuth callbacks, Cookie behavior, and product APIs
 remain unchanged. The capability is additive and does not add a proxy or
 deployment component.
 
+When the granted scope includes `session` (a scope the deployment registers
+per client), the token response also carries a Workspace login session token
+in `access_token` with its remaining lifetime in `expires_in`. The client
+presents that value as the `workspace_session` cookie on product and
+collaboration endpoints and acts with the authorizing User's permissions
+until the session expires; there is no refresh grant, so an expired token
+means starting the authorization flow again. Granting `session` is a
+deployment trust decision made at client registration, which is why code
+issuance itself stays silent exactly like identity-only grants.
+
 The browser uses the same built-in runtime development license as Workspace
 CLI. Both copies are rotated every 90 days and are application credentials, not
 the repository software license. The built-in credential is for `localhost`;

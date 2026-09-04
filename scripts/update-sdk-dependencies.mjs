@@ -14,6 +14,7 @@ const DEPENDENCY_FIELDS = [
 const INDEPENDENTLY_VERSIONED_PACKAGES = new Set([
   "@univerjs/icons",
   "@univerjs-pro/cli-assets",
+  "@univerjs-pro/engine-formula-rust-binding",
   "@univerjs-pro/exchange-node-binding",
 ]);
 const EXACT_SEMVER_PATTERN =

@@ -7,6 +7,7 @@ import {
   House,
   Lock,
   LogOut,
+  MessageCircle,
   Monitor,
   Moon,
   PanelLeftClose,
@@ -35,6 +36,7 @@ import {
   worktreeListQueryOptions,
 } from "../features/worktrees";
 import { api } from "../shared/api/client";
+import { workspaceHarnessOrigin } from "../shared/app-links";
 import { apiError } from "../shared/api/errors";
 import { useI18n, type MessageKey } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
@@ -411,6 +413,21 @@ export function WorkspaceLayout({
             <div className="flex shrink-0 items-center gap-1.5">
               {headerContent}
               {headerActions}
+              {workspaceHarnessOrigin() ? (
+                <Tooltip content={t("openChat")}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("openChat")}
+                    onClick={() => {
+                      const origin = workspaceHarnessOrigin();
+                      if (origin !== undefined) window.open(origin, "_blank", "noopener,noreferrer");
+                    }}
+                  >
+                    <MessageCircle />
+                  </Button>
+                </Tooltip>
+              ) : null}
               <Tooltip content={t("appSettings")}>
                 <Button
                   variant="ghost"

@@ -6,6 +6,13 @@ const CODE_TTL_MS = 60_000;
 const STATE_PATTERN = /^[A-Za-z0-9_-]{32,256}$/u;
 const DEFAULT_SCOPES = ["identity"] as const;
 
+/**
+ * The `session` scope authorizes the client to receive a Workspace login
+ * session token from the token endpoint. Grants without it stay
+ * identity-only, so existing registered clients keep their behavior.
+ */
+export const OAUTH_SESSION_SCOPE = "session";
+
 export interface OAuthClient {
   readonly clientId: string;
   readonly clientSecret: string;
@@ -153,6 +160,12 @@ export function authorizeRedirectTarget(
   target.searchParams.set("state", input.state);
   target.searchParams.set("scope", input.scope);
   return target.toString();
+}
+
+export function scopeIncludesSession(scope: string): boolean {
+  return scope
+    .split(" ")
+    .some((value) => value === OAUTH_SESSION_SCOPE);
 }
 
 export function defaultOAuthScope(): string {

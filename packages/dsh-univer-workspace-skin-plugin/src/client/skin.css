@@ -1,0 +1,74 @@
+/* Workspace skin: the DSH shell uses these aliases for every surface. */
+body {
+  --dsw-alias-brand-primary: #2563eb;
+  --dsw-alias-brand-primary-invert: #ffffff;
+  --dsw-alias-brand-text: #2563eb;
+  --dsw-alias-button-info-fill: #2563eb;
+  --dsw-alias-button-info-hover: #1d4ed8;
+  --dsw-alias-state-business-primary: #2563eb;
+  --dsw-alias-state-business-tertiary: #e0eaff;
+  --dsw-specific-sidebar-nav-item-active-accent: #e0eaff;
+}
+
+body[data-ds-dark-theme] {
+  --dsw-alias-brand-primary: #3b82f6;
+  --dsw-alias-brand-primary-invert: #0f1115;
+  --dsw-alias-brand-text: #3b82f6;
+  --dsw-alias-button-info-fill: #3b82f6;
+  --dsw-alias-button-info-hover: #2563eb;
+  --dsw-alias-state-business-primary: #3b82f6;
+  --dsw-alias-state-business-tertiary: #1e40af;
+  --dsw-specific-sidebar-nav-item-active-accent: #1e40af;
+}
+
+.uwh-skin-brandName {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* DSH exposes a brand-mark seat for the hero, but not a headline-text seat.
+ * Keep the product's Workspace tagline in that stable rendered node while
+ * preserving the shell's responsive layout and locale. */
+.pXSMma_headlineText {
+  min-width: 0;
+  color: transparent;
+  font-size: 0;
+  line-height: 1.25;
+}
+
+.pXSMma_headlineText::after {
+  color: var(--dsw-alias-label-primary);
+  content: "协作编辑、权限管理与 AI 任务，尽在同一工作区。";
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+html:lang(en) .pXSMma_headlineText::after,
+html:lang(en-US) .pXSMma_headlineText::after {
+  content: "Collaborative editing, permissions, and AI tasks in one workspace.";
+}
+
+@media (max-width: 720px) {
+  .pXSMma_headlineText::after {
+    font-size: 16px;
+    line-height: 24px;
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pXSMma_headlineText::after {
+    transition: none;
+  }
+}
