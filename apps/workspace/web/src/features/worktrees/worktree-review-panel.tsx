@@ -51,7 +51,10 @@ import {
   worktreesQueryKey,
 } from "./worktrees.queries";
 import { reviewActionFeedback } from "./worktree-action-feedback";
-import type { WorktreeReviewView } from "./worktree-review-search";
+import {
+  DEFAULT_WORKTREE_REVIEW_VIEW,
+  type WorktreeReviewView,
+} from "./worktree-review-search";
 
 type WorktreeDetailModel = components["schemas"]["WorktreeDetail"];
 type WorktreeState = components["schemas"]["WorktreeState"];
@@ -70,7 +73,7 @@ type BadgeVariant =
 export function WorktreeReviewPanel({
   worktree,
   selectedUnitId,
-  selectedView = "comparison",
+  selectedView = DEFAULT_WORKTREE_REVIEW_VIEW,
   onSelectedViewChange,
 }: {
   readonly worktree: WorktreeDetailModel;

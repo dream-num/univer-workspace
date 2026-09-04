@@ -4,6 +4,8 @@ export type WorktreeReviewView =
   | "agent"
   | "preview";
 
+export const DEFAULT_WORKTREE_REVIEW_VIEW: WorktreeReviewView = "agent";
+
 export interface WorktreeDashboardSearch {
   readonly worktree?: string;
   readonly unit?: string;

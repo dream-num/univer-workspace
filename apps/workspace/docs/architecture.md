@@ -127,8 +127,8 @@ shared → features → routes → app
 视觉封装。Univer 编辑器相关的创建、销毁、协同 Scope 和只读状态全部封装在
 `features/editor`。
 
-Worktree 审阅默认使用 `packages/unit-comparison-viewer` 展示结构化双栏比较。该 package 只消费
-已解码的 UnitData 和语义 comparison result，不请求数据或装配 Univer Runtime；Web 通过
+Worktree 审阅保留 Agent 草稿作为默认视图，并通过 `packages/unit-comparison-viewer` 提供可选的结构化
+双栏比较。该 package 只消费已解码的 UnitData 和语义 comparison result，不请求数据或装配 Univer Runtime；Web 通过
 `features/editor/comparison-univer.ts` 注入与应用编辑器一致的渲染 preset、locale、theme 和只读
 命令边界。Server 在已认证的 `/universer-api/worktrees/:worktreeId/units/:unitId/comparison` 内部端点
 物化 Trunk 与 Worktree 状态、解码五类 Unit，并通过对应 History SDK adapter 生成比较结果。该端点

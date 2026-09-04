@@ -9,7 +9,10 @@ import {
 } from "../features/worktrees";
 import { requireAuthenticatedSession } from "../features/auth";
 import { useI18n } from "../shared/i18n";
-import { parseWorktreeDashboardSearch } from "../features/worktrees/worktree-review-search";
+import {
+  DEFAULT_WORKTREE_REVIEW_VIEW,
+  parseWorktreeDashboardSearch,
+} from "../features/worktrees/worktree-review-search";
 import {
   WorkspaceHeaderSearch,
   WorkspaceLayout,
@@ -33,7 +36,11 @@ export const Route = createFileRoute("/worktrees")({
 
 function WorktreesPage() {
   const { t } = useI18n();
-  const { worktree, unit, view = "comparison" } = Route.useSearch();
+  const {
+    worktree,
+    unit,
+    view = DEFAULT_WORKTREE_REVIEW_VIEW,
+  } = Route.useSearch();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
 
