@@ -29,7 +29,7 @@ person for review. People stay in control of what is merged into the shared trun
 | For people                                              | For agents                                                         | For operators                                                        |
 | ------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | Organize content in Personal and Team Spaces            | Create and edit rich Office content through the Univer Facade API  | Deploy one Browser and Server application                            |
-| Co-edit Sheets, Docs, Slides, Bases, and Boards         | Inspect structured data, render screenshots, and run layout checks | Keep product, collaboration, and Blob data under application control |
+| Co-edit Sheets, Docs, Slides, Bases, and Boards         | Inspect data, render screenshots/PDFs, and run layout checks        | Keep product, collaboration, and Blob data under application control |
 | Share content with role- and node-aware access control  | Discover version-matched Skills and APIs offline                   | Integrate password, GitHub, Discord, or application OAuth login      |
 | Use Recent, Trash, file import/export, and review views | Work through multiple rounds without changing trunk                | Operate a documented HTTP API with explicit recovery boundaries      |
 
@@ -125,7 +125,7 @@ univer-workspace-cli login --complete
 ```
 
 The installed package includes version-matched Skills, structured JSON output,
-Facade API discovery, content inspection, rendering, Office exchange, and Worktree
+Facade API discovery, content inspection, PNG/PDF rendering, Office exchange, and Worktree
 workflows. See the [CLI guide](apps/cli/README.md) for the complete usage and login
 contract.
 
@@ -149,7 +149,7 @@ Workspace owns product identity, Spaces, hierarchy, ACLs, sharing, Trash, Recent
 Blob storage policy, remote workflows, and deployment. Client Core shares storage-neutral authentication,
 Workspace workflows, local Node-hosted Blob/Asset transfer, and the worker-backed content runtime between
 repository applications, including Node-hosted Office exchange, Typst compile/materialize/apply, render Unit
-assembly, screenshots, PNG output, Slide layout lint, the render-page source, and the SVG
+assembly, screenshots, PNG/PDF output, Slide layout lint, the render-page source, and the SVG
 compile/measure/apply workflow; the reference-provider package remains Browser-only.
 Both are private implementation modules, not additional public applications or SDKs.
 

@@ -79,7 +79,92 @@ describe("Workspace CLI skills command", () => {
       for (const stale of contract.stale) expect(content).not.toContain(stale);
     }
   });
+
+  it("bundles the current Facade lookup and cross-Unit Chart workflow", async () => {
+    const core = firstContent(await runSkills(["skills", "get", "core", "--json"]));
+    const doc = firstContent(await runSkills(["skills", "get", "doc", "--json"]));
+    const slide = firstContent(await runSkills(["skills", "get", "slide", "--json"]));
+    const embed = firstContent(await runSkills(["skills", "get", "embed", "--json"]));
+
+    expect(core).toContain("queries are not combined as AND");
+    expect(core).toContain("`show` accepts one or more exact symbols");
+    expect(core).toContain("Do not pass `--unit` to `show`");
+    expect(core).toContain("Chart backed by another Unit's Sheet or Base data");
+    expect(core).toContain("`export`, `print-pdf`");
+    expect(core.match(/print-pdf/g)).toHaveLength(1);
+    expect(core).toContain("Base → `base`");
+    expect(core).not.toContain("without a `base` alias");
+    expect(doc).toContain("api find <query...>");
+    expect(doc).toContain("api show <symbol...>");
+    expect(slide).toContain("api find <query...>");
+    expect(slide).toContain("api show <symbol...>");
+    expect(embed).toContain("Referencing another Unit's data from a Chart");
+    expect(embed).toContain("IResourceRefChartDataSourceInput");
+    expect(embed).toContain("newChart(...).setSource(ref)");
+    expect(embed).toContain("await chart.setDataSource(ref)");
+    expect(embed).toContain("RESOURCE_REF_INVALID_UNIT");
+    expect(embed).toContain("dataSource.source.kind");
+    expect(embed).toContain("Viewer and execute runtimes");
+    expect(embed).toContain("screenshot renderer does not currently preload");
+    expect(embed).toContain("only by a Chart");
+    expect(embed).not.toContain("A headless execute or screenshot may show a placeholder");
+  });
+
+  it("bundles Base and Board structured inspection guidance", async () => {
+    const baseResult = await runSkills(["skills", "get", "base", "--full", "--json"]);
+    const baseData = baseResult.data as Array<{
+      content: string;
+      files?: Array<{ content: string; path: string }>;
+    }>;
+    const base = baseData[0]?.content;
+    const board = firstContent(await runSkills(["skills", "get", "board", "--json"]));
+
+    expect(base).toContain("univer-workspace-cli inspect base");
+    expect(base).toContain("A new Base already contains");
+    expect(base).toContain("BaseFieldType.Currency");
+    expect(base).toContain("ICardLayoutConfig");
+    expect(base).toContain("explicitly `return` record values");
+    expect(base).toContain("injects the selected");
+    expect(base).toContain("`FBase` as `base`");
+    expect(base).not.toContain("const base = api.getBase");
+    expect(base).not.toContain("does not inject a `base` variable");
+    expect(base).not.toContain("`inspect base` is not supported");
+    expect(baseData[0]?.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "references/formulas.md",
+          content: expect.stringContaining("Base Formula fields use Excel structured references"),
+        }),
+      ]),
+    );
+
+    expect(board).toContain("univer-workspace-cli inspect board");
+    expect(board).toContain("inspect board-element id:<element-id>");
+    expect(board).not.toContain("Native `inspect` is not supported");
+  });
+
+  it("bundles inspection commands accepted by the current parser", async () => {
+    const core = firstContent(await runSkills(["skills", "get", "core", "--json"]));
+    const sheet = firstContent(await runSkills(["skills", "get", "sheet", "--json"]));
+    const slide = firstContent(await runSkills(["skills", "get", "slide", "--json"]));
+
+    expect(core).toContain("--worksheet name:<sheet-name>");
+    expect(sheet).toContain("inspect range A1:C9 --worksheet name:<sheet-name>");
+    expect(sheet).toContain("requires one explicit worksheet selector");
+    expect(slide).toContain("inspect slide index:N");
+    expect(slide).toContain("inspect slide id:<id>");
+    expect(slide).toContain("Use `inspect presentation` without a selector");
+    expect(slide).not.toContain("inspect presentation --pages");
+    expect(slide).not.toContain("`inspect --pages`");
+  });
 });
+
+function firstContent(result: Record<string, unknown>): string {
+  const data = result.data as Array<{ content: string }>;
+  const content = data[0]?.content;
+  expect(content).toEqual(expect.any(String));
+  return content!;
+}
 
 async function runSkills(args: readonly string[]): Promise<Record<string, unknown>> {
   let output = "";

@@ -9,6 +9,7 @@ import { createDaemonCommand } from "@univer-cli/daemon-command";
 import { createNodeResourceLibraryFactory } from "@univer-cli/resource-library";
 import { createResourcesCommand } from "@univer-cli/resource-library-command";
 import type {
+  UniverPrintPdfRuntime,
   UniverRenderRuntime,
   UniverRenderRuntimeOptions,
   UniverSlideLayoutRuntime,
@@ -23,6 +24,7 @@ import {
   WorkspaceContentExecutionFeature,
   WorkspaceContentSource,
   WorkspaceOpenFeature,
+  WorkspacePrintPdfFeature,
   WorkspaceRenderUnitLoader,
   WorkspaceScreenshotFeature,
   WorkspaceSpaceFeature,
@@ -42,6 +44,7 @@ import { createWorkspaceDaemonRuntimeOperations } from "./features/content/execu
 import { createWorkspaceUnitExchangeCommands } from "./features/exchange/command.js";
 import { createWorkspaceUnitLayoutLintCommand } from "./features/lint/command.js";
 import { createOpenCommand } from "./features/open/command.js";
+import { createWorkspacePrintPdfCommand } from "./features/print-pdf/command.js";
 import { createWorkspaceScreenshotCommand } from "./features/screenshot/command.js";
 import { createSkillsCommand } from "./features/skills/command.js";
 import { createSpaceCommand } from "./features/space/command.js";
@@ -60,6 +63,9 @@ export interface WorkspaceCliProgramOptions {
   readonly createRenderRuntime?: (
     options: UniverRenderRuntimeOptions,
   ) => Promise<UniverRenderRuntime>;
+  readonly createPrintPdfRuntime?: (
+    options: UniverRenderRuntimeOptions,
+  ) => Promise<UniverPrintPdfRuntime>;
   readonly createSlideLayoutRuntime?: (
     options: UniverRenderRuntimeOptions,
   ) => Promise<UniverSlideLayoutRuntime & { close(): Promise<void> }>;
@@ -148,6 +154,15 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
       ? {}
       : { createRuntime: options.createRenderRuntime }),
   });
+  const printPdf = new WorkspacePrintPdfFeature({
+    renderPageRoot: options.renderPageRoot,
+    license,
+    env: options.env,
+    loader: renderUnitLoader,
+    ...(options.createPrintPdfRuntime === undefined
+      ? {}
+      : { createRuntime: options.createPrintPdfRuntime }),
+  });
   const unitLayoutLint = new WorkspaceUnitLayoutLintFeature({
     renderPageRoot: options.renderPageRoot,
     license,
@@ -192,6 +207,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
       env: options.env,
       screenshot,
     }),
+    createWorkspacePrintPdfCommand(printPdf),
     createWorkspaceUnitLayoutLintCommand(unitLayoutLint),
     createContentExecuteCommand(contentExecution),
     createWorkspaceCompileTypstCommand(compileTypst),

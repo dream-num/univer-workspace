@@ -7,7 +7,10 @@ description: "Create, import, read, edit, paginate, chart, inspect, export, and 
 
 Every content command targets one remote draft explicitly with `--worktree <id>` and `--unit <id>`. `execute` provides `univerAPI`, `api` (an alias of `univerAPI`), and `doc` (the `FDocument` bound by `--unit`). Do not redeclare them. A Doc unit does not provide `workbook` or `presentation`; if one is undefined, verify the selected unit type.
 
-Use `doc.getParagraphs()` and `doc.getParagraph(paragraphId)` to select paragraphs. Query exact signatures and enum values with `univer-workspace-cli api show <symbol>` and `univer-workspace-cli api find <keyword>`.
+Use `doc.getParagraphs()` and `doc.getParagraph(paragraphId)` to select paragraphs. Use
+`univer-workspace-cli api find <query...>` to discover API symbols, then use
+`univer-workspace-cli api show <symbol...>` for exact signatures, enum values, documentation, and
+examples.
 
 ## Workspace target
 

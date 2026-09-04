@@ -23,10 +23,20 @@ export function createContentExecuteCommand(
     )
     .requiredOption("--worktree <id>", "target draft Worktree")
     .requiredOption("--unit <id>", "target Unit")
-    .option("-e <js>", "inline Facade code")
-    .option("--code <js>", "inline Facade code")
-    .option("--script <path>", "read Facade code from a file")
+    .option("-e <js>", "inline Facade code; use --script for multiline code")
+    .option("--code <js>", "inline Facade code; use --script for multiline code")
+    .option("--script <path>", "read multiline Facade code from a file")
     .option("--json", "write structured JSON")
+    .addHelpText(
+      "after",
+      [
+        "",
+        "Execution notes:",
+        "  Explicitly return readback values; bare expressions and console.log do not populate value.",
+        "  Read-only code creates no revision.",
+        "",
+      ].join("\n"),
+    )
     .action(async (commandOptions: ExecuteOptions) => {
       const result = await executeCommand(command, async () => {
         const code = await resolveCode(commandOptions, readScript);

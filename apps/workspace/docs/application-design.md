@@ -189,11 +189,19 @@ Trunk Scope 通过 `univer_resources.unit_id` 反查 Resource，再解析所属 
 - Node 或祖先在 Trash 中时拒绝；
 - Unit 不属于现有 Resource 时，普通 Trunk Endpoint 不可访问。
 
-Comment Endpoint 复用同一 Login Session、Unit Room 与 Access Resolver。只允许 Sheet/Doc：
-Viewer 可以读取评论，Editor 可以新增、回复、编辑和改变 solved 状态；删除要求作者本人或
-Resource Owner/Admin。评论 anchor 随 Unit 协作数据变化，正文由 Comment Adapter 保存。
+Comment Endpoint 复用同一 Login Session、Unit Room 与 Access Resolver，服务 Sheet、Doc、
+Slide、Base 和 Board。Viewer 可以读取评论，Editor 可以新增、回复、编辑和改变 solved 状态；
+删除要求作者本人或 Resource Owner/Admin。评论 anchor 随 Unit 协作数据变化，正文由 Comment
+Adapter 保存。
 由于 Comment 协议没有 Worktree ID、revision 或合并合同，Browser 仅在 Trunk Scope 注册
 Thread Comment，Worktree 与 Merge Preview 保持关闭。
+
+History Endpoint 同样复用 Login Session 与 Access Resolver，但服务五类 Trunk Unit。Viewer
+可以列出版本、作者并读取版本 changeset；恢复版本会生成标准 Collaboration changeset，因此仍
+由 Submit 权限要求 Editor 以上。History Adapter 的记录是权威 Trunk Unit/changeset 的派生索引；
+服务启动时通过独立 compatibility backfill 为启用 History 前的历史数据补建一次，正常读取不执行
+扫描或修复；它不能替代 Collaboration Database Adapter。Browser 只在 Trunk Scope 按 Unit 类型
+注册标准 SDK History UI，Worktree 与 Merge Preview 保持关闭。
 
 Worktree 和 Merge Preview 先解析 Worktree Visibility，再校验 Trunk Resource 或激活目标
 Node 的实际访问权限。Visibility 不替代底层权限。

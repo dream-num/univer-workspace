@@ -4,10 +4,12 @@ import {
   UniverCollabEndpoint,
 } from "@univerjs-pro/collaboration-endpoint";
 import { UniverCommentEndpoint } from "@univerjs-pro/collaboration-comment-endpoint";
+import { UniverHistoryEndpoint } from "@univerjs-pro/collaboration-history-endpoint";
 import type {
   DeleteCommentMiddlewareContext,
   IUniverCommentService,
 } from "@univerjs-pro/collaboration-comment-service";
+import type { IUniverHistoryService } from "@univerjs-pro/collaboration-history-service";
 import {
   CollabError,
   type UniverCollabService,
@@ -57,6 +59,7 @@ export interface CollaborationGateway {
 export function createCollaborationGateway(options: {
   readonly service: UniverCollabService;
   readonly commentService: IUniverCommentService;
+  readonly historyService: IUniverHistoryService;
   readonly identity: IdentityModule;
   readonly access: AccessResolver;
   readonly worktreeService: UniverCollabWorktreeService;
@@ -66,6 +69,7 @@ export function createCollaborationGateway(options: {
   const {
     service,
     commentService,
+    historyService,
     identity,
     access,
     worktreeService,
@@ -78,6 +82,7 @@ export function createCollaborationGateway(options: {
     service: commentService,
     roomHost: endpoint,
   });
+  const historyEndpoint = new UniverHistoryEndpoint(historyService);
   const worktreeEndpoint = new UniverCollabWorktreeEndpoint(
     worktreeService,
     { ticketStore }
@@ -146,6 +151,20 @@ export function createCollaborationGateway(options: {
     authorizeCommentDelete(access, context);
     await next();
   });
+
+  const authorizeHistoryRead = async (
+    context: {
+      readonly userID: string;
+      readonly request: { readonly unitID: string };
+    },
+    next: () => Promise<void>
+  ) => {
+    requireUnitAccess(access, context.userID, context.request.unitID);
+    await next();
+  };
+  historyService.use("getHistoryList", authorizeHistoryRead);
+  historyService.use("listHistoryCreators", authorizeHistoryRead);
+  historyService.use("getHistoryChangesets", authorizeHistoryRead);
 
   endpoint.use("connect", async (context, next) => {
     const user = context.session.customData.user as
@@ -276,6 +295,7 @@ export function createCollaborationGateway(options: {
     context.customData.user = protocolUser(session.user);
     await next();
   });
+  transport.register(historyEndpoint);
   transport.register(commentEndpoint);
   transport.register(worktreeEndpoint);
   transport.register(worktreeChangeFeed.endpoint(ticketStore));
@@ -309,6 +329,22 @@ export function createCollaborationGateway(options: {
         error: OK_ERROR,
         objectActions: requests.map((value: unknown) =>
           allowedObjectActions(value, userId, access)
+        ),
+      });
+    }
+  );
+  router.post(
+    "/authz/:objectType/object/:objectId/allowed",
+    json({ limit: "1mb" }),
+    (request, response) => {
+      const unitId =
+        typeof request.body?.unitID === "string" ? request.body.unitID : "";
+      const userId = response.locals.session.user.id as string;
+      response.json({
+        error: OK_ERROR,
+        actions: allowedActions(
+          request.body?.actions,
+          access.resolveUnit(userId, unitId)
         ),
       });
     }
@@ -468,13 +504,20 @@ function allowedObjectActions(
     unitID: unitId,
     objectID:
       typeof candidate.objectID === "string" ? candidate.objectID : "",
-    actions: Array.isArray(candidate.actions)
-      ? candidate.actions.map((action) => ({
-          action,
-          allowed: isActionAllowed(resource, action),
-        }))
-      : [],
+    actions: allowedActions(candidate.actions, resource),
   };
+}
+
+function allowedActions(
+  value: unknown,
+  resource: ResourceAccess | null
+): Array<{ readonly action: unknown; readonly allowed: boolean }> {
+  return Array.isArray(value)
+    ? value.map((action) => ({
+        action,
+        allowed: isActionAllowed(resource, action),
+      }))
+    : [];
 }
 
 function isActionAllowed(
@@ -558,13 +601,10 @@ function requireCommentAccess(
   const resource = write
     ? requireUnitEdit(access, userId, unitId)
     : requireUnitAccess(access, userId, unitId);
-  if (
-    resource.kind !== "univer" ||
-    (resource.unitType !== "sheet" && resource.unitType !== "doc")
-  ) {
+  if (resource.kind !== "univer" || resource.unitType === null) {
     throw new CollabError(
       "INVALID_REQUEST",
-      "Thread Comments are available only for Sheet and Doc Units."
+      "Thread Comments are available only for Univer Units."
     );
   }
   return resource;

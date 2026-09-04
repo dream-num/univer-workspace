@@ -55,6 +55,20 @@ describe("Workspace CLI", () => {
     });
   });
 
+  it("exposes current inspection targets and execution guidance", async () => {
+    const inspectionHelp = (await runCli(["inspect", "--help"], process.env)).stdout;
+    for (const target of ["base", "board", "board-element"]) {
+      expect(inspectionHelp).toContain(`"${target}"`);
+    }
+
+    const executionHelp = (await runCli(["execute", "--help"], process.env)).stdout;
+    expect(executionHelp).toContain("use --script for multiline code");
+    expect(executionHelp).toContain("Explicitly return readback values");
+    expect(executionHelp).toContain("bare expressions and console.log do not populate value");
+    expect(executionHelp).toContain("Read-only code creates no revision");
+    expect(executionHelp).not.toContain("Node.js require");
+  });
+
   it("compiles a Typst bundle through the built entrypoint from an arbitrary cwd", async () => {
     const directory = await mkdtemp(join(tmpdir(), "univer-workspace-typst-"));
     temporaryDirectories.push(directory);
@@ -169,6 +183,7 @@ describe("Workspace CLI", () => {
         "open",
         "resources",
         "screenshot",
+        "print-pdf",
         "compile-svg",
         "compile-typst",
       ]) {
@@ -253,7 +268,8 @@ describe("Workspace CLI", () => {
       }
 
       const api = await runCli(["api", "show", "FRange.setValues"], env);
-      expect(api.stdout).toContain("setValues(");
+      expect(api.stdout).toContain("declare class FRange");
+      expect(api.stdout).toContain("setValues(value:");
 
       const registries = await runCli(["resources", "registries", "--json"], env);
       expect(
