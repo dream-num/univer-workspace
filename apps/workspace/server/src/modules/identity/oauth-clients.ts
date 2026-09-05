@@ -103,24 +103,42 @@ export function requireOAuthCodeChallenge(value: unknown): string {
 
 export function validateRegisteredRedirectUri(
   requested: unknown,
-  allowed: readonly string[]
+  allowed: readonly string[],
+  clientId: string,
 ): string {
   if (typeof requested !== "string") {
-    throw new ApplicationError("INVALID_INPUT", 400, "redirect_uri is required.");
+    throw new ApplicationError(
+      "INVALID_INPUT",
+      400,
+      `redirect_uri is required for OAuth client "${clientId}".`,
+      "redirect_uri",
+    );
   }
-  const parsed = new URL(requested);
+  let parsed: URL;
+  try {
+    parsed = new URL(requested);
+  } catch {
+    throw new ApplicationError(
+      "INVALID_REDIRECT_URI",
+      400,
+      `redirect_uri is not a valid absolute URL for OAuth client "${clientId}".`,
+      "redirect_uri",
+    );
+  }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new ApplicationError(
       "INVALID_REDIRECT_URI",
       400,
-      "redirect_uri must use http or https."
+      `redirect_uri for OAuth client "${clientId}" must use http or https.`,
+      "redirect_uri",
     );
   }
   if (!allowed.includes(parsed.toString())) {
     throw new ApplicationError(
       "INVALID_REDIRECT_URI",
       400,
-      "redirect_uri is not registered for this client."
+      `redirect_uri is not registered for OAuth client "${clientId}".`,
+      "redirect_uri",
     );
   }
   return parsed.toString();

@@ -287,8 +287,12 @@ describe("OAuth authorization", () => {
       { redirect: "manual" }
     );
     expect(unknown.status).toBe(400);
-    expect(await unknown.json()).toMatchObject({
-      error: { code: "OAUTH_CLIENT_UNAVAILABLE" },
+    expect(await unknown.json()).toEqual({
+      error: {
+        code: "OAUTH_CLIENT_UNAVAILABLE",
+        field: "client_id",
+        message: 'OAuth client "someone-else" is not registered for this Workspace deployment.',
+      },
     });
 
     const secret = await fetch(`${origin}/api/auth/token`, {
@@ -327,8 +331,12 @@ describe("OAuth authorization", () => {
       { redirect: "manual" }
     );
     expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({
-      error: { code: "INVALID_REDIRECT_URI" },
+    expect(await response.json()).toEqual({
+      error: {
+        code: "INVALID_REDIRECT_URI",
+        field: "redirect_uri",
+        message: 'redirect_uri is not registered for OAuth client "internal-client".',
+      },
     });
   });
 });

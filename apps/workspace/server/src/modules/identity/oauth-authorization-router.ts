@@ -107,7 +107,8 @@ export function createOAuthAuthorizationRouter(options: {
     validateOAuthClientAuthentication(client, request.body.client_secret);
     const redirectUri = validateRegisteredRedirectUri(
       request.body.redirect_uri,
-      client.redirectUris
+      client.redirectUris,
+      client.clientId,
     );
     const code = requireQueryString(request.body.code);
     const codeVerifier = requireQueryString(request.body.code_verifier);
@@ -180,7 +181,8 @@ function parseAuthorizationRequest(
     clientId: client.clientId,
     redirectUri: validateRegisteredRedirectUri(
       values.redirect_uri,
-      client.redirectUris
+      client.redirectUris,
+      client.clientId,
     ),
     state: requireOAuthState(values.state),
     codeChallenge: requireOAuthCodeChallenge(values.code_challenge),
@@ -244,7 +246,8 @@ function requireRegisteredClient(
     throw new ApplicationError(
       "OAUTH_CLIENT_UNAVAILABLE",
       400,
-      "The requested OAuth client is not configured."
+      `OAuth client "${clientId}" is not registered for this Workspace deployment.`,
+      "client_id",
     );
   }
   return client;
