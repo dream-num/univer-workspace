@@ -160,6 +160,13 @@ exchange because no DSH browser session cookie exists yet; after the cookie is
 stored, the clean root URL works. If port `3101` is occupied, choose another
 explicit port and use the matching printed URL.
 
+If an agent is starting the Harness for a human, pass the complete `dsh web:`
+URL to the human exactly as printed and ask them to open it in their browser.
+Do not replace it with the bare root URL, remove the query string, put the token
+in another message field, or attempt to complete the browser exchange through
+an API client. The token is intended for the user's browser and is consumed
+once; after the user opens it, the browser can use the clean root URL.
+
 In Settings → Workspace, set the service origin (for the shared test environment use
 `https://workspace.univer.plus`; a local Workspace URL works as well). The first
 login uses Workspace Device
