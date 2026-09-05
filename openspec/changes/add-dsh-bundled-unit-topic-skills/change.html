@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>七份 DSH-native Unit/Topic Skills</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      padding: 40px 24px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    .page { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow { margin-bottom: 8px; color: var(--accent-text); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+    h1 { max-width: 860px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 800px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 760px; height: auto; }
+    .brief { display: grid; grid-template-columns: 1.1fr 1fr 0.9fr; gap: 16px; margin-top: 24px; }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .card ul { padding-left: 20px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View</p>
+      <h1>七份指导与同一 installed tool catalog 一起交付</h1>
+      <p class="thesis">将 Unit/Topic 知识改写为 DSH-native Skills，打包时核对实际工具名，运行时只借用原生 SkillRegistry 的按需加载与生命周期。</p>
+    </header>
+
+    <section class="diagram" aria-label="随包 Skills 的验证、注册与加载关系，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bundled-skills-title bundled-skills-desc">
+        <title id="bundled-skills-title">七份 bundled Skills 的交付路径</title>
+        <desc id="bundled-skills-desc">七份静态 Skill 与 installed tool catalog 共同通过 package gate，进入同一 tarball；Host 显式注册后由原生 SkillRegistry 按需加载，并用 exact disposer 回收。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1000" height="560" fill="#f5f5f5"/>
+
+        <path d="M 260 130 H 300 V 232 H 340" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 260 410 H 300 V 288 H 340" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 580 260 H 700" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 810 320 V 380" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 700 440 H 580" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="40" y="80" width="220" height="100" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="150" y="120" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">七份 SKILL.md</text>
+        <text x="150" y="148" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">5 个 Unit · 2 个 Topic</text>
+
+        <rect x="40" y="360" width="220" height="100" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="150" y="400" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Installed tool catalog</text>
+        <text x="150" y="428" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">实际 workspace_* 名称</text>
+
+        <rect x="340" y="190" width="240" height="140" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="460" y="238" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="20" font-weight="600" text-anchor="middle">Source / package gate</text>
+        <text x="460" y="270" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">matrix · semantic anchors · metadata</text>
+        <text x="460" y="298" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">七份全部通过才交付</text>
+
+        <rect x="700" y="200" width="220" height="120" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="810" y="248" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="19" font-weight="600" text-anchor="middle">同一预构建 tarball</text>
+        <text x="810" y="278" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">指导 + tools + exact SDK</text>
+
+        <rect x="700" y="380" width="220" height="120" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="810" y="428" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Host 显式注册</text>
+        <text x="810" y="456" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">bundled / runtime / 默认调用</text>
+        <text x="810" y="480" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">逆序 exact disposer</text>
+
+        <rect x="340" y="380" width="240" height="120" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="460" y="428" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">原生 SkillRegistry</text>
+        <text x="460" y="456" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">native precedence · 按需加载</text>
+        <text x="460" y="480" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">keyless skill consumer</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <p>只新增 `base`、`board`、`cross-unit-formula`、`doc`、`embed`、`sheet`、`slide`。`core` 仍归 Change 4；不做动态下载、filesystem watcher、Web UI 或 discovery tools。</p>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>frontmatter 固定为 `name` 与 `description`，拒绝 `allowed-tools`。</li>
+          <li>逐 Skill required/forbidden matrix 与 semantic anchors 同时检查。</li>
+          <li>七份先整体验证，再分别注册；沿用 model/user 默认 invocation。</li>
+          <li>其余工具引用以十个 accepted owners 的真实 installed catalog 为准。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <p>CLI 与 DSH 文本可能漂移，matrix、Facade anchors 与真实 catalog 共同阻断错误 package。安装 smoke 隔离空 project/DSH/AGENTS roots，并允许默认 provider 查询这些空根；plugin 不新增 provider、root 或 watcher。</p>
+      </article>
+    </section>
+
+    <footer>
+      Review projection derived from <a href="proposal.md">proposal.md</a> and <a href="design.md">design.md</a>. Markdown sources are authoritative.
+    </footer>
+  </main>
+</body>
+</html>
