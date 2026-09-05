@@ -134,7 +134,7 @@ export const zh = {
   "settings.workspace.switching": "正在切换 Workspace",
   "settings.workspace.restartPending": "连接变更正在等待重启",
   "settings.workspace.restartRecovering":
-    "守护进程正在重启 DSH 并切换本地数据目录，页面会自动恢复。",
+    "守护进程正在重启 DSH 并切换本地数据目录，请打开守护进程打印的新 dsh web 地址以恢复浏览器会话。",
   "settings.workspace.restartDisconnecting": "守护进程将断开当前 Workspace。",
   "settings.workspace.restartSwitching": "守护进程将切换到 {account}。",
   "settings.workspace.restartTimeout":
@@ -385,7 +385,7 @@ export const en = {
   "settings.workspace.switching": "Switching Workspace",
   "settings.workspace.restartPending": "Connection change is waiting for a restart",
   "settings.workspace.restartRecovering":
-    "The supervisor is restarting DSH and switching the local data directory. The page will recover automatically.",
+    "The supervisor is restarting DSH and switching the local data directory. Open the new dsh web URL printed by the supervisor to sign in to the restarted browser session.",
   "settings.workspace.restartDisconnecting":
     "The supervisor will disconnect the current Workspace.",
   "settings.workspace.restartSwitching": "The supervisor will switch to {account}.",

@@ -192,13 +192,17 @@ target for the next Device Authorization; it does not silently replace the
 currently active identity. Complete authorization for the new origin/account,
 or explicitly disconnect, then wait while the supervisor stops the old DSH
 child and starts the new identity runtime with the same launch arguments. The
-page reconnects automatically; do not stop the supervisor or rerun the command.
+new child prints a new `dsh web:` URL with a one-time token. Open that complete
+URL in the browser to establish the new DSH browser cookie; the old browser
+cookie cannot authenticate the restarted child. Do not stop the supervisor or
+rerun the command.
 Never record passwords or `workspace_session` values in bug reports; record only
 the origin and a non-secret account identifier.
 
 ### First end-to-end check
 
-Once the page reconnects with the authorized Workspace identity:
+Once the browser has opened the new token URL and loaded the authorized
+Workspace identity:
 
 1. Open **Sessions** in the left sidebar and select **New session**. Type a message in
    the native composer on the right. Sending to a model also requires a local
