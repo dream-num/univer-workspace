@@ -4,6 +4,8 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+packageExtensionsChecksum: sha256-Fv+FYHrW5ETymjlSnfCugggnoSlaJMpB3EWNeStaqUc=
+
 importers:
 
   .:
@@ -10854,6 +10856,7 @@ snapshots:
       '@univerjs/engine-formula': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/rpc': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
     transitivePeerDependencies:
       - react
       - rxjs
@@ -10866,6 +10869,7 @@ snapshots:
       '@univerjs/engine-formula': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/rpc': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
     transitivePeerDependencies:
       - react
       - rxjs
@@ -11301,6 +11305,7 @@ snapshots:
       '@univerjs/icons': 1.38.0(react-dom@19.2.8(react@18.3.1))(react@18.3.1)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@19.2.8(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       react: 18.3.1
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -11327,6 +11332,7 @@ snapshots:
       '@univerjs/icons': 1.38.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       react: 19.2.8
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -11353,6 +11359,7 @@ snapshots:
       '@univerjs/icons': 1.38.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       react: 19.2.8
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -11367,6 +11374,7 @@ snapshots:
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/drawing': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -11378,6 +11386,7 @@ snapshots:
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/drawing': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -11803,6 +11812,7 @@ snapshots:
       '@univerjs/sheets-filter': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/sheets-hyper-link': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/thread-comment': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       rxjs: 7.8.2
       uuid: 14.0.2
     transitivePeerDependencies:
@@ -11831,6 +11841,7 @@ snapshots:
       '@univerjs/sheets-filter': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/sheets-hyper-link': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/thread-comment': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       rxjs: 7.8.2
       uuid: 14.0.2
     transitivePeerDependencies:
@@ -12736,6 +12747,7 @@ snapshots:
       '@univerjs/engine-render': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/icons': 1.38.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       react: 19.2.8
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -14518,6 +14530,7 @@ snapshots:
       '@univerjs/icons': 1.38.0(react-dom@19.2.8(react@18.3.1))(react@18.3.1)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@19.2.8(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       react: 18.3.1
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -14544,6 +14557,7 @@ snapshots:
       '@univerjs/icons': 1.38.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       react: 19.2.8
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -14570,6 +14584,7 @@ snapshots:
       '@univerjs/icons': 1.38.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       react: 19.2.8
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -14585,6 +14600,7 @@ snapshots:
       '@univerjs/drawing': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/engine-render': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -14597,6 +14613,7 @@ snapshots:
       '@univerjs/drawing': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/engine-render': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -14985,6 +15002,7 @@ snapshots:
       '@univerjs/icons': 1.38.0(react-dom@19.2.8(react@18.3.1))(react@18.3.1)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@19.2.8(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       react: 18.3.1
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -15001,6 +15019,7 @@ snapshots:
       '@univerjs/icons': 1.38.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       react: 19.2.8
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -15017,6 +15036,7 @@ snapshots:
       '@univerjs/icons': 1.38.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       react: 19.2.8
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -15092,6 +15112,7 @@ snapshots:
   '@univerjs/drawing@1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)':
     dependencies:
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       ot-json1: 1.0.2
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -15100,6 +15121,7 @@ snapshots:
   '@univerjs/drawing@1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       ot-json1: 1.0.2
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -15110,6 +15132,7 @@ snapshots:
       '@flatten-js/interval-tree': 1.1.3
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/rpc': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       decimal.js: 10.6.0
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -15120,6 +15143,7 @@ snapshots:
       '@flatten-js/interval-tree': 1.1.3
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/rpc': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       decimal.js: 10.6.0
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -15130,6 +15154,7 @@ snapshots:
       '@floating-ui/dom': 1.8.0
       '@floating-ui/utils': 0.2.12
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       franc-min: 6.2.0
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -15140,6 +15165,7 @@ snapshots:
       '@floating-ui/dom': 1.8.0
       '@floating-ui/utils': 0.2.12
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       franc-min: 6.2.0
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -15815,6 +15841,7 @@ snapshots:
       '@univerjs/engine-formula': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/engine-render': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -15825,6 +15852,7 @@ snapshots:
       '@univerjs/engine-formula': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/engine-render': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16108,6 +16136,7 @@ snapshots:
       '@univerjs/engine-render': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/rpc': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16119,6 +16148,7 @@ snapshots:
       '@univerjs/engine-render': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/rpc': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16232,6 +16262,7 @@ snapshots:
       '@univerjs/engine-formula': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/rpc': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16243,6 +16274,7 @@ snapshots:
       '@univerjs/engine-formula': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/rpc': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16459,6 +16491,7 @@ snapshots:
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/engine-formula': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16468,6 +16501,7 @@ snapshots:
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/engine-formula': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16606,6 +16640,7 @@ snapshots:
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/engine-formula': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16615,6 +16650,7 @@ snapshots:
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/engine-formula': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16712,6 +16748,7 @@ snapshots:
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/telemetry': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@19.2.8(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       react: 18.3.1
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -16732,6 +16769,7 @@ snapshots:
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/telemetry': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       react: 19.2.8
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -16752,6 +16790,7 @@ snapshots:
       '@univerjs/sheets': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/telemetry': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/ui': 1.0.0-insiders.20260902-a58c423(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       react: 19.2.8
       rxjs: 7.8.2
     transitivePeerDependencies:
@@ -16766,6 +16805,7 @@ snapshots:
       '@univerjs/engine-render': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/rpc': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16777,6 +16817,7 @@ snapshots:
       '@univerjs/engine-render': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       '@univerjs/rpc': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16848,6 +16889,7 @@ snapshots:
   '@univerjs/thread-comment@1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)':
     dependencies:
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@18.3.1)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@18.3.1)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
@@ -16855,6 +16897,7 @@ snapshots:
   '@univerjs/thread-comment@1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.2(react@19.2.8)
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react

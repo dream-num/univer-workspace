@@ -7,9 +7,72 @@ allowBuilds:
   esbuild: true
   protobufjs: true
 
+# This SDK release emits direct Redi type imports without declaring the
+# dependency. Keep service identifiers in their host's React peer graph instead
+# of resolving the workspace's hoisted copy. Remove these extensions when the
+# upstream package manifests declare Redi themselves.
+packageExtensions:
+  "@univerjs/engine-render@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-ui@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/thread-comment@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/boards-ui@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/slides-ui@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/collaboration@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+
 # The Univer SDK and DSH release trains are pinned to exact releases and may be
 # updated on release day; only these selected scopes are exempt from
 # minimumReleaseAge.
+  "@univerjs-pro/bases@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/boards@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/edit-history-ui@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/slides@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/docs-ui@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/drawing@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/engine-formula@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-conditional-formatting@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-filter@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-formula@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-numfmt@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-table@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
 minimumReleaseAgeExclude:
   - "@deepseek-ai/cordis@4.0.2"
   - "@deepseek-ai/dsh*"

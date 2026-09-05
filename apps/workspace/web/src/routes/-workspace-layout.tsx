@@ -26,6 +26,7 @@ import {
   useState,
   type FormEvent,
   type PropsWithChildren,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../features/auth";
@@ -616,7 +617,7 @@ function NavLink({
   readonly params?: Record<string, string>;
   readonly selected: boolean;
   readonly collapsed: boolean;
-  readonly icon: ReactNode;
+  readonly icon: ReactElement;
   readonly label: string;
   readonly badge?: number;
   readonly badgeTitle?: string;
