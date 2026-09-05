@@ -12,7 +12,10 @@ describe("Harness OAuth browser flow", () => {
       startResponse as never,
     );
     expect(startResponse.status).toBe(302);
-    const authorization = new URL(startResponse.headers.location);
+    const location = startResponse.headers.location;
+    expect(location).toEqual(expect.any(String));
+    if (location === undefined) return;
+    const authorization = new URL(location);
     expect(authorization.pathname).toBe("/api/auth/authorize");
     expect(authorization.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/u);
     const state = authorization.searchParams.get("state")!;
