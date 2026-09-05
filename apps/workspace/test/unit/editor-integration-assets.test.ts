@@ -13,9 +13,32 @@ const globalStyles = readFileSync(
   new URL("../../web/src/app/styles/global.css", import.meta.url),
   "utf8"
 );
+const comparisonUniverSource = readFileSync(
+  new URL(
+    "../../web/src/features/editor/comparison-univer.ts",
+    import.meta.url
+  ),
+  "utf8"
+);
+const sheetComparisonPresetSource = readFileSync(
+  new URL(
+    "../../web/src/features/editor/sheet-comparison-presets.ts",
+    import.meta.url
+  ),
+  "utf8"
+);
 
 describe("editor integration assets", () => {
   it("loads shared styles before manual Plugin Mode product styles", () => {
+    expect(globalStyles).toContain('@import "tailwindcss";');
+    expect(globalStyles).toContain(
+      '@import "@univer/unit-comparison-viewer/styles.css";'
+    );
+    expect(globalStyles.indexOf('@import "tailwindcss";')).toBeLessThan(
+      globalStyles.indexOf(
+        '@import "@univer/unit-comparison-viewer/styles.css";'
+      )
+    );
     expectImportsInOrder(editorSources.base, [
       "@univerjs/design/lib/index.css",
       "@univerjs/ui/lib/index.css",
@@ -49,6 +72,26 @@ describe("editor integration assets", () => {
       "@univerjs-pro/boards-print/lib/index.css",
       "@univerjs-pro/boards-table-ui/lib/index.css",
     ]);
+  });
+
+  it("loads Sheet preset styles when comparison is the initial view", () => {
+    expect(comparisonUniverSource).toContain('"./sheet-comparison-presets"');
+    expectImportsInOrder(sheetComparisonPresetSource, [
+      "@univerjs/preset-sheets-core/lib/index.css",
+      "@univerjs/preset-sheets-drawing/lib/index.css",
+      "@univerjs/preset-sheets-conditional-formatting/lib/index.css",
+      "@univerjs/preset-sheets-filter/lib/index.css",
+      "@univerjs/preset-sheets-hyper-link/lib/index.css",
+      "@univerjs/preset-sheets-data-validation/lib/index.css",
+      "@univerjs/preset-sheets-find-replace/lib/index.css",
+      "@univerjs/preset-sheets-note/lib/index.css",
+      "@univerjs/preset-sheets-sort/lib/index.css",
+      "@univerjs/preset-sheets-table/lib/index.css",
+      "@univerjs/preset-sheets-advanced/lib/index.css",
+    ]);
+    expect(sheetComparisonPresetSource).not.toContain("history-ui");
+    expect(sheetComparisonPresetSource).not.toContain("thread-comment");
+    expect(sheetComparisonPresetSource).not.toContain("collaboration");
   });
 
   it("loads shared Pro styles before Doc feature styles", () => {

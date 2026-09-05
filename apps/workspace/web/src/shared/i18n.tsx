@@ -242,6 +242,9 @@ const messages = {
     agentVersion: "AI 修改版本",
     officialVersion: "正式版本",
     mergePreview: "合入预览",
+    reviewView: "查看",
+    reviewCompare: "对比",
+    comparisonFailed: "无法生成变更对比，请稍后重试。",
     trunkAdvancedPreviewReady:
       "正式版本已有新更新，系统已自动合并并生成预览。请确认合入结果。",
     mergeConflictTip:
@@ -585,6 +588,9 @@ const messages = {
     agentVersion: "AI changes",
     officialVersion: "Official version",
     mergePreview: "Merge preview",
+    reviewView: "View",
+    reviewCompare: "Compare",
+    comparisonFailed: "The change comparison could not be prepared. Try again later.",
     trunkAdvancedPreviewReady:
       "The official version has new updates. An automatic merge preview is ready for review.",
     mergeConflictTip:

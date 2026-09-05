@@ -31,11 +31,15 @@ import {
   worktreeStateLabel,
   worktreeStateVariant,
 } from "./worktree-review-panel";
+import { formatWorktreeDateTime } from "./worktree-review-presentation";
 import {
   worktreeListQueryOptions,
   worktreeQueryOptions,
 } from "./worktrees.queries";
-import type { WorktreeReviewView } from "./worktree-review-search";
+import {
+  DEFAULT_WORKTREE_REVIEW_VIEW,
+  type WorktreeReviewView,
+} from "./worktree-review-search";
 
 type WorktreeSummary = components["schemas"]["WorktreeSummary"];
 type WorktreeDetail = components["schemas"]["WorktreeDetail"];
@@ -60,7 +64,7 @@ export function WorktreeDashboard({
   searchQuery = "",
   selectedWorktreeId,
   selectedUnitId,
-  selectedView = "agent",
+  selectedView = DEFAULT_WORKTREE_REVIEW_VIEW,
   onSelectionChange,
 }: {
   readonly searchQuery?: string;
@@ -71,7 +75,7 @@ export function WorktreeDashboard({
     selection: WorktreeDashboardSelection | null
   ) => void;
 }) {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const active = useQuery(worktreeListQueryOptions("active"));
   const processed = useQuery(worktreeListQueryOptions("processed"));
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
@@ -182,7 +186,7 @@ export function WorktreeDashboard({
 
   const selectDocument = (
     document: ReviewDocument,
-    view: WorktreeReviewView = "agent"
+    view: WorktreeReviewView = DEFAULT_WORKTREE_REVIEW_VIEW
   ) =>
     onSelectionChange?.({
       worktreeId: document.worktree.id,
@@ -474,16 +478,9 @@ export function WorktreeDashboard({
                                     <ChevronRight />
                                   )}
                                   <Bot className="size-4 text-muted-foreground" />
-                                  <span className="grid min-w-0 gap-0.5">
-                                    <strong className="truncate text-[13px] font-medium text-foreground">
-                                      {task.name}
-                                    </strong>
-                                    <small className="truncate text-xs text-subtle-foreground">
-                                      {task.kind === "team"
-                                        ? task.teamSpace?.name
-                                        : t("personalSpace")}
-                                    </small>
-                                  </span>
+                                  <strong className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                                    {task.name}
+                                  </strong>
                                   <Badge
                                     variant={worktreeStateVariant(
                                       task.state
@@ -492,6 +489,18 @@ export function WorktreeDashboard({
                                   >
                                     {worktreeStateLabel(task.state, t)}
                                   </Badge>
+                                  <small className="col-start-3 col-end-5 truncate text-xs text-subtle-foreground">
+                                    {task.kind === "team"
+                                      ? task.teamSpace?.name
+                                      : t("personalSpace")}
+                                    {" · "}
+                                    {task.creator.displayName}
+                                    {" · "}
+                                    {formatWorktreeDateTime(
+                                      task.updatedAt,
+                                      language
+                                    )}
+                                  </small>
                                 </button>
                                 {taskExpanded && worktree?.units.length ? (
                                   <div className="mt-0.5 grid gap-0.5">
@@ -569,7 +578,7 @@ export function WorktreeDashboard({
           />
         ) : null}
 
-        <main className="min-w-0 overflow-hidden">
+        <main className="@container/review min-w-0 overflow-hidden">
           {!selectedDocument ? (
             <Empty
               className="mt-[min(22vh,200px)]"

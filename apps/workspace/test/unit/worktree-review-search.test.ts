@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_WORKTREE_REVIEW_VIEW,
   parseWorktreeDashboardSearch,
   reviewViewForOpenMode,
 } from "../../web/src/features/worktrees/worktree-review-search.js";
 
 describe("parseWorktreeDashboardSearch", () => {
+  it("keeps the existing agent view as the default", () => {
+    expect(DEFAULT_WORKTREE_REVIEW_VIEW).toBe("agent");
+  });
+
   it("keeps the selected Worktree, Unit, and version", () => {
     expect(
       parseWorktreeDashboardSearch({
@@ -32,6 +37,12 @@ describe("parseWorktreeDashboardSearch", () => {
       expect(parseWorktreeDashboardSearch({ view })).toEqual({});
     }
   );
+
+  it("accepts the comparison review view", () => {
+    expect(parseWorktreeDashboardSearch({ view: "comparison" })).toEqual({
+      view: "comparison",
+    });
+  });
 });
 
 describe("reviewViewForOpenMode", () => {
