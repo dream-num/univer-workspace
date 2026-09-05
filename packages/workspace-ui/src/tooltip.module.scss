@@ -1,0 +1,23 @@
+.positioner {
+  z-index: 50;
+}
+.popup {
+  max-width: 256px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--color-foreground);
+  color: var(--color-background);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 100ms ease-out,
+    scale 100ms ease-out;
+
+  &[data-starting-style],
+  &[data-ending-style] {
+    opacity: 0;
+    scale: 0.96;
+  }
+}

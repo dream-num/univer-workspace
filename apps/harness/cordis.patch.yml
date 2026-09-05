@@ -1,0 +1,122 @@
+# univer-workspace-harness bundle patch. Applied after the dsh-web-app layer,
+# so it may override rows by id and insert its own.
+#
+# It removes the surfaces ordinary internal users do not expose — the
+# permission "Full Access" default selector and advanced settings pages —
+# and mounts the harness core. The harness client owns the sidebar shell so it
+# can compose the Sessions/Files tabs; the native shell is disabled to avoid
+# duplicate declarations of the sidebar child slots. One row activates BOTH
+# faces: the harness node half registers the local Device Authorization
+# connection routes, and its package manifest declares
+# `dsh.client`, so the modules scanner loads the `./client` browser half from
+# the same row.
+
+# The custom Workspace plugin registers a compatible sidebar shell with the
+# native child slots. ui-slots enforces one declarer per child slot, so the
+# stock shell must be disabled before the custom shell is mounted.
+- id: ui-sidebar
+  disabled: true
+
+# ── network server binding ───────────────────────────────────────────────────
+
+# The CLI rejects an explicit `--host 0.0.0.0` invocation before the profile
+# loads. This deployment sets the supported all-interfaces webserver value at
+# composition time instead, while the connection row below adds the public
+# authority to the browser trust fence.
+- id: webserver
+  name: "@deepseek-ai/dsh-host-webserver"
+  inject: [webStartup]
+  config:
+    host: !!js >-
+      process.env.UWH_BIND_HOST ?? '0.0.0.0'
+    port: !!js ctx.webStartup.port ?? Number(process.env.PORT ?? 3080)
+
+# ── hide Full Access / advanced settings ───────────────────────────────────
+
+# Restate the `connection` row so its trust fence always includes the browser
+# origin the harness is served on (the deployment's public host). A patch
+# replaces the whole row config, so the `inject` edge that resolves
+# `ctx.webRuntime` before the expression runs is restated too. The public host
+# defaults to loopback for local Web runs; deployments can override it with
+# UWH_PUBLIC_HOST.
+- id: connection
+  name: "@deepseek-ai/dsh-client-connection"
+  inject: [webRuntime]
+  config:
+    trustedHosts: !!js >-
+      (() => {
+        const host = process.env.UWH_PUBLIC_HOST
+        const value = host === undefined || host.trim() === '' ? '127.0.0.1' : host.trim()
+        return [value, ...ctx.webRuntime.trustedHosts]
+          .filter((value, index, values) => values.indexOf(value) === index)
+      })()
+
+# Keep the DSH browser-session signing key and local model credentials stable
+# while the supervisor swaps identity-specific runtime homes. This is local
+# machine state, not a Workspace user credential; the latter stays in the
+# separate connection bootstrap record.
+- id: credentials
+  name: "@deepseek-ai/dsh-credentials-local"
+  config:
+    path: !!js >-
+      process.env.UWH_SHARED_CREDENTIALS_PATH ?? dshHomePath('.credentials.yaml')
+
+# Keep the stock WorkspaceBrowser's content-search branch available. The web
+# bundle deliberately defaults the SQLite query provider to `never`, which
+# leaves the sidebar with title-only search and an "unavailable" warning.
+# Harness sessions are already isolated at the list/API seam; the derived
+# index is only an implementation cache, so it can live under this profile's
+# DSH_HOME and be opened lazily on the first real query.
+- id: session-query-sqlite
+  name: "@deepseek-ai/dsh-session-query-sqlite"
+  config:
+    path: !!js dshHomePath('session-query.sqlite')
+    openAt: first-search
+
+# `ui-permission` is the `settings.general.item` row letting the user pick the
+# default permission preset; the `danger-full-access` preset is selectable
+# there. Hide it for the harness.
+- id: ui-permission
+  disabled: true
+
+# Keep the native plugin configuration cards and read-only inventory out of the
+# default composition; the harness ships its plugin set as a deployment fact.
+- id: ui-settings-plugins
+  disabled: true
+
+- id: ui-settings-plugin-inventory
+  disabled: true
+
+# DSH's model/credential settings are profile-global, not account-scoped. The
+# default production posture keeps them deployment-managed. Local/single-user
+# profiles may opt in with UWH_MODEL_SETTINGS_ENABLED=true (or by running
+# without NODE_ENV=production) so the stock Models page can recover a key that
+# was configured in the isolated profile. The scoped API independently limits
+# the opt-in to the two model namespaces and their credential calls.
+- id: ui-settings-models
+  disabled: !!js >-
+    process.env.NODE_ENV === 'production' &&
+    process.env.UWH_MODEL_SETTINGS_ENABLED !== 'true'
+
+# ── harness core plugin row (host half + browser half) ─────────────────────
+
+- insert:
+    - id: univer-workspace-harness
+      name: "@univerjs/univer-workspace-harness"
+      inject: [webStartup]
+      config:
+        # The Workspace service origin the harness authenticates against and
+        # calls. It is a deployment value overridable at runtime through the
+        # `univer-workspace-harness` settings namespace.
+        workspaceOrigin: !!js >-
+          process.env.UWH_WORKSPACE_ORIGIN ?? 'https://workspace.univer.plus'
+
+        # The local browser origin is used only for same-origin route checks.
+        publicOrigin: !!js >-
+          process.env.UWH_PUBLIC_ORIGIN ?? `http://127.0.0.1:${ctx.webStartup.port ?? process.env.PORT ?? 3080}`
+
+        # The launcher keeps this bootstrap record outside the selected
+        # identity runtime. Device login only updates the next-start record;
+        # a full restart selects the matching origin/user DSH_HOME.
+        connectionStatePath: !!js >-
+          process.env.UWH_CONNECTION_STATE_PATH ?? dshHomePath('connection.json')

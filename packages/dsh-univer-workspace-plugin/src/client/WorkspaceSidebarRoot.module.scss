@@ -1,0 +1,202 @@
+.sidebar,
+.rail {
+  box-sizing: border-box;
+  height: 100%;
+  min-width: 0;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+:global(.pI_x6G_handle[data-side="sidebar"]) {
+  width: 8px;
+  cursor: col-resize;
+  transition: background-color 120ms ease;
+}
+
+:global(.pI_x6G_handle[data-side="sidebar"]:hover),
+:global(.pI_x6G_handle[data-side="sidebar"]:focus-visible) {
+  background: color-mix(in srgb, var(--color-ring) 42%, transparent);
+}
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 12px;
+  overflow: hidden;
+}
+.wide,
+.collapsed {
+  /* state hooks for the Oil-style settle transition */
+}
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 10px 6px;
+}
+.brandRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 52px;
+}
+.brand,
+.brandActions,
+.railTop,
+.railFooter {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.brand {
+  flex: 1;
+  gap: 7px;
+}
+.brandName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.brandActions {
+  flex: none;
+  gap: 2px;
+}
+.newSession {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.newSession:hover,
+.iconButton:hover {
+  background: var(--color-accent);
+}
+.iconButton[data-selected] {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+.newSession:focus-visible,
+.iconButton:focus-visible,
+.tabButton:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.iconButton svg,
+.tabButton svg,
+.newSession svg {
+  flex: none;
+}
+.tabRow {
+  display: flex;
+  gap: 5px;
+  margin: 0 2px 8px;
+}
+.tabButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-secondary-foreground);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tabLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tabButton:hover,
+.tabButton[aria-selected="true"] {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+.tabButton[aria-selected="true"] {
+  font-weight: 500;
+}
+.regionArea {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.regionPane {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.hidden {
+  display: none;
+}
+.visible {
+  display: block;
+}
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.railTop,
+.railFooter {
+  flex-direction: column;
+  gap: 8px;
+}
+.railFooter {
+  margin-top: auto;
+  gap: 6px;
+}
+.rail :global(button) {
+  width: 36px;
+  min-height: 30px;
+}
+.collapsed .brandRow,
+.collapsed .tabRow,
+.collapsed .footer {
+  display: none;
+}
+.collapsed .regionArea {
+  display: none;
+}
+@media (max-width: 640px) {
+  .newSession span {
+    display: none;
+  }
+  .newSession {
+    width: 28px;
+    justify-content: center;
+    padding: 0;
+  }
+}

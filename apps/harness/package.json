@@ -1,0 +1,95 @@
+{
+  "name": "@univerjs/univer-workspace-harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH-based local Web client for one restart-bound Univer Workspace connection.",
+  "files": [
+    "lib",
+    "scripts/start-local.mjs",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./lib/index.js"
+    },
+    "./identity": {
+      "types": "./src/identity.ts",
+      "default": "./lib/identity.js"
+    },
+    "./client": {
+      "types": "./src/client/index.tsx",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "clean": "rm -rf lib",
+    "start:local": "node scripts/start-local.mjs --port 3080 --no-open --trusted-host 127.0.0.1",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-api-session-controller": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-api-workspace-controller": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-connection": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-locale": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-modules": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-ui-layout": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-ui-session": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-client-ui-workspace": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-host-webserver": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-session": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-session-persistence": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-settings": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-storage-domain": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-workspace": "0.1.2-alpha.4",
+    "@deepseek-ai/schemastery": "3.18.2",
+    "@types/node": "24.10.1",
+    "@types/react": "18.3.18",
+    "clsx": "2.1.1",
+    "esbuild": "0.27.7",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10",
+    "zod": "4.4.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-host-webserver": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-session": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-session-persistence": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-settings": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-storage-domain": "0.1.2-alpha.4",
+    "@deepseek-ai/dsh-workspace": "0.1.2-alpha.4"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-workspace-controller",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

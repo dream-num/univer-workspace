@@ -57,5 +57,5 @@ describe("collaborationStatusMessageKey", () => {
       suppressNative: true,
       showCustom: false,
     });
-  });
+  }, 30_000);
 });

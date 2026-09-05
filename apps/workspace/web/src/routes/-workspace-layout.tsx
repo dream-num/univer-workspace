@@ -7,6 +7,7 @@ import {
   House,
   Lock,
   LogOut,
+  MessageCircle,
   Monitor,
   Moon,
   PanelLeftClose,
@@ -25,6 +26,7 @@ import {
   useState,
   type FormEvent,
   type PropsWithChildren,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../features/auth";
@@ -35,6 +37,7 @@ import {
   worktreeListQueryOptions,
 } from "../features/worktrees";
 import { api } from "../shared/api/client";
+import { workspaceHarnessOrigin } from "../shared/app-links";
 import { apiError } from "../shared/api/errors";
 import { useI18n, type MessageKey } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
@@ -292,7 +295,7 @@ export function WorkspaceLayout({
           </div>
 
           <nav
-            aria-label={language === "zh-CN" ? "主导航" : "Main navigation"}
+            aria-label={t("mainNavigation")}
             className={cn(
               "mt-3 min-w-0 flex-1 overflow-x-hidden overflow-y-auto",
               navigationCollapsed ? "px-2.5" : "px-3"
@@ -363,7 +366,6 @@ export function WorkspaceLayout({
                 selectedNodeId={selectedNodeId}
                 selectedNodePath={selectedNodePath}
                 storageScope={currentSession.user.id}
-                onCreateTeamSpace={() => setTeamDialogOpen(true)}
               />
             )}
 
@@ -411,6 +413,21 @@ export function WorkspaceLayout({
             <div className="flex shrink-0 items-center gap-1.5">
               {headerContent}
               {headerActions}
+              {workspaceHarnessOrigin() ? (
+                <Tooltip content={t("openChat")}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("openChat")}
+                    onClick={() => {
+                      const origin = workspaceHarnessOrigin();
+                      if (origin !== undefined) window.open(origin, "_blank", "noopener,noreferrer");
+                    }}
+                  >
+                    <MessageCircle />
+                  </Button>
+                </Tooltip>
+              ) : null}
               <Tooltip content={t("appSettings")}>
                 <Button
                   variant="ghost"
@@ -600,7 +617,7 @@ function NavLink({
   readonly params?: Record<string, string>;
   readonly selected: boolean;
   readonly collapsed: boolean;
-  readonly icon: ReactNode;
+  readonly icon: ReactElement;
   readonly label: string;
   readonly badge?: number;
   readonly badgeTitle?: string;

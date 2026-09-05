@@ -1,0 +1,236 @@
+.surface {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  bottom: 0;
+  left: var(--uwh-resource-surface-left, 280px);
+  width: var(--uwh-resource-surface-width, 640px);
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--uvf-color-border);
+  background: var(--uvf-color-surface);
+  color: var(--uvf-color-foreground, #1f2937);
+  box-shadow: 2px 0 12px color-mix(in srgb, var(--uvf-color-foreground, #1f2937) 8%, transparent);
+  animation: surface-in 160ms ease-out;
+}
+
+@keyframes surface-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.header {
+  display: flex;
+  min-height: 56px;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--uvf-color-border);
+}
+
+.identity {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+}
+
+.glyph {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--uvf-color-muted) 14%, var(--uvf-color-surface));
+  color: var(--uvf-color-muted);
+}
+
+.glyph svg {
+  width: 16px;
+  height: 16px;
+}
+
+.titleBlock {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kind {
+  color: var(--uvf-color-muted);
+  font-size: 11px;
+}
+
+.download,
+.primaryAction {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--uvf-color-border);
+  border-radius: 7px;
+  color: var(--uvf-color-foreground, #1f2937);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.download:hover,
+.primaryAction:hover {
+  background: color-mix(in srgb, var(--uvf-color-accent) 12%, var(--uvf-color-surface));
+  color: var(--uvf-color-foreground, #1f2937);
+}
+
+.download svg,
+.primaryAction svg {
+  width: 14px;
+  height: 14px;
+}
+
+.close {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--uvf-color-muted);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: color-mix(in srgb, var(--uvf-color-accent) 12%, var(--uvf-color-surface));
+  color: var(--uvf-color-foreground, #1f2937);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--uvf-color-accent);
+  outline-offset: 1px;
+}
+
+.close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.status,
+.statusError,
+.unsupported {
+  display: grid;
+  min-height: 180px;
+  flex: 1;
+  place-content: center;
+  gap: 8px;
+  padding: 32px;
+  color: var(--uvf-color-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.statusError {
+  color: var(--uvf-color-danger);
+}
+
+.unsupported svg {
+  width: 28px;
+  height: 28px;
+  justify-self: center;
+}
+
+.mediaStage,
+.videoStage {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  place-items: center;
+  overflow: auto;
+  padding: 32px;
+  background: color-mix(in srgb, var(--uvf-color-muted) 8%, var(--uvf-color-surface));
+}
+
+.videoStage {
+  background: var(--uvf-color-foreground, #1f2937);
+}
+
+.image,
+.video {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.image {
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--uvf-color-foreground, #1f2937) 14%, transparent);
+}
+
+.audio {
+  width: min(100%, 480px);
+}
+
+.pdf {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  border: 0;
+  background: color-mix(in srgb, var(--uvf-color-muted) 8%, var(--uvf-color-surface));
+}
+
+.textStage {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+  background: color-mix(in srgb, var(--uvf-color-muted) 6%, var(--uvf-color-surface));
+}
+
+.truncated {
+  margin: 0 auto 10px;
+  max-width: 760px;
+  color: var(--uvf-color-muted);
+  font-size: 12px;
+}
+
+.textPreview {
+  box-sizing: border-box;
+  min-height: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid var(--uvf-color-border);
+  border-radius: 8px;
+  background: var(--uvf-color-surface);
+  color: var(--uvf-color-foreground, #1f2937);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

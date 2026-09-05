@@ -1,0 +1,65 @@
+.body {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.status,
+.error {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--color-muted);
+  color: var(--color-muted-foreground);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.error {
+  color: var(--color-destructive);
+}
+
+.list {
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--color-muted-foreground);
+}
+
+.icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--color-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

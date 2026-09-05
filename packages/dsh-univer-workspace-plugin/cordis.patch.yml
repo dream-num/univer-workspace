@@ -1,0 +1,20 @@
+# dsh-univer-workspace-plugin bundle patch. The plugin row is mounted by the
+# univer-workspace-harness composition; the mechanical per-Space directory
+# root and the runtime license are deployment values.
+
+- insert:
+    - id: univer-workspace
+      name: 'dsh-univer-workspace-plugin'
+      config:
+        workspaceRoot: !!js >-
+          process.env.UWH_WORKSPACE_ROOT ?? dshHomePath('workspace')
+        workspaceOrigin: !!js >-
+          process.env.UWH_WORKSPACE_ORIGIN ?? 'https://workspace.univer.plus'
+        publicOrigin: !!js >-
+          process.env.UWH_PUBLIC_ORIGIN ?? 'http://127.0.0.1:3080'
+        templates: !!js >-
+          JSON.parse(process.env.UWH_TEMPLATES_JSON ?? '[]')
+        # The Univer runtime license. Empty/absent falls back to the built-in
+        # development license; the deployment supplies the production value.
+        license: !!js >-
+          process.env.UWH_UNIVER_LICENSE ?? ''

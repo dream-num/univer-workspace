@@ -4,7 +4,7 @@
 
 **An open-source Office workspace where people and AI agents create, collaborate, and review together.**
 
-[Univer Docs](https://docs.univer.ai/) · [Office SDK](https://office.univer.ai/) · [CLI guide](apps/cli/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
+[Univer Docs](https://docs.univer.ai/) · [Office SDK](https://office.univer.ai/) · [CLI guide](apps/cli/README.md) · [Local Harness](apps/harness/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
@@ -26,12 +26,12 @@ person for review. People stay in control of what is merged into the shared trun
 
 ## Why Univer Workspace
 
-| For people                                              | For agents                                                         | For operators                                                        |
-| ------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Organize content in Personal and Team Spaces            | Create and edit rich Office content through the Univer Facade API  | Deploy one Browser and Server application                            |
-| Co-edit Sheets, Docs, Slides, Bases, and Boards         | Inspect data, render screenshots/PDFs, and run layout checks        | Keep product, collaboration, and Blob data under application control |
-| Share content with role- and node-aware access control  | Discover version-matched Skills and APIs offline                   | Integrate password, GitHub, Discord, or application OAuth login      |
-| Use Recent, Trash, file import/export, and review views | Work through multiple rounds without changing trunk                | Operate a documented HTTP API with explicit recovery boundaries      |
+| For people                                              | For agents                                                        | For operators                                                        |
+| ------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Organize content in Personal and Team Spaces            | Create and edit rich Office content through the Univer Facade API | Deploy one Browser and Server application                            |
+| Co-edit Sheets, Docs, Slides, Bases, and Boards         | Inspect data, render screenshots/PDFs, and run layout checks      | Keep product, collaboration, and Blob data under application control |
+| Share content with role- and node-aware access control  | Discover version-matched Skills and APIs offline                  | Integrate password, GitHub, Discord, or application OAuth login      |
+| Use Recent, Trash, file import/export, and review views | Work through multiple rounds without changing trunk               | Operate a documented HTTP API with explicit recovery boundaries      |
 
 ## How it works
 
@@ -134,9 +134,11 @@ contract.
 ```text
 apps/workspace                 Workspace Browser, Server, HTTP contract, and deployment app
 apps/cli                       Agent-ready remote Workspace automation application
+apps/harness                   Local DSH Web client for one configurable Workspace connection
 packages/client-core           Private Node-hosted Workspace Agent Client capabilities
 packages/reference-provider   Private Browser-only referenced-Unit policy
-packages/unit-comparison-viewer  Private read-only Unit comparison UI
+packages/dsh-univer-workspace-plugin        Harness Workspace capabilities and browser UI
+packages/dsh-univer-workspace-skin-plugin   Harness Workspace visual skin
 scripts                       SDK version and local CLI release tooling
 ```
 
@@ -151,8 +153,8 @@ Blob storage policy, remote workflows, and deployment. Client Core shares storag
 Workspace workflows, local Node-hosted Blob/Asset transfer, and the worker-backed content runtime between
 repository applications, including Node-hosted Office exchange, Typst compile/materialize/apply, render Unit
 assembly, screenshots, PNG/PDF output, Slide layout lint, the render-page source, and the SVG
-compile/measure/apply workflow; the reference-provider and Unit comparison viewer packages remain
-Browser-only. These packages are private implementation modules, not additional public applications or SDKs.
+compile/measure/apply workflow; the reference-provider package remains Browser-only.
+Both are private implementation modules, not additional public applications or SDKs.
 
 ## Architecture principles
 
@@ -194,7 +196,7 @@ Update every version-coupled Univer dependency and the lockfile with the reposit
 script rather than editing individual manifests:
 
 ```bash
-pnpm update:sdk --sdk_version <exact-sdk-version>
+pnpm update:univer-sdk --sdk_version <exact-sdk-version>
 ```
 
 ## Delivery model
@@ -212,17 +214,17 @@ the actual package artifact before publication.
 
 ## Documentation
 
-| Resource                                                            | Scope                                                                  |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| [Univer Runtime documentation](https://docs.univer.ai/)             | Browser Runtime, presets, plugins, Facade API, and editor capabilities |
-| [Univer Office SDK documentation](https://office.univer.ai/)        | Office SDK stack: Runtime, Collaboration, CLI, and Worktree            |
-| [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades           |
-| [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract             |
-| [Client Core package](packages/client-core/README.md)               | Private Node-hosted client capability boundary                          |
-| [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries               |
-| [HTTP contract](apps/workspace/contracts/http/README.md)            | Product API source and generation workflow                             |
-| [Reference-provider package](packages/reference-provider/README.md) | Private Browser referenced-Unit policy                                 |
-| [Unit comparison viewer](packages/unit-comparison-viewer/README.md) | Private read-only comparison UI and host integration boundary          |
+| Resource                                                            | Scope                                                                        |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [Univer Runtime documentation](https://docs.univer.ai/)             | Browser Runtime, presets, plugins, Facade API, and editor capabilities       |
+| [Univer Office SDK documentation](https://office.univer.ai/)        | Office SDK stack: Runtime, Collaboration, CLI, and Worktree                  |
+| [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades                 |
+| [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract                   |
+| [Local Harness guide](apps/harness/README.md)                       | Local profile, Device Authorization, sessions, files, Worktree, and identity switching |
+| [Client Core package](packages/client-core/README.md)               | Private Node-hosted client capability boundary                               |
+| [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries                     |
+| [HTTP contract](apps/workspace/contracts/http/README.md)            | Product API source and generation workflow                                   |
+| [Reference-provider package](packages/reference-provider/README.md) | Private Browser referenced-Unit policy                                       |
 
 ## Contributing
 

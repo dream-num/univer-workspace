@@ -87,6 +87,7 @@ paths:
           required: true
           schema:
             type: string
+            pattern: ^[A-Za-z0-9_-]{43,128}$
         - name: scope
           in: query
           required: false
@@ -108,6 +109,12 @@ paths:
         - Authentication
       operationId: oauthToken
       summary: Exchange a one-time authorization code for a registered client identity.
+      description: |
+        When the granted scope includes `session`, the response also carries a
+        Workspace login session token in `access_token`; the client presents
+        it as the `workspace_session` cookie on product and collaboration
+        endpoints, acting with the authorizing User's permissions until it
+        expires. Identity-only grants return an empty `access_token`.
       security: []
       requestBody:
         required: true
@@ -116,27 +123,30 @@ paths:
             schema:
               type: object
               required:
+                - grant_type
                 - code
                 - client_id
-                - client_secret
                 - redirect_uri
                 - code_verifier
               properties:
                 grant_type:
                   type: string
+                  enum:
+                    - authorization_code
                 code:
                   type: string
                 client_id:
                   type: string
                 client_secret:
                   type: string
+                  description: Required for confidential clients; omitted for public PKCE clients.
                 redirect_uri:
                   type: string
                 code_verifier:
                   type: string
       responses:
         '200':
-          description: The registered client identity.
+          description: The registered client identity and, for `session` grants, a login session token.
           content:
             application/json:
               schema:
@@ -144,10 +154,16 @@ paths:
                 properties:
                   access_token:
                     type: string
+                    description: |
+                      Workspace session token for `session` grants, empty
+                      string for identity-only grants.
                   token_type:
                     type: string
                   expires_in:
                     type: integer
+                    description: |
+                      Seconds until the issued session expires for `session`
+                      grants.
                   user:
                     $ref: '#/components/schemas/User'
         '400':

@@ -1,12 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Ellipsis,
-  ExternalLink,
-  Link2,
-  Pencil,
-  Share2,
-  Trash2,
-} from "lucide-react";
+import { Ellipsis, ExternalLink, Link2, Pencil, Share2, Trash2 } from "lucide-react";
 import { useState, type ReactElement, type ReactNode } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { ShareDialog } from "../permissions";
@@ -40,6 +33,7 @@ type Node = components["schemas"]["NodeSummary"];
 export function NodeActionsMenu(props: {
   readonly node: Node;
   readonly onEdit?: () => void;
+  readonly onMutated?: () => void;
   readonly children: (actions: ReactNode) => ReactElement;
 }) {
   const { t } = useI18n();
@@ -50,7 +44,7 @@ export function NodeActionsMenu(props: {
   const [trashOpen, setTrashOpen] = useState(false);
   const nodeUrl = new URL(
     `/nodes/${encodeURIComponent(props.node.id)}`,
-    window.location.origin
+    window.location.origin,
   ).toString();
 
   const updateNode = useMutation({
@@ -70,11 +64,10 @@ export function NodeActionsMenu(props: {
       ]);
       setRenameOpen(false);
       toast.success(t("itemUpdated"));
+      props.onMutated?.();
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : t("updateFailed")
-      );
+      toast.error(error instanceof Error ? error.message : t("updateFailed"));
     },
   });
 
@@ -97,11 +90,10 @@ export function NodeActionsMenu(props: {
       ]);
       setTrashOpen(false);
       toast.success(t("movedToTrash"));
+      props.onMutated?.();
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : t("trashActionFailed")
-      );
+      toast.error(error instanceof Error ? error.message : t("trashActionFailed"));
     },
   });
 
@@ -156,7 +148,7 @@ export function NodeActionsMenu(props: {
                     key: "ArrowDown",
                     bubbles: true,
                     cancelable: true,
-                  })
+                  }),
                 );
               }}
             >
@@ -166,11 +158,7 @@ export function NodeActionsMenu(props: {
         />
       </Tooltip>
       <MenuContent align="end" sideOffset={4} className="w-56">
-        <NodeActionItems
-          node={props.node}
-          customEdit={Boolean(props.onEdit)}
-          onAction={onAction}
-        />
+        <NodeActionItems node={props.node} customEdit={Boolean(props.onEdit)} onAction={onAction} />
       </MenuContent>
     </MenuRoot>
   );
@@ -208,23 +196,14 @@ export function NodeActionsMenu(props: {
         title={t("editNodeTitle", { name: props.node.name })}
         footer={
           <>
-            <DialogClose
-              render={<Button variant="secondary">{t("cancel")}</Button>}
-            />
-            <Button
-              onClick={submitEdit}
-              disabled={updateNode.isPending || !editName.trim()}
-            >
+            <DialogClose render={<Button variant="secondary">{t("cancel")}</Button>} />
+            <Button onClick={submitEdit} disabled={updateNode.isPending || !editName.trim()}>
               {t("save")}
             </Button>
           </>
         }
       >
-        <Field
-          label={t("name")}
-          htmlFor={`rename-node-${props.node.id}`}
-          required
-        >
+        <Field label={t("name")} htmlFor={`rename-node-${props.node.id}`} required>
           <Input
             id={`rename-node-${props.node.id}`}
             maxLength={255}
@@ -263,8 +242,7 @@ function NodeActionItems(props: {
   const Item = props.context ? ContextMenuItem : MenuItem;
   const Separator = props.context ? ContextMenuSeparator : MenuSeparator;
   const canEdit =
-    props.node.capabilities.rename ||
-    (props.customEdit && props.node.capabilities.move);
+    props.node.capabilities.rename || (props.customEdit && props.node.capabilities.move);
 
   return (
     <>

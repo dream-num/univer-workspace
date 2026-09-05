@@ -4,11 +4,21 @@ import type { User } from "./identity.types.js";
 
 const CODE_TTL_MS = 60_000;
 const STATE_PATTERN = /^[A-Za-z0-9_-]{32,256}$/u;
+const PKCE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
 const DEFAULT_SCOPES = ["identity"] as const;
+
+/**
+ * The `session` scope authorizes the client to receive a Workspace login
+ * session token from the token endpoint. Grants without it stay
+ * identity-only, so existing registered clients keep their behavior.
+ */
+export const OAUTH_SESSION_SCOPE = "session";
 
 export interface OAuthClient {
   readonly clientId: string;
-  readonly clientSecret: string;
+  readonly clientType?: "confidential" | "public";
+  readonly clientSecret?: string;
+  readonly requiresConsent?: boolean;
   readonly redirectUris: readonly string[];
   readonly scopes: readonly string[];
 }
@@ -51,6 +61,22 @@ export function validateOAuthClientSecret(
   }
 }
 
+export function validateOAuthClientAuthentication(
+  client: OAuthClient,
+  provided: string | undefined,
+): void {
+  if (client.clientType === "public") {
+    if (provided !== undefined) {
+      throw new ApplicationError("INVALID_INPUT", 400, "Public OAuth clients must not send a client secret.");
+    }
+    return;
+  }
+  if (client.clientSecret === undefined) {
+    throw new ApplicationError("OAUTH_CLIENT_UNAVAILABLE", 400, "The OAuth client is missing a secret.");
+  }
+  validateOAuthClientSecret(provided, client.clientSecret);
+}
+
 export function validateOAuthCodeVerifier(
   provided: string | undefined,
   expectedChallenge: string
@@ -64,26 +90,55 @@ export function validateOAuthCodeVerifier(
   }
 }
 
+export function requireOAuthCodeChallenge(value: unknown): string {
+  if (typeof value !== "string" || !PKCE_CHALLENGE_PATTERN.test(value)) {
+    throw new ApplicationError(
+      "INVALID_INPUT",
+      400,
+      "code_challenge must be a base64url PKCE value.",
+    );
+  }
+  return value;
+}
+
 export function validateRegisteredRedirectUri(
   requested: unknown,
-  allowed: readonly string[]
+  allowed: readonly string[],
+  clientId: string,
 ): string {
   if (typeof requested !== "string") {
-    throw new ApplicationError("INVALID_INPUT", 400, "redirect_uri is required.");
+    throw new ApplicationError(
+      "INVALID_INPUT",
+      400,
+      `redirect_uri is required for OAuth client "${clientId}".`,
+      "redirect_uri",
+    );
   }
-  const parsed = new URL(requested);
+  let parsed: URL;
+  try {
+    parsed = new URL(requested);
+  } catch {
+    throw new ApplicationError(
+      "INVALID_REDIRECT_URI",
+      400,
+      `redirect_uri is not a valid absolute URL for OAuth client "${clientId}".`,
+      "redirect_uri",
+    );
+  }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new ApplicationError(
       "INVALID_REDIRECT_URI",
       400,
-      "redirect_uri must use http or https."
+      `redirect_uri for OAuth client "${clientId}" must use http or https.`,
+      "redirect_uri",
     );
   }
   if (!allowed.includes(parsed.toString())) {
     throw new ApplicationError(
       "INVALID_REDIRECT_URI",
       400,
-      "redirect_uri is not registered for this client."
+      `redirect_uri is not registered for OAuth client "${clientId}".`,
+      "redirect_uri",
     );
   }
   return parsed.toString();
@@ -153,6 +208,12 @@ export function authorizeRedirectTarget(
   target.searchParams.set("state", input.state);
   target.searchParams.set("scope", input.scope);
   return target.toString();
+}
+
+export function scopeIncludesSession(scope: string): boolean {
+  return scope
+    .split(" ")
+    .some((value) => value === OAUTH_SESSION_SCOPE);
 }
 
 export function defaultOAuthScope(): string {

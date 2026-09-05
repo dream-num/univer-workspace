@@ -30,7 +30,10 @@ class WorkspaceHistoryShapeFormulaModelPlugin extends Plugin {
     "UNIVER_WORKSPACE_HISTORY_SHAPE_FORMULA_MODEL_PLUGIN";
   static override packageName = "@univerjs/univer-workspace";
 
-  constructor(protected override _injector: Injector) {
+  constructor(
+    _config: undefined,
+    protected override _injector: Injector,
+  ) {
     super();
   }
 
@@ -47,7 +50,7 @@ class WorkspaceHistoryShapeFormulaModelPlugin extends Plugin {
   }
 }
 
-setDependencies(WorkspaceHistoryShapeFormulaModelPlugin, [Injector]);
+setDependencies(WorkspaceHistoryShapeFormulaModelPlugin, [Injector], 1);
 
 let installed = false;
 

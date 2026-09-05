@@ -1,0 +1,312 @@
+/* Worktree tab of the Harness sidebar: origin-level "state group → Worktree"
+ * discovery rows adapted to the fixed-width rail. Colors only use the
+ * Workspace/OIL tokens the Harness skin actually defines
+ * (packages/dsh-univer-workspace-skin-plugin/src/client/skin.css); softer
+ * tones are derived with color-mix instead of new raw values. */
+
+.sidebar {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  color: var(--color-foreground);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.header {
+  display: flex;
+  min-height: 36px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.headerTitle {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header button[aria-busy="true"] svg {
+  animation: worktree-refresh 700ms linear infinite;
+}
+
+@keyframes worktree-refresh {
+  to { transform: rotate(360deg); }
+}
+
+.searchRow {
+  flex: none;
+  padding: 0 2px 8px;
+}
+
+.searchInput {
+  height: 28px;
+  padding: 0 10px;
+  border-color: var(--color-border);
+  border-radius: 8px;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.list {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+  gap: 10px;
+  overflow: auto;
+  padding: 2px 0 4px;
+}
+
+.status {
+  margin: 0;
+  padding: 18px 8px;
+  color: var(--color-subtle-foreground);
+  text-align: center;
+}
+
+.empty {
+  display: grid;
+  gap: 4px;
+  padding: 24px 8px;
+  color: var(--color-muted-foreground);
+  text-align: center;
+}
+
+.empty strong {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.error,
+.authNotice {
+  margin: 6px 2px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.error {
+  overflow-wrap: anywhere;
+  background: var(--color-destructive-soft);
+  color: var(--color-destructive-soft-foreground);
+}
+
+.authNotice {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted-foreground);
+}
+
+.authNotice strong {
+  color: var(--color-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.group {
+  display: grid;
+  gap: 2px;
+}
+
+.visibilityFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  margin: 0 2px 6px;
+  color: var(--color-subtle-foreground);
+  font-size: 12px;
+}
+
+.visibilityLabel {
+  flex: none;
+}
+
+.groupEmpty {
+  margin: 0;
+  padding: 8px 10px 10px 24px;
+  color: var(--color-subtle-foreground);
+  font-size: 12px;
+}
+
+.groupHeader {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  outline: 0;
+  background: transparent;
+  color: var(--color-subtle-foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.groupHeader:hover {
+  color: var(--color-muted-foreground);
+}
+
+.groupHeader:focus-visible,
+.worktreeRow:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ring) 40%, transparent);
+}
+
+.groupHeader svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.groupLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupCount {
+  flex: none;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.worktreeList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.worktreeRow {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  outline: 0;
+  background: transparent;
+  color: var(--color-secondary-foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.statusIcon {
+  width: 16px;
+  height: 16px;
+  justify-self: center;
+  color: var(--color-muted-foreground);
+}
+
+.statusIcon.statusDraft {
+  color: var(--color-muted-foreground);
+}
+
+.statusIcon.statusReady {
+  color: var(--color-success-soft-foreground);
+}
+
+.statusIcon.statusMerging {
+  color: var(--color-violet);
+}
+
+.statusIcon.statusMerged {
+  color: var(--color-violet);
+}
+
+.statusIcon.statusDiscarded {
+  color: var(--color-destructive-soft-foreground);
+}
+
+.worktreeRow:hover {
+  background: var(--color-accent);
+}
+
+.worktreeRow[data-selected] {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+
+.worktreeText {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.worktreeName {
+  overflow: hidden;
+  color: var(--color-foreground);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worktreeMeta {
+  overflow: hidden;
+  color: var(--color-subtle-foreground);
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusChip {
+  display: inline-flex;
+  min-width: 0;
+  flex: none;
+  align-items: center;
+  justify-self: end;
+  max-width: 96px;
+  overflow: hidden;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.statusDraft {
+  background: var(--color-muted);
+  color: var(--color-muted-foreground);
+}
+
+.statusReady {
+  background: var(--color-success-soft);
+  color: var(--color-success-soft-foreground);
+}
+
+.statusMerging {
+  background: var(--color-violet-soft);
+  color: var(--color-violet-soft-foreground);
+}
+
+.statusMerged {
+  background: var(--color-violet-soft);
+  color: var(--color-violet-soft-foreground);
+}
+
+.statusDiscarded {
+  background: var(--color-destructive-soft);
+  color: var(--color-destructive-soft-foreground);
+}

@@ -1,0 +1,30 @@
+.publicRead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.publicRead > span {
+  display: grid;
+  gap: 4px;
+}
+.publicRead strong {
+  color: var(--color-foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+.publicRead small {
+  color: var(--color-subtle-foreground);
+  font-size: 14px;
+}
+.publicRead input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--color-primary);
+}

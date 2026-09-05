@@ -3,12 +3,109 @@ packages:
   - packages/*
 
 allowBuilds:
+  "@parcel/watcher": true
   esbuild: true
   protobufjs: true
 
-# The SDK baseline is pinned to exact releases and updated on release day via
-# `pnpm update:sdk`; only these scopes are exempt from minimumReleaseAge.
+# This SDK release emits direct Redi type imports without declaring the
+# dependency. Keep service identifiers in their host's React peer graph instead
+# of resolving the workspace's hoisted copy. Remove these extensions when the
+# upstream package manifests declare Redi themselves.
+packageExtensions:
+  "@univerjs/engine-render@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-ui@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/thread-comment@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/boards-ui@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/slides-ui@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/collaboration@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+
+  "@univerjs-pro/bases@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/boards@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/edit-history-ui@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs-pro/slides@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/docs-ui@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/drawing@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/engine-formula@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-conditional-formatting@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-filter@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-formula@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-numfmt@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  "@univerjs/sheets-table@1.0.0-insiders.20260902-a58c423":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
+  # Router declarations import React types but omit the type peer. Bind them to
+  # the consuming application's React major; remove once upstream declares it.
+  "@tanstack/react-router@1.170.31":
+    peerDependencies:
+      "@types/react": ">=18 <20"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+
+# The Univer SDK and DSH release trains are pinned to exact releases and may be
+# updated on release day; only these selected scopes are exempt from
+# minimumReleaseAge.
 minimumReleaseAgeExclude:
+  - "@deepseek-ai/cordis@4.0.2"
+  - "@deepseek-ai/dsh*"
+  - "@deepseek-ai/schemastery@3.18.2"
   - "@univer-cli/*"
   - "@univerjs/*"
   - "@univerjs-pro/*"
+  - "@oxfmt/binding-android-arm-eabi@0.66.0"
+  - "@oxfmt/binding-android-arm64@0.66.0"
+  - "@oxfmt/binding-darwin-arm64@0.66.0"
+  - "@oxfmt/binding-darwin-x64@0.66.0"
+  - "@oxfmt/binding-freebsd-x64@0.66.0"
+  - "@oxfmt/binding-linux-arm-gnueabihf@0.66.0"
+  - "@oxfmt/binding-linux-arm-musleabihf@0.66.0"
+  - "@oxfmt/binding-linux-arm64-gnu@0.66.0"
+  - "@oxfmt/binding-linux-arm64-musl@0.66.0"
+  - "@oxfmt/binding-linux-ppc64-gnu@0.66.0"
+  - "@oxfmt/binding-linux-riscv64-gnu@0.66.0"
+  - "@oxfmt/binding-linux-riscv64-musl@0.66.0"
+  - "@oxfmt/binding-linux-s390x-gnu@0.66.0"
+  - "@oxfmt/binding-linux-x64-gnu@0.66.0"
+  - "@oxfmt/binding-linux-x64-musl@0.66.0"
+  - "@oxfmt/binding-openharmony-arm64@0.66.0"
+  - "@oxfmt/binding-win32-arm64-msvc@0.66.0"
+  - "@oxfmt/binding-win32-ia32-msvc@0.66.0"
+  - "@oxfmt/binding-win32-x64-msvc@0.66.0"
+  - oxfmt@0.66.0
