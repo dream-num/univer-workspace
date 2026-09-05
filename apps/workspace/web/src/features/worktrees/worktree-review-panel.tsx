@@ -202,26 +202,6 @@ export function WorktreeReviewPanel({
         }
         actions={
           <>
-            {worktree.capabilities.discard ? (
-              <ConfirmDialog
-                title={t("discardChangesConfirm")}
-                description={t("discardChangesDescription")}
-                confirmText={t("discardChanges")}
-                cancelText={t("cancel")}
-                danger
-                onConfirm={() => action.mutate("discard")}
-                trigger={
-                  <Button
-                    variant="destructive-ghost"
-                    size="sm"
-                    disabled={action.isPending}
-                  >
-                    <Trash2 />
-                    {t("discardChanges")}
-                  </Button>
-                }
-              />
-            ) : null}
             {worktree.capabilities.markReady ? (
               <ConfirmDialog
                 title={t("submitForReviewConfirm")}
@@ -260,6 +240,26 @@ export function WorktreeReviewPanel({
                   >
                     <CheckCircle2 />
                     {t("confirmMerge")}
+                  </Button>
+                }
+              />
+            ) : null}
+            {worktree.capabilities.discard ? (
+              <ConfirmDialog
+                title={t("discardChangesConfirm")}
+                description={t("discardChangesDescription")}
+                confirmText={t("discardChanges")}
+                cancelText={t("cancel")}
+                danger
+                onConfirm={() => action.mutate("discard")}
+                trigger={
+                  <Button
+                    variant="destructive-ghost"
+                    size="sm"
+                    disabled={action.isPending}
+                  >
+                    <Trash2 />
+                    {t("discardChanges")}
                   </Button>
                 }
               />

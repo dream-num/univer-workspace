@@ -118,19 +118,19 @@ function Fixture(): ReactElement {
                 <>
                   <Button
                     size="sm"
-                    variant="destructive-ghost"
-                    onClick={() => setAction("discard")}
-                  >
-                    <Trash2 />
-                    {t("discardChanges")}
-                  </Button>
-                  <Button
-                    size="sm"
                     disabled={state === "conflict"}
                     onClick={() => setAction(state === "draft" ? "submit" : "merge")}
                   >
                     {state === "draft" ? <Send /> : <CheckCircle2 />}
                     {t(state === "draft" ? "submitForReview" : "confirmMerge")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive-ghost"
+                    onClick={() => setAction("discard")}
+                  >
+                    <Trash2 />
+                    {t("discardChanges")}
                   </Button>
                 </>
               )
