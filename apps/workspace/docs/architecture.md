@@ -134,6 +134,10 @@ Worktree 审阅保留 Agent 草稿作为默认视图，并通过 `packages/unit-
 物化 Trunk 与 Worktree 状态、解码五类 Unit，并通过对应 History SDK adapter 生成比较结果。该端点
 属于 Univer 应用内部集成边界，不进入产品 OpenAPI。
 
+Worktree 审阅 Header 以当前选中文档名为标题。`worktree-review-header.tsx` 接收显示数据、控件与回调，
+负责居中与自然换行；查询、权限和操作状态留在 `worktree-review-panel.tsx`。合并状态提示与预览来源
+切换属于当前文档内容区，在结构化对比中隐藏预览来源切换。
+
 TanStack Query 管理 Session、Node、Resource、Recent、Trash、Permission、Worktree 和 Operation
 等服务端状态。Dialog、表单输入和当前选中项使用 React 本地状态，不引入额外全局状态库。
 
