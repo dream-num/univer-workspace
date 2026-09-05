@@ -30,6 +30,47 @@ profile loads:
 - Own the composition patch that mounts the three bundles and the deployment
   webserver/connection rows.
 
+## Runtime architecture
+
+The Harness keeps the local DSH process separate from the remote Workspace
+service. Workspace remains the authority for identity, permissions, Spaces,
+Nodes, Resources, and collaboration data.
+
+```mermaid
+flowchart LR
+  Browser[Local browser] -->|HTTP and WebSocket| DSH[DSH child process]
+  Supervisor[start-local supervisor] -->|Start and restart| DSH
+  DSH --> Core[Harness core plugin]
+  DSH --> Capability[Workspace capability plugin]
+  DSH --> Skin[Workspace skin plugin]
+  Core -->|Device Authorization and session cookie| Workspace[Remote or local Workspace]
+  Capability -->|HTTP and collaboration requests| Workspace
+  Browser -->|Workspace origin and device code| Core
+```
+
+The core plugin owns connection and identity lifecycle. The capability plugin
+owns Workspace tools and file/document interactions. The skin plugin only owns
+branding and visual tokens. The supervisor watches the active connection and
+restarts the DSH child when the Workspace origin, account, or session changes.
+
+## Local data and storage
+
+The quick start keeps installation and runtime data outside the repository.
+
+| Location | Contents | Isolation |
+| --- | --- | --- |
+| `UWH_DSH_BOOTSTRAP` | Isolated installation of the published DSH CLI | Shared by the local installation |
+| `DSH_HOME` | Profile metadata and packaged plugin bundles | Shared by the local installation |
+| `UWH_DSH_DATA_HOME` | `connection.json`, identity-specific DSH runtimes, and local session/attachment data | Runtime data is separated by Workspace origin and user id |
+| `UWH_SHARED_CREDENTIALS_PATH` | DSH model credentials and browser-session signing state; defaults to `$UWH_DSH_DATA_HOME/shared/.credentials.yaml` | Shared across identities; never contains Workspace session cookies |
+
+The active connection file contains the Workspace origin, a non-secret user
+identity, and the server-side session credential required by the local DSH
+runtime. Treat the file as sensitive local state. Do not commit it, upload it,
+or include its values in bug reports. Workspace product data, collaboration
+snapshots, and Blob bytes remain in the connected Workspace deployment; the
+Harness does not copy those databases into its local data directory.
+
 ## Non-responsibilities
 
 - DSH session persistence and attachment storage specialization (a
@@ -65,6 +106,17 @@ profile and does not download or compile binaries during startup.
 
 ## Local Web client quick start
 
+Use Node.js 24 or newer and the pnpm version declared in the root
+`package.json` (currently 11.24.0). Start from a clone of this repository and
+install its dependencies from the repository root:
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+The checked-in `.npmrc` selects the registry for the pinned Univer SDK release.
+The installation also needs access to the public npm registry for DSH packages.
+
 The Harness is a local Web page, not a desktop application. The DSH CLI must be
 installed outside this pnpm workspace so its React 18 dependency tree does not
 enter the Univer React 19 graph. From the repository root, prepare one isolated
@@ -93,16 +145,20 @@ pnpm --filter dsh-univer-workspace-skin-plugin pack \
 
 export DSH_PLUGINS="file:$DSH_HOME/internal-packages/univerjs-univer-workspace-harness-0.1.0.tgz file:$DSH_HOME/internal-packages/dsh-univer-workspace-plugin-0.1.0.tgz file:$DSH_HOME/internal-packages/dsh-univer-workspace-skin-plugin-0.1.0.tgz"
 NPM_CONFIG_USERCONFIG="$PWD/.npmrc" ./apps/harness/scripts/build-profile.sh
-node apps/harness/scripts/start-local.mjs --port 3080 \
+node apps/harness/scripts/start-local.mjs --port 3101 \
   --no-open --trusted-host 127.0.0.1
 ```
 
 Keep `start-local.mjs` running: it is the supervisor, not a one-shot command.
-On the first visit in a browser, open the exact authenticated URL printed by
-DSH. Opening the bare `http://127.0.0.1:3080` before that one-time exchange
-correctly returns HTTP 401; after DSH stores its local browser cookie, the clean
-root URL works. If port `3080` is occupied, use another explicit port such as
-`--port 3082` and use the matching printed URL.
+The first profile start can take several seconds while DSH loads the profile;
+wait until stderr prints a line beginning with `dsh web:`. Open that exact
+authenticated URL, which contains a one-time `?token=...` query, in the
+browser. DSH responds with a redirect to `/` and sets an HttpOnly browser
+session cookie. Do not copy the token into a bug report or reuse it after the
+exchange. The bare `http://127.0.0.1:3101` may be rejected before this
+exchange because no DSH browser session cookie exists yet; after the cookie is
+stored, the clean root URL works. If port `3101` is occupied, choose another
+explicit port and use the matching printed URL.
 
 In Settings → Workspace, set the service origin (for the shared test environment use
 `https://workspace.univer.plus`; a local Workspace URL works as well). The first
