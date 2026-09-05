@@ -55,12 +55,12 @@ import {
   resolveReviewView,
   reviewModeForView,
   reviewViewForMode,
-  type WorktreeReviewMode,
 } from "./worktree-review-presentation";
 import {
   DEFAULT_WORKTREE_REVIEW_VIEW,
   type WorktreeReviewView,
 } from "./worktree-review-search";
+import { WorktreeReviewHeader } from "./worktree-review-header";
 
 type WorktreeDetailModel = components["schemas"]["WorktreeDetail"];
 type WorktreeState = components["schemas"]["WorktreeState"];
@@ -134,10 +134,6 @@ export function WorktreeReviewPanel({
     : selectedView;
   const showReviewViewControl =
     worktree.capabilities.review && selectedUnit !== undefined;
-  const hasReviewActions =
-    worktree.capabilities.discard ||
-    worktree.capabilities.markReady ||
-    worktree.capabilities.merge;
 
   const action = useMutation({
     mutationFn: async (value: ReviewAction) => {
@@ -186,97 +182,91 @@ export function WorktreeReviewPanel({
 
   return (
     <article className="flex h-full min-h-0 flex-col">
-      <header
-        className={cn(
-          "grid shrink-0 grid-cols-1 items-center gap-x-4 gap-y-2 border-b border-border px-5 py-2",
-          (showReviewViewControl || hasReviewActions) &&
-            "@min-[480px]/review:grid-cols-[minmax(0,1fr)_auto]",
-          showReviewViewControl &&
-            hasReviewActions &&
-            "@min-[600px]/review:grid-cols-[minmax(0,1fr)_auto_max-content] @min-[600px]/review:py-1 @min-[680px]/review:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
-        )}
-      >
-        <ReviewTitle worktree={worktree} unit={selectedUnit} />
-        {showReviewViewControl ? (
-          <ReviewViewControl
-            activeView={activeView}
-            hasActions={hasReviewActions}
-            {...(onSelectedViewChange === undefined
-              ? {}
-              : { onSelectedViewChange })}
-          />
-        ) : null}
-        <div
-          className={cn(
-            "flex min-w-0 max-w-full flex-wrap items-center gap-2 empty:hidden @min-[480px]/review:col-start-2 @min-[480px]/review:row-start-1 @min-[480px]/review:justify-self-end",
-            showReviewViewControl &&
-              "@min-[600px]/review:col-start-3 @min-[600px]/review:max-w-none @min-[600px]/review:flex-nowrap @min-[600px]/review:justify-end"
-          )}
-        >
-          {worktree.capabilities.discard ? (
-            <ConfirmDialog
-              title={t("discardChangesConfirm")}
-              description={t("discardChangesDescription")}
-              confirmText={t("discardChanges")}
-              cancelText={t("cancel")}
-              danger
-              onConfirm={() => action.mutate("discard")}
-              trigger={
-                <Button
-                  variant="destructive-ghost"
-                  size="sm"
-                  disabled={action.isPending}
-                >
-                  <Trash2 />
-                  {t("discardChanges")}
-                </Button>
+      <WorktreeReviewHeader
+        documentName={
+          selectedUnit?.name || selectedUnit?.unitId || t("noAgentDocuments")
+        }
+        icon={selectedUnit ? <UnitTypeIcon type={selectedUnit.unitType} /> : null}
+        badge={<ReviewBadge state={worktree.state} unit={selectedUnit} />}
+        resultBadge={
+          selectedUnit ? <ReviewMergeResultBadge unit={selectedUnit} /> : null
+        }
+        view={
+          showReviewViewControl
+            ? {
+                value: reviewModeForView(activeView),
+                onChange: (value) =>
+                  onSelectedViewChange?.(reviewViewForMode(value)),
               }
-            />
-          ) : null}
-          {worktree.capabilities.markReady ? (
-            <ConfirmDialog
-              title={t("submitForReviewConfirm")}
-              description={t("submitForReviewDescription")}
-              confirmText={t("submitForReview")}
-              cancelText={t("cancel")}
-              onConfirm={() => action.mutate("markReady")}
-              trigger={
-                <Button size="sm" disabled={action.isPending}>
-                  <Send />
-                  {t("submitForReview")}
-                </Button>
-              }
-            />
-          ) : null}
-          {worktree.capabilities.merge && hasMergeConflict ? (
-            <Tooltip content={t("mergeConflictBlocksMerge")}>
-              <span className="inline-flex">
-                <Button size="sm" disabled>
-                  <CheckCircle2 />
-                  {t("confirmMerge")}
-                </Button>
-              </span>
-            </Tooltip>
-          ) : worktree.capabilities.merge ? (
-            <ConfirmDialog
-              title={t("mergeConfirm")}
-              description={t("mergeDescription")}
-              confirmText={t("confirmMerge")}
-              cancelText={t("cancel")}
-              onConfirm={() => action.mutate("merge")}
-              trigger={
-                <Button
-                  size="sm"
-                  disabled={action.isPending || mergeReviewPending}
-                >
-                  <CheckCircle2 />
-                  {t("confirmMerge")}
-                </Button>
-              }
-            />
-          ) : null}
-        </div>
-      </header>
+            : undefined
+        }
+        actions={
+          <>
+            {worktree.capabilities.discard ? (
+              <ConfirmDialog
+                title={t("discardChangesConfirm")}
+                description={t("discardChangesDescription")}
+                confirmText={t("discardChanges")}
+                cancelText={t("cancel")}
+                danger
+                onConfirm={() => action.mutate("discard")}
+                trigger={
+                  <Button
+                    variant="destructive-ghost"
+                    size="sm"
+                    disabled={action.isPending}
+                  >
+                    <Trash2 />
+                    {t("discardChanges")}
+                  </Button>
+                }
+              />
+            ) : null}
+            {worktree.capabilities.markReady ? (
+              <ConfirmDialog
+                title={t("submitForReviewConfirm")}
+                description={t("submitForReviewDescription")}
+                confirmText={t("submitForReview")}
+                cancelText={t("cancel")}
+                onConfirm={() => action.mutate("markReady")}
+                trigger={
+                  <Button size="sm" disabled={action.isPending}>
+                    <Send />
+                    {t("submitForReview")}
+                  </Button>
+                }
+              />
+            ) : null}
+            {worktree.capabilities.merge && hasMergeConflict ? (
+              <Tooltip content={t("mergeConflictBlocksMerge")}>
+                <span className="inline-flex max-w-full">
+                  <Button size="sm" disabled>
+                    <CheckCircle2 />
+                    {t("confirmMerge")}
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : worktree.capabilities.merge ? (
+              <ConfirmDialog
+                title={t("mergeConfirm")}
+                description={t("mergeDescription")}
+                confirmText={t("confirmMerge")}
+                cancelText={t("cancel")}
+                onConfirm={() => action.mutate("merge")}
+                trigger={
+                  <Button
+                    size="sm"
+                    disabled={action.isPending || mergeReviewPending}
+                  >
+                    <CheckCircle2 />
+                    {t("confirmMerge")}
+                  </Button>
+                }
+              />
+            ) : null}
+          </>
+        }
+      />
 
       {!worktree.capabilities.review ? (
         <Empty className="my-auto" title={t("noReviewPermission")} />
@@ -361,10 +351,12 @@ function UnitReview({
               {t("trunkAdvancedPreviewReady")}
             </span>
             {activeView !== "comparison" ? (
-              <div data-testid="merge-preview-control">
+              <div className="min-w-0 max-w-full" data-testid="merge-preview-control">
                 <Segmented<"preview" | "agent">
                   size="sm"
                   aria-label={t("mergePreview")}
+                  className="grid max-w-full grid-cols-2"
+                  itemClassName="h-auto min-h-7 min-w-0 whitespace-normal [overflow-wrap:anywhere] py-1"
                   value={activeView === "preview" ? "preview" : "agent"}
                   onValueChange={(value) => onSelectedViewChange?.(value)}
                   options={[
@@ -442,101 +434,41 @@ function UnitReview({
   );
 }
 
-function ReviewTitle({
-  worktree,
+function ReviewBadge({
+  state,
   unit,
 }: {
-  readonly worktree: WorktreeDetailModel;
+  readonly state: WorktreeState;
   readonly unit: WorktreeUnit | undefined;
 }) {
   const { t } = useI18n();
-  return (
-    <div className="flex min-w-0 items-center gap-2.5" data-testid="review-title">
-      {unit ? <UnitTypeIcon type={unit.unitType} /> : null}
-      <div className="flex min-w-0 items-baseline gap-1.5">
-        <h3
-          className="m-0 min-w-0 truncate text-sm font-semibold tracking-tight"
-          title={worktree.name}
-        >
-          {worktree.name}
-        </h3>
-        {unit ? (
-          <span
-            className="hidden min-w-0 max-w-[40%] shrink-0 truncate text-xs text-muted-foreground @min-[760px]/review:inline"
-            title={unit.name}
-          >
-            · {unit.name}
-          </span>
-        ) : null}
-      </div>
-      {unit ? (
-        <Badge variant={unitChangeVariant(unit.change)}>
-          {unitChangeLabel(unit.change, t)}
-        </Badge>
-      ) : (
-        <Badge variant={worktreeStateVariant(worktree.state)}>
-          {worktreeStateLabel(worktree.state, t)}
-        </Badge>
-      )}
-      {unit && unit.mergeResult !== "pending" ? (
-        <Badge
-          variant={
-            unit.mergeResult === "merged" || unit.mergeResult === "unchanged"
-              ? "success"
-              : "danger"
-          }
-        >
-          {t("mergeResultLabel", {
-            value: t(unit.mergeResult),
-          })}
-        </Badge>
-      ) : null}
-    </div>
+  return unit ? (
+    <Badge
+      className="min-w-0 shrink whitespace-normal [overflow-wrap:anywhere]"
+      variant={unitChangeVariant(unit.change)}
+    >
+      {unitChangeLabel(unit.change, t)}
+    </Badge>
+  ) : (
+    <Badge variant={worktreeStateVariant(state)}>
+      {worktreeStateLabel(state, t)}
+    </Badge>
   );
 }
 
-function ReviewViewControl({
-  activeView,
-  hasActions,
-  onSelectedViewChange,
-}: {
-  readonly activeView: WorktreeReviewView;
-  readonly hasActions: boolean;
-  readonly onSelectedViewChange?: (view: WorktreeReviewView) => void;
-}) {
+function ReviewMergeResultBadge({ unit }: { readonly unit: WorktreeUnit }) {
   const { t } = useI18n();
-  return (
-    <div
-      className={cn(
-        "min-w-0 w-full @min-[480px]/review:w-auto",
-        hasActions
-          ? "@min-[480px]/review:col-span-2 @min-[480px]/review:justify-self-center @min-[600px]/review:col-span-1 @min-[600px]/review:col-start-2 @min-[600px]/review:row-start-1"
-          : "@min-[480px]/review:col-start-2 @min-[480px]/review:row-start-1 @min-[480px]/review:justify-self-end"
-      )}
-      data-testid="view-compare-center"
+  return unit.mergeResult !== "pending" ? (
+    <Badge
+      variant={
+        unit.mergeResult === "merged" || unit.mergeResult === "unchanged"
+          ? "success"
+          : "danger"
+      }
     >
-      <Segmented<WorktreeReviewMode>
-        size="sm"
-        aria-label={t("readOnlyPreview")}
-        className="h-12 w-full bg-muted/80 p-0.5 shadow-xs @min-[480px]/review:h-8"
-        itemClassName="h-11 min-w-0 flex-1 basis-0 px-5 py-0 text-[13px] @min-[480px]/review:h-7 @min-[480px]/review:min-w-[72px] @min-[480px]/review:flex-none"
-        value={reviewModeForView(activeView)}
-        onValueChange={(value) =>
-          onSelectedViewChange?.(reviewViewForMode(value))
-        }
-        options={[
-          {
-            label: t("reviewView"),
-            value: "view",
-          },
-          {
-            label: t("reviewCompare"),
-            value: "compare",
-          },
-        ]}
-      />
-    </div>
-  );
+      {t("mergeResultLabel", { value: t(unit.mergeResult) })}
+    </Badge>
+  ) : null;
 }
 
 export function UnitChangeIcon({
