@@ -99,6 +99,16 @@ written to model settings.
 `lib/client.css`; profile assembly lives in this package's `scripts/` and
 `cordis.patch.yml`.
 
+### Render and screenshot tools
+
+`univer_lint` and `univer_screenshot` use the pinned Univer render runtime.
+They require both the version-matched static render page and a compatible
+Chrome/Chromium executable. The local quick start builds the page and exports
+`UWH_RENDER_PAGE_ROOT`; set `UWH_RENDER_BROWSER` when the browser executable is
+not discoverable on `PATH`. The production Docker image supplies both assets.
+If `UWH_RENDER_PAGE_ROOT` is missing, the tools return an explicit prerequisite
+error and do not claim that visual verification passed.
+
 Native addons used by the capability plugin remain external runtime
 dependencies. The Harness image installs the platform-specific packages once
 while assembling the profile; the runtime container only copies that assembled
@@ -145,6 +155,13 @@ pnpm --filter dsh-univer-workspace-skin-plugin pack \
 
 export DSH_PLUGINS="file:$DSH_HOME/internal-packages/univerjs-univer-workspace-harness-0.1.0.tgz file:$DSH_HOME/internal-packages/dsh-univer-workspace-plugin-0.1.0.tgz file:$DSH_HOME/internal-packages/dsh-univer-workspace-skin-plugin-0.1.0.tgz"
 NPM_CONFIG_USERCONFIG="$PWD/.npmrc" ./apps/harness/scripts/build-profile.sh
+
+# Optional but required for univer_lint and univer_screenshot.
+pnpm --filter @univerjs/univer-workspace-client-core build
+export UWH_RENDER_PAGE_ROOT="$PWD/packages/client-core/dist/render-runtime"
+# Point this at a compatible local Chrome/Chromium binary when it is not on PATH.
+export UWH_RENDER_BROWSER="${UWH_RENDER_BROWSER:-$(command -v google-chrome || command -v chromium || true)}"
+
 node apps/harness/scripts/start-local.mjs --port 3101 \
   --no-open --trusted-host 127.0.0.1
 ```
