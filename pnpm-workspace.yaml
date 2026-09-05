@@ -31,9 +31,6 @@ packageExtensions:
     dependencies:
       "@wendellhu/redi": "1.1.2"
 
-# The Univer SDK and DSH release trains are pinned to exact releases and may be
-# updated on release day; only these selected scopes are exempt from
-# minimumReleaseAge.
   "@univerjs-pro/bases@1.0.0-insiders.20260902-a58c423":
     dependencies:
       "@wendellhu/redi": "1.1.2"
@@ -73,6 +70,18 @@ packageExtensions:
   "@univerjs/sheets-table@1.0.0-insiders.20260902-a58c423":
     dependencies:
       "@wendellhu/redi": "1.1.2"
+  # Router declarations import React types but omit the type peer. Bind them to
+  # the consuming application's React major; remove once upstream declares it.
+  "@tanstack/react-router@1.170.31":
+    peerDependencies:
+      "@types/react": ">=18 <20"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+
+# The Univer SDK and DSH release trains are pinned to exact releases and may be
+# updated on release day; only these selected scopes are exempt from
+# minimumReleaseAge.
 minimumReleaseAgeExclude:
   - "@deepseek-ai/cordis@4.0.2"
   - "@deepseek-ai/dsh*"
