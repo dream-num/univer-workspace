@@ -17,10 +17,7 @@ import {
   type Univer,
 } from "@univerjs/core";
 import { IAttachmentIoService } from "@univerjs-pro/collaboration-client";
-import {
-  BoardToolType,
-  UniverBoardsPlugin,
-} from "@univerjs-pro/boards";
+import { BoardToolType, UniverBoardsPlugin } from "@univerjs-pro/boards";
 import { UniverBoardsChartPlugin } from "@univerjs-pro/boards-chart";
 import { UniverBoardsChartUIPlugin } from "@univerjs-pro/boards-chart-ui";
 import { UniverBoardsMindPlugin } from "@univerjs-pro/boards-mind";
@@ -62,16 +59,12 @@ import { UniverSheetsChartUIPlugin } from "@univerjs-pro/sheets-chart-ui";
 import { UniverSheetsExchangeClientPlugin } from "@univerjs-pro/sheets-exchange-client";
 import { UniverSheetsOutlinePlugin } from "@univerjs-pro/sheets-outline";
 import { UniverSheetsOutlineUIPlugin } from "@univerjs-pro/sheets-outline-ui";
-import {
-  UniverSheetsPivotTablePlugin,
-} from "@univerjs-pro/sheets-pivot";
+import { UniverSheetsPivotTablePlugin } from "@univerjs-pro/sheets-pivot";
 import { UniverSheetsPivotTableUIPlugin } from "@univerjs-pro/sheets-pivot-ui";
 import { UniverSheetsPrintPlugin } from "@univerjs-pro/sheets-print";
 import { UniverSheetsShapePlugin } from "@univerjs-pro/sheets-shape";
 import { UniverSheetsShapeUIPlugin } from "@univerjs-pro/sheets-shape-ui";
-import {
-  UniverSheetSparklinePlugin,
-} from "@univerjs-pro/sheets-sparkline";
+import { UniverSheetSparklinePlugin } from "@univerjs-pro/sheets-sparkline";
 import { UniverSheetSparklineUIPlugin } from "@univerjs-pro/sheets-sparkline-ui";
 import { UniverSlidesPlugin } from "@univerjs-pro/slides";
 import { UniverSlidesChartPlugin } from "@univerjs-pro/slides-chart";
@@ -122,10 +115,7 @@ import {
 } from "@univerjs/engine-formula";
 import { UniverLicensePlugin } from "@univerjs-pro/license";
 import type { IEmbedResourceRefDataProviderRegistration } from "@univerjs-pro/embed";
-import {
-  IReferencedUnitManagerService,
-  UniverEmbedPlugin,
-} from "@univerjs-pro/embed";
+import { IReferencedUnitManagerService, UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
 import type { ViewerUnitType } from "../viewer-types.ts";
 import type { ViewerUrls } from "./proxy.ts";
@@ -205,10 +195,7 @@ export interface ViewRenderingOptions {
 }
 
 /** Register the complete Office-compatible browser composition. */
-export function registerViewerRendering(
-  univer: Univer,
-  options: ViewRenderingOptions,
-): void {
+export function registerViewerRendering(univer: Univer, options: ViewRenderingOptions): void {
   const collaborationOwnsAssetIo = options.assetIoOwner === ViewAssetIoOwner.CollaborationClient;
   registerBasePlugins(
     univer,
@@ -227,10 +214,7 @@ export function registerViewerRendering(
   if (options.unitType !== undefined) {
     registerOutputPlugins(univer, options.unitType, options.exchangeClientConfig);
   }
-  registerEmbedCorePlugin(
-    univer,
-    options.resourceRefDataProviderRegistrations ?? [],
-  );
+  registerEmbedCorePlugin(univer, options.resourceRefDataProviderRegistrations ?? []);
   options.registerAfterEmbedCore?.();
   registerEmbedUIPlugin(univer);
 }
@@ -427,8 +411,7 @@ function registerEmbedCorePlugin(
   // essential: Embed rejects duplicate registration IDs in one Univer
   // instance, which otherwise leaves every viewer with a noisy runtime error.
   const providedSheetRegistration = registrations.find(
-    ({ registrationId }) =>
-      registrationId === COLLABORATION_SHEET_RESOURCE_REF_DATA_PROVIDER_ID,
+    ({ registrationId }) => registrationId === COLLABORATION_SHEET_RESOURCE_REF_DATA_PROVIDER_ID,
   );
   const ownedSheetRegistration = providedSheetRegistration
     ? undefined
@@ -438,11 +421,13 @@ function registerEmbedCorePlugin(
         waitForFormulaResultApplied: () =>
           injector.get(FormulaCalculationSessionService).waitForLatestApplied(),
         executeFormulaCalculation: () => {
-          void injector.get(ICommandService).executeCommand(
-            SetTriggerFormulaCalculationStartMutation.id,
-            { commands: [], forceCalculation: true },
-            { onlyLocal: true },
-          );
+          void injector
+            .get(ICommandService)
+            .executeCommand(
+              SetTriggerFormulaCalculationStartMutation.id,
+              { commands: [], forceCalculation: true },
+              { onlyLocal: true },
+            );
         },
       }));
   univer.registerPlugin(UniverEmbedPlugin, {

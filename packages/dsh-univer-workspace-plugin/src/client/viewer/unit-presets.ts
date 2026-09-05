@@ -108,36 +108,6 @@ import "@univerjs-pro/slides/facade";
 import "@univerjs-pro/slides-chart/facade";
 import "@univerjs-pro/slides-exchange-client/facade";
 import "@univerjs-pro/slides-table/facade";
-import "@univerjs/preset-docs-core/lib/index.css";
-import "@univerjs/preset-docs-drawing/lib/index.css";
-import "@univerjs/preset-docs-hyper-link/lib/index.css";
-import "@univerjs/preset-docs-thread-comment/lib/index.css";
-import "@univerjs/design/lib/index.css";
-import "@univerjs/docs-ui/lib/index.css";
-import "@univerjs/drawing-ui/lib/index.css";
-import "@univerjs/ui/lib/index.css";
-import "@univerjs-pro/bases-exchange-client/lib/index.css";
-import "@univerjs-pro/bases-ui/lib/index.css";
-import "@univerjs-pro/boards-chart-ui/lib/index.css";
-import "@univerjs-pro/boards-mind-ui/lib/index.css";
-import "@univerjs-pro/boards-table-ui/lib/index.css";
-import "@univerjs-pro/boards-ui/lib/index.css";
-import "@univerjs-pro/chart-ui/lib/index.css";
-import "@univerjs-pro/docs-callout-ui/lib/index.css";
-import "@univerjs-pro/docs-chart-ui/lib/index.css";
-import "@univerjs-pro/docs-code-ui/lib/index.css";
-import "@univerjs-pro/docs-column-ui/lib/index.css";
-import "@univerjs-pro/docs-latex-ui/lib/index.css";
-import "@univerjs-pro/docs-list-ui/lib/index.css";
-import "@univerjs-pro/docs-quote-ui/lib/index.css";
-import "@univerjs-pro/docs-shape-ui/lib/index.css";
-import "@univerjs-pro/docs-table-ui/lib/index.css";
-import "@univerjs-pro/ink-ui/lib/index.css";
-import "@univerjs-pro/shape-editor-ui/lib/index.css";
-import "@univerjs-pro/slides-chart-ui/lib/index.css";
-import "@univerjs-pro/slides-table-ui/lib/index.css";
-import "@univerjs-pro/slides-ui/lib/index.css";
-
 export interface ViewerPresetOptions {
   readonly container: string;
   readonly license: string;
@@ -188,11 +158,16 @@ function createSheetPresets({
   editable,
   universerEndpoint = "",
   exchangeUrls,
-}: Pick<ViewerPresetOptions, "container" | "license" | "editable" | "universerEndpoint" | "exchangeUrls">): IPreset[] {
+}: Pick<
+  ViewerPresetOptions,
+  "container" | "license" | "editable" | "universerEndpoint" | "exchangeUrls"
+>): IPreset[] {
   const coreConfig = {
     container,
     ribbonType: "grid" as const,
-    ...(editable ? {} : { toolbar: false }),
+    ...(editable
+      ? {}
+      : ({ header: false, headerMenu: false, toolbar: false, footer: false, contextMenu: false } as const)),
   };
   return [
     UniverSheetsCorePreset(coreConfig),
@@ -206,11 +181,14 @@ function createSheetPresets({
     UniverSheetsSortPreset(),
     UniverSheetsTablePreset(),
     UniverSheetsThreadCommentPreset(),
-    withViewerExchangeUrls(UniverSheetsAdvancedPreset({
-      license,
-      universerEndpoint,
-      print: { enforceWatermark: true },
-    }), exchangeUrls),
+    withViewerExchangeUrls(
+      UniverSheetsAdvancedPreset({
+        license,
+        universerEndpoint,
+        print: { enforceWatermark: true },
+      }),
+      exchangeUrls,
+    ),
   ];
 }
 
@@ -221,7 +199,9 @@ function createDocPresets({
   const coreConfig = {
     container,
     ribbonType: "grid" as const,
-    ...(editable ? {} : { toolbar: false }),
+    ...(editable
+      ? {}
+      : ({ header: false, headerMenu: false, toolbar: false, footer: false, contextMenu: false } as const)),
   };
   return [
     UniverDocsCorePreset(coreConfig),
@@ -252,10 +232,7 @@ function createDocPresets({
   ];
 }
 
-function createCommonDocumentPlugins(
-  container: string,
-  editable: boolean,
-): IPresetPlugin[] {
+function createCommonDocumentPlugins(container: string, editable: boolean): IPresetPlugin[] {
   return [
     UniverRenderEnginePlugin,
     [
@@ -383,10 +360,7 @@ function withViewerExchangeUrls(preset: IPreset, urls: ViewerUrls | undefined): 
       if (!Array.isArray(plugin)) return plugin;
       const [PluginConstructor, pluginConfig] = plugin;
       if (PluginConstructor !== UniverExchangeClientPlugin) return plugin;
-      return [
-        PluginConstructor,
-        { ...(pluginConfig as object), ...urls },
-      ] as IPresetPlugin;
+      return [PluginConstructor, { ...(pluginConfig as object), ...urls }] as IPresetPlugin;
     }),
   };
 }

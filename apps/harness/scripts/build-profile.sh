@@ -16,7 +16,7 @@
 # Optional env:
 #   DSH_PROFILE   profile name (default: univer-workspace-harness).
 #   DSH_WEB_BUNDLE in-box web bundle that establishes the browser surface
-#                 (default: the rc.2 bundle matching the current DSH CLI).
+#                 (default: the alpha.4 bundle matching the current DSH CLI).
 #   DSH_PLUGINS   space-separated out-of-tree bundle packages/specs (the
 #                 harness core, capability, and skin bundle tarballs).
 set -euo pipefail
@@ -26,7 +26,7 @@ set -euo pipefail
 export DSH_HOME
 
 PROFILE="${DSH_PROFILE:-univer-workspace-harness}"
-WEB_BUNDLE="${DSH_WEB_BUNDLE:-@deepseek-ai/dsh-web-app@0.1.1-rc.2}"
+WEB_BUNDLE="${DSH_WEB_BUNDLE:-@deepseek-ai/dsh-web-app@0.1.2-alpha.4}"
 INTERNAL_PLUGINS="${DSH_PLUGINS:-}"
 
 dsh() {
@@ -54,6 +54,13 @@ supportedArchitectures:
     - current
   libc:
     - current
+minimumReleaseAgeExclude:
+  # The selected DSH CLI/Web bundle is a version-locked release train; its
+  # split packages must be allowed through the same policy gate together.
+  - "@deepseek-ai/dsh*"
+  - "@univer-cli/*"
+  - "@univerjs/*"
+  - "@univerjs-pro/*"
 EOF
 
 # Establish the browser surface. `dsh plugin` initializes the profile on first

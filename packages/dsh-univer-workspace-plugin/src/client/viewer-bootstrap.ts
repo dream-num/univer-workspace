@@ -5,7 +5,11 @@
  */
 
 export interface ViewerBootstrap {
-  readonly user: { readonly id: string; readonly displayName: string; readonly avatarUrl: string | null };
+  readonly user: {
+    readonly id: string;
+    readonly displayName: string;
+    readonly avatarUrl: string | null;
+  };
   readonly license: string;
 }
 
@@ -14,7 +18,9 @@ let bootstrapPromise: Promise<ViewerBootstrap> | undefined;
 /** Fetch the viewer bootstrap (identity + license) from the harness host. */
 export function loadViewerBootstrap(): Promise<ViewerBootstrap> {
   if (bootstrapPromise === undefined) {
-    bootstrapPromise = fetch("/univer-workspace/api/viewer-bootstrap", { headers: { accept: "application/json" } })
+    bootstrapPromise = fetch("/univer-workspace/api/viewer-bootstrap", {
+      headers: { accept: "application/json" },
+    })
       .then(async (response) => {
         if (!response.ok) throw new Error(`viewer bootstrap answered ${response.status}`);
         const body = (await response.json()) as {

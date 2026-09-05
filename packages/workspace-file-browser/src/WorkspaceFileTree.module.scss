@@ -1,0 +1,246 @@
+.tree {
+  --uwfb-text: var(--color-foreground, var(--dsw-alias-label-primary));
+  --uwfb-text-secondary: var(--color-secondary-foreground, var(--dsw-alias-label-secondary));
+  --uwfb-text-subtle: var(--color-subtle-foreground, var(--dsw-alias-label-tertiary));
+  --uwfb-hover: var(--color-accent, var(--dsw-alias-interactive-bg-hover));
+  --uwfb-selected: var(--color-brand-50, var(--dsw-alias-interactive-bg-hover));
+  --uwfb-selected-text: var(--color-brand-700, var(--dsw-alias-label-primary));
+  --uwfb-focus: var(--color-ring, var(--dsw-alias-brand-primary));
+  --uwfb-danger: var(--color-destructive, var(--dsw-alias-state-danger-primary));
+  display: grid;
+  min-width: 0;
+  margin-top: 16px;
+  gap: 4px;
+  color: var(--uwfb-text);
+  font-size: 14px;
+}
+
+.section {
+  min-width: 0;
+}
+
+.sectionRow,
+.spaceRow,
+.nodeRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 32px;
+  border-radius: 6px;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.sectionRow {
+  padding: 0 2px 0 6px;
+}
+
+.sectionButton,
+.itemButton,
+.treeToggle {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sectionButton {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  height: 32px;
+  gap: 5px;
+  padding: 0;
+  color: var(--uwfb-text-subtle);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.sectionButton:hover {
+  color: var(--uwfb-text);
+}
+
+.sectionButton:focus-visible,
+.itemButton:focus-visible,
+.treeToggle:focus-visible {
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--uwfb-focus) 40%, transparent);
+}
+
+.spaceList,
+.nodeList {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.branchIndented {
+  margin-inline-start: 18px;
+}
+
+.space,
+.node {
+  min-width: 0;
+}
+
+.spaceRow,
+.nodeRow {
+  padding-right: 2px;
+  color: var(--uwfb-text-secondary);
+}
+
+.spaceRow:hover,
+.nodeRow:hover {
+  background: var(--uwfb-hover);
+  color: var(--uwfb-text);
+}
+
+.selected {
+  background: var(--uwfb-selected);
+  color: var(--uwfb-selected-text);
+  font-weight: 500;
+}
+
+.dropActive {
+  background: var(--uwfb-selected);
+  box-shadow: inset 0 0 0 2px var(--uwfb-focus);
+}
+
+.dragging {
+  opacity: 0.5;
+}
+
+.treeToggle,
+.toggleSpacer {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+}
+
+.chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform 120ms ease;
+}
+
+.chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.itemButton {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  min-height: 32px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  gap: 8px;
+  padding: 0 4px;
+  text-align: left;
+}
+
+.itemButton span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spaceIcon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--color-muted-foreground);
+}
+
+.actions {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 2px;
+  border-radius: 5px;
+  background: var(--uwfb-hover);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.sectionRow:hover > .actions,
+.sectionRow:focus-within > .actions,
+.spaceRow:hover > .actions,
+.spaceRow:focus-within > .actions,
+.nodeRow:hover > .actions,
+.nodeRow:focus-within > .actions,
+.selected > .actions {
+  opacity: 1;
+}
+
+.nodeRow:hover > .itemButton,
+.nodeRow:focus-within > .itemButton,
+.selected > .itemButton {
+  padding-right: 112px;
+}
+
+.status,
+.empty,
+.error {
+  box-sizing: border-box;
+  min-height: 32px;
+  margin: 0;
+  padding-inline-start: 10px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  color: var(--uwfb-text-subtle);
+  font-size: 12px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+}
+
+.error {
+  color: var(--uwfb-danger);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--uwfb-text-subtle) 28%, transparent);
+  border-top-color: var(--uwfb-text-subtle);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sectionRow,
+  .spaceRow,
+  .nodeRow,
+  .chevron,
+  .actions {
+    transition: none;
+  }
+
+  .spinner {
+    animation-duration: 1400ms;
+  }
+}

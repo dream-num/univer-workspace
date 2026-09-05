@@ -1,13 +1,13 @@
 /**
  * The collaboration proxy: registers browser-facing Workspace API routes on
  * the DSH web server and forwards them to the Workspace origin with the
- * authorizing User's session cookie.
+ * process-wide Workspace session credential.
  *
  * This is the "no separate gateway" landing point. The floating viewer (a
  * client-side Univer collaboration component implemented by this plugin) talks
  * to the DSH origin; this proxy carries each request — HTTP and the
- * collaboration WebSocket — to the Workspace origin with the per-User
- * credential.
+ * collaboration WebSocket — to the Workspace origin with the current local
+ * instance credential.
  *
  * The DSH webserver only supports exact-path WebSocket upgrade registration,
  * while the Workspace worktree WebSocket path is dynamic
@@ -46,17 +46,15 @@ const FORWARD_PREFIXES = [
 ] as const;
 
 function canForwardHttp(path: string): boolean {
-  return FORWARD_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
+  return FORWARD_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 /** The query parameter carrying the Workspace WS path for an upgrade. */
 const WS_TARGET_PARAM = "target";
 
 /** Resolve the authenticated User's workspace origin + session token, or undefined. */
-function resolveUpstream(ctx: Context, req: IncomingMessage): { origin: string; token: string } | undefined {
-  const identity = ctx.get("workspaceSession")!.currentUser(req.headers.cookie);
-  if (identity === undefined) return undefined;
-  const client = ctx.get("workspaceAuth")!.clientFor(identity.userId);
+function resolveUpstream(ctx: Context): { origin: string; token: string } | undefined {
+  const client = ctx.get("workspaceAuth")!.currentClient();
   if (client === undefined) return undefined;
   return { origin: client.origin, token: client.sessionToken };
 }
@@ -66,7 +64,9 @@ function stripPrefix(requestPath: string): string {
 }
 
 /** Build the HTTP forwarding handler. */
-function createHttpHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+function createHttpHandler(
+  ctx: Context,
+): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res): Promise<void> => {
     const url = new URL(req.url ?? "/", "http://x");
     const path = url.pathname;
@@ -76,17 +76,24 @@ function createHttpHandler(ctx: Context): (req: IncomingMessage, res: ServerResp
       res.end(JSON.stringify({ error: "not_forwarded" }));
       return;
     }
-    const upstream = resolveUpstream(ctx, req);
+    const upstream = resolveUpstream(ctx);
     if (upstream === undefined) {
       res.writeHead(401, { "content-type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ error: "missing_or_invalid_session" }));
+      res.end(JSON.stringify({ error: "workspace_connection_required" }));
       return;
     }
     const target = new URL(workspacePath + url.search, upstream.origin);
     const headers = new Headers();
     for (const [name, value] of Object.entries(req.headers)) {
       if (value === undefined) continue;
-      if (name === "host" || name === "cookie" || name === "connection" || name === "upgrade" || name === "content-length") continue;
+      if (
+        name === "host" ||
+        name === "cookie" ||
+        name === "connection" ||
+        name === "upgrade" ||
+        name === "content-length"
+      )
+        continue;
       headers.set(name, Array.isArray(value) ? value.join(", ") : value);
     }
     headers.set("cookie", `workspace_session=${upstream.token}`);
@@ -116,7 +123,9 @@ function createHttpHandler(ctx: Context): (req: IncomingMessage, res: ServerResp
 }
 
 /** Build the WebSocket upgrade handler that bridges to the Workspace origin. */
-function createUpgradeHandler(ctx: Context): (req: IncomingMessage, socket: Duplex, head: Buffer) => void {
+function createUpgradeHandler(
+  ctx: Context,
+): (req: IncomingMessage, socket: Duplex, head: Buffer) => void {
   return (req, socket, head): void => {
     const url = new URL(req.url ?? "/", "http://x");
     const targetParam = url.searchParams.get(WS_TARGET_PARAM);
@@ -124,7 +133,7 @@ function createUpgradeHandler(ctx: Context): (req: IncomingMessage, socket: Dupl
       socket.destroy();
       return;
     }
-    const upstream = resolveUpstream(ctx, req);
+    const upstream = resolveUpstream(ctx);
     if (upstream === undefined) {
       socket.destroy();
       return;
@@ -149,13 +158,14 @@ function createUpgradeHandler(ctx: Context): (req: IncomingMessage, socket: Dupl
       // before a changeset can be persisted. Normalize only at this transport
       // seam; the payload itself remains opaque to the proxy.
       const sendText = (peer: WebSocket, data: WebSocket.RawData): void => {
-        const text = typeof data === "string"
-          ? data
-          : Buffer.isBuffer(data)
-            ? data.toString("utf8")
-            : data instanceof ArrayBuffer
-              ? Buffer.from(new Uint8Array(data)).toString("utf8")
-              : Buffer.concat(data).toString("utf8");
+        const text =
+          typeof data === "string"
+            ? data
+            : Buffer.isBuffer(data)
+              ? data.toString("utf8")
+              : data instanceof ArrayBuffer
+                ? Buffer.from(new Uint8Array(data)).toString("utf8")
+                : Buffer.concat(data).toString("utf8");
         peer.send(text);
       };
       // The browser may send frames as soon as the proxy-side socket reaches
@@ -176,8 +186,16 @@ function createUpgradeHandler(ctx: Context): (req: IncomingMessage, socket: Dupl
       const close = (): void => {
         if (closed) return;
         closed = true;
-        try { client.close(); } catch { /* noop */ }
-        try { upstreamWs.close(); } catch { /* noop */ }
+        try {
+          client.close();
+        } catch {
+          /* noop */
+        }
+        try {
+          upstreamWs.close();
+        } catch {
+          /* noop */
+        }
       };
       client.on("close", close);
       client.on("error", close);

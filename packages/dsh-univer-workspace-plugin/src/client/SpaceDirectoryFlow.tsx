@@ -1,16 +1,20 @@
-import { useEffect, useState } from "react";
-import type { ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
+import {
+  Badge,
+  Button,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogRoot,
+  DialogTitle,
+  UserIcon,
+  UsersIcon,
+} from "@univerjs/univer-workspace-ui";
 import type { WorkspaceSpace } from "./workspace-contract.ts";
 import type { UniverLocaleKey } from "./locales.ts";
-
-/** Public owner conversation of DSH's two Workspace directory-flow slots. */
-export interface SpaceDirectoryFlowOwnerProps {
-  readonly open: boolean;
-  readonly busy: boolean;
-  readonly onPicked: (path: string) => void;
-  readonly onCancel: () => void;
-  readonly onError: (message: string) => void;
-}
+import type { DirectoryFlowOwnerProps } from "./dsh-runtime-types.ts";
+import css from "./SpaceDirectoryFlow.module.scss";
 
 export interface SpaceDirectoryFlowInjected {
   readonly loadSpaces: () => Promise<readonly WorkspaceSpace[]>;
@@ -18,26 +22,11 @@ export interface SpaceDirectoryFlowInjected {
   readonly t: (key: UniverLocaleKey) => string;
 }
 
-declare module "@deepseek-ai/dsh-client-ui-slots" {
-  interface SlotMap {
-    "conversation.hero.workspace.directoryFlow": {
-      kind: "single";
-      scope: "root";
-      owner: SpaceDirectoryFlowOwnerProps;
-    };
-    "sidebar.workspaces.directoryFlow": {
-      kind: "single";
-      scope: "root";
-      owner: SpaceDirectoryFlowOwnerProps;
-    };
-  }
-}
-
 type Phase = "pending" | "ready" | "error";
 
 /** Product-Space picker replacing DSH's local filesystem directory chooser. */
 export function SpaceDirectoryFlow(
-  props: SpaceDirectoryFlowOwnerProps & SpaceDirectoryFlowInjected,
+  props: DirectoryFlowOwnerProps & SpaceDirectoryFlowInjected,
 ): ReactElement | null {
   const { open, busy, loadSpaces, onCancel, selectSpace, t } = props;
   const [phase, setPhase] = useState<Phase>("pending");
@@ -47,84 +36,84 @@ export function SpaceDirectoryFlow(
     if (!open) return;
     let live = true;
     setPhase("pending");
-    void loadSpaces().then((value) => {
-      if (!live) return;
-      setSpaces(value);
-      setPhase("ready");
-    }).catch(() => {
-      if (live) setPhase("error");
-    });
-    return () => { live = false; };
-  }, [loadSpaces, open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape" && !busy) onCancel();
+    void loadSpaces()
+      .then((value) => {
+        if (!live) return;
+        setSpaces(value);
+        setPhase("ready");
+      })
+      .catch(() => {
+        if (live) setPhase("error");
+      });
+    return () => {
+      live = false;
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => { window.removeEventListener("keydown", onKeyDown); };
-  }, [busy, onCancel, open]);
+  }, [loadSpaces, open]);
 
   if (!open) return null;
   return (
-    <div
-      className="uwh-spacePickerBackdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !busy) onCancel();
+    <DialogRoot
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !busy) onCancel();
       }}
     >
-      <section
-        className="uwh-spacePickerDialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="uwh-space-picker-title"
-      >
-        <header className="uwh-spacePickerHeader">
-          <div>
-            <h2 id="uwh-space-picker-title">{t("workspace.chooseSpace")}</h2>
-            <p>{t("workspace.chooseSpaceHint")}</p>
-          </div>
-          <button
-            type="button"
-            className="uwh-spacePickerClose"
-            aria-label={t("workspace.cancel")}
-            disabled={busy}
-            onClick={onCancel}
-          >
-            ×
-          </button>
-        </header>
-        <div className="uwh-spacePickerBody">
-          {phase === "pending" && <p className="uwh-spacePickerStatus" role="status">{t("workspace.loadingSpaces")}</p>}
-          {phase === "error" && <p className="uwh-spacePickerError" role="alert">{t("workspace.spacesLoadFailed")}</p>}
-          {phase === "ready" && spaces.length === 0 && <p className="uwh-spacePickerStatus">{t("workspace.noSpaces")}</p>}
+      <DialogContent width="md" closeLabel={t("workspace.cancel")}>
+        <DialogHeader>
+          <DialogTitle>{t("workspace.chooseSpace")}</DialogTitle>
+          <DialogDescription>{t("workspace.chooseSpaceHint")}</DialogDescription>
+        </DialogHeader>
+        <div className={css.body}>
+          {phase === "pending" && (
+            <p className={css.status} role="status">
+              {t("workspace.loadingSpaces")}
+            </p>
+          )}
+          {phase === "error" && (
+            <p className={css.error} role="alert">
+              {t("workspace.spacesLoadFailed")}
+            </p>
+          )}
+          {phase === "ready" && spaces.length === 0 && (
+            <p className={css.status}>{t("workspace.noSpaces")}</p>
+          )}
           {phase === "ready" && spaces.length > 0 && (
-            <ul className="uwh-spacePickerList">
-              {spaces.map(space => (
+            <ul className={css.list}>
+              {spaces.map((space) => (
                 <li key={space.spaceId}>
-                  <button
+                  <Button
                     type="button"
-                    className="uwh-spacePickerItem"
+                    className={css.item}
+                    variant="ghost"
                     disabled={busy}
                     onClick={() => {
                       onCancel();
                       selectSpace(space.dshWorkspaceId);
                     }}
                   >
-                    <span className="uwh-spacePickerIcon" aria-hidden="true">◇</span>
-                    <span className="uwh-spacePickerName">{space.name}</span>
-                    <span className="uwh-spacePickerType">
-                      {t(space.type === "personal" ? "workspace.personalSpace" : "workspace.teamSpace")}
+                    <span className={css.icon} aria-hidden="true">
+                      {space.type === "personal" ? <UserIcon /> : <UsersIcon />}
                     </span>
-                  </button>
+                    <span className={css.name}>{space.name}</span>
+                    <Badge variant="outline">
+                      {t(
+                        space.type === "personal"
+                          ? "workspace.personalSpace"
+                          : "workspace.teamSpace",
+                      )}
+                    </Badge>
+                  </Button>
                 </li>
               ))}
             </ul>
           )}
         </div>
-      </section>
-    </div>
+        <DialogFooter>
+          <Button variant="secondary" disabled={busy} onClick={onCancel}>
+            {t("workspace.cancel")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </DialogRoot>
   );
 }

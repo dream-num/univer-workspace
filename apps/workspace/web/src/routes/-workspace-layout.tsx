@@ -294,7 +294,7 @@ export function WorkspaceLayout({
           </div>
 
           <nav
-            aria-label={language === "zh-CN" ? "主导航" : "Main navigation"}
+            aria-label={t("mainNavigation")}
             className={cn(
               "mt-3 min-w-0 flex-1 overflow-x-hidden overflow-y-auto",
               navigationCollapsed ? "px-2.5" : "px-3"
@@ -365,7 +365,6 @@ export function WorkspaceLayout({
                 selectedNodeId={selectedNodeId}
                 selectedNodePath={selectedNodePath}
                 storageScope={currentSession.user.id}
-                onCreateTeamSpace={() => setTeamDialogOpen(true)}
               />
             )}
 

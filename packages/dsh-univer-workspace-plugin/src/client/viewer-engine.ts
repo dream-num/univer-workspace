@@ -18,11 +18,9 @@ export type {
   ViewerOptions,
   ViewerScope,
   ViewerUnitType,
+  ViewerSelection,
 } from "./viewer/contracts.ts";
-export {
-  isViewerUnitTypeSupported,
-  SUPPORTED_VIEWER_UNIT_TYPES,
-} from "./viewer-types.ts";
+export { isViewerUnitTypeSupported, SUPPORTED_VIEWER_UNIT_TYPES } from "./viewer-types.ts";
 export {
   blockLocalEditingCommands,
   enforceSheetViewerReadOnlyPermissions,

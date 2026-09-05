@@ -1,12 +1,13 @@
 import { build } from "esbuild";
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { build as viteBuild } from "vite";
 
 // DSH bundles are consumed from a dsh profile, not from this workspace, so
-// every package builds self-contained artifacts: a node ESM host bundle
-// with the @deepseek-ai/* peers (and zod, owned by dsh-storage-domain) left
-// external, and a classic-script client bundle wrapped in a ModuleLoader
-// shell whose `require` resolves React from the DSH page runtime.
+// every package builds self-contained artifacts: a node ESM host bundle and
+// worker bundle with the @deepseek-ai/* peers (and zod, owned by
+// dsh-storage-domain) left external, plus a Vite-built browser client wrapped
+// in a ModuleLoader shell whose `require` resolves React from the DSH page runtime.
 const external = [
   "node:*",
   "@deepseek-ai/*",
@@ -43,29 +44,10 @@ await build({
   logLevel: "info",
 });
 
-const packageId = "dsh-univer-workspace-plugin";
-
-await build({
-  entryPoints: ["src/client/index.tsx"],
-  outfile: "lib/client.js",
-  bundle: true,
-  platform: "browser",
-  format: "cjs",
-  target: "es2022",
-  jsx: "transform",
-  jsxFactory: "createElement",
-  jsxFragment: "Fragment",
-  loader: { ".css": "text" },
-  external: ["react", "react-dom"],
-  sourcemap: true,
-  logLevel: "info",
-  banner: {
-    js: `var module = { exports: {} }; var exports = module.exports;\nwindow.__ModuleLoader__.load({ id: ${JSON.stringify(packageId)}, factory: (require) => {`,
-  },
-  footer: {
-    js: "return module.exports; } });",
-  },
-});
+// Browser UI is built by Vite so TSX, CSS Modules and SCSS share one
+// reproducible pipeline. The config preserves the DSH ModuleLoader wrapper
+// and externalizes the host-owned React/primitives runtime.
+await viteBuild({ configFile: "vite.client.config.mjs" });
 
 // The headless collaboration worker runs in a forked child process and loads
 // the whole Univer headless dependency graph. Node builtins stay external; the
@@ -95,7 +77,10 @@ await build({
 // public entry (dist/index.mjs) and take its sibling bootstrap.
 const poolEntryUrl = import.meta.resolve("@univer-cli/univer-collaboration-runtime-pool");
 const poolChildPath = fileURLToPath(new URL("./worker-child.mjs", poolEntryUrl));
-await copyFile(poolChildPath, fileURLToPath(new URL("../lib/worker-child-upstream.mjs", import.meta.url)));
+await copyFile(
+  poolChildPath,
+  fileURLToPath(new URL("../lib/worker-child-upstream.mjs", import.meta.url)),
+);
 await copyFile(
   fileURLToPath(new URL("../src/runtime/worker-child-bootstrap.mjs", import.meta.url)),
   fileURLToPath(new URL("../lib/worker-child.mjs", import.meta.url)),

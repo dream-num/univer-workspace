@@ -1,0 +1,20 @@
+.handle {
+  position: fixed;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  margin-left: -4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.handle:hover,
+.handle:focus-visible,
+.handle[data-dragging="true"] {
+  background: color-mix(in srgb, var(--color-ring) 42%, transparent);
+  outline: none;
+}

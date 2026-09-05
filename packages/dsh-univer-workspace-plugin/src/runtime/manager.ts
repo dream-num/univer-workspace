@@ -12,7 +12,11 @@ import {
   type UniverCollaborationRuntimeLease,
 } from "@univer-cli/univer-collaboration-runtime-pool";
 import { prepareContentExecutionProgram } from "@univer-cli/content-execution";
-import { inspectContent, type ContentInspectionQuery, type ContentInspectionResult } from "@univer-cli/content-inspection";
+import {
+  inspectContent,
+  type ContentInspectionQuery,
+  type ContentInspectionResult,
+} from "@univer-cli/content-inspection";
 import type {
   CollaborationCommitResult,
   CollaborationRuntimeValue,
@@ -71,9 +75,10 @@ export function runtimeFailureMessage(
 ): string {
   const messages = errorMessages(error);
   const detail = messages.length === 0 ? "" : `: ${messages.join("; caused by: ")}`;
-  const workerDiagnostic = workerCode === undefined
-    ? `diagnostic id: ${id}`
-    : `worker diagnostic: ${workerCode}; diagnostic id: ${id}`;
+  const workerDiagnostic =
+    workerCode === undefined
+      ? `diagnostic id: ${id}`
+      : `worker diagnostic: ${workerCode}; diagnostic id: ${id}`;
   return `Univer runtime ${operation} failed for ${target.unitType} Unit ${target.unitId}${detail} (${workerDiagnostic})`;
 }
 
@@ -84,7 +89,9 @@ function logRuntimeDiagnostic(payload: Record<string, unknown>): void {
 }
 
 export class RuntimeManager {
-  private readonly pool: ReturnType<typeof createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>>;
+  private readonly pool: ReturnType<
+    typeof createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>
+  >;
   private readonly workerUrl: URL;
   /** Last worker-side error code observed before the pool reports a crash. */
   private readonly workerFailures = new Map<string, string>();
@@ -112,14 +119,21 @@ export class RuntimeManager {
   }
 
   /** Read one Unit's data with the Facade API. */
-  public async read(target: WorkspaceRuntimeTarget, code: string): Promise<CollaborationRuntimeValue> {
+  public async read(
+    target: WorkspaceRuntimeTarget,
+    code: string,
+  ): Promise<CollaborationRuntimeValue> {
     return await this.withDiagnosticContext(target, "read", async () => {
       const lease = await this.acquire(target);
       let reusable = false;
       try {
         await this.synchronize(lease, target);
         const result = await lease.execute({
-          code: prepareContentExecutionProgram({ code, unitId: target.unitId, unitType: target.unitType }),
+          code: prepareContentExecutionProgram({
+            code,
+            unitId: target.unitId,
+            unitType: target.unitType,
+          }),
           mode: "read",
         });
         reusable = true;
@@ -176,7 +190,10 @@ export class RuntimeManager {
   }
 
   /** Execute a write in Worktree scope and commit the resulting changeset. */
-  public async writeAndCommit(target: WorkspaceRuntimeTarget, code: string): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }> {
+  public async writeAndCommit(
+    target: WorkspaceRuntimeTarget,
+    code: string,
+  ): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }> {
     if (target.scope.kind !== "worktree") {
       throw new Error("workspace target is not editable: execute requires a Worktree target");
     }
@@ -186,7 +203,11 @@ export class RuntimeManager {
       try {
         await this.synchronize(lease, target);
         const executed = await lease.execute({
-          code: prepareContentExecutionProgram({ code, unitId: target.unitId, unitType: target.unitType }),
+          code: prepareContentExecutionProgram({
+            code,
+            unitId: target.unitId,
+            unitType: target.unitType,
+          }),
           mode: "write",
         });
         if (executed.mutations.length === 0) {
@@ -232,13 +253,22 @@ export class RuntimeManager {
         error: errorDetails(error),
         at: new Date().toISOString(),
       });
-      throw new Error(runtimeFailureMessage(operation, target, error, workerCode, id), { cause: error });
+      throw new Error(runtimeFailureMessage(operation, target, error, workerCode, id), {
+        cause: error,
+      });
     }
   }
 
-  private async synchronize(lease: UniverCollaborationRuntimeLease, target: WorkspaceRuntimeTarget): Promise<void> {
+  private async synchronize(
+    lease: UniverCollaborationRuntimeLease,
+    target: WorkspaceRuntimeTarget,
+  ): Promise<void> {
     const before = await lease.getState();
-    if (before.pendingMutationCount !== 0 || before.awaitingChangeset !== null || before.conflict !== null) {
+    if (
+      before.pendingMutationCount !== 0 ||
+      before.awaitingChangeset !== null ||
+      before.conflict !== null
+    ) {
       throw new Error("cached workspace runtime is not reusable");
     }
     const pulled = await lease.pull();
@@ -246,7 +276,9 @@ export class RuntimeManager {
       throw new Error(`workspace runtime conflict: ${pulled.conflict.message}`);
     }
     if (target.revision >= 0 && pulled.state.baseRevision !== target.revision) {
-      throw new Error(`workspace runtime revision ${String(pulled.state.baseRevision)} does not match selected revision ${String(target.revision)}`);
+      throw new Error(
+        `workspace runtime revision ${String(pulled.state.baseRevision)} does not match selected revision ${String(target.revision)}`,
+      );
     }
   }
 
@@ -263,10 +295,14 @@ export class RuntimeManager {
         throw new Error(`workspace runtime conflict: ${result.conflict.message}`);
       }
       if (result.status === "pull-required") {
-        throw new Error(`workspace advanced from revision ${String(result.baseRevision)} to ${String(result.knownHeadRevision)} during execute`);
+        throw new Error(
+          `workspace advanced from revision ${String(result.baseRevision)} to ${String(result.knownHeadRevision)} during execute`,
+        );
       }
       throw new Error("workspace runtime discarded pending mutations");
     }
-    throw new Error(`workspace changeset submit could not be confirmed after ${String(MAX_COMMIT_ATTEMPTS)} attempts`);
+    throw new Error(
+      `workspace changeset submit could not be confirmed after ${String(MAX_COMMIT_ATTEMPTS)} attempts`,
+    );
   }
 }

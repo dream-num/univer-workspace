@@ -57,9 +57,23 @@ session files.
   injects it into the stock DSH hero/sidebar slots. DSH still owns its native
   mechanical workspace list and session persistence; selecting a Space only
   chooses the linked DSH workspace for the next session.
-- **Capability HTTP routes**: `/api/uwh/me`, `/api/uwh/template-fork`, and
-  Space rename are registered by this plugin. The Harness only supplies the
-  authenticated `workspaceAuth`/`workspaceSession` services they consume.
+- **Browser file workspace**: the sidebar replaces the shell root with native
+  DSH session and Workspace file tabs. The file tab browses the authenticated
+  Space/Node/Resource tree, creates items in permitted folders, renames and
+  trashes nodes, and exposes a capability-gated trash view with restore and
+  permanent removal. Univer Resources open in the embedded Viewer; Blob
+  Resources use the middle surface for read-only image, video, audio, PDF, and
+  text previews, while unsupported media remains download-only. Blob editing
+  is intentionally outside this plugin surface.
+- **File conversation companion**: opening a Workspace Resource emits a
+  file-scoped event consumed by a stable middle Viewer + right-side DSH
+  conversation surface. The companion reuses the selected native DSH session
+  and adds the Resource id/name as context; it does not create or mutate the
+  left-hand session list.
+- **Capability HTTP routes**: `/api/uwh/me`, `/api/uwh/template-fork`, Space
+  rename, the same-origin Space/Node tree, and trash actions are registered by
+  this plugin. The Harness only supplies the authenticated
+  `workspaceAuth` service they consume.
 - **Bundled skill**: `univer-workspace` teaches the model the Space/document
   model and the Worktree review rules.
 - **Turn preview and live viewer**: successful document/Worktree operations are
@@ -82,18 +96,18 @@ remote Workspace Resources. The shared operations are deliberately mapped to
 the remote contract rather than accepting a local file path that the server
 cannot authorize:
 
-| dsh-univer-office | Workspace plugin | Boundary |
-| --- | --- | --- |
-| `univer_new` | `univer_new` / `univer_create` | Resource creation is a Workspace API operation; the result is opened to resolve `unitId`. |
-| `univer_unit` | `univer_unit` (`action=create`) | Worktree-local Unit creation is backed by `POST /api/worktrees/{id}/units`; remove/restore is not exposed by the current product contract. |
-| `univer_status` | `univer_status` + `univer_spaces`, `univer_documents`, `univer_open` | Status returns the selected trunk Resource or Worktree Unit/file-state; Space, Node and Unit identity remain separate remote resources. |
-| `univer_execute` | `univer_execute` (or `univer_edit` `mode=write`) | Writes are Worktree-scoped and commit a collaboration changeset; exactly one inline `code`/safe session `codeFile` is accepted. |
-| `univer_inspect` | `univer_inspect` | Uses the public content-inspection SDK over the same headless collaboration runtime; range selectors are validated before execution. |
-| `univer_worktree` | `univer_worktree` | Lifecycle and approval semantics are aligned. |
-| `univer_import` / `univer_export` | same names | Local exchange SDK conversion; import creates a Worktree-local Unit and export reads trunk/draft UnitData into a session-relative output. |
-| `univer_api` | `univer_api` (`find`/`show`) | Pinned local CLI SDK reference; read-only and independent of Workspace ACL. |
-| `univer_resources` | `univer_resources` (`registries`/`find`/`read`/`export`/`clear-cache`) | Pinned local visual-resource library; cache/export are session-relative. This is not a product Resource listing. |
-| `univer_screenshot` / `univer_lint` / `univer_compile_svg` | — | No deployable remote render contract is available yet; these remain explicit follow-up work, not silently faked tools. |
+| dsh-univer-office                                          | Workspace plugin                                                       | Boundary                                                                                                                                   |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `univer_new`                                               | `univer_new` / `univer_create`                                         | Resource creation is a Workspace API operation; the result is opened to resolve `unitId`.                                                  |
+| `univer_unit`                                              | `univer_unit` (`action=create`)                                        | Worktree-local Unit creation is backed by `POST /api/worktrees/{id}/units`; remove/restore is not exposed by the current product contract. |
+| `univer_status`                                            | `univer_status` + `univer_spaces`, `univer_documents`, `univer_open`   | Status returns the selected trunk Resource or Worktree Unit/file-state; Space, Node and Unit identity remain separate remote resources.    |
+| `univer_execute`                                           | `univer_execute` (or `univer_edit` `mode=write`)                       | Writes are Worktree-scoped and commit a collaboration changeset; exactly one inline `code`/safe session `codeFile` is accepted.            |
+| `univer_inspect`                                           | `univer_inspect`                                                       | Uses the public content-inspection SDK over the same headless collaboration runtime; range selectors are validated before execution.       |
+| `univer_worktree`                                          | `univer_worktree`                                                      | Lifecycle and approval semantics are aligned.                                                                                              |
+| `univer_import` / `univer_export`                          | same names                                                             | Local exchange SDK conversion; import creates a Worktree-local Unit and export reads trunk/draft UnitData into a session-relative output.  |
+| `univer_api`                                               | `univer_api` (`find`/`show`)                                           | Pinned local CLI SDK reference; read-only and independent of Workspace ACL.                                                                |
+| `univer_resources`                                         | `univer_resources` (`registries`/`find`/`read`/`export`/`clear-cache`) | Pinned local visual-resource library; cache/export are session-relative. This is not a product Resource listing.                           |
+| `univer_screenshot` / `univer_lint` / `univer_compile_svg` | —                                                                      | No deployable remote render contract is available yet; these remain explicit follow-up work, not silently faked tools.                     |
 
 ## Architecture boundary
 
@@ -104,8 +118,8 @@ cannot authorize:
 
 ## Non-responsibilities
 
-- Authentication and credential storage (`workspaceAuth` /
-  `workspaceSession` belong to `@univerjs/univer-workspace-harness`).
+- Authentication and credential storage (`workspaceAuth` belongs to
+  `@univerjs/univer-workspace-harness`).
 - Workspace product APIs, Unit data model, or collaboration contracts
   (owned by the Workspace application and the Univer SDKs).
 - Publication: this is a private workspace package consumed by the harness
@@ -113,8 +127,11 @@ cannot authorize:
 
 ## Build
 
-`pnpm build` emits `lib/index.js` (node host bundle) and `lib/client.js`
-(browser bundle); bundled skills ship under `skills/`.
+`pnpm build` emits `lib/index.js` (node host bundle), `lib/client.js` (browser
+bundle), and the linked `lib/client.css` stylesheet; bundled skills ship under
+`skills/`. The WebServer plugin serves the stylesheet and contributes its
+`<link>` to the DSH boot page, so client code does not create runtime style
+tags.
 
 Native/binary addons are deliberately not bundled into either the host or
 worker. Every binary used by this plugin is an explicit production dependency

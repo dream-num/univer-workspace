@@ -3,13 +3,19 @@
 #
 # It removes the surfaces ordinary internal users do not expose — the
 # permission "Full Access" default selector and advanced settings pages —
-# and mounts the harness core. The official DSH WorkspaceBrowser remains the
-# sidebar owner; the harness only filters its data and routes authentication-
-# aware actions. One row activates BOTH
-# faces: the harness node half registers the OAuth login/callback and
-# authentication routes, and its package manifest declares
+# and mounts the harness core. The harness client owns the sidebar shell so it
+# can compose the Sessions/Files tabs; the native shell is disabled to avoid
+# duplicate declarations of the sidebar child slots. One row activates BOTH
+# faces: the harness node half registers the local Device Authorization
+# connection routes, and its package manifest declares
 # `dsh.client`, so the modules scanner loads the `./client` browser half from
 # the same row.
+
+# The custom Workspace plugin registers a compatible sidebar shell with the
+# native child slots. ui-slots enforces one declarer per child slot, so the
+# stock shell must be disabled before the custom shell is mounted.
+- id: ui-sidebar
+  disabled: true
 
 # ── network server binding ───────────────────────────────────────────────────
 
@@ -18,11 +24,12 @@
 # composition time instead, while the connection row below adds the public
 # authority to the browser trust fence.
 - id: webserver
-  name: '@deepseek-ai/dsh-host-webserver'
+  name: "@deepseek-ai/dsh-host-webserver"
   inject: [webStartup]
   config:
-    host: !!js process.env.UWH_BIND_HOST ?? '0.0.0.0'
-    port: !!js ctx.webStartup.port ?? 3080
+    host: !!js >-
+      process.env.UWH_BIND_HOST ?? '0.0.0.0'
+    port: !!js ctx.webStartup.port ?? Number(process.env.PORT ?? 3080)
 
 # ── hide Full Access / advanced settings ───────────────────────────────────
 
@@ -30,21 +37,29 @@
 # origin the harness is served on (the deployment's public host). A patch
 # replaces the whole row config, so the `inject` edge that resolves
 # `ctx.webRuntime` before the expression runs is restated too. The public host
-# comes from the deployment (UWH_PUBLIC_HOST); a missing/blank value is a
-# LOAD-TIME config error so DSH never silently trusts arbitrary Host headers.
+# defaults to loopback for local Web runs; deployments can override it with
+# UWH_PUBLIC_HOST.
 - id: connection
-  name: '@deepseek-ai/dsh-client-connection'
+  name: "@deepseek-ai/dsh-client-connection"
   inject: [webRuntime]
   config:
     trustedHosts: !!js >-
       (() => {
         const host = process.env.UWH_PUBLIC_HOST
-        if (host === undefined || host.trim() === '') {
-          throw new Error('UWH_PUBLIC_HOST is required: the harness is served on a fixed public host; without it DSH would reject the browser request as untrusted')
-        }
-        return [host.trim(), ...ctx.webRuntime.trustedHosts]
+        const value = host === undefined || host.trim() === '' ? '127.0.0.1' : host.trim()
+        return [value, ...ctx.webRuntime.trustedHosts]
           .filter((value, index, values) => values.indexOf(value) === index)
       })()
+
+# Keep the DSH browser-session signing key and local model credentials stable
+# while the supervisor swaps identity-specific runtime homes. This is local
+# machine state, not a Workspace user credential; the latter stays in the
+# separate connection bootstrap record.
+- id: credentials
+  name: "@deepseek-ai/dsh-credentials-local"
+  config:
+    path: !!js >-
+      process.env.UWH_SHARED_CREDENTIALS_PATH ?? dshHomePath('.credentials.yaml')
 
 # Keep the stock WorkspaceBrowser's content-search branch available. The web
 # bundle deliberately defaults the SQLite query provider to `never`, which
@@ -53,7 +68,7 @@
 # index is only an implementation cache, so it can live under this profile's
 # DSH_HOME and be opened lazily on the first real query.
 - id: session-query-sqlite
-  name: '@deepseek-ai/dsh-session-query-sqlite'
+  name: "@deepseek-ai/dsh-session-query-sqlite"
   config:
     path: !!js dshHomePath('session-query.sqlite')
     openAt: first-search
@@ -87,46 +102,21 @@
 
 - insert:
     - id: univer-workspace-harness
-      name: '@univerjs/univer-workspace-harness'
+      name: "@univerjs/univer-workspace-harness"
+      inject: [webStartup]
       config:
-        # The configured emptyDir mount root for per-user directories. The host
-        # plugin derives each per-user directory as a direct SHA-256-named child
-        # of this root and provisions it before resolving the Workspace record.
-        workspaceRoot: !!js process.env.UWH_WORKSPACE_ROOT
-
         # The Workspace service origin the harness authenticates against and
         # calls. It is a deployment value overridable at runtime through the
         # `univer-workspace-harness` settings namespace.
-        workspaceOrigin: !!js process.env.UWH_WORKSPACE_ORIGIN ?? 'https://workspace.univer.plus'
+        workspaceOrigin: !!js >-
+          process.env.UWH_WORKSPACE_ORIGIN ?? 'https://workspace.univer.plus'
 
-        # The deployment origin the harness is served on; the OAuth callback URL
-        # is built from it, never from a client-supplied Host header.
-        publicOrigin: !!js process.env.UWH_PUBLIC_ORIGIN
+        # The local browser origin is used only for same-origin route checks.
+        publicOrigin: !!js >-
+          process.env.UWH_PUBLIC_ORIGIN ?? `http://127.0.0.1:${ctx.webStartup.port ?? process.env.PORT ?? 3080}`
 
-        # Workspace OAuth confidential client credentials, set by the
-        # deployment. The client secret and session secret are deployment
-        # secrets and never reach the browser bundle.
-        oauthClientId: !!js process.env.UWH_OAUTH_CLIENT_ID
-        oauthClientSecret: !!js process.env.UWH_OAUTH_CLIENT_SECRET
-        sessionSecret: !!js process.env.UWH_OAUTH_SESSION_SECRET
-        authorizeScope: !!js process.env.UWH_OAUTH_SCOPE ?? 'identity session'
-
-        # Route paths of the harness host plugin. The callback path must match
-        # the redirect URI registered with the Workspace authorization server,
-        # so it is a deployment value; the other paths are fixed.
-        loginPath: /auth/login
-        callbackPath: !!js process.env.UWH_OAUTH_CALLBACK_PATH ?? '/auth/callback'
-        # HttpOnly session cookie (short-lived). An explicit override wins;
-        # otherwise Secure follows the configured public origin so local HTTP
-        # harnesses do not receive a cookie that the browser cannot return.
-        sessionCookieName: dsh_session
-        sessionTtlMs: !!js Number(process.env.UWH_OAUTH_SESSION_TTL_MS ?? 900000)
-        stateTtlMs: !!js Number(process.env.UWH_OAUTH_STATE_TTL_MS ?? 120000)
-        secureCookies: !!js process.env.UWH_OAUTH_SECURE_COOKIES === 'true' || (process.env.UWH_OAUTH_SECURE_COOKIES !== 'false' && new URL(process.env.UWH_PUBLIC_ORIGIN).protocol === 'https:')
-
-        # DSH model settings/credentials are profile-global. Keep them off in
-        # production unless the operator explicitly opts in; dev profiles
-        # retain the native Models page for local key setup.
-        modelSettingsEnabled: !!js >-
-          process.env.UWH_MODEL_SETTINGS_ENABLED === 'true' ||
-          process.env.NODE_ENV !== 'production'
+        # The launcher keeps this bootstrap record outside the selected
+        # identity runtime. Device login only updates the next-start record;
+        # a full restart selects the matching origin/user DSH_HOME.
+        connectionStatePath: !!js >-
+          process.env.UWH_CONNECTION_STATE_PATH ?? dshHomePath('connection.json')

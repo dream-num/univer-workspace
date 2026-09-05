@@ -8,14 +8,28 @@
 
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
-import type { CollaborationRuntimeValue, CollaborationUnitData } from "@univer-cli/univer-collaboration-runtime";
+import type {
+  CollaborationRuntimeValue,
+  CollaborationUnitData,
+} from "@univer-cli/univer-collaboration-runtime";
 import type { ContentInspectionResult } from "@univer-cli/content-inspection";
 import type {
-  CreatedDocument, CreateWorktreeLocalUnitInput, OpenedWorktreeUnit, WorktreeStateView, WorktreeSummary, WorktreeUnitDescriptor,
+  CreatedDocument,
+  CreateWorktreeLocalUnitInput,
+  OpenedWorktreeUnit,
+  WorktreeStateView,
+  WorktreeSummary,
+  WorktreeUnitDescriptor,
 } from "../provider/workspace-api.ts";
 import type { WorkspaceRuntimeScope } from "../runtime/target.js";
-import type { DocumentListOptions, WorkspaceDocument, WorkspaceDocumentOpen, WorkspaceSpace } from "../shared/wire.ts";
+import type {
+  DocumentListOptions,
+  WorkspaceDocument,
+  WorkspaceDocumentOpen,
+  WorkspaceSpace,
+} from "../shared/wire.ts";
 import type { DocumentFileState } from "../shared/state.ts";
+import type { JsonValue } from "../json-value.ts";
 
 /** The current User's accessible Univer Workspace Spaces, reconciled against dsh workspaces. */
 export interface ReconciledSpaces {
@@ -34,6 +48,7 @@ export interface CreateDocumentInput {
   readonly parentNodeId: string | null;
   readonly name: string;
   readonly unitType: "sheet" | "doc" | "slide" | "board" | "base";
+  readonly initialData?: JsonValue;
 }
 
 /** Input for running the Facade API against a Unit. */
@@ -66,7 +81,11 @@ export abstract class UniverWorkspaceService extends Service {
   abstract listSpaces(userId: string): Promise<ReconciledSpaces>;
 
   /** List a Space's Nodes, with optional hierarchy/search/resource filters. */
-  abstract listDocuments(userId: string, spaceId: string, options?: DocumentListOptions): Promise<readonly WorkspaceDocument[]>;
+  abstract listDocuments(
+    userId: string,
+    spaceId: string,
+    options?: DocumentListOptions,
+  ): Promise<readonly WorkspaceDocument[]>;
 
   /** Open one Resource's editor descriptor. */
   abstract openDocument(userId: string, resourceId: string): Promise<WorkspaceDocumentOpen>;
@@ -78,19 +97,37 @@ export abstract class UniverWorkspaceService extends Service {
   abstract createDocument(userId: string, input: CreateDocumentInput): Promise<CreatedDocument>;
 
   /** Create a User Worktree. */
-  abstract createWorktree(userId: string, input: { name: string; summary: string | null }): Promise<WorktreeSummary>;
+  abstract createWorktree(
+    userId: string,
+    input: { name: string; summary: string | null },
+  ): Promise<WorktreeSummary>;
 
   /** Fetch a complete Worktree descriptor after a lifecycle mutation. */
   abstract getWorktreeDetail(userId: string, worktreeId: string): Promise<WorktreeStateView>;
 
+  /** List all active and processed Worktrees visible to the current identity. */
+  abstract listWorktrees(userId: string): Promise<readonly WorktreeStateView[]>;
+
   /** Add an existing trunk Resource to a Worktree and return its mapped Unit. */
-  abstract addWorktreeTrunkUnit(userId: string, worktreeId: string, resourceId: string): Promise<WorktreeUnitDescriptor>;
+  abstract addWorktreeTrunkUnit(
+    userId: string,
+    worktreeId: string,
+    resourceId: string,
+  ): Promise<WorktreeUnitDescriptor>;
 
   /** Create a new Unit owned by a Worktree. */
-  abstract createWorktreeLocalUnit(userId: string, input: CreateWorktreeLocalUnitInput): Promise<WorktreeUnitDescriptor>;
+  abstract createWorktreeLocalUnit(
+    userId: string,
+    input: CreateWorktreeLocalUnitInput,
+  ): Promise<WorktreeUnitDescriptor>;
 
   /** Open a Worktree Unit. */
-  abstract openWorktreeUnit(userId: string, worktreeId: string, unitId: string, mode: "draft" | "trunk" | "mergePreview"): Promise<OpenedWorktreeUnit>;
+  abstract openWorktreeUnit(
+    userId: string,
+    worktreeId: string,
+    unitId: string,
+    mode: "draft" | "trunk" | "mergePreview",
+  ): Promise<OpenedWorktreeUnit>;
 
   /** Mark a Worktree ready to merge. */
   abstract markWorktreeReady(userId: string, worktreeId: string): Promise<WorktreeSummary>;
@@ -101,7 +138,7 @@ export abstract class UniverWorkspaceService extends Service {
   /** Merge a Worktree. */
   abstract mergeWorktree(userId: string, worktreeId: string): Promise<WorktreeSummary>;
 
-  /** Reopen a merged/discarded Worktree back to draft. */
+  /** Reopen a ready Worktree back to draft. */
   abstract reopenWorktree(userId: string, worktreeId: string): Promise<WorktreeSummary>;
 
   /** Collaboration state for one document (trunk viewer + related worktrees). */
@@ -111,7 +148,11 @@ export abstract class UniverWorkspaceService extends Service {
   abstract getWorktreeFileState(userId: string, worktreeId: string): Promise<DocumentFileState>;
 
   /** Drive a review transition from the browser surfaces. */
-  abstract transitionWorktree(userId: string, worktreeId: string, action: "ready" | "reopen" | "merge" | "discard"): Promise<WorktreeSummary>;
+  abstract transitionWorktree(
+    userId: string,
+    worktreeId: string,
+    action: "ready" | "reopen" | "merge" | "discard",
+  ): Promise<WorktreeSummary>;
 
   /** Read one Unit's data with the Facade API. */
   abstract readUnit(userId: string, input: EditUnitInput): Promise<CollaborationRuntimeValue>;
@@ -120,15 +161,21 @@ export abstract class UniverWorkspaceService extends Service {
   abstract inspectUnit(userId: string, input: InspectUnitInput): Promise<ContentInspectionResult>;
 
   /** Export synchronized UnitData for local Office conversion. */
-  abstract exportUnitData(userId: string, input: {
-    readonly scope: WorkspaceRuntimeScope;
-    readonly unitId: string;
-    readonly unitType: "sheet" | "doc" | "slide" | "board" | "base";
-    readonly revision?: number;
-  }): Promise<CollaborationUnitData>;
+  abstract exportUnitData(
+    userId: string,
+    input: {
+      readonly scope: WorkspaceRuntimeScope;
+      readonly unitId: string;
+      readonly unitType: "sheet" | "doc" | "slide" | "board" | "base";
+      readonly revision?: number;
+    },
+  ): Promise<CollaborationUnitData>;
 
   /** Execute a write in Worktree scope and commit the resulting changeset. */
-  abstract editUnit(userId: string, input: EditUnitInput): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }>;
+  abstract editUnit(
+    userId: string,
+    input: EditUnitInput,
+  ): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }>;
 
   /**
    * Resolve a session's Space scope from its working directory. The dsh

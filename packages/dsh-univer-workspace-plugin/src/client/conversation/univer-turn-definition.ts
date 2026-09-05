@@ -5,22 +5,34 @@
  * @module dsh-univer-workspace-plugin/client/conversation/univer-turn-definition
  */
 
-import type {
-  ConversationNodeDefinition,
-} from "@deepseek-ai/dsh-client-runtime/client";
-import type { TurnTailOwnerProps } from "@deepseek-ai/dsh-client-ui-conversation/client";
+import type { ConversationNodeDefinition } from "../dsh-runtime-types.ts";
 import type { SessionEvent } from "@deepseek-ai/dsh-session/types";
 
-export type UniverOperationName = "new" | "open" | "status" | "unit" | "inspect" | "execute" | "import" | "export" | "worktree";
+export type UniverOperationName =
+  | "new"
+  | "open"
+  | "status"
+  | "unit"
+  | "inspect"
+  | "execute"
+  | "import"
+  | "export"
+  | "worktree";
 export type UniverOperationPhase = "pending" | "succeeded" | "failed";
-export type UniverTurnLifecycle = "trunk" | "draft" | "ready" | "merged" | "discarded" | "unchanged";
+export type UniverTurnLifecycle =
+  | "trunk"
+  | "draft"
+  | "ready"
+  | "merged"
+  | "discarded"
+  | "unchanged";
 
 /** One durable Univer tool operation recovered from a call/result pair. */
 export interface UniverTurnOperation {
   readonly callId: string;
   readonly name: UniverOperationName;
   readonly action: string | null;
-  /** Stable document key: `res:<resourceId>` / `unit:<unitId>` / `name:<label>`. */
+  /** Stable content key: `wt:<worktreeId>` / `res:<resourceId>` / `unit:<unitId>` / `name:<label>`. */
   readonly docKey: string;
   /** Display label (document name) once known. */
   readonly label: string | null;
@@ -69,7 +81,7 @@ interface UniverTurnState extends UniverTurnData {
   readonly turn: number;
 }
 
-declare module "@deepseek-ai/dsh-client-runtime/client" {
+declare module "@deepseek-ai/dsh-client-ui-conversation/client" {
   interface ConversationTurnDataMap {
     /** Structured Univer Workspace operations performed during this Turn. */
     univerTurn: UniverTurnData;
@@ -81,11 +93,13 @@ export const univerTurnDefinition = {
   kind: "univerTurn",
   match(event: SessionEvent) {
     if (event.type === "turn/start") return { id: String(event.data.turn), role: "start" };
-    if (event.type === "tool/call" || event.type === "tool/result") return { id: String(event.data.turn), role: "update" };
+    if (event.type === "tool/call" || event.type === "tool/result")
+      return { id: String(event.data.turn), role: "update" };
     return null;
   },
   start(_context, match): UniverTurnState {
-    if (match.event.type !== "turn/start") throw new Error("univerTurn start match must be turn/start");
+    if (match.event.type !== "turn/start")
+      throw new Error("univerTurn start match must be turn/start");
     return { turn: match.event.data.turn, files: [] };
   },
   update(context, match): UniverTurnState {
@@ -95,12 +109,24 @@ export const univerTurnDefinition = {
   },
   buildLocationData(context, scope) {
     if (scope !== "turn" || context.state === undefined) return null;
-    return { kind: "turn", turn: context.state.turn, key: "univerTurn", value: { files: context.state.files } };
+    return {
+      kind: "turn",
+      turn: context.state.turn,
+      key: "univerTurn",
+      value: { files: context.state.files },
+    };
   },
 } satisfies ConversationNodeDefinition<UniverTurnState>;
 
 /** Select a Turn-tail surface only when that Turn touches Univer documents. */
-export function selectUniverTurn(owner: TurnTailOwnerProps): UniverTurnMatch | null {
+export function selectUniverTurn(owner: {
+  readonly turn: {
+    readonly turn: number;
+    readonly data: {
+      get(key: "univerTurn"): Readonly<UniverTurnData> | undefined;
+    };
+  };
+}): UniverTurnMatch | null {
   const data = owner.turn.data.get("univerTurn");
   if (data === undefined || data.files.length === 0) return null;
   return { turn: owner.turn.turn, files: data.files };
@@ -109,9 +135,12 @@ export function selectUniverTurn(owner: TurnTailOwnerProps): UniverTurnMatch | n
 /** Whether an operation may deliberately open or restore the live viewer window. */
 export function opensFloatingWindow(operation: UniverTurnOperation): boolean {
   if (operation.phase !== "succeeded") return false;
-  if (operation.name === "new" || operation.name === "open" || operation.name === "unit") return true;
+  if (operation.name === "new" || operation.name === "open" || operation.name === "unit")
+    return true;
   if (operation.name === "worktree") {
-    return operation.action === "create" || operation.action === "reopen" || operation.action === "ready";
+    return (
+      operation.action === "create" || operation.action === "reopen" || operation.action === "ready"
+    );
   }
   return isWrite(operation);
 }
@@ -119,7 +148,9 @@ export function opensFloatingWindow(operation: UniverTurnOperation): boolean {
 /** Targets referenced anywhere in a session, used to restore floating-window intent. */
 export function turnFilesOfSession(session: unknown, _cwd?: string): UniverTurnFile[] {
   if (session === null || typeof session !== "object") return [];
-  const snapshot = session as { chat?: { timeline?: { turns?: ReadonlyMap<number, { data: ReadonlyMap<string, unknown> }> } } };
+  const snapshot = session as {
+    chat?: { timeline?: { turns?: ReadonlyMap<number, { data: ReadonlyMap<string, unknown> }> } };
+  };
   const turns = snapshot.chat?.timeline?.turns;
   if (turns === undefined) return [];
   const files: UniverTurnFile[] = [];
@@ -130,82 +161,58 @@ export function turnFilesOfSession(session: unknown, _cwd?: string): UniverTurnF
   return mergeFiles(files);
 }
 
-/** Merge operations that resolve to the same document key. */
+/** Read all Univer Turn files from DSH's public target-neutral Conversation snapshot. */
+export function turnFilesOfConversation(conversation: unknown): UniverTurnFile[] {
+  if (conversation === null || typeof conversation !== "object") return [];
+  const views = (conversation as { views?: unknown }).views;
+  if (views === null || typeof views !== "object") return [];
+  const get = (views as { get?: unknown }).get;
+  if (typeof get !== "function") return [];
+  const chat = get.call(views, "chat") as unknown;
+  return turnFilesOfSession({ chat });
+}
+
+/** Merge operations that resolve to the same trunk Resource or Worktree aggregate. */
 export function mergeFiles(files: readonly UniverTurnFile[]): UniverTurnFile[] {
-  // Worktree and unit operations can carry an alias instead of the resource
-  // id. Resolve those aliases first so one remote Unit always becomes one
-  // card, even when the operations happened in different Turns.
-  const worktreeResources = new Map<string, string>();
-  const unitResources = new Map<string, string>();
-  const localWorktrees = new Set<string>();
-  const localUnits = new Map<string, string>();
-  const localResources = new Map<string, string>();
-  const mergedWorktrees = new Set<string>();
+  // A trunk operation may only carry unitId in a later event. Resolve that
+  // alias to its Resource without allowing it to absorb a Worktree projection.
+  const trunkResourcesByUnitId = new Map<string, string>();
   for (const file of files) {
     for (const operation of file.operations) {
-      if (operation.source === "worktree" && operation.worktreeId !== null) {
-        localWorktrees.add(operation.worktreeId);
-        if (operation.unitId !== null) localUnits.set(operation.unitId, `wt:${operation.worktreeId}`);
-        if (operation.resourceId !== null) localResources.set(operation.resourceId, `wt:${operation.worktreeId}`);
-      }
-      if (operation.name === "worktree" && operation.action === "merge" && operation.worktreeId !== null) {
-        mergedWorktrees.add(operation.worktreeId);
-      }
-      if (operation.resourceId !== null) {
-        const resourceKey = `res:${operation.resourceId}`;
-        if (operation.worktreeId !== null) worktreeResources.set(operation.worktreeId, resourceKey);
-        if (operation.unitId !== null && operation.source !== "worktree") unitResources.set(operation.unitId, resourceKey);
-      }
+      if (
+        operation.worktreeId === null &&
+        operation.resourceId !== null &&
+        operation.unitId !== null
+      )
+        trunkResourcesByUnitId.set(operation.unitId, `res:${operation.resourceId}`);
     }
   }
-  const canonicalKey = (key: string): string => {
-    if (key.startsWith("wt:")) {
-      const worktreeId = key.slice(3);
-      if (localWorktrees.has(worktreeId) && !mergedWorktrees.has(worktreeId)) return key;
-      return worktreeResources.get(worktreeId) ?? key;
-    }
-    if (key.startsWith("unit:")) return localUnits.get(key.slice(5)) ?? unitResources.get(key.slice(5)) ?? key;
-    if (key.startsWith("res:")) return localResources.get(key.slice(4)) ?? key;
-    return key;
-  };
+
   const unique = new Map<string, UniverTurnFile>();
-  for (const target of files) {
-    let remappedKey = canonicalKey(target.docKey);
-    if (!isViewerDocKey(remappedKey)) {
-      for (const operation of target.operations) {
-        const operationKey = operationCanonicalKey(operation, canonicalKey);
-        if (isViewerDocKey(operationKey)) {
-          remappedKey = operationKey;
-          break;
-        }
-      }
+  for (const file of files) {
+    if (file.operations.length === 0 && !unique.has(file.docKey)) unique.set(file.docKey, file);
+    for (const operation of file.operations) {
+      const contentKey = operationContentKey(operation, trunkResourcesByUnitId);
+      const remappedOperation =
+        contentKey === operation.docKey ? operation : { ...operation, docKey: contentKey };
+      const previous = unique.get(contentKey);
+      unique.set(contentKey, {
+        docKey: contentKey,
+        operations: [...(previous?.operations ?? []), remappedOperation],
+      });
     }
-    const remappedOperations = target.operations.map((operation) => {
-      const operationKey = operationCanonicalKey(operation, canonicalKey);
-      return operationKey === operation.docKey ? operation : { ...operation, docKey: operationKey };
-    });
-    const previous = unique.get(remappedKey);
-    unique.set(remappedKey, {
-      docKey: remappedKey,
-      operations: [...previous?.operations ?? [], ...remappedOperations],
-    });
   }
   return [...unique.values()];
 }
 
-function operationCanonicalKey(
+function operationContentKey(
   operation: UniverTurnOperation,
-  canonicalKey: (key: string) => string,
+  trunkResourcesByUnitId: ReadonlyMap<string, string>,
 ): string {
-  if (operation.source === "worktree" && operation.worktreeId !== null) {
-    return canonicalKey(`wt:${operation.worktreeId}`);
-  }
-  if (operation.unitId !== null) {
-    const unitKey = canonicalKey(`unit:${operation.unitId}`);
-    if (isViewerDocKey(unitKey)) return unitKey;
-  }
-  if (operation.resourceId !== null) return canonicalKey(`res:${operation.resourceId}`);
-  if (operation.worktreeId !== null) return canonicalKey(`wt:${operation.worktreeId}`);
+  if (operation.worktreeId !== null) return `wt:${operation.worktreeId}`;
+  if (operation.resourceId !== null) return `res:${operation.resourceId}`;
+  if (operation.unitId !== null)
+    return trunkResourcesByUnitId.get(operation.unitId) ?? `unit:${operation.unitId}`;
   return operation.docKey;
 }
 
@@ -264,9 +271,18 @@ export function outcomeOfTurnFile(target: UniverTurnFile): UniverTurnOutcome {
       continue;
     }
     if (operation.name === "open") readOnly = operation.readOnly;
-    if (primaryWorktreeId === null && operation.worktreeId !== null) primaryWorktreeId = operation.worktreeId;
+    if (primaryWorktreeId === null && operation.worktreeId !== null)
+      primaryWorktreeId = operation.worktreeId;
   }
-  return { primaryWorktreeId, lifecycle, preferredUnitId, preferredUnitType, preferredLabel, readOnly, changedContent };
+  return {
+    primaryWorktreeId,
+    lifecycle,
+    preferredUnitId,
+    preferredUnitType,
+    preferredLabel,
+    readOnly,
+    changedContent,
+  };
 }
 
 /** The latest Turn that touched each logical Unit, for historical card folding. */
@@ -294,7 +310,9 @@ export function unitIdentityOfTurnFile(file: UniverTurnFile, session: unknown): 
 export function latestWorktreeTurns(session: unknown): Map<string, number> {
   const latest = new Map<string, number>();
   if (session === null || typeof session !== "object") return latest;
-  const snapshot = session as { chat?: { timeline?: { turns?: ReadonlyMap<number, { data: ReadonlyMap<string, unknown> }> } } };
+  const snapshot = session as {
+    chat?: { timeline?: { turns?: ReadonlyMap<number, { data: ReadonlyMap<string, unknown> }> } };
+  };
   const turns = snapshot.chat?.timeline?.turns;
   if (turns === undefined) return latest;
   for (const [turnNumber, turn] of turns) {
@@ -311,69 +329,52 @@ export function latestWorktreeTurns(session: unknown): Map<string, number> {
 
 interface UnitAliases {
   readonly byUnitId: Map<string, string>;
-  readonly byWorktreeId: Map<string, string>;
-  readonly localUnitIds: Set<string>;
-  readonly localWorktreeIds: Set<string>;
 }
 
-function timelineTurns(session: unknown): ReadonlyMap<number, { data: ReadonlyMap<string, unknown> }> | undefined {
+function timelineTurns(
+  session: unknown,
+): ReadonlyMap<number, { data: ReadonlyMap<string, unknown> }> | undefined {
   if (session === null || typeof session !== "object") return undefined;
-  const snapshot = session as { chat?: { timeline?: { turns?: ReadonlyMap<number, { data: ReadonlyMap<string, unknown> }> } } };
+  const snapshot = session as {
+    chat?: { timeline?: { turns?: ReadonlyMap<number, { data: ReadonlyMap<string, unknown> }> } };
+  };
   return snapshot.chat?.timeline?.turns;
 }
 
 function collectUnitAliases(session: unknown): UnitAliases {
   const byUnitId = new Map<string, string>();
-  const byWorktreeId = new Map<string, string>();
-  const localUnitIds = new Set<string>();
-  const localWorktreeIds = new Set<string>();
   const turns = timelineTurns(session);
-  if (turns === undefined) return { byUnitId, byWorktreeId, localUnitIds, localWorktreeIds };
-  // First collect authoritative resource identities. Later turns often only
-  // carry unitId/worktreeId, so these aliases let them fold into the same card.
+  if (turns === undefined) return { byUnitId };
+  // Later trunk Turns may only carry unitId. Worktree operations always keep
+  // their Worktree aggregate identity and never populate this alias table.
   for (const turn of turns.values()) {
     const data = turn.data.get("univerTurn") as UniverTurnData | undefined;
     if (data === undefined || data === null) continue;
     for (const file of data.files) {
       for (const operation of file.operations) {
-        if (operation.source === "worktree") {
-          if (operation.unitId !== null) localUnitIds.add(operation.unitId);
-          if (operation.worktreeId !== null) localWorktreeIds.add(operation.worktreeId);
-        }
-        if (operation.resourceId === null) continue;
-        const identity = `res:${operation.resourceId}`;
-        if (operation.source !== "worktree") {
-          if (operation.unitId !== null) byUnitId.set(operation.unitId, identity);
-          if (operation.worktreeId !== null) byWorktreeId.set(operation.worktreeId, identity);
-        }
+        if (
+          operation.worktreeId === null &&
+          operation.resourceId !== null &&
+          operation.unitId !== null
+        )
+          byUnitId.set(operation.unitId, `res:${operation.resourceId}`);
       }
     }
   }
-  return { byUnitId, byWorktreeId, localUnitIds, localWorktreeIds };
+  return { byUnitId };
 }
 
 function unitIdentityOfFile(file: UniverTurnFile, aliases: UnitAliases): string {
   for (const operation of file.operations) {
-    if (operation.source === "worktree" && operation.worktreeId !== null) {
-      return `wt:${operation.worktreeId}`;
-    }
-    if (operation.worktreeId !== null && aliases.localWorktreeIds.has(operation.worktreeId)) {
-      return `wt:${operation.worktreeId}`;
-    }
-    if (operation.unitId !== null && aliases.localUnitIds.has(operation.unitId)) {
-      return operation.worktreeId === null ? `unit:${operation.unitId}` : `wt:${operation.worktreeId}`;
-    }
+    if (operation.worktreeId !== null) return `wt:${operation.worktreeId}`;
     if (operation.resourceId !== null) return `res:${operation.resourceId}`;
     if (operation.unitId !== null) {
       const identity = aliases.byUnitId.get(operation.unitId);
       if (identity !== undefined) return identity;
       return `unit:${operation.unitId}`;
     }
-    if (operation.worktreeId !== null) {
-      const identity = aliases.byWorktreeId.get(operation.worktreeId);
-      if (identity !== undefined) return identity;
-    }
   }
+  if (isViewerDocKey(file.docKey)) return file.docKey;
   return `doc:${file.docKey}`;
 }
 
@@ -392,7 +393,10 @@ function addCall(state: UniverTurnState, data: SessionEvent<"tool/call">["data"]
     callId: data.callId,
     name,
     action,
-    docKey: name === "worktree" && worktreeId !== null ? `wt:${worktreeId}` : docKeyOf(resourceId, unitId, label),
+    docKey:
+      name === "worktree" && worktreeId !== null
+        ? `wt:${worktreeId}`
+        : docKeyOf(resourceId, unitId, label),
     label,
     unitType,
     resourceId,
@@ -405,7 +409,10 @@ function addCall(state: UniverTurnState, data: SessionEvent<"tool/call">["data"]
   return { ...state, files: appendOperation(state.files, operation) };
 }
 
-function applyResult(state: UniverTurnState, data: SessionEvent<"tool/result">["data"]): UniverTurnState {
+function applyResult(
+  state: UniverTurnState,
+  data: SessionEvent<"tool/result">["data"],
+): UniverTurnState {
   const callId = data.message.content[0].toolCallId;
   const structured = structuredResult(data);
   let matched: UniverTurnOperation | undefined;
@@ -416,15 +423,17 @@ function applyResult(state: UniverTurnState, data: SessionEvent<"tool/result">["
   if (matched === undefined && structured === null) return state;
   // Tool renderers return the structured value directly. Accept the wrapped
   // `{ result: ... }` form as well for callers that use that convention.
-  const result = structured === null
-    ? null
-    : isRecord(structured.result) ? structured.result : structured;
+  const result =
+    structured === null ? null : isRecord(structured.result) ? structured.result : structured;
   const open = result !== null && isRecord(result.resource) ? result.resource : null;
-  const resourceId = fieldOf(result, "resourceId") ?? fieldOf(open, "id") ?? matched?.resourceId ?? null;
+  const resourceId =
+    fieldOf(result, "resourceId") ?? fieldOf(open, "id") ?? matched?.resourceId ?? null;
   const unitId = fieldOf(result, "unitId") ?? fieldOf(open, "unitId") ?? matched?.unitId ?? null;
-  const unitType = fieldOf(result, "unitType") ?? fieldOf(open, "unitType") ?? matched?.unitType ?? null;
+  const unitType =
+    fieldOf(result, "unitType") ?? fieldOf(open, "unitType") ?? matched?.unitType ?? null;
   const label = fieldOf(result, "name") ?? fieldOf(open, "name") ?? matched?.label ?? null;
-  const worktreeId = fieldOf(result, "worktreeId") ?? fieldOf(result, "id") ?? matched?.worktreeId ?? null;
+  const worktreeId =
+    fieldOf(result, "worktreeId") ?? fieldOf(result, "id") ?? matched?.worktreeId ?? null;
   const unit = result !== null && isRecord(result.unit) ? result.unit : null;
   const source = sourceOf(result) ?? sourceOf(unit) ?? matched?.source ?? null;
   const name = matched?.name ?? "open";
@@ -432,19 +441,24 @@ function applyResult(state: UniverTurnState, data: SessionEvent<"tool/result">["
     callId,
     name,
     action: fieldOf(result, "action") ?? matched?.action ?? null,
-    docKey: name === "worktree" && worktreeId !== null
-      ? `wt:${worktreeId}`
-      : source === "worktree" && worktreeId !== null
+    docKey:
+      name === "worktree" && worktreeId !== null
         ? `wt:${worktreeId}`
-      : resourceId !== null ? `res:${resourceId}` : matched?.docKey ?? docKeyOf(null, unitId, label),
+        : source === "worktree" && worktreeId !== null
+          ? `wt:${worktreeId}`
+          : resourceId !== null
+            ? `res:${resourceId}`
+            : (matched?.docKey ?? docKeyOf(null, unitId, label)),
     label,
     unitType,
     resourceId,
     worktreeId,
     unitId,
     ...(source === null ? {} : { source }),
-    readOnly: fieldOf(result, "editorMode") === "readOnly" || fieldOf(open, "editorMode") === "readOnly",
-    phase: data.error === undefined && data.message.content[0].isError !== true ? "succeeded" : "failed",
+    readOnly:
+      fieldOf(result, "editorMode") === "readOnly" || fieldOf(open, "editorMode") === "readOnly",
+    phase:
+      data.error === undefined && data.message.content[0].isError !== true ? "succeeded" : "failed",
   };
   const withoutCall = state.files.flatMap((entry) => {
     const operations = entry.operations.filter((candidate) => candidate.callId !== callId);
@@ -453,19 +467,27 @@ function applyResult(state: UniverTurnState, data: SessionEvent<"tool/result">["
   return { ...state, files: appendOperation(withoutCall, operation) };
 }
 
-function appendOperation(files: readonly UniverTurnFile[], operation: UniverTurnOperation): UniverTurnFile[] {
+function appendOperation(
+  files: readonly UniverTurnFile[],
+  operation: UniverTurnOperation,
+): UniverTurnFile[] {
   const next = [...files];
   const index = next.findIndex((entry) => entry.docKey === operation.docKey);
   if (index === -1) next.push({ docKey: operation.docKey, operations: [operation] });
   else {
     const previous = next[index];
-    if (previous !== undefined) next[index] = { ...previous, operations: [...previous.operations, operation] };
+    if (previous !== undefined)
+      next[index] = { ...previous, operations: [...previous.operations, operation] };
   }
   return next;
 }
 
-function structuredResult(data: SessionEvent<"tool/result">["data"]): Record<string, unknown> | null {
-  const text = data.message.content[0].content.flatMap((block) => block.type === "text" ? [block.text] : []).join("\n");
+function structuredResult(
+  data: SessionEvent<"tool/result">["data"],
+): Record<string, unknown> | null {
+  const text = data.message.content[0].content
+    .flatMap((block) => (block.type === "text" ? [block.text] : []))
+    .join("\n");
   const firstBrace = text.indexOf("{");
   return firstBrace === -1 ? null : parseRecord(text.slice(firstBrace));
 }

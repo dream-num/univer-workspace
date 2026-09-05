@@ -1,0 +1,9 @@
+/* Hero tagline translations for the existing DSH headline surface. */
+.pXSMma_headlineText::after {
+  content: "Collaborative editing, permissions, and AI tasks in one workspace.";
+}
+
+html:lang(zh) .pXSMma_headlineText::after,
+html:lang(zh-CN) .pXSMma_headlineText::after {
+  content: "协作编辑、权限管理与 AI 任务，尽在同一工作区。";
+}

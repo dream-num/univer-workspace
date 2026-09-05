@@ -13,6 +13,18 @@ export type ViewerScope =
   /** A read-only snapshot produced by the Worktree merge evaluator. */
   | { readonly kind: "mergePreview"; readonly worktreeId: string };
 
+/** A user selection that can be attached to a stable Workspace Resource ref. */
+export type ViewerSelection =
+  | {
+      readonly kind: "sheet-range";
+      readonly sheetName: string;
+      readonly a1Notation: string;
+    }
+  | {
+      readonly kind: "text";
+      readonly text: string;
+    };
+
 export interface ViewerOptions {
   container: string;
   unitId: string;
@@ -30,6 +42,8 @@ export interface ViewerOptions {
     readonly displayName: string;
     readonly avatarUrl: string | null;
   };
+  /** Called when the embedded Unit has a meaningful selection. */
+  onSelectionChange?: (selection: ViewerSelection | null) => void;
 }
 
 export interface ViewerHandle {

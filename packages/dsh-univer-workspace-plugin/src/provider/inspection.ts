@@ -25,9 +25,8 @@ export function inspectionQuery(
     const trimmed = range.trim();
     if (trimmed === "") throw new Error("inspection range must not be empty");
     const split = trimmed.lastIndexOf("!");
-    const worksheet = split < 0
-      ? { index: 0 as const }
-      : { name: unquoteSheetName(trimmed.slice(0, split)) };
+    const worksheet =
+      split < 0 ? { index: 0 as const } : { name: unquoteSheetName(trimmed.slice(0, split)) };
     const address = split < 0 ? trimmed : trimmed.slice(split + 1).trim();
     if (address === "") throw new Error("inspection range must not be empty");
     return { kind: "worksheet-range", ranges: [{ range: address, worksheet }] };

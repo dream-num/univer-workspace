@@ -13,6 +13,7 @@ export interface RemoteSpace {
   readonly type: "personal" | "team";
   readonly name: string;
   readonly accessRole: "owner" | "admin" | "editor" | "viewer";
+  readonly capabilities?: Readonly<Record<string, boolean>>;
 }
 function spaceType(value: unknown): "personal" | "team" {
   return value === "team" ? "team" : "personal";
@@ -24,13 +25,26 @@ function narrowSpace(raw: unknown): RemoteSpace {
   const spaceId = stringField(record.id);
   const name = stringField(record.name);
   if (spaceId === undefined || name === undefined) {
-    throw new WorkspaceApiError("workspace space list returned a malformed Space", 502, "MALFORMED_SPACE");
+    throw new WorkspaceApiError(
+      "workspace space list returned a malformed Space",
+      502,
+      "MALFORMED_SPACE",
+    );
   }
+  const capabilities =
+    record.capabilities !== null && typeof record.capabilities === "object"
+      ? (Object.fromEntries(
+          Object.entries(record.capabilities as Record<string, unknown>).filter(
+            ([, value]) => typeof value === "boolean",
+          ),
+        ) as Record<string, boolean>)
+      : undefined;
   return {
     spaceId,
     type: spaceType(record.type),
     name,
     accessRole: accessRole(record.accessRole),
+    ...(capabilities === undefined ? {} : { capabilities }),
   };
 }
 
@@ -38,9 +52,13 @@ function narrowSpace(raw: unknown): RemoteSpace {
 export function narrowSpaces(raw: unknown): RemoteSpace[] {
   const record = (raw ?? {}) as { spaces?: unknown };
   if (!Array.isArray(record.spaces)) {
-    throw new WorkspaceApiError("workspace space list returned no spaces array", 502, "MALFORMED_SPACES");
+    throw new WorkspaceApiError(
+      "workspace space list returned no spaces array",
+      502,
+      "MALFORMED_SPACES",
+    );
   }
-  return record.spaces.map(space => narrowSpace(space));
+  return record.spaces.map((space) => narrowSpace(space));
 }
 /** A page returned by either the Space-root or Node-children endpoint. */
 export interface WorkspaceNodePage {
@@ -57,38 +75,59 @@ function narrowDocument(raw: unknown, spaceId: string): WorkspaceDocument | unde
   if (nodeId === undefined || name === undefined) return undefined;
   const rawSpaceId = stringField(record.spaceId);
   if (rawSpaceId !== undefined && rawSpaceId !== spaceId) {
-    throw new WorkspaceApiError("workspace node list returned a node from another Space", 502, "MALFORMED_NODES");
+    throw new WorkspaceApiError(
+      "workspace node list returned a node from another Space",
+      502,
+      "MALFORMED_NODES",
+    );
   }
   const rawParentNodeId = record.parentNodeId;
-  const parentNodeId = rawParentNodeId === null || rawParentNodeId === undefined
-    ? null
-    : stringField(rawParentNodeId) ?? null;
+  const parentNodeId =
+    rawParentNodeId === null || rawParentNodeId === undefined
+      ? null
+      : (stringField(rawParentNodeId) ?? null);
   if (rawParentNodeId !== undefined && rawParentNodeId !== null && parentNodeId === null) {
-    throw new WorkspaceApiError("workspace node list returned a malformed parentNodeId", 502, "MALFORMED_NODES");
+    throw new WorkspaceApiError(
+      "workspace node list returned a malformed parentNodeId",
+      502,
+      "MALFORMED_NODES",
+    );
   }
   const resource = (record.resource ?? null) as Record<string, unknown> | null;
-  const resourceId = resource !== null ? stringField(resource.id) ?? null : null;
+  const resourceId = resource !== null ? (stringField(resource.id) ?? null) : null;
   const kind = resource?.kind;
   const resourceKind = kind === "univer" || kind === "blob" ? kind : null;
   const unitTypeRaw = kind === "univer" ? stringField(resource?.unitType) : undefined;
-  const unitType = unitTypeRaw === "sheet" || unitTypeRaw === "doc" || unitTypeRaw === "slide" || unitTypeRaw === "board" || unitTypeRaw === "base"
-    ? unitTypeRaw
-    : null;
+  const unitType =
+    unitTypeRaw === "sheet" ||
+    unitTypeRaw === "doc" ||
+    unitTypeRaw === "slide" ||
+    unitTypeRaw === "board" ||
+    unitTypeRaw === "base"
+      ? unitTypeRaw
+      : null;
   // Node-list Resource summaries carry no unitId (the Unit descriptor is only
   // resolved by the open endpoint), so the list answer leaves it null and
   // consumers call univer_open per resource.
   const unitId = null;
-  const nodeCapabilities = record.capabilities !== null && typeof record.capabilities === "object"
-    ? record.capabilities as Record<string, boolean>
-    : undefined;
-  const resourceCapabilities = resource?.capabilities !== null && typeof resource?.capabilities === "object"
-    ? resource.capabilities as Record<string, boolean>
-    : undefined;
+  const nodeCapabilities =
+    record.capabilities !== null && typeof record.capabilities === "object"
+      ? (record.capabilities as Record<string, boolean>)
+      : undefined;
+  const resourceCapabilities =
+    resource?.capabilities !== null && typeof resource?.capabilities === "object"
+      ? (resource.capabilities as Record<string, boolean>)
+      : undefined;
   const mediaType = resourceKind === "blob" ? stringField(resource?.mediaType) : undefined;
-  const byteSize = resourceKind === "blob" && typeof resource?.byteSize === "number" ? resource.byteSize : undefined;
-  const availability = resourceKind === "blob" && (resource?.availability === "ready" || resource?.availability === "quarantined")
-    ? resource.availability
-    : undefined;
+  const byteSize =
+    resourceKind === "blob" && typeof resource?.byteSize === "number"
+      ? resource.byteSize
+      : undefined;
+  const availability =
+    resourceKind === "blob" &&
+    (resource?.availability === "ready" || resource?.availability === "quarantined")
+      ? resource.availability
+      : undefined;
   return {
     nodeId,
     name,
@@ -111,7 +150,11 @@ function narrowDocument(raw: unknown, spaceId: string): WorkspaceDocument | unde
 function nextCursorOf(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string" || value === "") {
-    throw new WorkspaceApiError("workspace node list returned an invalid nextCursor", 502, "MALFORMED_NODES");
+    throw new WorkspaceApiError(
+      "workspace node list returned an invalid nextCursor",
+      502,
+      "MALFORMED_NODES",
+    );
   }
   return value;
 }
@@ -120,7 +163,11 @@ function nextCursorOf(value: unknown): string | null {
 export function narrowNodePage(raw: unknown, spaceId: string): WorkspaceNodePage {
   const record = (raw ?? {}) as { nodes?: unknown; nextCursor?: unknown };
   if (!Array.isArray(record.nodes)) {
-    throw new WorkspaceApiError("workspace node list returned no nodes array", 502, "MALFORMED_NODES");
+    throw new WorkspaceApiError(
+      "workspace node list returned no nodes array",
+      502,
+      "MALFORMED_NODES",
+    );
   }
   const documents: WorkspaceDocument[] = [];
   for (const node of record.nodes) {
@@ -175,7 +222,11 @@ export async function listSpaceDocuments(
   const appendPage = (page: WorkspaceNodePage): void => {
     pages += 1;
     if (pages > NODE_LIST_MAX_PAGES) {
-      throw new WorkspaceApiError("workspace node list exceeded the page safety limit", 502, "NODE_LIST_TOO_LARGE");
+      throw new WorkspaceApiError(
+        "workspace node list exceeded the page safety limit",
+        502,
+        "NODE_LIST_TOO_LARGE",
+      );
     }
     for (const document of page.documents) {
       if (seen.has(document.nodeId)) continue;
@@ -183,7 +234,11 @@ export async function listSpaceDocuments(
       documents.push(document);
       if (document.hasChildren) folders.push({ nodeId: document.nodeId });
       if (documents.length > NODE_LIST_MAX_NODES) {
-        throw new WorkspaceApiError("workspace node list exceeded the node safety limit", 502, "NODE_LIST_TOO_LARGE");
+        throw new WorkspaceApiError(
+          "workspace node list exceeded the node safety limit",
+          502,
+          "NODE_LIST_TOO_LARGE",
+        );
       }
     }
   };
@@ -193,6 +248,34 @@ export async function listSpaceDocuments(
     return narrowNodePage(raw, spaceId);
   };
 
+  if (options.recursive === false) {
+    let cursor: string | null = null;
+    const cursors = new Set<string>();
+    do {
+      if (cursor !== null) {
+        if (cursors.has(cursor)) {
+          throw new WorkspaceApiError(
+            "workspace node list returned a repeating nextCursor",
+            502,
+            "MALFORMED_NODES",
+          );
+        }
+        cursors.add(cursor);
+      }
+      const query = new URLSearchParams({ limit: String(NODE_LIST_PAGE_LIMIT) });
+      if (cursor !== null) query.set("cursor", cursor);
+      const parentNodeId = options.parentNodeId ?? null;
+      const path =
+        parentNodeId === null
+          ? `/api/spaces/${encodeURIComponent(spaceId)}/nodes?${query.toString()}`
+          : `/api/nodes/${encodeURIComponent(parentNodeId)}/children?${query.toString()}`;
+      const page = await readPage(path, parentNodeId === null ? "node list" : "node children list");
+      appendPage(page);
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    return filterDocumentProperties(documents, options);
+  }
+
   // Root pages must be consumed before descending so the returned order is
   // stable (the product's root ordering followed by each folder's ordering).
   let cursor: string | null = null;
@@ -200,7 +283,11 @@ export async function listSpaceDocuments(
   do {
     if (cursor !== null) {
       if (rootCursors.has(cursor)) {
-        throw new WorkspaceApiError("workspace node list returned a repeating nextCursor", 502, "MALFORMED_NODES");
+        throw new WorkspaceApiError(
+          "workspace node list returned a repeating nextCursor",
+          502,
+          "MALFORMED_NODES",
+        );
       }
       rootCursors.add(cursor);
     }
@@ -224,7 +311,11 @@ export async function listSpaceDocuments(
     do {
       if (childCursor !== null) {
         if (childCursors.has(childCursor)) {
-          throw new WorkspaceApiError("workspace node children list returned a repeating nextCursor", 502, "MALFORMED_NODES");
+          throw new WorkspaceApiError(
+            "workspace node children list returned a repeating nextCursor",
+            502,
+            "MALFORMED_NODES",
+          );
         }
         childCursors.add(childCursor);
       }
@@ -240,35 +331,45 @@ export async function listSpaceDocuments(
     } while (childCursor !== null);
   }
   const parentNodeId = options.parentNodeId === undefined ? null : options.parentNodeId;
-  const recursive = options.recursive !== false;
   let selected = documents;
   if (options.parentNodeId !== undefined) {
-    if (recursive) {
-      const descendants = new Set<string>();
-      let frontier = documents.filter(document => document.parentNodeId === parentNodeId).map(document => document.nodeId);
-      while (frontier.length > 0) {
-        const next: string[] = [];
-        for (const id of frontier) {
-          if (descendants.has(id)) continue;
-          descendants.add(id);
-          for (const document of documents) if (document.parentNodeId === id) next.push(document.nodeId);
-        }
-        frontier = next;
+    const descendants = new Set<string>();
+    let frontier = documents
+      .filter((document) => document.parentNodeId === parentNodeId)
+      .map((document) => document.nodeId);
+    while (frontier.length > 0) {
+      const next: string[] = [];
+      for (const id of frontier) {
+        if (descendants.has(id)) continue;
+        descendants.add(id);
+        for (const document of documents)
+          if (document.parentNodeId === id) next.push(document.nodeId);
       }
-      selected = documents.filter(document => descendants.has(document.nodeId));
-    } else {
-      selected = documents.filter(document => document.parentNodeId === parentNodeId);
+      frontier = next;
     }
-  } else if (!recursive) {
-    selected = documents.filter(document => document.parentNodeId === null);
+    selected = documents.filter((document) => descendants.has(document.nodeId));
   }
+  return filterDocumentProperties(selected, options);
+}
+
+function filterDocumentProperties(
+  documents: readonly WorkspaceDocument[],
+  options: DocumentListOptions,
+): WorkspaceDocument[] {
+  let selected = [...documents];
   const query = options.query?.trim().toLocaleLowerCase();
-  if (query !== undefined && query !== "") selected = selected.filter(document => document.name.toLocaleLowerCase().includes(query));
+  if (query !== undefined && query !== "") {
+    selected = selected.filter((document) => document.name.toLocaleLowerCase().includes(query));
+  }
   if (options.resourceKind !== undefined && options.resourceKind !== "all") {
-    selected = selected.filter(document =>
-      options.resourceKind === "folder" ? document.resourceKind === null : document.resourceKind === options.resourceKind,
+    selected = selected.filter((document) =>
+      options.resourceKind === "folder"
+        ? document.resourceKind === null
+        : document.resourceKind === options.resourceKind,
     );
   }
-  if (options.unitType !== undefined) selected = selected.filter(document => document.unitType === options.unitType);
+  if (options.unitType !== undefined) {
+    selected = selected.filter((document) => document.unitType === options.unitType);
+  }
   return selected;
 }

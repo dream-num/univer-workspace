@@ -8,6 +8,7 @@
 
 import { FUniver } from "@univerjs/core/facade";
 import "@univerjs-pro/collaboration-client/facade";
+import { DocSelectionManagerService } from "@univerjs/docs";
 import {
   IAuthzIoService,
   ICommandService,
@@ -37,7 +38,6 @@ import {
 } from "@univerjs-pro/collaboration-client-ui";
 import { UniverCollaborationEmbedPlugin } from "@univerjs-pro/collaboration-embed";
 import type { LocaleType } from "@univerjs/core";
-import { ensureViewerStyles } from "../viewer-css.ts";
 import { isViewerUnitTypeSupported } from "../viewer-types.ts";
 import { localeKeyOf, LOCALE_PACKS } from "./locales.ts";
 import {
@@ -68,7 +68,7 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
   // Office keeps the original edits visible when a ready Worktree cannot
   // materialize a merge preview (for example, there are no changesets to
   // replay). Never blank the Viewer in that case: fall back to the Worktree
-  // stream, read-only, while the surrounding status remains "待确认".
+  // stream, read-only, while the surrounding status remains "awaiting confirmation".
   let scope = opts.scope;
   if (opts.scope.kind === "mergePreview") {
     try {
@@ -89,8 +89,6 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
     : withReadOnlyPermissionLocale(LOCALE_PACKS[localeKey], READ_ONLY_COPY[localeKey]);
   const worktreeId = scope.kind === "worktree" ? scope.worktreeId : undefined;
   const urls = buildViewerUrls(worktreeId);
-  const releaseViewerStyles = ensureViewerStyles();
-
   const univer = new Univer({
     locale: opts.locale,
     locales: { [opts.locale]: localePack },
@@ -111,17 +109,20 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
       waitForFormulaResultApplied: () =>
         injector.get(FormulaCalculationSessionService).waitForLatestApplied(),
       executeFormulaCalculation: () => {
-        void injector.get(ICommandService).executeCommand(
-          SetTriggerFormulaCalculationStartMutation.id,
-          { commands: [], forceCalculation: true },
-          { onlyLocal: true },
-        );
+        void injector
+          .get(ICommandService)
+          .executeCommand(
+            SetTriggerFormulaCalculationStartMutation.id,
+            { commands: [], forceCalculation: true },
+            { onlyLocal: true },
+          );
       },
     };
   });
 
   let disposed = false;
   let formulaResultAppliedSubscription: { unsubscribe(): void } | undefined;
+  let selectionSubscription: { dispose(): void } | undefined;
   let api: ReturnType<typeof FUniver.newAPI> | undefined;
 
   const dispose = (): void => {
@@ -129,6 +130,8 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
     disposed = true;
     formulaResultAppliedSubscription?.unsubscribe();
     formulaResultAppliedSubscription = undefined;
+    selectionSubscription?.dispose();
+    selectionSubscription = undefined;
     sheetResourceRefDataProvider.dispose();
     if (window.univer === univer) delete window.univer;
     if (api !== undefined && window.univerAPI === api) delete window.univerAPI;
@@ -138,7 +141,6 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
       try {
         univer.dispose();
       } finally {
-        releaseViewerStyles();
       }
     }
   };
@@ -171,15 +173,19 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
           enableOfflineEditing: false,
           enableAuthServer: true,
           enableSingleActiveInstanceLock: false,
-          // Harness owns OAuth at this route; this is the client redirect only.
-          loginUrlKey: "/auth/login",
+          // Keep a rejected remote credential inside the always-available
+          // local shell; reconnecting is handled in Settings, not by OAuth.
+          loginUrlKey: "/",
           sendChangesetTimeout: 200,
           ...urls,
         });
-        univer.registerPlugin(
-          UniverCollaborationClientUIPlugin,
-          opts.unitType === "base" ? { enableDocumentCollaborationUI: false } : {},
-        );
+        if (opts.unitType === "base") {
+          univer.registerPlugin(UniverCollaborationClientUIPlugin, {
+            enableDocumentCollaborationUI: false,
+          });
+        } else {
+          univer.registerPlugin(UniverCollaborationClientUIPlugin);
+        }
       },
       registerAfterEmbedCore: () => {
         univer.registerPlugin(UniverCollaborationEmbedPlugin);
@@ -206,8 +212,7 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
     formulaResultAppliedSubscription = univer
       .__getInjector()
       .get(FormulaCalculationSessionService)
-      .resultApplied$
-      .subscribe((result: ISetFormulaCalculationResultMutation) => {
+      .resultApplied$.subscribe((result: ISetFormulaCalculationResultMutation) => {
         void sheetResourceRefDataProvider.formulaResultApplied(result);
       });
 
@@ -224,6 +229,54 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
       );
     } else if (readOnlyEnforcement === "mutation-gate") {
       blockLocalEditingCommands(univer.__getInjector().get(ICommandService));
+    }
+
+    if (opts.onSelectionChange && opts.unitType === "sheet") {
+      const workbook = api.getWorkbook(opts.unitId);
+      if (workbook !== null) {
+        selectionSubscription = workbook.onSelectionChange((selections) => {
+          const first = selections[0];
+          if (first === undefined) {
+            opts.onSelectionChange?.(null);
+            return;
+          }
+          const sheet =
+            first.sheetId === undefined
+              ? workbook.getActiveSheet()
+              : workbook.getSheetBySheetId(first.sheetId);
+          const range = sheet?.getRange(first);
+          const sheetName = sheet?.getSheetName() ?? "";
+          const a1Notation = range?.getA1Notation() ?? "";
+          opts.onSelectionChange?.(
+            sheetName === "" || a1Notation === ""
+              ? null
+              : { kind: "sheet-range", sheetName, a1Notation },
+          );
+        });
+      }
+    }
+
+    if (opts.onSelectionChange && opts.unitType === "doc") {
+      const selectionManager = univer.__getInjector().get(DocSelectionManagerService);
+      const subscription = selectionManager.textSelection$.subscribe((selection) => {
+        if (selection.unitId !== opts.unitId) return;
+        const range = selection.textRanges.find(
+          (candidate) => candidate.endOffset > candidate.startOffset,
+        );
+        if (range === undefined) {
+          opts.onSelectionChange?.(null);
+          return;
+        }
+        const document = api?.getDocument(opts.unitId);
+        if (document === null || document === undefined) {
+          opts.onSelectionChange?.(null);
+          return;
+        }
+        const segmentId = range.segmentId ?? selection.segmentId;
+        const text = document.getTextRange(range.startOffset, range.endOffset, segmentId).getText();
+        opts.onSelectionChange?.(text.length === 0 ? null : { kind: "text", text });
+      });
+      selectionSubscription = { dispose: () => subscription.unsubscribe() };
     }
 
     return {
@@ -272,7 +325,10 @@ async function loadUnit(
 }
 
 /** Materialize active Embed child descriptors after the host Unit is loaded. */
-export async function materializeHostEmbedChildren(univer: Univer, hostUnitId: string): Promise<void> {
+export async function materializeHostEmbedChildren(
+  univer: Univer,
+  hostUnitId: string,
+): Promise<void> {
   const injector = univer.__getInjector();
   const embedModel = injector.get(EmbedModelService);
   const materializer = injector.get(EmbedReferencedUnitMaterializeService);

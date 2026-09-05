@@ -6,10 +6,15 @@
 import { randomBytes } from "node:crypto";
 import type { WorkspaceHttpClient } from "./workspace-contract.ts";
 import type { WorkspaceDocumentOpen } from "../shared/wire.ts";
+import type { JsonValue } from "../json-value.ts";
 import { WorkspaceApiError, accessRole, readJson, stringField } from "./api-errors.ts";
 
 function unitType(value: unknown): WorkspaceDocumentOpen["unitType"] | undefined {
-  return value === "sheet" || value === "doc" || value === "slide" || value === "board" || value === "base"
+  return value === "sheet" ||
+    value === "doc" ||
+    value === "slide" ||
+    value === "board" ||
+    value === "base"
     ? value
     : undefined;
 }
@@ -19,7 +24,11 @@ export function narrowOpen(raw: unknown): WorkspaceDocumentOpen {
   const record = (raw ?? {}) as { resource?: unknown };
   const resource = (record.resource ?? null) as Record<string, unknown> | null;
   if (resource === null || resource.kind !== "univer") {
-    throw new WorkspaceApiError("workspace open returned a non-Univer resource", 502, "MALFORMED_OPEN");
+    throw new WorkspaceApiError(
+      "workspace open returned a non-Univer resource",
+      502,
+      "MALFORMED_OPEN",
+    );
   }
   const unitId = stringField(resource.unitId);
   const type = unitType(resource.unitType);
@@ -27,8 +36,19 @@ export function narrowOpen(raw: unknown): WorkspaceDocumentOpen {
   const spaceId = stringField(resource.spaceId);
   const resourceId = stringField(resource.id);
   const name = stringField(resource.name);
-  if (unitId === undefined || type === undefined || nodeId === undefined || spaceId === undefined || resourceId === undefined || name === undefined) {
-    throw new WorkspaceApiError("workspace open returned a malformed descriptor", 502, "MALFORMED_OPEN");
+  if (
+    unitId === undefined ||
+    type === undefined ||
+    nodeId === undefined ||
+    spaceId === undefined ||
+    resourceId === undefined ||
+    name === undefined
+  ) {
+    throw new WorkspaceApiError(
+      "workspace open returned a malformed descriptor",
+      502,
+      "MALFORMED_OPEN",
+    );
   }
   return {
     nodeId,
@@ -66,7 +86,11 @@ export function narrowUnitResource(raw: unknown, requestedUnitId: string): Works
     typeof nodeRaw !== "object" ||
     Array.isArray(nodeRaw)
   ) {
-    throw new WorkspaceApiError("workspace unit resource returned a malformed descriptor", 502, "MALFORMED_UNIT_RESOURCE");
+    throw new WorkspaceApiError(
+      "workspace unit resource returned a malformed descriptor",
+      502,
+      "MALFORMED_UNIT_RESOURCE",
+    );
   }
 
   const resource = resourceRaw as Record<string, unknown>;
@@ -77,7 +101,11 @@ export function narrowUnitResource(raw: unknown, requestedUnitId: string): Works
     typeof nodeResourceRaw !== "object" ||
     Array.isArray(nodeResourceRaw)
   ) {
-    throw new WorkspaceApiError("workspace unit resource returned a malformed descriptor", 502, "MALFORMED_UNIT_RESOURCE");
+    throw new WorkspaceApiError(
+      "workspace unit resource returned a malformed descriptor",
+      502,
+      "MALFORMED_UNIT_RESOURCE",
+    );
   }
   const nodeResource = nodeResourceRaw as Record<string, unknown>;
 
@@ -98,7 +126,11 @@ export function narrowUnitResource(raw: unknown, requestedUnitId: string): Works
     nodeType !== type ||
     stringField(nodeResource.id) !== resourceId
   ) {
-    throw new WorkspaceApiError("workspace unit resource returned a malformed descriptor", 502, "MALFORMED_UNIT_RESOURCE");
+    throw new WorkspaceApiError(
+      "workspace unit resource returned a malformed descriptor",
+      502,
+      "MALFORMED_UNIT_RESOURCE",
+    );
   }
 
   // Some compatible Workspace deployments include the Unit id in the
@@ -106,16 +138,28 @@ export function narrowUnitResource(raw: unknown, requestedUnitId: string): Works
   // canonical endpoint does not, so inject the requested id below.
   const embeddedUnitId = resource.unitId;
   if (embeddedUnitId !== undefined && embeddedUnitId !== requestedUnitId) {
-    throw new WorkspaceApiError("workspace unit resource returned a mismatched Unit", 502, "MALFORMED_UNIT_RESOURCE");
+    throw new WorkspaceApiError(
+      "workspace unit resource returned a mismatched Unit",
+      502,
+      "MALFORMED_UNIT_RESOURCE",
+    );
   }
 
   const capabilities = resource.capabilities;
-  if (capabilities !== undefined && (capabilities === null || typeof capabilities !== "object" || Array.isArray(capabilities))) {
-    throw new WorkspaceApiError("workspace unit resource returned malformed capabilities", 502, "MALFORMED_UNIT_RESOURCE");
+  if (
+    capabilities !== undefined &&
+    (capabilities === null || typeof capabilities !== "object" || Array.isArray(capabilities))
+  ) {
+    throw new WorkspaceApiError(
+      "workspace unit resource returned malformed capabilities",
+      502,
+      "MALFORMED_UNIT_RESOURCE",
+    );
   }
-  const editorMode = (capabilities as Record<string, unknown> | undefined)?.editContent === true
-    ? "edit"
-    : "readOnly";
+  const editorMode =
+    (capabilities as Record<string, unknown> | undefined)?.editContent === true
+      ? "edit"
+      : "readOnly";
   return {
     nodeId,
     resourceId,
@@ -128,9 +172,14 @@ export function narrowUnitResource(raw: unknown, requestedUnitId: string): Works
   };
 }
 /** Open one Resource's editor descriptor. */
-export async function openResource(client: WorkspaceHttpClient, resourceId: string): Promise<WorkspaceDocumentOpen> {
+export async function openResource(
+  client: WorkspaceHttpClient,
+  resourceId: string,
+): Promise<WorkspaceDocumentOpen> {
   const raw = await readJson(
-    await client.request(`/api/resources/${encodeURIComponent(resourceId)}/open`, { method: "POST" }),
+    await client.request(`/api/resources/${encodeURIComponent(resourceId)}/open`, {
+      method: "POST",
+    }),
     "resource open",
   );
   return narrowOpen(raw);
@@ -186,7 +235,11 @@ function narrowCreatedNode(raw: unknown): { readonly resourceId: string; readonl
   const nodeId = typeof node?.id === "string" ? node.id : undefined;
   const resourceId = typeof resource?.id === "string" ? resource.id : undefined;
   if (nodeId === undefined || resourceId === undefined || resource?.kind !== "univer") {
-    throw new WorkspaceApiError("workspace resource create returned a malformed node", 502, "MALFORMED_CREATE");
+    throw new WorkspaceApiError(
+      "workspace resource create returned a malformed node",
+      502,
+      "MALFORMED_CREATE",
+    );
   }
   return { resourceId, nodeId };
 }
@@ -202,7 +255,9 @@ const CREATE_ATTEMPT_LIMIT = 20;
 const CREATE_RETRY_DELAY_MS = 250;
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => { setTimeout(resolve, ms); });
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 export async function createDocument(
@@ -212,6 +267,7 @@ export async function createDocument(
     parentNodeId: string | null;
     name: string;
     unitType: "sheet" | "doc" | "slide" | "board" | "base";
+    initialData?: JsonValue;
   },
 ): Promise<CreatedDocument> {
   const body = JSON.stringify({
@@ -220,6 +276,7 @@ export async function createDocument(
     parentNodeId: input.parentNodeId,
     name: input.name,
     unitType: input.unitType,
+    ...(input.initialData === undefined ? {} : { initialData: input.initialData }),
   });
   const headers = {
     "content-type": "application/json",
@@ -230,7 +287,11 @@ export async function createDocument(
     const response = await client.request("/api/resources", { method: "POST", headers, body });
     if (response.status === 202) {
       if (attempt >= CREATE_ATTEMPT_LIMIT) {
-        throw new WorkspaceApiError("workspace resource create is still pending", 504, "CREATE_PENDING");
+        throw new WorkspaceApiError(
+          "workspace resource create is still pending",
+          504,
+          "CREATE_PENDING",
+        );
       }
       await delay(CREATE_RETRY_DELAY_MS);
       continue;

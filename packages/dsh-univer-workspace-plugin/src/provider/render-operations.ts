@@ -35,7 +35,7 @@ import {
   type UniverRenderUnit,
 } from "@univer-cli/univer-render-runtime";
 import type { CollaborationUnitData } from "@univer-cli/univer-collaboration-runtime";
-import type { JsonValue } from "@deepseek-ai/dsh-tools";
+import type { JsonValue } from "../json-value.ts";
 import type { WorkspaceRuntimeScope, WorkspaceUnitType } from "../runtime/target.ts";
 
 export interface RenderUnitSource {
@@ -115,8 +115,16 @@ export async function screenshotUnit(
     const result = await createUnitScreenshot({
       runtime,
       limits: {
-        maxPages: positiveEnv(config.env ?? process.env, "UWH_SCREENSHOT_MAX_PAGES", DEFAULT_MAX_PAGES),
-        maxPixels: positiveEnv(config.env ?? process.env, "UWH_SCREENSHOT_MAX_PIXELS", DEFAULT_MAX_PIXELS),
+        maxPages: positiveEnv(
+          config.env ?? process.env,
+          "UWH_SCREENSHOT_MAX_PAGES",
+          DEFAULT_MAX_PAGES,
+        ),
+        maxPixels: positiveEnv(
+          config.env ?? process.env,
+          "UWH_SCREENSHOT_MAX_PIXELS",
+          DEFAULT_MAX_PIXELS,
+        ),
       },
     }).capture(input);
     const images = await persistScreenshots(result, outputDirectory, config.signal);
@@ -128,7 +136,9 @@ export async function screenshotUnit(
   }
 }
 
-async function openRenderRuntime(config: RenderRuntimeConfig): Promise<UniverRenderRuntime & UniverSlideLayoutRuntime> {
+async function openRenderRuntime(
+  config: RenderRuntimeConfig,
+): Promise<UniverRenderRuntime & UniverSlideLayoutRuntime> {
   const env = config.env ?? process.env;
   const renderPageRoot = env.UWH_RENDER_PAGE_ROOT?.trim() || env.UNIVER_RENDER_PAGE_ROOT?.trim();
   if (renderPageRoot === undefined || renderPageRoot === "") {
@@ -142,7 +152,9 @@ async function openRenderRuntime(config: RenderRuntimeConfig): Promise<UniverRen
     renderPageRoot,
     env,
     ...(license === undefined || license === "" ? {} : { license }),
-    ...(browserExecutablePath === undefined || browserExecutablePath === "" ? {} : { browserExecutablePath }),
+    ...(browserExecutablePath === undefined || browserExecutablePath === ""
+      ? {}
+      : { browserExecutablePath }),
     ...(config.signal === undefined ? {} : { signal: config.signal }),
   });
 }
@@ -176,7 +188,11 @@ async function persistScreenshots(
     }
     const path = resolve(outputDirectory, image.name);
     try {
-      await writeFile(path, image.bytes, signal === undefined ? { flag: "wx" } : { flag: "wx", signal });
+      await writeFile(
+        path,
+        image.bytes,
+        signal === undefined ? { flag: "wx" } : { flag: "wx", signal },
+      );
     } catch (error) {
       if (isNodeError(error) && error.code === "EEXIST") {
         throw new Error(`Screenshot output already exists: ${path}`, { cause: error });
@@ -199,9 +215,15 @@ async function persistScreenshots(
 
 function screenshotMetadata(image: ScreenshotImage): JsonValue {
   return {
-    ...(image.boardSelector === undefined ? {} : { boardSelector: image.boardSelector as unknown as JsonValue }),
-    ...(image.contentBounds === undefined ? {} : { contentBounds: image.contentBounds as unknown as JsonValue }),
-    ...(image.layoutAnalysis === undefined ? {} : { layoutAnalysis: image.layoutAnalysis as unknown as JsonValue }),
+    ...(image.boardSelector === undefined
+      ? {}
+      : { boardSelector: image.boardSelector as unknown as JsonValue }),
+    ...(image.contentBounds === undefined
+      ? {}
+      : { contentBounds: image.contentBounds as unknown as JsonValue }),
+    ...(image.layoutAnalysis === undefined
+      ? {}
+      : { layoutAnalysis: image.layoutAnalysis as unknown as JsonValue }),
     ...(image.padding === undefined ? {} : { padding: image.padding }),
     ...(image.page === undefined ? {} : { page: image.page }),
     ...(image.pageId === undefined ? {} : { pageId: image.pageId }),
@@ -224,9 +246,12 @@ function positiveEnv(env: NodeJS.ProcessEnv, key: string, fallback: number): num
 }
 
 function normalizeRenderError(error: unknown): Error {
-  if (isUniverRenderError(error)) return new Error(`Univer render failed: ${error.message}`, { cause: error });
-  if (isUnitLayoutLintError(error)) return new Error(`Univer layout lint failed: ${error.message}`, { cause: error });
-  if (isUnitScreenshotError(error)) return new Error(`Univer screenshot failed: ${error.message}`, { cause: error });
+  if (isUniverRenderError(error))
+    return new Error(`Univer render failed: ${error.message}`, { cause: error });
+  if (isUnitLayoutLintError(error))
+    return new Error(`Univer layout lint failed: ${error.message}`, { cause: error });
+  if (isUnitScreenshotError(error))
+    return new Error(`Univer screenshot failed: ${error.message}`, { cause: error });
   return error instanceof Error ? error : new Error(String(error));
 }
 

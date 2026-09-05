@@ -4,42 +4,19 @@
  */
 
 import type { WorkspaceHttpClient } from "./workspace-contract.ts";
+import type { DocumentFileState } from "../shared/state.ts";
 import { WorkspaceApiError } from "./api-errors.ts";
 import { openResource } from "./resources-api.ts";
-import {
-  getWorktreeDetail,
-  listReviewWorktrees,
-  openWorktreeUnit,
-  type WorktreeStateView,
-  type WorktreeUnitView,
-} from "./worktree-api.ts";
+import { getWorktreeDetail, listReviewWorktrees, openWorktreeUnit } from "./worktree-api.ts";
 
-/**
- * Collaboration state for ONE document — the remote counterpart of the
- * dsh-univer-office FileState. `viewerTarget`/`worktreeTarget`/`mergeTarget`
- * carry the embedded-editor mount instead of office's opaque iframe URLs.
- */
-export interface DocumentFileState {
-  readonly ok: true;
-  readonly resourceId: string;
-  /** Canonical Workspace browser URL for the document. */
-  readonly workspaceUrl: string | null;
-  readonly gatewayRunning: true;
-  readonly viewerTarget: { readonly unitId: string; readonly unitType: string; readonly readOnly: boolean } | null;
-  readonly worktrees: readonly {
-    readonly worktreeId: string;
-    readonly name: string;
-    readonly status: WorktreeStateView["status"];
-    readonly units: readonly WorktreeUnitView[];
-    readonly worktreeTarget: { readonly unitId: string; readonly unitType: string; readonly readOnly: boolean } | null;
-    readonly mergeTarget: { readonly unitId: string; readonly unitType: string; readonly readOnly: boolean } | null;
-    readonly openUrl: string | null;
-  }[];
-}
+export type { DocumentFileState };
 
 /** FileState for a WORKTREE key: first unit anchors the trunk viewer, and the
  * worktree itself is the only related entry. */
-export async function getWorktreeFileState(client: WorkspaceHttpClient, worktreeId: string): Promise<DocumentFileState> {
+export async function getWorktreeFileState(
+  client: WorkspaceHttpClient,
+  worktreeId: string,
+): Promise<DocumentFileState> {
   // Resolve the requested Worktree directly.  Listing both active and
   // processed Worktrees here made one stale/corrupt historical Worktree poison
   // every Viewer poll and multiplied the request fan-out.  The detail route
@@ -60,11 +37,12 @@ export async function getWorktreeFileState(client: WorkspaceHttpClient, worktree
     // resource is deliberately not discoverable through `/api/resources`.
     // Open through the Worktree contract instead of treating it as a trunk
     // Resource; otherwise every fresh local Unit gets stuck in Loading.
-    const mode = worktree.status === "draft"
-      ? "draft"
-      : worktree.status === "ready"
-        ? "mergePreview"
-        : "trunk";
+    const mode =
+      worktree.status === "draft"
+        ? "draft"
+        : worktree.status === "ready"
+          ? "mergePreview"
+          : "trunk";
     if (!(first.source === "worktree" && worktree.status === "discarded")) {
       const opened = await openWorktreeUnit(client, worktreeId, first.unitId, mode);
       viewerTarget = {
@@ -82,33 +60,44 @@ export async function getWorktreeFileState(client: WorkspaceHttpClient, worktree
   }
   const units = worktree.units.map((unit) => ({
     ...unit,
-    ...worktree.status === "draft" ? { worktreeUrl: workspaceWorktreeUrl(client, worktreeId, unit.unitId) } : {},
-    ...worktree.status === "ready" ? { mergeUrl: workspaceWorktreeUrl(client, worktreeId, unit.unitId, "preview") } : {},
+    ...(worktree.status === "draft"
+      ? { worktreeUrl: workspaceWorktreeUrl(client, worktreeId, unit.unitId) }
+      : {}),
+    ...(worktree.status === "ready"
+      ? { mergeUrl: workspaceWorktreeUrl(client, worktreeId, unit.unitId, "preview") }
+      : {}),
   }));
   return {
     ok: true,
+    workspaceOrigin: client.origin,
     resourceId,
     workspaceUrl,
     gatewayRunning: true,
     viewerTarget,
-    worktrees: [{
-      worktreeId: worktree.worktreeId,
-      name: worktree.name,
-      status: worktree.status,
-      units,
-      worktreeTarget: worktree.status === "draft" && first !== undefined
-        ? { unitId: first.unitId, unitType: first.unitType, readOnly: false }
-        : null,
-      mergeTarget: worktree.status === "ready" && first !== undefined
-        ? { unitId: first.unitId, unitType: first.unitType, readOnly: true }
-        : null,
-      openUrl: first === undefined ? null : workspaceWorktreeUrl(client, worktreeId, first.unitId),
-    }],
+    worktrees: [
+      {
+        ...worktree,
+        units,
+        worktreeTarget:
+          (worktree.status === "draft" || worktree.status === "ready") && first !== undefined
+            ? { unitId: first.unitId, unitType: first.unitType, readOnly: true }
+            : null,
+        mergeTarget:
+          worktree.status === "ready" && first !== undefined
+            ? { unitId: first.unitId, unitType: first.unitType, readOnly: true }
+            : null,
+        openUrl:
+          first === undefined ? null : workspaceWorktreeUrl(client, worktreeId, first.unitId),
+      },
+    ],
   };
 }
 
 /** Assemble the per-document state: trunk viewer plus related worktrees. */
-export async function getFileState(client: WorkspaceHttpClient, resourceId: string): Promise<DocumentFileState> {
+export async function getFileState(
+  client: WorkspaceHttpClient,
+  resourceId: string,
+): Promise<DocumentFileState> {
   const open = await openResource(client, resourceId);
   const trunkTarget = {
     unitId: open.unitId,
@@ -122,19 +111,23 @@ export async function getFileState(client: WorkspaceHttpClient, resourceId: stri
         .filter((unit) => unit.resourceId === resourceId)
         .map((unit) => ({
           ...unit,
-          ...worktree.status === "draft" ? { worktreeUrl: workspaceWorktreeUrl(client, worktree.worktreeId, unit.unitId) } : {},
-          ...worktree.status === "ready" ? { mergeUrl: workspaceWorktreeUrl(client, worktree.worktreeId, unit.unitId, "preview") } : {},
+          ...(worktree.status === "draft"
+            ? { worktreeUrl: workspaceWorktreeUrl(client, worktree.worktreeId, unit.unitId) }
+            : {}),
+          ...(worktree.status === "ready"
+            ? {
+                mergeUrl: workspaceWorktreeUrl(client, worktree.worktreeId, unit.unitId, "preview"),
+              }
+            : {}),
         }));
       if (units.length === 0) return undefined;
       const first = units[0]!;
       return {
-        worktreeId: worktree.worktreeId,
-        name: worktree.name,
-        status: worktree.status,
+        ...worktree,
         units,
         worktreeTarget:
-          worktree.status === "draft"
-            ? { unitId: first.unitId, unitType: first.unitType, readOnly: false }
+          worktree.status === "draft" || worktree.status === "ready"
+            ? { unitId: first.unitId, unitType: first.unitType, readOnly: true }
             : null,
         mergeTarget:
           worktree.status === "ready"
@@ -146,6 +139,7 @@ export async function getFileState(client: WorkspaceHttpClient, resourceId: stri
     .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
   return {
     ok: true,
+    workspaceOrigin: client.origin,
     resourceId,
     workspaceUrl: workspaceDocumentUrl(client, open.nodeId),
     gatewayRunning: true,

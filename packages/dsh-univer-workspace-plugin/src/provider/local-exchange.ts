@@ -59,7 +59,12 @@ export function inferImportUnitType(
         : extension === ".ppt" || extension === ".pptx"
           ? "slide"
           : undefined;
-  if (inferred === undefined || (explicit !== undefined && explicit !== inferred && !(inferred === "sheet" && explicit === "base"))) {
+  if (
+    inferred === undefined ||
+    (explicit !== undefined &&
+      explicit !== inferred &&
+      !(inferred === "sheet" && explicit === "base"))
+  ) {
     throw new LocalExchangeError(
       `Cannot import ${fileName} as ${explicit ?? "an inferred Unit type"}.`,
       "UNSUPPORTED_IMPORT_FORMAT",
@@ -71,7 +76,13 @@ export function inferImportUnitType(
 /** Infer a supported export format from an output filename. */
 export function inferExportFormat(outputPath: string): LocalExchangeFormat {
   const extension = extname(outputPath).toLowerCase();
-  if (extension === ".xlsx" || extension === ".csv" || extension === ".tsv" || extension === ".docx" || extension === ".pptx") {
+  if (
+    extension === ".xlsx" ||
+    extension === ".csv" ||
+    extension === ".tsv" ||
+    extension === ".docx" ||
+    extension === ".pptx"
+  ) {
     return extension.slice(1) as LocalExchangeFormat;
   }
   throw new LocalExchangeError(
@@ -86,9 +97,10 @@ export function assertCompatibleExport(
   format: LocalExchangeFormat,
 ): void {
   const compatible =
-    ((unitType === "sheet" || unitType === "base") && (format === "xlsx" || format === "csv" || format === "tsv"))
-    || (unitType === "doc" && format === "docx")
-    || (unitType === "slide" && format === "pptx");
+    ((unitType === "sheet" || unitType === "base") &&
+      (format === "xlsx" || format === "csv" || format === "tsv")) ||
+    (unitType === "doc" && format === "docx") ||
+    (unitType === "slide" && format === "pptx");
   if (!compatible) {
     throw new LocalExchangeError(
       `Cannot export a ${unitType} Unit as ${format}.`,
@@ -102,7 +114,10 @@ export async function importUnitData(
   bytes: Uint8Array,
   fileName: string,
   explicitType?: LocalExchangeUnitType,
-): Promise<{ readonly unitType: LocalExchangeUnitType; readonly data: Readonly<Record<string, unknown>> }> {
+): Promise<{
+  readonly unitType: LocalExchangeUnitType;
+  readonly data: Readonly<Record<string, unknown>>;
+}> {
   const unitType = inferImportUnitType(fileName, explicitType);
   const format = importFormat(fileName);
   const options = importOptions(unitType, format, fileName);
@@ -158,24 +173,40 @@ export async function exportUnitData(
 
 function importFormat(fileName: string): ExchangeFormat {
   switch (extname(fileName).toLowerCase()) {
-    case ".xls": return ExchangeFormat.XLS;
-    case ".xlsx": return ExchangeFormat.XLSX;
-    case ".csv": return ExchangeFormat.CSV;
-    case ".tsv": return ExchangeFormat.TSV;
-    case ".doc": return ExchangeFormat.DOC;
-    case ".docx": return ExchangeFormat.DOCX;
-    case ".ppt": return ExchangeFormat.PPT;
-    case ".pptx": return ExchangeFormat.PPTX;
-    default: throw new LocalExchangeError(`Cannot infer import format from ${fileName}.`, "UNSUPPORTED_IMPORT_FORMAT");
+    case ".xls":
+      return ExchangeFormat.XLS;
+    case ".xlsx":
+      return ExchangeFormat.XLSX;
+    case ".csv":
+      return ExchangeFormat.CSV;
+    case ".tsv":
+      return ExchangeFormat.TSV;
+    case ".doc":
+      return ExchangeFormat.DOC;
+    case ".docx":
+      return ExchangeFormat.DOCX;
+    case ".ppt":
+      return ExchangeFormat.PPT;
+    case ".pptx":
+      return ExchangeFormat.PPTX;
+    default:
+      throw new LocalExchangeError(
+        `Cannot infer import format from ${fileName}.`,
+        "UNSUPPORTED_IMPORT_FORMAT",
+      );
   }
 }
 
 function instanceType(unitType: LocalExchangeUnitType): UniverInstanceType {
   switch (unitType) {
-    case "sheet": return UniverInstanceType.UNIVER_SHEET;
-    case "doc": return UniverInstanceType.UNIVER_DOC;
-    case "slide": return UniverInstanceType.UNIVER_SLIDE;
-    case "base": return UniverInstanceType.UNIVER_BASE;
+    case "sheet":
+      return UniverInstanceType.UNIVER_SHEET;
+    case "doc":
+      return UniverInstanceType.UNIVER_DOC;
+    case "slide":
+      return UniverInstanceType.UNIVER_SLIDE;
+    case "base":
+      return UniverInstanceType.UNIVER_BASE;
   }
 }
 
@@ -186,7 +217,9 @@ function importOptions(
 ): ImportOptions & { readonly fileName: string } {
   const base = { type: instanceType(unitType), format, fileName };
   if (format === ExchangeFormat.XLSX && unitType === "sheet") {
-    return { ...base, formulaCalculation: FormulaCalculationMode.FORCED } as ImportOptions & { readonly fileName: string };
+    return { ...base, formulaCalculation: FormulaCalculationMode.FORCED } as ImportOptions & {
+      readonly fileName: string;
+    };
   }
   // CSV/TSV accept an optional parser config. Supplying an empty object keeps
   // the option shape stable across the beta.2 SDK overloads.
@@ -206,7 +239,10 @@ function exportOptions(
   if (format === "csv" || format === "tsv") {
     const sheet = firstSheet(data);
     if (sheet === undefined) {
-      throw new LocalExchangeError("CSV/TSV export requires at least one worksheet.", "INVALID_UNIT_DATA");
+      throw new LocalExchangeError(
+        "CSV/TSV export requires at least one worksheet.",
+        "INVALID_UNIT_DATA",
+      );
     }
     return {
       type,
@@ -224,7 +260,13 @@ function exportOptions(
 function firstSheet(data: Readonly<Record<string, unknown>>): { readonly id: string } | undefined {
   const order = data.sheetOrder;
   const sheets = data.sheets;
-  if (!Array.isArray(order) || sheets === null || typeof sheets !== "object" || Array.isArray(sheets)) return undefined;
+  if (
+    !Array.isArray(order) ||
+    sheets === null ||
+    typeof sheets !== "object" ||
+    Array.isArray(sheets)
+  )
+    return undefined;
   const id = order.find((entry): entry is string => typeof entry === "string");
   return id === undefined ? undefined : { id };
 }

@@ -48,7 +48,8 @@ function sameOriginRoot(): string {
  * from the Univer runtime composition.
  */
 export function buildViewerUrls(worktreeId?: string): ViewerUrls {
-  const worktreeSeg = worktreeId !== undefined ? `/worktrees/${encodeURIComponent(worktreeId)}` : "";
+  const worktreeSeg =
+    worktreeId !== undefined ? `/worktrees/${encodeURIComponent(worktreeId)}` : "";
   const base = `${PROXY_PREFIX}/universer-api${worktreeSeg}`;
   return {
     snapshotServerUrl: `${base}/snapshot`,
@@ -99,8 +100,8 @@ function proxyFetch(input: string | URL | Request, init?: RequestInit): Promise<
   const rawUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   const target = new URL(rawUrl, window.location.origin);
   if (
-    target.origin === window.location.origin
-    && (target.pathname === "/universer-api" || target.pathname.startsWith("/universer-api/"))
+    target.origin === window.location.origin &&
+    (target.pathname === "/universer-api" || target.pathname.startsWith("/universer-api/"))
   ) {
     target.pathname = `${PROXY_PREFIX}${target.pathname}`;
   }
@@ -109,7 +110,8 @@ function proxyFetch(input: string | URL | Request, init?: RequestInit): Promise<
 
 function mergePreviewFailure(status: string): string {
   if (status === "conflict") return "The Worktree has a merge conflict; preview is unavailable.";
-  if (status === "already-merged") return "The Worktree has already been merged; preview is unavailable.";
+  if (status === "already-merged")
+    return "The Worktree has already been merged; preview is unavailable.";
   if (status === "not-applicable") return "This Worktree Unit has no merge preview.";
   return "The Worktree merge preview is unavailable.";
 }

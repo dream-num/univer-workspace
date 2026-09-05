@@ -28,11 +28,17 @@ export interface ToolSpaceScope extends SpaceScope {
  * synthetic executions that do not carry a session cwd.  Such executions do
  * not have a product Space boundary and must not receive a user-wide client.
  */
-export async function resolveToolScope(ctx: Context, exec: ToolRunContext): Promise<ToolSpaceScope> {
+export async function resolveToolScope(
+  ctx: Context,
+  exec: ToolRunContext,
+): Promise<ToolSpaceScope> {
   const cwd = toolWorkspaceCwd(exec);
   const service = ctx.get("univerWorkspace");
   if (service === undefined) {
-    throw new UniverError("The Univer Workspace service is unavailable.", "WORKSPACE_SERVICE_UNAVAILABLE");
+    throw new UniverError(
+      "The Univer Workspace service is unavailable.",
+      "WORKSPACE_SERVICE_UNAVAILABLE",
+    );
   }
   const resolved = await service.resolveSpaceForSession(cwd);
   if (resolved === undefined) {
@@ -68,7 +74,10 @@ export async function assertWorktreeAccessible(
 ): Promise<void> {
   const service = ctx.get("univerWorkspace");
   if (service === undefined) {
-    throw new UniverError("The Univer Workspace service is unavailable.", "WORKSPACE_SERVICE_UNAVAILABLE");
+    throw new UniverError(
+      "The Univer Workspace service is unavailable.",
+      "WORKSPACE_SERVICE_UNAVAILABLE",
+    );
   }
   // The authenticated Workspace endpoint validates ownership and ACL.  Do not
   // compare the Worktree's Space with the session default: users can operate

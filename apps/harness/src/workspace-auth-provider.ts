@@ -1,137 +1,181 @@
 /**
- * Concrete `workspaceAuth` service. Constructed directly against the shared
- * root store by the harness core (siblings resolve it via `ctx.get`); the
- * core then calls {@link WorkspaceAuthProvider.initialize} once at startup,
- * which opens the credentials domain the way a class-plugin mount's
- * `[Service.init]` would.
+ * Concrete process-wide Workspace connection provider for the local Harness.
+ *
  * @module @univerjs/univer-workspace-harness/workspace-auth-provider
  */
 
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
-import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
-import type { Domain } from "@deepseek-ai/dsh-storage-domain";
+import type {} from "@deepseek-ai/dsh-settings";
 import z from "@deepseek-ai/schemastery";
-import { credentialsDomainSpec } from "./credentials.ts";
-import { WORKSPACE_SESSION_COOKIE, WorkspaceAuthService, type WorkspaceHttpClient } from "./workspace-auth.ts";
+import {
+  canonicalWorkspaceOrigin,
+  readConnectionStateSync,
+  writeConfiguredOrigin,
+  writeConnectionState,
+  type WorkspaceConnection,
+} from "./connection-state.ts";
+import type { UwhIdentity } from "./contract.ts";
+import {
+  WORKSPACE_SESSION_COOKIE,
+  WorkspaceAuthService,
+  type WorkspaceHttpClient,
+} from "./workspace-auth.ts";
 
-/** The settings namespace name for the harness origin override. */
-export const UWH_SETTINGS_NAMESPACE = settingsNamespace("univer-workspace-harness");
+export const UWH_SETTINGS_NAMESPACE = "univer-workspace-harness";
 
-/** Composition entry that the harness core owns. */
 export interface WorkspaceAuthConfig {
-  /** Default Workspace origin (overridable through settings). */
-  workspaceOrigin: string;
+  readonly workspaceOrigin: string;
+  readonly connectionStatePath: string;
 }
 
-/** The settings section shape: only the origin is a user-adjustable field. */
 export interface WorkspaceAuthSettings {
   workspaceOrigin: string;
 }
 
-/** The settings schema for {@link WorkspaceAuthSettings}. */
 const settingsSchema = z.object({
   workspaceOrigin: z.string().required(),
 });
 
-/** The class-plugin provider for the workspaceAuth service. */
 export class WorkspaceAuthProvider extends WorkspaceAuthService {
-  static readonly inject = ["storageDomain"];
+  static readonly inject = ["settings"];
 
   private originSource: (() => WorkspaceAuthSettings) | undefined;
-  private table: ReturnType<Domain<typeof credentialsDomainSpec>["table"]> | undefined;
+  private readonly active: WorkspaceConnection | undefined;
+  private configuredOrigin: string;
+  private settingsMounted = false;
+  private settingsReset: Promise<void> = Promise.resolve();
+  private settingsResetError: unknown;
+  private originWrite: Promise<void> = Promise.resolve();
+  private originWriteError: unknown;
+  private staged = false;
+  private next: WorkspaceConnection | undefined;
 
   constructor(
     ctx: Context,
     private readonly config: WorkspaceAuthConfig,
   ) {
     super(ctx);
-    const settingsEntry: WorkspaceAuthSettings = { workspaceOrigin: config.workspaceOrigin };
-    installSettingsSection(ctx, UWH_SETTINGS_NAMESPACE, settingsSchema, settingsEntry, {
+    const state = readConnectionStateSync(config.connectionStatePath);
+    this.active = state.active;
+    this.configuredOrigin =
+      state.configuredOrigin ??
+      this.active?.origin ??
+      canonicalWorkspaceOrigin(config.workspaceOrigin);
+    const settingsEntry: WorkspaceAuthSettings = {
+      workspaceOrigin: this.configuredOrigin,
+    };
+    ctx.settings.installSection(ctx, UWH_SETTINGS_NAMESPACE, settingsSchema, settingsEntry, {
       setSource: (current) => this.setOriginSource(current),
-      onChange: () => {},
+      onChange: () => this.handleOriginChange(),
     });
+    this.settingsMounted = true;
+    if (state.configuredOrigin === undefined && state.active === undefined) {
+      this.handleOriginChange();
+    } else {
+      if (state.configuredOrigin === undefined) {
+        this.persistConfiguredOrigin(this.configuredOrigin);
+      }
+      this.settingsReset = ctx.settings.replace(UWH_SETTINGS_NAMESPACE, {}).then(
+        () => {
+          this.settingsResetError = undefined;
+        },
+        (error: unknown) => {
+          this.settingsResetError = error;
+        },
+      );
+    }
   }
 
-  async [Service.init](): Promise<void> {
-    await this.openDomain();
-  }
-
-  /** Open the credentials domain exactly once. The harness core kicks this
-   * off synchronously after constructing the provider against the shared
-   * root store; every table access awaits it. */
-  readonly ready: Promise<void> = this.openDomain();
-
-  private async openDomain(): Promise<void> {
-    if (this.table !== undefined) return;
-    const domain = await this.ctx.storageDomain.open(credentialsDomainSpec);
-    this.ctx.effect(() => () => { void domain.close(); }, "uwh: credentials domain close");
-    this.table = domain.table("credentials");
-  }
-
-  /** Kept for API symmetry with the session provider; awaits {@link ready}. */
-  async initialize(): Promise<void> {
-    await this.ready;
-  }
+  async [Service.init](): Promise<void> {}
 
   setOriginSource(source: () => WorkspaceAuthSettings): void {
     this.originSource = source;
   }
 
+  private handleOriginChange(): void {
+    if (!this.settingsMounted) return;
+    const configured = this.originSource?.().workspaceOrigin;
+    if (configured === undefined) return;
+    const origin = canonicalWorkspaceOrigin(configured);
+    if (origin === this.configuredOrigin) return;
+    this.configuredOrigin = origin;
+    this.persistConfiguredOrigin(origin);
+  }
+
+  private persistConfiguredOrigin(origin: string): void {
+    this.originWrite = writeConfiguredOrigin(this.config.connectionStatePath, origin).then(
+      () => {
+        this.originWriteError = undefined;
+      },
+      (error: unknown) => {
+        this.originWriteError = error;
+      },
+    );
+  }
+
+  private async waitForOriginWrite(): Promise<void> {
+    await this.settingsReset;
+    if (this.settingsResetError !== undefined) throw this.settingsResetError;
+    await this.originWrite;
+    if (this.originWriteError !== undefined) throw this.originWriteError;
+  }
+
   effectiveOrigin(): string {
-    const section = this.originSource?.();
-    return section?.workspaceOrigin ?? this.config.workspaceOrigin;
+    return this.active?.origin ?? canonicalWorkspaceOrigin(this.config.workspaceOrigin);
   }
 
-  hasCredential(userId: string): boolean {
-    return this.readCredential(userId) !== undefined;
+  loginOrigin(): string {
+    return this.configuredOrigin;
   }
 
-  clientFor(userId: string): WorkspaceHttpClient | undefined {
-    const credential = this.readCredential(userId);
-    if (credential === undefined) return undefined;
-    const origin = this.effectiveOrigin();
-    const token = credential.token;
+  currentIdentity(): UwhIdentity | undefined {
+    return this.active?.identity;
+  }
+
+  currentClient(): WorkspaceHttpClient | undefined {
+    const active = this.active;
+    if (active === undefined) return undefined;
+    const { origin, sessionToken } = active;
     return {
       origin,
-      sessionToken: token,
+      sessionToken,
       request: (path, init) => {
         const headers = new Headers(init?.headers);
-        headers.set("cookie", `${WORKSPACE_SESSION_COOKIE}=${token}`);
+        headers.set("cookie", `${WORKSPACE_SESSION_COOKIE}=${sessionToken}`);
         const method = init?.method ?? "GET";
-        const mutating = method !== "GET" && method !== "HEAD";
-        if (mutating && !headers.has("origin")) headers.set("origin", origin);
-        return fetch(new URL(path, origin).toString(), { ...init, headers });
+        if (method !== "GET" && method !== "HEAD" && !headers.has("origin")) {
+          headers.set("origin", origin);
+        }
+        return fetch(new URL(path, origin), { ...init, headers });
       },
     };
   }
 
-  async storeCredential(userId: string, token: string, expiresAtMs: number): Promise<void> {
-    await this.ready;
-    await this.requireTable().put(userId, { token, expiresAt: expiresAtMs });
+  async stageConnection(identity: UwhIdentity, token: string, origin: string): Promise<void> {
+    await this.waitForOriginWrite();
+    const next: WorkspaceConnection = {
+      origin: canonicalWorkspaceOrigin(origin),
+      identity,
+      sessionToken: token,
+    };
+    await writeConnectionState(this.config.connectionStatePath, next);
+    this.next = next;
+    this.staged = true;
   }
 
-  async clearCredential(userId: string): Promise<void> {
-    await this.ready;
-    await this.requireTable().delete(userId);
+  async stageDisconnect(): Promise<void> {
+    await this.waitForOriginWrite();
+    await writeConnectionState(this.config.connectionStatePath, undefined);
+    this.next = undefined;
+    this.staged = true;
   }
 
-  private readCredential(userId: string): { readonly token: string } | undefined {
-    const table = this.table;
-    if (table === undefined) return undefined;
-    const record = table.get(userId);
-    if (record === undefined) return undefined;
-    if (record.expiresAt <= Date.now()) {
-      void this.clearCredential(userId);
-      return undefined;
-    }
-    return { token: record.token };
+  restartRequired(): boolean {
+    return this.staged;
   }
 
-  private requireTable(): ReturnType<Domain<typeof credentialsDomainSpec>["table"]> {
-    if (this.table === undefined) {
-      throw new Error("workspaceAuth credentials domain is not initialized");
-    }
-    return this.table;
+  pendingIdentity(): UwhIdentity | undefined {
+    return this.staged ? this.next?.identity : undefined;
   }
 }

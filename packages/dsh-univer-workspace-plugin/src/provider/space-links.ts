@@ -18,6 +18,8 @@ export const spaceLinkRecord = z.object({
   spaceId: z.string(),
   /** Opaque Workspace user id the Space was resolved for. */
   userId: z.string(),
+  /** Canonical Workspace origin; optional for records written before origin isolation. */
+  origin: z.string().optional(),
 });
 
 /** The space-links domain: one table keyed by dsh workspace id. */

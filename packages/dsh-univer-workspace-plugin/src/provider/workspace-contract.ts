@@ -22,8 +22,10 @@ export interface WorkspaceHttpClient {
 /** The authenticated-client service supplied by the harness. */
 export interface WorkspaceAuthService {
   effectiveOrigin(): string;
-  hasCredential(userId: string): boolean;
-  clientFor(userId: string): WorkspaceHttpClient | undefined;
+  currentIdentity(): WorkspaceSessionIdentity | undefined;
+  currentClient(): WorkspaceHttpClient | undefined;
+  restartRequired(): boolean;
+  pendingIdentity(): WorkspaceSessionIdentity | undefined;
 }
 
 /** The verified browser-session identity service supplied by the harness. */
@@ -33,13 +35,19 @@ export interface WorkspaceSessionIdentity {
   readonly displayName?: string;
 }
 
-export interface WorkspaceSessionService {
-  currentUser(cookieHeader: string | undefined): WorkspaceSessionIdentity | undefined;
-}
-
 /** Derive the account-local mechanical DSH workspace directory. */
 export function userDirectoryPath(workspaceRoot: string, userId: string): string {
   return resolve(workspaceRoot, createHash("sha256").update(userId, "utf8").digest("hex"));
+}
+
+export function originUserDirectoryPath(
+  workspaceRoot: string,
+  origin: string,
+  userId: string,
+): string {
+  const originKey = createHash("sha256").update(new URL(origin).origin, "utf8").digest("hex");
+  const userKey = createHash("sha256").update(userId, "utf8").digest("hex");
+  return resolve(workspaceRoot, originKey, userKey);
 }
 
 /**
@@ -55,9 +63,20 @@ export function spaceDirectoryPath(workspaceRoot: string, userId: string, spaceI
   return resolve(workspaceRoot, user, space);
 }
 
+export function originSpaceDirectoryPath(
+  workspaceRoot: string,
+  origin: string,
+  userId: string,
+  spaceId: string,
+): string {
+  return resolve(
+    originUserDirectoryPath(workspaceRoot, origin, userId),
+    createHash("sha256").update(spaceId, "utf8").digest("hex"),
+  );
+}
+
 declare module "@deepseek-ai/cordis" {
   interface Context {
     workspaceAuth: WorkspaceAuthService;
-    workspaceSession: WorkspaceSessionService;
   }
 }

@@ -17,20 +17,17 @@ import {
 import { UniverShapePlugin } from "@univerjs-pro/engine-shape";
 import { UniverLicensePlugin } from "@univerjs-pro/license";
 import { UniverShapeEditorPlugin } from "@univerjs-pro/shape-editor";
-import {
-  DependentOn,
-  Injector,
-  Plugin,
-  setDependencies,
-  UniverInstanceType,
-} from "@univerjs/core";
+import { DependentOn, Injector, Plugin, setDependencies, UniverInstanceType } from "@univerjs/core";
 
 class HistoryShapeFormulaModelPlugin extends Plugin {
   static override type = UniverInstanceType.UNIVER_UNKNOWN;
   static override pluginName = "DSH_HISTORY_SHAPE_FORMULA_MODEL_PLUGIN";
   static override packageName = "dsh-univer-workspace-plugin";
 
-  constructor(protected override _injector: Injector) {
+  constructor(
+    _config: undefined,
+    protected override _injector: Injector,
+  ) {
     super();
   }
 
@@ -47,7 +44,7 @@ class HistoryShapeFormulaModelPlugin extends Plugin {
   }
 }
 
-setDependencies(HistoryShapeFormulaModelPlugin, [Injector]);
+setDependencies(HistoryShapeFormulaModelPlugin, [Injector], 1);
 
 let installed = false;
 

@@ -36,40 +36,45 @@ export function configuredCollaborationPreset(
       const [PluginConstructor, pluginConfig] = plugin;
       if (PluginConstructor === UniverCollaborationClientPlugin) {
         const existingConfig = (pluginConfig ?? {}) as { readonly override?: readonly unknown[] };
-        const previewConfig = mergePreviewConfig === undefined
-          ? {}
-          : {
-              ...mergePreviewConfig,
-              // Keep the endpoint on the DSH origin even though the preview's
-              // in-memory snapshot override handles the initial read.
-              snapshotServerUrl: urls.snapshotServerUrl,
-              override: [
-                ...(existingConfig.override ?? []),
-                ...(mergePreviewConfig.override ?? []),
-              ],
-            };
-        return [[
-          PluginConstructor,
-          {
-            ...(pluginConfig as object),
-            ...urls,
-            ...previewConfig,
-            enableOfflineEditing: false,
-            enableSingleActiveInstanceLock: false,
-            enableAuthServer: true,
-            loginUrlKey: "/login",
-            sendChangesetTimeout: 200,
-          },
-        ] as IPresetPlugin];
+        const previewConfig =
+          mergePreviewConfig === undefined
+            ? {}
+            : {
+                ...mergePreviewConfig,
+                // Keep the endpoint on the DSH origin even though the preview's
+                // in-memory snapshot override handles the initial read.
+                snapshotServerUrl: urls.snapshotServerUrl,
+                override: [
+                  ...(existingConfig.override ?? []),
+                  ...(mergePreviewConfig.override ?? []),
+                ],
+              };
+        return [
+          [
+            PluginConstructor,
+            {
+              ...(pluginConfig as object),
+              ...urls,
+              ...previewConfig,
+              enableOfflineEditing: false,
+              enableSingleActiveInstanceLock: false,
+              enableAuthServer: true,
+              loginUrlKey: "/login",
+              sendChangesetTimeout: 200,
+            },
+          ] as IPresetPlugin,
+        ];
       }
       if (PluginConstructor === UniverCollaborationClientUIPlugin) {
-        return [[
-          PluginConstructor,
-          {
-            ...(pluginConfig as object),
-            enableDocumentCollaborationUI: false,
-          },
-        ] as IPresetPlugin];
+        return [
+          [
+            PluginConstructor,
+            {
+              ...(pluginConfig as object),
+              enableDocumentCollaborationUI: false,
+            },
+          ] as IPresetPlugin,
+        ];
       }
       return [plugin];
     }),

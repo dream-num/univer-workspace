@@ -31,7 +31,10 @@ function serializeError(reason) {
 
 function reportFatal(reason) {
   const error = serializeError(reason);
-  console.error("[uwh-worker]", JSON.stringify({ event: "fatal", requestId: activeRequestId, error }));
+  console.error(
+    "[uwh-worker]",
+    JSON.stringify({ event: "fatal", requestId: activeRequestId, error }),
+  );
   if (activeRequestId !== undefined && process.send !== undefined) {
     try {
       process.send({ id: activeRequestId, type: "error", error });

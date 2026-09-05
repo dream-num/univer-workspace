@@ -23,7 +23,7 @@ export interface HarnessDocumentTitleProps {
  */
 export function HarnessDocumentTitle({ sessionList }: HarnessDocumentTitleProps): null {
   const snapshot = useSyncExternalStore(
-    listener => sessionList.subscribe(listener),
+    (listener) => sessionList.subscribe(listener),
     () => sessionList.getSnapshot(),
     () => sessionList.getSnapshot(),
   );

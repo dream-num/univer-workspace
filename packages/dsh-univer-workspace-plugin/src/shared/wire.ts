@@ -17,6 +17,13 @@ export interface WorkspaceSpace {
   readonly accessRole: "owner" | "admin" | "editor" | "viewer";
   /** The dsh workspace id backing this Space (the mechanical directory carrier). */
   readonly dshWorkspaceId: string;
+  readonly capabilities?: Readonly<{
+    readonly browseRoot?: boolean;
+    readonly createAtRoot?: boolean;
+    readonly renameSpace?: boolean;
+    readonly manageMembers?: boolean;
+    readonly viewTrash?: boolean;
+  }>;
 }
 
 /** One document (Node + optional Univer Resource) inside a Space. */

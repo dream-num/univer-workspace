@@ -1,6 +1,6 @@
 /** Hash routing for the native DSH Session selection. */
 
-import type { ClientContext, ISessions } from "@deepseek-ai/dsh-client-runtime/client";
+import type { ClientContext, ISessions } from "./dsh-runtime-types.ts";
 import type { SessionId } from "@deepseek-ai/dsh-client-connection/client";
 
 /** Hash prefix used by Harness Session links. */
@@ -114,9 +114,12 @@ export function apply(ctx: ClientContext): void {
   const unsubscribe = sessions.list.subscribe(projectCurrent);
   onHashChange();
   projectCurrent();
-  ctx.effect(() => () => {
-    disposed = true;
-    window.removeEventListener("hashchange", onHashChange);
-    unsubscribe();
-  }, "uwh: session hash route");
+  ctx.effect(
+    () => () => {
+      disposed = true;
+      window.removeEventListener("hashchange", onHashChange);
+      unsubscribe();
+    },
+    "uwh: session hash route",
+  );
 }

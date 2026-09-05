@@ -1,61 +1,53 @@
 /**
- * The `workspaceAuth` service: the seam sibling plugins (the capability
- * plugin) consume to reach the effective Workspace origin and to obtain an
- * authenticated HTTP client for the authorizing User.
+ * Process-wide Workspace connection seam for the local Harness.
  *
- * The harness core owns the credential store and the origin settings
- * namespace; this service only exposes reads and per-User clients. A client
- * is unavailable for a user with no stored (or expired) credential, in which
- * case the caller must direct the user back through the OAuth login flow.
+ * A local Harness instance has one remote Workspace identity. Consumers do
+ * not select a user from a request and this service does not implement local
+ * permissions; it only exposes the connection chosen before process startup.
+ *
  * @module @univerjs/univer-workspace-harness/workspace-auth
  */
 
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
+import type { UwhIdentity } from "./contract.ts";
 
-/** The Workspace session cookie name the Workspace product uses. */
 export const WORKSPACE_SESSION_COOKIE = "workspace_session";
 
-/** An authenticated client bound to one user's Workspace credential. */
 export interface WorkspaceHttpClient {
-  /** The effective Workspace origin this client calls. */
   readonly origin: string;
-  /**
-   * The raw `workspace_session` token (the cookie value). Exposed so a
-   * sibling plugin can hand the credential across a process boundary (the
-   * headless collaboration worker pool) without reading the credential store.
-   */
   readonly sessionToken: string;
-  /**
-   * Perform an authenticated request on the Workspace origin. The user's
-   * `workspace_session` cookie is attached; mutating calls also carry the
-   * origin header. The request rejects when the stored credential is absent
-   * or has expired, and resolves to a 401 response when the Workspace has
-   * rejected the credential.
-   */
   request(path: string, init?: RequestInit): Promise<Response>;
 }
 
-/** The public surface of the workspaceAuth service. */
 export abstract class WorkspaceAuthService extends Service {
   constructor(ctx: Context) {
     super(ctx, "workspaceAuth");
   }
 
-  /** The effective Workspace origin (composition base overridden by settings). */
+  /** Origin of the connection bound when this process started. */
   abstract effectiveOrigin(): string;
 
-  /** Whether a non-expired credential is stored for the user. */
-  abstract hasCredential(userId: string): boolean;
+  /** Origin selected in Settings for the next Device Authorization flow. */
+  abstract loginOrigin(): string;
 
-  /** An authenticated client for the user, or `undefined` without a valid credential. */
-  abstract clientFor(userId: string): WorkspaceHttpClient | undefined;
+  /** Remote identity shared by every request in this local process. */
+  abstract currentIdentity(): UwhIdentity | undefined;
 
-  /** Persist (or replace) the user's Workspace session credential. */
-  abstract storeCredential(userId: string, token: string, expiresAtMs: number): Promise<void>;
+  /** Remote HTTP client shared by every request in this local process. */
+  abstract currentClient(): WorkspaceHttpClient | undefined;
 
-  /** Remove the user's Workspace session credential. */
-  abstract clearCredential(userId: string): Promise<void>;
+  /** Persist the connection that becomes active after a full restart. */
+  abstract stageConnection(identity: UwhIdentity, token: string, origin: string): Promise<void>;
+
+  /** Persist an unconnected next startup state. */
+  abstract stageDisconnect(): Promise<void>;
+
+  /** Whether persisted next-start state differs from this running process. */
+  abstract restartRequired(): boolean;
+
+  /** Identity staged for the next start, if any. */
+  abstract pendingIdentity(): UwhIdentity | undefined;
 }
 
 declare module "@deepseek-ai/cordis" {

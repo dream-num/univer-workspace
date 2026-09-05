@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
+import type { ClientContext } from "../src/client/dsh-runtime-types.ts";
 import {
   SESSION_HASH_PREFIX,
   sessionHashForId,

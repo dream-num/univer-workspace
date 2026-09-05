@@ -14,6 +14,7 @@ export function text(value: string): ContentBlock[] {
 export function nonEmptyArgument(value: string | undefined, name: string): string | undefined {
   if (value === undefined) return undefined;
   const trimmed = value.trim();
-  if (trimmed === "") throw new UniverError(`univer_status ${name} must be non-empty.`, "INVALID_REQUEST");
+  if (trimmed === "")
+    throw new UniverError(`univer_status ${name} must be non-empty.`, "INVALID_REQUEST");
   return trimmed;
 }

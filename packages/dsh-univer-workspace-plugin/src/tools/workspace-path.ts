@@ -31,22 +31,37 @@ export function toolWorkspaceCwd(exec: ToolRunContext): string {
 }
 
 /** Resolve an existing input below the canonical session workspace. */
-export async function existingSessionPath(exec: ToolRunContext, value: string): Promise<AuthorizedSessionPath> {
+export async function existingSessionPath(
+  exec: ToolRunContext,
+  value: string,
+): Promise<AuthorizedSessionPath> {
   return await authorizedPath(toolWorkspaceCwd(exec), value, true);
 }
 
 /** Resolve a new output below the canonical session workspace. */
-export async function newSessionPath(exec: ToolRunContext, value: string): Promise<AuthorizedSessionPath> {
+export async function newSessionPath(
+  exec: ToolRunContext,
+  value: string,
+): Promise<AuthorizedSessionPath> {
   return await authorizedPath(toolWorkspaceCwd(exec), value, false);
 }
 
-async function authorizedPath(cwd: string, value: string, mustExist: boolean): Promise<AuthorizedSessionPath> {
-  if (value.trim() === "") throw new UniverError("Session workspace path is required.", "INVALID_FILE_PATH");
+async function authorizedPath(
+  cwd: string,
+  value: string,
+  mustExist: boolean,
+): Promise<AuthorizedSessionPath> {
+  if (value.trim() === "")
+    throw new UniverError("Session workspace path is required.", "INVALID_FILE_PATH");
   let workspace: string;
   try {
     workspace = await realpath(cwd);
   } catch (error) {
-    throw new UniverError("The session workspace cannot be resolved.", "SESSION_SCOPE_UNAVAILABLE", { cause: error });
+    throw new UniverError(
+      "The session workspace cannot be resolved.",
+      "SESSION_SCOPE_UNAVAILABLE",
+      { cause: error },
+    );
   }
   const candidate = isAbsolute(value) ? resolve(value) : resolve(workspace, value);
   let canonical: string;
@@ -54,7 +69,9 @@ async function authorizedPath(cwd: string, value: string, mustExist: boolean): P
     canonical = mustExist ? await realpath(candidate) : await canonicalizePotentialPath(candidate);
   } catch (error) {
     throw new UniverError(
-      mustExist ? "The session workspace input does not exist or cannot be resolved." : "The session workspace output cannot be resolved.",
+      mustExist
+        ? "The session workspace input does not exist or cannot be resolved."
+        : "The session workspace output cannot be resolved.",
       "INVALID_FILE_PATH",
       { cause: error },
     );

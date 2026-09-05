@@ -6,16 +6,15 @@
  * carries only plain types and path constants. Authentication/session guard
  * routes live on the host; capability routes live in their owning plugin.
  */
-/** Route path that starts the OAuth login flow (redirects to the Workspace authorize endpoint). */
-export const UWH_LOGIN_PATH = "/auth/login";
-
-/** Route path the Workspace authorize endpoint redirects back to with the authorization code. */
-export const UWH_CALLBACK_PATH = "/auth/callback";
+/** Local host endpoints for the Workspace Device Authorization flow. */
+export const UWH_DEVICE_START_PATH = "/auth/device/start";
+export const UWH_DEVICE_COMPLETE_PATH = "/auth/device/complete";
+export const UWH_DEVICE_LOGOUT_PATH = "/auth/device/logout";
 
 /** Route path for the guarded browser prompt endpoint. */
 export const UWH_SESSION_PROMPT_PATH = "/api/uwh/session-prompt";
 
-/** The identity a signed session cookie carries, after validation. */
+/** The remote Workspace identity bound to one local Harness process. */
 export interface UwhIdentity {
   /** Opaque Workspace user id (never used directly as a path segment). */
   userId: string;

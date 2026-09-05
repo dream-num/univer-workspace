@@ -69,7 +69,11 @@ export async function compileSvg(input: CompileSvgInput): Promise<CompiledSvgPro
   }
 }
 
-function readAsset(workspace: string, source: string, href: string): { readonly bytes: Uint8Array } {
+function readAsset(
+  workspace: string,
+  source: string,
+  href: string,
+): { readonly bytes: Uint8Array } {
   let path: string;
   try {
     const candidate = isAbsolute(href) ? resolve(href) : resolve(dirname(source), href);

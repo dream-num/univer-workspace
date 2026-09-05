@@ -1,5 +1,7 @@
 import { build } from "esbuild";
+import { build as viteBuild } from "vite";
 import { mkdir, rm } from "node:fs/promises";
+import { resolve } from "node:path";
 
 // DSH bundles are consumed from a dsh profile, not from this workspace, so
 // every package builds self-contained artifacts: a node ESM host bundle
@@ -25,24 +27,29 @@ await build({
 
 const packageId = "dsh-univer-workspace-skin-plugin";
 
-await build({
-  entryPoints: ["src/client/index.tsx"],
-  outfile: "lib/client.js",
-  bundle: true,
-  platform: "browser",
-  format: "cjs",
-  target: "es2022",
-  jsx: "transform",
-  jsxFactory: "createElement",
-  jsxFragment: "Fragment",
-  loader: { ".css": "text" },
-  external: ["react", "react-dom"],
-  sourcemap: true,
-  logLevel: "info",
-  banner: {
-    js: `var module = { exports: {} }; var exports = module.exports;\nwindow.__ModuleLoader__.load({ id: ${JSON.stringify(packageId)}, factory: (require) => {`,
+await viteBuild({
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
   },
-  footer: {
-    js: "return module.exports; } });",
+  build: {
+    outDir: "lib",
+    emptyOutDir: false,
+    sourcemap: true,
+    cssCodeSplit: false,
+    lib: {
+      entry: resolve("src/client/index.tsx"),
+      formats: ["cjs"],
+      fileName: () => "client.js",
+    },
+    rollupOptions: {
+      external: ["react", "react/jsx-runtime", "react-dom"],
+      output: {
+        inlineDynamicImports: true,
+        banner: `var module = { exports: {} }; var exports = module.exports;\nwindow.__ModuleLoader__.load({ id: ${JSON.stringify(packageId)}, factory: (require) => {`,
+        footer: "return module.exports; } });",
+        assetFileNames: (assetInfo) =>
+          assetInfo.name?.endsWith(".css") ? "client.css" : "[name][extname]",
+      },
+    },
   },
 });

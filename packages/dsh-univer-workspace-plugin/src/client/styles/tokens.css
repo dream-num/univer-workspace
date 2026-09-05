@@ -10,6 +10,14 @@
   --uvf-color-border: var(--dsw-alias-border-l2, #dfe3eb);
   --uvf-color-surface: var(--dsw-alias-bg-base, #fff);
   --uvf-color-muted: var(--dsw-alias-label-tertiary, #7d8798);
+  /* Worktree lifecycle semantics travel with this plugin; the skin may
+     override these values, but the feature never depends on it. */
+  --color-success: #1a7f37;
+  --color-success-soft: #dafbe1;
+  --color-success-soft-foreground: #116329;
+  --color-violet: #8250df;
+  --color-violet-soft: #fbefff;
+  --color-violet-soft-foreground: #6639ba;
   --uvf-radius-control: 7px;
   --uvf-radius-card: 12px;
   --uvf-shadow-dialog: 0 24px 70px rgb(13 22 38 / 28%);

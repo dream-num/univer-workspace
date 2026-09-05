@@ -54,7 +54,10 @@ export async function uploadFile(
     method: "POST",
     body: form,
   });
-  const body = (await response.json()) as { FileId?: unknown; error?: { code?: string; message?: string } };
+  const body = (await response.json()) as {
+    FileId?: unknown;
+    error?: { code?: string; message?: string };
+  };
   if (!response.ok || typeof body.FileId !== "string") {
     throw new Error(`workspace file upload failed: ${body.error?.message ?? response.status}`);
   }
@@ -67,13 +70,17 @@ export async function startImport(
   type: ExchangeUnitType | "auto",
   input: ImportRequest,
 ): Promise<string> {
-  const path = type === "auto" ? "/universer-api/exchange/import" : `/universer-api/exchange/${type}/import`;
+  const path =
+    type === "auto" ? "/universer-api/exchange/import" : `/universer-api/exchange/${type}/import`;
   const response = await client.request(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
-  const body = (await response.json()) as { taskID?: unknown; error?: { code?: string; message?: string } };
+  const body = (await response.json()) as {
+    taskID?: unknown;
+    error?: { code?: string; message?: string };
+  };
   if (!response.ok || typeof body.taskID !== "string") {
     throw new Error(`workspace import failed: ${body.error?.message ?? response.status}`);
   }
@@ -91,7 +98,10 @@ export async function startExport(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
-  const body = (await response.json()) as { taskID?: unknown; error?: { code?: string; message?: string } };
+  const body = (await response.json()) as {
+    taskID?: unknown;
+    error?: { code?: string; message?: string };
+  };
   if (!response.ok || typeof body.taskID !== "string") {
     throw new Error(`workspace export failed: ${body.error?.message ?? response.status}`);
   }
@@ -99,9 +109,16 @@ export async function startExport(
 }
 
 /** Poll one exchange task to a terminal result. */
-export async function getTask(client: WorkspaceHttpClient, taskID: string): Promise<ExchangeTaskResult> {
-  const response = await client.request(`/universer-api/exchange/task/${encodeURIComponent(taskID)}`);
-  const body = (await response.json()) as ExchangeTaskResult & { error?: { code?: string; message?: string } };
+export async function getTask(
+  client: WorkspaceHttpClient,
+  taskID: string,
+): Promise<ExchangeTaskResult> {
+  const response = await client.request(
+    `/universer-api/exchange/task/${encodeURIComponent(taskID)}`,
+  );
+  const body = (await response.json()) as ExchangeTaskResult & {
+    error?: { code?: string; message?: string };
+  };
   if (!response.ok) {
     throw new Error(`workspace exchange task failed: ${body.error?.message ?? response.status}`);
   }
@@ -109,12 +126,16 @@ export async function getTask(client: WorkspaceHttpClient, taskID: string): Prom
 }
 
 /** Poll an exchange task until it settles (done or failed). */
-export async function awaitTask(client: WorkspaceHttpClient, taskID: string, signal?: AbortSignal): Promise<ExchangeTaskResult> {
+export async function awaitTask(
+  client: WorkspaceHttpClient,
+  taskID: string,
+  signal?: AbortSignal,
+): Promise<ExchangeTaskResult> {
   for (;;) {
     if (signal?.aborted) throw new Error("exchange task cancelled");
     const result = await getTask(client, taskID);
     if (result.status === "pending") {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       continue;
     }
     return result;
@@ -122,8 +143,13 @@ export async function awaitTask(client: WorkspaceHttpClient, taskID: string, sig
 }
 
 /** Download an exchange artifact's bytes by fileID. */
-export async function downloadFile(client: WorkspaceHttpClient, fileID: string): Promise<Uint8Array> {
-  const response = await client.request(`/universer-api/file/${encodeURIComponent(fileID)}/content`);
+export async function downloadFile(
+  client: WorkspaceHttpClient,
+  fileID: string,
+): Promise<Uint8Array> {
+  const response = await client.request(
+    `/universer-api/file/${encodeURIComponent(fileID)}/content`,
+  );
   if (!response.ok) throw new Error(`workspace file download failed: ${response.status}`);
   return new Uint8Array(await response.arrayBuffer());
 }

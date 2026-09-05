@@ -1,0 +1,54 @@
+/* Middle full-height Worktree Changes review surface: header + collapsible
+ * smart path tree + default-expanded Unit accordion stream. */
+
+.changes {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.changesHeader {
+  display: flex;
+  min-height: 52px;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.changesTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.changesBody {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(220px, 240px) minmax(0, 1fr);
+  background: var(--uvf-color-surface, #fff);
+}
+
+.changesBody[data-tree-collapsed] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.accordionScroll {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--uvf-color-border, #dfe3eb) 8%, var(--uvf-color-surface, #fff));
+}
+
+@media (max-width: 960px) {
+  .changesBody {
+    grid-template-columns: 208px minmax(0, 1fr);
+  }
+}

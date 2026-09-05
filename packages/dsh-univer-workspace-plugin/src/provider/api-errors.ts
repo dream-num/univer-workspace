@@ -18,7 +18,9 @@ export class WorkspaceApiError extends Error {
 /** Parse a JSON response or throw a typed error. */
 export async function readJson(response: Response, operation: string): Promise<unknown> {
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: { code?: string; message?: string };
+    };
     throw new WorkspaceApiError(
       `workspace ${operation} failed: ${body.error?.message ?? response.statusText}`,
       response.status,

@@ -35,6 +35,7 @@ describe("Workspace provider seams", () => {
       ["reopenWorktree", barrel.reopenWorktree, worktrees.reopenWorktree],
       ["narrowWorktreeDetail", barrel.narrowWorktreeDetail, worktrees.narrowWorktreeDetail],
       ["listActiveWorktrees", barrel.listActiveWorktrees, worktrees.listActiveWorktrees],
+      ["listReviewWorktrees", barrel.listReviewWorktrees, worktrees.listReviewWorktrees],
       ["getFileState", barrel.getFileState, fileState.getFileState],
       ["getWorktreeFileState", barrel.getWorktreeFileState, fileState.getWorktreeFileState],
     ] as const) {

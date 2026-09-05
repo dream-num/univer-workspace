@@ -26,6 +26,26 @@ export function workspacePathName(userId: string): string {
   return createHash("sha256").update(userId, "utf8").digest("hex");
 }
 
+/** Stable origin directory component for origin-aware local data isolation. */
+export function workspaceOriginName(origin: string): string {
+  return createHash("sha256").update(new URL(origin).origin, "utf8").digest("hex");
+}
+
+/** Derive the per-origin, per-user directory used by a one-origin Harness process. */
+export function workspacePathForOrigin(
+  workspaceRoot: string,
+  origin: string,
+  userId: string,
+): { ok: true; path: string } | { ok: false; reason: string } {
+  if (userId === "") return { ok: false, reason: "missing user id" };
+  const path = resolve(workspaceRoot, workspaceOriginName(origin), workspacePathName(userId));
+  const originRoot = resolve(workspaceRoot, workspaceOriginName(origin));
+  if (dirname(path) !== originRoot || !isDirectSha256Child(workspaceRoot, originRoot)) {
+    return { ok: false, reason: "derived origin workspace path is invalid" };
+  }
+  return { ok: true, path };
+}
+
 /**
  * Whether a candidate path is one DIRECT SHA-256-named child of a root.
  */

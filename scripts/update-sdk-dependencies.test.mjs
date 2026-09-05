@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   alignManifestSdkDependencies,
@@ -7,6 +8,14 @@ import {
   resolveWorkspaceSdkBaseline,
   validateWorkspaceSdkDependencies,
 } from "./update-sdk-dependencies.mjs";
+
+test("exposes the update:univer-sdk command", () => {
+  const packageJson = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  assert.equal(typeof packageJson.scripts?.["update:univer-sdk"], "string");
+  assert.equal(packageJson.scripts?.["update:" + "sdk"], undefined);
+});
 
 test("requires one exact SDK version", () => {
   assert.equal(

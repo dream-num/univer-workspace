@@ -5,48 +5,41 @@
  * this control is deliberately a plain same-origin-safe anchor with
  * `target="_blank"`, so opening it never mutates the current DSH session.
  */
-import { createElement, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { ExternalLinkIcon } from "@univerjs/univer-workspace-ui";
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import type { InjectFace } from "@deepseek-ai/dsh-client-ui-slots";
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type {} from "@deepseek-ai/dsh-client-ui-sidebar/client";
+import css from "./WorkspaceSwitchButton.module.scss";
 
 export interface WorkspaceSwitchInjected {
   readonly loadWorkspaceOrigin: () => Promise<string | undefined>;
 }
 
-type SessionProps = PropsRuntime<"conversation.session.header.utilities">
-  & PropsLocale<"univer">
-  & InjectFace<WorkspaceSwitchInjected>;
+type SessionProps = PropsRuntime<"conversation.session.header.utilities"> &
+  PropsLocale<"univer"> &
+  InjectFace<WorkspaceSwitchInjected>;
 
-type FooterProps = PropsRuntime<"sidebar.footer.action">
-  & PropsLocale<"univer">
-  & InjectFace<WorkspaceSwitchInjected>;
-
-/** A small external-link glyph kept independent of any host icon package. */
-function ExternalIcon() {
-  return createElement("svg", {
-    viewBox: "0 0 16 16",
-    width: 14,
-    height: 14,
-    "aria-hidden": "true",
-    focusable: "false",
-  },
-  createElement("path", { d: "M6 3H3.75A1.75 1.75 0 0 0 2 4.75v7.5A1.75 1.75 0 0 0 3.75 14h7.5A1.75 1.75 0 0 0 13 12.25V10" }),
-  createElement("path", { d: "M9 2h5v5M14 2 7.5 8.5" }));
-}
+type FooterProps = PropsRuntime<"sidebar.footer.action"> &
+  PropsLocale<"univer"> &
+  InjectFace<WorkspaceSwitchInjected>;
 
 function useOrigin(loadWorkspaceOrigin: () => Promise<string | undefined>): string | undefined {
   const [origin, setOrigin] = useState<string | undefined>();
   useEffect(() => {
     let live = true;
-    void loadWorkspaceOrigin().then((value) => {
-      if (live) setOrigin(normalizeOrigin(value));
-    }).catch(() => {
-      // A missing/expired Workspace session should not leave a dead control
-      // in the shell; the next authenticated bootstrap will retry on mount.
-    });
-    return () => { live = false; };
+    void loadWorkspaceOrigin()
+      .then((value) => {
+        if (live) setOrigin(normalizeOrigin(value));
+      })
+      .catch(() => {
+        // A missing/expired Workspace session should not leave a dead control
+        // in the shell; the next authenticated bootstrap will retry on mount.
+      });
+    return () => {
+      live = false;
+    };
   }, [loadWorkspaceOrigin]);
   return origin;
 }
@@ -69,26 +62,36 @@ function normalizeOrigin(value: string | undefined): string | undefined {
 export function WorkspaceHeaderSwitch({ loadWorkspaceOrigin, t }: SessionProps) {
   const origin = useOrigin(loadWorkspaceOrigin);
   if (origin === undefined) return null;
-  return createElement("a", {
-    className: "uwh-workspaceSwitch",
-    href: origin,
-    target: "_blank",
-    rel: "noopener noreferrer",
-    title: t("workspace.openWorkspace"),
-    "aria-label": t("workspace.openWorkspace"),
-  }, createElement(ExternalIcon), createElement("span", null, t("workspace.workspace")));
+  return (
+    <a
+      className={css.switch}
+      href={origin}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={t("workspace.openWorkspace")}
+      aria-label={t("workspace.openWorkspace")}
+    >
+      <ExternalLinkIcon />
+      <span>{t("workspace.workspace")}</span>
+    </a>
+  );
 }
 
 /** Sidebar-footer fallback (the conversation header is hidden in the blank hero). */
 export function WorkspaceFooterSwitch({ wide, loadWorkspaceOrigin, t }: FooterProps) {
   const origin = useOrigin(loadWorkspaceOrigin);
   if (origin === undefined) return null;
-  return createElement("a", {
-    className: `uwh-workspaceSwitch uwh-workspaceSwitchFooter${wide ? "" : " uwh-workspaceSwitchRail"}`,
-    href: origin,
-    target: "_blank",
-    rel: "noopener noreferrer",
-    title: t("workspace.openWorkspace"),
-    "aria-label": t("workspace.openWorkspace"),
-  }, createElement(ExternalIcon), wide ? createElement("span", null, t("workspace.workspace")) : null);
+  return (
+    <a
+      className={`${css.switch} ${css.footer}${wide ? "" : ` ${css.rail}`}`}
+      href={origin}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={t("workspace.openWorkspace")}
+      aria-label={t("workspace.openWorkspace")}
+    >
+      <ExternalLinkIcon />
+      {wide ? <span>{t("workspace.workspace")}</span> : null}
+    </a>
+  );
 }

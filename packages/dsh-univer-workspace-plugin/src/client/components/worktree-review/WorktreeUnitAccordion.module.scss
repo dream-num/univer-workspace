@@ -1,0 +1,217 @@
+/* Unit accordion stream of the middle Worktree review surface. */
+
+.stream {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 16px 20px 24px;
+  list-style: none;
+}
+
+.item {
+  display: grid;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--uvf-color-surface, #fff);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-foreground) 5%, transparent);
+}
+
+.item[data-located] {
+  border-color: color-mix(in srgb, var(--color-brand-500, var(--color-ring)) 60%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ring) 25%, transparent);
+}
+
+.itemHeader {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  outline: 0;
+  background: transparent;
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.itemHeader:hover {
+  background: var(--color-accent);
+}
+
+.itemHeader:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+.itemHeader > svg:first-child {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--color-subtle-foreground);
+}
+
+.itemHeader[data-deleted] .unitName {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.headerTypeIcon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--color-muted-foreground);
+}
+
+.unitName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.unitChange {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding-top: 2px;
+  color: var(--color-muted-foreground);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.unitChange svg {
+  width: 11px;
+  height: 11px;
+}
+
+.itemBody {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding: 0 12px 14px;
+  border-top: 1px solid var(--color-border);
+  background: var(--uvf-color-surface, #fff);
+}
+
+.unitHeader {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.unitFacts {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.unitFactText {
+  color: var(--color-secondary-foreground);
+  font-size: 12px;
+}
+
+.controls {
+  display: flex;
+  max-width: 100%;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.addBadge {
+  width: 9px;
+  height: 9px;
+  margin-left: -9px;
+  margin-top: 8px;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--color-background);
+}
+
+.location {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--color-subtle-foreground);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.locationLoading,
+.locationUnavailable {
+  color: var(--color-subtle-foreground);
+  font-size: 11px;
+}
+
+.sharedBadge {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-muted-foreground);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.viewerBox {
+  display: flex;
+  min-width: 0;
+  min-height: 360px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.viewerPlaceholder {
+  display: grid;
+  min-height: 360px;
+  place-items: center;
+  background: color-mix(in srgb, var(--uvf-color-border, #dfe3eb) 8%, var(--uvf-color-surface, #fff));
+  color: var(--color-subtle-foreground);
+  font-size: 12px;
+}
+
+.notice {
+  display: grid;
+  min-height: 96px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--uvf-color-border, #dfe3eb) 8%, var(--uvf-color-surface, #fff));
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+}
+
+.deletedEmpty {
+  display: flex;
+  min-height: 96px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--uvf-color-border, #dfe3eb) 8%, var(--uvf-color-surface, #fff));
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+}
+
+.deletedEmpty svg {
+  width: 14px;
+  height: 14px;
+}

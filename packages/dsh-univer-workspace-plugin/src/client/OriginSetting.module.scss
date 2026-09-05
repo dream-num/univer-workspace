@@ -1,0 +1,83 @@
+.setting {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(280px, 1.2fr);
+  gap: 16px;
+  align-items: start;
+  padding: 10px 0;
+  color: var(--color-foreground);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.summary,
+.controls {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.summary strong {
+  font-weight: 500;
+}
+
+.hint,
+.account {
+  color: var(--color-subtle-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.value {
+  overflow: hidden;
+  color: var(--color-secondary-foreground);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions,
+.deviceLogin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.restartNotice {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--color-ring);
+  border-radius: 8px;
+  background: var(--color-background);
+  color: var(--color-secondary-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.restartNotice strong {
+  color: var(--color-foreground);
+  font-weight: 500;
+}
+
+.deviceLogin {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-background);
+}
+
+.deviceLogin a {
+  color: var(--color-ring);
+}
+
+.error {
+  color: var(--color-destructive);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .setting {
+    grid-template-columns: 1fr;
+  }
+}

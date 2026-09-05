@@ -13,6 +13,7 @@ import * as tools from "./tools/plugin.ts";
 import * as webServer from "./webServer/plugin.ts";
 import * as skills from "./skills/plugin.ts";
 import * as collabProxy from "./collab-proxy/plugin.ts";
+import * as sessionContext from "./session-context.ts";
 import type { WorkspaceTemplate } from "./client/workspace-contract.ts";
 
 /** The 90-day runtime development license, used only when no config/env license is set. */
@@ -32,13 +33,15 @@ export interface Config {
   templates: WorkspaceTemplate[];
 }
 
-const templatesZ = z.array(z.object({
-  key: z.string().required(),
-  sessionId: z.string().required(),
-  label: z.string().default(""),
-  agentPreset: z.string().default(""),
-  description: z.string().default(""),
-}));
+const templatesZ = z.array(
+  z.object({
+    key: z.string().required(),
+    sessionId: z.string().required(),
+    label: z.string().default(""),
+    agentPreset: z.string().default(""),
+    description: z.string().default(""),
+  }),
+);
 
 export const Config: z<Config> = z.object({
   workspaceRoot: z.string().required(),
@@ -69,6 +72,7 @@ export function apply(ctx: Context, config: Config): void {
   });
   ctx.plugin(skills);
   ctx.plugin(collabProxy);
+  ctx.plugin(sessionContext);
 }
 
 function resolveLicense(configured: string): string {

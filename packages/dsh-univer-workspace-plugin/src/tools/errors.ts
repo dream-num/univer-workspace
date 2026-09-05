@@ -56,7 +56,10 @@ export function asUniverError(error: unknown, fallbackCode: string): UniverError
 
 /** Keep user-facing tool diagnostics one line and bounded; never include a stack. */
 function normalizeMessage(message: string): string {
-  const value = message.replace(/[\u0000-\u001f\u007f]/gu, " ").replace(/\s+/gu, " ").trim();
+  const value = message
+    .replace(/[\u0000-\u001f\u007f]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
   if (value.length === 0) return "The Univer Workspace operation failed.";
   return value.length > 1000 ? `${value.slice(0, 997)}...` : value;
 }
@@ -67,25 +70,36 @@ function normalizeCode(code: string): string {
 }
 
 /** Public, redacted projection for a registry failure that bypassed execute. */
-export function safeToolFailureMessage(message: string, code = "WORKSPACE_OPERATION_FAILED"): string {
+export function safeToolFailureMessage(
+  message: string,
+  code = "WORKSPACE_OPERATION_FAILED",
+): string {
   return publicMessage(message, normalizeCode(code));
 }
 
 function isCodedError(error: unknown): error is Error & { readonly code: string } {
-  return error instanceof Error
-    && "code" in error
-    && typeof error.code === "string"
-    && error.code.length > 0;
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    error.code.length > 0
+  );
 }
 
 function mappedAdapterCode(code: string, fallbackCode: string): string {
   switch (code) {
-    case "UNSUPPORTED_IMPORT_FORMAT": return "IMPORT_FORMAT_UNSUPPORTED";
-    case "UNSUPPORTED_EXPORT_FORMAT": return "EXPORT_FORMAT_UNSUPPORTED";
-    case "EXPORT_TYPE_MISMATCH": return "EXPORT_TYPE_MISMATCH";
-    case "INVALID_UNIT_DATA": return "UNIT_DATA_INVALID";
-    case "INITIAL_DATA_TOO_LARGE": return "UNIT_DATA_TOO_LARGE";
-    default: return normalizeCode(fallbackCode);
+    case "UNSUPPORTED_IMPORT_FORMAT":
+      return "IMPORT_FORMAT_UNSUPPORTED";
+    case "UNSUPPORTED_EXPORT_FORMAT":
+      return "EXPORT_FORMAT_UNSUPPORTED";
+    case "EXPORT_TYPE_MISMATCH":
+      return "EXPORT_TYPE_MISMATCH";
+    case "INVALID_UNIT_DATA":
+      return "UNIT_DATA_INVALID";
+    case "INITIAL_DATA_TOO_LARGE":
+      return "UNIT_DATA_TOO_LARGE";
+    default:
+      return normalizeCode(fallbackCode);
   }
 }
 
@@ -109,11 +123,13 @@ function workspaceCode(error: WorkspaceApiError): string {
 function workspaceMessage(error: WorkspaceApiError): string {
   if (error.status === 401 || error.status === 403) return "Workspace authorization was denied.";
   if (error.status === 404) return "The requested Workspace resource was not found.";
-  if (error.status === 409) return "The Workspace resource changed concurrently; refresh status and retry.";
+  if (error.status === 409)
+    return "The Workspace resource changed concurrently; refresh status and retry.";
   if (error.status === 429) return "Workspace rate limit exceeded; retry later.";
   if (error.status === 400 || error.status === 422) return "The Workspace request was rejected.";
   if (error.status === 408) return "The Workspace request timed out; retry later.";
-  if (error.status >= 500 && error.status <= 599) return "The Workspace service is temporarily unavailable.";
+  if (error.status >= 500 && error.status <= 599)
+    return "The Workspace service is temporarily unavailable.";
   return publicMessage(error.message, workspaceCode(error));
 }
 
@@ -134,14 +150,27 @@ function publicMessage(message: string, code: string): string {
     .replace(/(?:https?|wss?|ftp):\/\/[^\s)\]}>,;]+/giu, "[redacted URL]")
     .replace(/(^|\s)\/\/(?:[^\s/]+\/)+[^\s]*/gu, "$1[redacted URL]")
     // Unix and Windows absolute paths. Keep relative user paths intact.
-    .replace(/(^|[\s("'`])(?:\/(?:[^\s/"'`)]+\/)*[^\s/"'`)]*|[A-Za-z]:[\\/][^\s"'`)]+)/gu, (_match, prefix: string) => `${prefix}[redacted path]`)
+    .replace(
+      /(^|[\s("'`])(?:\/(?:[^\s/"'`)]+\/)*[^\s/"'`)]*|[A-Za-z]:[\\/][^\s"'`)]+)/gu,
+      (_match, prefix: string) => `${prefix}[redacted path]`,
+    )
     // Common credential-bearing fields and JWT-like bearer values.
-    .replace(/\b(authorization|bearer|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|client[_ -]?secret|password|secret|token)(\s*[:=])\s*(?:bearer\s+)?[^\s,;]+/giu, "$1$2[redacted]")
-    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_.-]{8,}\b/gu, "[redacted token]");
+    .replace(
+      /\b(authorization|bearer|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|client[_ -]?secret|password|secret|token)(\s*[:=])\s*(?:bearer\s+)?[^\s,;]+/giu,
+      "$1$2[redacted]",
+    )
+    .replace(
+      /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_.-]{8,}\b/gu,
+      "[redacted token]",
+    );
 
   // The replacement above intentionally preserves ordinary validation prose,
   // but reject any residual high-risk marker rather than guessing.
-  if (/(?:https?:\/\/|wss?:\/\/|Bearer\s+|\b(?:sk-|sk_live_|ghp_|xox[baprs]-)[A-Za-z0-9_-]+|(?:^|\s|["'`])\/(?:root|home|tmp|var|etc|opt|workspace|mnt|usr|srv|app)(?:\/|\s|["'`]|$)|[A-Za-z]:\\)/iu.test(redacted)) {
+  if (
+    /(?:https?:\/\/|wss?:\/\/|Bearer\s+|\b(?:sk-|sk_live_|ghp_|xox[baprs]-)[A-Za-z0-9_-]+|(?:^|\s|["'`])\/(?:root|home|tmp|var|etc|opt|workspace|mnt|usr|srv|app)(?:\/|\s|["'`]|$)|[A-Za-z]:\\)/iu.test(
+      redacted,
+    )
+  ) {
     return genericMessage(code);
   }
   return redacted || genericMessage(code);
@@ -149,7 +178,8 @@ function publicMessage(message: string, code: string): string {
 
 /** Turn the common Univer worksheet lookup failure into an actionable tool error. */
 function worksheetSelectorHint(message: string): string | null {
-  if (!/worksheet selector did not match(?: a worksheet| any worksheet)/iu.test(message)) return null;
+  if (!/worksheet selector did not match(?: a worksheet| any worksheet)/iu.test(message))
+    return null;
   return "No worksheet matched the requested selector. Use univer_inspect without `range` to list the exact worksheet name, then retry with `<worksheet-name>!A1:D20`; worksheet names are case-sensitive, and names containing spaces must be quoted (for example `'Sheet 1'!A1:D20`).";
 }
 

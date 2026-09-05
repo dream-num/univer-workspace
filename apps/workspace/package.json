@@ -144,6 +144,8 @@
     "@univerjs/thread-comment-ui": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/ui": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/univer-workspace-reference-provider": "workspace:*",
+    "@univerjs/univer-workspace-file-browser": "workspace:*",
+    "@univerjs/univer-workspace-ui": "workspace:*",
     "busboy": "^1.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

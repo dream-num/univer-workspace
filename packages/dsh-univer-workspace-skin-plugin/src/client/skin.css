@@ -1,5 +1,22 @@
+@import "./locales.css";
+
 /* Workspace skin: the DSH shell uses these aliases for every surface. */
 body {
+  --color-background: #ffffff;
+  --color-foreground: #1d2129;
+  --color-muted: #f0f2f5;
+  --color-muted-foreground: #69707e;
+  --color-subtle-foreground: #9aa1ad;
+  --color-accent: #eceff4;
+  --color-secondary-foreground: #3c4350;
+  --color-border: #e4e7ed;
+  --color-ring: #2563eb;
+  --color-brand-50: #eef4ff;
+  --color-brand-700: #1d4ed8;
+  --color-destructive: #dc2626;
+  --color-destructive-soft: #fdecec;
+  --color-destructive-soft-foreground: #b42318;
+  --color-group: #d97706;
   --dsw-alias-brand-primary: #2563eb;
   --dsw-alias-brand-primary-invert: #ffffff;
   --dsw-alias-brand-text: #2563eb;
@@ -11,6 +28,21 @@ body {
 }
 
 body[data-ds-dark-theme] {
+  --color-background: #14171d;
+  --color-foreground: #e2e6ee;
+  --color-muted: #1f242e;
+  --color-muted-foreground: #98a1b0;
+  --color-subtle-foreground: #66707f;
+  --color-accent: #232933;
+  --color-secondary-foreground: #c3cad6;
+  --color-border: #272d38;
+  --color-ring: #3b82f6;
+  --color-brand-50: #16233d;
+  --color-brand-700: #93b4fb;
+  --color-destructive: #ef4444;
+  --color-destructive-soft: #382124;
+  --color-destructive-soft-foreground: #f3a9a2;
+  --color-group: #f59e0b;
   --dsw-alias-brand-primary: #3b82f6;
   --dsw-alias-brand-primary-invert: #0f1115;
   --dsw-alias-brand-text: #3b82f6;
@@ -44,7 +76,6 @@ body[data-ds-dark-theme] {
 
 .pXSMma_headlineText::after {
   color: var(--dsw-alias-label-primary);
-  content: "协作编辑、权限管理与 AI 任务，尽在同一工作区。";
   display: block;
   font-size: 18px;
   font-weight: 600;
@@ -52,11 +83,6 @@ body[data-ds-dark-theme] {
   max-width: 100%;
   overflow-wrap: anywhere;
   white-space: normal;
-}
-
-html:lang(en) .pXSMma_headlineText::after,
-html:lang(en-US) .pXSMma_headlineText::after {
-  content: "Collaborative editing, permissions, and AI tasks in one workspace.";
 }
 
 @media (max-width: 720px) {

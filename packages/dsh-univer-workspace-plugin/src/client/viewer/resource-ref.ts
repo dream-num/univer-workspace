@@ -18,10 +18,7 @@ import {
 } from "@univerjs/core";
 import type { ISetFormulaCalculationResultMutation } from "@univerjs/engine-formula";
 import { deserializeRangeWithSheet } from "@univerjs/engine-formula";
-import {
-  ensureBaseTableCellLayout,
-  getBaseCellFormulaValue,
-} from "@univerjs-pro/bases";
+import { ensureBaseTableCellLayout, getBaseCellFormulaValue } from "@univerjs-pro/bases";
 import {
   isResourceRefRangePart,
   isResourceRefTablePart,
@@ -30,8 +27,7 @@ import {
   type IReferencedUnitManagerService,
 } from "@univerjs-pro/embed";
 
-const VIEW_BASE_RESOURCE_REF_DATA_PROVIDER_ID =
-  "univer-view-base-resource-ref-data-provider";
+const VIEW_BASE_RESOURCE_REF_DATA_PROVIDER_ID = "univer-view-base-resource-ref-data-provider";
 export const COLLABORATION_SHEET_RESOURCE_REF_DATA_PROVIDER_ID =
   "univer-collaboration-sheet-resource-ref-data-provider";
 
@@ -263,9 +259,7 @@ export function createSheetResourceRefDataProvider(
 
 export interface SheetResourceRefDataProvider {
   readonly registration: IEmbedResourceRefDataProviderRegistration;
-  formulaResultApplied(
-    result: ISetFormulaCalculationResultMutation,
-  ): Promise<void> | undefined;
+  formulaResultApplied(result: ISetFormulaCalculationResultMutation): Promise<void> | undefined;
   dispose(): void;
 }
 

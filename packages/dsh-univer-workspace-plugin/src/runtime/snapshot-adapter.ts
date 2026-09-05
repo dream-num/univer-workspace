@@ -104,7 +104,10 @@ export class WorkspaceSnapshotServerAdapter implements ISnapshotServerService {
     if (!isRecord(body["resources"])) {
       throw invalidResponse("Workspace resource response is invalid.");
     }
-    return { error: parseError(body["error"]), resources: body["resources"] as IGetResourcesResponse["resources"] };
+    return {
+      error: parseError(body["error"]),
+      resources: body["resources"] as IGetResourcesResponse["resources"],
+    };
   }
 
   public async saveSnapshot(
@@ -185,7 +188,12 @@ export class WorkspaceSnapshotServerAdapter implements ISnapshotServerService {
 }
 
 function decodeSnapshot(value: unknown, unitId: string, type: number): ISnapshot {
-  if (!isRecord(value) || value["unitID"] !== unitId || value["type"] !== type || !isRevision(value["rev"])) {
+  if (
+    !isRecord(value) ||
+    value["unitID"] !== unitId ||
+    value["type"] !== type ||
+    !isRevision(value["rev"])
+  ) {
     throw invalidResponse("Workspace returned a different Snapshot.");
   }
   const decoded: Record<string, unknown> = { ...value };
@@ -199,8 +207,12 @@ function decodeSnapshot(value: unknown, unitId: string, type: number): ISnapshot
       originalMeta: decodeBytes(workbook["originalMeta"], "workbook metadata"),
       sheets: Object.fromEntries(
         Object.entries(workbook["sheets"]).map(([sheetId, sheet]) => {
-          if (!isRecord(sheet)) throw invalidResponse(`Workspace Sheet ${sheetId} metadata is invalid.`);
-          return [sheetId, { ...sheet, originalMeta: decodeBytes(sheet["originalMeta"], `Sheet ${sheetId}`) }];
+          if (!isRecord(sheet))
+            throw invalidResponse(`Workspace Sheet ${sheetId} metadata is invalid.`);
+          return [
+            sheetId,
+            { ...sheet, originalMeta: decodeBytes(sheet["originalMeta"], `Sheet ${sheetId}`) },
+          ];
         }),
       ),
     };
@@ -208,13 +220,17 @@ function decodeSnapshot(value: unknown, unitId: string, type: number): ISnapshot
     const field = type === 1 ? "doc" : type === 3 ? "slide" : "board";
     const metadata = value[field];
     if (!isRecord(metadata)) throw invalidResponse(`Workspace ${field} Snapshot is invalid.`);
-    decoded[field] = { ...metadata, originalMeta: decodeBytes(metadata["originalMeta"], `${field} metadata`) };
+    decoded[field] = {
+      ...metadata,
+      originalMeta: decodeBytes(metadata["originalMeta"], `${field} metadata`),
+    };
   }
   return decoded as unknown as ISnapshot;
 }
 
 function parseChangesets(value: unknown, unitId: string, type: number): IChangeset[] {
-  if (!Array.isArray(value)) throw invalidResponse("Workspace Snapshot response is missing changesets.");
+  if (!Array.isArray(value))
+    throw invalidResponse("Workspace Snapshot response is missing changesets.");
   return value.map((changeset) => {
     if (
       !isRecord(changeset) ||

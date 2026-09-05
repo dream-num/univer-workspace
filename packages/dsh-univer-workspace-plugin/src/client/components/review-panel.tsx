@@ -7,16 +7,17 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
+import { Button, MessageSquareIcon } from "@univerjs/univer-workspace-ui";
 import type { DocumentFileState } from "../../shared/state.ts";
 import type { WorktreeAction, WorktreeStatus } from "../../shared/state.ts";
 import type { UniverLocaleKey } from "../locales.ts";
 import type { ViewerBootstrap } from "../viewer-bootstrap.ts";
 import { ViewerMount } from "./viewer-mount.tsx";
 import type { ViewerLocale } from "../viewer-locale.ts";
-import type { ViewerScope, ViewerUnitType } from "../viewer-engine.ts";
+import type { ViewerScope, ViewerSelection, ViewerUnitType } from "../viewer/contracts.ts";
+import type { WorkspaceResourceReferenceInsertResult } from "../workspace-resource-reference.ts";
 import { postWorktreeAction } from "../api/univer-api.ts";
-import { UnitChips } from "./unit-chips.tsx";
-import { useExclusiveViewer } from "./use-exclusive-viewer.ts";
+import css from "./review-panel.module.scss";
 
 type CardStatus = WorktreeStatus | "trunk" | "loading" | "unavailable";
 type ReviewWorktree = DocumentFileState["worktrees"][number];
@@ -28,108 +29,6 @@ export interface ViewerRuntimeProps {
   readonly t: (key: UniverLocaleKey) => string;
 }
 
-/** Render one review panel for one document. */
-export function ReviewPanel(props: {
-  readonly docKey: string;
-  readonly label: string | null;
-  readonly unitType: string | null;
-  readonly state: DocumentFileState | undefined
-  readonly stateError?: string | undefined
-  readonly worktreeId: string | null;
-  readonly preferredUnitId: string | null;
-  readonly preferredReadOnly: boolean;
-  readonly historical: boolean;
-  readonly t: (key: UniverLocaleKey) => string;
-} & ViewerRuntimeProps): React.ReactElement {
-  const [open, setOpen] = React.useState(!props.historical);
-  const [fullscreen, setFullscreen] = React.useState(false);
-  const [selected, setSelected] = React.useState<string | undefined>(props.preferredUnitId ?? undefined);
-  const wasHistorical = React.useRef(props.historical);
-  const worktree = props.worktreeId === null ? undefined : props.state?.worktrees.find((entry) => entry.worktreeId === props.worktreeId);
-  const status: CardStatus = props.state === undefined
-    ? props.stateError === undefined ? "loading" : "unavailable"
-    : props.worktreeId === null
-      ? "trunk"
-      : worktree?.status ?? "unavailable";
-  const units = worktree?.units ?? [];
-  const selectedUnit = selected !== undefined && units.some((unit) => unit.unitId === selected)
-    ? selected
-    : props.preferredUnitId !== null && units.some((unit) => unit.unitId === props.preferredUnitId)
-      ? props.preferredUnitId
-      : units[0]?.unitId;
-  const merged = status === "merged";
-  const discarded = status === "discarded";
-  const documentTitle = props.label ?? props.t("card.title");
-  const viewer = viewerTarget({
-    status,
-    units,
-    selectedUnit,
-    state: props.state,
-    worktree: worktree ?? undefined,
-    fallbackUnitId: props.preferredUnitId,
-    fallbackUnitType: props.unitType,
-    worktreeId: props.worktreeId,
-  });
-  const title = worktree?.name || props.t("dock.currentVersion");
-
-  useExclusiveViewer(viewer?.unitId, open, () => {
-    setOpen(false);
-    setFullscreen(false);
-  });
-
-  React.useEffect(() => {
-    if (!wasHistorical.current && props.historical) setOpen(false);
-    wasHistorical.current = props.historical;
-  }, [props.historical]);
-
-  React.useEffect(() => {
-    if (props.preferredUnitId !== null) setSelected(props.preferredUnitId);
-  }, [props.preferredUnitId]);
-
-  React.useEffect(() => {
-    if (!fullscreen) return;
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") setFullscreen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [fullscreen]);
-
-  return <section
-    className={`uvf_panel${fullscreen ? " uvf_panel_fullscreen" : ""}${props.historical ? " uvf_panel_history" : ""}`}
-    data-status={status}
-    aria-label={documentTitle}
-  >
-    <header className="uvf_panelHead">
-      <span className="uvf_panelGlyph" aria-hidden="true"><UniverMark merged={merged} discarded={discarded} /></span>
-      <span className="uvf_panelIdentity">
-        <span className="uvf_panelTitleRow"><span className="uvf_panelTitle">{documentTitle}</span><span className="uvf_panelWorktree">{title}</span></span>
-        <span className="uvf_panelMeta" title={props.docKey}>{props.docKey}</span>
-      </span>
-      <span className="uvf_panelChip" data-status={status}><span className="uvf_panelStatusDot" aria-hidden="true" />{statusLabel(status, props.t)}</span>
-      <PanelControl action="fullscreen" label={props.t(fullscreen ? "dock.exitFullscreen" : "dock.fullscreen")} onClick={() => {
-        setOpen(true);
-        setFullscreen((value) => !value);
-      }}>
-        <FullscreenIcon restored={fullscreen} />
-      </PanelControl>
-      {fullscreen ? null : <PanelControl action="fold" label={props.t(open ? "dock.fold" : "dock.expand")} onClick={() => setOpen((value) => !value)}>
-        <FoldIcon open={open} />
-      </PanelControl>}
-    </header>
-    {open ? <div className="uvf_panelContent">
-      <div className="uvf_panelBody">
-        <UnitChips units={units} selected={selectedUnit} t={props.t} onSelect={setSelected} />
-        {viewer === undefined
-          ? <div className="uvf_panelUnavailable" role={props.stateError === undefined ? "status" : "alert"}>{props.stateError === undefined ? props.t(status === "loading" ? "dock.loading" : "dock.unavailable") : `${props.t("window.loadFailed")}: ${props.stateError}`}</div>
-          : <div className="uvf_panelFrame uvf_panelViewer">
-              <PanelViewer key={viewerKey(viewer)} viewer={viewer} runtime={props} worktreeId={props.worktreeId} status={status} worktreeName={title} units={units} />
-            </div>}
-      </div>
-    </div> : null}
-  </section>;
-}
-
 /** Mounts the embedded editor for one resolved target. */
 export function PanelViewer(props: {
   readonly viewer: ViewerTarget;
@@ -137,7 +36,16 @@ export function PanelViewer(props: {
   readonly worktreeId?: string | null | undefined;
   readonly status?: CardStatus | undefined;
   readonly worktreeName?: string;
-  readonly units?: readonly { readonly unitId: string; readonly name: string; readonly kind: string }[];
+  readonly units?: readonly {
+    readonly unitId: string;
+    readonly name: string;
+    readonly kind: string;
+  }[];
+  readonly resource?: { readonly resourceId: string; readonly name: string };
+  readonly insertResourceReference?: (
+    resource: { readonly resourceId: string; readonly name: string },
+    selection?: ViewerSelection,
+  ) => WorkspaceResourceReferenceInsertResult;
 }): React.ReactElement {
   const [state, setState] = React.useState<
     | { readonly status: "loading"; readonly attempt: number }
@@ -145,46 +53,87 @@ export function PanelViewer(props: {
     | { readonly status: "error"; readonly error: string; readonly attempt: number }
   >({ status: "loading", attempt: 0 });
   const [attempt, setAttempt] = React.useState(0);
+  const [selection, setSelection] = React.useState<ViewerSelection | null>(null);
   const loadViewerBootstrap = props.runtime.loadViewerBootstrap;
+  React.useEffect(() => setSelection(null), [props.viewer.unitId, props.viewer.scope]);
   React.useEffect(() => {
     let live = true;
     setState({ status: "loading", attempt });
     void loadViewerBootstrap()
-      .then((value) => { if (live) setState({ status: "ready", bootstrap: value }); })
+      .then((value) => {
+        if (live) setState({ status: "ready", bootstrap: value });
+      })
       .catch((reason: unknown) => {
         if (live) setState({ status: "error", error: viewerBootstrapError(reason), attempt });
       });
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [attempt, loadViewerBootstrap]);
 
   if (state.status === "loading") {
     return <ViewerStatus role="status" message={props.runtime.t("window.loading")} />;
   }
   if (state.status === "error") {
-    return <ViewerStatus
-      role="alert"
-      message={`${props.runtime.t("window.loadFailed")}: ${state.error}`}
-      action={{ label: props.runtime.t("window.retry"), onClick: () => setAttempt((value) => value + 1) }}
-    />;
+    return (
+      <ViewerStatus
+        role="alert"
+        message={`${props.runtime.t("window.loadFailed")}: ${state.error}`}
+        action={{
+          label: props.runtime.t("window.retry"),
+          onClick: () => setAttempt((value) => value + 1),
+        }}
+      />
+    );
   }
-  return <>
-    <ViewerLifecycleBar
-      worktreeId={props.worktreeId}
-      status={props.status}
-      worktreeName={props.worktreeName ?? props.runtime.t("card.title")}
-      {...(props.units === undefined ? {} : { units: props.units })}
-      t={props.runtime.t}
-    />
-    <ViewerMount
-      unitId={props.viewer.unitId}
-      unitType={props.viewer.unitType}
-      editable={props.viewer.editable}
-      scope={props.viewer.scope}
-      bootstrap={state.bootstrap}
-      viewerLocale={props.runtime.getViewerLocale()}
-      t={props.runtime.t}
-    />
-  </>;
+  return (
+    <>
+      <ViewerLifecycleBar
+        worktreeId={props.worktreeId}
+        status={props.status}
+        worktreeName={props.worktreeName ?? props.runtime.t("card.title")}
+        {...(props.units === undefined ? {} : { units: props.units })}
+        t={props.runtime.t}
+      />
+      {props.resource !== undefined &&
+      props.insertResourceReference !== undefined &&
+      selection !== null ? (
+        <div className={css.viewerSelectionContext} role="status">
+          <span>
+            {props.runtime.t("selection.current")}: {selectionLabel(selection)}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => props.insertResourceReference?.(props.resource!, selection)}
+          >
+            <MessageSquareIcon />
+            {props.runtime.t("selection.addToMessage")}
+          </Button>
+        </div>
+      ) : null}
+      <ViewerMount
+        unitId={props.viewer.unitId}
+        unitType={props.viewer.unitType}
+        editable={props.viewer.editable}
+        scope={props.viewer.scope}
+        bootstrap={state.bootstrap}
+        viewerLocale={props.runtime.getViewerLocale()}
+        t={props.runtime.t}
+        {...(props.resource === undefined || props.insertResourceReference === undefined
+          ? {}
+          : { onSelectionChange: setSelection })}
+      />
+    </>
+  );
+}
+
+function selectionLabel(selection: ViewerSelection): string {
+  return selection.kind === "sheet-range"
+    ? `${selection.sheetName}!${selection.a1Notation}`
+    : selection.text.length > 120
+      ? `${selection.text.slice(0, 120)}…`
+      : selection.text;
 }
 
 /** The office Viewer owns lifecycle actions; the outer review card does not. */
@@ -192,47 +141,170 @@ function ViewerLifecycleBar(props: {
   readonly worktreeId?: string | null | undefined;
   readonly status?: CardStatus | undefined;
   readonly worktreeName: string;
-  readonly units?: readonly { readonly unitId: string; readonly name: string; readonly kind: string }[];
+  readonly units?: readonly {
+    readonly unitId: string;
+    readonly name: string;
+    readonly kind: string;
+  }[];
   readonly t: (key: UniverLocaleKey) => string;
 }): React.ReactElement | null {
   const [busy, setBusy] = React.useState<WorktreeAction | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [confirming, setConfirming] = React.useState<WorktreeAction | null>(null);
-  if (props.worktreeId === null || props.worktreeId === undefined || (props.status !== "draft" && props.status !== "ready")) return null;
+  if (
+    props.worktreeId === null ||
+    props.worktreeId === undefined ||
+    (props.status !== "draft" && props.status !== "ready")
+  )
+    return null;
   const run = (action: WorktreeAction): void => {
     if (busy !== null) return;
     setConfirming(action);
   };
   const confirm = (): void => {
     const action = confirming;
-    if (action === null || busy !== null || props.worktreeId === null || props.worktreeId === undefined) return;
+    if (
+      action === null ||
+      busy !== null ||
+      props.worktreeId === null ||
+      props.worktreeId === undefined
+    )
+      return;
     setConfirming(null);
     setBusy(action);
     setError(null);
-    void postWorktreeAction(props.worktreeId, action).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    }).finally(() => setBusy(null));
+    void postWorktreeAction(props.worktreeId, action)
+      .catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      })
+      .finally(() => setBusy(null));
   };
-  const confirmation = confirming === null || typeof document === "undefined" ? null : createPortal(<div className="uvf_viewerModalBackdrop" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) setConfirming(null); }}>
-    <div className="uvf_viewerModal" role="dialog" aria-modal="true" aria-labelledby="uvf-viewer-confirm-title">
-      <div className="uvf_viewerModalIcon" aria-hidden="true">{confirming === "discard" ? "!" : "✓"}</div>
-      <div className="uvf_viewerConfirmBody"><strong id="uvf-viewer-confirm-title">{confirming === "merge" ? props.t("viewer.mergeTitle") : confirming === "discard" ? props.t("viewer.discardTitle") : props.t("viewer.readyTitle")}</strong><span>{props.worktreeName}</span><p>{confirming === "merge" ? props.t("viewer.mergeBody") : confirming === "discard" ? props.t("viewer.discardBody") : props.t("viewer.readyBody")}</p>{props.units === undefined || props.units.length === 0 ? null : <div className="uvf_viewerConfirmChips">{props.units.filter((unit) => unit.kind !== "unchanged").map((unit) => <span className="uvf_viewerConfirmChip" key={unit.unitId}>{unit.name}</span>)}</div>}</div>
-      <div className="uvf_viewerConfirmActions"><button type="button" className="uvf_viewerButton" onClick={() => setConfirming(null)}>{props.t("viewer.cancel")}</button><button type="button" className={`uvf_viewerButton${confirming === "discard" ? " uvf_viewerButtonDestructive" : " uvf_viewerButtonPrimary"}`} onClick={confirm}>{confirming === "ready" ? props.t("viewer.readyConfirm") : confirming === "merge" ? props.t("viewer.mergeConfirm") : props.t("viewer.discardConfirm")}</button></div>
+  const confirmation =
+    confirming === null || typeof document === "undefined"
+      ? null
+      : createPortal(
+          <div
+            className={css.viewerModalBackdrop}
+            role="presentation"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) setConfirming(null);
+            }}
+          >
+            <div
+              className={css.viewerModal}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="uvf-viewer-confirm-title"
+            >
+              <div className={css.viewerModalIcon} aria-hidden="true">
+                {confirming === "discard" ? "!" : "✓"}
+              </div>
+              <div className={css.viewerConfirmBody}>
+                <strong id="uvf-viewer-confirm-title">
+                  {confirming === "merge"
+                    ? props.t("viewer.mergeTitle")
+                    : confirming === "discard"
+                      ? props.t("viewer.discardTitle")
+                      : props.t("viewer.readyTitle")}
+                </strong>
+                <span>{props.worktreeName}</span>
+                <p>
+                  {confirming === "merge"
+                    ? props.t("viewer.mergeBody")
+                    : confirming === "discard"
+                      ? props.t("viewer.discardBody")
+                      : props.t("viewer.readyBody")}
+                </p>
+                {props.units === undefined || props.units.length === 0 ? null : (
+                  <div className={css.viewerConfirmChips}>
+                    {props.units
+                      .filter((unit) => unit.kind !== "unchanged")
+                      .map((unit) => (
+                        <span className={css.viewerConfirmChip} key={unit.unitId}>
+                          {unit.name}
+                        </span>
+                      ))}
+                  </div>
+                )}
+              </div>
+              <div className={css.viewerConfirmActions}>
+                <button
+                  type="button"
+                  className={css.viewerButton}
+                  onClick={() => setConfirming(null)}
+                >
+                  {props.t("viewer.cancel")}
+                </button>
+                <button
+                  type="button"
+                  className={`${css.viewerButton} ${confirming === "discard" ? css.viewerButtonDestructive : css.viewerButtonPrimary}`}
+                  onClick={confirm}
+                >
+                  {confirming === "ready"
+                    ? props.t("viewer.readyConfirm")
+                    : confirming === "merge"
+                      ? props.t("viewer.mergeConfirm")
+                      : props.t("viewer.discardConfirm")}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        );
+  const topbar = (
+    <div className={css.viewerTopbar} onPointerDown={(event) => event.stopPropagation()}>
+      <div className={css.viewerTopbarIdentity}>
+        <span className={css.viewerTopbarTitle}>{props.worktreeName}</span>
+        {props.status === "ready" ? (
+          <span className={css.viewerReadOnly}>{props.t("viewer.readOnlyPreview")}</span>
+        ) : null}
+      </div>
+      <div className={css.viewerTopbarActions}>
+        {props.status === "draft" ? (
+          <button
+            type="button"
+            className={`${css.viewerButton} ${css.viewerButtonPrimary}`}
+            disabled={busy !== null}
+            onClick={() => run("ready")}
+          >
+            <CheckIcon />
+            {busy === "ready" ? props.t("window.loading") : props.t("viewer.submitForReview")}
+          </button>
+        ) : null}
+        {props.status === "ready" ? (
+          <button
+            type="button"
+            className={`${css.viewerButton} ${css.viewerButtonPrimary}`}
+            disabled={busy !== null}
+            onClick={() => run("merge")}
+          >
+            <MergeIcon />
+            {busy === "merge" ? props.t("window.loading") : props.t("viewer.mergeToCurrent")}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={`${css.viewerButton} ${css.viewerButtonGhostDanger}`}
+          disabled={busy !== null}
+          onClick={() => run("discard")}
+        >
+          <TrashIcon />
+          {busy === "discard" ? props.t("window.loading") : props.t("viewer.discard")}
+        </button>
+      </div>
+      {error === null ? null : (
+        <span className={css.viewerActionError} role="status">
+          {error}
+        </span>
+      )}
     </div>
-  </div>, document.body);
-  const topbar = <div className="uvf_viewerTopbar" onPointerDown={(event) => event.stopPropagation()}>
-    <div className="uvf_viewerTopbarIdentity">
-      <span className="uvf_viewerTopbarTitle">{props.worktreeName}</span>
-      {props.status === "ready" ? <span className="uvf_viewerReadOnly">{props.t("viewer.readOnlyPreview")}</span> : null}
-    </div>
-    <div className="uvf_viewerTopbarActions">
-      {props.status === "draft" ? <button type="button" className="uvf_viewerButton uvf_viewerButtonPrimary" disabled={busy !== null} onClick={() => run("ready")}><CheckIcon />{busy === "ready" ? props.t("window.loading") : props.t("viewer.submitForReview")}</button> : null}
-      {props.status === "ready" ? <button type="button" className="uvf_viewerButton uvf_viewerButtonPrimary" disabled={busy !== null} onClick={() => run("merge")}><MergeIcon />{busy === "merge" ? props.t("window.loading") : props.t("viewer.mergeToCurrent")}</button> : null}
-      <button type="button" className="uvf_viewerButton uvf_viewerButtonGhostDanger" disabled={busy !== null} onClick={() => run("discard")}><TrashIcon />{busy === "discard" ? props.t("window.loading") : props.t("viewer.discard")}</button>
-    </div>
-    {error === null ? null : <span className="uvf_viewerActionError" role="status">{error}</span>}
-  </div>;
-  return <>{topbar}{confirmation}</>;
+  );
+  return (
+    <>
+      {topbar}
+      {confirmation}
+    </>
+  );
 }
 
 function ViewerStatus(props: {
@@ -240,10 +312,20 @@ function ViewerStatus(props: {
   readonly message: string;
   readonly action?: { readonly label: string; readonly onClick: () => void };
 }): React.ReactElement {
-  return <div className="uvf_viewerStatus" role={props.role} aria-live={props.role === "status" ? "polite" : "assertive"}>
-    <span>{props.message}</span>
-    {props.action === undefined ? null : <button type="button" className="uvf_viewerRetry" onClick={props.action.onClick}>{props.action.label}</button>}
-  </div>;
+  return (
+    <div
+      className={css.viewerStatus}
+      role={props.role}
+      aria-live={props.role === "status" ? "polite" : "assertive"}
+    >
+      <span>{props.message}</span>
+      {props.action === undefined ? null : (
+        <button type="button" className={css.viewerRetry} onClick={props.action.onClick}>
+          {props.action.label}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function viewerBootstrapError(reason: unknown): string {
@@ -269,7 +351,7 @@ function viewerKey(viewer: ViewerTarget): string {
 }
 
 /** Resolve what the embedded editor should mount — office cardTarget equivalent. */
-function viewerTarget(input: {
+export function resolveViewerTarget(input: {
   readonly status: CardStatus;
   readonly units: readonly { unitId: string; unitType: string }[];
   readonly selectedUnit: string | undefined;
@@ -287,7 +369,9 @@ function viewerTarget(input: {
     // than silently rendering the wrong Unit.
     const raw = fromUnit ?? hint;
     if (raw === undefined || raw === "") return "unsupported";
-    return raw === "sheet" || raw === "doc" || raw === "slide" || raw === "board" || raw === "base" ? raw : "unsupported";
+    return raw === "sheet" || raw === "doc" || raw === "slide" || raw === "board" || raw === "base"
+      ? raw
+      : "unsupported";
   };
   if (input.state === undefined) return undefined;
   if (input.worktreeId === null || input.status === "merged" || input.status === "discarded") {
@@ -298,7 +382,7 @@ function viewerTarget(input: {
     return {
       unitId,
       unitType: resolvedType,
-      editable: !target.readOnly,
+      editable: input.worktreeId === null && !target.readOnly,
       scope: { kind: "trunk" },
       ...(resolvedType === "unsupported" ? { unsupportedType: rawUnitType(target.unitType) } : {}),
     };
@@ -313,9 +397,11 @@ function viewerTarget(input: {
     return {
       unitId,
       unitType: resolvedType,
-      editable: true,
+      editable: false,
       scope: { kind: "worktree", worktreeId: input.worktreeId },
-      ...(resolvedType === "unsupported" ? { unsupportedType: rawUnitType(input.fallbackUnitType) } : {}),
+      ...(resolvedType === "unsupported"
+        ? { unsupportedType: rawUnitType(input.fallbackUnitType) }
+        : {}),
     };
   }
   // Workspace permits mergePreview only while a Worktree is ready.  A
@@ -327,7 +413,9 @@ function viewerTarget(input: {
     unitType: resolvedType,
     editable: false,
     scope: { kind: "mergePreview", worktreeId: input.worktreeId },
-    ...(resolvedType === "unsupported" ? { unsupportedType: rawUnitType(input.fallbackUnitType) } : {}),
+    ...(resolvedType === "unsupported"
+      ? { unsupportedType: rawUnitType(input.fallbackUnitType) }
+      : {}),
   };
 }
 
@@ -335,45 +423,26 @@ function rawUnitType(value: string | null): string {
   return value === null || value === "" ? "unknown" : value;
 }
 
-function statusLabel(status: CardStatus, t: (key: UniverLocaleKey) => string): string {
-  if (status === "draft") return t("dock.draft");
-  if (status === "ready") return t("dock.mergeReady");
-  if (status === "merging") return t("dock.merging");
-  if (status === "merged") return t("dock.merged");
-  if (status === "discarded") return t("dock.discarded");
-  if (status === "trunk") return t("dock.currentVersion");
-  if (status === "loading") return t("dock.loading");
-  return t("dock.unavailable");
-}
-
-function PanelControl(props: { readonly action: string; readonly label: string; readonly onClick: () => void; readonly children: React.ReactNode }): React.ReactElement {
-  return <button type="button" className="uvf_btn" data-panel-action={props.action} title={props.label} aria-label={props.label} onClick={props.onClick}>{props.children}</button>;
-}
-
 function CheckIcon(): React.ReactElement {
-  return <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>;
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="m3 8 3 3 7-7" />
+    </svg>
+  );
 }
 
 function MergeIcon(): React.ReactElement {
-  return <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3v4c0 2 2 3 4 3h4M10 7l2 3-2 3" /></svg>;
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M4 3v4c0 2 2 3 4 3h4M10 7l2 3-2 3" />
+    </svg>
+  );
 }
 
 function TrashIcon(): React.ReactElement {
-  return <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M6 4V2h4v2m-6 0 .7 10h6.6L12 4M7 7v4m2-4v4" /></svg>;
-}
-
-function FoldIcon(props: { readonly open: boolean }): React.ReactElement {
-  return <svg viewBox="0 0 16 16" aria-hidden="true"><path d={props.open ? "m4 10 4-4 4 4" : "m4 6 4 4 4-4"} /></svg>;
-}
-
-function UniverMark(props: { readonly merged: boolean; readonly discarded: boolean }): React.ReactElement {
-  if (props.merged) return <svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7" /></svg>;
-  if (props.discarded) return <svg viewBox="0 0 20 20"><path d="M6 10h8" /></svg>;
-  return <svg viewBox="0 0 20 20"><rect x="4" y="4" width="12" height="12" rx="2" /><path d="M4 8h12M8 4v12" /></svg>;
-}
-
-function FullscreenIcon(props: { readonly restored: boolean }): React.ReactElement {
-  return <svg viewBox="0 0 16 16" aria-hidden="true">{props.restored
-    ? <path d="M6 3v3H3m10 0h-3V3m0 10v-3h3M3 10h3v3" />
-    : <path d="M6 3H3v3m10 0V3h-3m0 10h3v-3M3 10v3h3" />}</svg>;
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3 4h10M6 4V2h4v2m-6 0 .7 10h6.6L12 4M7 7v4m2-4v4" />
+    </svg>
+  );
 }

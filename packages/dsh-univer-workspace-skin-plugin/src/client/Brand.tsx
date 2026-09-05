@@ -4,7 +4,6 @@
  * keeping them as React SVG children avoids an HTML injection boundary and
  * lets the host-provided `className`/currentColor styling work on both seats.
  */
-import { createElement } from "react";
 import type { HeroBrandMarkOwnerProps } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type { SidebarBrandMarkOwnerProps } from "@deepseek-ai/dsh-client-ui-sidebar/client";
 import type { PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
@@ -20,23 +19,25 @@ const MARK_PATHS = [
 
 /** Render the exact Univer CLI mark in the expanded rail, collapsed rail, or hero. */
 export function WorkspaceBrandMark({ size, className }: WorkspaceBrandMarkProps) {
-  return createElement(
-    "svg",
-    {
-      xmlns: "http://www.w3.org/2000/svg",
-      fill: "none",
-      viewBox: "0 0 20 20",
-      width: size,
-      height: size,
-      className,
-      "aria-hidden": "true",
-      focusable: "false",
-    },
-    ...MARK_PATHS.map((d) => createElement("path", { key: d, fill: "currentColor", d })),
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 20 20"
+      width={size}
+      height={size}
+      className={className}
+      aria-hidden="true"
+      focusable="false"
+    >
+      {MARK_PATHS.map((d) => (
+        <path key={d} fill="currentColor" d={d} />
+      ))}
+    </svg>
   );
 }
 
 /** Render the brand name beside the expanded mark. */
 export function WorkspaceBrandName(_props: PropsRuntime<"sidebar.brand.name">) {
-  return createElement("span", { className: "uwh-skin-brandName" }, "Univer Workspace");
+  return <span className="uwh-skin-brandName">Univer Workspace</span>;
 }

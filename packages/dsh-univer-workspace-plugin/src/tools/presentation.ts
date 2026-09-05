@@ -37,10 +37,18 @@ export function withUniverErrorContent(definition: ToolDefinition): ToolDefiniti
   const previous = definition.finalizeContent;
   return {
     ...definition,
-    finalizeContent(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined {
+    finalizeContent(
+      exec: Readonly<ToolExecution>,
+      result: Readonly<ToolExecutionResult>,
+    ): ContentBlock[] | undefined {
       if (result.isError) {
         const code = result.error.info?.code ?? "WORKSPACE_OPERATION_FAILED";
-        return [{ type: "text", text: `Error [${code}]: ${safeToolFailureMessage(result.error.message, code)}` }];
+        return [
+          {
+            type: "text",
+            text: `Error [${code}]: ${safeToolFailureMessage(result.error.message, code)}`,
+          },
+        ];
       }
       try {
         return previous?.(exec, result);
@@ -96,8 +104,10 @@ export function renderJson(_args: unknown, value: unknown): ContentBlock[] {
 export function renderToolFailure(error: ToolFailure): ContentBlock[] {
   const info = error.info;
   const code = info?.code ?? "WORKSPACE_OPERATION_FAILED";
-  return [{
-    type: "text",
-    text: `Error [${code}]: ${safeToolFailureMessage(error.message, code)}`,
-  }];
+  return [
+    {
+      type: "text",
+      text: `Error [${code}]: ${safeToolFailureMessage(error.message, code)}`,
+    },
+  ];
 }

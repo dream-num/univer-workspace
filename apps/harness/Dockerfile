@@ -55,14 +55,14 @@ RUN mkdir -p /opt/dsh/bootstrap && cd /opt/dsh/bootstrap \
       --allow-build=koffi \
       --allow-build=node-pty \
       --allow-build=protobufjs \
-      @deepseek-ai/dsh@0.1.1-rc.2
+      @deepseek-ai/dsh@0.1.2-alpha.4
 
 # Build the profile through the official `dsh plugin` command so the profile's
 # package.json and dsh.profile.bundles list are reconciled by the tool — never
 # hand-written. DSH_HOME is isolated inside the image.
 ENV DSH_HOME=/opt/dsh/home \
     DSH_BIN=/opt/dsh/bootstrap/node_modules/@deepseek-ai/dsh/lib/bin.js \
-    DSH_WEB_BUNDLE="@deepseek-ai/dsh-web-app@0.1.1-rc.2" \
+    DSH_WEB_BUNDLE="@deepseek-ai/dsh-web-app@0.1.2-alpha.4" \
     DSH_PLUGINS="file:/opt/dsh/home/internal-packages/univerjs-univer-workspace-harness-0.1.0.tgz file:/opt/dsh/home/internal-packages/dsh-univer-workspace-plugin-0.1.0.tgz file:/opt/dsh/home/internal-packages/dsh-univer-workspace-skin-plugin-0.1.0.tgz"
 RUN NPM_CONFIG_USERCONFIG=/src/.npmrc ./apps/harness/scripts/build-profile.sh
 RUN printf 'registry=%s\n' "$NPM_REGISTRY" > /opt/dsh/home/profiles/univer-workspace-harness/.npmrc
@@ -72,6 +72,8 @@ FROM node:24-bookworm-slim AS runtime
 
 ENV NODE_ENV=production \
     DSH_HOME=/opt/dsh/home \
+    DSH_BIN=/opt/dsh/install/node_modules/@deepseek-ai/dsh/lib/bin.js \
+    UWH_DSH_DATA_HOME=/workspace/.dsh \
     HOME=/home/dsh \
     UWH_RENDER_PAGE_ROOT=/opt/univer/render-runtime \
     UWH_RENDER_BROWSER=/usr/local/bin/google-chrome \
@@ -106,6 +108,7 @@ RUN if ! getent passwd 1000 >/dev/null; then \
 # so no registry credential reaches runtime.
 COPY --from=build --chown=1000:1000 /opt/dsh/bootstrap/node_modules /opt/dsh/install/node_modules
 COPY --from=build --chown=1000:1000 /opt/dsh/home /opt/dsh/home
+COPY --from=build --chown=1000:1000 /src/apps/harness/scripts/start-local.mjs /opt/dsh/start-local.mjs
 COPY --from=build --chown=1000:1000 /src/packages/client-core/dist/render-runtime /opt/univer/render-runtime
 
 # Fail the image build instead of shipping a harness whose screenshot tools
@@ -117,7 +120,7 @@ RUN test -s "${UWH_RENDER_PAGE_ROOT}/index.html" \
 # Launcher for the packaged dsh CLI.
 RUN printf '#!/bin/sh\nexec node /opt/dsh/install/node_modules/@deepseek-ai/dsh/lib/bin.js "$@"\n' \
     > /usr/local/bin/dsh \
-  && printf '#!/bin/sh\nset -eu\ntrusted_host="${UWH_PUBLIC_HOST:-127.0.0.1}"\nexec /usr/local/bin/dsh --profile univer-workspace-harness --port "${UWH_PORT:-3080}" --no-open --trusted-host "$trusted_host"\n' \
+  && printf '#!/bin/sh\nset -eu\ntrusted_host="${UWH_PUBLIC_HOST:-127.0.0.1}"\nexec node /opt/dsh/start-local.mjs --port "${UWH_PORT:-3080}" --no-open --trusted-host "$trusted_host"\n' \
     > /usr/local/bin/univer-workspace-harness-entrypoint \
   && chmod 0755 /usr/local/bin/dsh /usr/local/bin/univer-workspace-harness-entrypoint
 

@@ -20,7 +20,9 @@ export class WorkerHttp {
       const body = await response.text().catch(() => "");
       const detail = body.replace(/\s+/gu, " ").trim().slice(0, 800);
       throw Object.assign(
-        new Error(`workspace request failed: GET ${path} answered ${response.status}${detail === "" ? "" : `; response: ${detail}`}`),
+        new Error(
+          `workspace request failed: GET ${path} answered ${response.status}${detail === "" ? "" : `; response: ${detail}`}`,
+        ),
         { code: `WORKSPACE_HTTP_${response.status}` },
       );
     }

@@ -34,9 +34,11 @@ export function apply(ctx: Context): void {
     // the screenshot definition out of the base catalog and let Cordis load
     // it only while `attachments` is provided (the same gate as office).
     const disposeRender = registerRenderTools(ctx, { includeScreenshot: false });
-    const inject = (ctx as unknown as {
-      inject(deps: readonly string[], callback: (ctx: Context) => void): unknown;
-    }).inject.bind(ctx);
+    const inject = (
+      ctx as unknown as {
+        inject(deps: readonly string[], callback: (ctx: Context) => void): unknown;
+      }
+    ).inject.bind(ctx);
     inject(["attachments"], (imageCtx) => {
       registerScreenshotTool(imageCtx);
     });

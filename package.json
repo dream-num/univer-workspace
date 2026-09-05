@@ -3,10 +3,6 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "packageManager": "pnpm@11.24.0",
-  "engines": {
-    "node": ">=24"
-  },
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
@@ -14,11 +10,13 @@
     "test:sdk-dependencies": "node --test scripts/update-sdk-dependencies.test.mjs",
     "test:release": "node --test scripts/release/*.test.mjs",
     "check": "pnpm typecheck && pnpm test",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "package:workspace-cli": "pnpm --filter univer-workspace-cli package",
     "release:cli": "node scripts/release/release-cli.mjs",
     "release:cli:dev": "node scripts/release/release-cli.mjs --channel=dev --publish",
     "release:cli:publish": "node scripts/release/publish-cli.mjs",
-    "update:sdk": "node scripts/update-sdk-dependencies.mjs",
+    "update:univer-sdk": "node scripts/update-sdk-dependencies.mjs",
     "link:workspace-cli": "pnpm --filter univer-workspace-cli build && pnpm link --global ./apps/cli",
     "unlink:workspace-cli": "node scripts/unlink-workspace-cli.mjs",
     "workspace:dev:web": "pnpm --filter @univerjs/univer-workspace dev:web",
@@ -28,9 +26,14 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "oxfmt": "0.66.0",
     "tsx": "^4.23.0",
     "typescript": "^5.9.0",
     "vite": "^8.0.0",
     "vitest": "^4.1.10"
-  }
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.24.0"
 }

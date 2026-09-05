@@ -27,7 +27,10 @@ export function resolveViewerReadOnlyEnforcement(
 
 /** Disable Sheet actions whose Ribbon state is governed by workbook permissions. */
 export function enforceSheetViewerReadOnlyPermissions(
-  permissionService: Pick<IPermissionService, "addPermissionPoint" | "getPermissionPoint" | "updatePermissionPoint">,
+  permissionService: Pick<
+    IPermissionService,
+    "addPermissionPoint" | "getPermissionPoint" | "updatePermissionPoint"
+  >,
   unitId: string,
 ): void {
   const points = [
@@ -64,11 +67,26 @@ export interface ReadOnlyLocaleCopy {
 }
 
 const permissionErrorKeys = [
-  "alertContent", "commonErr", "editErr", "pasteErr", "setStyleErr", "copyErr",
-  "workbookCopyErr", "setRowColStyleErr", "moveRowColErr", "moveRangeErr",
-  "insertRowColErr", "removeRowColErr", "autoFillErr", "filterErr",
-  "operatorSheetErr", "insertOrDeleteMoveRangeErr", "printErr", "formulaErr",
-  "hyperLinkErr", "commentErr",
+  "alertContent",
+  "commonErr",
+  "editErr",
+  "pasteErr",
+  "setStyleErr",
+  "copyErr",
+  "workbookCopyErr",
+  "setRowColStyleErr",
+  "moveRowColErr",
+  "moveRangeErr",
+  "insertRowColErr",
+  "removeRowColErr",
+  "autoFillErr",
+  "filterErr",
+  "operatorSheetErr",
+  "insertOrDeleteMoveRangeErr",
+  "printErr",
+  "formulaErr",
+  "hyperLinkErr",
+  "commentErr",
 ] as const;
 
 function permissionMessages(message: string): Record<string, string> {
@@ -109,7 +127,4 @@ export function withReadOnlyPermissionLocale(
   } as unknown as ILanguagePack);
 }
 
-export const READ_ONLY_COPY: Record<"zh-CN" | "en-US", ReadOnlyLocaleCopy> = {
-  "zh-CN": { title: "只读视图", message: "当前视图为只读；提交确认的修改请在对应 worktree 中进行。" },
-  "en-US": { title: "Read-only view", message: "This view is read-only; confirmed edits live in their worktree." },
-};
+export { READ_ONLY_COPY } from "./readonly-locales.ts";

@@ -15,22 +15,44 @@ import type { Context } from "@deepseek-ai/cordis";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type { SessionHeader } from "@deepseek-ai/dsh-session";
 import type { Workspace, WorkspaceId } from "@deepseek-ai/dsh-workspace";
-import type { CollaborationRuntimeValue, CollaborationUnitData } from "@univer-cli/univer-collaboration-runtime";
+import type {
+  CollaborationRuntimeValue,
+  CollaborationUnitData,
+} from "@univer-cli/univer-collaboration-runtime";
 import type { ContentInspectionResult } from "@univer-cli/content-inspection";
-import { spaceDirectoryPath, type WorkspaceAuthService, type WorkspaceHttpClient } from "./workspace-contract.ts";
+import {
+  originSpaceDirectoryPath,
+  type WorkspaceAuthService,
+  type WorkspaceHttpClient,
+} from "./workspace-contract.ts";
 import type { DocumentListOptions, WorkspaceDocument, WorkspaceSpace } from "../shared/wire.ts";
 import {
-  UniverWorkspaceService, type CreateDocumentInput, type EditUnitInput, type SpaceScope,
+  UniverWorkspaceService,
+  type CreateDocumentInput,
+  type EditUnitInput,
+  type SpaceScope,
   type InspectUnitInput,
 } from "../service/univer-workspace-service.ts";
 import { RuntimeManager } from "../runtime/manager.js";
 import type { WorkspaceRuntimeTarget } from "../runtime/target.js";
 import { spaceLinksDomainSpec } from "./space-links.ts";
 import {
-  addWorktreeTrunkUnit, createDocument as apiCreateDocument, createWorktree as apiCreateWorktree,
+  addWorktreeTrunkUnit,
+  createDocument as apiCreateDocument,
+  createWorktree as apiCreateWorktree,
   createWorktreeLocalUnit as apiCreateWorktreeLocalUnit,
-  discardWorktree, listSpaceDocuments, listSpaces, markWorktreeReady, mergeWorktree,
-  getFileState as apiGetFileState, getWorktreeDetail, getWorktreeFileState as apiGetWorktreeFileState, openResource, openWorktreeUnit, reopenWorktree,
+  discardWorktree,
+  listReviewWorktrees,
+  listSpaceDocuments,
+  listSpaces,
+  markWorktreeReady,
+  mergeWorktree,
+  getFileState as apiGetFileState,
+  getWorktreeDetail,
+  getWorktreeFileState as apiGetWorktreeFileState,
+  openResource,
+  openWorktreeUnit,
+  reopenWorktree,
   resolveUnitResource as apiResolveUnitResource,
   type CreateWorktreeLocalUnitInput,
 } from "./workspace-api.ts";
@@ -55,13 +77,19 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   ) {
     super(ctx);
     this.runtimeManager = new RuntimeManager(config.workerUrl);
-    ctx.effect(() => () => { void this.runtimeManager.close(); }, "univer-workspace: runtime pool close");
+    ctx.effect(
+      () => () => {
+        void this.runtimeManager.close();
+      },
+      "univer-workspace: runtime pool close",
+    );
   }
 
   async listSpaces(userId: string): Promise<{ spaces: readonly WorkspaceSpace[] }> {
-    const client = this.requireWorkspaceAuth().clientFor(userId);
+    const auth = this.requireWorkspaceAuth();
+    const client = this.currentClientFor(userId);
     if (client === undefined) {
-      throw new Error("workspace credential is missing; sign in again");
+      throw new Error("workspace connection is unavailable; connect and restart the Harness");
     }
     const remote = await listSpaces(client);
     // The registry rebuilds its header index during boot. A rolling restart
@@ -70,13 +98,19 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     const persistedHeaders = await this.persistedSessionHeaders();
     const spaces: WorkspaceSpace[] = [];
     for (const space of remote) {
-      const dshWorkspaceId = await this.reconcileSpace(userId, space.spaceId, space.name, persistedHeaders);
+      const dshWorkspaceId = await this.reconcileSpace(
+        userId,
+        space.spaceId,
+        space.name,
+        persistedHeaders,
+      );
       spaces.push({
         spaceId: space.spaceId,
         type: space.type,
         name: space.name,
         accessRole: space.accessRole,
         dshWorkspaceId,
+        ...(space.capabilities === undefined ? {} : { capabilities: space.capabilities }),
       });
     }
     return { spaces };
@@ -89,7 +123,11 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return record === undefined ? undefined : { userId: record.userId, spaceId: record.spaceId };
   }
 
-  async listDocuments(userId: string, spaceId: string, options?: DocumentListOptions): Promise<readonly WorkspaceDocument[]> {
+  async listDocuments(
+    userId: string,
+    spaceId: string,
+    options?: DocumentListOptions,
+  ): Promise<readonly WorkspaceDocument[]> {
     const client = this.requireClient(userId);
     return await listSpaceDocuments(client, spaceId, options);
   }
@@ -119,6 +157,11 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await getWorktreeDetail(client, worktreeId);
   }
 
+  async listWorktrees(userId: string) {
+    const client = this.requireClient(userId);
+    return await listReviewWorktrees(client);
+  }
+
   async addWorktreeTrunkUnit(userId: string, worktreeId: string, resourceId: string) {
     const client = this.requireClient(userId);
     return await addWorktreeTrunkUnit(client, worktreeId, resourceId);
@@ -129,7 +172,12 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await apiCreateWorktreeLocalUnit(client, input);
   }
 
-  async openWorktreeUnit(userId: string, worktreeId: string, unitId: string, mode: "draft" | "trunk" | "mergePreview") {
+  async openWorktreeUnit(
+    userId: string,
+    worktreeId: string,
+    unitId: string,
+    mode: "draft" | "trunk" | "mergePreview",
+  ) {
     const client = this.requireClient(userId);
     return await openWorktreeUnit(client, worktreeId, unitId, mode);
   }
@@ -164,7 +212,11 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await apiGetWorktreeFileState(client, worktreeId);
   }
 
-  async transitionWorktree(userId: string, worktreeId: string, action: "ready" | "reopen" | "merge" | "discard") {
+  async transitionWorktree(
+    userId: string,
+    worktreeId: string,
+    action: "ready" | "reopen" | "merge" | "discard",
+  ) {
     const client = this.requireClient(userId);
     if (action === "ready") return await markWorktreeReady(client, worktreeId);
     if (action === "merge") return await mergeWorktree(client, worktreeId);
@@ -200,12 +252,15 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await this.runtimeManager.inspect(target, inspectionQuery(input.unitType, input.range));
   }
 
-  async exportUnitData(userId: string, input: {
-    scope: WorkspaceRuntimeTarget["scope"];
-    unitId: string;
-    unitType: WorkspaceRuntimeTarget["unitType"];
-    revision?: number;
-  }): Promise<CollaborationUnitData> {
+  async exportUnitData(
+    userId: string,
+    input: {
+      scope: WorkspaceRuntimeTarget["scope"];
+      unitId: string;
+      unitType: WorkspaceRuntimeTarget["unitType"];
+      revision?: number;
+    },
+  ): Promise<CollaborationUnitData> {
     const client = this.requireClient(userId);
     const target: WorkspaceRuntimeTarget = {
       origin: client.origin,
@@ -219,7 +274,10 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await this.runtimeManager.exportUnitData(target);
   }
 
-  async editUnit(userId: string, input: EditUnitInput): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }> {
+  async editUnit(
+    userId: string,
+    input: EditUnitInput,
+  ): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }> {
     const client = this.requireClient(userId);
     const target: WorkspaceRuntimeTarget = {
       origin: client.origin,
@@ -234,25 +292,49 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   }
 
   private requireClient(userId: string): WorkspaceHttpClient {
-    const client = this.requireWorkspaceAuth().clientFor(userId);
+    const client = this.currentClientFor(userId);
     if (client === undefined) {
-      throw new Error("workspace credential is missing; sign in again");
+      throw new Error("workspace connection is unavailable; connect and restart the Harness");
     }
     return client;
   }
-  private async reconcileSpace(userId: string, spaceId: string, name: string, headers: readonly SessionHeader[]): Promise<string> {
+
+  private currentClientFor(userId: string): WorkspaceHttpClient | undefined {
+    const auth = this.requireWorkspaceAuth();
+    const identity = auth.currentIdentity();
+    if (identity === undefined || identity.userId !== userId) {
+      return undefined;
+    }
+    return auth.currentClient();
+  }
+  private async reconcileSpace(
+    userId: string,
+    spaceId: string,
+    name: string,
+    headers: readonly SessionHeader[],
+  ): Promise<string> {
     const table = await this.requireTable();
-    const directory = spaceDirectoryPath(this.config.workspaceRoot, userId, spaceId);
+    const auth = this.requireWorkspaceAuth();
+    const origin = new URL(auth.effectiveOrigin()).origin;
+    const directory = originSpaceDirectoryPath(this.config.workspaceRoot, origin, userId, spaceId);
     // workspaceRoot is an ephemeral working volume in the deployment. Always
     // recreate the deterministic directory before resolving the registry path.
     await mkdir(directory, { recursive: true });
     // Reuse an existing link for this space id (same user), so the backing dsh
     // workspace stays stable across list calls and Pod restarts.
     for (const [key, record] of table.entries()) {
-      if (record.userId === userId && record.spaceId === spaceId) {
-        const workspace = this.ctx.workspaceRegistry.get(key as WorkspaceId)
-          ?? await this.ctx.workspaceRegistry.resolveByPath(directory);
+      if (
+        record.userId === userId &&
+        record.spaceId === spaceId &&
+        (record.origin === undefined || record.origin === origin)
+      ) {
+        const candidate = this.ctx.workspaceRegistry.get(key as WorkspaceId);
+        const workspace =
+          candidate?.path === directory
+            ? candidate
+            : await this.ctx.workspaceRegistry.resolveByPath(directory);
         if (workspace !== undefined) {
+          if (record.origin !== origin) await table.put(key, { ...record, origin });
           await this.attachPersistedSessions(workspace, directory, headers);
           return workspace.id;
         }
@@ -261,14 +343,15 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
         // link atomically from the domain consumer's perspective.
         const recreated = await this.ctx.workspaceRegistry.create(directory, name);
         await table.delete(key);
-        await table.put(recreated.id, { userId, spaceId });
+        await table.put(recreated.id, { userId, spaceId, origin });
         await this.attachPersistedSessions(recreated, directory, headers);
         return recreated.id;
       }
     }
-    const workspace = (await this.ctx.workspaceRegistry.resolveByPath(directory))
-      ?? await this.ctx.workspaceRegistry.create(directory, name);
-    await table.put(workspace.id, { userId, spaceId });
+    const workspace =
+      (await this.ctx.workspaceRegistry.resolveByPath(directory)) ??
+      (await this.ctx.workspaceRegistry.create(directory, name));
+    await table.put(workspace.id, { userId, spaceId, origin });
     await this.attachPersistedSessions(workspace, directory, headers);
     return workspace.id;
   }
@@ -281,7 +364,11 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await persistence.list();
   }
 
-  private async attachPersistedSessions(workspace: Workspace, directory: string, headers: readonly SessionHeader[]): Promise<void> {
+  private async attachPersistedSessions(
+    workspace: Workspace,
+    directory: string,
+    headers: readonly SessionHeader[],
+  ): Promise<void> {
     const attached = new Set(workspace.sessionIds);
     for (const header of headers) {
       if (header.cwd !== directory || attached.has(header.id)) continue;
@@ -299,7 +386,12 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
       throw new Error("storageDomain service is unavailable");
     }
     const domain = await storageDomain.open(spaceLinksDomainSpec);
-    this.ctx.effect(() => () => { void domain.close(); }, "univer-workspace: space-links domain close");
+    this.ctx.effect(
+      () => () => {
+        void domain.close();
+      },
+      "univer-workspace: space-links domain close",
+    );
     this.table = domain.table("links");
     return this.table;
   }

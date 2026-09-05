@@ -1,5 +1,5 @@
 /** Pure, replay-stable display model for the keyed Univer tool rows. */
-import type { ToolCallBlock } from "@deepseek-ai/dsh-client-runtime/client";
+import type { ToolCallBlock } from "../dsh-runtime-types.ts";
 
 export const WORKSPACE_TOOL_NAMES = [
   "univer_spaces",
@@ -20,7 +20,7 @@ export const WORKSPACE_TOOL_NAMES = [
   "univer_resources",
 ] as const;
 
-type WorkspaceToolName = typeof WORKSPACE_TOOL_NAMES[number];
+type WorkspaceToolName = (typeof WORKSPACE_TOOL_NAMES)[number];
 type ToolRowState = "running" | "ok" | "error" | "stopped";
 
 export interface WorkspaceToolRowModel {
@@ -67,28 +67,34 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const HASH = /^[0-9a-f]{24,}$/iu;
 
 /** Derive a human row without using opaque Workspace ids as summaries. */
-export function workspaceToolRowModel(toolName: string, block: ToolCallBlock): WorkspaceToolRowModel {
+export function workspaceToolRowModel(
+  toolName: string,
+  block: ToolCallBlock,
+): WorkspaceToolRowModel {
   const settled = "kind" in block;
-  const args = parseRecord(settled ? block.call?.argsRaw ?? "" : block.argsRaw);
+  const args = parseRecord(settled ? (block.call?.argsRaw ?? "") : block.argsRaw);
   const output = settled ? resultText(block) : null;
   const result = output === null ? null : parseEmbeddedRecord(output);
   const state: ToolRowState = !settled
     ? "running"
     : block.error?.code === "interrupted"
       ? "stopped"
-      : block.isError ? "error" : "ok";
-  const name = firstHumanString(result, ["name", "title", "fileName"])
-    ?? firstNestedHumanString(result, ["document", "unit", "result"], ["name", "title", "fileName"])
-    ?? firstHumanString(args, ["name", "title"]);
-  const action = firstHumanString(result, ["action", "operation"])
-    ?? firstNestedHumanString(result, ["result"], ["action", "operation"])
-    ?? firstHumanString(args, ["action", "mode"]);
-  const unitType = firstHumanString(result, ["unitType"])
-    ?? firstNestedHumanString(result, ["document", "unit", "result"], ["unitType"])
-    ?? firstHumanString(args, ["unitType"]);
-  const summary = state === "error"
-    ? firstLine(output ?? "")
-    : name ?? action ?? unitType;
+      : block.isError
+        ? "error"
+        : "ok";
+  const name =
+    firstHumanString(result, ["name", "title", "fileName"]) ??
+    firstNestedHumanString(result, ["document", "unit", "result"], ["name", "title", "fileName"]) ??
+    firstHumanString(args, ["name", "title"]);
+  const action =
+    firstHumanString(result, ["action", "operation"]) ??
+    firstNestedHumanString(result, ["result"], ["action", "operation"]) ??
+    firstHumanString(args, ["action", "mode"]);
+  const unitType =
+    firstHumanString(result, ["unitType"]) ??
+    firstNestedHumanString(result, ["document", "unit", "result"], ["unitType"]) ??
+    firstHumanString(args, ["unitType"]);
+  const summary = state === "error" ? firstLine(output ?? "") : (name ?? action ?? unitType);
 
   return {
     titleKey: TITLE_KEYS[asWorkspaceToolName(toolName)] ?? "tool.status",
@@ -101,13 +107,19 @@ export function workspaceToolRowModel(toolName: string, block: ToolCallBlock): W
 
 function asWorkspaceToolName(value: string): WorkspaceToolName {
   return WORKSPACE_TOOL_NAMES.includes(value as WorkspaceToolName)
-    ? value as WorkspaceToolName
+    ? (value as WorkspaceToolName)
     : "univer_status";
 }
 
 function documentScoped(toolName: string): boolean {
-  return toolName === "univer_open" || toolName === "univer_status" || toolName === "univer_edit"
-    || toolName === "univer_inspect" || toolName === "univer_execute" || toolName === "univer_export";
+  return (
+    toolName === "univer_open" ||
+    toolName === "univer_status" ||
+    toolName === "univer_edit" ||
+    toolName === "univer_inspect" ||
+    toolName === "univer_execute" ||
+    toolName === "univer_export"
+  );
 }
 
 function parseRecord(value: string): Record<string, unknown> | null {
@@ -141,20 +153,32 @@ function firstNestedHumanString(
   return null;
 }
 
-function firstHumanString(input: Record<string, unknown> | null, keys: readonly string[]): string | null {
+function firstHumanString(
+  input: Record<string, unknown> | null,
+  keys: readonly string[],
+): string | null {
   if (input === null) return null;
   for (const key of keys) {
     const value = input[key];
     if (typeof value !== "string") continue;
     const candidate = firstLine(value).trim();
-    if (candidate !== "" && candidate.length <= 120 && !UUID.test(candidate) && !HASH.test(candidate)) return candidate;
+    if (
+      candidate !== "" &&
+      candidate.length <= 120 &&
+      !UUID.test(candidate) &&
+      !HASH.test(candidate)
+    )
+      return candidate;
   }
   return null;
 }
 
 function resultText(block: Extract<ToolCallBlock, { kind: "tool-result" }>): string {
-  const parts = block.content.map(item => item.type === "text" ? item.text : JSON.stringify(item));
-  if (parts.length === 0 && block.error !== undefined) parts.push(`${block.error.name}: ${block.error.code}`);
+  const parts = block.content.map((item) =>
+    item.type === "text" ? item.text : JSON.stringify(item),
+  );
+  if (parts.length === 0 && block.error !== undefined)
+    parts.push(`${block.error.name}: ${block.error.code}`);
   return parts.join("\n");
 }
 
