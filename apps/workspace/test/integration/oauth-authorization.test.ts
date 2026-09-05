@@ -191,18 +191,29 @@ describe("OAuth authorization", () => {
     expect(authorize.status).toBe(302);
     const consent = await fetch(new URL(authorize.headers.get("location")!, origin), { headers: { cookie: cookie! } });
     expect(consent.status).toBe(200);
+    expect(consent.headers.get("content-security-policy")).toContain(
+      "form-action 'self' http://127.0.0.1:3101",
+    );
     const consentHtml = await consent.text();
     expect(consentHtml).toContain("Authorize external client");
+    expect(consentHtml).toContain("<style>");
     const consentToken = consentHtml.match(/name="consent_token" value="([^"]+)"/)?.[1];
     expect(consentToken).toEqual(expect.any(String));
     const approved = await fetch(new URL(authorize.headers.get("location")!, origin), { method: "POST", headers: { cookie: cookie!, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ consent_token: consentToken!, decision: "allow" }), redirect: "manual" });
-    expect(approved.status).toBe(302);
+    expect(approved.status).toBe(303);
     const callback = new URL(approved.headers.get("location")!);
     const token = await fetch(`${origin}/api/auth/token`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ grant_type: "authorization_code", code: callback.searchParams.get("code"), client_id: PUBLIC_CLIENT_ID, redirect_uri: PUBLIC_CALLBACK_URL, code_verifier: CODE_VERIFIER }) });
     expect(token.status).toBe(200);
     expect((await token.json()).access_token).toEqual(expect.any(String));
     const replayConsent = await fetch(new URL(authorize.headers.get("location")!, origin), { method: "POST", headers: { cookie: cookie!, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ consent_token: consentToken!, decision: "allow" }), redirect: "manual" });
     expect(replayConsent.status).toBe(400);
+    expect(await replayConsent.json()).toEqual({
+      error: {
+        code: "INVALID_INPUT",
+        field: "consent_token",
+        message: "The consent request is invalid, expired, or already used.",
+      },
+    });
   });
 
   it("exchanges a session-scope grant for a working Workspace session token", async () => {
