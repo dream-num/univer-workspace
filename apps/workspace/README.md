@@ -146,6 +146,8 @@ session is absent, then returns a one-time short-lived code to the registered
 redirect URI. `POST /api/auth/token` validates the client secret, the registered
 redirect URI, the PKCE verifier, expiry, and one-time use before returning the
 Workspace identity. Registration is deployment-supplied via `OAUTH_CLIENTS_JSON`.
+External browser clients should use `clientType: "public"`, PKCE, and `requiresConsent: true`; they omit `clientSecret` and use an exact registered callback URL. The local Harness callback is `http://127.0.0.1:3101/auth/oauth/callback`. Internal service clients may remain confidential and use the existing no-consent behavior.
+
 Existing Workspace login, OAuth callbacks, Cookie behavior, and product APIs
 remain unchanged. The capability is additive and does not add a proxy or
 deployment component.

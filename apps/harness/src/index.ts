@@ -19,7 +19,10 @@ import {
   UWH_DEVICE_LOGOUT_PATH,
   UWH_DEVICE_START_PATH,
   UWH_SESSION_PROMPT_PATH,
+  UWH_OAUTH_START_PATH,
+  UWH_OAUTH_CALLBACK_PATH,
 } from "./contract.ts";
+import { createOAuthCallbackHandler, createOAuthStartHandler } from "./oauth-authorization.ts";
 import {
   completeDeviceAuthorization,
   startDeviceAuthorization,
@@ -289,6 +292,8 @@ export function createDeviceLogoutHandler(
 export function localRouteDefinitions(
   ctx: Context,
   pending: Map<string, DeviceAuthorizationStart>,
+  oauthPending: Map<string, Parameters<typeof createOAuthStartHandler>[1] extends Map<string, infer V> ? V : never> = new Map(),
+  publicOrigin = "http://127.0.0.1:3101",
 ): readonly LocalRouteDefinition[] {
   return [
     {
@@ -311,6 +316,8 @@ export function localRouteDefinitions(
       path: UWH_SESSION_PROMPT_PATH,
       handler: createLocalSessionPromptHandler(ctx),
     },
+    { kind: "exact", path: UWH_OAUTH_START_PATH, handler: createOAuthStartHandler(ctx, oauthPending, publicOrigin) },
+    { kind: "exact", path: UWH_OAUTH_CALLBACK_PATH, handler: createOAuthCallbackHandler(ctx, oauthPending) },
   ];
 }
 
@@ -323,8 +330,9 @@ export function apply(ctx: Context, config: Config): void {
     connectionStatePath: config.connectionStatePath,
   });
   const pending = new Map<string, DeviceAuthorizationStart>();
+  const oauthPending = new Map();
   ctx.effect(() => {
-    const routes = localRouteDefinitions(ctx, pending).map((route) =>
+    const routes = localRouteDefinitions(ctx, pending, oauthPending, config.publicOrigin).map((route) =>
       ctx.webServer.register(route),
     );
     return () => {

@@ -15,7 +15,9 @@ export const OAUTH_SESSION_SCOPE = "session";
 
 export interface OAuthClient {
   readonly clientId: string;
-  readonly clientSecret: string;
+  readonly clientType?: "confidential" | "public";
+  readonly clientSecret?: string;
+  readonly requiresConsent?: boolean;
   readonly redirectUris: readonly string[];
   readonly scopes: readonly string[];
 }
@@ -56,6 +58,22 @@ export function validateOAuthClientSecret(
       "A valid client secret is required."
     );
   }
+}
+
+export function validateOAuthClientAuthentication(
+  client: OAuthClient,
+  provided: string | undefined,
+): void {
+  if (client.clientType === "public") {
+    if (provided !== undefined) {
+      throw new ApplicationError("INVALID_INPUT", 400, "Public OAuth clients must not send a client secret.");
+    }
+    return;
+  }
+  if (client.clientSecret === undefined) {
+    throw new ApplicationError("OAUTH_CLIENT_UNAVAILABLE", 400, "The OAuth client is missing a secret.");
+  }
+  validateOAuthClientSecret(provided, client.clientSecret);
 }
 
 export function validateOAuthCodeVerifier(

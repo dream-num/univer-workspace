@@ -16,6 +16,8 @@ const CALLBACK_URL = "https://client.example.test/auth/callback";
 const SESSION_CLIENT_ID = "session-client";
 const SESSION_CLIENT_SECRET = "test-session-secret-at-least-32-characters";
 const SESSION_CALLBACK_URL = "https://harness.example.test/auth/callback";
+const PUBLIC_CLIENT_ID = "univer-workspace-harness";
+const PUBLIC_CALLBACK_URL = "http://127.0.0.1:3101/auth/oauth/callback";
 const STATE = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGH";
 const CODE_VERIFIER = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const CODE_CHALLENGE = createHash("sha256").update(CODE_VERIFIER).digest("base64url");
@@ -31,6 +33,13 @@ const OAUTH_CLIENTS_JSON = JSON.stringify({
       clientId: SESSION_CLIENT_ID,
       clientSecret: SESSION_CLIENT_SECRET,
       redirectUris: [SESSION_CALLBACK_URL],
+      scopes: ["identity", "session"],
+    },
+    {
+      clientId: PUBLIC_CLIENT_ID,
+      clientType: "public",
+      requiresConsent: true,
+      redirectUris: [PUBLIC_CALLBACK_URL],
       scopes: ["identity", "session"],
     },
   ],
@@ -56,7 +65,7 @@ afterEach(async () => {
 describe("OAuth authorization", () => {
   it("loads registered clients from OAUTH_CLIENTS_JSON", () => {
     const config = loadConfig({ OAUTH_CLIENTS_JSON });
-    expect(config.oauthClients?.clients).toHaveLength(2);
+    expect(config.oauthClients?.clients).toHaveLength(3);
     expect(config.oauthClients?.clients[0]).toMatchObject({
       clientId: CLIENT_ID,
       clientSecret: CLIENT_SECRET,
@@ -67,6 +76,11 @@ describe("OAuth authorization", () => {
       clientId: SESSION_CLIENT_ID,
       redirectUris: [SESSION_CALLBACK_URL],
       scopes: ["identity", "session"],
+    });
+    expect(config.oauthClients?.clients[2]).toMatchObject({
+      clientId: PUBLIC_CLIENT_ID,
+      clientType: "public",
+      requiresConsent: true,
     });
   });
 
@@ -165,6 +179,24 @@ describe("OAuth authorization", () => {
     expect(await replay.json()).toMatchObject({
       error: { code: "INVALID_GRANT" },
     });
+  });
+
+  it("requires explicit consent for the external public Harness client", async () => {
+    const origin = await startApplication();
+    const registration = await fetch(`${origin}/api/auth/password/register`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "consent-user", displayName: "Consent User", password: "correct horse battery staple" }) });
+    const cookie = registration.headers.get("set-cookie")?.split(";", 1)[0];
+    const query = new URLSearchParams({ client_id: PUBLIC_CLIENT_ID, redirect_uri: PUBLIC_CALLBACK_URL, state: STATE, code_challenge: CODE_CHALLENGE, scope: "identity session" });
+    const authorize = await fetch(`${origin}/api/auth/authorize?${query}`, { headers: { cookie: cookie! }, redirect: "manual" });
+    expect(authorize.status).toBe(302);
+    const consent = await fetch(new URL(authorize.headers.get("location")!, origin), { headers: { cookie: cookie! } });
+    expect(consent.status).toBe(200);
+    expect(await consent.text()).toContain("Authorize external client");
+    const approved = await fetch(new URL(authorize.headers.get("location")!, origin), { method: "POST", headers: { cookie: cookie!, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ ...Object.fromEntries(query), decision: "allow" }), redirect: "manual" });
+    expect(approved.status).toBe(302);
+    const callback = new URL(approved.headers.get("location")!);
+    const token = await fetch(`${origin}/api/auth/token`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: callback.searchParams.get("code"), client_id: PUBLIC_CLIENT_ID, redirect_uri: PUBLIC_CALLBACK_URL, code_verifier: CODE_VERIFIER }) });
+    expect(token.status).toBe(200);
+    expect((await token.json()).access_token).toEqual(expect.any(String));
   });
 
   it("exchanges a session-scope grant for a working Workspace session token", async () => {

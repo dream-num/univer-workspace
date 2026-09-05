@@ -136,29 +136,7 @@ export function OriginSetting({ scope, t }: OriginSettingProps) {
   const startDeviceLogin = (): void => {
     setBusy(true);
     setError(undefined);
-    void fetch("/auth/device/start", { method: "POST" })
-      .then(async (response) => {
-        const body = (await response.json()) as Record<string, unknown>;
-        if (!response.ok) {
-          throw new Error(
-            typeof body.error === "string" ? body.error : t("settings.workspace.loginStartFailed"),
-          );
-        }
-        const next = {
-          deviceCode: String(body.deviceCode ?? ""),
-          userCode: String(body.userCode ?? ""),
-          verificationUrl: String(body.verificationUrl ?? ""),
-          intervalMs: Number(body.intervalMs ?? 5000),
-          expiresAt: Number(body.expiresAt ?? Date.now() + 600_000),
-        };
-        if (next.deviceCode === "" || next.verificationUrl === "") {
-          throw new Error(t("settings.workspace.loginResponseInvalid"));
-        }
-        setPending(next);
-        window.open(next.verificationUrl, "_blank", "noopener,noreferrer");
-      })
-      .catch(reportError)
-      .finally(() => setBusy(false));
+    window.location.assign("/auth/oauth/start");
   };
 
   const completeDeviceLogin = (): void => {

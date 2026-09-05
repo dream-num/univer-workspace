@@ -85,7 +85,9 @@ function oauthClientConfig(
 ): {
   readonly clients: readonly {
     readonly clientId: string;
-    readonly clientSecret: string;
+    readonly clientType?: "confidential" | "public";
+    readonly clientSecret?: string;
+    readonly requiresConsent?: boolean;
     readonly redirectUris: readonly string[];
     readonly scopes: readonly string[];
   }[];
@@ -101,7 +103,10 @@ function oauthClientConfig(
     clients: clients.map((value) => {
       const rawClient = value as Record<string, unknown>;
       const clientId = requireString(rawClient.clientId, "clientId");
-      const clientSecret = requireString(rawClient.clientSecret, "clientSecret");
+      const clientType = rawClient.clientType === "public" ? "public" : "confidential";
+      const clientSecret = clientType === "confidential"
+        ? requireString(rawClient.clientSecret, "clientSecret")
+        : undefined;
       const redirectUris = convertStringArray(rawClient.redirectUris, "redirectUris");
       if (redirectUris.length === 0) {
         throw new Error("OAUTH_CLIENTS_JSON client redirectUris must be a non-empty array");
@@ -112,7 +117,9 @@ function oauthClientConfig(
       }
       return {
         clientId,
-        clientSecret,
+        clientType,
+        requiresConsent: rawClient.requiresConsent === true,
+        ...(clientSecret === undefined ? {} : { clientSecret }),
         redirectUris,
         scopes,
       };

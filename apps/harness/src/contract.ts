@@ -10,6 +10,8 @@
 export const UWH_DEVICE_START_PATH = "/auth/device/start";
 export const UWH_DEVICE_COMPLETE_PATH = "/auth/device/complete";
 export const UWH_DEVICE_LOGOUT_PATH = "/auth/device/logout";
+export const UWH_OAUTH_START_PATH = "/auth/oauth/start";
+export const UWH_OAUTH_CALLBACK_PATH = "/auth/oauth/callback";
 
 /** Route path for the guarded browser prompt endpoint. */
 export const UWH_SESSION_PROMPT_PATH = "/api/uwh/session-prompt";
