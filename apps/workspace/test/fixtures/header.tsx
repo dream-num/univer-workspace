@@ -1,11 +1,11 @@
 import { useState, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { Table2, Trash2, CheckCircle2, Send } from "lucide-react";
-import { LanguageProvider, useI18n, type AppLanguage } from "../src/shared/i18n";
-import { Alert, Badge, Button, Segmented } from "../src/shared/ui";
-import { WorktreeReviewHeader } from "../src/features/worktrees/worktree-review-header";
-import type { WorktreeReviewMode } from "../src/features/worktrees/worktree-review-presentation";
-import "../src/app/styles/global.css";
+import { LanguageProvider, useI18n, type AppLanguage } from "../../web/src/shared/i18n";
+import { Alert, Badge, Button, Segmented } from "../../web/src/shared/ui";
+import { WorktreeReviewHeader } from "../../web/src/features/worktrees/worktree-review-header";
+import type { WorktreeReviewMode } from "../../web/src/features/worktrees/worktree-review-presentation";
+import "../../web/src/app/styles/global.css";
 
 /** Real application Header with inert actions; does not access Workspace data. */
 function Fixture(): ReactElement {
