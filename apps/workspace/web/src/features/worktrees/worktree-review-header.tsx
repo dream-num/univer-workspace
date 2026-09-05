@@ -2,6 +2,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -36,6 +37,7 @@ export function WorktreeReviewHeader({
   const { t } = useI18n();
   const headerRef = useRef<HTMLElement>(null);
   const [layout, setLayout] = useState<"measuring" | "centered" | "flow">("measuring");
+  const [titleMinimum, setTitleMinimum] = useState(0);
   const flow = layout === "flow";
 
   useLayoutEffect(() => {
@@ -62,6 +64,16 @@ export function WorktreeReviewHeader({
   useLayoutEffect(() => {
     if (layout !== "measuring") return;
     const header = headerRef.current!;
+    const titleRow = header.querySelector<HTMLElement>("[data-header-title-row]")!;
+    const name = header.querySelector<HTMLElement>("[data-header-name]")!;
+    const nameWidth = name.getBoundingClientRect().width;
+    // Measure the uncompressed row; only the filename may shrink to its CSS flex basis.
+    const minimum = Math.ceil(
+      titleRow.getBoundingClientRect().width -
+        nameWidth +
+        Math.min(nameWidth, parseFloat(getComputedStyle(name).flexBasis)),
+    );
+    setTitleMinimum(minimum);
     const center = header.querySelector<HTMLElement>("[data-header-view]");
     if (!center) {
       setLayout("flow");
@@ -75,7 +87,7 @@ export function WorktreeReviewHeader({
       parseFloat(style.paddingRight);
     const required =
       center.getBoundingClientRect().width +
-      2 * Math.max(260, right.scrollWidth) +
+      2 * Math.max(minimum, right.scrollWidth) +
       2 * parseFloat(style.columnGap);
     setLayout(available >= required ? "centered" : "flow");
   }, [layout]);
@@ -84,6 +96,7 @@ export function WorktreeReviewHeader({
     <header
       ref={headerRef}
       data-header-layout={layout}
+      style={{ "--header-title-min": `${titleMinimum}px` } as CSSProperties}
       className={cn(
         "min-h-11 min-w-0 shrink-0 items-center gap-x-3 gap-y-1.5 border-b border-border px-5 py-1.5",
         flow
@@ -95,10 +108,17 @@ export function WorktreeReviewHeader({
         data-testid="review-title"
         className={cn(
           "flex min-w-0 flex-wrap items-center gap-2.5",
-          flow && "min-w-[min(260px,100%)] flex-[1_1_260px]",
+          flow &&
+            "min-w-[min(var(--header-title-min),100%)] flex-[1_1_var(--header-title-min)]",
         )}
       >
-        <div className="flex min-w-0 max-w-full items-center gap-2.5">
+        <div
+          data-header-title-row
+          className={cn(
+            "flex min-w-0 max-w-full items-center gap-2.5",
+            layout === "measuring" && "w-max max-w-none shrink-0",
+          )}
+        >
           {icon && <span className="inline-flex shrink-0">{icon}</span>}
           <div className="flex min-w-0 items-center gap-1.5">
             <h3
