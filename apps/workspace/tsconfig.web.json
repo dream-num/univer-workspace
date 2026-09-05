@@ -12,6 +12,8 @@
   "include": [
     "web/**/*.ts",
     "web/**/*.tsx",
+    "test/fixtures/**/*.tsx",
+    "test/vite.header.config.ts",
     "generated/**/*.d.ts",
     "vite.config.ts"
   ]
