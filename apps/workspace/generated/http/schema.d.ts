@@ -1945,10 +1945,12 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    grant_type?: string;
+                    /** @enum {string} */
+                    grant_type: "authorization_code";
                     code: string;
                     client_id: string;
-                    client_secret: string;
+                    /** @description Required for confidential clients; omitted for public PKCE clients. */
+                    client_secret?: string;
                     redirect_uri: string;
                     code_verifier: string;
                 };

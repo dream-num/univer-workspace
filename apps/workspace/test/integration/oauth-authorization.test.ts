@@ -168,6 +168,7 @@ describe("OAuth authorization", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        grant_type: "authorization_code",
         code,
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
@@ -190,13 +191,18 @@ describe("OAuth authorization", () => {
     expect(authorize.status).toBe(302);
     const consent = await fetch(new URL(authorize.headers.get("location")!, origin), { headers: { cookie: cookie! } });
     expect(consent.status).toBe(200);
-    expect(await consent.text()).toContain("Authorize external client");
-    const approved = await fetch(new URL(authorize.headers.get("location")!, origin), { method: "POST", headers: { cookie: cookie!, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ ...Object.fromEntries(query), decision: "allow" }), redirect: "manual" });
+    const consentHtml = await consent.text();
+    expect(consentHtml).toContain("Authorize external client");
+    const consentToken = consentHtml.match(/name="consent_token" value="([^"]+)"/)?.[1];
+    expect(consentToken).toEqual(expect.any(String));
+    const approved = await fetch(new URL(authorize.headers.get("location")!, origin), { method: "POST", headers: { cookie: cookie!, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ consent_token: consentToken!, decision: "allow" }), redirect: "manual" });
     expect(approved.status).toBe(302);
     const callback = new URL(approved.headers.get("location")!);
-    const token = await fetch(`${origin}/api/auth/token`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: callback.searchParams.get("code"), client_id: PUBLIC_CLIENT_ID, redirect_uri: PUBLIC_CALLBACK_URL, code_verifier: CODE_VERIFIER }) });
+    const token = await fetch(`${origin}/api/auth/token`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ grant_type: "authorization_code", code: callback.searchParams.get("code"), client_id: PUBLIC_CLIENT_ID, redirect_uri: PUBLIC_CALLBACK_URL, code_verifier: CODE_VERIFIER }) });
     expect(token.status).toBe(200);
     expect((await token.json()).access_token).toEqual(expect.any(String));
+    const replayConsent = await fetch(new URL(authorize.headers.get("location")!, origin), { method: "POST", headers: { cookie: cookie!, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ consent_token: consentToken!, decision: "allow" }), redirect: "manual" });
+    expect(replayConsent.status).toBe(400);
   });
 
   it("exchanges a session-scope grant for a working Workspace session token", async () => {
@@ -289,6 +295,7 @@ describe("OAuth authorization", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        grant_type: "authorization_code",
         code: "not-a-real-code",
         client_id: CLIENT_ID,
         client_secret: "wrong-secret",

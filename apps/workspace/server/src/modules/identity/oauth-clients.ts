@@ -4,6 +4,7 @@ import type { User } from "./identity.types.js";
 
 const CODE_TTL_MS = 60_000;
 const STATE_PATTERN = /^[A-Za-z0-9_-]{32,256}$/u;
+const PKCE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
 const DEFAULT_SCOPES = ["identity"] as const;
 
 /**
@@ -87,6 +88,17 @@ export function validateOAuthCodeVerifier(
       "A valid PKCE code verifier is required."
     );
   }
+}
+
+export function requireOAuthCodeChallenge(value: unknown): string {
+  if (typeof value !== "string" || !PKCE_CHALLENGE_PATTERN.test(value)) {
+    throw new ApplicationError(
+      "INVALID_INPUT",
+      400,
+      "code_challenge must be a base64url PKCE value.",
+    );
+  }
+  return value;
 }
 
 export function validateRegisteredRedirectUri(

@@ -8,8 +8,13 @@ const TTL = 10 * 60_000;
 interface Pending { readonly state: string; readonly verifier: string; readonly origin: string; readonly redirectUri: string; readonly expiresAt: number }
 
 export function createOAuthStartHandler(ctx: Context, pending: Map<string, Pending>, publicOrigin: string) {
-  return async (_req: IncomingMessage, res: ServerResponse): Promise<void> => {
+  return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    if (req.method !== "GET") {
+      res.writeHead(405, { "allow": "GET", "cache-control": "no-store" }); res.end(); return;
+    }
     const origin = ctx.workspaceAuth.loginOrigin();
+    for (const [key, value] of pending) if (value.expiresAt <= Date.now()) pending.delete(key);
+    if (pending.size >= 32) { res.writeHead(429, { "cache-control": "no-store" }); res.end("Too many pending authorizations."); return; }
     const state = randomBytes(32).toString("base64url");
     const verifier = randomBytes(48).toString("base64url");
     const redirectUri = new URL("/auth/oauth/callback", publicOrigin).href;
@@ -31,7 +36,16 @@ export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pe
     if (!entry || entry.expiresAt <= Date.now() || url.searchParams.get("error")) {
       res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }); res.end("Workspace authorization was denied or expired."); return;
     }
-    const response = await fetch(new URL("/api/auth/token", entry.origin), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ grant_type: "authorization_code", client_id: CLIENT_ID, redirect_uri: entry.redirectUri, code: url.searchParams.get("code"), code_verifier: entry.verifier }) });
+    const code = url.searchParams.get("code");
+    if (!code) { res.writeHead(400, { "cache-control": "no-store" }); res.end("Workspace authorization was denied or expired."); return; }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    let response: Response;
+    try {
+      response = await fetch(new URL("/api/auth/token", entry.origin), { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ grant_type: "authorization_code", client_id: CLIENT_ID, redirect_uri: entry.redirectUri, code, code_verifier: entry.verifier }), signal: controller.signal });
+    } catch {
+      res.writeHead(502, { "cache-control": "no-store" }); res.end("Workspace token exchange failed."); return;
+    } finally { clearTimeout(timeout); }
     if (!response.ok) { res.writeHead(502, { "content-type": "text/plain; charset=utf-8" }); res.end("Workspace token exchange failed."); return; }
     const body = await response.json() as { access_token?: unknown; user?: { id?: unknown; username?: unknown; displayName?: unknown } };
     if (typeof body.access_token !== "string" || typeof body.user?.id !== "string" || typeof body.user.username !== "string") { res.writeHead(502, { "content-type": "text/plain; charset=utf-8" }); res.end("Workspace token response was invalid."); return; }

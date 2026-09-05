@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { json, Router, urlencoded } from "express"
 import { ApplicationError } from "../../middleware/errors.js";
 import type { IdentityModule } from "./identity.service.js";
@@ -10,6 +11,7 @@ import {
   requireOAuthState,
   scopeIncludesSession,
   validateOAuthClientAuthentication,
+  requireOAuthCodeChallenge,
   validateRegisteredRedirectUri,
   type IssuedAuthorization,
   type OAuthClient,
@@ -26,6 +28,7 @@ export function createOAuthAuthorizationRouter(options: {
   router.use(json({ limit: "1mb" }));
   router.use(urlencoded({ extended: false, limit: "1mb" }));
   const clients = new Map<string, OAuthClient>();
+  const consentTokens = new Map<string, { readonly userId: string; readonly request: AuthorizationRequest; readonly expiresAt: number }>();
   for (const client of options.oauthClients?.clients ?? []) {
     clients.set(client.clientId, client);
   }
@@ -69,13 +72,23 @@ export function createOAuthAuthorizationRouter(options: {
       response.redirect(`/login?returnTo=${encodeURIComponent(`/api/auth/authorize/consent?${new URLSearchParams(request.query as Record<string, string>).toString()}`)}`);
       return;
     }
-    response.type("html").send(`<!doctype html><title>Authorize ${escapeHtml(authorizationRequest.clientId)}</title><main><h1>Authorize external client</h1><p><strong>${escapeHtml(authorizationRequest.clientId)}</strong> requests access as <strong>${escapeHtml(session.user.displayName)}</strong>.</p><p>Requested scopes: ${escapeHtml(authorizationRequest.scope)}</p><form method="post"><input type="hidden" name="client_id" value="${escapeHtml(authorizationRequest.clientId)}"><input type="hidden" name="redirect_uri" value="${escapeHtml(authorizationRequest.redirectUri)}"><input type="hidden" name="state" value="${escapeHtml(authorizationRequest.state)}"><input type="hidden" name="code_challenge" value="${escapeHtml(authorizationRequest.codeChallenge)}"><input type="hidden" name="scope" value="${escapeHtml(authorizationRequest.scope)}"><button name="decision" value="deny">Deny</button><button name="decision" value="allow">Allow</button></form></main>`);
+    for (const [token, entry] of consentTokens) if (entry.expiresAt <= Date.now()) consentTokens.delete(token);
+    const consentToken = randomBytes(32).toString("base64url");
+    consentTokens.set(consentToken, { userId: session.user.id, request: authorizationRequest, expiresAt: Date.now() + 5 * 60_000 });
+    response.set({ "cache-control": "no-store", "content-security-policy": "default-src 'none'; form-action 'self'; base-uri 'none'", "x-frame-options": "DENY", "referrer-policy": "no-referrer" });
+    response.type("html").send(`<!doctype html><title>Authorize ${escapeHtml(authorizationRequest.clientId)}</title><main><h1>Authorize external client</h1><p><strong>${escapeHtml(authorizationRequest.clientId)}</strong> requests access as <strong>${escapeHtml(session.user.displayName)}</strong>.</p><p>Requested scopes: ${escapeHtml(authorizationRequest.scope)}</p><form method="post"><input type="hidden" name="consent_token" value="${escapeHtml(consentToken)}"><button name="decision" value="deny">Deny</button><button name="decision" value="allow">Allow</button></form></main>`);
   });
 
   router.post("/authorize/consent", (request, response) => {
-    const authorizationRequest = parseAuthorizationRequest(clients, request.body);
     const session = options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) throw new ApplicationError("UNAUTHENTICATED", 401, "Sign in is required.");
+    const token = requireQueryString(request.body.consent_token);
+    const pending = consentTokens.get(token);
+    consentTokens.delete(token);
+    if (pending === undefined || pending.expiresAt <= Date.now() || pending.userId !== session.user.id) {
+      throw new ApplicationError("INVALID_INPUT", 400, "The authorization request is invalid or expired.");
+    }
+    const authorizationRequest = pending.request;
     if (request.body.decision !== "allow") {
       const target = new URL(authorizationRequest.redirectUri);
       target.searchParams.set("error", "access_denied");
@@ -87,6 +100,9 @@ export function createOAuthAuthorizationRouter(options: {
   });
 
   router.post("/token", (request, response) => {
+    if (request.body.grant_type !== "authorization_code") {
+      throw new ApplicationError("INVALID_INPUT", 400, "grant_type must be authorization_code.");
+    }
     const client = requireRegisteredClient(clients, request.body.client_id);
     validateOAuthClientAuthentication(client, request.body.client_secret);
     const redirectUri = validateRegisteredRedirectUri(
@@ -167,7 +183,7 @@ function parseAuthorizationRequest(
       client.redirectUris
     ),
     state: requireOAuthState(values.state),
-    codeChallenge: requireQueryString(values.code_challenge),
+    codeChallenge: requireOAuthCodeChallenge(values.code_challenge),
     scope: requireScope(values.scope, client),
   };
 }

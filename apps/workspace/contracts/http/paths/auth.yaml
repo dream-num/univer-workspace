@@ -45,6 +45,7 @@
         required: true
         schema:
           type: string
+          pattern: ^[A-Za-z0-9_-]{43,128}$
       - name: scope
         in: query
         required: false
@@ -79,16 +80,18 @@
         application/json:
           schema:
             type: object
-            required: [code, client_id, client_secret, redirect_uri, code_verifier]
+            required: [grant_type, code, client_id, redirect_uri, code_verifier]
             properties:
               grant_type:
                 type: string
+                enum: [authorization_code]
               code:
                 type: string
               client_id:
                 type: string
               client_secret:
                 type: string
+                description: Required for confidential clients; omitted for public PKCE clients.
               redirect_uri:
                 type: string
               code_verifier:
