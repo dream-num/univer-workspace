@@ -911,7 +911,22 @@ export function createWorkspaceResourceInputSource(
       if (request.query.startsWith(WORKSPACE_BROWSE_PREFIX)) {
         return browseWorkspaceCandidates(request.query, request.signal, labels);
       }
-      const resources = await resolveCandidates(session.sessionId, request);
+      let resources: readonly WorkspaceResourceDescriptor[];
+      try {
+        resources = await resolveCandidates(session.sessionId, request);
+      } catch (error) {
+        if (request.signal.aborted) return [];
+        // Suggestions are optional; the authoritative directory remains usable
+        // when a recent/owned/shared projection is unavailable.
+        if (resolveCandidates !== DEFAULT_WORKSPACE_RESOURCE_CANDIDATE_RESOLVER) throw error;
+        return [{
+          name: labels.browseWorkspace,
+          description: labels.retry,
+          icon: "folder",
+          drill: true,
+          value: browseValue([]),
+        }];
+      }
       if (request.signal.aborted) return [];
       const candidates = prioritizeWorkspaceResources(
         resources,

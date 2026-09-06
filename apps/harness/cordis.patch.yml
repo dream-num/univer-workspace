@@ -17,6 +17,11 @@
 - id: ui-sidebar
   disabled: true
 
+# Workspace resources own @ discovery; native local files and sessions are
+# not the remote Workspace document catalog.
+- id: ui-reference
+  disabled: true
+
 # ── network server binding ───────────────────────────────────────────────────
 
 # The CLI rejects an explicit `--host 0.0.0.0` invocation before the profile

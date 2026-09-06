@@ -277,6 +277,16 @@ describe("Workspace Resource reference", () => {
     });
   });
 
+  it("keeps directory browsing available when suggestions fail", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("unavailable", { status: 503 })));
+    const source = createWorkspaceResourceInputSource();
+    const candidates = await source.candidates(
+      { sessionId: "discovery-failure-session" as SessionId },
+      { query: "", position: "inline", drilled: false, signal: new AbortController().signal },
+    );
+    expect(candidates).toEqual([expect.objectContaining({ icon: "folder", drill: true })]);
+  });
+
   it("discovers projected resources and exposes an honest Workspace browse drill", async () => {
     const browseSpace = {
       spaceId: "space-1",
