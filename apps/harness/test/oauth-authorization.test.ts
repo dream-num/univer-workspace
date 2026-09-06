@@ -24,12 +24,29 @@ describe("Harness OAuth browser flow", () => {
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ access_token: "session", user: { id: "u1", username: "alice" } }), { status: 200 }));
     try {
       const callbackResponse = new TestResponse();
-      await createOAuthCallbackHandler(ctx as never, pending)(new TestRequest(`GET /auth/oauth/callback?state=${state}&code=code-1`) as never, callbackResponse as never);
-      expect(callbackResponse.status).toBe(303);
+      const callback = createOAuthCallbackHandler(ctx as never, pending);
+      await callback(new TestRequest(`GET /auth/oauth/callback?state=${state}&code=code-1`) as never, callbackResponse as never);
+      expect(callbackResponse.status).toBe(200);
+      expect(callbackResponse.body).toContain('http-equiv="refresh"');
+      expect(callbackResponse.headers.location).toBeUndefined();
       expect(stageConnection).toHaveBeenCalledWith({ userId: "u1", username: "alice" }, "session", "https://workspace.example");
       expect(pending.has(state)).toBe(false);
       expect(entry.verifier).toBeTruthy();
+      const replay = new TestResponse();
+      await callback(new TestRequest(`GET /auth/oauth/callback?state=${state}&code=code-1`) as never, replay as never);
+      expect(replay.body).toContain("Workspace connected");
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(stageConnection).toHaveBeenCalledTimes(1);
     } finally { globalThis.fetch = originalFetch; }
+  });
+  it("offers a new flow when the local request is gone", async () => {
+    const response = new TestResponse();
+    await createOAuthCallbackHandler({} as never, new Map())(
+      new TestRequest("GET /auth/oauth/callback?state=expired&code=unused") as never,
+      response as never,
+    );
+    expect(response.body).toContain('href="/auth/oauth/start"');
+    expect(response.body).not.toContain("denied or expired");
   });
 });
 

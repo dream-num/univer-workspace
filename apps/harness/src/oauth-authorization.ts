@@ -28,16 +28,31 @@ export function createOAuthStartHandler(ctx: Context, pending: Map<string, Pendi
 }
 
 export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pending>) {
+  const completed = new Map<string, number>();
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    if (req.method !== "GET") {
+      res.writeHead(405, { allow: "GET", "cache-control": "no-store" });
+      res.end();
+      return;
+    }
+    for (const [key, expiresAt] of completed) {
+      if (expiresAt <= Date.now()) completed.delete(key);
+    }
     const url = new URL(req.url ?? "/", "http://localhost");
     const state = url.searchParams.get("state") ?? "";
+    if (completed.has(state)) {
+      sendCallbackPage(res, true);
+      return;
+    }
     const entry = pending.get(state);
-    pending.delete(state);
     if (!entry || entry.expiresAt <= Date.now() || url.searchParams.get("error")) {
-      res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }); res.end("Workspace authorization was denied or expired."); return;
+      pending.delete(state);
+      sendCallbackPage(res, false, url.searchParams.get("error") === "access_denied");
+      return;
     }
     const code = url.searchParams.get("code");
-    if (!code) { res.writeHead(400, { "cache-control": "no-store" }); res.end("Workspace authorization was denied or expired."); return; }
+    if (!code) { sendCallbackPage(res, false); return; }
+    pending.delete(state);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
     let response: Response;
@@ -50,7 +65,25 @@ export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pe
     const body = await response.json() as { access_token?: unknown; user?: { id?: unknown; username?: unknown; displayName?: unknown } };
     if (typeof body.access_token !== "string" || typeof body.user?.id !== "string" || typeof body.user.username !== "string") { res.writeHead(502, { "content-type": "text/plain; charset=utf-8" }); res.end("Workspace token response was invalid."); return; }
     await ctx.workspaceAuth.stageConnection({ userId: body.user.id, username: body.user.username, ...(typeof body.user.displayName === "string" ? { displayName: body.user.displayName } : {}) }, body.access_token, entry.origin);
-    res.writeHead(303, { location: "/" });
-    res.end();
+    if (completed.size >= 32) completed.delete(completed.keys().next().value!);
+    completed.set(state, Date.now() + TTL);
+    sendCallbackPage(res, true);
   };
+}
+
+function sendCallbackPage(res: ServerResponse, success: boolean, denied = false): void {
+  // Commit a local document before navigating to DSH. Its Strict cookie is
+  // excluded from a cross-site OAuth redirect chain, even when the final URL is local.
+  const title = success ? "Workspace connected" : denied ? "Connection cancelled" : "Start a new connection";
+  const description = success
+    ? "Your authorization is complete. Continue to the application."
+    : denied ? "You declined access. You can start again whenever you are ready."
+      : "This connection request is no longer available. Start again to create a new request.";
+  res.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    "referrer-policy": "no-referrer",
+    "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+  });
+  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${success ? '<meta http-equiv="refresh" content="1;url=/">' : ""}<title>${title}</title><style>body{font:16px system-ui;margin:0;background:#f6f7fb;color:#171717;display:grid;min-height:100vh;place-items:center}main{max-width:420px;padding:32px;margin:20px;background:white;border:1px solid #e2e4ea;border-radius:16px}p{line-height:1.6}a{color:#5147bd}</style></head><body><main><h1>${title}</h1><p>${description}</p><a href="${success ? "/" : "/auth/oauth/start"}">${success ? "Continue to application" : "Start again"}</a></main></body></html>`);
 }
