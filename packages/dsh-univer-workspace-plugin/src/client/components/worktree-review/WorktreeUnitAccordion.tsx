@@ -10,7 +10,7 @@
  * @module dsh-univer-workspace-plugin/client/components/worktree-review/WorktreeUnitAccordion
  */
 
-import { useEffect, useRef, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   Badge,
   Button,
@@ -45,6 +45,7 @@ import type {
 import type { ViewerSelection } from "../../viewer/contracts.ts";
 import { unitLocationTitle } from "./worktree-review-model.ts";
 import { UnitChangeIcon, UnitTypeIcon } from "./unit-markers.tsx";
+import { postWorktreeUnitRemoval } from "../../api/univer-api.ts";
 import css from "./WorktreeUnitAccordion.module.scss";
 
 export interface WorktreeUnitAccordionProps {
@@ -60,6 +61,7 @@ export interface WorktreeUnitAccordionProps {
     resource: Pick<WorkspaceResourceDescriptor, "resourceId" | "name">,
     selection?: ViewerSelection,
   ) => WorkspaceResourceReferenceInsertResult;
+  readonly onActionSettled: () => void;
   readonly onToggle: (unitId: string) => void;
   readonly onViewChange: (unitId: string, mode: TurnViewMode) => void;
 }
@@ -79,6 +81,7 @@ export function WorktreeUnitAccordion(props: WorktreeUnitAccordionProps): ReactE
           mount={props.mount}
           runtime={props.runtime}
           insertResourceReference={props.insertResourceReference}
+          onActionSettled={props.onActionSettled}
           onToggle={() => props.onToggle(unit.unitId)}
           onViewChange={(mode) => props.onViewChange(unit.unitId, mode)}
         />
@@ -100,11 +103,25 @@ function WorktreeUnitItem(props: {
     resource: Pick<WorkspaceResourceDescriptor, "resourceId" | "name">,
     selection?: ViewerSelection,
   ) => WorkspaceResourceReferenceInsertResult;
+  readonly onActionSettled: () => void;
   readonly onToggle: () => void;
   readonly onViewChange: (mode: TurnViewMode) => void;
 }): ReactElement {
   const { worktree, unit, runtime } = props;
   const t = runtime.t;
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const updateRemoval = (): void => {
+    if (busy) return;
+    setBusy(true);
+    setActionError(null);
+    void postWorktreeUnitRemoval(worktree.worktreeId, unit.unitId, unit.kind !== "deleted")
+      .then(props.onActionSettled)
+      .catch((error: unknown) =>
+        setActionError(error instanceof Error ? error.message : String(error)),
+      )
+      .finally(() => setBusy(false));
+  };
   const itemRef = useRef<HTMLLIElement | null>(null);
   const register = props.mount.register;
 
@@ -115,7 +132,9 @@ function WorktreeUnitItem(props: {
   }, [props.located]);
 
   const activeView = activeViewerMode(props.view, worktree, unit);
-  const previewable = activeView !== "agent" || unit.kind !== "deleted";
+  const previewable =
+    unit.kind !== "deleted" ||
+    (activeView === "trunk" && worktree.status !== "merged" && unit.nodeId !== null);
   const resolvedViewer =
     props.expanded && previewable ? resolveTurnViewer(worktree, unit, activeView) : undefined;
   // Worktree is a human review surface. The Agent Draft can be writable in
@@ -166,6 +185,11 @@ function WorktreeUnitItem(props: {
         <div className={css.itemBody}>
           <div className={css.unitHeader}>
             <div className={css.controls}>
+              {worktree.status === "draft" && worktree.capabilities.editDraft ? (
+                <Button variant="ghost" size="sm" disabled={busy} onClick={updateRemoval}>
+                  {t(unit.kind === "deleted" ? "turn.undoRemoval" : "turn.removeUnit")}
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -193,6 +217,7 @@ function WorktreeUnitItem(props: {
               />
             </div>
           </div>
+          {actionError === null ? null : <div role="alert">{actionError}</div>}
           {!previewable ? (
             <div className={css.deletedEmpty} role="status">
               <TrashIcon aria-hidden="true" />

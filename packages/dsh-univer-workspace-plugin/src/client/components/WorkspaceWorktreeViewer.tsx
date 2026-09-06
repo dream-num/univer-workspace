@@ -283,6 +283,7 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
                   mount={mount}
                   runtime={props}
                   insertResourceReference={props.insertResourceReference}
+                  onActionSettled={() => setMutationVersion((value) => value + 1)}
                   onToggle={toggleUnit}
                   onViewChange={(unitId, mode) =>
                     setViewByUnitId((current) => ({ ...current, [unitId]: mode }))

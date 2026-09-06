@@ -1,16 +1,10 @@
 /**
- * Worktree Unit authoring tool.
- *
- * This is the honest remote counterpart of dsh-univer-office's
- * `univer_unit create`.  Workspace exposes a POST create contract for a
- * Worktree-local Unit, but no delete/remove contract; the schema therefore
- * accepts `create` only until the product adds a reversible remove operation.
+ * Create draft Units and manage reversible deletion intent in a Workspace Worktree.
  * @module dsh-univer-workspace-plugin/tools/unit
  */
 
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
-import type { ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm";
 import { resolveTargetSpace, resolveToolScope } from "./tool-scope.ts";
 import { registerUniverTool } from "./presentation.ts";
@@ -32,12 +26,16 @@ export function registerUnitTool(ctx: Context): () => void {
     defineTool({
       name: "univer_unit",
       description:
-        "Create a new sheet, doc, slide, board, or base Unit inside a draft Workspace Worktree. The target Space defaults to the calling agent's linked Space; provide another Space when the authenticated User has access to it. Workspace currently has no Unit remove endpoint, so action=create is the only supported action.",
+        "Manage documents (Units) inside a draft Workspace Worktree. create requires name and unitType; the target Space defaults to the agent's linked Space. remove requires unitId and marks it for deletion at merge: existing documents go to Trash and new draft documents are never published. restore requires unitId and undoes this draft deletion intent; it does not restore Trash. Ready Worktrees must be reopened before changing deletion intent. No action here merges the Worktree.",
       parameters: {
-        action: { type: "string", required: true, enum: ["create"] },
+        action: { type: "string", required: true, enum: ["create", "remove", "restore"] },
         worktreeId: { type: "string", required: true },
-        name: { type: "string", required: true },
-        unitType: { ...unitTypeEnum, required: true },
+        name: { type: "string" },
+        unitType: { ...unitTypeEnum },
+        unitId: {
+          type: "string",
+          description: "Required for remove or restore; use the Unit ID from Worktree detail.",
+        },
         spaceId: { type: "string" },
         parentNodeId: { type: "string" },
         initialData: { type: "json" },
@@ -53,7 +51,7 @@ export function registerUnitTool(ctx: Context): () => void {
           properties: {
             unitId: { type: "string", required: true },
             resourceId: { type: "string", required: true },
-            nodeId: { type: "string", required: true },
+            nodeId: { type: "json", required: true },
             source: { type: "string", required: true },
             name: { type: "string", required: true },
             unitType: { type: "string", required: true },
@@ -70,10 +68,22 @@ export function registerUnitTool(ctx: Context): () => void {
       async execute(args, exec) {
         const resolved = await resolveToolScope(ctx, exec);
         const { userId } = resolved;
-        const targetSpaceId = resolveTargetSpace(resolved, args.spaceId);
         if (args.worktreeId.trim() === "")
           throw new UniverError("univer_unit requires worktreeId.", "INVALID_REQUEST");
-        if (args.name.trim() === "")
+        if (args.action === "remove" || args.action === "restore") {
+          if (!args.unitId?.trim())
+            throw new UniverError(
+              "univer_unit requires unitId for removal or restoration.",
+              "INVALID_REQUEST",
+            );
+          return ctx
+            .get("univerWorkspace")!
+            .setWorktreeUnitRemoved(userId, args.worktreeId, args.unitId, args.action === "remove");
+        }
+        const targetSpaceId = resolveTargetSpace(resolved, args.spaceId);
+        if (!args.unitType)
+          throw new UniverError("univer_unit create requires unitType.", "INVALID_REQUEST");
+        if (!args.name?.trim())
           throw new UniverError("univer_unit requires a non-empty name.", "INVALID_REQUEST");
         const idempotencyKey = args.idempotencyKey?.trim();
         if (args.idempotencyKey !== undefined && idempotencyKey === "") {
@@ -103,14 +113,14 @@ export function registerUnitTool(ctx: Context): () => void {
         });
         return unit;
       },
-      presentCall: (args: unknown) => ({
-        card: "generic",
-        title:
-          typeof args === "object" && args !== null && "name" in args
-            ? `create Unit ${(args as { name?: unknown }).name ?? ""}`
-            : "create Unit",
-        kind: "execute",
-      }),
+      presentCall: (args: unknown) => {
+        const input = args as { action?: string; name?: string; unitId?: string } | null;
+        return {
+          card: "generic",
+          title: `${input?.action ?? "create"} Unit ${input?.name ?? input?.unitId ?? ""}`,
+          kind: "execute",
+        };
+      },
     }),
   );
   return () => dispose();

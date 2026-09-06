@@ -7,9 +7,7 @@ import type {
   WorktreeBackend,
 } from "../../modules/worktrees/worktrees.types.js";
 
-export function createWorktreeBackend(
-  service: UniverCollabWorktreeService
-): WorktreeBackend {
+export function createWorktreeBackend(service: UniverCollabWorktreeService): WorktreeBackend {
   return {
     async createWorktree(worktreeId, userId) {
       return (
@@ -75,6 +73,14 @@ export function createWorktreeBackend(
         await service.markReady(
           { worktreeID: worktreeId },
           collaborationCallOptions(userId)
+        )
+      ).worktree;
+    },
+    async setUnitRemoved(worktreeId, unitId, removed, userId) {
+      return (
+        await service.setUnitRemoved(
+          { worktreeID: worktreeId, unitID: unitId, removed },
+          collaborationCallOptions(userId),
         )
       ).worktree;
     },

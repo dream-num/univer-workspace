@@ -63,7 +63,7 @@ export type ActivationState =
 export interface WorktreeUnit {
   readonly unitId: string;
   readonly resourceId: string;
-  readonly nodeId: string;
+  readonly nodeId: string | null;
   readonly source: "trunk" | "worktree";
   readonly name: string;
   readonly unitType: UnitType;
@@ -137,6 +137,12 @@ export interface WorktreeBackend {
     userId: string
   ): Promise<WorktreeData>;
   markReady(worktreeId: string, userId: string): Promise<WorktreeData>;
+  setUnitRemoved(
+    worktreeId: string,
+    unitId: string,
+    removed: boolean,
+    userId: string,
+  ): Promise<WorktreeData>;
   reopen(worktreeId: string, userId: string): Promise<WorktreeData>;
   merge(worktreeId: string, userId: string): Promise<WorktreeData>;
   discard(worktreeId: string, userId: string): Promise<WorktreeData>;
@@ -163,6 +169,12 @@ export type WorktreeChangesetSubmitResult =
     };
 
 export interface WorktreesModule {
+  setUnitRemoved(
+    userId: string,
+    worktreeId: string,
+    unitId: string,
+    input: unknown,
+  ): Promise<{ readonly worktree: WorktreeDetail }>;
   list(
     userId: string,
     query: {

@@ -6,7 +6,7 @@ local or remote Univer Workspace connection. It is assembled from published
 profile loads:
 
 - `@univerjs/univer-workspace-harness` (this package) — the service core:
-  local-only Workspace Device Authorization, one process-wide remote
+  Workspace browser OAuth authorization, one process-wide remote
   connection exposed through the `workspaceAuth` cordis service, the
   Workspace origin settings namespace, and the supervisor that restarts DSH
   into an origin-and-user-specific data directory.
@@ -18,7 +18,7 @@ profile loads:
 
 ## Responsibilities
 
-- Obtain one remote Workspace session through Device Authorization. The local
+- Obtain one remote Workspace session through browser OAuth with PKCE. The local
   Harness has no users or permissions of its own; every local browser uses the
   same current connection and Workspace remains authoritative for remote ACLs.
 - Provide `workspaceAuth` to sibling plugins: effective Workspace origin,
@@ -43,9 +43,9 @@ flowchart LR
   DSH --> Core[Harness core plugin]
   DSH --> Capability[Workspace capability plugin]
   DSH --> Skin[Workspace skin plugin]
-  Core -->|Device Authorization and session cookie| Workspace[Remote or local Workspace]
+  Core -->|OAuth code exchange and session cookie| Workspace[Remote or local Workspace]
   Capability -->|HTTP and collaboration requests| Workspace
-  Browser -->|Workspace origin and device code| Core
+  Browser -->|Workspace origin and OAuth redirect| Core
 ```
 
 The core plugin owns connection and identity lifecycle. The capability plugin
@@ -186,13 +186,18 @@ once; after the user opens it, the browser can use the clean root URL.
 
 In Settings → Workspace, set the service origin (for the shared test environment use
 `https://workspace.univer.plus`; a local Workspace URL works as well). The first
-login uses Workspace Device
-Authorization: click “Sign in to Workspace”, open the verification page, sign in or
-register a test account on Workspace, approve the code, then return to Harness
-and click “I completed authorization” once. Harness automatically polls the authorization
-until Workspace approves it, then stores only the resulting session cookie
-server-side; it never asks the Harness page for a Workspace password. If the
-authorization expires, start a new login request instead of reusing the old code.
+login uses browser OAuth: click “Sign in to Workspace”, sign in or register on
+Workspace, then approve the Harness access request. Workspace redirects to the
+local Harness callback; the Harness exchanges the one-time code using PKCE and
+stores the resulting Workspace session server-side. No device code or manual
+completion button is needed. If the request expires, start a new login from Settings.
+
+The Workspace deployment must register the public client
+`univer-workspace-harness` with consent enabled, scopes `identity` and `session`,
+and the exact callback `http://127.0.0.1:3101/auth/oauth/callback` (adjust the
+host and port to your Harness URL). For a local Workspace, configure this client
+through `OAUTH_CLIENTS_JSON` using `apps/workspace/.env.example` before startup.
+
 
 After login, the left sidebar exposes the implemented **Sessions / Files / Worktree**
 tabs. Session navigation keeps the native DSH behavior, Workspace file
@@ -205,7 +210,7 @@ native composer, type `@` to choose one or more Workspace Resources for the
 current message; each reference is checked against the connected Workspace when
 the message is sent.
 Saving a different Workspace origin changes the
-target for the next Device Authorization; it does not silently replace the
+target for the next browser authorization; it does not silently replace the
 currently active identity. Complete authorization for the new origin/account,
 or explicitly disconnect, then wait while the supervisor stops the old DSH
 child and starts the new identity runtime with the same launch arguments. The
@@ -263,7 +268,7 @@ pnpm workspace:dev:server
 The local Workspace server listens on `http://127.0.0.1:3020` by default. If you
 also need the Browser application, run `pnpm workspace:dev:web` and open
 `http://127.0.0.1:5173`. In the Harness Settings page, set the Workspace origin
-to `http://127.0.0.1:3020` and complete Device Authorization through the local
+to `http://127.0.0.1:3020` and complete browser authorization through the local
 Workspace sign-in flow. The Harness does not create Workspace users or bypass
 Workspace authentication.
 

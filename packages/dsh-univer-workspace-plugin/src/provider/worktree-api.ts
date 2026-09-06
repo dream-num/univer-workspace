@@ -223,14 +223,14 @@ export interface CreateWorktreeLocalUnitInput {
 export interface WorktreeUnitDescriptor {
   readonly unitId: string;
   readonly resourceId: string;
-  readonly nodeId: string;
+  readonly nodeId: string | null;
   readonly source: "trunk" | "worktree";
   readonly name: string;
   readonly unitType: "sheet" | "doc" | "slide" | "board" | "base";
   readonly target: { readonly spaceId: string; readonly parentNodeId: string | null } | null;
   readonly draftHeadRevision: number;
   readonly change: "modified" | "added" | "deleted" | "unchanged";
-  readonly mergeResult: "pending" | "merged" | "unchanged" | "conflict" | "failed";
+  readonly mergeResult: "pending" | "merged" | "unchanged" | "removed" | "conflict" | "failed";
   readonly activationState:
     | "notApplicable"
     | "waitingForMerge"
@@ -242,7 +242,14 @@ export interface WorktreeUnitDescriptor {
 
 const WORKTREE_UNIT_TYPES = ["sheet", "doc", "slide", "board", "base"] as const;
 const WORKTREE_UNIT_CHANGES = ["modified", "added", "deleted", "unchanged"] as const;
-const WORKTREE_MERGE_RESULTS = ["pending", "merged", "unchanged", "conflict", "failed"] as const;
+const WORKTREE_MERGE_RESULTS = [
+  "pending",
+  "merged",
+  "unchanged",
+  "removed",
+  "conflict",
+  "failed",
+] as const;
 const WORKTREE_ACTIVATION_STATES = [
   "notApplicable",
   "waitingForMerge",
@@ -266,7 +273,7 @@ export function narrowWorktreeUnit(raw: unknown): WorktreeUnitDescriptor {
   const record = (raw ?? {}) as Record<string, unknown>;
   const unitId = stringField(record.unitId);
   const resourceId = stringField(record.resourceId);
-  const nodeId = stringField(record.nodeId);
+  const nodeId = record.nodeId === null ? null : stringField(record.nodeId);
   const source =
     record.source === "trunk" || record.source === "worktree" ? record.source : undefined;
   const name = stringField(record.name);
@@ -439,6 +446,38 @@ export async function getWorktreeDetail(
   return narrowWorktreeDetail(await worktreeDetail(client, worktreeId));
 }
 
+/** Change one draft Unit's deletion intent through the product-authorized route. */
+export async function setWorktreeUnitRemoved(
+  client: WorkspaceHttpClient,
+  worktreeId: string,
+  unitId: string,
+  removed: boolean,
+): Promise<WorktreeUnitDescriptor> {
+  const detail = narrowWorktreeDetail(
+    await readJson(
+      await client.request(
+        `/api/worktrees/${encodeURIComponent(worktreeId)}/units/${encodeURIComponent(unitId)}/removal`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ removed }),
+        },
+      ),
+      "worktree unit removal",
+    ),
+  );
+  const selected = detail.units.find((unit) => unit.unitId === unitId);
+  if (detail.worktreeId !== worktreeId || !selected || (selected.kind === "deleted") !== removed) {
+    throw new WorkspaceApiError(
+      "workspace returned a mismatched Unit deletion result",
+      502,
+      "WORKTREE_UNIT_RESULT_MISMATCH",
+    );
+  }
+  const { kind, worktreeUrl: _worktreeUrl, mergeUrl: _mergeUrl, ...unit } = selected;
+  return narrowWorktreeUnit({ ...unit, change: kind });
+}
+
 /** Convert a validated detail back to the summary shape used by tools. */
 export function worktreeSummaryFromDetail(detail: WorktreeStateView): WorktreeSummary {
   return {
@@ -459,9 +498,7 @@ export function worktreeSummaryFromDetail(detail: WorktreeStateView): WorktreeSu
 }
 
 /**
- * Create a Unit owned by a Worktree. This is the real Workspace equivalent of
- * Office's `univer_unit create`; the product contract has no Unit-delete
- * endpoint, so this function deliberately exposes creation only.
+ * Create a Unit owned by a draft Worktree.
  */
 export async function createWorktreeLocalUnit(
   client: WorkspaceHttpClient,

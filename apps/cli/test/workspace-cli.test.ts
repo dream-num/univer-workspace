@@ -55,12 +55,14 @@ describe("Workspace CLI", () => {
     });
   });
 
-  it("exposes current inspection targets and execution guidance", async () => {
+  it("exposes current inspection targets through the built entrypoint", async () => {
     const inspectionHelp = (await runCli(["inspect", "--help"], process.env)).stdout;
     for (const target of ["base", "board", "board-element"]) {
       expect(inspectionHelp).toContain(`"${target}"`);
     }
+  });
 
+  it("exposes execution guidance through the built entrypoint", async () => {
     const executionHelp = (await runCli(["execute", "--help"], process.env)).stdout;
     expect(executionHelp).toContain("use --script for multiline code");
     expect(executionHelp).toContain("Explicitly return readback values");

@@ -121,6 +121,14 @@ export abstract class UniverWorkspaceService extends Service {
     input: CreateWorktreeLocalUnitInput,
   ): Promise<WorktreeUnitDescriptor>;
 
+  /** Mark a draft Unit for deletion or undo that intent. */
+  abstract setWorktreeUnitRemoved(
+    userId: string,
+    worktreeId: string,
+    unitId: string,
+    removed: boolean,
+  ): Promise<WorktreeUnitDescriptor>;
+
   /** Open a Worktree Unit. */
   abstract openWorktreeUnit(
     userId: string,
