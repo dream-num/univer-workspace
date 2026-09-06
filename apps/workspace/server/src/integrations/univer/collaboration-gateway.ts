@@ -172,6 +172,7 @@ export function createCollaborationGateway(options: {
       | ReturnType<typeof protocolUser>
       | undefined;
     context.member.name = user?.name ?? context.session.userID;
+    context.member.avatar = user?.avatar ?? "";
     await next();
   });
   endpoint.use("joinUnit", async (context, next) => {
@@ -274,6 +275,7 @@ export function createCollaborationGateway(options: {
       | ReturnType<typeof protocolUser>
       | undefined;
     context.member.name = user?.name ?? context.session.userID;
+    context.member.avatar = user?.avatar ?? "";
     await next();
   });
   worktreeEndpoint.use("joinUnit", async (context, next) => {

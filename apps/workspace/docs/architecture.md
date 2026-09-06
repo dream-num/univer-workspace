@@ -127,6 +127,13 @@ shared → features → routes → app
 视觉封装。Univer 编辑器相关的创建、销毁、协同 Scope 和只读状态全部封装在
 `features/editor`。
 
+在线头像组通过 SDK 公开 `subscribeCollaborators` 订阅当前 Unit 的房间成员，按 `userID`
+汇总展示，连接身份与选区仍由 SDK 按 `memberID` 管理。Gateway 在 Trunk 和 Worktree 的
+`connect` middleware 中从认证 Session 填充姓名和头像。Browser 订阅随编辑器销毁，
+离线时清空展示；当前 SDK 重新 JOIN 追加成员的问题集中在
+`features/editor/workarounds/collaboration-presence-members.ts` 中处理，待上游修复后删除。
+Worktree iframe 展示自己 Scope 的在线成员；merge preview 不建立 presence 订阅。
+
 Worktree 审阅保留 Agent 草稿作为默认视图，并通过 `packages/unit-comparison-viewer` 提供可选的结构化
 双栏比较。该 package 只消费已解码的 UnitData 和语义 comparison result，不请求数据或装配 Univer Runtime；Web 通过
 `features/editor/comparison-univer.ts` 注入与应用编辑器一致的渲染 preset、locale、theme 和只读

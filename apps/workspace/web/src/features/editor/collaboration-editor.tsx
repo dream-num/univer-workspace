@@ -14,6 +14,8 @@ import {
   CollaborationUIEventId,
   CollaborationUIEventService,
   CollaborationStatus,
+  CollaborationSessionService,
+  MemberService,
   UniverCollaborationClientPlugin,
   type IUniverCollaborationClientConfig,
 } from "@univerjs-pro/collaboration-client";
@@ -42,7 +44,7 @@ import type {
   IPreset,
   IPresetPlugin,
 } from "@univerjs/presets";
-import type { IUser } from "@univerjs/protocol";
+import type { IMember, IUser } from "@univerjs/protocol";
 import type { Theme } from "@univerjs/themes";
 import { createUniver, mergeLocales } from "@univerjs/presets";
 import { useEffect, useRef, useState } from "react";
@@ -65,6 +67,7 @@ import {
   createWorkspaceOutputPlugins,
 } from "./exchange-plugins";
 import { resolveMergeReview } from "./merge-review";
+import { observeEditorCollaborators } from "./collaborator-presence";
 import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
 import { resolveUniverLicense } from "./univer-license";
 import {
@@ -97,6 +100,7 @@ export interface CollaborationEditorProps {
       };
   readonly mappedUnitIds?: readonly string[];
   readonly readOnly?: boolean;
+  readonly onCollaboratorsChange?: (members: readonly IMember[]) => void;
 }
 
 export interface WorkspaceHistoryDefinition {
@@ -150,6 +154,7 @@ export function createCollaborationEditor(
     collaborationScope = { kind: "trunk" },
     mappedUnitIds,
     readOnly = false,
+    onCollaboratorsChange,
   }: CollaborationEditorProps) {
     const container = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
@@ -181,9 +186,11 @@ export function createCollaborationEditor(
       let mountedUniver: ReturnType<typeof createUniver>["univer"] | null =
         null;
       let statusListener: { dispose(): void } | null = null;
+      let collaboratorsListener: { dispose(): void } | null = null;
       let collaborationUIEventListener: { unsubscribe(): void } | null = null;
       let readOnlyListener: { dispose(): void } | null = null;
       let readOnlyLifecycleListener: { dispose(): void } | null = null;
+      onCollaboratorsChange?.([]);
 
       const mount = async () => {
         if (!element.id) {
@@ -447,6 +454,24 @@ export function createCollaborationEditor(
             setLoading(false);
           }
         });
+        if (
+          !disposed &&
+          onCollaboratorsChange &&
+          collaborationScope.kind !== "mergePreview"
+        ) {
+          const injector = univer.__getInjector();
+          const session = await injector
+            .get(CollaborationSessionService)
+            .requireSession(unitId);
+          if (disposed) return;
+          collaboratorsListener = observeEditorCollaborators({
+            unitId,
+            session,
+            collaboration,
+            memberService: injector.get(MemberService),
+            onChange: onCollaboratorsChange,
+          });
+        }
       };
 
       mount().catch((reason: unknown) => {
@@ -461,6 +486,8 @@ export function createCollaborationEditor(
 
       return () => {
         disposed = true;
+        collaboratorsListener?.dispose();
+        onCollaboratorsChange?.([]);
         statusListener?.dispose();
         collaborationUIEventListener?.unsubscribe();
         readOnlyListener?.dispose();
@@ -480,6 +507,7 @@ export function createCollaborationEditor(
       user.displayName,
       user.id,
       readOnly,
+      onCollaboratorsChange,
     ]);
 
     return (

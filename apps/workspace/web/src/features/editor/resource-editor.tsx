@@ -18,10 +18,14 @@ export function ResourceEditor(props: {
   readonly collaborationScope?: CollaborationEditorProps["collaborationScope"];
   readonly mappedUnitIds?: CollaborationEditorProps["mappedUnitIds"];
   readonly readOnly?: boolean;
+  readonly onCollaboratorsChange?: CollaborationEditorProps["onCollaboratorsChange"];
 }) {
   const editorProps = {
     unitId: props.unitId,
     user: props.user,
+    ...(props.onCollaboratorsChange
+      ? { onCollaboratorsChange: props.onCollaboratorsChange }
+      : {}),
     ...(props.readOnly === undefined
       ? {}
       : { readOnly: props.readOnly }),

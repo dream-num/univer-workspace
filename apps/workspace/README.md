@@ -4,6 +4,15 @@ A deployable React workspace providing authenticated Univer
 collaboration, Node hierarchy management, permissions, Trash, recent Resources,
 and Worktrees.
 
+Document headers show the users connected to the current collaboration room,
+with spaced profile avatars, colored presence dots, and hover names. Members are
+deduplicated by user; up to four avatars are shown, with a `+N` circle only when
+more users are connected. Missing or
+unavailable avatars fall back to initials. Worktree embedded editors show their
+own scoped room members; merge previews do not participate in presence. Names
+and avatars come from the authenticated server Session. Presence is transient
+and the displayed roster clears on disconnect and rebuilds on rejoin.
+
 ## Development
 
 Requirements:
