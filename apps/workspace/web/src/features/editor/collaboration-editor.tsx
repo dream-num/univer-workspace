@@ -14,8 +14,6 @@ import {
   CollaborationUIEventId,
   CollaborationUIEventService,
   CollaborationStatus,
-  CollaborationSessionService,
-  MemberService,
   UniverCollaborationClientPlugin,
   type IUniverCollaborationClientConfig,
 } from "@univerjs-pro/collaboration-client";
@@ -67,7 +65,6 @@ import {
   createWorkspaceOutputPlugins,
 } from "./exchange-plugins";
 import { resolveMergeReview } from "./merge-review";
-import { observeEditorCollaborators } from "./collaborator-presence";
 import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
 import { resolveUniverLicense } from "./univer-license";
 import {
@@ -187,6 +184,7 @@ export function createCollaborationEditor(
         null;
       let statusListener: { dispose(): void } | null = null;
       let collaboratorsListener: { dispose(): void } | null = null;
+      let collaborators: readonly IMember[] = [];
       let collaborationUIEventListener: { unsubscribe(): void } | null = null;
       let readOnlyListener: { dispose(): void } | null = null;
       let readOnlyLifecycleListener: { dispose(): void } | null = null;
@@ -435,6 +433,9 @@ export function createCollaborationEditor(
           (event) => {
             if (!disposed && event.unitId === unitId) {
               setCollaborationStatus(event.status);
+              onCollaboratorsChange?.(
+                event.status === CollaborationStatus.OFFLINE ? [] : collaborators
+              );
               if (event.status !== CollaborationStatus.CONFLICT) {
                 setCollaborationIssue(null);
               }
@@ -459,17 +460,15 @@ export function createCollaborationEditor(
           onCollaboratorsChange &&
           collaborationScope.kind !== "mergePreview"
         ) {
-          const injector = univer.__getInjector();
-          const session = await injector
-            .get(CollaborationSessionService)
-            .requireSession(unitId);
-          if (disposed) return;
-          collaboratorsListener = observeEditorCollaborators({
-            unitId,
-            session,
-            collaboration,
-            memberService: injector.get(MemberService),
-            onChange: onCollaboratorsChange,
+          collaboratorsListener = collaboration.subscribeCollaborators(unitId, (members) => {
+            collaborators = members;
+            if (!disposed) {
+              onCollaboratorsChange(
+                collaboration.getCollaborationStatus(unitId) === CollaborationStatus.OFFLINE
+                  ? []
+                  : members
+              );
+            }
           });
         }
       };

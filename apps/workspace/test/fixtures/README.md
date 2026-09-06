@@ -7,10 +7,3 @@ This development entry renders the application Header with inert callbacks and n
 The fixture has its own development configuration and requires no backend. Production
 `build:web` still uses `web/index.html`; it does not include this test HTML entry.
 `pnpm --filter @univerjs/univer-workspace typecheck` also checks the relocated fixture.
-
-The same dev server serves `http://127.0.0.1:5182/test/fixtures/presence.html` for
-the online avatar group. Check hover/focus names, a valid image, missing/broken
-image fallback, seven connections deduplicated into six users, overflow, language,
-theme, narrow widths, and clearing the group with Toggle connection. Toggle
-overflow switches between four users (no count circle) and six users (`+2`). It uses
-fixture data only and does not connect to a collaboration server.

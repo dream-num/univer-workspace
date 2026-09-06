@@ -1,7 +1,6 @@
 import type { IMember } from "@univerjs/protocol";
 import { useI18n } from "../../shared/i18n";
 import { Avatar, Tooltip } from "../../shared/ui";
-import { uniqueCollaborators } from "./collaborator-members";
 
 const VISIBLE_MEMBERS = 4;
 const MEMBER_ACCENTS = [
@@ -19,7 +18,11 @@ export function CollaboratorAvatars({
   readonly currentUserId: string;
 }) {
   const { t } = useI18n();
-  const users = uniqueCollaborators(members, currentUserId);
+  const users = [
+    ...new Map(members.map((member) => [member.userID, member])).values(),
+  ].sort((left, right) =>
+    Number(right.userID === currentUserId) - Number(left.userID === currentUserId)
+  );
   if (users.length === 0) return null;
   const memberLabel = (member: IMember) =>
     member.userID === currentUserId

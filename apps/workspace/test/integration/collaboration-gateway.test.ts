@@ -760,40 +760,11 @@ describe("collaboration gateway", () => {
         },
       },
     });
-    // Updating link access invalidates existing Sessions, including the owner's.
-    const presentOwner = await joinUnit(origin, cookie, opened.resource.unitId);
-    const viewerEntered = nextCombResponse(presentOwner.socket);
     const viewerConnection = await joinUnit(
       origin,
       viewerCookie,
       opened.resource.unitId
     );
-    expect(viewerConnection.members).toEqual(expect.arrayContaining([
-      {
-        memberID: presentOwner.memberId,
-        userID: issued.view.user.id,
-        name: "Gateway User",
-        avatar: "https://avatars.example/gateway-user.png",
-      },
-      {
-        memberID: viewerConnection.memberId,
-        userID: viewer.view.user.id,
-        name: "Gateway Viewer",
-        avatar: "",
-      },
-    ]));
-    await expect(viewerEntered).resolves.toMatchObject({
-      cmd: CombCmd.RECV,
-      data: {
-        eventID: "users_enter",
-        data: {
-          memberID: viewerConnection.memberId,
-          userID: viewer.view.user.id,
-          name: "Gateway Viewer",
-          avatar: "",
-        },
-      },
-    });
     const viewerAddCommentResponse = await fetch(
       `${origin}/universer-api/comment/unit/${opened.resource.unitId}/add`,
       {
@@ -900,20 +871,6 @@ describe("collaboration gateway", () => {
         resourceId,
       }
     );
-    const worktreeConnection = await joinUnit(
-      origin,
-      cookie,
-      worktreeUnit.body.unit.unitId,
-      `/universer-api/worktrees/${worktree.body.id}`
-    );
-    expect(worktreeConnection.members).toEqual([
-      {
-        memberID: worktreeConnection.memberId,
-        userID: issued.view.user.id,
-        name: "Gateway User",
-        avatar: "https://avatars.example/gateway-user.png",
-      },
-    ]);
     const worktreeResponse = await fetch(
       `${origin}/universer-api/worktrees/${worktree.body.id}`,
       { headers: { cookie } }
@@ -1088,8 +1045,7 @@ function commentWrite(
 async function joinUnit(
   origin: string,
   cookie: string,
-  unitId: string,
-  protocolBasePath = "/universer-api"
+  unitId: string
 ) {
   const ticketResponse = await fetch(
     `${origin}/universer-api/user/session-ticket`,
@@ -1097,7 +1053,7 @@ async function joinUnit(
   );
   const ticket = (await ticketResponse.json()) as { readonly ticket: string };
   const socket = new WebSocket(
-    `${origin.replace(/^http/, "ws")}${protocolBasePath}/comb/connect?sessionTicket=${encodeURIComponent(ticket.ticket)}`
+    `${origin.replace(/^http/, "ws")}/universer-api/comb/connect?sessionTicket=${encodeURIComponent(ticket.ticket)}`
   );
   sockets.push(socket);
   await new Promise<void>((resolve, reject) => {
