@@ -19,7 +19,7 @@ export function registerDocumentCreationTools(ctx: Context): () => void {
       defineTool({
         name: "univer_new",
         description:
-          "Create a new remote Univer document in an explicit Workspace Space (remote equivalent of dsh-univer-office's univer_new).",
+          "Create a new typed Univer Workspace document directly in the Space trunk. This immediately publishes its directory entry. For agent drafting and review, prefer univer_worktree action=create followed by univer_unit action=create.",
         parameters: {
           spaceId: { type: "string", required: true },
           name: { type: "string", required: true },
@@ -57,7 +57,7 @@ export function registerDocumentCreationTools(ctx: Context): () => void {
       ctx,
       defineTool({
         name: "univer_create",
-        description: "Create a new Univer document (sheet/doc/slide/board/base) inside a Space.",
+        description: "Create a new Univer document (sheet/doc/slide/board/base) directly in the Space trunk. For agent drafting and review, prefer univer_worktree action=create followed by univer_unit action=create.",
         parameters: {
           spaceId: { type: "string", required: true },
           name: { type: "string", required: true },

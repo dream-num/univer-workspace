@@ -24,7 +24,7 @@ const DEFINITIONS = [
   {
     name: "univer",
     description:
-      "Create, inspect, edit, import, export, and hand off multi-Unit .univer files through DSH tools and isolated worktrees. Use proactively for any task involving .univer files, spreadsheets or .xlsx/.csv/.tsv data, presentations or .pptx slides, .docx documents, Base databases, Board canvases, cross-Unit content, or exact Univer Facade API authoring; load this before the matching Unit skill.",
+      "Create, inspect, edit, import, export, and hand off remote Univer Workspace documents (Units) through DSH tools and isolated worktrees. Use proactively for any task involving Workspace documents, spreadsheets or .xlsx/.csv/.tsv data, presentations or .pptx slides, .docx documents, Base databases, Board canvases, cross-Unit content, or exact Univer Facade API authoring; load this before the matching Unit skill.",
   },
   {
     name: "univer-sheet",
@@ -54,12 +54,12 @@ const DEFINITIONS = [
   {
     name: "univer-embed",
     description:
-      "Embed one Univer Unit inside another through DSH tools and the Lite Interface. Use proactively when a Sheet, Doc, Slide, Base, Board, dashboard, report, presentation, database, or canvas should display or interact with content from another Unit in the same .univer file.",
+      "Embed one Univer Unit inside another through DSH tools and the Lite Interface. Use proactively when a Sheet, Doc, Slide, Base, Board, dashboard, report, presentation, database, or canvas should display or interact with content from another accessible Univer Workspace Unit.",
   },
   {
     name: "univer-cross-unit-formula",
     description:
-      "Author, calculate, update, inspect, and verify cross-Unit formulas through DSH tools and the Lite Interface. Use proactively when a Sheet cell or formula-driven Shape in a Sheet, Doc, Slide, or Board reads a Sheet range or Base table column from another Unit in the same .univer file.",
+      "Author, calculate, update, inspect, and verify cross-Unit formulas through DSH tools and the Lite Interface. Use proactively when a Sheet cell or formula-driven Shape in a Sheet, Doc, Slide, or Board reads a Sheet range or Base table column from another accessible Univer Workspace Unit.",
   },
 ] as const;
 

@@ -31,7 +31,7 @@ export function registerWorktreeTools(ctx: Context): () => void {
     defineTool({
       name: "univer_worktree",
       description:
-        "Create or transition an isolated Univer Worktree for review. Actions: create, ready, reopen, merge, discard. Create requires resourceId so the draft has a document to edit; pass the resourceId returned by univer_create or univer_open. Merge and discard require user approval.",
+        "Create or transition an isolated Univer Worktree for review. Actions: create, ready, reopen, merge, discard. For a new document, omit resourceId to create an empty draft, then use univer_unit action=create or univer_import. For an existing document, pass its resourceId to include it in the draft. Merge and discard require user approval.",
       parameters: {
         action: {
           type: "string",
@@ -120,9 +120,9 @@ export function registerWorktreeTools(ctx: Context): () => void {
         const resolved = await resolveToolScope(ctx, exec);
         const { userId } = resolved;
         if (args.action === "create") {
-          if (args.resourceId === undefined || args.resourceId.trim() === "") {
+          if (args.resourceId !== undefined && args.resourceId.trim() === "") {
             throw new UniverError(
-              "univer_worktree create requires resourceId from univer_create or univer_open.",
+              "univer_worktree create requires a non-empty resourceId when provided.",
               "INVALID_REQUEST",
             );
           }
@@ -132,11 +132,14 @@ export function registerWorktreeTools(ctx: Context): () => void {
               "INVALID_REQUEST",
             );
           }
-          const document = await ctx.get("univerWorkspace")!.openDocument(userId, args.resourceId);
+          if (args.resourceId !== undefined) {
+            await ctx.get("univerWorkspace")!.openDocument(userId, args.resourceId);
+          }
           const worktree = await ctx.get("univerWorkspace")!.createWorktree(userId, {
             name: args.name ?? "Univer worktree",
             summary: args.summary ?? null,
           });
+          if (args.resourceId === undefined) return worktree;
           const added = await ctx
             .get("univerWorkspace")!
             .addWorktreeTrunkUnit(userId, worktree.id, args.resourceId);

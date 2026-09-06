@@ -1,11 +1,11 @@
 ---
 name: univer-embed
-description: Embed one Univer Unit inside another through DSH tools and the Lite Interface. Use proactively when a Sheet, Doc, Slide, Base, Board, dashboard, report, presentation, database, or canvas should display or interact with content from another Unit in the same .univer file.
+description: Embed one Univer Unit inside another through DSH tools and the Lite Interface. Use proactively when a Sheet, Doc, Slide, Base, Board, dashboard, report, presentation, database, or canvas should display or interact with content from another accessible Univer Workspace Unit.
 ---
 
 # Embed Units
 
-Load `univer` plus the host and child Unit skills first. Keep both Units in the same `.univer` file and same draft worktree, and address each by exact `unitId`.
+Load `univer` plus the host and child Unit skills first. Resolve host and child as Univer Workspace Units and address each by exact `unitId`. Author changes in a draft worktree. Verify that the runtime can resolve the referenced child; access to a Unit does not by itself guarantee it is loaded.
 
 The Viewer supports one Embed level only. A host may contain multiple sibling Embeds, but do not embed a Unit that itself contains an Embed. Keep those Units as siblings or link them instead.
 

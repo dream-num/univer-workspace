@@ -1,26 +1,29 @@
 ---
 name: univer
-description: Create, inspect, edit, import, export, and hand off multi-Unit .univer files through DSH tools and isolated worktrees. Use proactively for any task involving .univer files, spreadsheets or .xlsx/.csv/.tsv data, presentations or .pptx slides, .docx documents, Base databases, Board canvases, cross-Unit content, or exact Univer Facade API authoring; load this before the matching Unit skill.
+description: Create, inspect, edit, import, export, and hand off remote Univer Workspace documents (Units) through DSH tools and isolated worktrees. Use proactively for any task involving Workspace documents, spreadsheets or .xlsx/.csv/.tsv data, presentations or .pptx slides, .docx documents, Base databases, Board canvases, cross-Unit content, or exact Univer Facade API authoring; load this before the matching Unit skill.
 ---
 
-# Univer files
+# Univer Workspace documents
 
-Use the structured `univer_*` tools whenever the task creates, reads, changes, converts, or reviews office content. Do not wait for the user to name a tool. Do not invoke a global `univer` CLI, edit `.univer` storage directly, or substitute openpyxl, python-pptx, python-docx, ZIP manipulation, or another writer.
+Use the structured `univer_*` tools whenever the task creates, reads, changes, converts, or reviews office content. Do not wait for the user to name a tool. Do not invoke a global `univer` CLI, access backend document storage directly, or substitute openpyxl, python-pptx, python-docx, ZIP manipulation, or another writer.
 
 ## Start immediately
 
-- Existing `.univer`: call `univer_status` before selecting a Unit or worktree.
-- New `.univer`: call `univer_new`, then `univer_worktree` with `action: "create"`.
-- Office source (`.xlsx`, `.csv`, `.tsv`, `.docx`, `.pptx`): create the target `.univer` and draft worktree, then call `univer_import`.
+- Existing document: discover it with `univer_documents` and open its `resourceId` with `univer_open`; call `univer_status` with that identity before selecting a Unit or continuing a worktree.
+- New document: call `univer_worktree` with `action: "create"` and no `resourceId`, then `univer_unit` with `action: "create"`, the returned `worktreeId`, `name`, and `unitType`. The target `spaceId` defaults to the session's linked Space; set it and `parentNodeId` explicitly when needed.
+- Office source (`.xlsx`, `.csv`, `.tsv`, `.docx`, `.pptx`): create an empty draft worktree, then call `univer_import` in that worktree. Import creates the new Unit; no placeholder document is needed.
+- `univer_new` and `univer_create` create a document directly in the Space's trunk. Use them only when the user explicitly requests immediate creation outside the review workflow.
 - Before authoring content, load the matching Unit skill: `univer-sheet`, `univer-doc`, `univer-slide`, `univer-base`, or `univer-board`.
 - For an Embed, also load `univer-embed`. For formulas that read another Unit, also load `univer-cross-unit-formula`.
 
 ## Mental model
 
-- A `.univer` file is the authoritative multi-Unit container. Each Sheet, Doc, Slide, Base, or Board is a top-level Unit with a stable `unitId`.
+- A document is a Sheet, Doc, Slide, Base, or Board Unit managed by the Univer Workspace backend. Its content is persisted by backend services in databases, not in a local document file.
+- `resourceId` identifies the product resource, `unitId` identifies its document content, and `nodeId` identifies its location in a Space. A Worktree can group multiple Units; it is an isolated review scope, not a storage file.
+- A new Worktree-local Unit has reserved identities and a target Space/folder. It appears in the formal Space directory only after merge activates it; discard does not publish it.
 - Sheet names, pages, paragraphs, tables, ranges, shapes, fields, records, and views live inside a Unit; none substitutes for `unitId`.
 - `trunk` is the reviewed main line. A worktree is an isolated scope for agent changes. There is no implicit current worktree.
-- Every content write requires the complete address: `file`, draft `worktreeId`, and `unitId`.
+- Every content write requires the complete address: draft `worktreeId` and `unitId` (plus `unitType` where required by the tool).
 - `univer_execute` persists only when Facade mutations occurred. A read-only execution produces no revision.
 - `ready` rejects writes until `reopen`. `merged` and `discarded` are terminal; never reuse them.
 - Tool success is not correctness evidence. Read the changed model back and verify task-specific assertions.
@@ -46,9 +49,9 @@ Only `colorEditable: true` resources may follow an authored color. Fixed logos, 
 
 ## Required workflow
 
-1. Call `univer_status` to discover Unit IDs and worktree states.
-2. Create or select one draft worktree. Continue an existing worktree only after confirming its state.
-3. Create a Unit with `univer_unit`, or import one with `univer_import`.
+1. Discover existing documents through `univer_spaces`, `univer_documents`, and `univer_open`. For an existing scope, call `univer_status` with `resourceId` or `worktreeId`; it is not an unscoped listing tool.
+2. Create or select one draft worktree. For new documents, omit `resourceId`; for an existing document, supply its `resourceId` when creating the worktree. Continue an existing worktree only after confirming its state.
+3. For a new document, create a Unit with `univer_unit` or import one with `univer_import`. For an existing document, use its returned Unit identity; do not create a duplicate.
 4. Load the matching Unit skill before writing Facade code.
 5. Resolve unfamiliar Facade usage with `univer_api` following the lookup rules above. Never guess an unfamiliar signature, parameter type, or enum.
 6. Mutate through `univer_execute`, or through `univer_compile_svg` for generated Slide page content.
@@ -77,10 +80,11 @@ Never reopen or reuse a merged or discarded worktree; create a new worktree inst
 
 | Stage | Tool | Use |
 | --- | --- | --- |
-| Start | `univer_new` | Create an empty `.univer`; never overwrites and never creates an implicit Unit. |
-| Start | `univer_status` | List trunk Units and worktrees, or inspect one explicit scope. |
+| Discover | `univer_spaces`, `univer_documents`, `univer_open` | Discover remote documents and resolve their identities. |
+| Direct creation | `univer_new`, `univer_create` | Create a typed document immediately in trunk; prefer Worktree-local creation for agent tasks. |
+| Start | `univer_status` | Inspect a document or Worktree using an explicit identity. |
 | Start | `univer_worktree` | `create`, `ready`, `reopen`, `merge`, or `discard`. |
-| Start | `univer_unit` | Create or remove a Sheet, Doc, Slide, Base, or Board in a draft worktree. |
+| Start | `univer_unit` | Create a Sheet, Doc, Slide, Base, or Board in a draft worktree; removal is not supported. |
 | Start | `univer_import` | Import local xlsx, csv, tsv, docx, or pptx as a new Unit. |
 | Write | `univer_execute` | Run version-matched Facade JavaScript against one Unit in a draft worktree. |
 | Write | `univer_compile_svg` | Compile workspace SVG into one explicit Slide page with browser text metrics. |

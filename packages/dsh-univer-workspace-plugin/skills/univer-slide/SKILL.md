@@ -44,7 +44,7 @@ Finish page N before authoring page N+1.
 
 1. Prepare this page's local assets and record paths in the spec. For bundled icons, logos, emoji, or illustrations, use `univer_resources` `find` followed by `export` into a workspace resource directory. Copy returned handles exactly, keep a consistent registry/style baseline, and reuse prior exports deliberately. Do not substitute Unicode glyphs or empty placeholders for required visuals.
 2. Hand-author the complete `page-NN.svg` with inline styles and workspace-relative assets. Keep every page SVG through delivery.
-3. Call `univer_compile_svg` with explicit `source`, target `file`, draft `worktreeId`, Slide `unitId`, one-based `page`, and default `mode: "replace"`.
+3. Call `univer_compile_svg` with explicit `source`, draft `worktreeId`, Slide `unitId`, one-based `page`, and default `mode: "replace"`.
 4. Clear every compiler warning. Review every returned lint; retain one only when intentional and justified by evidence.
 5. Call `univer_inspect` for the Slide Unit, then `univer_lint` for page N.
 6. Fix the SVG and repeat replacement until the page is clean or every surviving lint has an explicit justification.
@@ -68,7 +68,7 @@ Treat each defect as a pattern: search all page SVGs for the same mistake, fix s
 
 ### 4. Deliver
 
-Follow the `univer` ready/status workflow. Provide the `.univer` artifact and `.pptx` export only when requested. Do not merge unless the user explicitly asks.
+Follow the `univer` ready/status workflow. Hand off the remote document and its Worktree for review; provide a `.pptx` export only when requested. Do not merge unless the user explicitly asks.
 
 ## SVG is the generation path
 

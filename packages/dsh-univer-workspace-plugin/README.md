@@ -2,9 +2,9 @@
 
 The Univer capability plugin for DSH. It gives an agent the ability to
 operate **remote Univer Workspace Units** (documents) in the Spaces the
-authorizing User can access — the capability profile of `dsh-univer-office`,
-reimplemented independently against the Workspace service instead of local
-session files.
+authorizing User can access. Documents are Units managed and persisted by the
+Univer Workspace backend; local paths are used only for task assets and
+import/export, not as document identities.
 
 ## Delivered so far
 
@@ -52,7 +52,7 @@ session files.
 - **Worktree parity**: `univer_worktree` exposes the review lifecycle used by
   the browser (`create` → `ready` → `merge`/`discard`). The underlying
   transition adapter may retain compatibility with older server actions, but
-  the plugin does not invent a visible `reopen` action.
+  the plugin exposes `reopen` for returning a ready Worktree to draft.
 - **Browser Space picker**: this plugin owns the Workspace Space picker and
   injects it into the stock DSH hero/sidebar slots. DSH still owns its native
   mechanical workspace list and session persistence; selecting a Space only
@@ -74,7 +74,7 @@ session files.
   rename, the same-origin Space/Node tree, and trash actions are registered by
   this plugin. The Harness only supplies the authenticated
   `workspaceAuth` service they consume.
-- **Bundled skill**: `univer-workspace` teaches the model the Space/document
+- **Bundled skill**: `univer` teaches the model the Space/document
   model and the Worktree review rules.
 - **Turn preview and live viewer**: successful document/Worktree operations are
   folded into one replay-safe turn card; while a session is running, a live
@@ -88,6 +88,22 @@ session files.
 
 - The remaining Office-only gateway/file capabilities that do not have a
   Workspace product equivalent yet.
+
+## Document creation and review
+
+For agent tasks, create an empty draft with `univer_worktree` (`action: "create"`,
+no `resourceId`), then create a document with `univer_unit` (`action: "create"`)
+or import one with `univer_import`. New Units stay in the Worktree until merge
+activates their reserved Resource and Node identities in the target Space.
+Existing documents enter a new Worktree by passing their `resourceId` to
+`univer_worktree`. Verify the content, mark the draft ready, and let the user
+review it before merge.
+
+`univer_new` and `univer_create` create documents directly in trunk and are for
+explicit requests to publish immediately. Worktree changes currently support
+new and modified documents. Per-document deletion through Worktree review is
+not implemented; trashing a Space node and discarding a whole Worktree are
+separate operations.
 
 ## dsh-univer-office tool audit
 

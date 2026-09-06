@@ -16,7 +16,7 @@ const EXPECTED_SKILLS = [
 ] as const;
 
 describe("bundled Workspace Skills", () => {
-  it("registers the eight Office-shaped candidates with static assets", async () => {
+  it("registers the eight Workspace candidates with static assets", async () => {
     const ctx = new Context();
     new SkillRegistry(ctx);
     apply(ctx);
@@ -29,12 +29,14 @@ describe("bundled Workspace Skills", () => {
         "utf8",
       );
       expect(source).toMatch(new RegExp(`^name: ${candidate.name}$`, "m"));
-      expect(source).toMatch(new RegExp(`^description: ${escapeRegExp(candidate.description)}$`, "m"));
+      expect(source.split("\n").find(line => line.startsWith("description: "))).toBe(
+        `description: ${candidate.description}`,
+      );
       expect(source.startsWith("---\n")).toBe(true);
     }
   });
 
-  it("keeps the Office workflow contract intact", async () => {
+  it("keeps the Workspace workflow contract intact", async () => {
     const core = await readSkill("univer");
     const sheet = await readSkill("univer-sheet");
     const doc = await readSkill("univer-doc");
@@ -58,11 +60,4 @@ describe("bundled Workspace Skills", () => {
 
 async function readSkill(name: string): Promise<string> {
   return await readFile(new URL(`../skills/${name}/SKILL.md`, import.meta.url), "utf8");
-}
-
-function escapeRegExp(value: string): string {
-  return value
-    .replace(/[.*+?^$()|[\\]\\]/g, "\\$&")
-    .replaceAll("{", "\\{")
-    .replaceAll("}", "\\}");
 }

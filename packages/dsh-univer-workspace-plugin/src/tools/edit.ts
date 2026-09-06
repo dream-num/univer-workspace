@@ -183,7 +183,7 @@ export function registerEditTool(ctx: Context): () => void {
     defineTool({
       name: "univer_inspect",
       description:
-        "Inspect structured content from a remote Workspace Unit. This mirrors dsh-univer-office's univer_inspect: omit range first to discover a workbook's worksheet names, then use an exact Sheet selector such as 'Sheet 1'!A1:D20 (case-sensitive; quote names containing spaces). If a selector does not match, retry without range to get the valid names. It never executes caller-provided write code.",
+        "Inspect structured content from a remote Workspace Unit. Omit range first to discover a workbook's worksheet names, then use an exact Sheet selector such as 'Sheet 1'!A1:D20 (case-sensitive; quote names containing spaces). If a selector does not match, retry without range to get the valid names. It never executes caller-provided write code.",
       parameters: {
         worktreeId: { type: "string" as const },
         unitId: { type: "string" as const, required: true },
