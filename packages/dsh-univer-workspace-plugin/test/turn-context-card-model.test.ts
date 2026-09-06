@@ -220,12 +220,3 @@ describe("Turn-context card presentation model", () => {
     expect(activeViewerMode("preview", draft, trunkUnit)).toBe("agent");
   });
 });
-
-it("only previews existing trunk content before a deletion is merged", () => {
-  const removed = unit("u1", "r1", { kind: "deleted" });
-  expect(resolveTurnViewer(worktree(), removed, "trunk")).toBeDefined();
-  expect(resolveTurnViewer(worktree(), removed, "agent")).toBeUndefined();
-  expect(resolveTurnViewer(worktree({ status: "ready" }), removed, "preview")).toBeUndefined();
-  expect(resolveTurnViewer(worktree({ status: "merged" }), removed, "trunk")).toBeUndefined();
-  expect(resolveTurnViewer(worktree(), { ...removed, nodeId: null }, "trunk")).toBeUndefined();
-});

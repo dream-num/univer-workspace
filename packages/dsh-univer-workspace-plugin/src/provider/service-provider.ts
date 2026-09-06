@@ -41,7 +41,6 @@ import {
   createDocument as apiCreateDocument,
   createWorktree as apiCreateWorktree,
   createWorktreeLocalUnit as apiCreateWorktreeLocalUnit,
-  setWorktreeUnitRemoved as apiSetWorktreeUnitRemoved,
   discardWorktree,
   listReviewWorktrees,
   listSpaceDocuments,
@@ -186,15 +185,6 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   async markWorktreeReady(userId: string, worktreeId: string) {
     const client = this.requireClient(userId);
     return await markWorktreeReady(client, worktreeId);
-  }
-
-  async setWorktreeUnitRemoved(
-    userId: string,
-    worktreeId: string,
-    unitId: string,
-    removed: boolean,
-  ) {
-    return apiSetWorktreeUnitRemoved(this.requireClient(userId), worktreeId, unitId, removed);
   }
 
   async discardWorktree(userId: string, worktreeId: string) {

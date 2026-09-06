@@ -36,7 +36,6 @@ export {
   worktreeSummaryFromDetail,
   addWorktreeTrunkUnit,
   createWorktreeLocalUnit,
-  setWorktreeUnitRemoved,
   narrowWorktreeUnit,
   openWorktreeUnit,
   markWorktreeReady,

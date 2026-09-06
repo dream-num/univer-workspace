@@ -3,7 +3,6 @@ import {
   createWorkspaceApplication,
   type WorkspaceApplication,
 } from "../../server/src/app.js";
-import { TrashRepository } from "../../server/src/modules/trash/trash.repository.js";
 
 const applications: WorkspaceApplication[] = [];
 
@@ -14,71 +13,6 @@ afterEach(async () => {
 });
 
 describe("Trash Batches", () => {
-  it("replays a workflow deletion without repeating it after restoration", async () => {
-    const application = createTestApplication();
-    const owner = await register(application, "retry-trash-owner");
-    const stranger = await register(application, "retry-trash-stranger");
-    const space = application.spaces.list(owner.id).spaces[0];
-    if (!space) throw new Error("Personal space is missing");
-    const resource = await createResource(application, owner.id, space.id, null, "Retry Sheet");
-    const nodeId = resource.node.id;
-    const batchId = "workflow-trash-batch-0001";
-    expect(() => application.trash.trashNodeOnce(stranger.id, nodeId, batchId)).toThrowError(
-      expect.objectContaining({ code: "NOT_FOUND" }),
-    );
-    application.trash.trashNodeOnce(owner.id, nodeId, batchId);
-    application.trash.trashNodeOnce(owner.id, nodeId, batchId);
-    expect(application.trash.list(owner.id, space.id, {}).items).toHaveLength(1);
-    expect(() => application.trash.trashNodeOnce(stranger.id, nodeId, batchId)).toThrowError(
-      expect.objectContaining({ code: "CONFLICT" }),
-    );
-    expect(() => application.trash.trashNodeOnce(owner.id, "other-node", batchId)).toThrowError(
-      expect.objectContaining({ code: "CONFLICT" }),
-    );
-
-    application.trash.restore(owner.id, batchId);
-    application.trash.trashNodeOnce(owner.id, nodeId, batchId);
-    // The repository also protects callers that observed an absent batch before another writer.
-    new TrashRepository(application.database).trashNode({
-      batchId,
-      nodeId,
-      spaceId: space.id,
-      createdBy: owner.id,
-      createdAt: Date.now(),
-    });
-    expect(
-      application.resources.get(owner.id, resource.resourceId).resource.id
-    ).toBe(resource.resourceId);
-    expect(application.trash.list(owner.id, space.id, {}).items).toEqual(
-      []
-    );
-  });
-
-  it("rolls back the workflow receipt when deleting the Node fails", async () => {
-    const application = createTestApplication();
-    const owner = await register(application, "atomic-trash-owner");
-    const space = application.spaces.list(owner.id).spaces[0];
-    if (!space) throw new Error("Personal space is missing");
-    const resource = await createResource(application, owner.id, space.id, null, "Atomic Sheet");
-    const batchId = "atomic-workflow-trash-0001";
-    application.database.connection.exec(`
-      CREATE TEMP TRIGGER fail_trash_write BEFORE UPDATE OF trash_batch_id ON nodes
-      BEGIN SELECT RAISE(ABORT, 'Injected Trash failure'); END;
-    `);
-    expect(() => application.trash.trashNodeOnce(owner.id, resource.node.id, batchId)).toThrow(
-      "Injected Trash failure",
-    );
-    expect(new TrashRepository(application.database).findBatch(batchId)).toBeNull();
-    expect(
-      application.resources.get(owner.id, resource.resourceId).resource.id
-    ).toBe(resource.resourceId);
-    application.database.connection.exec("DROP TRIGGER fail_trash_write");
-    application.trash.trashNodeOnce(owner.id, resource.node.id, batchId);
-    expect(application.trash.list(owner.id, space.id, {}).items).toEqual([
-      expect.objectContaining({ id: batchId }),
-    ]);
-  });
-
   it("keeps nested batches independent and restores them in parent-first order", async () => {
     const application = createTestApplication();
     const owner = await register(application, "trash-owner");

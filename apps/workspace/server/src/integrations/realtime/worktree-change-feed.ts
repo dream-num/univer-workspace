@@ -28,32 +28,43 @@ export function createWorktreeChangeFeed(): WorktreeChangeFeed {
       }
       endpointCreated = true;
       return {
-        register(router) {
-          router.upgrade(WORKTREE_CHANGE_FEED_PATH, async (context) => {
-            const url = new URL(context.incomingMessage.url ?? "/", "http://localhost");
-            if (disposed) {
-              context.reject(503, "Worktree change feed is unavailable");
-              return;
-            }
-            const ticket = await ticketStore.consume(url.searchParams.get("sessionTicket") ?? "");
-            if (!ticket) {
-              context.reject(401, "Invalid or expired session ticket");
-              return;
-            }
-            context.accept({
-              open({ connection }) {
-                const userConnections = connections.get(ticket.userID) ?? new Map();
-                userConnections.set(connection.id, connection);
-                connections.set(ticket.userID, userConnections);
-                safeSend(connection, JSON.stringify({ event: "worktreeChangeFeedReady" }));
-              },
-              message({ connection }) {
-                connection.close(1003, "Worktree change feed is server-only");
-              },
-              close({ connection }) {
-                removeConnection(ticket.userID, connection.id);
-              },
-            });
+        async handleUpgrade(context, next) {
+          const url = new URL(
+            context.incomingMessage.url ?? "/",
+            "http://localhost"
+          );
+          if (url.pathname !== WORKTREE_CHANGE_FEED_PATH) {
+            await next();
+            return;
+          }
+          if (disposed) {
+            context.reject(503, "Worktree change feed is unavailable");
+            return;
+          }
+          const ticket = await ticketStore.consume(
+            url.searchParams.get("sessionTicket") ?? ""
+          );
+          if (!ticket) {
+            context.reject(401, "Invalid or expired session ticket");
+            return;
+          }
+          context.accept({
+            open({ connection }) {
+              const userConnections =
+                connections.get(ticket.userID) ?? new Map();
+              userConnections.set(connection.id, connection);
+              connections.set(ticket.userID, userConnections);
+              safeSend(
+                connection,
+                JSON.stringify({ event: "worktreeChangeFeedReady" })
+              );
+            },
+            message({ connection }) {
+              connection.close(1003, "Worktree change feed is server-only");
+            },
+            close({ connection }) {
+              removeConnection(ticket.userID, connection.id);
+            },
           });
         },
         dispose: async () => {

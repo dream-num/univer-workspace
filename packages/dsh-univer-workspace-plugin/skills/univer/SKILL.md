@@ -49,8 +49,6 @@ Only `colorEditable: true` resources may follow an authored color. Fixed logos, 
 
 ## Required workflow
 
-For document deletion, use `univer_unit` with `action: "remove"`, `worktreeId`, and `unitId`. This only records draft intent; use `action: "restore"` to undo it before Ready. Existing documents enter Trash after an approved merge, and canceled new draft Units are never published. Do not use permanent deletion or filesystem operations for this workflow.
-
 1. Discover existing documents through `univer_spaces`, `univer_documents`, and `univer_open`. For an existing scope, call `univer_status` with `resourceId` or `worktreeId`; it is not an unscoped listing tool.
 2. Create or select one draft worktree. For new documents, omit `resourceId`; for an existing document, supply its `resourceId` when creating the worktree. Continue an existing worktree only after confirming its state.
 3. For a new document, create a Unit with `univer_unit` or import one with `univer_import`. For an existing document, use its returned Unit identity; do not create a duplicate.
@@ -86,7 +84,7 @@ Never reopen or reuse a merged or discarded worktree; create a new worktree inst
 | Direct creation | `univer_new`, `univer_create` | Create a typed document immediately in trunk; prefer Worktree-local creation for agent tasks. |
 | Start | `univer_status` | Inspect a document or Worktree using an explicit identity. |
 | Start | `univer_worktree` | `create`, `ready`, `reopen`, `merge`, or `discard`. |
-| Start | `univer_unit` | Create a draft Unit, mark one for deletion with `remove`, or undo its deletion intent with `restore`. |
+| Start | `univer_unit` | Create a Sheet, Doc, Slide, Base, or Board in a draft worktree; removal is not supported. |
 | Start | `univer_import` | Import local xlsx, csv, tsv, docx, or pptx as a new Unit. |
 | Write | `univer_execute` | Run version-matched Facade JavaScript against one Unit in a draft worktree. |
 | Write | `univer_compile_svg` | Compile workspace SVG into one explicit Slide page with browser text metrics. |

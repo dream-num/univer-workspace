@@ -135,20 +135,6 @@ export function WorktreeReviewPanel({
   const showReviewViewControl =
     worktree.capabilities.review && selectedUnit !== undefined;
 
-  const removal = useMutation({
-    mutationFn: async (unit: WorktreeUnit) => {
-      const result = await api.POST("/api/worktrees/{worktreeId}/units/{unitId}/removal", {
-        params: { path: { worktreeId: worktree.id, unitId: unit.unitId } },
-        body: { removed: unit.change !== "deleted" },
-      });
-      if (result.error) throw apiError(result.error);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: worktreesQueryKey });
-    },
-    onError: (error) => toast.error(error.message),
-  });
-
   const action = useMutation({
     mutationFn: async (value: ReviewAction) => {
       const result =
@@ -216,16 +202,6 @@ export function WorktreeReviewPanel({
         }
         actions={
           <>
-            {selectedUnit && worktree.state === "draft" && worktree.capabilities.editDraft ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={removal.isPending || action.isPending}
-                onClick={() => removal.mutate(selectedUnit)}
-              >
-                {t(selectedUnit.change === "deleted" ? "undoUnitRemoval" : "markUnitRemoved")}
-              </Button>
-            ) : null}
             {worktree.capabilities.markReady ? (
               <ConfirmDialog
                 title={t("submitForReviewConfirm")}
@@ -298,8 +274,6 @@ export function WorktreeReviewPanel({
         <Empty className="my-auto" title={t("reviewDocumentNotFound")} />
       ) : !selectedUnit ? (
         <Empty className="my-auto" title={t("noAgentDocuments")} />
-      ) : selectedUnit.change === "deleted" ? (
-        <Empty className="my-auto" title={t("removedUnitPreview")} />
       ) : (
         <UnitReview
           key={`${worktree.id}:${selectedUnit.unitId}`}
@@ -373,7 +347,9 @@ function UnitReview({
       {mergeReviewStatus === "preview" ? (
         <Alert className="mx-4.5 mt-3" variant="info">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="min-w-0 flex-1">{t("trunkAdvancedPreviewReady")}</span>
+            <span className="min-w-0 flex-1">
+              {t("trunkAdvancedPreviewReady")}
+            </span>
             {activeView !== "comparison" ? (
               <div className="min-w-0 max-w-full" data-testid="merge-preview-control">
                 <Segmented<"preview" | "agent">
@@ -474,7 +450,9 @@ function ReviewBadge({
       {unitChangeLabel(unit.change, t)}
     </Badge>
   ) : (
-    <Badge variant={worktreeStateVariant(state)}>{worktreeStateLabel(state, t)}</Badge>
+    <Badge variant={worktreeStateVariant(state)}>
+      {worktreeStateLabel(state, t)}
+    </Badge>
   );
 }
 
@@ -483,8 +461,7 @@ function ReviewMergeResultBadge({ unit }: { readonly unit: WorktreeUnit }) {
   return unit.mergeResult !== "pending" ? (
     <Badge
       variant={
-        unit.mergeResult === "merged" || unit.mergeResult === "unchanged" ||
-        unit.mergeResult === "removed"
+        unit.mergeResult === "merged" || unit.mergeResult === "unchanged"
           ? "success"
           : "danger"
       }

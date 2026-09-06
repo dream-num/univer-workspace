@@ -72,17 +72,6 @@ export function createWorktreesRouter(options: {
       response.status(result.status).json(result.body);
     }
   );
-  router.post("/worktrees/:worktreeId/units/:unitId/removal", async (request, response) => {
-    const user = options.identity.requireSession(request.headers.cookie).user;
-    response.json(
-      await options.worktrees.setUnitRemoved(
-        user.id,
-        request.params.worktreeId,
-        request.params.unitId,
-        request.body,
-      ),
-    );
-  });
   router.post(
     "/worktrees/:worktreeId/units/:unitId/open",
     async (request, response) => {

@@ -20,34 +20,6 @@ afterEach(async () => {
 });
 
 describe("Worktree browser API", () => {
-  it("authenticates removal, rejects malformed and cross-origin requests, and preserves upstream denial", async () => {
-    const identity = { current: undefined as undefined | { userId: string; username: string } };
-    const remove = vi.fn(async (..._args: unknown[]) => ({ unitId: "unit-1" }));
-    const server = await serve(
-      identity,
-      vi.fn(async () => []),
-      remove,
-    );
-    const url = `${server.origin}/univer-workspace/api/worktrees/wt-1/units/unit-1/removal`;
-    const request = (body: unknown, origin?: string) =>
-      fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json", ...(origin ? { origin } : {}) },
-        body: JSON.stringify(body),
-      });
-    expect((await request({ removed: true })).status).toBe(401);
-    identity.current = { userId: "user-1", username: "alice" };
-    expect((await request({ removed: "true" })).status).toBe(400);
-    expect((await request({ removed: true }, "https://attacker.test")).status).toBe(403);
-    expect(remove).not.toHaveBeenCalled();
-    for (const removed of [true, false]) {
-      expect((await request({ removed })).status).toBe(200);
-      expect(remove).toHaveBeenLastCalledWith("user-1", "wt-1", "unit-1", removed);
-    }
-    remove.mockRejectedValueOnce(Object.assign(new Error("No trash permission"), { status: 403 }));
-    expect((await request({ removed: true })).status).toBe(403);
-  });
-
   it("walks active and processed pages and de-duplicates Worktree details", async () => {
     const requests: string[] = [];
     const client: WorkspaceHttpClient = {
@@ -224,7 +196,6 @@ function worktreeView(worktreeId: string) {
 async function serve(
   identity: { current: undefined | { userId: string; username: string } },
   listWorktrees: (userId: string) => Promise<unknown>,
-  setWorktreeUnitRemoved = vi.fn(async (..._args: unknown[]) => ({ unitId: "unit-1" })),
 ): Promise<{ origin: string }> {
   const context = {
     get(name: string) {
@@ -234,7 +205,7 @@ async function serve(
           currentClient: () => undefined,
         };
       }
-      if (name === "univerWorkspace") return { listWorktrees, setWorktreeUnitRemoved };
+      if (name === "univerWorkspace") return { listWorktrees };
       return undefined;
     },
   } as unknown as Context;

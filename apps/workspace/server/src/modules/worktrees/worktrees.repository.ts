@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { WorkspaceDatabase } from "../../db/database.js";
 import type { UnitType } from "../access/index.js";
 import type { OperationState } from "../resources/resources.types.js";
@@ -36,7 +35,7 @@ export interface WorktreeUnitRow {
   readonly worktree_id: string;
   readonly unit_id: string;
   readonly resource_id: string;
-  readonly node_id: string | null;
+  readonly node_id: string;
   readonly source: "trunk" | "worktree";
   readonly ordinal: number;
   readonly existing_name: string | null;
@@ -454,37 +453,6 @@ export class WorktreesRepository {
            AND discarded_at IS NULL`
       )
       .run(discardedAt, discardedAt, worktreeId);
-  }
-
-  markLocalUnitDiscarded(worktreeId: string, unitId: string, discardedAt: number): void {
-    this._database.connection
-      .prepare(
-        `UPDATE worktree_node_intents SET discarded_at = ?, updated_at = ?
-       WHERE worktree_id = ? AND unit_id = ? AND activated_at IS NULL AND discarded_at IS NULL`,
-      )
-      .run(discardedAt, discardedAt, worktreeId, unitId);
-  }
-
-  removalBatchId(worktreeId: string, unitId: string): string {
-    return `worktree-${createHash("sha256")
-      .update(JSON.stringify([worktreeId, unitId]))
-      .digest("hex")}`;
-  }
-
-  hasRemovalReceipt(worktreeId: string, unitId: string, userId: string): boolean {
-    return Boolean(
-      this._database.connection
-        .prepare("SELECT 1 FROM trash_batches WHERE id = ? AND created_by = ?")
-        .get(this.removalBatchId(worktreeId, unitId), userId),
-    );
-  }
-
-  getOperation(operationId: string): WorktreeOperationRow | null {
-    return (
-      (this._database.connection
-        .prepare("SELECT * FROM operations WHERE id = ?")
-        .get(operationId) as WorktreeOperationRow | undefined) ?? null
-    );
   }
 
   reserveOperation(input: {

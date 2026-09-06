@@ -103,8 +103,7 @@ WorktreeUnitTarget:
 
 MergeResult:
   type: string
-  enum: [pending, merged, unchanged, removed, conflict, failed]
-  description: Removed means this Unit was excluded from content publication. Product deletion is complete only when the Worktree is merged and its merge Operation is completed.
+  enum: [pending, merged, unchanged, conflict, failed]
 
 WorktreeUnitChange:
   type: string
@@ -141,8 +140,7 @@ WorktreeUnit:
     resourceId:
       type: string
     nodeId:
-      type: [string, "null"]
-      description: Null when the document no longer has a product Node, including after permanent deletion.
+      type: string
     source:
       type: string
       enum: [trunk, worktree]

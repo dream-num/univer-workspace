@@ -149,11 +149,6 @@ export function resolveTurnViewer(
   unit: WorktreeUnitView,
   mode: TurnViewMode,
 ): ViewerTarget | undefined {
-  if (
-    unit.kind === "deleted" &&
-    (mode !== "trunk" || worktree.status === "merged" || unit.nodeId === null)
-  )
-    return undefined;
   const unitType = viewerUnitTypeOf(unit.unitType);
   const unsupported =
     unitType === "unsupported" ? { unsupportedType: rawUnitType(unit.unitType) } : {};
@@ -292,7 +287,6 @@ export function mergeResultLabel(
 ): string {
   if (result === "merged") return t("dock.merged");
   if (result === "unchanged") return t("turn.unit.unchanged");
-  if (result === "removed") return t("turn.merge.removed");
   if (result === "conflict") return t("dock.unit.conflict");
   if (result === "failed") return t("turn.merge.failed");
   return t("dock.loading");
@@ -301,9 +295,7 @@ export function mergeResultLabel(
 export function mergeResultVariant(
   result: WorktreeUnitView["mergeResult"],
 ): NonNullable<BadgeProps["variant"]> {
-  return result === "merged" || result === "unchanged" || result === "removed"
-    ? "success"
-    : "danger";
+  return result === "merged" || result === "unchanged" ? "success" : "danger";
 }
 
 /** Localized Unit type label; unknown types render no label (never the raw key). */

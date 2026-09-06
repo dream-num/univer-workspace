@@ -1020,29 +1020,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/worktrees/{worktreeId}/units/{unitId}/removal": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                worktreeId: string;
-                unitId: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mark a draft Unit for deletion or undo its deletion intent.
-         * @description Existing documents remain available until merge; canceled local Units are never published. Only editable drafts accept changes to deletion intent.
-         */
-        post: operations["setWorktreeUnitRemoved"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/worktrees/{worktreeId}/units/{unitId}/open": {
         parameters: {
             query?: never;
@@ -1693,18 +1670,14 @@ export interface components {
         };
         /** @enum {string} */
         WorktreeUnitChange: "modified" | "added" | "deleted" | "unchanged";
-        /**
-         * @description Removed means this Unit was excluded from content publication. Product deletion is complete only when the Worktree is merged and its merge Operation is completed.
-         * @enum {string}
-         */
-        MergeResult: "pending" | "merged" | "unchanged" | "removed" | "conflict" | "failed";
+        /** @enum {string} */
+        MergeResult: "pending" | "merged" | "unchanged" | "conflict" | "failed";
         /** @enum {string} */
         ActivationState: "notApplicable" | "waitingForMerge" | "pending" | "completed" | "failed" | "discarded";
         WorktreeUnit: {
             unitId: string;
             resourceId: string;
-            /** @description Null when the document no longer has a product Node, including after permanent deletion. */
-            nodeId: string | null;
+            nodeId: string;
             /** @enum {string} */
             source: "trunk" | "worktree";
             name: string;
@@ -3716,40 +3689,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationEnvelope"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-        };
-    };
-    setWorktreeUnitRemoved: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                worktreeId: string;
-                unitId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    removed: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description Worktree with updated deletion intent. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorktreeEnvelope"];
                 };
             };
             400: components["responses"]["BadRequest"];

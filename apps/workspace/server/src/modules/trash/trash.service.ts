@@ -38,31 +38,6 @@ export function createTrashModule(options: {
       return batchView(batch, options.repository);
     },
 
-    trashNodeOnce(userId, nodeId, batchId) {
-      const existing = options.repository.findBatch(batchId);
-      if (existing) {
-        if (existing.root_node_id !== nodeId || existing.created_by !== userId) {
-          throw new ApplicationError(
-            "CONFLICT",
-            409,
-            "The Trash Batch belongs to a different deletion request.",
-          );
-        }
-        // Restoration is a later user decision. Replaying deletion must preserve it.
-        return;
-      }
-      const node = options.access.resolveNode(userId, nodeId);
-      if (!node) throw notFound();
-      if (!node.capabilities.trash) throw forbidden();
-      options.repository.trashNode({
-        batchId,
-        nodeId,
-        spaceId: node.spaceId,
-        createdBy: userId,
-        createdAt: now(),
-      });
-    },
-
     list(userId, spaceId, page) {
       const space = options.access.resolveSpace(userId, spaceId);
       if (!space) throw notFound();

@@ -48,25 +48,6 @@ export class TrashRepository {
     readonly createdAt: number;
   }): void {
     this._database.transaction((database) => {
-      const existing = database
-        .prepare("SELECT root_node_id, space_id, created_by FROM trash_batches WHERE id = ?")
-        .get(input.batchId) as
-        | {
-            readonly root_node_id: string;
-            readonly space_id: string;
-            readonly created_by: string;
-          }
-        | undefined;
-      if (existing) {
-        if (
-          existing.root_node_id !== input.nodeId ||
-          existing.space_id !== input.spaceId ||
-          existing.created_by !== input.createdBy
-        ) {
-          throw new Error("Trash Batch identity does not match the deletion request.");
-        }
-        return;
-      }
       database
         .prepare(
           `INSERT INTO trash_batches

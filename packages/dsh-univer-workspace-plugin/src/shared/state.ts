@@ -40,7 +40,7 @@ export interface WorktreeTeamSpace {
 export interface ChangedUnit {
   readonly unitId: string;
   readonly resourceId: string;
-  readonly nodeId?: string | null;
+  readonly nodeId?: string;
   readonly name: string;
   readonly unitType: string;
   /** Whether this Unit is inherited from trunk or created in the Worktree. */
@@ -57,10 +57,10 @@ export interface ChangedUnit {
 
 /** A complete Unit entry returned by the origin-level Worktree list. */
 export interface WorktreeUnitView extends ChangedUnit {
-  readonly nodeId: string | null;
+  readonly nodeId: string;
   readonly source: "trunk" | "worktree";
   readonly target: { readonly spaceId: string; readonly parentNodeId: string | null } | null;
-  readonly mergeResult: "pending" | "merged" | "unchanged" | "removed" | "conflict" | "failed";
+  readonly mergeResult: "pending" | "merged" | "unchanged" | "conflict" | "failed";
   readonly activationState:
     | "notApplicable"
     | "waitingForMerge"

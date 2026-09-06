@@ -117,7 +117,7 @@ export async function getFileState(
   const query = docKey.startsWith("wt:")
     ? `worktreeId=${encodeURIComponent(docKey.slice(3))}`
     : `resourceId=${encodeURIComponent(docKey.slice(4))}`;
-  const request: Promise<DocumentFileState> = Promise.resolve().then(async () => {
+  const request = (async (): Promise<DocumentFileState> => {
     const response = await fetch(`/univer-workspace/api/file-state?${query}`, {
       headers: { accept: "application/json" },
     });
@@ -140,10 +140,9 @@ export async function getFileState(
       throw new Error(`file state answered ${response.status}${diagnosticId}`);
     }
     const value = (await response.json()) as DocumentFileState;
-    if (fileStateRequests.get(docKey) !== request) return getFileState(docKey);
     fileStateSnapshots.set(docKey, value);
     return value;
-  });
+  })();
   fileStateRequests.set(docKey, request);
   try {
     return await request;
@@ -155,7 +154,6 @@ export async function getFileState(
 /** Invalidate one shared snapshot after an explicit Workspace mutation. */
 export function invalidateFileState(docKey: string): void {
   fileStateSnapshots.delete(docKey);
-  fileStateRequests.delete(docKey);
 }
 
 export function isMissingDocument(error: unknown): boolean {
@@ -196,28 +194,6 @@ export async function postWorktreeAction(
       /* retain the status-only fallback */
     }
     throw new Error(`worktree ${action} answered ${response.status}${detail}`);
-  }
-  invalidateFileState(`wt:${worktreeId}`);
-}
-
-/** Update a draft deletion intent; publishing it remains a separate merge action. */
-export async function postWorktreeUnitRemoval(
-  worktreeId: string,
-  unitId: string,
-  removed: boolean,
-): Promise<void> {
-  const response = await fetch(
-    `/univer-workspace/api/worktrees/${encodeURIComponent(worktreeId)}/units/${encodeURIComponent(unitId)}/removal`,
-    {
-      method: "POST",
-      headers: { accept: "application/json", "content-type": "application/json" },
-      body: JSON.stringify({ removed }),
-    },
-  );
-  if (!response.ok) {
-    const body = (await response.json().catch(() => undefined)) as { error?: unknown } | undefined;
-    const detail = typeof body?.error === "string" ? `: ${body.error}` : "";
-    throw new Error(`worktree removal answered ${response.status}${detail}`);
   }
   invalidateFileState(`wt:${worktreeId}`);
 }

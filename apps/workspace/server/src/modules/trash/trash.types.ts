@@ -59,8 +59,6 @@ export interface TrashList {
 
 export interface TrashModule {
   trashNode(userId: string, nodeId: string): TrashBatchView;
-  /** Internal workflow entry; the caller owns the stable batch ID and its recovery lifetime. */
-  trashNodeOnce(userId: string, nodeId: string, batchId: string): void;
   list(
     userId: string,
     spaceId: string,
