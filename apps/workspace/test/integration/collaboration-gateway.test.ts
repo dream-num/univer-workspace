@@ -517,6 +517,9 @@ describe("collaboration gateway", () => {
       password: "correct horse battery staple",
     });
     const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
+    application.identity.updateCurrentUser(cookie, {
+      avatarUrl: "https://avatars.example/gateway-user.png",
+    });
     const space = application.spaces.list(issued.view.user.id).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.resources.create(
@@ -623,6 +626,14 @@ describe("collaboration gateway", () => {
       cookie,
       opened.resource.unitId
     );
+    expect(ownerConnection.members).toEqual([
+      {
+        memberID: ownerConnection.memberId,
+        userID: issued.view.user.id,
+        name: "Gateway User",
+        avatar: "https://avatars.example/gateway-user.png",
+      },
+    ]);
     const addCommentResponse = await fetch(
       `${origin}/universer-api/comment/unit/${opened.resource.unitId}/add`,
       {
@@ -1035,7 +1046,7 @@ async function joinUnit(
   origin: string,
   cookie: string,
   unitId: string
-): Promise<{ readonly memberId: string; readonly socket: WebSocket }> {
+) {
   const ticketResponse = await fetch(
     `${origin}/universer-api/user/session-ticket`,
     { headers: { cookie } }
@@ -1069,11 +1080,17 @@ async function joinUnit(
       data: { rooms: [{ roomID: unitId, args: "" }] },
     })
   );
-  await expect(nextCombResponse(socket)).resolves.toMatchObject({
+  const joined = await nextCombResponse(socket);
+  expect(joined).toMatchObject({
     cmd: CombCmd.JOIN,
     code: CmdRspCode.OK,
   });
-  return { memberId: hello.data.memberID, socket };
+  if (joined.cmd !== CombCmd.JOIN) throw new Error("JOIN response missing");
+  return {
+    memberId: hello.data.memberID,
+    socket,
+    members: joined.data.roomInfos[unitId]?.members,
+  };
 }
 
 function nextCombResponse(socket: WebSocket) {

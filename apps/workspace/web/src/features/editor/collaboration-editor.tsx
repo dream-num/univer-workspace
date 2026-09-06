@@ -42,7 +42,7 @@ import type {
   IPreset,
   IPresetPlugin,
 } from "@univerjs/presets";
-import type { IUser } from "@univerjs/protocol";
+import type { IMember, IUser } from "@univerjs/protocol";
 import type { Theme } from "@univerjs/themes";
 import { createUniver, mergeLocales } from "@univerjs/presets";
 import { useEffect, useRef, useState } from "react";
@@ -97,6 +97,7 @@ export interface CollaborationEditorProps {
       };
   readonly mappedUnitIds?: readonly string[];
   readonly readOnly?: boolean;
+  readonly onCollaboratorsChange?: (members: readonly IMember[]) => void;
 }
 
 export interface WorkspaceHistoryDefinition {
@@ -150,6 +151,7 @@ export function createCollaborationEditor(
     collaborationScope = { kind: "trunk" },
     mappedUnitIds,
     readOnly = false,
+    onCollaboratorsChange,
   }: CollaborationEditorProps) {
     const container = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
@@ -181,9 +183,12 @@ export function createCollaborationEditor(
       let mountedUniver: ReturnType<typeof createUniver>["univer"] | null =
         null;
       let statusListener: { dispose(): void } | null = null;
+      let collaboratorsListener: { dispose(): void } | null = null;
+      let collaborators: readonly IMember[] = [];
       let collaborationUIEventListener: { unsubscribe(): void } | null = null;
       let readOnlyListener: { dispose(): void } | null = null;
       let readOnlyLifecycleListener: { dispose(): void } | null = null;
+      onCollaboratorsChange?.([]);
 
       const mount = async () => {
         if (!element.id) {
@@ -428,6 +433,9 @@ export function createCollaborationEditor(
           (event) => {
             if (!disposed && event.unitId === unitId) {
               setCollaborationStatus(event.status);
+              onCollaboratorsChange?.(
+                event.status === CollaborationStatus.OFFLINE ? [] : collaborators
+              );
               if (event.status !== CollaborationStatus.CONFLICT) {
                 setCollaborationIssue(null);
               }
@@ -447,6 +455,22 @@ export function createCollaborationEditor(
             setLoading(false);
           }
         });
+        if (
+          !disposed &&
+          onCollaboratorsChange &&
+          collaborationScope.kind !== "mergePreview"
+        ) {
+          collaboratorsListener = collaboration.subscribeCollaborators(unitId, (members) => {
+            collaborators = members;
+            if (!disposed) {
+              onCollaboratorsChange(
+                collaboration.getCollaborationStatus(unitId) === CollaborationStatus.OFFLINE
+                  ? []
+                  : members
+              );
+            }
+          });
+        }
       };
 
       mount().catch((reason: unknown) => {
@@ -461,6 +485,8 @@ export function createCollaborationEditor(
 
       return () => {
         disposed = true;
+        collaboratorsListener?.dispose();
+        onCollaboratorsChange?.([]);
         statusListener?.dispose();
         collaborationUIEventListener?.unsubscribe();
         readOnlyListener?.dispose();
@@ -480,6 +506,7 @@ export function createCollaborationEditor(
       user.displayName,
       user.id,
       readOnly,
+      onCollaboratorsChange,
     ]);
 
     return (
