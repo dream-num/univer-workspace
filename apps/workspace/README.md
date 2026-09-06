@@ -4,10 +4,6 @@ A deployable React workspace providing authenticated Univer
 collaboration, Node hierarchy management, permissions, Trash, recent Resources,
 and Worktrees.
 
-Document headers show up to four online collaborators' avatars with hover names,
-deduplicated by user. Additional users appear as `+N`; missing avatars fall back
-to initials. Profile data and room membership come from the Collaboration SDK.
-
 ## Development
 
 Requirements:
