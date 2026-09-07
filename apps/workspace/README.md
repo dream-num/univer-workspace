@@ -56,6 +56,16 @@ authenticated internal `/universer-api` boundary. The Browser supplies its own
 Univer presets and plugins to the comparison viewer; official, agent, and
 merge-preview iframe views remain available.
 
+Draft Worktrees can also mark individual Units for deletion and undo that intent.
+Ready Worktrees freeze the intent; reopen one before changing it. Merging excludes
+removed Units from content publication, then moves existing documents to Workspace
+Trash. A Unit created and canceled in the same Worktree never becomes a published
+document. Discarding the Worktree leaves existing documents unchanged.
+The per-Unit merge result `removed` describes content exclusion; wait for both Worktree state `merged`
+and a completed merge Operation before treating product deletion as finished.
+A completed attempt that leaves the Worktree ready still needs another merge. Restore a merged
+document through Trash, not through the draft undo action.
+
 The Univer editors import and export XLSX/CSV/TSV, DOCX, and PPTX through the
 server-side `@univerjs-pro/exchange-node` runtime. These endpoints follow the
 Universer Exchange shape under `/universer-api/exchange/**`; they are not part
@@ -211,6 +221,14 @@ The Collaboration Comment and History Adapters perform additive, idempotent
 initialization of their own `comment=1` and `history=1` component schemas in the
 existing Collaboration SQLite file; they do not require a product database
 migration command. Back up both SQLite files before rollout.
+
+The current Worktree removal development build uses private SDK Dev overrides.
+Its Collaboration Worktree adapter upgrades its own component schema from V1 to
+V2; the product database remains V6. Older SDK builds cannot open Worktree V2.
+Test this build with separate product, collaboration, and Blob storage paths.
+Never point the main-branch application and this development build at the same
+Collaboration SQLite file. Rolling back requires the matching pre-upgrade database
+backup, not only switching the application commit.
 For a V6 rollout, stop every old Workspace instance, start one V6 instance and
 wait for migration and health checks to succeed, then restore normal service;
 do not let V5 and V6 processes write the same SQLite file concurrently.

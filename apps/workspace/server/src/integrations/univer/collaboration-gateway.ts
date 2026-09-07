@@ -202,6 +202,7 @@ export function createCollaborationGateway(options: {
     "createWorktree",
     "addWorktreeUnit",
     "createWorktreeUnit",
+    "setWorktreeUnitRemoved",
     "markWorktreeReady",
     "reopenWorktree",
     "discardWorktree",
@@ -435,32 +436,25 @@ function setServerChangesetCreateTime(changeset: {
 
 function trackConnections(
   endpoint: NodeTransportEndpoint,
-  connections: Set<NodeTransportConnection>
+  connections: Set<NodeTransportConnection>,
 ): NodeTransportEndpoint {
   return {
-    async handleHttp(context, next) {
-      if (endpoint.handleHttp) {
-        await endpoint.handleHttp(context, next);
-        return;
-      }
-      await next();
-    },
-    async handleUpgrade(context, next) {
-      if (!endpoint.handleUpgrade) {
-        await next();
-        return;
-      }
-      await endpoint.handleUpgrade(
-        {
-          incomingMessage: context.incomingMessage,
-          customData: context.customData,
-          reject: context.reject.bind(context),
-          accept(handler) {
-            context.accept(trackConnectionLifecycle(handler, connections));
-          },
+    register(router) {
+      endpoint.register({
+        get: (path, handler) => router.get(path, handler),
+        post: (path, handler) => router.post(path, handler),
+        delete: (path, handler) => router.delete(path, handler),
+        upgrade(path, handler) {
+          router.upgrade(path, (context) =>
+            handler({
+              ...context,
+              accept(socketHandler) {
+                context.accept(trackConnectionLifecycle(socketHandler, connections));
+              },
+            }),
+          );
         },
-        next
-      );
+      });
     },
     async dispose() {
       await endpoint.dispose?.();
