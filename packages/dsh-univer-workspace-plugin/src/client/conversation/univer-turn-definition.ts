@@ -145,6 +145,13 @@ export function opensFloatingWindow(operation: UniverTurnOperation): boolean {
   return isWrite(operation);
 }
 
+/** Successful mutations and review transitions belong on a Changes card. */
+export function changesReviewState(operation: UniverTurnOperation): boolean {
+  return operation.phase === "succeeded" && (
+    operation.name === "new" || operation.name === "worktree" || isWrite(operation)
+  );
+}
+
 /** Targets referenced anywhere in a session, used to restore floating-window intent. */
 export function turnFilesOfSession(session: unknown, _cwd?: string): UniverTurnFile[] {
   if (session === null || typeof session !== "object") return [];
@@ -255,7 +262,7 @@ export function outcomeOfTurnFile(target: UniverTurnFile): UniverTurnOutcome {
       continue;
     }
     if (operation.name === "unit") {
-      if (operation.action === "create") {
+      if (operation.action === "create" || operation.action === "remove" || operation.action === "restore") {
         primaryWorktreeId = operation.worktreeId;
         lifecycle = "draft";
         changedContent = true;
@@ -403,7 +410,7 @@ function addCall(state: UniverTurnState, data: SessionEvent<"tool/call">["data"]
     worktreeId,
     unitId,
     source: null,
-    readOnly: false,
+    readOnly: args.mode === "read" || args.readOnly === true,
     phase: "pending",
   };
   return { ...state, files: appendOperation(state.files, operation) };
@@ -456,7 +463,7 @@ function applyResult(
     unitId,
     ...(source === null ? {} : { source }),
     readOnly:
-      fieldOf(result, "editorMode") === "readOnly" || fieldOf(open, "editorMode") === "readOnly",
+      matched?.readOnly === true || fieldOf(result, "editorMode") === "readOnly" || fieldOf(open, "editorMode") === "readOnly",
     phase:
       data.error === undefined && data.message.content[0].isError !== true ? "succeeded" : "failed",
   };
@@ -500,7 +507,7 @@ function operationName(name: string): UniverOperationName | null {
   if (operation === "status") return "status";
   if (operation === "unit") return "unit";
   if (operation === "inspect") return "inspect";
-  if (operation === "edit" || operation === "execute") return "execute";
+  if (operation === "edit" || operation === "execute" || operation === "compile_svg") return "execute";
   if (operation === "import") return "import";
   if (operation === "export") return "export";
   if (operation === "worktree") return "worktree";
@@ -508,7 +515,7 @@ function operationName(name: string): UniverOperationName | null {
 }
 
 function isWrite(operation: UniverTurnOperation): boolean {
-  return operation.name === "execute" || operation.name === "import" || operation.name === "unit";
+  return (operation.name === "execute" && !operation.readOnly) || operation.name === "import" || operation.name === "unit";
 }
 
 function docKeyOf(resourceId: string | null, unitId: string | null, label: string | null): string {

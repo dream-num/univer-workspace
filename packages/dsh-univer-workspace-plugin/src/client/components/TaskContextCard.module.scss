@@ -52,21 +52,17 @@
 
   /* Each visible navigation column widens the panel so the Viewer keeps a
      usable width; the panel still never exceeds its parent container. */
-  &[data-expanded][data-nav-worktree],
   &[data-expanded][data-nav-unit] {
     width: min(780px, calc(100vw - 32px));
   }
 
-  &[data-expanded][data-nav-worktree][data-nav-unit] {
-    width: min(940px, calc(100vw - 32px));
-  }
+
 }
 
 /* Collapsed state is a lightweight change affordance; detail identity belongs
    to the expanded floating window. */
 .card:not([data-expanded]) {
   .identity {
-    .title,
     .meta,
     .fileCount {
       display: none;
@@ -203,10 +199,6 @@
   transform: rotate(180deg);
 }
 
-.chevronDown {
-  transform: rotate(90deg);
-}
-
 .body {
   display: grid;
   min-width: 0;
@@ -214,11 +206,6 @@
   grid-template-columns: minmax(0, 1fr);
   overflow-y: auto;
   border-top: 1px solid var(--color-border);
-}
-
-/* Outer level: [optional one-level Worktree navigation] + [worktree pane]. */
-.card[data-nav-worktree] .body {
-  grid-template-columns: 168px minmax(0, 1fr);
 }
 
 /* Inner level: [optional Unit navigation] + [preview], inside the pane. */
@@ -233,120 +220,22 @@
   grid-template-columns: 180px minmax(0, 1fr);
 }
 
-.worktreeNavigation {
-  display: flex;
-  max-height: 420px;
-  flex-direction: column;
-  gap: 2px;
-  overflow-y: auto;
-  border-right: 1px solid var(--color-border);
-  padding: 8px;
-  background: var(--color-muted);
-}
-
-.worktreeGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-
-  & + & {
-    margin-top: 8px;
-  }
-}
-
-.worktreeGroupLabel {
-  margin: 0;
-  padding: 2px 8px;
-  color: var(--color-subtle-foreground);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.worktreeGroupToggle {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 4px;
-  border: 0;
+.worktreeSwitcher {
+  align-self: flex-start;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: transparent;
-  padding: 3px 8px;
-  color: var(--color-subtle-foreground);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-
-  > svg {
-    width: 12px;
-    height: 12px;
-    flex: none;
-  }
-
-  &:hover {
-    background: var(--color-accent);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-ring);
-    outline-offset: 1px;
-  }
-}
-
-.worktreeGroupCount {
+  padding: 4px 6px;
+  background: var(--color-background);
   color: var(--color-muted-foreground);
-  font-weight: 400;
-}
-
-.worktreeRow {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  padding: 7px 8px;
-  color: var(--color-secondary-foreground);
   font: inherit;
   font-size: 12px;
-  text-align: left;
   cursor: pointer;
-
-  &:hover {
-    background: var(--color-accent);
-  }
 
   &:focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 1px;
   }
-
-  &[data-selected] {
-    background: var(--color-brand-50);
-    color: var(--color-brand-700);
-    font-weight: 500;
-  }
-}
-
-.worktreeName {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.activityNew {
-  flex: none;
-  border-radius: 999px;
-  background: var(--color-brand-50);
-  padding: 0 6px;
-  color: var(--color-brand-700);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 16px;
 }
 
 .unitNavigation {

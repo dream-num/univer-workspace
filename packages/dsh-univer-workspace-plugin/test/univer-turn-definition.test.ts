@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   latestUnitTurns,
+  changesReviewState,
+  opensFloatingWindow,
   mergeFiles,
   turnFilesOfConversation,
   unitIdentityOfTurnFile,
@@ -434,3 +436,17 @@ describe("univer turn projection", () => {
     );
   });
 });
+
+ it("keeps read-mode execution out of Changes and floating-window mutation intent", () => {
+  const definition = univerTurnDefinition as any;
+  let state = definition.start({}, turnStart());
+  const call = toolCall();
+  call.event.data.name = "univer_execute";
+  call.event.data.arguments = JSON.stringify({ worktreeId: "read-worktree", unitId: UNIT_ID, mode: "read" });
+  state = definition.update({ state }, call);
+  state = definition.update({ state }, toolResult());
+  const operation = state.files.flatMap((file: any) => file.operations)[0];
+  expect(operation.readOnly).toBe(true);
+  expect(changesReviewState(operation)).toBe(false);
+  expect(opensFloatingWindow(operation)).toBe(false);
+ });

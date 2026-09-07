@@ -6,7 +6,7 @@
 
 import * as React from "react";
 import type { DocumentFileState } from "../../shared/state.ts";
-import { getFileState, isMissingDocument } from "../api/univer-api.ts";
+import { getFileState, isMissingDocument, subscribeFileStateInvalidation } from "../api/univer-api.ts";
 
 /** Read collaboration state once for a stable list of docKeys (`res:`/`wt:`). */
 export function useUniverStates(files: readonly string[]): {
@@ -32,13 +32,13 @@ export function useUniverStates(files: readonly string[]): {
     setErrors({});
     let active = true;
     let activeController: AbortController | undefined;
-    const readOnce = async (): Promise<void> => {
+    const readOnce = async (keys = trackedFiles): Promise<void> => {
       // A single request pass keeps each rendered card stable.
       if (!active) return;
       const controller = new AbortController();
       activeController = controller;
       try {
-        for (const file of trackedFiles) {
+        for (const file of keys) {
           try {
             const state = await getFileState(file, controller.signal);
             if (!active) return;
@@ -76,8 +76,12 @@ export function useUniverStates(files: readonly string[]): {
         if (activeController === controller) activeController = undefined;
       }
     };
+    const unsubscribe = subscribeFileStateInvalidation((file) => {
+      if (trackedFiles.includes(file)) void readOnce([file]);
+    });
     void readOnce();
     return () => {
+      unsubscribe();
       active = false;
       activeController?.abort();
     };

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { getFileState, invalidateFileState } from "../src/client/api/univer-api.ts";
+import { getFileState, invalidateFileState, subscribeFileStateInvalidation } from "../src/client/api/univer-api.ts";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -36,4 +36,22 @@ it("does not reuse or cache a read started before a removal mutation", async () 
   expect(await getFileState(key)).toEqual(state);
   expect(fetch).toHaveBeenCalledTimes(2);
   invalidateFileState(key);
+});
+
+it("refreshes a cached empty Worktree after a Unit creation notification", async () => {
+  const key = "wt:created-unit";
+  const empty = { worktrees: [{ unitCount: 0, units: [] }] };
+  const populated = { worktrees: [{ unitCount: 1, units: [{ unitId: "created", kind: "added" }] }] };
+  const fetch = vi.fn().mockResolvedValueOnce(Response.json(empty)).mockResolvedValueOnce(Response.json(populated));
+  vi.stubGlobal("fetch", fetch);
+  expect(await getFileState(key)).toEqual(empty);
+  let refreshed: Promise<unknown> | undefined;
+  const unsubscribe = subscribeFileStateInvalidation((changed) => {
+    if (changed === key) refreshed = getFileState(key);
+  });
+  invalidateFileState(key);
+  expect(await refreshed).toEqual(populated);
+  unsubscribe();
+  invalidateFileState(key);
+  expect(fetch).toHaveBeenCalledTimes(2);
 });

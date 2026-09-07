@@ -13,9 +13,11 @@ import type { ConversationSnapshot } from "@deepseek-ai/dsh-client-ui-conversati
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import {
   isViewerDocKey,
+  changesReviewState,
   opensFloatingWindow,
   turnFilesOfConversation,
 } from "./conversation/univer-turn-definition.ts";
+import { invalidateFileState } from "./api/univer-api.ts";
 import { useUniverStates } from "./hooks/use-univer-state.ts";
 import type { ViewerRuntimeProps } from "./components/review-panel.tsx";
 import { TaskContextCard } from "./components/TaskContextCard.tsx";
@@ -61,9 +63,10 @@ function UniverSessionDock(props: ViewerDockProps): React.ReactElement {
       worktreeId: string | null;
       preferredUnitId: string | null;
     } | null = null;
+    const invalidated = new Set<string>();
     for (const file of turnFiles) {
       for (const operation of file.operations) {
-        if (!opensFloatingWindow(operation)) continue;
+        if (operation.phase !== "succeeded") continue;
         if (seen.current.has(operation.callId)) continue;
         seen.current.add(operation.callId);
         // Only a resolvable wt:/res: target wakes the card; a qualifying
@@ -75,9 +78,14 @@ function UniverSessionDock(props: ViewerDockProps): React.ReactElement {
           file.docKey,
         );
         if (target === null) continue;
-        focus = { ...target, preferredUnitId: operation.unitId };
+        if (changesReviewState(operation)) {
+          invalidated.add(target.docKey);
+          if (operation.resourceId !== null) invalidated.add(`res:${operation.resourceId}`);
+        }
+        if (opensFloatingWindow(operation)) focus = { ...target, preferredUnitId: operation.unitId };
       }
     }
+    for (const key of invalidated) invalidateFileState(key);
     if (focus === null) return;
     const target = focus;
     setVisible(true);

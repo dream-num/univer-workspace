@@ -42,6 +42,7 @@ describe("Session task-card presentation model", () => {
     const failedWorktree = file("wt:worktree-1", [
       operation("failed-edit", {
         name: "execute",
+          readOnly: false,
         docKey: "wt:worktree-1",
         worktreeId: "worktree-1",
         phase: "failed",
@@ -72,10 +73,10 @@ describe("Session task-card presentation model", () => {
       file("wt:worktree-1", [
         operation("worktree-edit", {
           name: "execute",
+          readOnly: false,
           docKey: "wt:worktree-1",
           label: "Budget changes",
           worktreeId: "worktree-1",
-          readOnly: false,
         }),
       ]),
     ]);
@@ -108,6 +109,7 @@ describe("Session task-card presentation model", () => {
       file("wt:worktree-1", [
         operation("worktree-edit", {
           name: "execute",
+          readOnly: false,
           docKey: "wt:worktree-1",
           worktreeId: "worktree-1",
         }),
@@ -154,6 +156,7 @@ describe("Session task-card presentation model", () => {
         }),
         operation("worktree-1-edit", {
           name: "execute",
+          readOnly: false,
           docKey: "wt:worktree-1",
           label: null,
           worktreeId: "worktree-1",

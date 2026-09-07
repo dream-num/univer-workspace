@@ -11,6 +11,7 @@ import * as React from "react";
 import type { PropsLocale } from "@deepseek-ai/dsh-client-ui-slots";
 import {
   isViewerDocKey,
+  changesReviewState,
   latestUnitTurns,
   mergeFiles,
   outcomeOfTurnFile,
@@ -36,7 +37,7 @@ export function PreviewCard(props: PreviewCardProps): React.ReactElement {
   const files = React.useMemo(
     () =>
       absorbWorktreeCoveredTrunkFiles(
-        mergeFiles(props.matched.files).filter((entry) => isViewerDocKey(entry.docKey)),
+        mergeFiles(props.matched.files).filter((entry) => isViewerDocKey(entry.docKey) && entry.operations.some(changesReviewState)),
       ),
     [props.matched.files],
   );

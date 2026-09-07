@@ -105,6 +105,12 @@ export async function getWorktrees(signal?: AbortSignal): Promise<readonly Workt
  * keeps its panel rendering as unavailable, mirroring office. */
 const fileStateRequests = new Map<string, Promise<DocumentFileState>>();
 const fileStateSnapshots = new Map<string, DocumentFileState>();
+const fileStateListeners = new Set<(docKey: string) => void>();
+
+export function subscribeFileStateInvalidation(listener: (docKey: string) => void): () => void {
+  fileStateListeners.add(listener);
+  return () => { fileStateListeners.delete(listener); };
+}
 
 export async function getFileState(
   docKey: string,
@@ -156,6 +162,7 @@ export async function getFileState(
 export function invalidateFileState(docKey: string): void {
   fileStateSnapshots.delete(docKey);
   fileStateRequests.delete(docKey);
+  for (const listener of fileStateListeners) listener(docKey);
 }
 
 export function isMissingDocument(error: unknown): boolean {

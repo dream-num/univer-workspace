@@ -1,7 +1,7 @@
 /**
  * The single persistent session-task card (confirmed variant A). One DSH
  * Conversation renders at most one of these: it aggregates every Worktree the
- * Session touched (left one-level switcher when more than one exists) and
+ * Session touched (header dropdown when more than one exists) and
  * falls back to the latest independent trunk Resource only when no Worktree
  * candidate exists. The card is collapsed by default and mounts the shared
  * Univer Viewer only while explicitly expanded. All selection state — pinned
@@ -19,7 +19,6 @@ import {
   BoardsMultiIcon,
   Button,
   ChevronDownIcon,
-  ChevronRightIcon,
   CloseIcon,
   DocsMultiIcon,
   ExternalLinkIcon,
@@ -71,8 +70,7 @@ export function TaskContextCard(props: TaskContextCardProps): React.ReactElement
   const [dragOffset, setDragOffset] = React.useState({ x: 0, y: 0 });
   const [dragging, setDragging] = React.useState(false);
   const dragOrigin = React.useRef<{ pointerId: number; x: number; y: number } | null>(null);
-  const [navigationOpen, setNavigationOpen] = React.useState(false);
-  const [processedOpen, setProcessedOpen] = React.useState(false);
+  const [navigationOpen, setNavigationOpen] = React.useState(true);
   const [pinnedWorktreeId, setPinnedWorktreeId] = React.useState<string | null>(null);
   const [selectedUnitId, setSelectedUnitId] = React.useState<string | undefined>(undefined);
   const [activity, setActivity] = React.useState<readonly string[]>([]);
@@ -96,13 +94,13 @@ export function TaskContextCard(props: TaskContextCardProps): React.ReactElement
 
   const pinned =
     pinnedWorktreeId !== null &&
-    activeWorktrees.some((candidate) => candidate.worktreeId === pinnedWorktreeId)
+    props.candidates.worktrees.some((candidate) => candidate.worktreeId === pinnedWorktreeId)
       ? pinnedWorktreeId
       : null;
-  const defaultWorktreeId = defaultCurrentWorktreeId(activeWorktrees, liveStatusOf);
+  const defaultWorktreeId = defaultCurrentWorktreeId(props.candidates.worktrees, liveStatusOf);
   const currentWorktreeId = pinned ?? defaultWorktreeId;
   const currentCandidate =
-    activeWorktrees.find((candidate) => candidate.worktreeId === currentWorktreeId) ?? null;
+    props.candidates.worktrees.find((candidate) => candidate.worktreeId === currentWorktreeId) ?? null;
   const fallback = currentCandidate === null ? props.candidates.fallback : null;
 
   // Focus intents: a manual open pins and expands; a new Agent operation never
@@ -154,7 +152,7 @@ export function TaskContextCard(props: TaskContextCardProps): React.ReactElement
   if (currentCandidate === null && fallback === null) return <></>;
 
   const onPointerDown = (event: React.PointerEvent<HTMLElement>): void => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("button, input, textarea"))
+    if (event.button !== 0 || (event.target as HTMLElement).closest("button, input, textarea, select"))
       return;
     dragOrigin.current = {
       pointerId: event.pointerId,
@@ -191,18 +189,16 @@ export function TaskContextCard(props: TaskContextCardProps): React.ReactElement
           worktree={liveWorktreeOf(currentCandidate)}
           state={props.states[currentCandidate.docKey]}
           stateError={props.errors[currentCandidate.docKey]}
-          worktreeNav={
+          worktreeSwitcher={
             props.candidates.worktrees.length > 1 ? (
-              <WorktreeNavigation
+              <WorktreeSwitcher
                 active={activeWorktrees}
                 processed={processedWorktrees}
-                processedOpen={processedOpen}
                 currentWorktreeId={currentCandidate.worktreeId}
                 activity={activity}
                 nameOf={(entry) => liveWorktreeOf(entry)?.name || entry.label || t("card.title")}
                 statusOf={liveStatusOf}
                 t={t}
-                onToggleProcessed={() => setProcessedOpen((value) => !value)}
                 onSelect={selectWorktree}
               />
             ) : null
@@ -253,7 +249,7 @@ function WorktreeCard(props: {
   readonly worktree: DocumentWorktreeState | undefined;
   readonly state: DocumentFileState | undefined;
   readonly stateError: string | undefined;
-  readonly worktreeNav: React.ReactNode;
+  readonly worktreeSwitcher: React.ReactNode;
   readonly expanded: boolean;
   readonly navigationOpen: boolean;
   readonly selectedUnitId: string | undefined;
@@ -287,6 +283,9 @@ function WorktreeCard(props: {
         ? candidate.preferredUnitId
         : units[0]?.unitId;
   const title = worktree?.name || candidate.label || t("card.title");
+  const documentCount = worktree === undefined
+    ? statusLabel(status, t)
+    : t(units.length === 1 ? "task.documentCount" : "task.documentsCount").replace("{value}", String(units.length));
   const updatedAt = worktree === undefined ? null : formatOptionalDateTime(worktree.updatedAt);
 
   const collapsedMeta = null;
@@ -346,7 +345,6 @@ function WorktreeCard(props: {
       data-worktree-id={candidate.worktreeId}
       data-dragging={props.dragging || undefined}
       style={{ transform: `translate(${props.dragOffset.x}px, ${props.dragOffset.y}px)` }}
-      data-nav-worktree={expanded && props.worktreeNav !== null ? true : undefined}
       data-nav-unit={expanded && props.navigationOpen && units.length > 0 ? true : undefined}
       aria-label={title}
     >
@@ -357,11 +355,12 @@ function WorktreeCard(props: {
         onPointerUp={props.onPointerUp}
       >
         <div className={css.identity}>
+          {props.worktreeSwitcher}
           <div className={css.titleRow}>
             <strong className={css.title}>{title}</strong>
             <Badge variant={statusVariant(status)}>{statusLabel(status, t)}</Badge>
             <span className={css.fileCount}>
-              {t("task.filesCount").replace("{value}", String(worktree?.unitCount ?? units.length))}
+              {documentCount}
             </span>
           </div>
           {expanded ? (
@@ -422,7 +421,7 @@ function WorktreeCard(props: {
           >
             <ChevronDownIcon className={css.chevronUp} />
             <span className={css.changeSummary}>
-              {t("task.filesCount").replace("{value}", String(worktree?.unitCount ?? units.length))}
+              {documentCount}
             </span>
           </Button>
         </div>
@@ -430,7 +429,6 @@ function WorktreeCard(props: {
 
       {expanded ? (
         <div className={css.body}>
-          {props.worktreeNav}
           <div className={css.worktreePane}>
             {props.navigationOpen && units.length > 0 ? (
               <nav className={css.unitNavigation} aria-label={t("task.unitNav.aria")}>
@@ -491,66 +489,42 @@ function WorktreeCard(props: {
   );
 }
 
-/** Left one-level Worktree switcher; rendered only for multi-Worktree sessions. */
-function WorktreeNavigation(props: {
+/** Infrequent session Worktree switching stays separate from document navigation. */
+function WorktreeSwitcher(props: {
   readonly active: readonly SessionWorktreeCandidate[];
   readonly processed: readonly SessionWorktreeCandidate[];
-  readonly processedOpen: boolean;
   readonly currentWorktreeId: string;
   readonly activity: readonly string[];
-  /** The live product name wins; the candidate label is only a fallback. */
   readonly nameOf: (candidate: SessionWorktreeCandidate) => string;
   readonly statusOf: (candidate: SessionWorktreeCandidate) => WorktreeStatus | undefined;
   readonly t: (key: UniverLocaleKey) => string;
-  readonly onToggleProcessed: () => void;
   readonly onSelect: (candidate: SessionWorktreeCandidate) => void;
 }): React.ReactElement {
   const t = props.t;
-  const renderRow = (candidate: SessionWorktreeCandidate): React.ReactElement => {
-    const selected = candidate.worktreeId === props.currentWorktreeId;
+  const renderOption = (candidate: SessionWorktreeCandidate): React.ReactElement => {
     const status = props.statusOf(candidate);
-    const hasNews = props.activity.includes(candidate.worktreeId);
-    return (
-      <button
-        key={candidate.worktreeId}
-        type="button"
-        className={css.worktreeRow}
-        data-selected={selected || undefined}
-        aria-pressed={selected}
-        onClick={() => props.onSelect(candidate)}
-      >
-        <span className={css.worktreeName}>{props.nameOf(candidate)}</span>
-        {hasNews ? <span className={css.activityNew}>{t("task.new")}</span> : null}
-        {status === undefined ? null : (
-          <Badge variant={statusVariant(status)}>{statusLabel(status, t)}</Badge>
-        )}
-      </button>
-    );
+    const label = [
+      props.nameOf(candidate),
+      status === undefined ? null : statusLabel(status, t),
+      props.activity.includes(candidate.worktreeId) ? t("task.new") : null,
+    ].filter(Boolean).join(" · ");
+    return <option key={candidate.worktreeId} value={candidate.worktreeId}>{label}</option>;
   };
   return (
-    <nav className={css.worktreeNavigation} aria-label={t("task.worktreeNav")}>
-      {props.active.length > 0 ? (
-        <div className={css.worktreeGroup}>
-          <p className={css.worktreeGroupLabel}>{t("task.group.active")}</p>
-          {props.active.map(renderRow)}
-        </div>
-      ) : null}
-      {props.processed.length > 0 ? (
-        <div className={css.worktreeGroup}>
-          <button
-            type="button"
-            className={css.worktreeGroupToggle}
-            aria-expanded={props.processedOpen}
-            onClick={props.onToggleProcessed}
-          >
-            <ChevronRightIcon className={props.processedOpen ? css.chevronDown : undefined} />
-            {t("task.group.processed")}
-            <span className={css.worktreeGroupCount}>{props.processed.length}</span>
-          </button>
-          {props.processedOpen ? props.processed.map(renderRow) : null}
-        </div>
-      ) : null}
-    </nav>
+    <select
+      className={css.worktreeSwitcher}
+      aria-label={t("task.worktreeNav")}
+      value={props.currentWorktreeId}
+      onChange={(event) => {
+        const candidate = [...props.active, ...props.processed].find(
+          (entry) => entry.worktreeId === event.target.value,
+        );
+        if (candidate !== undefined) props.onSelect(candidate);
+      }}
+    >
+      {props.active.length > 0 ? <optgroup label={t("task.group.active")}>{props.active.map(renderOption)}</optgroup> : null}
+      {props.processed.length > 0 ? <optgroup label={t("task.group.processed")}>{props.processed.map(renderOption)}</optgroup> : null}
+    </select>
   );
 }
 

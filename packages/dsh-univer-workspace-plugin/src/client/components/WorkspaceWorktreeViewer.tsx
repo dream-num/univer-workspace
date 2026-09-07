@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { Button, ChevronDownIcon, ChevronRightIcon } from "@univerjs/univer-workspace-ui";
 import type { DocumentFileState } from "../../shared/state.ts";
-import { getFileState } from "../api/univer-api.ts";
+import { getFileState, subscribeFileStateInvalidation } from "../api/univer-api.ts";
 import type { UniverLocaleKey } from "../locales.ts";
 import type { WorkspaceWorktreeSurface } from "../navigation/workspace-navigation.ts";
 import type { ViewerBootstrap } from "../viewer-bootstrap.ts";
@@ -65,6 +65,10 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const locateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialLocateDoneRef = useRef(false);
+
+  useEffect(() => subscribeFileStateInvalidation((key) => {
+    if (key === `wt:${props.target.worktreeId}`) setMutationVersion((value) => value + 1);
+  }), [props.target.worktreeId]);
 
   useEffect(() => {
     const controller = new AbortController();

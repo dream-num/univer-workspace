@@ -17,7 +17,7 @@ import {
 } from "@univerjs/univer-workspace-ui";
 import type { WorktreeStateView, WorktreeStatus } from "../shared/state.ts";
 import type { UniverLocaleKey } from "./locales.ts";
-import { getWorktrees } from "./api/univer-api.ts";
+import { getWorktrees, subscribeFileStateInvalidation } from "./api/univer-api.ts";
 import type { WorkspaceWorktreeSurface } from "./navigation/workspace-navigation.ts";
 import { WORKSPACE_ME_PATH, type WorkspaceMeView } from "./workspace-contract.ts";
 import {
@@ -68,6 +68,10 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
     setRefreshing(true);
     setRefreshEpoch((value) => value + 1);
   }, []);
+
+  useEffect(() => subscribeFileStateInvalidation((key) => {
+    if (key.startsWith("wt:")) refresh();
+  }), [refresh]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
