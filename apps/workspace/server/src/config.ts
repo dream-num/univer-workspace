@@ -4,6 +4,7 @@ import type { OAuthClientConfig } from "./modules/identity/oauth-clients.js";
 export interface WorkspaceConfig {
   readonly host: string;
   readonly port: number;
+  readonly metricsToken?: string;
   readonly databaseFilename: string;
   readonly collaborationDatabaseFilename: string;
   readonly blobDirectory?: string;
@@ -34,6 +35,10 @@ export function loadConfig(
     environment.DISCORD_BOT_API_KEY,
     "DISCORD_BOT_API_KEY"
   );
+  const metricsToken = optionalSecret(environment.METRICS_TOKEN, "METRICS_TOKEN");
+  if (metricsToken && !/^[a-zA-Z0-9._~+/-]+=*$/.test(metricsToken)) {
+    throw new Error("METRICS_TOKEN must be a valid Bearer token without whitespace");
+  }
   return {
     host: environment.HOST ?? "127.0.0.1",
     port: integer(environment.PORT, 3020, "PORT"),
@@ -63,6 +68,7 @@ export function loadConfig(
       "SESSION_TTL_MS"
     ),
     ...(discordBotApiKey ? { discordBotApiKey } : {}),
+    ...(metricsToken ? { metricsToken } : {}),
     githubOAuth,
     discordOAuth,
     oauthClients: oauthClientsConfig,

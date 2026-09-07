@@ -21,6 +21,8 @@ import {
   type WorkspaceApplication,
 } from "../../server/src/app.js";
 
+import { httpRequestDurationSeconds } from "../../server/src/middleware/metrics.js";
+
 const applications: WorkspaceApplication[] = [];
 const servers: Server[] = [];
 const sockets: WebSocket[] = [];
@@ -657,11 +659,25 @@ describe("collaboration gateway", () => {
       ],
     });
 
+    httpRequestDurationSeconds.reset();
     const snapshotResponse = await fetch(
       `${origin}/universer-api/snapshot/${UniverType.UNIVER_SHEET}/unit/${opened.resource.unitId}/rev/0`,
       { headers: { cookie } }
     );
     expect(snapshotResponse.status).toBe(200);
+    const requestCounts = (await httpRequestDurationSeconds.get()).values.filter(
+      (value) => value.metricName.endsWith("_count")
+    );
+    expect(requestCounts).toEqual([
+      expect.objectContaining({
+        value: 1,
+        labels: {
+          method: "GET",
+          route: "/universer-api/snapshot/:type/unit/:unitID/rev/:revision",
+          status_code: 200,
+        },
+      }),
+    ]);
     await expect(snapshotResponse.json()).resolves.toMatchObject({
       snapshot: {
         unitID: opened.resource.unitId,

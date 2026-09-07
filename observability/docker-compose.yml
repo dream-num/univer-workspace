@@ -1,0 +1,36 @@
+# Optional local Prometheus and Grafana stack.
+# Configure the scrape token as described in README.md, then run from the repo root:
+#   docker compose -f observability/docker-compose.yml up -d
+#   docker compose -f observability/docker-compose.yml down
+# Prometheus: http://localhost:9090
+# Grafana: http://localhost:3000 (initial credentials: admin / admin)
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      # Load the local scrape configuration.
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Persist metric history across container recreation.
+      - prometheus-data:/prometheus
+      - type: bind
+        source: ${METRICS_TOKEN_FILE:-./.secrets/metrics-token}
+        target: /etc/prometheus/metrics-token
+        read_only: true
+        bind:
+          create_host_path: false
+
+  grafana:
+    image: grafana/grafana-oss:12.1.0
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      # Provision the data source and dashboard at startup.
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+volumes:
+  prometheus-data:
+  grafana-data:

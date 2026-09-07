@@ -1,0 +1,9 @@
+# Provision the Prometheus data source at Grafana startup.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: PBFA97CFB590B2093
+    type: prometheus
+    access: proxy # Grafana forwards queries to Prometheus.
+    url: http://prometheus:9090 # Compose service name within the container network.
+    isDefault: true

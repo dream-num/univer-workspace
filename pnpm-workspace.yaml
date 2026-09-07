@@ -12,62 +12,62 @@ allowBuilds:
 # of resolving the workspace's hoisted copy. Remove these extensions when the
 # upstream package manifests declare Redi themselves.
 packageExtensions:
-  "@univerjs/engine-render@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/engine-render@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-ui@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/sheets-ui@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/thread-comment@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/thread-comment@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/boards-ui@1.0.0-insiders.20260902-a58c423":
+  "@univerjs-pro/boards-ui@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/slides-ui@1.0.0-insiders.20260902-a58c423":
+  "@univerjs-pro/slides-ui@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/collaboration@1.0.0-insiders.20260902-a58c423":
+  "@univerjs-pro/collaboration@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
 
-  "@univerjs-pro/bases@1.0.0-insiders.20260902-a58c423":
+  "@univerjs-pro/bases@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/boards@1.0.0-insiders.20260902-a58c423":
+  "@univerjs-pro/boards@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/edit-history-ui@1.0.0-insiders.20260902-a58c423":
+  "@univerjs-pro/edit-history-ui@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/slides@1.0.0-insiders.20260902-a58c423":
+  "@univerjs-pro/slides@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/docs-ui@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/docs-ui@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/drawing@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/drawing@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/engine-formula@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/engine-formula@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/sheets@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-conditional-formatting@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/sheets-conditional-formatting@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-filter@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/sheets-filter@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-formula@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/sheets-formula@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-numfmt@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/sheets-numfmt@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-table@1.0.0-insiders.20260902-a58c423":
+  "@univerjs/sheets-table@1.0.0-insiders.20260907-70fc579":
     dependencies:
       "@wendellhu/redi": "1.1.2"
   # Router declarations import React types but omit the type peer. Bind them to
@@ -109,16 +109,3 @@ minimumReleaseAgeExclude:
   - "@oxfmt/binding-win32-ia32-msvc@0.66.0"
   - "@oxfmt/binding-win32-x64-msvc@0.66.0"
   - oxfmt@0.66.0
-
-# Temporary Worktree development release; keep the unrelated SDK baseline unchanged.
-overrides:
-  "@univerjs-pro/collaboration-endpoint": "1.0.0-dev.worktree-removal.20260907"
-  "@univerjs-pro/collaboration-service": "1.0.0-dev.worktree-removal.20260907"
-  "@univerjs-pro/collaboration-transport-node": "1.0.0-dev.worktree-removal.20260907"
-  "@univerjs-pro/collaboration-worktree-client": "1.0.0-dev.worktree-removal.20260907"
-  "@univerjs-pro/collaboration-worktree-database-memory": "1.0.0-dev.worktree-removal.20260907"
-  "@univerjs-pro/collaboration-worktree-database-sqlite": "1.0.0-dev.worktree-removal.20260907"
-  "@univerjs-pro/collaboration-worktree-endpoint": "1.0.0-dev.worktree-removal.20260907"
-  "@univerjs-pro/collaboration-worktree-service": "1.0.0-dev.worktree-removal.20260907"
-  "@univerjs-pro/collaboration-history-endpoint": "1.0.0-dev.worktree-removal.20260907"
-  "@univerjs-pro/collaboration-comment-endpoint": "1.0.0-dev.worktree-removal.20260907"
