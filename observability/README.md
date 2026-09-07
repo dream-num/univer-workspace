@@ -58,7 +58,7 @@ docker compose -f observability/docker-compose.yml up -d
 
 - Prometheus：<http://127.0.0.1:9090>，在 Targets 页面确认 `univer-workspace` 为 UP。
 - Grafana：<http://127.0.0.1:3000>，首次登录为 `admin / admin`，按页面要求修改密码。
-- 自动配置数据源 UID 为 `Prometheus`，仪表盘名为 `Univer Workspace · RED 指标`。
+- 自动配置名为 `Prometheus` 的数据源，仪表盘名为 `Univer Workspace · RED 指标`。
 - 先访问几次 Workspace 接口；抓取间隔为 15 秒，速率与分位数图需要积累多个采样点。
 - 收到 401 时核对两侧抓取令牌；收到 404 时检查 `METRICS_TOKEN` 配置并重启 Workspace；
   连接失败时检查目标地址、端口与网络。
