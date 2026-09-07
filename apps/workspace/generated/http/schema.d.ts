@@ -3557,7 +3557,11 @@ export interface operations {
     listWorktrees: {
         parameters: {
             query?: {
-                scope?: "active" | "processed";
+                scope?: "active" | "processed" | "all";
+                /** @description Literal substring of name, summary, creator display name or username, or Team Space name. ASCII case-insensitive; other characters match exactly. Applied before pagination. */
+                search?: string;
+                /** @description Descending product timestamp, with ascending Worktree ID as a stable tie-breaker. Cursors must be reused with the same filters and order. */
+                order?: "updatedAtDesc" | "createdAtDesc";
                 kind?: components["schemas"]["WorktreeKind"];
                 teamSpaceId?: string;
                 /** @description Opaque cursor returned by the previous page. */
@@ -3582,6 +3586,7 @@ export interface operations {
                     "application/json": components["schemas"]["WorktreeList"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
         };
     };

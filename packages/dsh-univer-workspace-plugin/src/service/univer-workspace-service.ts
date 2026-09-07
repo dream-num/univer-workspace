@@ -6,6 +6,7 @@
  * @module dsh-univer-workspace-plugin/service
  */
 
+import type { WorktreeListQuery, WorktreeSummaryPage } from "../shared/state.ts";
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
 import type {
@@ -105,8 +106,8 @@ export abstract class UniverWorkspaceService extends Service {
   /** Fetch a complete Worktree descriptor after a lifecycle mutation. */
   abstract getWorktreeDetail(userId: string, worktreeId: string): Promise<WorktreeStateView>;
 
-  /** List all active and processed Worktrees visible to the current identity. */
-  abstract listWorktrees(userId: string): Promise<readonly WorktreeStateView[]>;
+  /** List one page of visible summaries without fetching Unit details. */
+  abstract listWorktrees(userId: string, query?: WorktreeListQuery): Promise<WorktreeSummaryPage>;
 
   /** Add an existing trunk Resource to a Worktree and return its mapped Unit. */
   abstract addWorktreeTrunkUnit(

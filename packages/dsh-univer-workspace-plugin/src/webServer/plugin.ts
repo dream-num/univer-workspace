@@ -647,8 +647,14 @@ export function createBrowserApiHandler(
         return;
       }
       try {
-        const worktrees = await ctx.get("univerWorkspace")!.listWorktrees(user.userId);
-        jsonResponse(res, 200, { worktrees });
+        const params = new URL(req.url ?? "/", "http://localhost").searchParams;
+        const query: Record<string, string | number> = {};
+        for (const key of ["scope", "kind", "teamSpaceId", "search", "order", "cursor", "limit"]) {
+          const value = params.get(key);
+          if (value !== null) query[key] = value;
+        }
+        const page = await ctx.get("univerWorkspace")!.listWorktrees(user.userId, query);
+        jsonResponse(res, 200, page);
       } catch (error) {
         jsonResponse(
           res,

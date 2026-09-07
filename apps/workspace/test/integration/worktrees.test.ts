@@ -25,6 +25,49 @@ afterEach(async () => {
 });
 
 describe("Worktrees", () => {
+  it("paginates authorized summaries before hydration, with stable ordering and literal search", async () => {
+    const backend = new MemoryWorktreeBackend();
+    const application = createTestApplication(backend);
+    const owner = await register(application, "page-owner");
+    const viewer = await register(application, "page-viewer");
+    const outsider = await register(application, "page-outsider");
+    const team = application.spaces.createTeamSpace(owner.id, { name: "Pagination team" });
+    application.permissions.upsertTeamMember(owner.id, team.id, viewer.id, { role: "viewer" });
+    const visibleIds: string[] = [];
+    for (let i = 0; i < 110; i += 1) {
+      const visible = i < 55;
+      const created = await application.worktrees.create(owner.id, `page-create-worktree-${i}`, {
+        kind: "team", teamSpaceId: team.id, visibility: visible ? "space" : "private",
+        name: visible ? `Visible 100%_ ${i}` : `Hidden ${i}`, summary: null,
+      });
+      application.database.connection.prepare("UPDATE worktrees SET created_at = ?, updated_at = ? WHERE id = ?")
+        .run(visible ? 100 : 200, visible ? 100 : 200, created.body.id);
+      if (visible) visibleIds.push(created.body.id);
+    }
+    const get = vi.spyOn(backend, "getWorktree");
+    const query = { scope: "all", order: "createdAtDesc", limit: 50, kind: "team", teamSpaceId: team.id };
+    const first = await application.worktrees.list(viewer.id, query);
+    expect(first.items.map((item) => item.id)).toEqual(visibleIds.sort().slice(0, 50));
+    expect(get).toHaveBeenCalledTimes(50);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await application.worktrees.list(viewer.id, { ...query, cursor: first.nextCursor });
+    expect(second.items.map((item) => item.id)).toEqual(visibleIds.slice(50));
+    expect(second.nextCursor).toBeNull();
+    const legacyCursor = Buffer.from(JSON.stringify({ updatedAt: 100, id: visibleIds[49] })).toString("base64url");
+    expect((await application.worktrees.list(viewer.id, { scope: "active", cursor: legacyCursor })).items.map((item) => item.id))
+      .toEqual(visibleIds.slice(50));
+    expect((await application.worktrees.list(outsider.id, query)).items).toEqual([]);
+    expect((await application.worktrees.list(owner.id, { ...query, limit: 200 })).items).toHaveLength(110);
+    expect((await application.worktrees.list(viewer.id, { ...query, search: "100%_", limit: 200 })).items).toHaveLength(55);
+    expect((await application.worktrees.list(viewer.id, { ...query, search: "100__", limit: 200 })).items).toEqual([]);
+    expect((await application.worktrees.list(viewer.id, { ...query, search: "PAGINATION TEAM", limit: 200 })).items).toHaveLength(55);
+    expect((await application.worktrees.list(viewer.id, { ...query, scope: "processed" })).items).toEqual([]);
+    await expect(application.worktrees.list(viewer.id, { ...query, cursor: first.nextCursor, search: "Visible" }))
+      .rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(application.worktrees.list(viewer.id, { ...query, search: "x".repeat(201) }))
+      .rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+
   it("does not trash a removed Unit until all content merge results succeed", async () => {
     const backend = new MemoryWorktreeBackend();
     const application = createTestApplication(backend);

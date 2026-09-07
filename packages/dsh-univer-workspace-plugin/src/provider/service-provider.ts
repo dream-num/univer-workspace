@@ -9,6 +9,7 @@
  * @module dsh-univer-workspace-plugin/provider/service-provider
  */
 
+import type { WorktreeListQuery } from "../shared/state.ts";
 import { mkdir } from "node:fs/promises";
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
@@ -44,7 +45,7 @@ import {
   createWorktreeLocalUnit as apiCreateWorktreeLocalUnit,
   setWorktreeUnitRemoved as apiSetWorktreeUnitRemoved,
   discardWorktree,
-  listReviewWorktrees,
+  listWorktreePage,
   listSpaceDocuments,
   listSpaces,
   markWorktreeReady,
@@ -177,9 +178,9 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await getWorktreeDetail(client, worktreeId);
   }
 
-  async listWorktrees(userId: string) {
+  async listWorktrees(userId: string, query: WorktreeListQuery = {}) {
     const client = this.requireClient(userId);
-    return await listReviewWorktrees(client);
+    return await listWorktreePage(client, query);
   }
 
   async addWorktreeTrunkUnit(userId: string, worktreeId: string, resourceId: string) {

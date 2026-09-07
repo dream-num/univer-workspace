@@ -46,6 +46,7 @@ export {
   narrowWorktreeDetail,
   listActiveWorktrees,
   listReviewWorktrees,
+  listWorktreePage,
 } from "./worktree-api.ts";
 export type {
   WorktreeCapabilities,

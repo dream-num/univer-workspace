@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Context } from "@deepseek-ai/cordis";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { listActiveWorktrees, listReviewWorktrees } from "../src/provider/worktree-api.ts";
+import { listActiveWorktrees, listReviewWorktrees, listWorktreePage } from "../src/provider/worktree-api.ts";
 import type { WorkspaceHttpClient } from "../src/provider/workspace-contract.ts";
 import { createBrowserApiHandler } from "../src/webServer/plugin.ts";
 
@@ -46,6 +46,24 @@ describe("Worktree browser API", () => {
     }
     remove.mockRejectedValueOnce(Object.assign(new Error("No trash permission"), { status: 403 }));
     expect((await request({ removed: true })).status).toBe(403);
+  });
+
+  it("fetches exactly one summary page without following its cursor or loading details", async () => {
+    const request = vi.fn(async (_path: string) => response({
+      items: Array.from({ length: 50 }, (_, i) => (worktreeDetail(`wt-${i}`) as { worktree: unknown }).worktree),
+      nextCursor: "next-page",
+    }));
+    const client: WorkspaceHttpClient = { origin: "https://workspace.test", sessionToken: "session", request };
+    const query = { scope: "all", kind: "team", teamSpaceId: "team-1", search: "100%_", order: "createdAtDesc", limit: 50 } as const;
+    const page = await listWorktreePage(client, query);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(page.items).toHaveLength(50);
+    expect(page.items[0]).not.toHaveProperty("units");
+    expect(page.nextCursor).toBe("next-page");
+    const url = new URL(request.mock.calls[0]![0] as string, client.origin);
+    expect(Object.fromEntries(url.searchParams)).toEqual({ ...query, limit: "50" });
+    request.mockResolvedValueOnce(response({ items: [], nextCursor: "next-page" }));
+    await expect(listWorktreePage(client, { ...query, cursor: "next-page" })).rejects.toMatchObject({ status: 502 });
   });
 
   it("walks active and processed pages and de-duplicates Worktree details", async () => {
@@ -126,15 +144,15 @@ describe("Worktree browser API", () => {
 
   it("lists the current identity's origin-level Worktrees", async () => {
     const worktrees = [worktreeView("wt-ready")];
-    const listWorktrees = vi.fn(async () => worktrees);
+    const listWorktrees = vi.fn(async () => ({ items: worktrees, nextCursor: "next-page" }));
     const identity = { current: { userId: "user-1", username: "alice" } };
     const server = await serve(identity, listWorktrees);
 
     const result = await fetch(`${server.origin}/univer-workspace/api/worktrees`);
 
     expect(result.status).toBe(200);
-    expect(await result.json()).toEqual({ worktrees });
-    expect(listWorktrees).toHaveBeenCalledExactlyOnceWith("user-1");
+    expect(await result.json()).toEqual({ items: worktrees, nextCursor: "next-page" });
+    expect(listWorktrees).toHaveBeenCalledExactlyOnceWith("user-1", {});
   });
 });
 

@@ -8,8 +8,9 @@ import type {
 } from "./worktrees.types.js";
 
 export interface WorktreeCursor {
-  readonly updatedAt: number;
+  readonly timestamp: number;
   readonly id: string;
+  readonly queryKey?: string;
 }
 
 export interface WorktreeRow {
@@ -112,17 +113,22 @@ export class WorktreesRepository {
 
   listCandidates(input: {
     readonly userId: string;
-    readonly scope: "active" | "processed";
+    readonly scope: "active" | "processed" | "all";
+    readonly search: string;
+    readonly order: "updatedAtDesc" | "createdAtDesc";
     readonly kind: WorktreeKind | null;
     readonly teamSpaceId: string | null;
     readonly cursor: WorktreeCursor | null;
     readonly limit: number;
   }): WorktreeRow[] {
     const predicates = [
-      input.scope === "active"
-        ? "worktree.processed_at IS NULL"
-        : "worktree.processed_at IS NOT NULL",
+      input.scope === "all"
+        ? "1 = 1"
+        : input.scope === "active"
+          ? "worktree.processed_at IS NULL"
+          : "worktree.processed_at IS NOT NULL",
     ];
+    const orderColumn = input.order === "createdAtDesc" ? "created_at" : "updated_at";
     const parameters: Array<string | number> = [
       input.userId,
       input.userId,
@@ -136,14 +142,24 @@ export class WorktreesRepository {
       predicates.push("worktree.team_space_id = ?");
       parameters.push(input.teamSpaceId);
     }
+    if (input.search) {
+      predicates.push(`(
+        instr(lower(worktree.name), lower(?)) > 0
+        OR instr(lower(coalesce(worktree.summary, '')), lower(?)) > 0
+        OR instr(lower(creator.display_name), lower(?)) > 0
+        OR instr(lower(creator.username), lower(?)) > 0
+        OR instr(lower(coalesce(team.name, '')), lower(?)) > 0
+      )`);
+      parameters.push(...Array<string>(5).fill(input.search));
+    }
     if (input.cursor) {
       predicates.push(
-        `(worktree.updated_at < ?
-          OR (worktree.updated_at = ? AND worktree.id > ?))`
+        `(worktree.${orderColumn} < ?
+          OR (worktree.${orderColumn} = ? AND worktree.id > ?))`
       );
       parameters.push(
-        input.cursor.updatedAt,
-        input.cursor.updatedAt,
+        input.cursor.timestamp,
+        input.cursor.timestamp,
         input.cursor.id
       );
     }
@@ -153,11 +169,15 @@ export class WorktreesRepository {
         `${worktreeSelect()}
          WHERE (
            worktree.creator_user_id = ?
-           OR team.owner_user_id = ?
-           OR member.user_id IS NOT NULL
+           OR (worktree.kind = 'team' AND (
+             team.owner_user_id = ?
+             OR (member.user_id IS NOT NULL AND (
+               worktree.visibility = 'space' OR member.role = 'admin'
+             ))
+           ))
          )
            AND ${predicates.join(" AND ")}
-         ORDER BY worktree.updated_at DESC, worktree.id
+         ORDER BY worktree.${orderColumn} DESC, worktree.id
          LIMIT ?`
       )
       .all(...parameters) as unknown as WorktreeRow[];

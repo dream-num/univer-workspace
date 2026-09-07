@@ -263,3 +263,21 @@ pnpm db:reset
 
 See [architecture.md](docs/architecture.md), [data-model.md](docs/data-model.md),
 and [application-design.md](docs/application-design.md).
+
+### Worktree discovery API
+
+`GET /api/worktrees` returns a cursor-paginated summary page (`items`, `nextCursor`).
+It defaults to active Worktrees ordered by product update time. `scope=processed`
+loads history and `scope=all` includes both; `kind=user` selects the current user's
+personal Worktrees, while `kind=team&teamSpaceId=<id>` selects one Team Space.
+Omitting the ownership filters provides the current user's accessible overview
+across Spaces without changing visibility or content permissions.
+
+Use `limit` (1–200, default 50), `order=createdAtDesc` for creation order, and
+`search` (up to 200 characters) for a literal substring in names, summaries,
+creator names, or Team Space names. Search is ASCII case-insensitive; other
+characters match exactly. Visibility and search are applied before pagination.
+Pass `nextCursor` as `cursor` with the same filters and order until it is null.
+Each page reflects current data; refresh the first page after lifecycle changes.
+Summary `unitCount` includes all mapped Units, not only changed documents.
+Fetch `/api/worktrees/<id>` only when Unit details are needed.

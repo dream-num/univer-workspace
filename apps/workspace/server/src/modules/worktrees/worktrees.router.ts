@@ -16,6 +16,8 @@ export function createWorktreesRouter(options: {
     response.json(
       await options.worktrees.list(user.id, {
         scope: request.query.scope,
+        search: request.query.search,
+        order: request.query.order,
         kind: request.query.kind,
         teamSpaceId: request.query.teamSpaceId,
         cursor: request.query.cursor,

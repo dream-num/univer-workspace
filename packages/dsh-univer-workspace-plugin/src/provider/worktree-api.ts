@@ -5,6 +5,8 @@
 
 import type { WorkspaceHttpClient } from "./workspace-contract.ts";
 import type {
+  WorktreeListQuery,
+  WorktreeSummaryPage,
   WorktreeCapabilities,
   WorktreeCreator,
   WorktreeStateView,
@@ -771,6 +773,31 @@ export function narrowWorktreeDetail(raw: unknown): WorktreeStateView {
     updatedAt: summary.updatedAt,
     capabilities: summary.capabilities,
     units,
+  };
+}
+
+/** One bounded summary request; detail and Unit hydration belong to selection. */
+export async function listWorktreePage(
+  client: WorkspaceHttpClient,
+  query: WorktreeListQuery = {},
+): Promise<WorktreeSummaryPage> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  const raw = await readJson(await client.request(`/api/worktrees?${params}`), "worktree list");
+  const record = (raw ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(record.items) ||
+    !(record.nextCursor === null || (typeof record.nextCursor === "string" &&
+      record.nextCursor !== "" && record.nextCursor !== query.cursor))) {
+    throw new WorkspaceApiError("workspace worktree list returned an invalid page", 502, "MALFORMED_WORKTREES");
+  }
+  return {
+    items: record.items.map((entry) => {
+      const { id, state, ...summary } = narrowWorktreeSummary(entry);
+      return { ...summary, worktreeId: id, status: state };
+    }),
+    nextCursor: record.nextCursor,
   };
 }
 

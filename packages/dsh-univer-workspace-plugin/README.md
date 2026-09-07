@@ -167,3 +167,13 @@ Account-level Harness sessions use the connected account's personal Space as
 the default destination. Sessions opened in a selected Space keep that Space
 as their default. Explicit targets still require Workspace server permission;
 unrelated local DSH directories are not automatically linked.
+
+### Worktree list loading
+
+The Worktree sidebar loads one page of summaries per request, defaults to pending
+Worktrees, and loads further pages with **Load more**. Search and lifecycle filters
+run on the Workspace server; selecting a row loads that Worktree's Unit details.
+The Team and personal groups describe the loaded rows, not global totals.
+Conversation cards continue resolving their known Worktree IDs independently.
+This sidebar requires a Workspace server supporting `scope=all`, `search`, and
+`order=createdAtDesc` on `GET /api/worktrees`; update the server before the plugin.

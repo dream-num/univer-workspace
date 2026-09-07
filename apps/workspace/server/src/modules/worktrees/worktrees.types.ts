@@ -179,6 +179,8 @@ export interface WorktreesModule {
     userId: string,
     query: {
       readonly scope: unknown;
+      readonly search?: unknown;
+      readonly order?: unknown;
       readonly kind: unknown;
       readonly teamSpaceId: unknown;
       readonly cursor: unknown;

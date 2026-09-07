@@ -3,6 +3,7 @@
  * @module dsh-univer-workspace-plugin/client/api/univer-api
  */
 
+import type { WorktreeListQuery, WorktreeSummaryPage } from "../../shared/state.ts";
 import type { DocumentFileState, WorktreeAction, WorktreeStateView } from "../../shared/state.ts";
 
 export interface WorkspaceNodeLocation {
@@ -87,17 +88,24 @@ function objectRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-/** List all active and processed Worktrees visible to the connected identity. */
-export async function getWorktrees(signal?: AbortSignal): Promise<readonly WorktreeStateView[]> {
-  const response = await fetch("/univer-workspace/api/worktrees", {
+/** Fetch one summary page; opening a Worktree fetches its details separately. */
+export async function getWorktrees(query: WorktreeListQuery = {}, signal?: AbortSignal): Promise<WorktreeSummaryPage> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  const response = await fetch(`/univer-workspace/api/worktrees?${params}`, {
     headers: { accept: "application/json" },
     ...(signal === undefined ? {} : { signal }),
   });
   if (response.status === 401) throw new Error("workspace_connection_required");
   if (!response.ok) throw new Error(`worktree list answered ${response.status}`);
-  const body = (await response.json()) as { worktrees?: unknown };
-  if (!Array.isArray(body.worktrees)) throw new Error("worktree list returned malformed data");
-  return body.worktrees as WorktreeStateView[];
+  const body = (await response.json()) as WorktreeSummaryPage;
+  if (!Array.isArray(body.items) || !(body.nextCursor === null ||
+    (typeof body.nextCursor === "string" && body.nextCursor !== "" && body.nextCursor !== query.cursor))) {
+    throw new Error("worktree list returned malformed data");
+  }
+  return body;
 }
 
 /** Read collaboration state for one docKey (`res:<id>` or `wt:<id>`).

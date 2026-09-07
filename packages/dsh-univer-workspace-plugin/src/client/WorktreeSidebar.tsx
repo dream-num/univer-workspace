@@ -15,16 +15,14 @@ import {
   RefreshIcon,
   Select,
 } from "@univerjs/univer-workspace-ui";
-import type { WorktreeStateView, WorktreeStatus } from "../shared/state.ts";
+import type { WorktreeListQuery, WorktreeSummaryView, WorktreeStatus } from "../shared/state.ts";
 import type { UniverLocaleKey } from "./locales.ts";
 import { getWorktrees, subscribeFileStateInvalidation } from "./api/univer-api.ts";
 import type { WorkspaceWorktreeSurface } from "./navigation/workspace-navigation.ts";
 import { WORKSPACE_ME_PATH, type WorkspaceMeView } from "./workspace-contract.ts";
 import {
-  worktreeMatchesVisibility,
   type WorktreeVisibilityFilter,
   formatWorktreeRelativeTime,
-  sortWorktreesByCreatedAt,
 } from "./worktree-order.ts";
 import css from "./WorktreeSidebar.module.scss";
 
@@ -40,12 +38,12 @@ export interface WorktreeSidebarProps {
   readonly t: (key: UniverLocaleKey) => string;
 }
 
-export function worktreeOwnershipOf(worktree: WorktreeStateView): OwnershipGroupKey {
+export function worktreeOwnershipOf(worktree: WorktreeSummaryView): OwnershipGroupKey {
   return worktree.kind;
 }
 
 export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: WorktreeSidebarProps) {
-  const [worktrees, setWorktrees] = useState<readonly WorktreeStateView[]>();
+  const [worktrees, setWorktrees] = useState<readonly WorktreeSummaryView[]>();
   const [workspaceOrigin, setWorkspaceOrigin] = useState("");
   const [pending, setPending] = useState(true);
   const [error, setError] = useState<string>();
@@ -57,6 +55,19 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
   const [now, setNow] = useState(() => Date.now());
   const [visibilityFilter, setVisibilityFilter] = useState<WorktreeVisibilityFilter>("open");
   const loadRetryAttempt = useRef(0);
+  const [listQuery, setListQuery] = useState<WorktreeListQuery>({ scope: "active", order: "createdAtDesc", limit: 50 });
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if ((listQuery.search ?? "") === search.trim()) return;
+      setWorktrees(undefined);
+      setNextCursor(null);
+      loadRetryAttempt.current = 0;
+      setListQuery(({ cursor: _cursor, ...current }) => ({ ...current, search: search.trim() }));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search, listQuery.search]);
   const [expandedGroups, setExpandedGroups] = useState<
     Readonly<Record<OwnershipGroupKey, boolean>>
   >({
@@ -66,6 +77,8 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
 
   const refresh = useCallback(() => {
     setRefreshing(true);
+    setNextCursor(null);
+    setListQuery(({ cursor: _cursor, ...current }) => current);
     setRefreshEpoch((value) => value + 1);
   }, []);
 
@@ -92,13 +105,16 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
       retryTimer = window.setTimeout(() => setRefreshEpoch((value) => value + 1), delay);
     };
     setPending(true);
-    void Promise.allSettled([getWorktrees(abort.signal), fetchWorkspaceMe(abort.signal)])
+    void Promise.allSettled([getWorktrees(listQuery, abort.signal), fetchWorkspaceMe(abort.signal)])
       .then(([worktreeResult, meResult]) => {
         if (abort.signal.aborted) return;
 
         let hasFailure = false;
         if (worktreeResult.status === "fulfilled") {
-          setWorktrees(worktreeResult.value);
+          const page = worktreeResult.value;
+          setWorktrees((current) => listQuery.cursor === undefined ? page.items :
+            [...new Map([...(current ?? []), ...page.items].map((item) => [item.worktreeId, item])).values()]);
+          setNextCursor(page.nextCursor);
           setError(undefined);
         } else {
           hasFailure = true;
@@ -140,33 +156,18 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
       abort.abort();
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
-  }, [refreshEpoch]);
+  }, [refreshEpoch, listQuery]);
 
-  const query = search.trim().toLocaleLowerCase();
-  const visibleWorktrees = useMemo(
-    () => (worktrees ?? []).filter((worktree) => matchesSearch(worktree, query)),
-    [worktrees, query],
-  );
   const groups = useMemo(
-    () =>
-      OWNERSHIP_GROUPS.map((group) => {
-        const allWorktrees = visibleWorktrees.filter(
-          (worktree) => worktreeOwnershipOf(worktree) === group.key,
-        );
-        return {
-          ...group,
-          worktrees: sortWorktreesByCreatedAt(
-            allWorktrees.filter((worktree) =>
-              worktreeMatchesVisibility(worktree.status, visibilityFilter),
-            ),
-          ),
-        };
-      }),
-    [visibilityFilter, visibleWorktrees],
+    () => OWNERSHIP_GROUPS.map((group) => ({
+      ...group,
+      worktrees: (worktrees ?? []).filter((worktree) => worktreeOwnershipOf(worktree) === group.key),
+    })),
+    [worktrees],
   );
 
   const openWorktree = useCallback(
-    (worktree: WorktreeStateView) => {
+    (worktree: WorktreeSummaryView) => {
       if (workspaceOrigin === "") return;
       onOpenWorktree({
         kind: "worktree",
@@ -179,7 +180,7 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
     [onOpenWorktree, workspaceOrigin],
   );
 
-  const renderWorktree = (worktree: WorktreeStateView) => {
+  const renderWorktree = (worktree: WorktreeSummaryView) => {
     const metaParts: string[] = [];
     if (worktree.kind === "team") {
       metaParts.push(worktree.teamSpace?.name ?? t("worktree.teamSpaceFallback"));
@@ -245,7 +246,14 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
           <span className={css.visibilityLabel}>{t("worktree.visibilityLabel")}</span>
           <Select
             value={visibilityFilter}
-            onValueChange={setVisibilityFilter}
+            onValueChange={(value) => {
+              setVisibilityFilter(value);
+              setWorktrees(undefined);
+              setNextCursor(null);
+              loadRetryAttempt.current = 0;
+              setListQuery(({ cursor: _cursor, ...current }) => ({ ...current,
+                scope: value === "open" ? "active" : value === "closed" ? "processed" : "all" }));
+            }}
             size="sm"
             borderless
             aria-label={t("worktree.visibilityAria")}
@@ -273,15 +281,9 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
           {initialLoading ? <p className={css.status}>{t("worktree.loading")}</p> : null}
           {!initialLoading && worktrees !== undefined && worktrees.length === 0 ? (
             <div className={css.empty}>
-              <strong>{t("worktree.emptyTitle")}</strong>
-              <span>{t("worktree.emptyBody")}</span>
+              <strong>{t(search.trim() !== "" ? "worktree.noMatch" : "worktree.emptyTitle")}</strong>
+              {search.trim() === "" ? <span>{t("worktree.emptyBody")}</span> : null}
             </div>
-          ) : null}
-          {!initialLoading &&
-          worktrees !== undefined &&
-          worktrees.length > 0 &&
-          visibleWorktrees.length === 0 ? (
-            <p className={css.status}>{t("worktree.noMatch")}</p>
           ) : null}
           {groups.map((group) => {
             const groupOpen = expandedGroups[group.key];
@@ -300,7 +302,6 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
                   <span className={css.groupLabel}>
                     {t(`worktree.group.${group.key}` as UniverLocaleKey)}
                   </span>
-                  <span className={css.groupCount}>{group.worktrees.length}</span>
                 </button>
                 {groupOpen ? (
                   <>
@@ -314,6 +315,12 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
               </section>
             );
           })}
+          {nextCursor !== null ? (
+            <Button disabled={pending || retrying || search.trim() !== (listQuery.search ?? "")}
+              onClick={() => setListQuery((current) => ({ ...current, cursor: nextCursor }))}>
+              {t(pending ? "worktree.loading" : "worktree.loadMore")}
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -329,18 +336,6 @@ async function fetchWorkspaceMe(signal: AbortSignal): Promise<WorkspaceMeView> {
   if (response.status === 401) throw new Error("workspace_connection_required");
   if (!response.ok) throw new Error(`workspace identity answered ${response.status}`);
   return (await response.json()) as WorkspaceMeView;
-}
-
-function matchesSearch(worktree: WorktreeStateView, query: string): boolean {
-  if (query === "") return true;
-  const fields: readonly (string | null | undefined)[] = [
-    worktree.name,
-    worktree.summary,
-    worktree.creator.displayName,
-    worktree.creator.username,
-    worktree.teamSpace?.name,
-  ];
-  return fields.some((field) => field?.toLocaleLowerCase().includes(query) === true);
 }
 
 function worktreeStatusLabel(status: WorktreeStatus, t: (key: UniverLocaleKey) => string): string {

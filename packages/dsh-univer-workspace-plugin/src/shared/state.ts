@@ -71,7 +71,7 @@ export interface WorktreeUnitView extends ChangedUnit {
 }
 
 /** One origin-level Worktree with the full product metadata needed by browser surfaces. */
-export interface WorktreeStateView {
+export interface WorktreeSummaryView {
   readonly worktreeId: string;
   readonly name: string;
   readonly status: WorktreeStatus;
@@ -85,7 +85,25 @@ export interface WorktreeStateView {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly capabilities: WorktreeCapabilities;
+}
+
+export interface WorktreeStateView extends WorktreeSummaryView {
   readonly units: readonly WorktreeUnitView[];
+}
+
+export interface WorktreeListQuery {
+  readonly scope?: "active" | "processed" | "all";
+  readonly kind?: "user" | "team";
+  readonly teamSpaceId?: string;
+  readonly search?: string;
+  readonly order?: "updatedAtDesc" | "createdAtDesc";
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
+export interface WorktreeSummaryPage {
+  readonly items: readonly WorktreeSummaryView[];
+  readonly nextCursor: string | null;
 }
 
 /** Embedded-editor mount carried where office uses opaque viewer URLs. */
