@@ -162,7 +162,7 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
     () => OWNERSHIP_GROUPS.map((group) => ({
       ...group,
       worktrees: (worktrees ?? []).filter((worktree) => worktreeOwnershipOf(worktree) === group.key),
-    })),
+    })).filter((group) => group.worktrees.length > 0),
     [worktrees],
   );
 
@@ -304,13 +304,7 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
                   </span>
                 </button>
                 {groupOpen ? (
-                  <>
-                    {group.worktrees.length > 0 ? (
-                      <ul className={css.worktreeList}>{group.worktrees.map(renderWorktree)}</ul>
-                    ) : (
-                      <p className={css.groupEmpty}>{t("worktree.groupEmpty")}</p>
-                    )}
-                  </>
+                  <ul className={css.worktreeList}>{group.worktrees.map(renderWorktree)}</ul>
                 ) : null}
               </section>
             );
