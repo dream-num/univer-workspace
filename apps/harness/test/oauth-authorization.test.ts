@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 import { createOAuthCallbackHandler, createOAuthStartHandler } from "../src/oauth-authorization.js";
 
@@ -27,7 +28,26 @@ describe("Harness OAuth browser flow", () => {
       const callback = createOAuthCallbackHandler(ctx as never, pending);
       await callback(new TestRequest(`GET /auth/oauth/callback?state=${state}&code=code-1`) as never, callbackResponse as never);
       expect(callbackResponse.status).toBe(200);
-      expect(callbackResponse.body).toContain('http-equiv="refresh"');
+      expect(callbackResponse.body).not.toContain('http-equiv="refresh"');
+      const script = callbackResponse.body.match(/<script nonce="([^"]+)">([\s\S]*?)<\/script>/u)!;
+      expect(callbackResponse.headers["content-security-policy"]).toContain(`script-src 'nonce-${script[1]}'`);
+      const replace = vi.fn();
+      const ready = { connected: true, restartRequired: false, identity: { userId: "u1" }, workspaceOrigin: "https://workspace.example" };
+      const browserFetch = vi.fn()
+        .mockRejectedValueOnce(new Error("Restarting"))
+        .mockResolvedValueOnce(Response.json({ ...ready, restartRequired: true }))
+        .mockResolvedValueOnce(Response.json({ ...ready, identity: { userId: "previous-user" } }))
+        .mockResolvedValueOnce(Response.json({ ...ready, workspaceOrigin: "https://other.example" }))
+        .mockResolvedValueOnce(Response.json(ready))
+        .mockResolvedValueOnce(new Response("Not ready", { status: 404 }))
+        .mockResolvedValueOnce(Response.json(ready))
+        .mockResolvedValueOnce(new Response("<!doctype html>", { headers: { "content-type": "text/html" } }));
+      await runInNewContext(script[2]!.replace("void waitForApplication();", "waitForApplication();"), {
+        fetch: browserFetch, AbortSignal, setTimeout: (resolve: () => void) => resolve(),
+        window: { location: { replace } },
+      });
+      expect(browserFetch).toHaveBeenCalledTimes(8);
+      expect(replace).toHaveBeenCalledExactlyOnceWith("/");
       expect(callbackResponse.headers.location).toBeUndefined();
       expect(stageConnection).toHaveBeenCalledWith({ userId: "u1", username: "alice" }, "session", "https://workspace.example");
       expect(pending.has(state)).toBe(false);

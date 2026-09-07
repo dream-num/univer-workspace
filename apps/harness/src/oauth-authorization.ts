@@ -28,20 +28,21 @@ export function createOAuthStartHandler(ctx: Context, pending: Map<string, Pendi
 }
 
 export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pending>) {
-  const completed = new Map<string, number>();
+  const completed = new Map<string, { expiresAt: number; userId: string; origin: string }>();
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "GET") {
       res.writeHead(405, { allow: "GET", "cache-control": "no-store" });
       res.end();
       return;
     }
-    for (const [key, expiresAt] of completed) {
-      if (expiresAt <= Date.now()) completed.delete(key);
+    for (const [key, receipt] of completed) {
+      if (receipt.expiresAt <= Date.now()) completed.delete(key);
     }
     const url = new URL(req.url ?? "/", "http://localhost");
     const state = url.searchParams.get("state") ?? "";
-    if (completed.has(state)) {
-      sendCallbackPage(res, true);
+    const receipt = completed.get(state);
+    if (receipt !== undefined) {
+      sendCallbackPage(res, receipt);
       return;
     }
     const entry = pending.get(state);
@@ -66,24 +67,52 @@ export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pe
     if (typeof body.access_token !== "string" || typeof body.user?.id !== "string" || typeof body.user.username !== "string") { res.writeHead(502, { "content-type": "text/plain; charset=utf-8" }); res.end("Workspace token response was invalid."); return; }
     await ctx.workspaceAuth.stageConnection({ userId: body.user.id, username: body.user.username, ...(typeof body.user.displayName === "string" ? { displayName: body.user.displayName } : {}) }, body.access_token, entry.origin);
     if (completed.size >= 32) completed.delete(completed.keys().next().value!);
-    completed.set(state, Date.now() + TTL);
-    sendCallbackPage(res, true);
+    const connection = { expiresAt: Date.now() + TTL, userId: body.user.id, origin: entry.origin };
+    completed.set(state, connection);
+    sendCallbackPage(res, connection);
   };
 }
 
-function sendCallbackPage(res: ServerResponse, success: boolean, denied = false): void {
+function sendCallbackPage(res: ServerResponse, connection: false | { userId: string; origin: string }, denied = false): void {
+  const success = connection !== false;
+  const nonce = randomBytes(18).toString("base64url");
+  const expected = JSON.stringify(connection).replaceAll("<", "\\u003c");
+  const script = success ? `<script nonce="${nonce}">
+const expected = ${expected};
+const deadline = Date.now() + 45000;
+async function waitForApplication() {
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch("/api/uwh/me", { cache: "no-store", headers: { accept: "application/json" }, signal: AbortSignal.timeout(3000) });
+      const status = response.ok ? await response.json() : null;
+      if (status?.connected === true && status.restartRequired === false && status.identity?.userId === expected.userId && status.workspaceOrigin === expected.origin) {
+        const home = await fetch("/", { cache: "no-store", signal: AbortSignal.timeout(3000) });
+        if (home.ok && home.headers.get("content-type")?.includes("text/html")) {
+          window.location.replace("/");
+          return;
+        }
+      }
+    } catch {
+      // The supervised child can be unavailable while switching identity.
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  document.getElementById("status").textContent = "Workspace is connected, but the application is still starting. Try the link below in a moment.";
+}
+void waitForApplication();
+</script>` : "";
   // Commit a local document before navigating to DSH. Its Strict cookie is
   // excluded from a cross-site OAuth redirect chain, even when the final URL is local.
   const title = success ? "Workspace connected" : denied ? "Connection cancelled" : "Start a new connection";
   const description = success
-    ? "Your authorization is complete. Continue to the application."
+    ? "Your authorization is complete. Waiting for the application to start…"
     : denied ? "You declined access. You can start again whenever you are ready."
       : "This connection request is no longer available. Start again to create a new request.";
   res.writeHead(200, {
     "content-type": "text/html; charset=utf-8",
     "cache-control": "no-store",
     "referrer-policy": "no-referrer",
-    "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+    "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'`,
   });
-  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${success ? '<meta http-equiv="refresh" content="1;url=/">' : ""}<title>${title}</title><style>body{font:16px system-ui;margin:0;background:#f6f7fb;color:#171717;display:grid;min-height:100vh;place-items:center}main{max-width:420px;padding:32px;margin:20px;background:white;border:1px solid #e2e4ea;border-radius:16px}p{line-height:1.6}a{color:#5147bd}</style></head><body><main><h1>${title}</h1><p>${description}</p><a href="${success ? "/" : "/auth/oauth/start"}">${success ? "Continue to application" : "Start again"}</a></main></body></html>`);
+  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font:16px system-ui;margin:0;background:#f6f7fb;color:#171717;display:grid;min-height:100vh;place-items:center}main{max-width:420px;padding:32px;margin:20px;background:white;border:1px solid #e2e4ea;border-radius:16px}p{line-height:1.6}a{color:#5147bd}</style></head><body><main><h1>${title}</h1><p id="status">${description}</p><a href="${success ? "/" : "/auth/oauth/start"}">${success ? "Continue to application" : "Start again"}</a></main>${script}</body></html>`);
 }

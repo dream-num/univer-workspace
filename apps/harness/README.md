@@ -82,6 +82,10 @@ Harness does not copy those databases into its local data directory.
 
 ## Model credentials
 
+On first launch, dismiss the DSH testing notice with **Continue**. The model
+setup dialog offers **Configure later** if you only want to browse Workspace
+and review changes; sending agent messages still requires model credentials.
+
 DSH model settings and credentials are local-machine state; they are not tied
 to a Workspace user. For a local profile, run without `NODE_ENV=production` or
 set `UWH_MODEL_SETTINGS_ENABLED=true`, then configure the stock DSH Models page.
