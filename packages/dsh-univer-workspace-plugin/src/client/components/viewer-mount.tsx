@@ -6,6 +6,7 @@
  */
 
 import * as React from "react";
+import { viewerErrorMessage } from "../viewer/error-message.ts";
 import { LocaleType } from "@univerjs/core";
 import {
   createViewer,
@@ -144,18 +145,4 @@ export function ViewerMount(props: {
       <div ref={containerRef} id={instanceId} className={css.viewerContainer} />
     </div>
   );
-}
-
-function viewerErrorMessage(reason: unknown): string {
-  if (reason instanceof Error && reason.message !== "") return reason.message;
-  if (typeof reason === "string" && reason !== "") return reason;
-  if (reason !== null && typeof reason === "object") {
-    try {
-      const encoded = JSON.stringify(reason);
-      if (encoded !== undefined && encoded !== "{}") return encoded;
-    } catch {
-      /* Fall through to a stable user-facing message. */
-    }
-  }
-  return "Viewer failed to load";
 }

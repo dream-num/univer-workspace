@@ -191,6 +191,7 @@
     "@univerjs/preset-sheets-table": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/preset-sheets-thread-comment": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/presets": "1.0.0-insiders.20260902-a58c423",
+    "@univerjs/network": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/protocol": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/sheets": "1.0.0-insiders.20260902-a58c423",
     "@univerjs/sheets-conditional-formatting": "1.0.0-insiders.20260902-a58c423",

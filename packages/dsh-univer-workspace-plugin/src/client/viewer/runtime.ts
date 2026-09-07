@@ -6,6 +6,7 @@
  * target-specific seam is the opaque same-origin URL set built by `proxy.ts`.
  */
 
+import { UniverNetworkPlugin } from "@univerjs/network";
 import { FUniver } from "@univerjs/core/facade";
 import "@univerjs-pro/collaboration-client/facade";
 import { DocSelectionManagerService } from "@univerjs/docs";
@@ -146,6 +147,9 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
   };
 
   try {
+    // Use the Harness fetch transport so every document request carries the
+    // connection version belonging to this page, including snapshot requests.
+    univer.registerPlugin(UniverNetworkPlugin, { useFetchImpl: true });
     registerViewerRendering(univer, {
       container: opts.container,
       assetIoOwner: ViewAssetIoOwner.CollaborationClient,
