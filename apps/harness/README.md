@@ -8,8 +8,8 @@ profile loads:
 - `@univerjs/univer-workspace-harness` (this package) — the service core:
   Workspace browser OAuth authorization, one process-wide remote
   connection exposed through the `workspaceAuth` cordis service, the
-  Workspace origin settings namespace, and the supervisor that restarts DSH
-  into an origin-and-user-specific data directory.
+  Workspace origin settings namespace, and account-scoped service lifecycles
+  that switch data directories without restarting DSH.
 - `dsh-univer-workspace-plugin` — the Univer capability plugin: space ↔
   dsh-workspace reconciliation and the agent toolset operating remote
   Workspace Units.
@@ -23,8 +23,8 @@ profile loads:
   same current connection and Workspace remains authoritative for remote ACLs.
 - Provide `workspaceAuth` to sibling plugins: effective Workspace origin,
   authenticated HTTP client, and current remote identity.
-- Supervise the DSH child process so an origin/account change is applied by a
-  full child restart without asking the user to rerun the launch command.
+- Keep the DSH process and local browser authentication running while a
+  connection change reloads account-owned sessions, storage and Workspace services.
 - Keep Workspace capability routes, Viewer UI, template actions, and Space
   behavior in the consuming plugins; this package only composes them.
 - Own the composition patch that mounts the three bundles and the deployment
@@ -39,7 +39,8 @@ Nodes, Resources, and collaboration data.
 ```mermaid
 flowchart LR
   Browser[Local browser] -->|HTTP and WebSocket| DSH[DSH child process]
-  Supervisor[start-local supervisor] -->|Start and restart| DSH
+  Launcher[start-local launcher] -->|Start once| DSH
+  Core -->|Switch account services| Account[Sessions, storage, directory and collaboration]
   DSH --> Core[Harness core plugin]
   DSH --> Capability[Workspace capability plugin]
   DSH --> Skin[Workspace skin plugin]
@@ -50,8 +51,17 @@ flowchart LR
 
 The core plugin owns connection and identity lifecycle. The capability plugin
 owns Workspace tools and file/document interactions. The skin plugin only owns
-branding and visual tokens. The supervisor watches the active connection and
-restarts the DSH child when the Workspace origin, account, or session changes.
+branding and visual tokens. The Harness uses Cordis dependency lifecycles to drain
+account-owned services before activating the new identity. Session logs, search
+indexes, attachments and Workspace records use the existing origin-and-user
+runtime directory; switching back restores that directory. The HTTP listener,
+browser authentication, model credentials and settings remain running.
+
+Each rendered page carries a connection version. HTTP requests and collaboration
+WebSocket upgrades from an old page are rejected after a switch. Other open tabs
+reload when the new runtime is ready, so their old selections cannot operate on
+the new account. Switching stops the previous account's active agent runtime;
+already accepted remote operations remain owned by the Workspace server.
 
 ## Local data and storage
 
@@ -62,6 +72,7 @@ The quick start keeps installation and runtime data outside the repository.
 | `UWH_DSH_BOOTSTRAP` | Isolated installation of the published DSH CLI | Shared by the local installation |
 | `DSH_HOME` | Profile metadata and packaged plugin bundles | Shared by the local installation |
 | `UWH_DSH_DATA_HOME` | `connection.json`, identity-specific DSH runtimes, and local session/attachment data | Runtime data is separated by Workspace origin and user id |
+| `UWH_SHARED_SETTINGS_PATH` | Local model and interface settings; defaults to `$UWH_DSH_DATA_HOME/shared/settings.yaml` | Shared across identities |
 | `UWH_SHARED_CREDENTIALS_PATH` | DSH model credentials and browser-session signing state; defaults to `$UWH_DSH_DATA_HOME/shared/.credentials.yaml` | Shared across identities; never contains Workspace session cookies |
 
 The active connection file contains the Workspace origin, a non-secret user
@@ -170,7 +181,7 @@ node apps/harness/scripts/start-local.mjs --port 3101 \
   --no-open --trusted-host 127.0.0.1
 ```
 
-Keep `start-local.mjs` running: it is the supervisor, not a one-shot command.
+Keep `start-local.mjs` running: it owns the DSH child process lifetime.
 The first profile start can take several seconds while DSH loads the profile;
 wait until stderr prints a line beginning with `dsh web:`. Open that exact
 authenticated URL, which contains a one-time `?token=...` query, in the
@@ -213,15 +224,14 @@ not create a second conversation, composer, or fixed conversation tab. In the
 native composer, type `@` to choose one or more Workspace Resources for the
 current message; each reference is checked against the connected Workspace when
 the message is sent.
-Saving a different Workspace origin changes the
-target for the next browser authorization; it does not silently replace the
-currently active identity. Complete authorization for the new origin/account,
-or explicitly disconnect, then wait while the supervisor stops the old DSH
-child and starts the new identity runtime with the same launch arguments. The
-new child prints a new `dsh web:` URL with a one-time token. Open that complete
-URL in the browser to establish the new DSH browser cookie; the old browser
-cookie cannot authenticate the restarted child. Do not stop the supervisor or
-rerun the command.
+Saving a different Workspace origin selects the destination for the next login.
+Complete browser authorization to activate it, or explicitly disconnect. The
+Harness then reloads account-owned services inside the same process, closes old
+collaboration connections and refreshes the directory and session scope. There
+is no new launch token to open. The completion page waits for the selected
+identity and local application to be ready before returning; its retry button
+checks readiness again instead of navigating into an unavailable application.
+Keep the launcher running throughout the switch.
 Never record passwords or `workspace_session` values in bug reports; record only
 the origin and a non-secret account identifier.
 
@@ -253,10 +263,10 @@ Workspace identity:
    carries stable Resource identities; opening a file alone does not silently
    add it to the message context.
 7. To test another Workspace service or identity, return to **Settings →
-   Workspace** and save or authorize the new connection. The supervisor
-   restarts only the DSH child into the matching identity-specific data
-   directory, so the new identity receives its own conversation and file
-   state.
+   Workspace** and save or authorize the new connection. The Harness
+   switches account-owned services to the matching data directory without
+   restarting DSH. Verify that the new identity receives its own conversations
+   and directory, and that switching back restores the original history.
 
 ## Connect to a local Workspace
 
@@ -280,9 +290,9 @@ Workspace authentication.
 
 - **The bare local URL returns HTTP 401:** open the authenticated URL printed by
   DSH once. After the browser stores the DSH session cookie, the root URL works.
-- **The page says that the connection is waiting for a restart:** keep
-  `start-local.mjs` running. It supervises the DSH child and applies origin or
-  identity changes automatically.
+- **The connection page is still waiting:** keep `start-local.mjs` running.
+  Use **Check again** if offered; it verifies readiness before returning.
+  Inspect the launcher log if account services fail to load.
 - **Workspace login succeeds but model messages fail:** Workspace Device
   Authorization only grants Workspace data access. Configure a local DSH model
   credential separately.
@@ -290,9 +300,9 @@ Workspace authentication.
   are single-use and are not persisted in the browser.
 - **The Viewer is unavailable:** confirm that the connected account can read the
   Resource and that the profile was rebuilt after changing plugin source.
-- **A second user sees the previous user's sessions:** stop the supervisor,
-  remove only the test data directory selected by `UWH_DSH_DATA_HOME`, and start
-  again. Never delete a shared Workspace product database to reset a Harness test.
+- **The directory still shows the previous account:** let the page refresh
+  after authorization. If it persists, record the service origin and account
+  names for diagnosis; preserve the local data directory and session history.
 
 Do not put passwords, Workspace session cookies, device codes, or model API keys
 in bug reports. Record the Workspace origin, local Harness port, profile name,

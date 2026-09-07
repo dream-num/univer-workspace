@@ -72,16 +72,18 @@ export interface ServiceProviderConfig {
 class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   private table: ReturnType<Domain<typeof spaceLinksDomainSpec>["table"]> | undefined;
   private readonly runtimeManager: RuntimeManager;
+  private readonly connectionVersion: string | undefined;
 
   constructor(
     ctx: Context,
     private readonly config: ServiceProviderConfig,
   ) {
     super(ctx);
+    this.connectionVersion = ctx.get("workspaceRuntime")?.version;
     this.runtimeManager = new RuntimeManager(config.workerUrl);
     ctx.effect(
       () => () => {
-        void this.runtimeManager.close();
+        return this.runtimeManager.close();
       },
       "univer-workspace: runtime pool close",
     );
@@ -91,7 +93,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     const auth = this.requireWorkspaceAuth();
     const client = this.currentClientFor(userId);
     if (client === undefined) {
-      throw new Error("workspace connection is unavailable; connect and restart the Harness");
+      throw new Error("workspace connection is unavailable; connect to Workspace");
     }
     const remote = await listSpaces(client);
     // The registry rebuilds its header index during boot. A rolling restart
@@ -321,7 +323,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   private requireClient(userId: string): WorkspaceHttpClient {
     const client = this.currentClientFor(userId);
     if (client === undefined) {
-      throw new Error("workspace connection is unavailable; connect and restart the Harness");
+      throw new Error("workspace connection is unavailable; connect to Workspace");
     }
     return client;
   }
@@ -329,7 +331,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   private currentClientFor(userId: string): WorkspaceHttpClient | undefined {
     const auth = this.requireWorkspaceAuth();
     const identity = auth.currentIdentity();
-    if (identity === undefined || identity.userId !== userId) {
+    if (this.ctx.get("workspaceRuntime")?.version !== this.connectionVersion || identity === undefined || identity.userId !== userId) {
       return undefined;
     }
     return auth.currentClient();

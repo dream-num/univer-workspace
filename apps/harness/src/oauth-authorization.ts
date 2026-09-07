@@ -28,7 +28,7 @@ export function createOAuthStartHandler(ctx: Context, pending: Map<string, Pendi
 }
 
 export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pending>) {
-  const completed = new Map<string, { expiresAt: number; userId: string; origin: string }>();
+  const completed = new Map<string, { expiresAt: number; userId: string; origin: string; version: string }>();
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "GET") {
       res.writeHead(405, { allow: "GET", "cache-control": "no-store" });
@@ -42,6 +42,11 @@ export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pe
     const state = url.searchParams.get("state") ?? "";
     const receipt = completed.get(state);
     if (receipt !== undefined) {
+      // A completed authorization cannot switch the instance back after another login.
+      if (receipt.version !== ctx.workspaceAuth.connectionVersion()) {
+        sendCallbackPage(res, false);
+        return;
+      }
       sendCallbackPage(res, receipt);
       return;
     }
@@ -65,27 +70,30 @@ export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pe
     if (!response.ok) { res.writeHead(502, { "content-type": "text/plain; charset=utf-8" }); res.end("Workspace token exchange failed."); return; }
     const body = await response.json() as { access_token?: unknown; user?: { id?: unknown; username?: unknown; displayName?: unknown } };
     if (typeof body.access_token !== "string" || typeof body.user?.id !== "string" || typeof body.user.username !== "string") { res.writeHead(502, { "content-type": "text/plain; charset=utf-8" }); res.end("Workspace token response was invalid."); return; }
-    await ctx.workspaceAuth.stageConnection({ userId: body.user.id, username: body.user.username, ...(typeof body.user.displayName === "string" ? { displayName: body.user.displayName } : {}) }, body.access_token, entry.origin);
+    await ctx.workspaceAuth.connect({ userId: body.user.id, username: body.user.username, ...(typeof body.user.displayName === "string" ? { displayName: body.user.displayName } : {}) }, body.access_token, entry.origin);
     if (completed.size >= 32) completed.delete(completed.keys().next().value!);
-    const connection = { expiresAt: Date.now() + TTL, userId: body.user.id, origin: entry.origin };
+    const connection = { expiresAt: Date.now() + TTL, userId: body.user.id, origin: entry.origin, version: ctx.workspaceAuth.connectionVersion() };
     completed.set(state, connection);
     sendCallbackPage(res, connection);
   };
 }
 
-function sendCallbackPage(res: ServerResponse, connection: false | { userId: string; origin: string }, denied = false): void {
+function sendCallbackPage(res: ServerResponse, connection: false | { userId: string; origin: string; version: string }, denied = false): void {
   const success = connection !== false;
   const nonce = randomBytes(18).toString("base64url");
   const expected = JSON.stringify(connection).replaceAll("<", "\\u003c");
   const script = success ? `<script nonce="${nonce}">
 const expected = ${expected};
-const deadline = Date.now() + 45000;
+const retry = document.getElementById("retry");
+retry.addEventListener("click", () => { void waitForApplication(); });
 async function waitForApplication() {
+  retry.disabled = true;
+  const deadline = Date.now() + 45000;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch("/api/uwh/me", { cache: "no-store", headers: { accept: "application/json" }, signal: AbortSignal.timeout(3000) });
+      const response = await fetch("/api/uwh/me", { cache: "no-store", headers: { accept: "application/json", "x-uwh-connection": expected.version }, signal: AbortSignal.timeout(3000) });
       const status = response.ok ? await response.json() : null;
-      if (status?.connected === true && status.restartRequired === false && status.identity?.userId === expected.userId && status.workspaceOrigin === expected.origin) {
+      if (status?.connected === true && status.switching === false && status.identity?.userId === expected.userId && status.workspaceOrigin === expected.origin) {
         const home = await fetch("/", { cache: "no-store", signal: AbortSignal.timeout(3000) });
         if (home.ok && home.headers.get("content-type")?.includes("text/html")) {
           window.location.replace("/");
@@ -93,11 +101,12 @@ async function waitForApplication() {
         }
       }
     } catch {
-      // The supervised child can be unavailable while switching identity.
+      // Account-owned routes can be unavailable while switching identity.
     }
     await new Promise(resolve => setTimeout(resolve, 500));
   }
-  document.getElementById("status").textContent = "Workspace is connected, but the application is still starting. Try the link below in a moment.";
+  retry.disabled = false;
+  document.getElementById("status").textContent = "Workspace is connected, but the application is not ready yet. Check again to continue safely.";
 }
 void waitForApplication();
 </script>` : "";
@@ -105,7 +114,7 @@ void waitForApplication();
   // excluded from a cross-site OAuth redirect chain, even when the final URL is local.
   const title = success ? "Workspace connected" : denied ? "Connection cancelled" : "Start a new connection";
   const description = success
-    ? "Your authorization is complete. Waiting for the application to start…"
+    ? "Your authorization is complete. Updating your Workspace…"
     : denied ? "You declined access. You can start again whenever you are ready."
       : "This connection request is no longer available. Start again to create a new request.";
   res.writeHead(200, {
@@ -114,5 +123,5 @@ void waitForApplication();
     "referrer-policy": "no-referrer",
     "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'`,
   });
-  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font:16px system-ui;margin:0;background:#f6f7fb;color:#171717;display:grid;min-height:100vh;place-items:center}main{max-width:420px;padding:32px;margin:20px;background:white;border:1px solid #e2e4ea;border-radius:16px}p{line-height:1.6}a{color:#5147bd}</style></head><body><main><h1>${title}</h1><p id="status">${description}</p><a href="${success ? "/" : "/auth/oauth/start"}">${success ? "Continue to application" : "Start again"}</a></main>${script}</body></html>`);
+  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font:16px system-ui;margin:0;background:#f6f7fb;color:#171717;display:grid;min-height:100vh;place-items:center}main{max-width:420px;padding:32px;margin:20px;background:white;border:1px solid #e2e4ea;border-radius:16px}p{line-height:1.6}a{color:#5147bd}</style></head><body><main><h1>${title}</h1><p id="status">${description}</p>${success ? '<button id="retry" type="button" disabled>Check again</button><noscript>Enable JavaScript to finish connecting.</noscript>' : '<a href="/auth/oauth/start">Start again</a>'}</main>${script}</body></html>`);
 }

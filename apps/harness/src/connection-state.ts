@@ -3,7 +3,7 @@
  *
  * The local Harness has one process-wide Workspace identity. This file is
  * deliberately stored outside the selected DSH runtime home so the launcher
- * can choose an origin-and-user-specific runtime before DSH starts. It is a
+ * and live connection provider can select an origin-and-user-specific runtime. It is a
  * connection bootstrap record, not a local authorization database.
  *
  * @module @univerjs/univer-workspace-harness/connection-state

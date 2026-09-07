@@ -84,7 +84,7 @@ describe("univer-workspace-harness plugin", () => {
       intervalMs: 5_000,
       origin: "https://workspace.example",
     };
-    const stageConnection = vi.fn(async () => undefined);
+    const connect = vi.fn(async () => undefined);
     const response = new FakeResponse();
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () =>
@@ -100,7 +100,8 @@ describe("univer-workspace-harness plugin", () => {
         {
           workspaceAuth: {
             loginOrigin: () => "https://workspace.example",
-            stageConnection,
+            connect,
+            switching: () => false,
           },
         } as never,
         new Map([[authorization.deviceCode, authorization]]),
@@ -114,15 +115,15 @@ describe("univer-workspace-harness plugin", () => {
       globalThis.fetch = originalFetch;
     }
 
-    expect(stageConnection).toHaveBeenCalledWith(
+    expect(connect).toHaveBeenCalledWith(
       { userId: "u-1", username: "alice" },
       "opaque-token",
       "https://workspace.example",
     );
     expect(response.status).toBe(200);
     expect(JSON.parse(response.body)).toMatchObject({
-      status: "restart_required",
-      restartRequired: true,
+      status: "connected",
+      switching: false,
     });
     expect(response.headers["set-cookie"]).toBeUndefined();
   });

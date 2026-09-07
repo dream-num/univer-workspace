@@ -63,7 +63,7 @@ describe("WorkspaceAuthProvider origin selection", () => {
     await vi.waitFor(() => {
       expect(settings.workspaceOrigin).toBe("https://workspace.univer.plus");
     });
-    await provider.stageDisconnect();
+    await provider.disconnect();
     await expect(readConnectionState(statePath)).resolves.toEqual({
       version: 1,
       configuredOrigin: "https://workspace.univer.plus",
@@ -72,7 +72,7 @@ describe("WorkspaceAuthProvider origin selection", () => {
     settings = { workspaceOrigin: "https://next.example/path" };
     notifyChange?.();
     expect(provider.loginOrigin()).toBe("https://next.example");
-    await provider.stageConnection(
+    await provider.connect(
       { userId: "user-next", username: "next" },
       "token-next",
       provider.loginOrigin(),
@@ -116,7 +116,7 @@ describe("WorkspaceAuthProvider origin selection", () => {
     });
 
     expect(provider.loginOrigin()).toBe("https://legacy-bootstrap.example");
-    await provider.stageConnection(
+    await provider.connect(
       { userId: "legacy-user", username: "legacy" },
       "legacy-token",
       provider.loginOrigin(),

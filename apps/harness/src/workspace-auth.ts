@@ -3,7 +3,7 @@
  *
  * A local Harness instance has one remote Workspace identity. Consumers do
  * not select a user from a request and this service does not implement local
- * permissions; it only exposes the connection chosen before process startup.
+ * permissions; it exposes the active connection while account-owned services reload.
  *
  * @module @univerjs/univer-workspace-harness/workspace-auth
  */
@@ -25,10 +25,10 @@ export abstract class WorkspaceAuthService extends Service {
     super(ctx, "workspaceAuth");
   }
 
-  /** Origin of the connection bound when this process started. */
+  /** Origin of the currently active connection. */
   abstract effectiveOrigin(): string;
 
-  /** Origin selected in Settings for the next Device Authorization flow. */
+  /** Origin selected in Settings for the next authorization flow. */
   abstract loginOrigin(): string;
 
   /** Remote identity shared by every request in this local process. */
@@ -37,16 +37,18 @@ export abstract class WorkspaceAuthService extends Service {
   /** Remote HTTP client shared by every request in this local process. */
   abstract currentClient(): WorkspaceHttpClient | undefined;
 
-  /** Persist the connection that becomes active after a full restart. */
-  abstract stageConnection(identity: UwhIdentity, token: string, origin: string): Promise<void>;
+  /** Drain account-owned services and activate the persisted connection. */
+  abstract connect(identity: UwhIdentity, token: string, origin: string): Promise<void>;
 
-  /** Persist an unconnected next startup state. */
-  abstract stageDisconnect(): Promise<void>;
+  /** Disconnect and switch to the unconnected local runtime. */
+  abstract disconnect(): Promise<void>;
 
-  /** Whether persisted next-start state differs from this running process. */
-  abstract restartRequired(): boolean;
+  /** Whether account-owned services are being switched. */
+  abstract switching(): boolean;
 
-  /** Identity staged for the next start, if any. */
+  abstract connectionVersion(): string;
+
+  /** Identity being activated, if any. */
   abstract pendingIdentity(): UwhIdentity | undefined;
 }
 

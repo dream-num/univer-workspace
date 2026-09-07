@@ -12,8 +12,8 @@ await rm("lib", { recursive: true, force: true });
 await mkdir("lib", { recursive: true });
 
 await build({
-  entryPoints: ["src/index.ts"],
-  outfile: "lib/index.js",
+  entryPoints: ["src/index.ts", "src/runtime-webserver.ts"],
+  outdir: "lib",
   bundle: true,
   platform: "node",
   format: "esm",

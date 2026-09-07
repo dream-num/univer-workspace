@@ -84,7 +84,7 @@ export interface WorkspaceMeView {
   readonly workspaceOrigin: string;
   readonly templates: readonly WorkspaceTemplate[];
   readonly connected: boolean;
-  readonly restartRequired: boolean;
+  readonly switching: boolean;
   readonly identity?: {
     readonly userId: string;
     readonly username: string;

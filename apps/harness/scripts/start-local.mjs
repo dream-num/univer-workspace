@@ -14,9 +14,10 @@ const statePath = resolve(
 const sharedCredentialsPath = resolve(
   process.env.UWH_SHARED_CREDENTIALS_PATH ?? resolve(dataHome, "shared", ".credentials.yaml"),
 );
+const sharedSettingsPath = resolve(process.env.UWH_SHARED_SETTINGS_PATH ?? resolve(dataHome, "shared", "settings.yaml"));
 const profileName = process.env.DSH_PROFILE ?? "univer-workspace-harness";
 const dshBin = resolve(requiredEnvironment("DSH_BIN"));
-const pollMs = positiveInteger(process.env.UWH_CONNECTION_POLL_MS, 500);
+
 const dshArgs = [dshBin, "--profile", profileName, ...process.argv.slice(2)];
 
 let child;
@@ -30,10 +31,22 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 await mkdir(dirname(sharedCredentialsPath), { recursive: true, mode: 0o700 });
 await migrateSharedCredentials(sharedCredentialsPath);
+await mkdir(dirname(sharedSettingsPath), { recursive: true, mode: 0o700 });
+const initial = await readActiveConnection(statePath);
+for (const candidate of [resolve(runtimeHomeFor(initial), "settings.yaml"), resolve(dataHome, "runtimes", "bootstrap", "settings.yaml"), resolve(installHome, "settings.yaml")]) {
+  try {
+    await copyFile(candidate, sharedSettingsPath, constants.COPYFILE_EXCL);
+    await chmod(sharedSettingsPath, 0o600);
+    break;
+  } catch (error) {
+    if (error?.code === "EEXIST") break;
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
 
 while (stoppingSignal === undefined) {
   const active = await readActiveConnection(statePath);
-  const launchedFingerprint = connectionFingerprint(active);
+
   const runtimeHome = runtimeHomeFor(active);
   await mkdir(runtimeHome, { recursive: true, mode: 0o700 });
   await ensureProfileLink(resolve(runtimeHome, "profiles"), resolve(installHome, "profiles"));
@@ -43,14 +56,15 @@ while (stoppingSignal === undefined) {
     DSH_HOME: runtimeHome,
     UWH_CONNECTION_STATE_PATH: statePath,
     UWH_SHARED_CREDENTIALS_PATH: sharedCredentialsPath,
+    UWH_SHARED_SETTINGS_PATH: sharedSettingsPath,
+    UWH_DSH_DATA_HOME: dataHome,
     ...(active === undefined ? {} : { UWH_WORKSPACE_ORIGIN: active.origin }),
   };
   if (active === undefined) delete childEnvironment.UWH_WORKSPACE_ORIGIN;
   console.error(
     `[uwh] starting ${active === undefined ? "unconnected" : `${active.identity.username} @ ${active.origin}`} with runtime ${runtimeHome}`,
   );
-  const result = await runChild(childEnvironment, launchedFingerprint);
-  if (result.switchRequested && stoppingSignal === undefined) continue;
+  const result = await runChild(childEnvironment);
   if (stoppingSignal !== undefined) break;
   if (result.error !== undefined) {
     console.error(`[uwh] failed to start DSH: ${result.error.message}`);
@@ -70,43 +84,19 @@ if (stoppingSignal !== undefined) {
   process.kill(process.pid, stoppingSignal);
 }
 
-function runChild(environment, launchedFingerprint) {
+function runChild(environment) {
   return new Promise((resolveResult) => {
-    let switchRequested = false;
-    let checking = false;
     child = spawn(process.execPath, dshArgs, {
       env: environment,
       stdio: "inherit",
     });
-    const timer = setInterval(() => {
-      if (checking || switchRequested || stoppingSignal !== undefined) return;
-      checking = true;
-      void readActiveConnection(statePath)
-        .then((next) => {
-          if (connectionFingerprint(next) === launchedFingerprint) return;
-          switchRequested = true;
-          console.error("[uwh] Workspace connection changed; restarting DSH runtime");
-          child?.kill("SIGTERM");
-        })
-        .catch((error) => {
-          console.error(
-            `[uwh] cannot read updated Workspace connection state: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        })
-        .finally(() => {
-          checking = false;
-        });
-    }, pollMs);
-    timer.unref();
     child.once("error", (error) => {
-      clearInterval(timer);
       child = undefined;
-      resolveResult({ code: null, signal: null, switchRequested, error });
+      resolveResult({ code: null, signal: null, error });
     });
     child.once("exit", (code, signal) => {
-      clearInterval(timer);
       child = undefined;
-      resolveResult({ code, signal, switchRequested });
+      resolveResult({ code, signal });
     });
   });
 }
@@ -119,15 +109,6 @@ function requiredEnvironment(name) {
   return value;
 }
 
-function positiveInteger(value, fallback) {
-  if (value === undefined) return fallback;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 10) {
-    throw new Error("UWH_CONNECTION_POLL_MS must be an integer of at least 10 milliseconds");
-  }
-  return parsed;
-}
-
 function runtimeHomeFor(active) {
   const runtimeName =
     active === undefined
@@ -138,17 +119,6 @@ function runtimeHomeFor(active) {
           .update(active.identity.userId, "utf8")
           .digest("hex");
   return resolve(dataHome, "runtimes", runtimeName);
-}
-
-function connectionFingerprint(active) {
-  if (active === undefined) return "unconnected";
-  return createHash("sha256")
-    .update(active.origin, "utf8")
-    .update("\0", "utf8")
-    .update(active.identity.userId, "utf8")
-    .update("\0", "utf8")
-    .update(active.sessionToken, "utf8")
-    .digest("hex");
 }
 
 async function readActiveConnection(path) {

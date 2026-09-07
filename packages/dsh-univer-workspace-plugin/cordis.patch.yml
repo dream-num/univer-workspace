@@ -5,9 +5,10 @@
 - insert:
     - id: univer-workspace
       name: 'dsh-univer-workspace-plugin'
+      inject: [workspaceRuntime]
       config:
         workspaceRoot: !!js >-
-          process.env.UWH_WORKSPACE_ROOT ?? dshHomePath('workspace')
+          process.env.UWH_WORKSPACE_ROOT ?? (ctx.workspaceRuntime.home + '/workspace')
         workspaceOrigin: !!js >-
           process.env.UWH_WORKSPACE_ORIGIN ?? 'https://workspace.univer.plus'
         publicOrigin: !!js >-

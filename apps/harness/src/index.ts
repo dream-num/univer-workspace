@@ -2,13 +2,14 @@
  * Local Web Harness connection host.
  *
  * This plugin exposes one process-wide remote Workspace connection through
- * Device Authorization. It does not authenticate local browser users or
- * filter DSH state per request; origin/user isolation is established before
- * startup by selecting an identity-specific DSH_HOME.
+ * browser authorization. Account-owned services reload against isolated
+ * origin/user directories while the local HTTP listener stays active.
  *
  * @module @univerjs/univer-workspace-harness
  */
 
+import { connectionBrowserScript } from "./connection-browser.ts";
+import { CONNECTION_STATUS_PATH } from "./runtime-webserver.ts";
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Context } from "@deepseek-ai/cordis";
@@ -259,14 +260,14 @@ export function createDeviceCompleteHandler(
       const result = await completeDeviceAuthorization(authorization);
       if (result.status === "pending") return jsonResponse(res, 202, { status: "pending" });
       pending.delete(deviceCode);
-      await ctx.workspaceAuth.stageConnection(
+      await ctx.workspaceAuth.connect(
         result.identity,
         result.sessionToken,
         authorization.origin,
       );
       jsonResponse(res, 200, {
-        status: "restart_required",
-        restartRequired: true,
+        status: "connected",
+        switching: ctx.workspaceAuth.switching(),
         identity: result.identity,
       });
     } catch (error) {
@@ -283,8 +284,8 @@ export function createDeviceLogoutHandler(
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res): Promise<void> => {
     if (req.method !== "POST") return jsonResponse(res, 405, { error: "method_not_allowed" });
-    await ctx.workspaceAuth.stageDisconnect();
-    jsonResponse(res, 200, { loggedOut: true, restartRequired: true });
+    await ctx.workspaceAuth.disconnect();
+    jsonResponse(res, 200, { loggedOut: true, switching: ctx.workspaceAuth.switching() });
   };
 }
 
@@ -340,5 +341,14 @@ export function apply(ctx: Context, config: Config): void {
       pending.clear();
     };
   }, "uwh: local Workspace connection routes");
-  void workspaceAuth;
+  ctx.on("webserver/index-inject", (rows) => {
+    rows.push({ kind: "global", name: "__UWH_CONNECTION_VERSION__", value: workspaceAuth.connectionVersion() });
+    rows.push({ kind: "script", placement: "head", text: connectionBrowserScript });
+  });
+  ctx.effect(() => ctx.webServer.register({
+    kind: "exact", path: CONNECTION_STATUS_PATH,
+    handler: (_req, res) => jsonResponse(res, 200, {
+      version: workspaceAuth.connectionVersion(), ready: workspaceAuth.runtimeReady(),
+    }),
+  }), "uwh: connection readiness");
 }

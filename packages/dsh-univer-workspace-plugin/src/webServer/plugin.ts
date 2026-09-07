@@ -295,7 +295,7 @@ function createCapabilityHandler(
           workspaceOrigin: effectiveWorkspaceOrigin(ctx, config),
           templates: config.templates,
           connected: false,
-          restartRequired: ctx.workspaceAuth.restartRequired(),
+          switching: ctx.workspaceAuth.switching(),
           ...(ctx.workspaceAuth.pendingIdentity() === undefined
             ? {}
             : { pendingIdentity: ctx.workspaceAuth.pendingIdentity() }),
@@ -315,7 +315,7 @@ function createCapabilityHandler(
           workspaceOrigin: effectiveWorkspaceOrigin(ctx, config),
           templates: config.templates,
           connected: ctx.workspaceAuth.currentClient() !== undefined,
-          restartRequired: ctx.workspaceAuth.restartRequired(),
+          switching: ctx.workspaceAuth.switching(),
           ...(ctx.workspaceAuth.pendingIdentity() === undefined
             ? {}
             : { pendingIdentity: ctx.workspaceAuth.pendingIdentity() }),

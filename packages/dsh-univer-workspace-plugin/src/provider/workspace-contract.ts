@@ -24,7 +24,7 @@ export interface WorkspaceAuthService {
   effectiveOrigin(): string;
   currentIdentity(): WorkspaceSessionIdentity | undefined;
   currentClient(): WorkspaceHttpClient | undefined;
-  restartRequired(): boolean;
+  switching(): boolean;
   pendingIdentity(): WorkspaceSessionIdentity | undefined;
 }
 

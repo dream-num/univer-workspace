@@ -6,7 +6,7 @@
 # and mounts the harness core. The harness client owns the sidebar shell so it
 # can compose the Sessions/Files tabs; the native shell is disabled to avoid
 # duplicate declarations of the sidebar child slots. One row activates BOTH
-# faces: the harness node half registers the local Device Authorization
+# faces: the harness node half registers the local authorization
 # connection routes, and its package manifest declares
 # `dsh.client`, so the modules scanner loads the `./client` browser half from
 # the same row.
@@ -29,12 +29,15 @@
 # composition time instead, while the connection row below adds the public
 # authority to the browser trust fence.
 - id: webserver
-  name: "@deepseek-ai/dsh-host-webserver"
-  inject: [webStartup]
-  config:
-    host: !!js >-
-      process.env.UWH_BIND_HOST ?? '0.0.0.0'
-    port: !!js ctx.webStartup.port ?? Number(process.env.PORT ?? 3080)
+  disabled: true
+- insert:
+    - id: workspace-webserver
+      name: "@univerjs/univer-workspace-harness/runtime-webserver"
+      inject: [webStartup]
+      config:
+        host: !!js >-
+          process.env.UWH_BIND_HOST ?? '0.0.0.0'
+        port: !!js ctx.webStartup.port ?? Number(process.env.PORT ?? 3080)
 
 # ── hide Full Access / advanced settings ───────────────────────────────────
 
@@ -57,7 +60,7 @@
       })()
 
 # Keep the DSH browser-session signing key and local model credentials stable
-# while the supervisor swaps identity-specific runtime homes. This is local
+# while account-owned services switch runtime directories. This is local
 # machine state, not a Workspace user credential; the latter stays in the
 # separate connection bootstrap record.
 - id: credentials
@@ -65,18 +68,6 @@
   config:
     path: !!js >-
       process.env.UWH_SHARED_CREDENTIALS_PATH ?? dshHomePath('.credentials.yaml')
-
-# Keep the stock WorkspaceBrowser's content-search branch available. The web
-# bundle deliberately defaults the SQLite query provider to `never`, which
-# leaves the sidebar with title-only search and an "unavailable" warning.
-# Harness sessions are already isolated at the list/API seam; the derived
-# index is only an implementation cache, so it can live under this profile's
-# DSH_HOME and be opened lazily on the first real query.
-- id: session-query-sqlite
-  name: "@deepseek-ai/dsh-session-query-sqlite"
-  config:
-    path: !!js dshHomePath('session-query.sqlite')
-    openAt: first-search
 
 # `ui-permission` is the `settings.general.item` row letting the user pick the
 # default permission preset; the `danger-full-access` preset is selectable
@@ -121,7 +112,37 @@
           process.env.UWH_PUBLIC_ORIGIN ?? `http://127.0.0.1:${ctx.webStartup.port ?? process.env.PORT ?? 3080}`
 
         # The launcher keeps this bootstrap record outside the selected
-        # identity runtime. Device login only updates the next-start record;
-        # a full restart selects the matching origin/user DSH_HOME.
+        # identity runtime. Authorization updates this record and reloads account services
+        # against the matching origin/user directory in the same process.
         connectionStatePath: !!js >-
           process.env.UWH_CONNECTION_STATE_PATH ?? dshHomePath('connection.json')
+
+# Only account-owned services reload when the selected connection changes.
+# The HTTP listener, local browser authentication and settings remain resident.
+- id: session
+  inject: [workspaceRuntime]
+- id: storage
+  inject: [workspaceRuntime]
+- id: typert-gateway
+  inject: [workspaceRuntime]
+- id: session-persistence-jsonl
+  inject: [workspaceRuntime]
+  config:
+    root: !!js ctx.workspaceRuntime.home + '/sessions'
+- id: storage-json
+  inject: [workspaceRuntime]
+  config:
+    root: !!js ctx.workspaceRuntime.home + '/storages'
+- id: session-query-sqlite
+  inject: [workspaceRuntime]
+  config:
+    path: !!js ctx.workspaceRuntime.home + '/session-query.sqlite'
+    openAt: first-search
+- id: attachment-local
+  inject: [workspaceRuntime]
+  config:
+    dshHome: !!js ctx.workspaceRuntime.home
+
+- id: settings
+  config:
+    path: !!js process.env.UWH_SHARED_SETTINGS_PATH ?? dshHomePath('settings.yaml')

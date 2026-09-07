@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Button, Input } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { PropsLocale } from "@deepseek-ai/dsh-client-ui-slots";
 import type { SettingsScope } from "./dsh-runtime-types.ts";
-import { pollDeviceAuthorization } from "./device-authorization-poll.ts";
 import css from "./OriginSetting.module.scss";
 
 export interface WorkspaceAuthSettings {
@@ -13,27 +12,16 @@ export interface OriginSettingProps extends PropsLocale<"univer"> {
   scope: SettingsScope<WorkspaceAuthSettings>;
 }
 
-interface ConnectionStatus {
-  readonly connected?: unknown;
-  readonly restartRequired?: unknown;
-  readonly identity?: { readonly userId?: unknown };
-}
-
-async function waitForHarness(
-  accepts: (status: ConnectionStatus) => boolean,
-  timeoutMessage: string,
-  timeoutMs = 45_000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
+async function waitForConnection(timeoutMessage: string): Promise<void> {
+  const deadline = Date.now() + 45_000;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch("/api/uwh/me", {
-        cache: "no-store",
-        headers: { accept: "application/json" },
+      const response = await fetch("/auth/connection/status", {
+        cache: "no-store", signal: AbortSignal.timeout(3000),
       });
-      if (response.ok && accepts((await response.json()) as ConnectionStatus)) return;
+      if (response.ok && (await response.json() as { ready?: boolean }).ready === true) return;
     } catch {
-      // The supervised DSH child is intentionally unavailable during restart.
+      // Account-owned services can be unavailable briefly during a switch.
     }
     await new Promise((resolve) => window.setTimeout(resolve, 500));
   }
@@ -46,16 +34,7 @@ export function OriginSetting({ scope, t }: OriginSettingProps) {
   const [overridden, setOverridden] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [pending, setPending] = useState<{
-    deviceCode: string;
-    userCode: string;
-    verificationUrl: string;
-    intervalMs: number;
-    expiresAt: number;
-  }>();
   const [account, setAccount] = useState<string>();
-  const [pendingAccount, setPendingAccount] = useState<string>();
-  const [restartRequired, setRestartRequired] = useState(false);
   const [switching, setSwitching] = useState(false);
 
   const reportError = (reason: unknown): void => {
@@ -90,20 +69,13 @@ export function OriginSetting({ scope, t }: OriginSettingProps) {
         if (!response.ok) return;
         const body = (await response.json()) as {
           identity?: { username?: unknown; displayName?: unknown };
-          pendingIdentity?: { username?: unknown; displayName?: unknown };
-          restartRequired?: unknown;
+          switching?: unknown;
         };
         const identity = body.identity;
         const label =
           typeof identity?.username === "string" ? identity.username : identity?.displayName;
         if (typeof label === "string") setAccount(label);
-        const nextIdentity = body.pendingIdentity;
-        const nextLabel =
-          typeof nextIdentity?.username === "string"
-            ? nextIdentity.username
-            : nextIdentity?.displayName;
-        if (typeof nextLabel === "string") setPendingAccount(nextLabel);
-        setRestartRequired(body.restartRequired === true);
+        setSwitching(body.switching === true);
       })
       .catch(() => {
         // Connection status is advisory; Settings remains usable if it fails.
@@ -133,43 +105,10 @@ export function OriginSetting({ scope, t }: OriginSettingProps) {
       .finally(() => setBusy(false));
   };
 
-  const startDeviceLogin = (): void => {
+  const startLogin = (): void => {
     setBusy(true);
     setError(undefined);
     window.location.assign("/auth/oauth/start");
-  };
-
-  const completeDeviceLogin = (): void => {
-    if (pending === undefined) return;
-    setBusy(true);
-    setError(undefined);
-    void pollDeviceAuthorization({
-      deviceCode: pending.deviceCode,
-      intervalMs: pending.intervalMs,
-      expiresAt: pending.expiresAt,
-    })
-      .then(async (body) => {
-        const identity = body.identity as Record<string, unknown> | undefined;
-        setPendingAccount(
-          typeof identity?.username === "string"
-            ? identity.username
-            : t("settings.workspace.connectedFallback"),
-        );
-        setRestartRequired(body.restartRequired === true);
-        setPending(undefined);
-        setSwitching(true);
-        const expectedUserId = typeof identity?.userId === "string" ? identity.userId : undefined;
-        await waitForHarness(
-          (status) =>
-            status.connected === true &&
-            status.restartRequired === false &&
-            (expectedUserId === undefined || status.identity?.userId === expectedUserId),
-          t("settings.workspace.restartTimeout"),
-        );
-        window.location.reload();
-      })
-      .catch(reportError)
-      .finally(() => setBusy(false));
   };
 
   const logout = (): void => {
@@ -177,14 +116,9 @@ export function OriginSetting({ scope, t }: OriginSettingProps) {
     void fetch("/auth/device/logout", { method: "POST" })
       .then(async (response) => {
         if (!response.ok) throw new Error(t("settings.workspace.logoutFailed"));
-        setPendingAccount(undefined);
-        setRestartRequired(true);
         setSwitching(true);
-        await waitForHarness(
-          (status) => status.connected === false && status.restartRequired === false,
-          t("settings.workspace.restartTimeout"),
-        );
-        window.location.reload();
+        await waitForConnection(t("settings.workspace.connectionTimeout"));
+        window.location.replace("/");
       })
       .catch(reportError)
       .finally(() => setBusy(false));
@@ -218,7 +152,7 @@ export function OriginSetting({ scope, t }: OriginSettingProps) {
               {t("settings.workspace.restoreOrigin")}
             </Button>
           )}
-          <Button size="sm" variant="ghost" disabled={busy} onClick={startDeviceLogin}>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={startLogin}>
             {t("settings.workspace.login")}
           </Button>
           {account !== undefined && (
@@ -230,31 +164,10 @@ export function OriginSetting({ scope, t }: OriginSettingProps) {
             </Button>
           )}
         </div>
-        {pending !== undefined && (
-          <div className={css.deviceLogin} role="status">
-            <span>{t("settings.workspace.code", { code: pending.userCode })}</span>
-            <a href={pending.verificationUrl} target="_blank" rel="noreferrer">
-              {t("settings.workspace.openAuthorization")}
-            </a>
-            <Button size="sm" variant="primary" disabled={busy} onClick={completeDeviceLogin}>
-              {t("settings.workspace.completeAuthorization")}
-            </Button>
-          </div>
-        )}
-        {restartRequired && (
+        {switching && (
           <div className={css.restartNotice} role="status">
-            <strong>
-              {switching
-                ? t("settings.workspace.switching")
-                : t("settings.workspace.restartPending")}
-            </strong>
-            <span>
-              {switching
-                ? t("settings.workspace.restartRecovering")
-                : pendingAccount === undefined
-                  ? t("settings.workspace.restartDisconnecting")
-                  : t("settings.workspace.restartSwitching", { account: pendingAccount })}
-            </span>
+            <strong>{t("settings.workspace.switching")}</strong>
+            <span>{t("settings.workspace.connectionUpdating")}</span>
           </div>
         )}
         {error !== undefined && (

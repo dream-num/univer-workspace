@@ -2,7 +2,7 @@
   "name": "@univerjs/univer-workspace-harness",
   "version": "0.1.0",
   "private": true,
-  "description": "DSH-based local Web client for one restart-bound Univer Workspace connection.",
+  "description": "DSH-based local Web client for one switchable Univer Workspace connection.",
   "files": [
     "lib",
     "scripts/start-local.mjs",
@@ -25,7 +25,11 @@
       "types": "./src/client/index.tsx",
       "default": "./lib/client.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./runtime-webserver": {
+      "types": "./src/runtime-webserver.ts",
+      "default": "./lib/runtime-webserver.js"
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs",

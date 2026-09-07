@@ -125,6 +125,7 @@ function createHttpHandler(
 /** Build the WebSocket upgrade handler that bridges to the Workspace origin. */
 function createUpgradeHandler(
   ctx: Context,
+  connections: Set<() => void>,
 ): (req: IncomingMessage, socket: Duplex, head: Buffer) => void {
   return (req, socket, head): void => {
     const url = new URL(req.url ?? "/", "http://x");
@@ -144,7 +145,7 @@ function createUpgradeHandler(
       // `target` identifies the upstream path. Every other query parameter is
       // opaque to this transport bridge and is forwarded unchanged.
       for (const [name, value] of url.searchParams) {
-        if (name !== WS_TARGET_PARAM) target.searchParams.append(name, value);
+        if (name !== WS_TARGET_PARAM && name !== "uwhConnection") target.searchParams.append(name, value);
       }
       target.protocol = target.protocol === "https:" ? "wss:" : "ws:";
       const upstreamWs = new WebSocket(target, {
@@ -186,6 +187,7 @@ function createUpgradeHandler(
       const close = (): void => {
         if (closed) return;
         closed = true;
+        connections.delete(close);
         try {
           client.close();
         } catch {
@@ -197,6 +199,7 @@ function createUpgradeHandler(
           /* noop */
         }
       };
+      connections.add(close);
       client.on("close", close);
       client.on("error", close);
       upstreamWs.on("open", () => {
@@ -227,6 +230,7 @@ export const inject = ["webServer"];
 
 export function apply(ctx: Context): void {
   ctx.effect(() => {
+    const connections = new Set<() => void>();
     const disposeHttp = ctx.webServer.register({
       kind: "prefix",
       path: HTTP_PREFIX,
@@ -234,9 +238,10 @@ export function apply(ctx: Context): void {
     });
     const disposeUpgrade = ctx.webServer.registerUpgrade({
       path: WS_PATH,
-      handler: createUpgradeHandler(ctx),
+      handler: createUpgradeHandler(ctx, connections),
     });
     return () => {
+      for (const close of connections) close();
       disposeUpgrade();
       disposeHttp();
     };

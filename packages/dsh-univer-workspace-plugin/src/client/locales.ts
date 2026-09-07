@@ -139,6 +139,8 @@ export const zh = {
   "settings.workspace.restartSwitching": "守护进程将切换到 {account}。",
   "settings.workspace.restartTimeout":
     "Harness 自动重启未完成，请确认使用 start-local 启动器运行服务",
+  "settings.workspace.connectionTimeout": "连接切换尚未完成，请稍后刷新页面。",
+  "settings.workspace.connectionUpdating": "正在更新目录和会话…",
   "settings.workspace.loginFailed": "登录失败",
   "settings.workspace.authorizationExpired": "Workspace 授权已过期，请重新开始登录",
   "settings.workspace.loginStartFailed": "无法启动登录",
@@ -395,6 +397,8 @@ export const en = {
   "settings.workspace.restartSwitching": "The supervisor will switch to {account}.",
   "settings.workspace.restartTimeout":
     "Harness did not restart. Confirm that it was started with the start-local supervisor.",
+  "settings.workspace.connectionTimeout": "The connection is not ready yet. Refresh the page in a moment.",
+  "settings.workspace.connectionUpdating": "Updating directories and sessions…",
   "settings.workspace.loginFailed": "Login failed",
   "settings.workspace.authorizationExpired":
     "Workspace authorization expired. Start a new login request.",

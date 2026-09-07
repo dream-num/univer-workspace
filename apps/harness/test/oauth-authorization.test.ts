@@ -5,8 +5,9 @@ import { createOAuthCallbackHandler, createOAuthStartHandler } from "../src/oaut
 describe("Harness OAuth browser flow", () => {
   it("starts with state and PKCE, then exchanges the callback once", async () => {
     const pending = new Map<string, any>();
-    const stageConnection = vi.fn(async () => undefined);
-    const ctx = { workspaceAuth: { loginOrigin: () => "https://workspace.example", stageConnection } };
+    const connect = vi.fn(async () => undefined);
+    let version = "generation-1";
+    const ctx = { workspaceAuth: { connectionVersion: () => version, loginOrigin: () => "https://workspace.example", connect } };
     const startResponse = new TestResponse();
     await createOAuthStartHandler(ctx as never, pending, "http://127.0.0.1:3101")(
       new TestRequest("GET") as never,
@@ -28,35 +29,43 @@ describe("Harness OAuth browser flow", () => {
       const callback = createOAuthCallbackHandler(ctx as never, pending);
       await callback(new TestRequest(`GET /auth/oauth/callback?state=${state}&code=code-1`) as never, callbackResponse as never);
       expect(callbackResponse.status).toBe(200);
+      expect(callbackResponse.body).not.toContain('href="/"');
+      expect(callbackResponse.body).toContain('id="retry" type="button" disabled');
       expect(callbackResponse.body).not.toContain('http-equiv="refresh"');
       const script = callbackResponse.body.match(/<script nonce="([^"]+)">([\s\S]*?)<\/script>/u)!;
       expect(callbackResponse.headers["content-security-policy"]).toContain(`script-src 'nonce-${script[1]}'`);
       const replace = vi.fn();
-      const ready = { connected: true, restartRequired: false, identity: { userId: "u1" }, workspaceOrigin: "https://workspace.example" };
+      const ready = { connected: true, switching: false, identity: { userId: "u1" }, workspaceOrigin: "https://workspace.example" };
       const browserFetch = vi.fn()
         .mockRejectedValueOnce(new Error("Restarting"))
-        .mockResolvedValueOnce(Response.json({ ...ready, restartRequired: true }))
+        .mockResolvedValueOnce(Response.json({ ...ready, switching: true }))
         .mockResolvedValueOnce(Response.json({ ...ready, identity: { userId: "previous-user" } }))
         .mockResolvedValueOnce(Response.json({ ...ready, workspaceOrigin: "https://other.example" }))
         .mockResolvedValueOnce(Response.json(ready))
         .mockResolvedValueOnce(new Response("Not ready", { status: 404 }))
         .mockResolvedValueOnce(Response.json(ready))
         .mockResolvedValueOnce(new Response("<!doctype html>", { headers: { "content-type": "text/html" } }));
-      await runInNewContext(script[2]!.replace("void waitForApplication();", "waitForApplication();"), {
+      await runInNewContext(script[2]!.replace(/void waitForApplication\(\);\s*$/, "waitForApplication();"), {
+        document: { getElementById: () => ({ disabled: true, addEventListener: vi.fn() }) },
         fetch: browserFetch, AbortSignal, setTimeout: (resolve: () => void) => resolve(),
         window: { location: { replace } },
       });
       expect(browserFetch).toHaveBeenCalledTimes(8);
       expect(replace).toHaveBeenCalledExactlyOnceWith("/");
       expect(callbackResponse.headers.location).toBeUndefined();
-      expect(stageConnection).toHaveBeenCalledWith({ userId: "u1", username: "alice" }, "session", "https://workspace.example");
+      expect(connect).toHaveBeenCalledWith({ userId: "u1", username: "alice" }, "session", "https://workspace.example");
       expect(pending.has(state)).toBe(false);
       expect(entry.verifier).toBeTruthy();
       const replay = new TestResponse();
       await callback(new TestRequest(`GET /auth/oauth/callback?state=${state}&code=code-1`) as never, replay as never);
       expect(replay.body).toContain("Workspace connected");
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-      expect(stageConnection).toHaveBeenCalledTimes(1);
+      expect(connect).toHaveBeenCalledTimes(1);
+      version = "generation-2";
+      const superseded = new TestResponse();
+      await callback(new TestRequest(`GET /auth/oauth/callback?state=${state}&code=code-1`) as never, superseded as never);
+      expect(superseded.body).toContain('href="/auth/oauth/start"');
+      expect(superseded.body).not.toContain("Workspace connected");
     } finally { globalThis.fetch = originalFetch; }
   });
   it("offers a new flow when the local request is gone", async () => {

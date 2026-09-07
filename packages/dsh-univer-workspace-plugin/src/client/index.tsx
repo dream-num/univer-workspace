@@ -343,7 +343,7 @@ export function apply(ctx: ClientContext): void {
             typeof value.workspaceOrigin !== "string" ||
             !Array.isArray(value.templates) ||
             typeof value.connected !== "boolean" ||
-            typeof value.restartRequired !== "boolean"
+            typeof value.switching !== "boolean"
           ) {
             throw new Error("identity_failed");
           }

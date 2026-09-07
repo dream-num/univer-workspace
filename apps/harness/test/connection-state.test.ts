@@ -166,7 +166,7 @@ describe("local Workspace connection state", () => {
     expect(await readlink(join(String(connected.home), "profiles"))).toBe(profileRoot);
   });
 
-  it("supervises a full DSH restart when the active connection changes", async () => {
+  it("keeps the same DSH process when the active connection changes", async () => {
     const root = await mkdtemp(join(tmpdir(), "uwh-supervisor-"));
     const installHome = join(root, "install");
     const dataHome = join(root, "data");
@@ -185,7 +185,7 @@ appendFileSync(process.env.UWH_TEST_OUTPUT, JSON.stringify({ count, home: proces
 if (count === 1) {
   setTimeout(() => writeFileSync(process.env.UWH_CONNECTION_STATE_PATH, JSON.stringify({ version: 1, active: { origin: "https://workspace.example", identity: { userId: "user-1", username: "alice" }, sessionToken: "new-token" } })), 30);
   process.on("SIGTERM", () => process.exit(0));
-  setInterval(() => {}, 1000);
+  setTimeout(() => process.exit(0), 180);
 }
 `,
       "utf8",
@@ -224,13 +224,6 @@ if (count === 1) {
       {
         count: 1,
         home: join(dataHome, "runtimes", "bootstrap"),
-        marker: "preserved-environment",
-        args: ["--profile", "test-profile", "--port", "3999", "--trusted-host", "127.0.0.1"],
-      },
-      {
-        count: 2,
-        home: runtimeHomeFor(dataHome, connection),
-        origin: "https://workspace.example",
         marker: "preserved-environment",
         args: ["--profile", "test-profile", "--port", "3999", "--trusted-host", "127.0.0.1"],
       },
