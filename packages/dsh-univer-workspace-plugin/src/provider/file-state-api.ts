@@ -28,7 +28,11 @@ export async function getWorktreeFileState(
     }
     throw error;
   });
-  const first = worktree.units[0];
+  // Removed Units remain review records, but cannot anchor an editor after
+  // publication. Canceled local Units likewise have no trunk resource to open.
+  const first = worktree.units.find(
+    (unit) => unit.kind !== "deleted" && unit.activationState !== "discarded",
+  );
   let viewerTarget: DocumentFileState["viewerTarget"] = null;
   let resourceId = first?.resourceId ?? "";
   let workspaceUrl: string | null = null;

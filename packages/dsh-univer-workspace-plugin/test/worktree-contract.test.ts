@@ -3,6 +3,7 @@ import {
   narrowWorktreeDetail,
   narrowWorktreeSummary,
   narrowWorktreeUnit,
+  setWorktreeUnitRemoved,
 } from "../src/provider/workspace-api.js";
 import { getWorktreeFileState, workspaceWorktreeUrl } from "../src/provider/file-state-api.ts";
 import type { WorkspaceHttpClient } from "../src/provider/workspace-contract.ts";
@@ -48,6 +49,50 @@ const summary = {
 };
 
 describe("Workspace Worktree contract", () => {
+  it.each([true, false])(
+    "updates Unit removal intent through the product route (%s)",
+    async (removed) => {
+      const calls: Array<{ path: string; body: unknown }> = [];
+      const client = {
+        async request(path: string, init: RequestInit) {
+          calls.push({ path, body: JSON.parse(String(init.body)) });
+          return Response.json({
+            worktree: { ...summary, units: [{ ...unit, change: removed ? "deleted" : "added" }] },
+          });
+        },
+      } as unknown as WorkspaceHttpClient;
+      await expect(
+        setWorktreeUnitRemoved(client, "wt-1", "unit-1", removed),
+      ).resolves.toMatchObject({ unitId: "unit-1", change: removed ? "deleted" : "added" });
+      expect(calls).toEqual([
+        { path: "/api/worktrees/wt-1/units/unit-1/removal", body: { removed } },
+      ]);
+    },
+  );
+
+  it("rejects a deletion response for another Worktree", async () => {
+    const client = {
+      request: async () =>
+        Response.json({
+          worktree: {
+            ...summary,
+            id: "other-worktree",
+            units: [{ ...unit, change: "deleted" }],
+          },
+        }),
+    } as unknown as WorkspaceHttpClient;
+    await expect(setWorktreeUnitRemoved(client, "wt-1", "unit-1", true)).rejects.toMatchObject({
+      code: "WORKTREE_UNIT_RESULT_MISMATCH",
+    });
+  });
+
+  it("accepts removed only as a Unit result, never as a Worktree status", () => {
+    expect(
+      narrowWorktreeUnit({ ...unit, change: "deleted", mergeResult: "removed" }).mergeResult,
+    ).toBe("removed");
+    expect(() => narrowWorktreeSummary({ ...summary, state: "removed" })).toThrow();
+  });
+
   it("retains the complete summary and capability fields", () => {
     expect(
       narrowWorktreeSummary({
@@ -155,6 +200,29 @@ describe("Workspace Worktree contract", () => {
     expect(detail.capabilities.editDraft).toBe(true);
   });
 
+  it.each(["draft", "ready", "merged", "discarded"])(
+    "keeps deletion-only %s Worktrees reviewable without opening removed resources",
+    async (state) => {
+      const calls: string[] = [];
+      const client = {
+        origin: "https://workspace.example",
+        async request(path: string) {
+          calls.push(path);
+          if (path !== "/api/worktrees/wt-1") return new Response(null, { status: 404 });
+          return Response.json({ worktree: {
+            ...summary, state,
+            units: [{ ...unit, nodeId: null, change: "deleted", mergeResult: state === "merged" ? "removed" : "pending" }],
+          } });
+        },
+      } as WorkspaceHttpClient;
+      const result = await getWorktreeFileState(client, "wt-1");
+      expect(result.worktrees[0]?.units[0]?.kind).toBe("deleted");
+      expect(result.viewerTarget).toBeNull();
+      expect(result.workspaceUrl).toBeNull();
+      expect(calls).toEqual(["/api/worktrees/wt-1"]);
+    },
+  );
+
   it("preserves complete Worktree metadata in the browser file-state projection", async () => {
     const client: WorkspaceHttpClient = {
       origin: "https://workspace.test",
@@ -211,10 +279,17 @@ describe("Workspace Worktree contract", () => {
   });
 });
 
-it("reads deleted Unit results without accepting removal as a Worktree state", () => {
-  expect(narrowWorktreeUnit({ ...unit, source: "trunk", target: null, nodeId: null,
-    change: "deleted", mergeResult: "removed" })).toMatchObject({ nodeId: null, mergeResult: "removed" });
-  expect(() => narrowWorktreeSummary({ ...summary, state: "removed" })).toThrow();
+it("retains review metadata after permanent Node deletion without accepting a missing nodeId field", () => {
+  expect(
+    narrowWorktreeUnit({
+      ...unit,
+      source: "trunk",
+      target: null,
+      nodeId: null,
+      change: "deleted",
+      mergeResult: "removed",
+    }),
+  ).toMatchObject({ nodeId: null, mergeResult: "removed" });
   const { nodeId: _nodeId, ...missingNode } = unit;
   expect(() => narrowWorktreeUnit(missingNode)).toThrow();
 });

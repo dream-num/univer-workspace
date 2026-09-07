@@ -919,6 +919,40 @@ export function createBrowserApiHandler(
       }
       return;
     }
+    const removalMatch = /^\/worktrees\/([^/]+)\/units\/([^/]+)\/removal$/.exec(subPath);
+    if (req.method === "POST" && removalMatch !== null) {
+      const user = authenticatedUser(ctx);
+      if (user === null) {
+        jsonResponse(res, 401, { error: "workspace_connection_required" });
+        return;
+      }
+      const body = await readJsonBody(req).catch(() => undefined);
+      if (
+        body === null ||
+        typeof body !== "object" ||
+        !("removed" in body) ||
+        typeof body.removed !== "boolean"
+      ) {
+        jsonResponse(res, 400, { error: "removed_boolean_required" });
+        return;
+      }
+      try {
+        const unit = await ctx
+          .get("univerWorkspace")!
+          .setWorktreeUnitRemoved(
+            user.userId,
+            decodeURIComponent(removalMatch[1]!),
+            decodeURIComponent(removalMatch[2]!),
+            body.removed,
+          );
+        jsonResponse(res, 200, { unit });
+      } catch (error) {
+        jsonResponse(res, upstreamStatus(error), {
+          error: error instanceof Error ? error.message : "workspace unreachable",
+        });
+      }
+      return;
+    }
     const actionMatch = /^\/worktrees\/([A-Za-z0-9-]+)\/(ready|reopen|merge|discard)$/.exec(
       subPath,
     );

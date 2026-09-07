@@ -28,8 +28,9 @@ import/export, not as document identities.
 - **Worktree-local Unit**: `univer_unit` implements the Workspace product's
   `source=worktree` create contract with the calling Space as its enforced
   scope, stable idempotency, pending-Operation polling, and complete Unit
-  response validation. The product currently has no remove/restore endpoint,
-  so `action=create` is intentionally the only advertised action.
+  response validation. `action=remove` marks a Unit for deletion at merge;
+  `action=restore` undoes that draft intent. Existing documents enter Trash only
+  after merge, while canceled new Units never become published documents.
 - **Execution sources and path safety**: `univer_execute` accepts exactly one
   inline `code` or session-relative `codeFile`; both import/export paths use
   canonical realpath containment checks, including symlink escapes.
@@ -100,10 +101,11 @@ Existing documents enter a new Worktree by passing their `resourceId` to
 review it before merge.
 
 `univer_new` and `univer_create` create documents directly in trunk and are for
-explicit requests to publish immediately. Worktree changes currently support
-new and modified documents. Per-document deletion through Worktree review is
-not implemented; trashing a Space node and discarding a whole Worktree are
-separate operations.
+explicit requests to publish immediately. Worktree changes support new, modified, and deleted documents. Use
+`univer_unit` with `action: "remove"` to mark a document for deletion and
+`action: "restore"` to undo that intent while the Worktree is a draft.
+Merging moves existing documents to Trash and cancels unpublished new Units.
+Discarding a Worktree leaves existing documents unchanged.
 
 ## dsh-univer-office tool audit
 
@@ -115,7 +117,7 @@ cannot authorize:
 | dsh-univer-office                                          | Workspace plugin                                                       | Boundary                                                                                                                                   |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `univer_new`                                               | `univer_new` / `univer_create`                                         | Resource creation is a Workspace API operation; the result is opened to resolve `unitId`.                                                  |
-| `univer_unit`                                              | `univer_unit` (`action=create`)                                        | Worktree-local Unit creation is backed by `POST /api/worktrees/{id}/units`; remove/restore is not exposed by the current product contract. |
+| `univer_unit`                                              | `univer_unit` (`create`, `remove`, `restore`)                                        | Create draft Units or update their deletion intent through the Workspace product API; merge approval remains a separate Worktree action. |
 | `univer_status`                                            | `univer_status` + `univer_spaces`, `univer_documents`, `univer_open`   | Status returns the selected trunk Resource or Worktree Unit/file-state; Space, Node and Unit identity remain separate remote resources.    |
 | `univer_execute`                                           | `univer_execute` (or `univer_edit` `mode=write`)                       | Writes are Worktree-scoped and commit a collaboration changeset; exactly one inline `code`/safe session `codeFile` is accepted.            |
 | `univer_inspect`                                           | `univer_inspect`                                                       | Uses the public content-inspection SDK over the same headless collaboration runtime; range selectors are validated before execution.       |

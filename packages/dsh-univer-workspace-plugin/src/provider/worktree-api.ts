@@ -242,7 +242,14 @@ export interface WorktreeUnitDescriptor {
 
 const WORKTREE_UNIT_TYPES = ["sheet", "doc", "slide", "board", "base"] as const;
 const WORKTREE_UNIT_CHANGES = ["modified", "added", "deleted", "unchanged"] as const;
-const WORKTREE_MERGE_RESULTS = ["pending", "merged", "unchanged", "removed", "conflict", "failed"] as const;
+const WORKTREE_MERGE_RESULTS = [
+  "pending",
+  "merged",
+  "unchanged",
+  "removed",
+  "conflict",
+  "failed",
+] as const;
 const WORKTREE_ACTIVATION_STATES = [
   "notApplicable",
   "waitingForMerge",
@@ -437,6 +444,38 @@ export async function getWorktreeDetail(
   worktreeId: string,
 ): Promise<WorktreeStateView> {
   return narrowWorktreeDetail(await worktreeDetail(client, worktreeId));
+}
+
+/** Change one draft Unit's deletion intent through the product-authorized route. */
+export async function setWorktreeUnitRemoved(
+  client: WorkspaceHttpClient,
+  worktreeId: string,
+  unitId: string,
+  removed: boolean,
+): Promise<WorktreeUnitDescriptor> {
+  const detail = narrowWorktreeDetail(
+    await readJson(
+      await client.request(
+        `/api/worktrees/${encodeURIComponent(worktreeId)}/units/${encodeURIComponent(unitId)}/removal`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ removed }),
+        },
+      ),
+      "worktree unit removal",
+    ),
+  );
+  const selected = detail.units.find((unit) => unit.unitId === unitId);
+  if (detail.worktreeId !== worktreeId || !selected || (selected.kind === "deleted") !== removed) {
+    throw new WorkspaceApiError(
+      "workspace returned a mismatched Unit deletion result",
+      502,
+      "WORKTREE_UNIT_RESULT_MISMATCH",
+    );
+  }
+  const { kind, worktreeUrl: _worktreeUrl, mergeUrl: _mergeUrl, ...unit } = selected;
+  return narrowWorktreeUnit({ ...unit, change: kind });
 }
 
 /** Convert a validated detail back to the summary shape used by tools. */

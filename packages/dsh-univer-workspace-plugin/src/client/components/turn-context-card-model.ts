@@ -152,7 +152,8 @@ export function resolveTurnViewer(
   if (
     unit.kind === "deleted" &&
     (mode !== "trunk" || worktree.status === "merged" || unit.nodeId === null)
-  ) return undefined;
+  )
+    return undefined;
   const unitType = viewerUnitTypeOf(unit.unitType);
   const unsupported =
     unitType === "unsupported" ? { unsupportedType: rawUnitType(unit.unitType) } : {};
@@ -291,7 +292,7 @@ export function mergeResultLabel(
 ): string {
   if (result === "merged") return t("dock.merged");
   if (result === "unchanged") return t("turn.unit.unchanged");
-  if (result === "removed") return t("turn.unit.deleted");
+  if (result === "removed") return t("turn.merge.removed");
   if (result === "conflict") return t("dock.unit.conflict");
   if (result === "failed") return t("turn.merge.failed");
   return t("dock.loading");
