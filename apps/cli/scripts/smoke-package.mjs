@@ -24,6 +24,12 @@ try {
   const installRoot = join(temporaryRoot, "install");
   const univerHome = join(temporaryRoot, "home");
   await Promise.all([mkdir(tarballRoot), mkdir(installRoot), mkdir(univerHome)]);
+  // Anchor npm to this isolated consumer instead of an ancestor project in the temp directory.
+  await writeFile(
+    join(installRoot, "package.json"),
+    JSON.stringify({ name: "workspace-cli-smoke-consumer", private: true }),
+    "utf8",
+  );
   const blobSourcePath = join(temporaryRoot, "blob-source.bin");
   const blobOutputPath = join(temporaryRoot, "blob-output.bin");
   const assetOutputPath = join(temporaryRoot, "asset-output.bin");
