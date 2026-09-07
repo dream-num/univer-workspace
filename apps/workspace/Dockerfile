@@ -14,6 +14,7 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/workspace/package.json ./apps/workspace/package.json
 COPY packages/reference-provider/package.json ./packages/reference-provider/package.json
+COPY packages/unit-comparison-viewer/package.json ./packages/unit-comparison-viewer/package.json
 
 RUN pnpm install \
     --frozen-lockfile \
@@ -23,6 +24,7 @@ RUN pnpm install \
 COPY tsconfig.base.json ./
 COPY apps/workspace ./apps/workspace
 COPY packages/reference-provider ./packages/reference-provider
+COPY packages/unit-comparison-viewer ./packages/unit-comparison-viewer
 
 RUN pnpm --filter @univerjs/univer-workspace-reference-provider build \
     && pnpm --filter @univerjs/univer-workspace build \
