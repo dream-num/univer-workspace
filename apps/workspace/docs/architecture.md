@@ -204,6 +204,19 @@ Worktree Service 在 Collaboration 与产品写入均完成后调用专用 Chang
 身份或内容的失效信号。实时发送失败不改变已经完成的产品写入，客户端重连后通过首帧统一
 失效查询，从产品 API 恢复当前状态。
 
+## 服务观测
+
+`app.ts` 注册 `middleware/logging.ts` 和 `middleware/metrics.ts` 中的请求中间件。
+Pino 输出 JSON 日志，HTTP 元数据按白名单记录 request ID、method、URL 路径部分、
+statusCode 和耗时。prom-client 按 method、路由模板和 status_code 采集 HTTP 请求数与耗时。
+Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板，例如 `/nodes/:id`。
+
+`integrations/univer/collaboration-gateway.ts` 注册 Transport 观测中间件，在响应完成时
+通过 SDK 的 `ctx.route?.path` 读取完整路由模板；路由匹配前结束的请求和未知路径统一归为
+`unmatched`。Express 和 SDK 中间件各自在入口开始计时，在响应完成时写入同一个 Histogram。
+请求进入 SDK 时标记统计归属，由 SDK 中间件完成采集；Express 中间件负责其余 HTTP 请求。
+配置、认证与部署方式见 [观测说明](../../../observability/README.md)。
+
 ## 产品数据库
 
 产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V6 结构，`initialize.ts`

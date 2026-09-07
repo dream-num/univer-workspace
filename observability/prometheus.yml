@@ -1,0 +1,14 @@
+# Prometheus periodically scrapes the Workspace HTTP metrics endpoint.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: univer-workspace
+    # Reach the host service from Docker Desktop or OrbStack on macOS.
+    static_configs:
+      - targets:
+          - host.docker.internal:3020
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics-token
