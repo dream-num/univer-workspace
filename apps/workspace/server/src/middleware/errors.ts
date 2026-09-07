@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
+import { requestLogger } from "./logging.js";
 
 export type ApplicationErrorCode =
   | "INVALID_INPUT"
@@ -53,7 +54,7 @@ export const notFoundHandler: RequestHandler = (_request, response) => {
 
 export const errorHandler: ErrorRequestHandler = (
   error: unknown,
-  _request,
+  request,
   response,
   _next
 ) => {
@@ -68,7 +69,8 @@ export const errorHandler: ErrorRequestHandler = (
     return;
   }
 
-  console.error(error);
+  // Correlate unexpected errors with the request ID returned to the caller.
+  requestLogger(request).error({ err: error }, "unhandled request error");
   response.status(500).json({
     error: {
       code: "INTERNAL_ERROR",

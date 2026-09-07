@@ -25,6 +25,11 @@ import {
   notFoundHandler,
 } from "./middleware/errors.js";
 import {
+  createMetricsHandler,
+  createMetricsMiddleware,
+} from "./middleware/metrics.js";
+import { createRequestLoggingMiddleware } from "./middleware/logging.js";
+import {
   AccessRepository,
   createAccessResolver,
   type AccessResolver,
@@ -277,9 +282,15 @@ export function createWorkspaceApplication(
   const app = express();
 
   app.disable("x-powered-by");
+  // Register HTTP observation before routes so it covers all requests.
+  app.use(createMetricsMiddleware());
+  // Attach the request-scoped logger for downstream error handling.
+  app.use(createRequestLoggingMiddleware());
   app.get("/healthz", (_request, response) => {
     response.json({ status: "ok" });
   });
+  // The operational endpoint is disabled unless a dedicated scrape token is set.
+  app.get("/metrics", createMetricsHandler(config.metricsToken));
   app.get("/openapi.yaml", (_request, response) => {
     const filename = resolve("generated/http/openapi.bundled.yaml");
     if (!existsSync(filename)) {

@@ -45,6 +45,7 @@ import {
 } from "../realtime/worktree-change-feed.js";
 import { protocolUser } from "./protocol-user.js";
 import { setFinalMutationSize } from "./changeset-observation.js";
+import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.js";
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
@@ -289,6 +290,7 @@ export function createCollaborationGateway(options: {
     await next();
   });
 
+  transport.use(createCollaborationMetricsMiddleware());
   transport.use(async (context, next) => {
     const session = identity.getSession(cookieHeader(context));
     if (!session.authenticated) {

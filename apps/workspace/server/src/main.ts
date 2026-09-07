@@ -4,6 +4,7 @@ import { loadConfig } from "./config.js";
 import { startOperationRecovery } from "./jobs/operation-recovery.js";
 import { startBlobMaintenance } from "./jobs/blob-maintenance.js";
 import { shutdownServer } from "./server-lifecycle.js";
+import { logger } from "./middleware/logging.js";
 
 const config = loadConfig();
 const application = createWorkspaceApplication(config);
@@ -22,8 +23,9 @@ const server = createServer(application.app);
 application.attachWebSocket(server);
 
 server.listen(config.port, config.host, () => {
-  console.info(
-    `Univer Workspace is running at http://${config.host}:${config.port}`
+  logger.info(
+    { host: config.host, port: config.port },
+    "Univer Workspace is running"
   );
 });
 
@@ -37,7 +39,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     void shutdownServer(server, background, application).catch(
       (error: unknown) => {
-        console.error(error);
+        logger.error({ err: error }, "failed to shut down server");
         process.exitCode = 1;
       }
     );
