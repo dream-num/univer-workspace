@@ -210,3 +210,11 @@ describe("Workspace Worktree contract", () => {
     expect(() => narrowWorktreeDetail({ worktree: summary })).toThrow(/malformed Unit list/);
   });
 });
+
+it("reads deleted Unit results without accepting removal as a Worktree state", () => {
+  expect(narrowWorktreeUnit({ ...unit, source: "trunk", target: null, nodeId: null,
+    change: "deleted", mergeResult: "removed" })).toMatchObject({ nodeId: null, mergeResult: "removed" });
+  expect(() => narrowWorktreeSummary({ ...summary, state: "removed" })).toThrow();
+  const { nodeId: _nodeId, ...missingNode } = unit;
+  expect(() => narrowWorktreeUnit(missingNode)).toThrow();
+});

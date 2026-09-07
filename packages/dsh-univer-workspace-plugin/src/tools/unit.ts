@@ -53,7 +53,7 @@ export function registerUnitTool(ctx: Context): () => void {
           properties: {
             unitId: { type: "string", required: true },
             resourceId: { type: "string", required: true },
-            nodeId: { type: "string", required: true },
+            nodeId: { type: "json", required: true, description: "Node ID, or null if the node no longer exists." },
             source: { type: "string", required: true },
             name: { type: "string", required: true },
             unitType: { type: "string", required: true },

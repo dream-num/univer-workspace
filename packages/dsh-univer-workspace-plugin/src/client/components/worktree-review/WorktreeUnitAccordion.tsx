@@ -115,7 +115,9 @@ function WorktreeUnitItem(props: {
   }, [props.located]);
 
   const activeView = activeViewerMode(props.view, worktree, unit);
-  const previewable = activeView !== "agent" || unit.kind !== "deleted";
+  const previewable =
+    unit.kind !== "deleted" ||
+    (activeView === "trunk" && worktree.status !== "merged" && unit.nodeId !== null);
   const resolvedViewer =
     props.expanded && previewable ? resolveTurnViewer(worktree, unit, activeView) : undefined;
   // Worktree is a human review surface. The Agent Draft can be writable in
