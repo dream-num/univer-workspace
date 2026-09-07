@@ -162,3 +162,8 @@ The consuming Harness image installs these packages once while assembling the
 profile. pnpm's `supportedArchitectures: current` policy selects only the
 container's platform binary, so runtime resolution is deterministic and does
 not depend on a transitive hoist or a bundled `.node` file.
+
+Account-level Harness sessions use the connected account's personal Space as
+the default destination. Sessions opened in a selected Space keep that Space
+as their default. Explicit targets still require Workspace server permission;
+unrelated local DSH directories are not automatically linked.

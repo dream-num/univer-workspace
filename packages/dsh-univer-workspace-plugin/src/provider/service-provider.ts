@@ -22,6 +22,7 @@ import type {
 import type { ContentInspectionResult } from "@univer-cli/content-inspection";
 import {
   originSpaceDirectoryPath,
+  originUserDirectoryPath,
   type WorkspaceAuthService,
   type WorkspaceHttpClient,
 } from "./workspace-contract.ts";
@@ -121,7 +122,23 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     const workspace = await this.ctx.workspaceRegistry.resolveByPath(cwd);
     if (workspace === undefined) return undefined;
     const record = (await this.requireTable()).get(workspace.id);
-    return record === undefined ? undefined : { userId: record.userId, spaceId: record.spaceId };
+    const auth = this.requireWorkspaceAuth();
+    const identity = auth.currentIdentity();
+    if (identity === undefined) return undefined;
+    const origin = new URL(auth.effectiveOrigin()).origin;
+    if (record !== undefined) {
+      if (record.userId !== identity.userId || (record.origin !== undefined && record.origin !== origin))
+        return undefined;
+      return { userId: record.userId, spaceId: record.spaceId };
+    }
+    // The account-level workspace is created by the Harness home/template flow.
+    // Its default destination is the authenticated account's personal Space;
+    // arbitrary local workspaces never inherit this connection.
+    if (workspace.path !== originUserDirectoryPath(this.config.workspaceRoot, origin, identity.userId))
+      return undefined;
+    const spaces = await listSpaces(this.requireClient(identity.userId));
+    const personal = spaces.find((space) => space.type === "personal" && space.accessRole === "owner");
+    return personal === undefined ? undefined : { userId: identity.userId, spaceId: personal.spaceId };
   }
 
   async listDocuments(

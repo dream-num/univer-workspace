@@ -1,8 +1,9 @@
 /**
  * Shared authorization scope for every Workspace tool.
  *
- * A DSH session is mechanically backed by one Space directory.  That Space is
- * the default target, while the Workspace OAuth identity remains authoritative
+ * A DSH session uses either a linked Space directory or the account directory.
+ * Linked Spaces remain the default target; account sessions default to the
+ * authenticated account's personal Space, while the Workspace OAuth identity remains authoritative
  * for any explicitly selected Space.  The session link is routing context, not
  * an ACL boundary.
  *
@@ -22,11 +23,11 @@ export interface ToolSpaceScope extends SpaceScope {
 }
 
 /**
- * Resolve the authenticated Space represented by the calling DSH session.
+ * Resolve the authenticated default Space for the calling DSH session.
  *
  * Failing closed here is important: tools can be invoked by background or
  * synthetic executions that do not carry a session cwd.  Such executions do
- * not have a product Space boundary and must not receive a user-wide client.
+ * not identify a supported Workspace directory and must not receive a client.
  */
 export async function resolveToolScope(
   ctx: Context,
