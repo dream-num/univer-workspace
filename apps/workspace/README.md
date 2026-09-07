@@ -222,13 +222,12 @@ initialization of their own `comment=1` and `history=1` component schemas in the
 existing Collaboration SQLite file; they do not require a product database
 migration command. Back up both SQLite files before rollout.
 
-The current Worktree removal development build uses private SDK Dev overrides.
-Its Collaboration Worktree adapter upgrades its own component schema from V1 to
-V2; the product database remains V6. Older SDK builds cannot open Worktree V2.
-Test this build with separate product, collaboration, and Blob storage paths.
-Never point the main-branch application and this development build at the same
-Collaboration SQLite file. Rolling back requires the matching pre-upgrade database
-backup, not only switching the application commit.
+The published Collaboration Worktree adapter upgrades its own component schema
+from V1 to V2; the product database remains V6. Older SDK builds cannot open
+Worktree V2. Validate upgrades with separate product, collaboration, and Blob
+storage paths. Never let old and new SDK builds write the same Collaboration
+SQLite file. Rolling back requires the matching pre-upgrade database backup,
+not only switching the application commit.
 For a V6 rollout, stop every old Workspace instance, start one V6 instance and
 wait for migration and health checks to succeed, then restore normal service;
 do not let V5 and V6 processes write the same SQLite file concurrently.
