@@ -235,6 +235,10 @@ const messages = {
     base: "数据表",
     pending: "等待合入",
     merged: "已合入",
+    removed: "已排除内容合并",
+    markUnitRemoved: "标记删除",
+    undoUnitRemoval: "撤销删除",
+    removedUnitPreview: "此文档已标记删除，不会发布其内容。",
     unchanged: "无变更",
     conflict: "存在冲突",
     failed: "合入失败",
@@ -581,6 +585,10 @@ const messages = {
     base: "Base",
     pending: "Pending",
     merged: "Merged",
+    removed: "Excluded from content merge",
+    markUnitRemoved: "Mark for deletion",
+    undoUnitRemoval: "Undo deletion",
+    removedUnitPreview: "This document is marked for deletion. Its content will not be published.",
     unchanged: "Unchanged",
     conflict: "Conflict",
     failed: "Failed",
@@ -743,11 +751,7 @@ export function LanguageProvider({ children }: PropsWithChildren) {
     [language]
   );
 
-  return (
-    <LanguageContext.Provider value={value}>
-      {children}
-    </LanguageContext.Provider>
-  );
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
 export function useI18n(): LanguageContextValue {

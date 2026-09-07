@@ -4,6 +4,18 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@univerjs-pro/collaboration-endpoint': 1.0.0-dev.worktree-removal.20260907
+  '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907
+  '@univerjs-pro/collaboration-transport-node': 1.0.0-dev.worktree-removal.20260907
+  '@univerjs-pro/collaboration-worktree-client': 1.0.0-dev.worktree-removal.20260907
+  '@univerjs-pro/collaboration-worktree-database-memory': 1.0.0-dev.worktree-removal.20260907
+  '@univerjs-pro/collaboration-worktree-database-sqlite': 1.0.0-dev.worktree-removal.20260907
+  '@univerjs-pro/collaboration-worktree-endpoint': 1.0.0-dev.worktree-removal.20260907
+  '@univerjs-pro/collaboration-worktree-service': 1.0.0-dev.worktree-removal.20260907
+  '@univerjs-pro/collaboration-history-endpoint': 1.0.0-dev.worktree-removal.20260907
+  '@univerjs-pro/collaboration-comment-endpoint': 1.0.0-dev.worktree-removal.20260907
+
 importers:
 
   .:
@@ -496,8 +508,8 @@ importers:
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)
       '@univerjs-pro/collaboration-comment-endpoint':
-        specifier: 1.0.0-insiders.20260902-a58c423
-        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+        specifier: 1.0.0-dev.worktree-removal.20260907
+        version: 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs-pro/collaboration-comment-service':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)
@@ -505,35 +517,35 @@ importers:
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)
       '@univerjs-pro/collaboration-endpoint':
-        specifier: 1.0.0-insiders.20260902-a58c423
-        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+        specifier: 1.0.0-dev.worktree-removal.20260907
+        version: 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs-pro/collaboration-history-database-sqlite':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/collaboration-history-endpoint':
-        specifier: 1.0.0-insiders.20260902-a58c423
-        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+        specifier: 1.0.0-dev.worktree-removal.20260907
+        version: 1.0.0-dev.worktree-removal.20260907(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/collaboration-history-service':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/collaboration-service':
-        specifier: 1.0.0-insiders.20260902-a58c423
-        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+        specifier: 1.0.0-dev.worktree-removal.20260907
+        version: 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs-pro/collaboration-transport-node':
-        specifier: 1.0.0-insiders.20260902-a58c423
-        version: 1.0.0-insiders.20260902-a58c423
+        specifier: 1.0.0-dev.worktree-removal.20260907
+        version: 1.0.0-dev.worktree-removal.20260907
       '@univerjs-pro/collaboration-worktree-client':
-        specifier: 1.0.0-insiders.20260902-a58c423
-        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+        specifier: 1.0.0-dev.worktree-removal.20260907
+        version: 1.0.0-dev.worktree-removal.20260907(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/collaboration-worktree-database-sqlite':
-        specifier: 1.0.0-insiders.20260902-a58c423
-        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+        specifier: 1.0.0-dev.worktree-removal.20260907
+        version: 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs-pro/collaboration-worktree-endpoint':
-        specifier: 1.0.0-insiders.20260902-a58c423
-        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+        specifier: 1.0.0-dev.worktree-removal.20260907
+        version: 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs-pro/collaboration-worktree-service':
-        specifier: 1.0.0-insiders.20260902-a58c423
-        version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+        specifier: 1.0.0-dev.worktree-removal.20260907
+        version: 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs-pro/docs-callout':
         specifier: 1.0.0-insiders.20260902-a58c423
         version: 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
@@ -2519,8 +2531,11 @@ packages:
     resolution: {integrity: sha512-VISUzh68yX9iJed5ggV8C7U6axvI6Z5XN3eAUNBqiTDfQwDUScAGzBzThOY1sfvEBN6D0PRPqkhnMEYlJHeHZw==}
     engines: {node: '>=22'}
 
-  '@univerjs-pro/collaboration-comment-endpoint@1.0.0-insiders.20260902-a58c423':
-    resolution: {integrity: sha512-eomkwDSesnxzXgs8x2ABLWTm7PQe3wUOsajO3Nyq4WOizZVZneB24rlDBw5vdVLZkEIxKrtJwFQGBDd5YTygsg==}
+  '@univerjs-pro/collaboration-comment-endpoint@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-XUUPnf/1u8wIOWd4SN6LXs65C+L946r7ir1x7OjTCs+bwHiJvyo5YU/G+eKXe9Q47FsTeilOZ3mGeqHo/mUonQ==}
+
+  '@univerjs-pro/collaboration-comment-service@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-mCGuESLX30O5kWMMsPjkWU4zU/5hxWaFYdlnLtMzFXXtze22jzsyla7WSSZoPtHz/0iKCFLpX0fWVcSL1VnsQQ==}
 
   '@univerjs-pro/collaboration-comment-service@1.0.0-insiders.20260902-a58c423':
     resolution: {integrity: sha512-UQT/tDkUPRTzMfNh2n4t4sM1Oyof+YcC1j1tcAz8Za04McD5msf/xss3cew1LESP7Thiahhnv5DSl5yDhowB4Q==}
@@ -2529,37 +2544,40 @@ packages:
     resolution: {integrity: sha512-hZjVefoTV+651yBSxC9AU3bpIJ+EBCrVweEuSqZbsX/EhFcqcolV1i1s/es6TYEhf6uVSPcmZEgAVDwJZYc50Q==}
     engines: {node: '>=22'}
 
-  '@univerjs-pro/collaboration-endpoint@1.0.0-insiders.20260902-a58c423':
-    resolution: {integrity: sha512-qgkAOnH4Gc9t9NQjsQ4qqoZyUKNZ8+RGoVlL500WUPDgPcFfnQ4iybxWfzlA1yF2bxv8jnvyWfYkiVXSWjI+fA==}
+  '@univerjs-pro/collaboration-endpoint@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-lHATbBisAc14lu4v4+R49R7kuHCjHdBB8N+TLEFtFjUq/wn0hOx+4ahrynzhe4w/d+7/VVot3fhM8s9jPb/ulQ==}
 
   '@univerjs-pro/collaboration-history-database-sqlite@1.0.0-insiders.20260902-a58c423':
     resolution: {integrity: sha512-q2iAbpfqqgRkkphRG9fNt3AuusjO+7u8D9hQoWK2aQZ1EbPlq0WflRi25fLmjUIg1TbS5En0gF86Xo4Z3C9zVg==}
     engines: {node: '>=22'}
 
-  '@univerjs-pro/collaboration-history-endpoint@1.0.0-insiders.20260902-a58c423':
-    resolution: {integrity: sha512-tgNguwYfGZZ+aYtSz6pMEgaj7qdvXKRdwuw+DXgKPGzaydyXfxWsUITJbmENHB0fDkw5ivbUAomOZHCxmSV9TA==}
+  '@univerjs-pro/collaboration-history-endpoint@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-UYyMbCNsss8dtjNtFBZV688lQO6zWmwj0bfbRXMpCA9z4wr/kpi/88IUrO7DHCcpKuoz5HKP75eUsyGTS+WlaA==}
+
+  '@univerjs-pro/collaboration-history-service@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-ZKr8Z07ZfE6n5dWCY4tjITckaQ8Veqm49WnJWU76dTj/8YYG6o5wEvX/Fqw8NYfhgPi6hZjMppolxPRJb/aglA==}
 
   '@univerjs-pro/collaboration-history-service@1.0.0-insiders.20260902-a58c423':
     resolution: {integrity: sha512-Geu2ivoO4pxHTPc9HPoLdZZbnSg+TOV7PGgpe6a3MO3bmm1f5f/12LQPf8ntrFD/UwC8axfGHt+LMfNX0yn9rQ==}
 
-  '@univerjs-pro/collaboration-service@1.0.0-insiders.20260902-a58c423':
-    resolution: {integrity: sha512-+P/IzPnGde6Lp26TjnZsqNanvfnD97Kfuzwk0+/Dn2ayRj/UTb2CSYioSuzf6ajgf9DSwXu3gUISG1dxtV7lBg==}
+  '@univerjs-pro/collaboration-service@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-aK6oUzirgnLZabr+RqYy5YgKojDVztUz2k2uakcfHmsY0PBa6FlQRVlQjfobr3i0pBnEXOnQXC4IRB4+6agDMQ==}
 
-  '@univerjs-pro/collaboration-transport-node@1.0.0-insiders.20260902-a58c423':
-    resolution: {integrity: sha512-K6hM+MkMFCfe60jlWVvfj8IK/aKUJ/RUijpdatJCV/mwZBRijkAx+q2iu46+O4/R8rj7B+VFDlFgfYgFM/PlIA==}
+  '@univerjs-pro/collaboration-transport-node@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-QzPZCXPObTEtWV/MSy4Hq/T/xMCMPmNETxrm9zbuBu7SkVA9k4sMmNbs9KSotAiDTLhXnpr84571Yp32lqARtA==}
 
-  '@univerjs-pro/collaboration-worktree-client@1.0.0-insiders.20260902-a58c423':
-    resolution: {integrity: sha512-s5os3ObjG3Mlp0WcB2qRvxCOrBwwMWxTiYMpUqbLGsSF3Y4ND/swQ3wGgFFJJOjHg36RVz0FeEl+VwmSHqrlNQ==}
+  '@univerjs-pro/collaboration-worktree-client@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-wh+AAjs1e52ljzBX2sFGxYNbuaHGnfMzxvpuIbpb2YIObinb/jfWAwM/E+HK2zMkOE6ghrYdKFsdkfqkindaOQ==}
 
-  '@univerjs-pro/collaboration-worktree-database-sqlite@1.0.0-insiders.20260902-a58c423':
-    resolution: {integrity: sha512-VN+etTGY6/aE4lKoFPa3XX4cp8k45GWtI+lCQSoAakU78gzCRxulvhgYs5qWkPuIgwlXWeIbqNrgMCH0vjTVYA==}
+  '@univerjs-pro/collaboration-worktree-database-sqlite@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-8xwiGy4UPWnBCoQEpBGiemC6RS/ULXz0WkKLfxel0kdmFdCUcxEurlwvquWPhFUU5u0HIrWnyMuoFVzbiih7mA==}
     engines: {node: '>=22'}
 
-  '@univerjs-pro/collaboration-worktree-endpoint@1.0.0-insiders.20260902-a58c423':
-    resolution: {integrity: sha512-1M5GW+pemFP63gQhNKqg2PqE6wiX+YFbga3I+z0MAKJYwjKqDo4LYDKXcYjB9xHLRfJYmrhGZKy2GR2S6zxkwg==}
+  '@univerjs-pro/collaboration-worktree-endpoint@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-/LwFJJ5wRn/21u7Vb6ToOsVhzzTVhE8cVR5WAvSJjwvRNkzLMf5BOxPfOsDGd5/GIllKncSgbNdkSyweLqkfBw==}
 
-  '@univerjs-pro/collaboration-worktree-service@1.0.0-insiders.20260902-a58c423':
-    resolution: {integrity: sha512-Abqdl4UFlRnkPO3oNpyR64usuPprmxvdn02qEiadY0yIkRXYqZNAwcbiMbo/1rByHd3oG6KDVECkxADfRonvjw==}
+  '@univerjs-pro/collaboration-worktree-service@1.0.0-dev.worktree-removal.20260907':
+    resolution: {integrity: sha512-piK/zY4O3JqVcb4ZXlHKycN47nLUze/YaQnJDSlu4pDNCiQjywackCvyXM8rlfcAYf9DgO+OW5vxp/auSeTL3w==}
 
   '@univerjs-pro/collaboration@1.0.0-insiders.20260902-a58c423':
     resolution: {integrity: sha512-XFIr9GSr/KuOEbrq7B7s9C69poYF/ft5RVnTzD0eI97xZZE/lOGWemeP5rwjDxzajhzsm+JkXW1yIpnXaYzp+Q==}
@@ -6716,37 +6734,44 @@ snapshots:
     transitivePeerDependencies:
       - react
 
-  '@univerjs-pro/collaboration-comment-endpoint@1.0.0-insiders.20260902-a58c423(react@19.2.8)':
+  '@univerjs-pro/collaboration-comment-endpoint@1.0.0-dev.worktree-removal.20260907(react@19.2.8)':
     dependencies:
-      '@univerjs-pro/collaboration-comment-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
-      '@univerjs-pro/collaboration-endpoint': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
-      '@univerjs-pro/collaboration-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
-      '@univerjs-pro/collaboration-transport-node': 1.0.0-insiders.20260902-a58c423
+      '@univerjs-pro/collaboration-comment-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs-pro/collaboration-endpoint': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs-pro/collaboration-transport-node': 1.0.0-dev.worktree-removal.20260907
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
     transitivePeerDependencies:
       - bufferutil
       - react
       - utf-8-validate
 
+  '@univerjs-pro/collaboration-comment-service@1.0.0-dev.worktree-removal.20260907(react@19.2.8)':
+    dependencies:
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
+    transitivePeerDependencies:
+      - react
+
   '@univerjs-pro/collaboration-comment-service@1.0.0-insiders.20260902-a58c423(react@19.2.8)':
     dependencies:
-      '@univerjs-pro/collaboration-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
     transitivePeerDependencies:
       - react
 
   '@univerjs-pro/collaboration-database-sqlite@1.0.0-insiders.20260902-a58c423(react@19.2.8)':
     dependencies:
-      '@univerjs-pro/collaboration-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       libsql: 0.5.29
     transitivePeerDependencies:
       - react
 
-  '@univerjs-pro/collaboration-endpoint@1.0.0-insiders.20260902-a58c423(react@19.2.8)':
+  '@univerjs-pro/collaboration-endpoint@1.0.0-dev.worktree-removal.20260907(react@19.2.8)':
     dependencies:
-      '@univerjs-pro/collaboration-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
-      '@univerjs-pro/collaboration-transport-node': 1.0.0-insiders.20260902-a58c423
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs-pro/collaboration-transport-node': 1.0.0-dev.worktree-removal.20260907
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
     transitivePeerDependencies:
       - bufferutil
@@ -6762,11 +6787,11 @@ snapshots:
       - react
       - rxjs
 
-  '@univerjs-pro/collaboration-history-endpoint@1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)':
+  '@univerjs-pro/collaboration-history-endpoint@1.0.0-dev.worktree-removal.20260907(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
-      '@univerjs-pro/collaboration-history-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
-      '@univerjs-pro/collaboration-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
-      '@univerjs-pro/collaboration-transport-node': 1.0.0-insiders.20260902-a58c423
+      '@univerjs-pro/collaboration-history-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs-pro/collaboration-transport-node': 1.0.0-dev.worktree-removal.20260907
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
     transitivePeerDependencies:
       - bufferutil
@@ -6774,16 +6799,25 @@ snapshots:
       - rxjs
       - utf-8-validate
 
-  '@univerjs-pro/collaboration-history-service@1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)':
+  '@univerjs-pro/collaboration-history-service@1.0.0-dev.worktree-removal.20260907(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/collaboration': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
-      '@univerjs-pro/collaboration-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
     transitivePeerDependencies:
       - react
       - rxjs
 
-  '@univerjs-pro/collaboration-service@1.0.0-insiders.20260902-a58c423(react@19.2.8)':
+  '@univerjs-pro/collaboration-history-service@1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/collaboration': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
+    transitivePeerDependencies:
+      - react
+      - rxjs
+
+  '@univerjs-pro/collaboration-service@1.0.0-dev.worktree-removal.20260907(react@19.2.8)':
     dependencies:
       '@univerjs-pro/bases': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/bases-thread-comment': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
@@ -6835,20 +6869,20 @@ snapshots:
     transitivePeerDependencies:
       - react
 
-  '@univerjs-pro/collaboration-transport-node@1.0.0-insiders.20260902-a58c423':
+  '@univerjs-pro/collaboration-transport-node@1.0.0-dev.worktree-removal.20260907':
     dependencies:
       ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@univerjs-pro/collaboration-worktree-client@1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)':
+  '@univerjs-pro/collaboration-worktree-client@1.0.0-dev.worktree-removal.20260907(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@oxc-project/runtime': 0.139.0
       '@univerjs-pro/collaboration': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/collaboration-client': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
-      '@univerjs-pro/collaboration-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
-      '@univerjs-pro/collaboration-worktree-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs-pro/collaboration-worktree-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs/core': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/network': 1.0.0-insiders.20260902-a58c423(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
@@ -6856,30 +6890,30 @@ snapshots:
       - react
       - rxjs
 
-  '@univerjs-pro/collaboration-worktree-database-sqlite@1.0.0-insiders.20260902-a58c423(react@19.2.8)':
+  '@univerjs-pro/collaboration-worktree-database-sqlite@1.0.0-dev.worktree-removal.20260907(react@19.2.8)':
     dependencies:
-      '@univerjs-pro/collaboration-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
-      '@univerjs-pro/collaboration-worktree-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs-pro/collaboration-worktree-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
       libsql: 0.5.29
     transitivePeerDependencies:
       - react
 
-  '@univerjs-pro/collaboration-worktree-endpoint@1.0.0-insiders.20260902-a58c423(react@19.2.8)':
+  '@univerjs-pro/collaboration-worktree-endpoint@1.0.0-dev.worktree-removal.20260907(react@19.2.8)':
     dependencies:
-      '@univerjs-pro/collaboration-endpoint': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
-      '@univerjs-pro/collaboration-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
-      '@univerjs-pro/collaboration-transport-node': 1.0.0-insiders.20260902-a58c423
-      '@univerjs-pro/collaboration-worktree-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+      '@univerjs-pro/collaboration-endpoint': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
+      '@univerjs-pro/collaboration-transport-node': 1.0.0-dev.worktree-removal.20260907
+      '@univerjs-pro/collaboration-worktree-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
     transitivePeerDependencies:
       - bufferutil
       - react
       - utf-8-validate
 
-  '@univerjs-pro/collaboration-worktree-service@1.0.0-insiders.20260902-a58c423(react@19.2.8)':
+  '@univerjs-pro/collaboration-worktree-service@1.0.0-dev.worktree-removal.20260907(react@19.2.8)':
     dependencies:
-      '@univerjs-pro/collaboration-service': 1.0.0-insiders.20260902-a58c423(react@19.2.8)
+      '@univerjs-pro/collaboration-service': 1.0.0-dev.worktree-removal.20260907(react@19.2.8)
       '@univerjs/protocol': 1.0.0-insiders.20260902-a58c423
     transitivePeerDependencies:
       - react

@@ -1743,6 +1743,53 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/worktrees/{worktreeId}/units/{unitId}/removal:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: unitId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Worktrees
+      operationId: setWorktreeUnitRemoved
+      summary: Mark a draft Unit for deletion or undo its deletion intent.
+      description: Existing documents remain available until merge; canceled local Units are never published. Only editable drafts accept changes to deletion intent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - removed
+              properties:
+                removed:
+                  type: boolean
+      responses:
+        '200':
+          description: Worktree with updated deletion intent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/worktrees/{worktreeId}/units/{unitId}/open:
     parameters:
       - name: worktreeId
@@ -3522,8 +3569,10 @@ components:
         - pending
         - merged
         - unchanged
+        - removed
         - conflict
         - failed
+      description: Removed means this Unit was excluded from content publication. Product deletion is complete only when the Worktree is merged and its merge Operation is completed.
     ActivationState:
       type: string
       enum:
@@ -3554,7 +3603,10 @@ components:
         resourceId:
           type: string
         nodeId:
-          type: string
+          type:
+            - string
+            - 'null'
+          description: Null when the document no longer has a product Node, including after permanent deletion.
         source:
           type: string
           enum:

@@ -1,6 +1,9 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { WorktreeData } from "@univerjs-pro/collaboration-worktree-service";
 import { UniverType } from "@univerjs/protocol";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createWorkspaceApplication,
   type WorkspaceApplication,
@@ -11,14 +14,355 @@ import type {
 } from "../../server/src/modules/worktrees/index.js";
 
 const applications: WorkspaceApplication[] = [];
+const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
   await Promise.all(
     applications.splice(0).map((application) => application.close())
   );
+  for (const directory of temporaryDirectories.splice(0))
+    rmSync(directory, { recursive: true, force: true });
 });
 
 describe("Worktrees", () => {
+  it("does not trash a removed Unit until all content merge results succeed", async () => {
+    const backend = new MemoryWorktreeBackend();
+    const application = createTestApplication(backend);
+    const user = await register(application, "partial-removal-user");
+    const space = application.spaces.list(user.id).spaces[0]!;
+    const resource = await createResource(application, user.id, space.id);
+    const created = await application.worktrees.create(user.id, "partial-removal-create-0001", {
+      kind: "user",
+      name: "Partial merge",
+      summary: null,
+    });
+    const id = created.body.id;
+    const removed = await application.worktrees.addUnit(user.id, id, "partial-removal-add-0001", {
+      source: "trunk",
+      resourceId: resource.id,
+    });
+    await application.worktrees.addUnit(user.id, id, "partial-removal-local-0001", {
+      source: "worktree",
+      name: "Blocked publication",
+      unitType: "doc",
+      targetSpaceId: space.id,
+      targetParentNodeId: null,
+    });
+    await application.worktrees.setUnitRemoved(user.id, id, removed.body.unit.unitId, {
+      removed: true,
+    });
+    await application.worktrees.markReady(user.id, id);
+    vi.spyOn(backend, "merge").mockImplementationOnce(async () => {
+      const current = await backend.getWorktree(id);
+      return {
+        ...current,
+        status: "ready",
+        units: current.units.map((unit) => ({
+          ...unit,
+          mergeResult: unit.removed
+            ? { status: "removed" }
+            : {
+                status: "failed",
+                error: {
+                  code: "INTERNAL_ERROR",
+                  message: "Injected publication failure",
+                  retryable: true,
+                },
+              },
+        })),
+      };
+    });
+    const partial = await application.worktrees.merge(user.id, id, "partial-removal-merge-0001");
+    expect(partial.worktree.state).toBe("ready");
+    expect(application.trash.list(user.id, space.id, {}).items).toEqual([]);
+    expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
+    await expect(
+      application.worktrees.merge(user.id, id, "partial-removal-merge-0002"),
+    ).resolves.toMatchObject({ worktree: { state: "merged" }, operation: { state: "completed" } });
+    expect(application.trash.list(user.id, space.id, {}).items).toHaveLength(1);
+  });
+
+  it("recovers persisted removal finalization after closing and reopening both databases", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "workspace-removal-restart-"));
+    temporaryDirectories.push(directory);
+    const application = createRealTestApplication(directory);
+    await application.initialize();
+    const user = await register(application, "restart-removal-user");
+    const space = application.spaces.list(user.id).spaces[0]!;
+    const resource = await createResource(application, user.id, space.id);
+    const created = await application.worktrees.create(user.id, "restart-removal-create-0001", {
+      kind: "user",
+      name: "Recover removal",
+      summary: null,
+    });
+    const id = created.body.id;
+    const added = await application.worktrees.addUnit(user.id, id, "restart-removal-add-0001", {
+      source: "trunk",
+      resourceId: resource.id,
+    });
+    await application.worktrees.setUnitRemoved(user.id, id, added.body.unit.unitId, {
+      removed: true,
+    });
+    await application.worktrees.markReady(user.id, id);
+    application.database.connection.exec(`
+      CREATE TEMP TRIGGER fail_restart_trash BEFORE UPDATE OF trash_batch_id ON nodes
+      BEGIN SELECT RAISE(ABORT, 'Stop before product deletion'); END;
+    `);
+    const operationId = "restart-removal-merge-0001";
+    await expect(application.worktrees.merge(user.id, id, operationId)).rejects.toThrow(
+      "Stop before product deletion",
+    );
+    expect(application.trash.list(user.id, space.id, {}).items).toEqual([]);
+    expect((await application.worktrees.get(user.id, id)).worktree.state).toBe("merged");
+    await application.close();
+    applications.splice(applications.indexOf(application), 1);
+
+    const reopened = createRealTestApplication(directory);
+    await reopened.initialize();
+    expect(reopened.operations.get(user.id, operationId).state).toBe("failed");
+    await expect(reopened.operations.retry(user.id, operationId)).resolves.toMatchObject({
+      state: "completed",
+    });
+    const batches = reopened.trash.list(user.id, space.id, {}).items;
+    expect(batches).toHaveLength(1);
+    await reopened.worktrees.merge(user.id, id, operationId);
+    expect(reopened.trash.list(user.id, space.id, {}).items.map((batch) => batch.id)).toEqual(
+      batches.map((batch) => batch.id),
+    );
+  });
+
+  it("finalizes real SDK removal through Trash and preserves restoration across merge recovery", async () => {
+    const application = createRealTestApplication();
+    const user = await register(application, "real-removal-user");
+    const space = application.spaces.list(user.id).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const resource = await createResource(application, user.id, space.id);
+    const created = await application.worktrees.create(user.id, "real-removal-create-0001", {
+      kind: "user",
+      name: "Review removals",
+      summary: null,
+    });
+    const worktreeId = created.body.id;
+    const trunk = await application.worktrees.addUnit(
+      user.id,
+      worktreeId,
+      "real-removal-trunk-0001",
+      { source: "trunk", resourceId: resource.id },
+    );
+    const local = await application.worktrees.addUnit(
+      user.id,
+      worktreeId,
+      "real-removal-local-0001",
+      {
+        source: "worktree",
+        name: "Canceled document",
+        unitType: "doc",
+        targetSpaceId: space.id,
+        targetParentNodeId: null,
+      },
+    );
+    for (const unitId of [trunk.body.unit.unitId, local.body.unit.unitId]) {
+      await application.worktrees.setUnitRemoved(user.id, worktreeId, unitId, { removed: true });
+      expect(
+        await application.worktrees.authorizeProtocol({
+          userId: user.id,
+          worktreeId,
+          unitId,
+          write: true,
+        }),
+      ).toBe(false);
+    }
+    expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
+    await application.worktrees.markReady(user.id, worktreeId);
+    application.database.connection.exec(`
+      CREATE TEMP TRIGGER fail_after_trash BEFORE UPDATE OF processed_at ON worktrees
+      BEGIN SELECT RAISE(ABORT, 'Injected finalization failure'); END;
+    `);
+    const operationId = "real-removal-merge-0001";
+    await expect(application.worktrees.merge(user.id, worktreeId, operationId)).rejects.toThrow(
+      "Injected finalization failure",
+    );
+    const batches = application.trash.list(user.id, space.id, {}).items;
+    expect(batches).toHaveLength(1);
+    await expect(application.worktrees.get(user.id, worktreeId)).resolves.toMatchObject({
+      worktree: {
+        state: "merged",
+        units: [
+          expect.objectContaining({ change: "deleted", mergeResult: "removed" }),
+          expect.objectContaining({ change: "deleted", activationState: "discarded" }),
+        ],
+      },
+    });
+    await expect(
+      application.worktrees.openUnit(
+        user.id,
+        worktreeId,
+        trunk.body.unit.unitId,
+        { mode: "draft" }
+      )
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(
+      await application.worktrees.authorizeProtocol({
+        userId: user.id,
+        worktreeId,
+        unitId: trunk.body.unit.unitId,
+        write: false,
+      }),
+    ).toBe(false);
+    application.trash.restore(user.id, batches[0]!.id);
+    application.database.connection.exec("DROP TRIGGER fail_after_trash");
+    await expect(
+      application.operations.retry(user.id, operationId)
+    ).resolves.toMatchObject({
+      state: "completed",
+    });
+    await expect(
+      application.worktrees.merge(user.id, worktreeId, operationId),
+    ).resolves.toMatchObject({ operation: { state: "completed" } });
+    expect(application.trash.list(user.id, space.id, {}).items).toEqual([]);
+    expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
+    expect(() => application.resources.get(user.id, local.body.unit.resourceId)).toThrowError(
+      expect.objectContaining({ code: "NOT_FOUND" }),
+    );
+    const permanentBatch = application.trash.trashNode(user.id, trunk.body.unit.nodeId!);
+    application.trash.removePermanently(user.id, permanentBatch.id);
+    const history = await application.worktrees.get(user.id, worktreeId);
+    expect(
+      history.worktree.units.find((unit) => unit.unitId === trunk.body.unit.unitId),
+    ).toMatchObject({
+      nodeId: null,
+      name: "Removed resource",
+      change: "deleted",
+      mergeResult: "removed",
+    });
+    await expect(
+      application.worktrees.merge(user.id, worktreeId, operationId),
+    ).resolves.toMatchObject({ operation: { state: "completed" } });
+  });
+
+  it("cancels a new Unit after its target disappears and prevents undo until the target is restored", async () => {
+    const application = createRealTestApplication();
+    const user = await register(application, "canceled-target-user");
+    const space = application.spaces.list(user.id).spaces[0]!;
+    const folder = application.nodes.create(user.id, {
+      spaceId: space.id,
+      parentNodeId: null,
+      name: "Target",
+    });
+    const created = await application.worktrees.create(user.id, "cancel-target-create-0001", {
+      kind: "user",
+      name: "Cancel unpublished Unit",
+      summary: null,
+    });
+    const id = created.body.id;
+    const added = await application.worktrees.addUnit(user.id, id, "cancel-target-add-0001", {
+      source: "worktree",
+      name: "Canceled",
+      unitType: "doc",
+      targetSpaceId: space.id,
+      targetParentNodeId: folder.id,
+    });
+    const batch = application.trash.trashNode(user.id, folder.id);
+    await application.worktrees.setUnitRemoved(user.id, id, added.body.unit.unitId, {
+      removed: true,
+    });
+    await expect(
+      application.worktrees.setUnitRemoved(user.id, id, added.body.unit.unitId, { removed: false }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    application.trash.restore(user.id, batch.id);
+    await application.worktrees.setUnitRemoved(user.id, id, added.body.unit.unitId, {
+      removed: false,
+    });
+    await application.worktrees.setUnitRemoved(user.id, id, added.body.unit.unitId, {
+      removed: true,
+    });
+    application.trash.trashNode(user.id, folder.id);
+    await application.worktrees.markReady(user.id, id);
+    await expect(
+      application.worktrees.merge(user.id, id, "cancel-target-merge-0001"),
+    ).resolves.toMatchObject({ operation: { state: "completed" } });
+    expect((await application.worktrees.get(user.id, id)).worktree.units[0]).toMatchObject({
+      mergeResult: "removed",
+      activationState: "discarded",
+    });
+  });
+
+  it("rechecks membership before merging a deletion and discards without trashing the live Unit", async () => {
+    const application = createRealTestApplication();
+    const owner = await register(application, "removal-team-owner");
+    const editor = await register(application, "removal-team-editor");
+    const team = application.spaces.createTeamSpace(owner.id, { name: "Removal review" });
+    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    const resource = await createResource(application, editor.id, team.id);
+    const created = await application.worktrees.create(editor.id, "removal-team-create-0001", {
+      kind: "team",
+      teamSpaceId: team.id,
+      visibility: "private",
+      name: "Delete",
+      summary: null,
+    });
+    const id = created.body.id;
+    const added = await application.worktrees.addUnit(editor.id, id, "removal-team-add-0001", {
+      source: "trunk",
+      resourceId: resource.id,
+    });
+    await expect(
+      application.worktrees.setUnitRemoved(editor.id, id, added.body.unit.unitId, {
+        removed: true,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "admin" });
+    await application.worktrees.setUnitRemoved(editor.id, id, added.body.unit.unitId, {
+      removed: true,
+    });
+    await application.worktrees.markReady(editor.id, id);
+    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    await expect(
+      application.worktrees.merge(editor.id, id, "removal-team-merge-0001"),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(application.trash.list(owner.id, team.id, {}).items).toEqual([]);
+    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    await application.worktrees.discard(editor.id, id, "removal-team-discard-0001");
+    expect(application.resources.get(owner.id, resource.id).resource.id).toBe(resource.id);
+    expect(application.trash.list(owner.id, team.id, {}).items).toEqual([]);
+  });
+
+  it("records reversible deletion intent without changing the live document", async () => {
+    const application = createTestApplication();
+    const user = await register(application, "removal-intent-user");
+    const space = application.spaces.list(user.id).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const resource = await createResource(application, user.id, space.id);
+    const created = await application.worktrees.create(user.id, "create-removal-intent-0001", {
+      kind: "user",
+      name: "Review deletion",
+      summary: null,
+    });
+    const worktreeId = created.body.id;
+    const added = await application.worktrees.addUnit(
+      user.id,
+      worktreeId,
+      "add-removal-intent-0001",
+      { source: "trunk", resourceId: resource.id },
+    );
+    const unitId = added.body.unit.unitId;
+    await expect(
+      application.worktrees.setUnitRemoved(user.id, worktreeId, unitId, { removed: true }),
+    ).resolves.toMatchObject({
+      worktree: { units: [expect.objectContaining({ change: "deleted" })] },
+    });
+    expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
+    await expect(
+      application.worktrees.setUnitRemoved(user.id, worktreeId, unitId, { removed: false }),
+    ).resolves.toMatchObject({
+      worktree: { units: [expect.objectContaining({ change: "unchanged" })] },
+    });
+    await application.worktrees.markReady(user.id, worktreeId);
+    await expect(
+      application.worktrees.setUnitRemoved(user.id, worktreeId, unitId, { removed: true }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   it("creates, edits, readies and merges trunk and local Units", async () => {
     const application = createTestApplication();
     const user = await register(application, "worktree-user");
@@ -125,6 +469,71 @@ describe("Worktrees", () => {
       ).items.map((item) => item.id)
     ).toContain(worktreeId);
   });
+
+  it.each(["failed", "pending"] as const)(
+    "resumes %s product activation without merging content twice",
+    async (operationState) => {
+      const backend = new MemoryWorktreeBackend();
+      const merge = vi.spyOn(backend, "merge");
+      const application = createTestApplication(backend);
+      const user = await register(application, "merge-recovery-user");
+      const space = application.spaces.list(user.id).spaces[0]!;
+      const created = await application.worktrees.create(user.id, "create-merge-recovery-0001", {
+        kind: "user",
+        name: "Recover publication",
+        summary: null,
+      });
+      const worktreeId = created.body.id;
+      const local = await application.worktrees.addUnit(
+        user.id,
+        worktreeId,
+        "add-merge-recovery-unit-0001",
+        {
+          source: "worktree",
+          name: "Recovered document",
+          unitType: "doc",
+          targetSpaceId: space.id,
+          targetParentNodeId: null,
+        },
+      );
+      await application.worktrees.markReady(user.id, worktreeId);
+      application.database.connection.exec(`
+      CREATE TEMP TRIGGER fail_worktree_activation BEFORE INSERT ON nodes
+      BEGIN SELECT RAISE(ABORT, 'Injected activation failure'); END;
+    `);
+      const operationId = "merge-recovery-operation-0001";
+      await expect(application.worktrees.merge(user.id, worktreeId, operationId)).rejects.toThrow(
+        "Injected activation failure",
+      );
+      expect((await backend.getWorktree(worktreeId)).status).toBe("merged");
+      expect(application.operations.get(user.id, operationId).state).toBe("failed");
+      application.database.connection.exec("DROP TRIGGER fail_worktree_activation");
+
+      await expect(
+        application.worktrees.merge(user.id, worktreeId, "unrelated-merge-operation-0001"),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      if (operationState === "pending") {
+        // A process exit can leave the operation pending after the SDK commits.
+        application.database.connection
+          .prepare("UPDATE operations SET state = 'pending' WHERE id = ?")
+          .run(operationId);
+        await expect(
+          application.worktrees.merge(user.id, worktreeId, operationId),
+        ).resolves.toMatchObject({ operation: { state: "completed" } });
+      } else {
+        await expect(application.operations.retry(user.id, operationId)).resolves.toMatchObject({
+          state: "completed",
+        });
+      }
+      expect(application.resources.get(user.id, local.body.unit.resourceId)).toMatchObject({
+        node: { id: local.body.unit.nodeId, name: "Recovered document" },
+      });
+      await expect(
+        application.worktrees.merge(user.id, worktreeId, operationId),
+      ).resolves.toMatchObject({ operation: { state: "completed" } });
+      expect(merge).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("keeps private Team Worktree Units hidden from administrators", async () => {
     const application = createTestApplication();
@@ -401,6 +810,19 @@ class MemoryWorktreeBackend implements WorktreeBackend {
     return this._transition(worktreeId, "ready");
   }
 
+  async setUnitRemoved(
+    worktreeId: string,
+    unitId: string,
+    removed: boolean,
+  ): Promise<WorktreeData> {
+    const current = this._require(worktreeId);
+    if (current.status !== "draft") throw new Error("Worktree is frozen");
+    return this._set(worktreeId, {
+      ...current,
+      units: current.units.map((unit) => (unit.unitID === unitId ? { ...unit, removed } : unit)),
+    });
+  }
+
   async reopen(worktreeId: string): Promise<WorktreeData> {
     return this._transition(worktreeId, "draft");
   }
@@ -412,7 +834,7 @@ class MemoryWorktreeBackend implements WorktreeBackend {
       status: "merged",
       units: current.units.map((unit) => ({
         ...unit,
-        mergeResult: { status: "merged", trunkRevision: 2 },
+        mergeResult: unit.removed ? { status: "removed" } : { status: "merged", trunkRevision: 2 },
       })),
     });
   }
@@ -523,12 +945,13 @@ function createTestApplication(
   return application;
 }
 
-function createRealTestApplication(): WorkspaceApplication {
+function createRealTestApplication(directory?: string): WorkspaceApplication {
   const application = createWorkspaceApplication({
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: ":memory:",
-    collaborationDatabaseFilename: ":memory:",
+    databaseFilename: directory ? join(directory, "product.sqlite") : ":memory:",
+    collaborationDatabaseFilename: directory ? join(directory, "collaboration.sqlite") : ":memory:",
+    ...(directory ? { blobDirectory: join(directory, "blobs") } : {}),
     secureCookies: false,
     sessionTtlMs: 60_000,
   });
