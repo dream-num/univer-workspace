@@ -109,3 +109,16 @@ minimumReleaseAgeExclude:
   - "@oxfmt/binding-win32-ia32-msvc@0.66.0"
   - "@oxfmt/binding-win32-x64-msvc@0.66.0"
   - oxfmt@0.66.0
+
+# Temporary Worktree development release; keep the unrelated SDK baseline unchanged.
+overrides:
+  "@univerjs-pro/collaboration-endpoint": "1.0.0-dev.worktree-removal.20260907"
+  "@univerjs-pro/collaboration-service": "1.0.0-dev.worktree-removal.20260907"
+  "@univerjs-pro/collaboration-transport-node": "1.0.0-dev.worktree-removal.20260907"
+  "@univerjs-pro/collaboration-worktree-client": "1.0.0-dev.worktree-removal.20260907"
+  "@univerjs-pro/collaboration-worktree-database-memory": "1.0.0-dev.worktree-removal.20260907"
+  "@univerjs-pro/collaboration-worktree-database-sqlite": "1.0.0-dev.worktree-removal.20260907"
+  "@univerjs-pro/collaboration-worktree-endpoint": "1.0.0-dev.worktree-removal.20260907"
+  "@univerjs-pro/collaboration-worktree-service": "1.0.0-dev.worktree-removal.20260907"
+  "@univerjs-pro/collaboration-history-endpoint": "1.0.0-dev.worktree-removal.20260907"
+  "@univerjs-pro/collaboration-comment-endpoint": "1.0.0-dev.worktree-removal.20260907"

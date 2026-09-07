@@ -508,6 +508,69 @@ describe("collaboration gateway", () => {
     expect(stored.mutationSize).toBe(2);
   });
 
+  it("rejects direct SDK removal outside the product API", async () => {
+    const { application, origin } = await startApplication();
+    const issued = await application.identity.registerWithPassword({
+      username: "removal-gateway-user",
+      displayName: "Removal Gateway User",
+      password: "correct horse battery staple",
+    });
+    const userId = issued.view.user.id;
+    const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
+    const space = application.spaces.list(userId).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const created = await application.worktrees.create(userId, "guard-worktree-create-0001", {
+      kind: "user",
+      name: "Guard deletion",
+      summary: null,
+    });
+    const added = await application.worktrees.addUnit(
+      userId,
+      created.body.id,
+      "guard-unit-create-0001",
+      {
+        source: "worktree",
+        name: "Guard document",
+        unitType: "doc",
+        targetSpaceId: space.id,
+        targetParentNodeId: null,
+      },
+    );
+    const response = await fetch(
+      `${origin}/universer-api/worktrees/${created.body.id}/units/${added.body.unit.unitId}/removal`,
+      {
+        method: "POST",
+        headers: {
+          cookie,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ removed: true }),
+      },
+    );
+    expect(response.status).toBe(403);
+    await response.text();
+    expect(
+      (await application.worktrees.get(userId, created.body.id)).worktree.units[0]?.change,
+    ).toBe("added");
+    for (const removed of [true, false]) {
+      const update = await fetch(
+        `${origin}/api/worktrees/${created.body.id}/units/${added.body.unit.unitId}/removal`,
+        {
+          method: "POST",
+          headers: {
+            cookie,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ removed }),
+        },
+      );
+      expect(update.status).toBe(200);
+      await expect(update.json()).resolves.toMatchObject({
+        worktree: { units: [expect.objectContaining({ change: removed ? "deleted" : "added" })] },
+      });
+    }
+  });
+
   it("binds the authenticated product user and Node permissions to Univer protocol", async () => {
     const { application, origin, collaborationDatabaseFilename } =
       await startApplication();
@@ -517,6 +580,9 @@ describe("collaboration gateway", () => {
       password: "correct horse battery staple",
     });
     const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
+    application.identity.updateCurrentUser(cookie, {
+      avatarUrl: "https://avatars.example/gateway-user.png",
+    });
     const space = application.spaces.list(issued.view.user.id).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.resources.create(
@@ -623,6 +689,14 @@ describe("collaboration gateway", () => {
       cookie,
       opened.resource.unitId
     );
+    expect(ownerConnection.members).toEqual([
+      {
+        memberID: ownerConnection.memberId,
+        userID: issued.view.user.id,
+        name: "Gateway User",
+        avatar: "https://avatars.example/gateway-user.png",
+      },
+    ]);
     const addCommentResponse = await fetch(
       `${origin}/universer-api/comment/unit/${opened.resource.unitId}/add`,
       {
@@ -1035,7 +1109,7 @@ async function joinUnit(
   origin: string,
   cookie: string,
   unitId: string
-): Promise<{ readonly memberId: string; readonly socket: WebSocket }> {
+) {
   const ticketResponse = await fetch(
     `${origin}/universer-api/user/session-ticket`,
     { headers: { cookie } }
@@ -1069,11 +1143,17 @@ async function joinUnit(
       data: { rooms: [{ roomID: unitId, args: "" }] },
     })
   );
-  await expect(nextCombResponse(socket)).resolves.toMatchObject({
+  const joined = await nextCombResponse(socket);
+  expect(joined).toMatchObject({
     cmd: CombCmd.JOIN,
     code: CmdRspCode.OK,
   });
-  return { memberId: hello.data.memberID, socket };
+  if (joined.cmd !== CombCmd.JOIN) throw new Error("JOIN response missing");
+  return {
+    memberId: hello.data.memberID,
+    socket,
+    members: joined.data.roomInfos[unitId]?.members,
+  };
 }
 
 function nextCombResponse(socket: WebSocket) {

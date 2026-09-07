@@ -69,6 +69,8 @@ const messages = {
     noWritableSpace: "没有可用于新建文档的空间。",
     editingMode: "已连接，可编辑",
     readOnlyMode: "只读",
+    collaboratorsOnline: "{count} 人在线",
+    collaboratorYou: "{name}（你）",
     renameResource: "重命名文档",
     resourceRenamed: "文档已重命名为“{name}”。",
     resourceRenameFailed: "文档重命名失败。",
@@ -235,6 +237,10 @@ const messages = {
     base: "数据表",
     pending: "等待合入",
     merged: "已合入",
+    removed: "已排除内容合并",
+    markUnitRemoved: "标记删除",
+    undoUnitRemoval: "撤销删除",
+    removedUnitPreview: "此文档已标记删除，不会发布其内容。",
     unchanged: "无变更",
     conflict: "存在冲突",
     failed: "合入失败",
@@ -407,6 +413,8 @@ const messages = {
     noWritableSpace: "There is no writable space for a new document.",
     editingMode: "Connected and editable",
     readOnlyMode: "Read only",
+    collaboratorsOnline: "{count} online",
+    collaboratorYou: "{name} (you)",
     renameResource: "Rename document",
     resourceRenamed: "Document renamed to “{name}”.",
     resourceRenameFailed: "Document rename failed.",
@@ -581,6 +589,10 @@ const messages = {
     base: "Base",
     pending: "Pending",
     merged: "Merged",
+    removed: "Excluded from content merge",
+    markUnitRemoved: "Mark for deletion",
+    undoUnitRemoval: "Undo deletion",
+    removedUnitPreview: "This document is marked for deletion. Its content will not be published.",
     unchanged: "Unchanged",
     conflict: "Conflict",
     failed: "Failed",
@@ -743,11 +755,7 @@ export function LanguageProvider({ children }: PropsWithChildren) {
     [language]
   );
 
-  return (
-    <LanguageContext.Provider value={value}>
-      {children}
-    </LanguageContext.Provider>
-  );
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
 export function useI18n(): LanguageContextValue {

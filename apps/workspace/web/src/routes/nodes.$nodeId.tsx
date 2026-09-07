@@ -6,6 +6,7 @@ import {
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { Cloud, Download, Lock, Share2 } from "lucide-react";
 import { useState } from "react";
+import type { IMember } from "@univerjs/protocol";
 import type { components } from "../../../generated/http/schema.js";
 import {
   NodeBrowser,
@@ -25,7 +26,7 @@ import {
   WorkspaceHeaderSearch,
   WorkspaceLayout,
 } from "./-workspace-layout";
-import { ResourceEditor } from "../features/editor";
+import { CollaboratorAvatars, ResourceEditor } from "../features/editor";
 import { BlobPreview } from "../features/blobs";
 import { api } from "../shared/api/client";
 import { apiError } from "../shared/api/errors";
@@ -143,6 +144,7 @@ function OpenResourcePage({
   if (!resource) return null;
   return (
     <LoadedResourcePage
+      key={resource.id}
       node={node}
       resourceId={resource.id}
       selectedNodePath={selectedNodePath}
@@ -164,6 +166,7 @@ function LoadedResourcePage({
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const [shareOpen, setShareOpen] = useState(false);
+  const [collaborators, setCollaborators] = useState<readonly IMember[]>([]);
   const rename = useMutation({
     mutationFn: async (name: string) => {
       const { data: updated, error } = await api.PATCH(
@@ -264,6 +267,10 @@ function LoadedResourcePage({
         }
         headerActions={
           <>
+            <CollaboratorAvatars
+              members={collaborators}
+              currentUserId={session.data.user.id}
+            />
             <Tooltip content={modeLabel}>
               <span
                 aria-label={modeLabel}
@@ -292,6 +299,7 @@ function LoadedResourcePage({
             unitType={data.resource.unitType}
             user={session.data.user}
             readOnly={!isEditing}
+            onCollaboratorsChange={setCollaborators}
           />
         </section>
       </WorkspaceLayout>

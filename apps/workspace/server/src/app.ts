@@ -140,7 +140,7 @@ export function createWorkspaceApplication(
     readonly githubOAuthProvider?: GitHubOAuthProvider;
     readonly discordOAuthProvider?: DiscordOAuthProvider;
     readonly oauthStateSecret?: string;
-  } = {}
+  } = {},
 ): WorkspaceApplication {
   const database = openWorkspaceDatabase(config.databaseFilename);
   const oauthStateSecret =
@@ -230,6 +230,7 @@ export function createWorkspaceApplication(
   const univerAssetsRepository = new UniverAssetsRepository(database);
   const worktreeChangeFeed = createWorktreeChangeFeed();
   const worktrees = createWorktreesModule({
+    trash,
     repository: new WorktreesRepository(database),
     access,
     backend:
@@ -434,6 +435,7 @@ function unavailableWorktreeBackend(): WorktreeBackend {
     addUnit: unavailable,
     createUnit: unavailable,
     markReady: unavailable,
+    setUnitRemoved: unavailable,
     reopen: unavailable,
     merge: unavailable,
     discard: unavailable,
