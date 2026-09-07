@@ -9,7 +9,7 @@ export const httpRequestDurationSeconds = new client.Histogram({
   name: "http_request_duration_seconds",
   help: "HTTP request duration in seconds",
   labelNames: ["method", "route", "status_code"],
-  buckets: [0.01, 0.05, 0.1, 0.3, 1, 3, 10],
+  buckets: [0.01, 0.05, 0.1, 0.3, 1, 3, 10, 30],
 });
 
 // SDK middleware claims requests when they enter Transport. Express then leaves
