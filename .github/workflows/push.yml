@@ -3,6 +3,11 @@ name: Deploy Workspace
 on:
   workflow_dispatch:
     inputs:
+      build_only:
+        description: Build the exact image without deploying shared Staging
+        type: boolean
+        default: false
+
       release_tag:
         description: Optional existing stable Workspace release tag in vX.Y.Z form
         type: string
@@ -95,6 +100,7 @@ jobs:
           make push_image "IMAGE_TAG=$IMAGE_TAG" "CR=$CR"
 
   deploy-k8s:
+    if: ${{ !inputs.build_only }}
     name: DeployK8s
     runs-on: arc-runner-set
     needs: build-docker-image
