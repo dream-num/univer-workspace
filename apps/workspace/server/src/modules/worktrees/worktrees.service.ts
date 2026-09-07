@@ -810,13 +810,26 @@ function worktreeCapabilities(
       row.visibility === "space" &&
       teamRole !== null);
   const removed = new Set(states.filter((unit) => unit.removed).map((unit) => unit.unitID));
+  // Read and edit checks run synchronously for one actor. Reuse their resource
+  // resolution only within this calculation, never across awaits or requests.
+  const resources = new Map<string, ResourceAccess | null>();
+  const capabilityAccess: AccessResolver = {
+    ...access,
+    resolveResource(actorId, resourceId) {
+      if (actorId !== userId) return access.resolveResource(actorId, resourceId);
+      if (!resources.has(resourceId)) {
+        resources.set(resourceId, access.resolveResource(actorId, resourceId));
+      }
+      return resources.get(resourceId)!;
+    },
+  };
   const unitRead = units.every(
-    (unit) => removed.has(unit.unit_id) || canReadUnit(userId, row, unit, access),
+    (unit) => removed.has(unit.unit_id) || canReadUnit(userId, row, unit, capabilityAccess),
   );
   const unitEdit = units.every(
     (unit) =>
       (unit.source === "worktree" && removed.has(unit.unit_id)) ||
-      canEditUnit(userId, row, unit, access),
+      canEditUnit(userId, row, unit, capabilityAccess),
   );
   const review = visibleReview && unitRead;
   const creatorCanEdit =

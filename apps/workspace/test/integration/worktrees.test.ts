@@ -25,6 +25,40 @@ afterEach(async () => {
 });
 
 describe("Worktrees", () => {
+  it("shares resource resolution within a summary and rechecks permissions on the next request", async () => {
+    const application = createTestApplication();
+    const owner = await register(application, "summary-owner");
+    const editor = await register(application, "summary-editor");
+    const team = application.spaces.createTeamSpace(owner.id, { name: "Summary permissions" });
+    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    const resource = await createResource(application, editor.id, team.id);
+    const created = await application.worktrees.create(editor.id, "summary-permissions-create", {
+      kind: "team", teamSpaceId: team.id, visibility: "private", name: "Changes", summary: null,
+    });
+    await application.worktrees.addUnit(editor.id, created.body.id, "summary-permissions-add", {
+      source: "trunk", resourceId: resource.id,
+    });
+    const resolve = vi.spyOn(application.access, "resolveResource");
+    const first = await application.worktrees.list(editor.id, {});
+    expect(resolve).toHaveBeenCalledExactlyOnceWith(editor.id, resource.id);
+    expect(first.items[0]).toMatchObject({ unitCount: 1, capabilities: { review: true, editDraft: true } });
+    expect((await application.worktrees.list(owner.id, {})).items[0])
+      .toMatchObject({ unitCount: 1, capabilities: { review: false, editDraft: false } });
+
+    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "viewer" });
+    resolve.mockClear();
+    const second = await application.worktrees.list(editor.id, {});
+    expect(resolve).toHaveBeenCalledExactlyOnceWith(editor.id, resource.id);
+    expect(second.items[0]).toMatchObject({ unitCount: 1, capabilities: { review: true, editDraft: false } });
+    await expect(application.worktrees.markReady(editor.id, created.body.id))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
+    application.permissions.removeTeamMember(owner.id, team.id, editor.id);
+    resolve.mockClear();
+    expect((await application.worktrees.list(editor.id, {})).items[0])
+      .toMatchObject({ unitCount: 1, capabilities: { review: false, editDraft: false } });
+    expect(resolve).toHaveBeenCalledExactlyOnceWith(editor.id, resource.id);
+  });
+
   it("paginates authorized summaries before hydration, with stable ordering and literal search", async () => {
     const backend = new MemoryWorktreeBackend();
     const application = createTestApplication(backend);

@@ -1,3 +1,4 @@
+import type { StatementSync } from "node:sqlite";
 import type { WorkspaceDatabase } from "../../db/database.js";
 import type {
   AccessRole,
@@ -57,6 +58,10 @@ export interface ResourceMappingRow {
 }
 
 export class AccessRepository {
+  // Reuse SQL compilation, not authorization results. Every execution binds
+  // the current actor and reads current data on this repository's connection.
+  private _resolveNodeStatement: StatementSync | undefined;
+
   constructor(private readonly _database: WorkspaceDatabase) {}
 
   findResourceByUnitId(unitId: string): ResourceMappingRow | null {
@@ -140,7 +145,7 @@ export class AccessRepository {
 
   resolveNode(userId: string, nodeId: string): ResolvedNodeRow | null {
     return (
-      (this._database.connection
+      ((this._resolveNodeStatement ??= this._database.connection
         .prepare(
           `WITH RECURSIVE ancestry(id, parent_id, depth) AS (
              SELECT id, parent_id, 0
@@ -260,7 +265,7 @@ export class AccessRepository {
                  )
                )
              )`
-        )
+        ))
         .get(
           nodeId,
           userId,
