@@ -7,6 +7,13 @@
 
 /** Simplified Chinese UI strings (the key source). */
 export const zh = {
+  "review.height.label": "文档预览高度",
+  "review.height.compact": "紧凑",
+  "review.height.auto": "自动",
+  "review.height.fill": "铺满",
+  "review.height.resize": "调整文档预览高度",
+  "review.height.resizeHint": "拖拽或使用上下方向键调整高度，双击恢复自动",
+
   "reference.localFiles": "本地文件",
   "reference.hostFiles": "Workspace Agent 所在机器的文件和文件夹",
   "reference.truncated": "结果未全部显示，请输入更完整的路径前缀",
@@ -267,6 +274,13 @@ export const zh = {
 
 /** English UI strings. */
 export const en = {
+  "review.height.label": "Document preview height",
+  "review.height.compact": "Compact",
+  "review.height.auto": "Auto",
+  "review.height.fill": "Fill",
+  "review.height.resize": "Resize document preview",
+  "review.height.resizeHint": "Drag or use arrow keys to resize; double-click to reset to Auto",
+
   "reference.localFiles": "Local files",
   "reference.hostFiles": "Files and folders on the Workspace Agent host",
   "reference.truncated": "More entries exist; type a more specific path prefix",

@@ -4,7 +4,7 @@
   display: grid;
   gap: 12px;
   margin: 0;
-  padding: 16px 20px 24px;
+  padding: 12px 20px 20px;
   list-style: none;
 }
 
@@ -96,7 +96,7 @@
   display: grid;
   min-width: 0;
   gap: 12px;
-  padding: 0 12px 14px;
+  padding: 10px 12px 14px;
   border-top: 1px solid var(--color-border);
   background: var(--uvf-color-surface, #fff);
 }
@@ -105,7 +105,7 @@
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
@@ -159,10 +159,16 @@
   line-height: 16px;
 }
 
+.heightControls {
+  margin-left: auto;
+}
+
 .viewerBox {
+  position: relative;
+  box-sizing: border-box;
   display: flex;
   min-width: 0;
-  min-height: 360px;
+  min-height: 0;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--color-border);
@@ -170,8 +176,9 @@
 }
 
 .viewerPlaceholder {
+  flex: 1;
   display: grid;
-  min-height: 360px;
+  min-height: 0;
   place-items: center;
   background: color-mix(in srgb, var(--uvf-color-border, #dfe3eb) 8%, var(--uvf-color-surface, #fff));
   color: var(--color-subtle-foreground);
@@ -203,4 +210,43 @@
 .deletedEmpty svg {
   width: 14px;
   height: 14px;
+}
+
+.resizeHandle {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  background: transparent;
+}
+
+.resizeHandle::after {
+  content: "";
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-muted-foreground);
+  opacity: 0;
+}
+
+.resizeHandle:hover::after,
+.resizeHandle:focus-visible::after,
+.resizeHandle:active::after {
+  opacity: 1;
+}
+
+.resizeHandle:hover,
+.resizeHandle:focus-visible,
+.resizeHandle:active {
+  background: var(--color-accent);
+  outline: 2px solid var(--color-ring);
+  outline-offset: -2px;
 }
