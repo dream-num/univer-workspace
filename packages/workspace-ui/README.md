@@ -1,7 +1,5 @@
 # Univer Workspace UI
 
-English | [简体中文](README.zh-CN.md)
-
 Private UI primitives shared by Workspace Browser and Workspace Agent. This
 package owns reusable control behavior and presentation: buttons, inputs,
 selection controls, menus, dialogs, tooltips, badges, avatars, icons, and toast

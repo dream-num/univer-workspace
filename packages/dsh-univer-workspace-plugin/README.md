@@ -12,8 +12,8 @@ This plugin is part of the Workspace Agent application composition. The supporte
 setup installs it into the dedicated `univer-workspace-harness` profile alongside
 the Agent core, skin, and version-matched DSH web bundle. Follow the
 [Agent installation guide](../../apps/agent/README.md#installation-and-first-use)
-([Chinese](../../apps/agent/README.zh-CN.md#安装与首次使用)) instead of adding this
-capability bundle alone to an existing general-purpose `web` profile.
+instead of adding this capability bundle alone to an existing general-purpose
+`web` profile.
 
 A DSH profile selects an installed bundle set and its composition patches. A
 separate profile matters here for four reasons:
