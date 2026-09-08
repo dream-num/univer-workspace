@@ -34,6 +34,7 @@ export interface WorkspaceResourceViewerProps {
   readonly surfaceLeft: number | null;
   readonly surfaceWidth: number;
   readonly onClose: () => void;
+  readonly headerAction?: ReactElement | undefined;
   readonly loadViewerBootstrap: () => Promise<ViewerBootstrap>;
   readonly getViewerLocale: () => ViewerLocale;
   readonly t: (key: UniverLocaleKey) => string;
@@ -133,14 +134,16 @@ export function WorkspaceResourceViewer(props: WorkspaceResourceViewerProps): Re
         >
           <MessageSquarePlusIcon />
         </Button>
-        <button
-          type="button"
-          className={css.close}
-          aria-label={props.t("dock.close")}
-          onClick={props.onClose}
-        >
-          <CloseIcon />
-        </button>
+        {props.headerAction ?? (
+          <button
+            type="button"
+            className={css.close}
+            aria-label={props.t("dock.close")}
+            onClick={props.onClose}
+          >
+            <CloseIcon />
+          </button>
+        )}
       </header>
       <div className={css.content}>
         {fileState.status === "loading" ? (

@@ -57,6 +57,7 @@ class FakeResizeObserver {
 let scrollport: FakeElement | null;
 let sidebar: FakeElement | null;
 let header: FakeElement | null;
+let hero: FakeElement | null;
 let reduceMotion: boolean;
 
 beforeEach(() => {
@@ -64,6 +65,7 @@ beforeEach(() => {
   scrollport.parentElement = new FakeElement();
   sidebar = new FakeElement();
   header = new FakeElement();
+  hero = null;
   sidebar.right = 312.4;
   reduceMotion = false;
   FakeResizeObserver.current = undefined;
@@ -73,6 +75,7 @@ beforeEach(() => {
   vi.stubGlobal("document", {
     querySelector: (selector: string) => {
       if (selector === "[data-conversation-scroll]") return scrollport;
+      if (selector === '[data-slot="conversation"] > div > div') return hero;
       if (selector === '[data-slot="conversation.session.header"] > header') return header;
       if (selector === '[data-plugin="dsh-univer-workspace"][data-surface="sidebar"]') {
         return sidebar;
@@ -91,6 +94,16 @@ afterEach(() => {
 });
 
 describe("Conversation inset adapter", () => {
+  it("reserves room for the native new-session hero and restores it", () => {
+    scrollport = null;
+    hero = new FakeElement();
+    hero.style.setProperty("padding-left", "12px");
+    expect(applyConversationInset(640)).toBe(hero);
+    expect(hero.style.getPropertyValue("padding-left")).toBe("640px");
+    clearConversationInset();
+    expect(hero.style.getPropertyValue("padding-left")).toBe("12px");
+  });
+
   it("restores the exact pre-existing inline styles", () => {
     const host = scrollport?.parentElement as FakeElement;
     host.style.setProperty("padding-left", "7px", "important");

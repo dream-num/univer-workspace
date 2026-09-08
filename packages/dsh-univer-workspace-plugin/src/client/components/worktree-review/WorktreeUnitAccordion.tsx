@@ -37,6 +37,7 @@ import {
   canViewAgentDraft,
   canViewMergePreview,
   canViewTrunk,
+  hasUnitMergeProblem,
   mergeResultLabel,
   mergeResultVariant,
   resolveTurnViewer,
@@ -64,6 +65,7 @@ export interface WorktreeUnitAccordionProps {
   readonly locations: UnitLocationMap;
   readonly expandedIds: ReadonlySet<string>;
   readonly locatedUnitId: string | null;
+  readonly locateVersion: number;
   readonly viewByUnitId: Readonly<Record<string, TurnViewMode>>;
   readonly mount: ViewportMount;
   readonly runtime: ViewerRuntimeProps;
@@ -89,6 +91,7 @@ export function WorktreeUnitAccordion(props: WorktreeUnitAccordionProps): ReactE
           location={props.locations[unit.unitId] ?? { status: "loading" }}
           expanded={props.expandedIds.has(unit.unitId)}
           located={props.locatedUnitId === unit.unitId}
+          locateVersion={props.locateVersion}
           view={props.viewByUnitId[unit.unitId] ?? "agent"}
           mount={props.mount}
           runtime={props.runtime}
@@ -110,6 +113,7 @@ function WorktreeUnitItem(props: {
   readonly location: UnitLocationMap[string];
   readonly expanded: boolean;
   readonly located: boolean;
+  readonly locateVersion: number;
   readonly view: TurnViewMode;
   readonly mount: ViewportMount;
   readonly runtime: ViewerRuntimeProps;
@@ -140,11 +144,17 @@ function WorktreeUnitItem(props: {
   const register = props.mount.register;
   const previewId = useId();
 
-  useEffect(() => register(unit.unitId, itemRef.current), [register, unit.unitId]);
+  useEffect(() => {
+    register(unit.unitId, itemRef.current);
+    return () => register(unit.unitId, null);
+  }, [register, unit.unitId, props.expanded]);
 
   useEffect(() => {
-    if (props.located) itemRef.current?.scrollIntoView({ block: "start" });
-  }, [props.located]);
+    const root = props.scrollRootRef.current;
+    const item = itemRef.current;
+    if (!props.located || root === null || item === null) return;
+    root.scrollTop += item.getBoundingClientRect().top - root.getBoundingClientRect().top;
+  }, [props.located, props.locateVersion, props.expanded, props.scrollRootRef]);
 
   const activeView = activeViewerMode(props.view, worktree, unit);
   const previewable =
@@ -200,7 +210,7 @@ function WorktreeUnitItem(props: {
           {props.location.status === "resolved" && props.location.shared ? (
             <Badge variant="outline">{t("worktree.sharedFile")}</Badge>
           ) : null}
-          {mergeResult === "conflict" || mergeResult === "failed" ? (
+          {hasUnitMergeProblem(mergeResult) ? (
             <Badge variant={mergeResultVariant(mergeResult)}>
               {mergeResultLabel(mergeResult, t)}
             </Badge>

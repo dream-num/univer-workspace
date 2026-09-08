@@ -131,26 +131,9 @@
   background: transparent;
   padding: 8px 10px;
   color: var(--color-secondary-foreground);
-  cursor: pointer;
   font: inherit;
   font-size: 13px;
   text-align: left;
-
-  > svg:first-child {
-    width: 12px;
-    height: 12px;
-    flex-shrink: 0;
-    color: var(--color-subtle-foreground);
-  }
-
-  &:hover {
-    background: var(--color-accent);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-ring);
-    outline-offset: 1px;
-  }
 
   &[data-deleted] .unitName {
     opacity: 0.6;
@@ -263,4 +246,37 @@
     height: 14px;
     flex: none;
   }
+}
+
+.documentRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+  min-width: 0;
+}
+.documentRow .accordionHeader {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.documentRow > button:last-child {
+  flex: none;
+}
+.documentRow .unitName {
+  flex: 0 1 auto;
+  max-width: 60%;
+}
+.directoryPath {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-subtle-foreground);
+  font-size: 12px;
+}
+.documentRow .unitChange {
+  margin-left: auto;
+  flex: none;
 }

@@ -52,6 +52,7 @@ import {
   canViewTrunk,
   defaultExpandedUnits,
   formatOptionalDateTime,
+  hasUnitMergeProblem,
   mergeResultLabel,
   mergeResultVariant,
   resolveTurnViewer,
@@ -65,6 +66,7 @@ import {
   type TurnCardStatus,
   type TurnViewMode,
 } from "./turn-context-card-model.ts";
+import { useUnitLocations, type UnitLocationMap } from "./worktree-review/use-unit-locations.ts";
 import css from "./TurnContextCard.module.scss";
 import { WorktreeBranchIcon } from "./worktree-review/WorktreeBranchIcon.tsx";
 
@@ -121,6 +123,7 @@ function WorktreeTurnCard(
   // worktree.unitCount describes the whole Worktree and must not pose as the
   // per-Turn count.
   const turnUnits = worktree === undefined ? [] : selectTurnUnits(worktree.units, props.operations);
+  const locations = useUnitLocations(collapsed ? [] : turnUnits, 0);
   const expandedUnitIds =
     expandedIds ?? defaultExpandedUnits(turnUnits, props.preferredUnitId, props.historical);
   const toggleUnit = (unitId: string): void => {
@@ -206,6 +209,7 @@ function WorktreeTurnCard(
             props,
             worktree,
             turnUnits,
+            locations,
             expandedUnitIds,
             viewByUnitId,
             toggleUnit,
@@ -222,6 +226,7 @@ function renderWorktreeBody(input: {
   readonly props: TurnContextCardProps & { readonly worktreeId: string };
   readonly worktree: DocumentWorktreeState | undefined;
   readonly turnUnits: readonly WorktreeUnitView[];
+  readonly locations: UnitLocationMap;
   readonly expandedUnitIds: readonly string[];
   readonly viewByUnitId: Readonly<Record<string, TurnViewMode>>;
   readonly toggleUnit: (unitId: string) => void;
@@ -230,7 +235,8 @@ function renderWorktreeBody(input: {
   >;
 }): React.ReactNode {
   const { props, worktree, turnUnits } = input;
-  if (props.state === undefined) {
+  const workspaceOrigin = props.state?.workspaceOrigin;
+  if (workspaceOrigin === undefined) {
     return (
       <div className={css.notice} role={props.stateError === undefined ? "status" : "alert"}>
         {props.stateError === undefined
@@ -267,6 +273,19 @@ function renderWorktreeBody(input: {
           key={unit.unitId}
           worktree={worktree}
           unit={unit}
+          location={input.locations[unit.unitId]}
+          onReview={() =>
+            props.navigation.dispatch({
+              type: "open-content",
+              contentSurface: {
+                kind: "worktree",
+                workspaceOrigin,
+                worktreeId: worktree.worktreeId,
+                name: worktree.name,
+                unitId: unit.unitId,
+              },
+            })
+          }
           expanded={input.expandedUnitIds.includes(unit.unitId)}
           view={input.viewByUnitId[unit.unitId] ?? "agent"}
           runtime={props}
@@ -284,6 +303,8 @@ function renderWorktreeBody(input: {
 function TurnUnitItem(props: {
   readonly worktree: DocumentWorktreeState;
   readonly unit: WorktreeUnitView;
+  readonly location: UnitLocationMap[string] | undefined;
+  readonly onReview: () => void;
   readonly expanded: boolean;
   readonly view: TurnViewMode;
   readonly runtime: ViewerRuntimeProps;
@@ -296,6 +317,8 @@ function TurnUnitItem(props: {
   const viewer =
     props.expanded && previewable ? resolveTurnViewer(worktree, unit, activeView) : undefined;
 
+  const directory = props.location?.status === "resolved" && !props.location.shared
+    ? props.location.path.join(" / ") : "";
   const ChangeIcon = UNIT_CHANGE_ICONS[unit.kind];
   const mergeResult = unit.mergeResult;
   const viewOptions: SegmentedOption<TurnViewMode>[] = [
@@ -308,26 +331,38 @@ function TurnUnitItem(props: {
 
   return (
     <li className={css.accordionItem} data-unit-id={unit.unitId}>
-      <button
-        type="button"
-        className={css.accordionHeader}
-        aria-expanded={props.expanded}
-        data-deleted={unit.kind === "deleted" || undefined}
-        onClick={props.onToggle}
-      >
-        {props.expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-        <UnitTypeIcon type={unit.unitType} />
-        <span className={css.unitName}>{unit.name}</span>
-        <span className={css.unitChange}>
-          {ChangeIcon === undefined ? null : <ChangeIcon aria-hidden="true" />}
-          {unitChangeLabel(unit.kind, props.runtime.t)}
-        </span>
-        {mergeResult === "pending" ? null : (
-          <Badge variant={mergeResultVariant(mergeResult)}>
-            {mergeResultLabel(mergeResult, props.runtime.t)}
-          </Badge>
-        )}
-      </button>
+      <div className={css.documentRow}>
+        <div
+          className={css.accordionHeader}
+          data-deleted={unit.kind === "deleted" || undefined}
+        >
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-expanded={props.expanded}
+            aria-label={`${props.runtime.t(props.expanded ? "dock.fold" : "dock.expand")}: ${unit.name}`}
+            title={props.runtime.t(props.expanded ? "dock.fold" : "dock.expand")}
+            onClick={props.onToggle}
+          >
+            {props.expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+          </Button>
+          <UnitTypeIcon type={unit.unitType} />
+          <span className={css.unitName} title={unit.name}>{unit.name}</span>
+          {directory ? <span className={css.directoryPath} title={directory}>{directory}</span> : null}
+          <span className={css.unitChange}>
+            {ChangeIcon === undefined ? null : <ChangeIcon aria-hidden="true" />}
+            {unitChangeLabel(unit.kind, props.runtime.t)}
+          </span>
+          {hasUnitMergeProblem(mergeResult) ? (
+            <Badge variant={mergeResultVariant(mergeResult)}>
+              {mergeResultLabel(mergeResult, props.runtime.t)}
+            </Badge>
+          ) : null}
+        </div>
+        <Button variant="secondary" size="sm" onClick={props.onReview}>
+          {props.runtime.t("review.openDocument")}
+        </Button>
+      </div>
       {props.expanded ? (
         <div className={css.accordionBody}>
           <div className={css.unitHeader}>

@@ -579,7 +579,8 @@ export function apply(ctx: ClientContext): void {
         name: "conversation.chat.turnTail",
         priority: -10,
         locale: UNIVER_LOCALE_NAMESPACE,
-        select: selectUniverTurn,
+        // Mount a lightweight recovery reader even when paged chat lacks this Turn's tools.
+        select: (owner) => selectUniverTurn(owner) ?? { turn: owner.turn.turn, files: [] },
         inject: () => ({ loadViewerBootstrap, getViewerLocale, navigation }),
       },
       PreviewCard,

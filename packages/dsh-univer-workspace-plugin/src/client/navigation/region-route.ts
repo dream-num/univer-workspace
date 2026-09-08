@@ -68,6 +68,13 @@ export function bindContentRoute(
     const current = new AbortController();
     controller = current;
     const route = parseContentRegion(value);
+    const surface = navigation.getSnapshot().contentSurface;
+    if (route?.kind === "worktree" && surface?.kind === "worktree" && route.id === surface.worktreeId) {
+      restoring = true;
+      navigation.dispatch({ type: "open-content", contentSurface: { ...surface, unitId: route.unitId } });
+      restoring = false;
+      return;
+    }
     restoring = true;
     navigation.dispatch({ type: "close-content" });
     restoring = false;

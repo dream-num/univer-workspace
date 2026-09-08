@@ -88,6 +88,18 @@ describe("Workspace navigation state", () => {
     ).toEqual({ navigationMode: "worktrees", contentSurface: next });
   });
 
+  it("publishes repeated review requests for the same Unit", () => {
+    const store = createWorkspaceNavigationStore(initial);
+    const listener = vi.fn();
+    store.subscribe(listener);
+    store.dispatch({ type: "open-content", contentSurface: worktree });
+    const first = store.getSnapshot().contentSurface;
+    store.dispatch({ type: "open-content", contentSurface: worktree });
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(store.getSnapshot().contentSurface).toEqual(first);
+    expect(store.getSnapshot().contentSurface).not.toBe(first);
+  });
+
   it("closes only the middle content surface", () => {
     expect(
       reduceWorkspaceNavigation(

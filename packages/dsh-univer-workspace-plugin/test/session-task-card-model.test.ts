@@ -255,12 +255,12 @@ describe("Session task-card source contract", () => {
     );
     expect(turnSource).toContain("React.useState(!props.initiallyExpanded)");
     expect(turnSource.match(/props\.t\("task\.openMiddle"\)/g)).toHaveLength(2);
-    expect(turnSource.match(/type:\s*"open-content"/g)).toHaveLength(2);
+    expect(turnSource).toContain('unitId: unit.unitId');
     expect(turnSource).not.toContain("OPEN_VIEWER_EVENT");
     expect(turnSource).not.toMatch(/from\s+["']\.\/use-exclusive-viewer/);
     expect(turnSource).not.toMatch(/\buseExclusiveViewer\s*\(/);
     expect(clientSource).toMatch(
-      /name:\s*"conversation\.chat\.turnTail"[\s\S]{0,180}inject:\s*\(\)\s*=>\s*\(\{[\s\S]{0,100}\bnavigation\b/,
+      /name:\s*"conversation\.chat\.turnTail"[\s\S]{0,400}inject:\s*\(\)\s*=>\s*\(\{[\s\S]{0,100}\bnavigation\b/,
     );
   });
 });

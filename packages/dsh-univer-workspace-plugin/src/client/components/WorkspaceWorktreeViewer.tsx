@@ -9,7 +9,7 @@
  * @module dsh-univer-workspace-plugin/client/components/WorkspaceWorktreeViewer
  */
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { Button, DialogRoot, DialogContent, DialogHeader, DialogTitle } from "@univerjs/univer-workspace-ui";
 import type { DocumentFileState } from "../../shared/state.ts";
 import { getFileState, subscribeFileStateInvalidation } from "../api/univer-api.ts";
@@ -33,7 +33,7 @@ import surfaceCss from "./WorkspaceResourceViewer.module.scss";
 import css from "./WorkspaceWorktreeViewer.module.scss";
 
 /** Mounted-Viewer retention budget (the confirmed keep-with-LRU policy). */
-const VIEWER_LRU_CAPACITY = 3;
+const VIEWER_CACHE_CAPACITY = 6;
 
 type WorktreeFileState =
   | { readonly status: "loading" }
@@ -45,6 +45,7 @@ export interface WorkspaceWorktreeViewerProps {
   readonly surfaceLeft: number | null;
   readonly surfaceWidth: number;
   readonly onClose: () => void;
+  readonly headerAction?: ReactElement | undefined;
   readonly loadViewerBootstrap: () => Promise<ViewerBootstrap>;
   readonly getViewerLocale: () => ViewerLocale;
   readonly t: (key: UniverLocaleKey) => string;
@@ -82,8 +83,14 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
   const [viewByUnitId, setViewByUnitId] = useState<Readonly<Record<string, TurnViewMode>>>({});
   const [locatedUnitId, setLocatedUnitId] = useState<string | null>(null);
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
+  const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
+  const registerScrollRoot = useCallback((element: HTMLDivElement | null) => {
+    scrollRootRef.current = element;
+    setScrollRoot(element);
+  }, []);
+  const [locateVersion, setLocateVersion] = useState(0);
   const locateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialLocateDoneRef = useRef(false);
+  const locatedTargetRef = useRef<WorkspaceWorktreeSurface | null>(null);
 
   useEffect(() => subscribeFileStateInvalidation((key) => {
     if (key === null || key === `wt:${props.target.worktreeId}`) setMutationVersion((value) => value + 1);
@@ -109,7 +116,7 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
   }, [props.target.worktreeId, mutationVersion]);
 
   useEffect(() => {
-    initialLocateDoneRef.current = false;
+    locatedTargetRef.current = null;
     setCollapsedIds(new Set());
     setViewByUnitId({});
     setLocatedUnitId(null);
@@ -136,7 +143,7 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
   }, [unitIds, collapsedIds]);
 
   const locations = useUnitLocations(units, mutationVersion);
-  const mount = useViewportMount(scrollRootRef, unitIds, expandedIds, VIEWER_LRU_CAPACITY);
+  const mount = useViewportMount(scrollRoot, unitIds, expandedIds, VIEWER_CACHE_CAPACITY);
 
   const pathTree = useMemo(() => {
     const entries: PathTreeUnitEntry[] = [];
@@ -196,17 +203,18 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
     });
     if (locateTimerRef.current !== null) clearTimeout(locateTimerRef.current);
     setLocatedUnitId(unitId);
+    setLocateVersion((version) => version + 1);
     locateTimerRef.current = setTimeout(() => setLocatedUnitId(null), 1600);
   };
 
-  // A surface opened for a specific Unit scrolls to it once data arrives.
+  // Each explicit review request locates its Unit once data arrives.
   useEffect(() => {
-    if (initialLocateDoneRef.current || units.length === 0) return;
+    if (locatedTargetRef.current === props.target || units.length === 0) return;
     const preferred = props.target.unitId;
     if (preferred === null || !unitIds.includes(preferred)) return;
-    initialLocateDoneRef.current = true;
+    locatedTargetRef.current = props.target;
     locateUnit(preferred);
-  }, [units, unitIds, props.target.unitId]);
+  }, [units, unitIds, props.target]);
 
   const toggleUnit = (unitId: string): void => {
     setCollapsedIds((current) => {
@@ -243,6 +251,7 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
         fallbackName={props.target.name}
         t={props.t}
         onClose={props.onClose}
+        headerAction={props.headerAction}
         onActionSettled={() => setMutationVersion((value) => value + 1)}
       />
       <div className={surfaceCss.content}>
@@ -314,13 +323,14 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
                   t={props.t}
                 />
               </div>
-              <div ref={scrollRootRef} className={css.accordionScroll}>
+              <div ref={registerScrollRoot} className={css.accordionScroll}>
                 <WorktreeUnitAccordion
                   scrollRootRef={scrollRootRef}
                   worktree={worktree}
                   units={units}
                   locations={locations}
                   expandedIds={expandedIds}
+                  locateVersion={locateVersion}
                   locatedUnitId={locatedUnitId}
                   viewByUnitId={viewByUnitId}
                   mount={mount}
