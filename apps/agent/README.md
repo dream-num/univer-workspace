@@ -206,8 +206,10 @@ in another message field, or attempt to complete the browser exchange through
 an API client. The token is intended for the user's browser and is consumed
 once; after the user opens it, the browser can use the clean root URL.
 
-In Settings → Workspace, set the service origin (for the shared test environment use
-`https://workspace.univer.plus`; a local Workspace URL works as well). The first
+In Settings → Workspace, enter the origin of your own Workspace service. For a
+local setup, complete [Connect to a local Workspace](#connect-to-a-local-workspace)
+below and use `http://127.0.0.1:5173`. The shared `workspace.univer.plus` deployment
+is an internal test environment, not a public service required by this application. The first
 login uses browser OAuth: click “Sign in to Workspace”, sign in or register on
 Workspace, then approve the Workspace Agent access request. Workspace redirects to the
 local Workspace Agent callback; the Workspace Agent exchanges the one-time code using PKCE and
@@ -277,26 +279,67 @@ Workspace identity:
 
 ## Connect to a local Workspace
 
-The Workspace Agent accepts any Workspace HTTP origin. To run the Workspace application
-from this repository, use a second terminal and follow the Workspace application
-guide:
+You can run the complete application locally without access to the shared test
+deployment. Workspace does **not** register the Agent OAuth client by default:
+copying `.env.example` alone is insufficient because its OAuth example is commented
+out. Complete the configuration below before starting the Workspace server.
 
-```bash
-cp apps/workspace/.env.example apps/workspace/.env
-pnpm workspace:dev:server
-```
+1. From the repository root, create the Workspace configuration if you do not
+   already have one. Keep an existing `.env` and edit it instead of overwriting it.
 
-The API server listens on `http://127.0.0.1:3020` by default. Browser authorization
-also needs the Workspace sign-in UI: run `pnpm workspace:dev:web` in another
-terminal, then set the Workspace Agent Workspace origin to `http://127.0.0.1:5173`.
-Vite serves the sign-in UI and forwards API and collaboration requests to port
-3020. Register the Workspace Agent OAuth client in `OAUTH_CLIENTS_JSON` before starting
-the server, as described above; its callback must match the Workspace Agent port.
+   ```bash
+   cp apps/workspace/.env.example apps/workspace/.env
+   ```
 
-Port 3020 can be used directly when the Workspace Browser has been built into
-`apps/workspace/dist/public`. On a fresh clone without that build, using port
-3020 as the authorization origin leaves the login page unavailable. The Workspace Agent
-does not create Workspace users or bypass Workspace authentication.
+2. Add this active, single-line setting to `apps/workspace/.env`:
+
+   ```dotenv
+   OAUTH_CLIENTS_JSON={"clients":[{"clientId":"univer-workspace-harness","clientType":"public","requiresConsent":true,"redirectUris":["http://127.0.0.1:3101/auth/oauth/callback"],"scopes":["identity","session"]}]}
+   ```
+
+   If `OAUTH_CLIENTS_JSON` already exists, add this client to its `clients` array;
+   keep one setting and preserve any other registered clients. This is a public
+   OAuth client using PKCE and explicit user consent; no client secret is needed.
+   The client ID remains `univer-workspace-harness` after the application rename.
+
+3. Start the Workspace backend in one terminal and its browser UI in another:
+
+   ```bash
+   pnpm workspace:dev:server
+   ```
+
+   ```bash
+   pnpm workspace:dev:web
+   ```
+
+4. Open `http://127.0.0.1:5173` and register a local Workspace account, or sign in
+   to an existing one. Local registration does not require GitHub or Discord OAuth
+   credentials. Leave both Workspace processes running.
+
+5. Start Workspace Agent using the [local installation commands](#local-web-client-quick-start)
+   above on port 3101. Open its complete printed token URL. In **Settings →
+   Workspace**, set the service origin to `http://127.0.0.1:5173`, click **Sign in
+   to Workspace**, and approve access on your local Workspace authorization page.
+   After returning to Agent, your account and personal Space should appear in the
+   sidebar. You can then create a session and browse or reference documents.
+
+| Address | Purpose |
+| --- | --- |
+| `http://127.0.0.1:3101` | Workspace Agent UI and its OAuth callback |
+| `http://127.0.0.1:5173` | Workspace browser UI and the service origin entered in Agent |
+| `http://127.0.0.1:3020` | Workspace backend; Vite forwards API and collaboration requests here |
+
+The callback URL is an exact match: `localhost` and `127.0.0.1` are different
+registrations. If you change the Agent host or port, update `redirectUris` to match
+the callback and restart the Workspace backend. This registration controls OAuth
+callbacks; it is not a general CORS allowance for port 3101.
+
+`OAUTH_CLIENT_UNAVAILABLE` means the server did not load the requested client;
+check that the setting is active and restart the backend. `INVALID_REDIRECT_URI`
+means the requested callback is not registered. Port 3020 can be used as the service
+origin only when the Workspace Browser has been built into
+`apps/workspace/dist/public`. On a fresh clone, use 5173 so the sign-in and consent
+pages are available.
 
 ## Troubleshooting
 
