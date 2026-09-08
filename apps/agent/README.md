@@ -135,6 +135,49 @@ dependencies. The Workspace Agent image installs the platform-specific packages 
 while assembling the profile; the runtime container only copies that assembled
 profile and does not download or compile binaries during startup.
 
+## Agent-assisted setup
+
+```mermaid
+flowchart TD
+    Start[Ask whether the user has a Workspace service] --> HasWorkspace{Existing Workspace URL?}
+    HasWorkspace -->|Yes| Existing[Verify the URL and administrator-managed OAuth registration]
+    HasWorkspace -->|No| Choice{Choose with the user}
+    Choice -->|Local| Local[Prepare a local Workspace]
+    Choice -->|Hosted| Hosted[Prepare a hosted Workspace deployment]
+    Local --> Configure[Register the Agent OAuth client and exact callback]
+    Hosted --> Configure
+    Existing --> Agent[Install and start Workspace Agent]
+    Configure --> Run[Start or deploy Workspace and verify its sign-in page]
+    Run --> Agent
+    Agent --> Open[Give the user the Workspace address and printed Agent token URL]
+    Open --> Login[Guide sign-in or registration and OAuth consent]
+    Login --> Verify[Confirm the connected account and Space directory]
+```
+
+
+Before installing, ask whether the user already has a Workspace service and its
+browser URL. If they do, verify that it is reachable and supports the Agent OAuth
+client; explain any registration changes its administrator needs to make.
+
+If they do not, explain the choices: a local Workspace runs on their own machine,
+while a hosted deployment needs a server and an address they can reach. Ask which
+they prefer, then follow [Connect to a local Workspace](#connect-to-a-local-workspace)
+or the [Workspace deployment guide](../workspace/README.md#docker). Use the
+repository's default branch when cloning; no feature-branch checkout is required.
+
+Check the documented Node.js/pnpm, package registry, model credentials, and license
+requirements before starting. Tell the user which credentials or configuration
+are missing and what they need to provide; never assume access to the internal
+test service. If running through SSH or inside a container, make sure the user
+can reach the supplied URLs and that the OAuth callback matches that setup.
+
+Verify both the Workspace sign-in page and the Agent startup before handing off.
+Give the user their Workspace address and the complete printed Agent token URL,
+explain which page to open, and guide them through registration or login and
+consent. Startup alone is not a complete setup: confirm that the connected account
+and its Space directory appear. Keep installation commands in the linked guides
+as the single source of truth.
+
 ## Local Web client quick start
 
 Use Node.js 24 or newer and the pnpm version declared in the root
