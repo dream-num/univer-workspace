@@ -278,6 +278,7 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
               )}
               <div ref={scrollRootRef} className={css.accordionScroll}>
                 <WorktreeUnitAccordion
+                  scrollRootRef={scrollRootRef}
                   worktree={worktree}
                   units={units}
                   locations={locations}

@@ -12,12 +12,12 @@
 .changesHeader {
   display: flex;
   box-sizing: border-box;
-  height: var(--uwh-pane-header-height);
-  min-height: var(--uwh-pane-header-height);
+  // This is a secondary toolbar below the Worktree title, not a pane header.
+  min-height: 44px;
   flex: none;
   align-items: center;
   gap: 12px;
-  padding: 0 20px;
+  padding: 6px 20px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-background);
 }

@@ -10,7 +10,7 @@
  * @module dsh-univer-workspace-plugin/client/components/worktree-review/WorktreeUnitAccordion
  */
 
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, useId, type RefObject, type ReactElement } from "react";
 import {
   Badge,
   Button,
@@ -45,9 +45,11 @@ import type { ViewerSelection } from "../../viewer/contracts.ts";
 import { unitLocationTitle } from "./worktree-review-model.ts";
 import { UnitChangeIcon, UnitTypeIcon } from "./unit-markers.tsx";
 import { postWorktreeUnitRemoval } from "../../api/univer-api.ts";
+import { useReviewHeight } from "./use-review-height.ts";
 import css from "./WorktreeUnitAccordion.module.scss";
 
 export interface WorktreeUnitAccordionProps {
+  readonly scrollRootRef: RefObject<HTMLElement | null>;
   readonly worktree: DocumentWorktreeState;
   readonly units: readonly WorktreeUnitView[];
   readonly locations: UnitLocationMap;
@@ -70,7 +72,9 @@ export function WorktreeUnitAccordion(props: WorktreeUnitAccordionProps): ReactE
     <ul className={css.stream}>
       {props.units.map((unit) => (
         <WorktreeUnitItem
-          key={unit.unitId}
+          key={`${props.worktree.worktreeId}:${unit.unitId}`}
+          scrollRootRef={props.scrollRootRef}
+          single={props.units.length === 1}
           worktree={props.worktree}
           unit={unit}
           location={props.locations[unit.unitId] ?? { status: "loading" }}
@@ -90,6 +94,8 @@ export function WorktreeUnitAccordion(props: WorktreeUnitAccordionProps): ReactE
 }
 
 function WorktreeUnitItem(props: {
+  readonly scrollRootRef: RefObject<HTMLElement | null>;
+  readonly single: boolean;
   readonly worktree: DocumentWorktreeState;
   readonly unit: WorktreeUnitView;
   readonly location: UnitLocationMap[string];
@@ -123,6 +129,7 @@ function WorktreeUnitItem(props: {
   };
   const itemRef = useRef<HTMLLIElement | null>(null);
   const register = props.mount.register;
+  const previewId = useId();
 
   useEffect(() => register(unit.unitId, itemRef.current), [register, unit.unitId]);
 
@@ -141,6 +148,9 @@ function WorktreeUnitItem(props: {
   // all changes go through the Agent and lifecycle actions remain in the
   // review header.
   const viewer = resolvedViewer === undefined ? undefined : { ...resolvedViewer, editable: false };
+  const sizing = useReviewHeight(
+    props.scrollRootRef, itemRef, viewer !== undefined && viewer.unitType !== "unsupported", props.single,
+  );
   const mergeResult = unit.mergeResult;
   const locationTitle = unitLocationTitle(props.location, unit.name);
   const viewOptions: SegmentedOption<TurnViewMode>[] = [
@@ -214,6 +224,20 @@ function WorktreeUnitItem(props: {
                 onValueChange={props.onViewChange}
               />
             </div>
+            {viewer !== undefined && viewer.unitType !== "unsupported" ? (
+              <Segmented
+                aria-label={t("review.height.label")}
+                size="sm"
+                className={css.heightControls ?? ""}
+                value={sizing.preset}
+                options={[
+                  { value: "compact", label: t("review.height.compact") },
+                  { value: "auto", label: t("review.height.auto") },
+                  { value: "fill", label: t("review.height.fill") },
+                ]}
+                onValueChange={sizing.setPreset}
+              />
+            ) : null}
           </div>
           {actionError === null ? null : <div role="alert">{actionError}</div>}
           {!previewable ? (
@@ -230,7 +254,14 @@ function WorktreeUnitItem(props: {
               {t("window.unsupportedType")}
             </div>
           ) : (
-            <div className={css.viewerBox} data-view-mode={activeView}>
+            <div
+              ref={sizing.viewerRef}
+              id={previewId}
+              className={css.viewerBox}
+              style={{ height: sizing.height }}
+              data-view-mode={activeView}
+              data-height-mode={sizing.preset}
+            >
               {props.mount.shouldMount(unit.unitId) ? (
                 <PanelViewer
                   key={viewerKey(viewer)}
@@ -244,6 +275,13 @@ function WorktreeUnitItem(props: {
                   {t("window.loading")}
                 </div>
               )}
+              <div
+                {...sizing.resizeProps}
+                className={css.resizeHandle}
+                aria-label={t("review.height.resize")}
+                aria-controls={previewId}
+                title={t("review.height.resizeHint")}
+              />
             </div>
           )}
         </div>
