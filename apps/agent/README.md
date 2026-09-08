@@ -1,5 +1,7 @@
 # Univer Workspace Agent
 
+English | [简体中文](README.zh-CN.md)
+
 Univer Workspace Agent is a local web application for discussing documents with
 an AI agent and reviewing its changes in Worktrees. It connects to one local or
 remote Univer Workspace service. The application uses DSH (DeepSeek Harness),
@@ -15,6 +17,43 @@ assembled from published `@deepseek-ai/*` packages as three bundles:
   Workspace Units.
 - `dsh-univer-workspace-skin-plugin` — the browser skin aligning the DSH UI
   with the Workspace brand.
+
+## Installation and first use
+
+Workspace Agent runs on your machine and connects to a Univer Workspace service.
+You need both applications: Workspace stores documents and enforces access;
+Agent provides the conversation and review interface. DSH is the agent runtime
+assembled by the installation commands below; no prior DSH installation is needed.
+
+### Set up with an agent
+
+Give your coding agent this prompt, even if you have not cloned the repository:
+
+> Help me install and run Univer Workspace Agent from https://github.com/dream-num/univer-workspace. First ask whether I have a Workspace service and its URL. If not, explain local versus hosted setup and help me choose, then follow the repository README to start or deploy one. Follow apps/agent/README.md to check prerequisites, configure the connection, and verify startup. Explain any credentials or user actions needed, and give me the Workspace address and complete printed Agent token URL, guiding me through login and authorization.
+
+The agent should follow the [setup workflow](#agent-assisted-setup), explain the
+choices, and confirm that your account and Space directory load. Workspace login
+and model credentials are separate: browsing documents does not require sending a
+model request, but chatting with the agent does.
+
+### Set up manually
+
+1. Check the [requirements and installation commands](#local-web-client-quick-start)
+   and clone the repository. This application is built from source; its private
+   packages are not installed from npm as a standalone Workspace Agent release.
+2. Choose a Workspace service. For an existing service, ask its administrator to
+   register the [Agent OAuth client and callback](#connect-to-a-local-workspace).
+   Otherwise, [start Workspace locally](#connect-to-a-local-workspace) or follow
+   the [Workspace deployment guide](../workspace/README.md#docker).
+3. Build and start Agent with the [local installation commands](#local-web-client-quick-start).
+   Open the complete token URL printed by the launcher, then connect and authorize
+   your Workspace account in **Settings → Workspace**.
+4. Follow [Using Workspace Agent](#using-workspace-agent) to browse documents,
+   start a conversation, and review changes. Keep the launcher running while using
+   the application.
+
+The shared `workspace.univer.plus` service is an internal test deployment. Use your
+own Workspace service for this setup.
 
 ## Responsibilities
 
@@ -181,10 +220,13 @@ as the single source of truth.
 ## Local Web client quick start
 
 Use Node.js 24 or newer and the pnpm version declared in the root
-`package.json` (currently 11.24.0). Start from a clone of this repository and
-install its dependencies from the repository root:
+`package.json` (currently 11.24.0). Clone the repository and install its
+dependencies from the repository root.
+If you already have a checkout, use its root directory instead of cloning again:
 
 ```bash
+git clone https://github.com/dream-num/univer-workspace.git
+cd univer-workspace
 pnpm install --frozen-lockfile
 ```
 
@@ -287,7 +329,7 @@ Keep the launcher running throughout the switch.
 Never record passwords or `workspace_session` values in bug reports; record only
 the origin and a non-secret account identifier.
 
-### First end-to-end check
+## Using Workspace Agent
 
 Once the browser has opened the new token URL and loaded the authorized
 Workspace identity:
@@ -309,16 +351,37 @@ Workspace identity:
 5. Open **Worktree** to find personal or team tasks. The default view shows
    open tasks; choose **All** to include closed tasks or **Closed only** to show
    only closed tasks, then select a task to open its Changes review surface.
-6. In a native conversation message, type `@`, choose **Browse Workspace** when
-   the file is not in the recent suggestions, navigate Space → folder → file,
-   and repeat to add multiple Resources before sending. The resulting message
-   carries stable Resource identities; opening a file alone does not silently
-   add it to the message context.
+6. In a conversation message, type `@` and choose **Browse Workspace** for remote
+   documents or folders, or **Local files** for files and folders on the machine
+   running Agent. Repeat to add multiple references before sending. A document
+   or folder row's **Add to message** action also adds a reference to the current
+   conversation. Opening a document alone does not add it to the message context.
+   See [File and folder mentions](#file-and-folder-mentions) for path entry and
+   the distinction between references and uploads.
 7. To test another Workspace service or identity, return to **Settings →
    Workspace** and save or authorize the new connection. The Workspace Agent
    switches account-owned services to the matching data directory without
    restarting DSH. Verify that the new identity receives its own conversations
    and directory, and that switching back restores the original history.
+
+### Review changes and keep your conversation
+
+Ask the agent to make a document change, then inspect the resulting Worktree
+before merging. Its review view shows added, modified, and deleted documents;
+select an entry to inspect it and use the merge or discard controls when ready.
+The Worktree selector switches between related Worktrees; the document list shows
+the selected Worktree's contents.
+
+Use **Hide conversation** to give the document more room while retaining the
+Session and its draft. **Show conversation** or **Add to message** brings it back.
+See [Region navigation](#region-navigation) for bookmarks and refresh behavior.
+
+For troubleshooting a conversation, use **Session log** in its header to download
+a ZIP containing the Session, descendant Sessions, and attachments. The header
+appears after the first message. Confirm that the browser finishes the download;
+a download-started notification alone does not establish success. Review the
+archive before sharing it, because it can contain conversation content and local
+attachments.
 
 ## Connect to a local Workspace
 
@@ -391,11 +454,15 @@ pages are available.
 - **The connection page is still waiting:** keep `start-local.mjs` running.
   Use **Check again** if offered; it verifies readiness before returning.
   Inspect the launcher log if account services fail to load.
-- **Workspace login succeeds but model messages fail:** Workspace Device
-  Authorization only grants Workspace data access. Configure a local DSH model
-  credential separately.
-- **The device code expires:** start a new authorization request. Device codes
-  are single-use and are not persisted in the browser.
+- **Workspace login succeeds but model messages fail:** Workspace OAuth only
+  grants Workspace data access. Configure a local DSH model credential separately.
+- **The authorization request expires:** start a new login from **Settings →
+  Workspace**. This application uses browser OAuth with PKCE and consent; it does
+  not ask you to enter a CLI device code.
+- **Session log download fails with `workspace_connection_changed`:** refresh
+  Agent after updating its local profile, then download using **Session log**.
+  The button includes the page's connection version; a copied bare
+  `/api/session.export` URL cannot pass the account-isolation check.
 - **The Viewer is unavailable:** confirm that the connected account can read the
   Resource and that the profile was rebuilt after changing plugin source.
 - **The directory still shows the previous account:** let the page refresh
@@ -405,12 +472,6 @@ pages are available.
 Do not put passwords, Workspace session cookies, device codes, or model API keys
 in bug reports. Record the Workspace origin, local Workspace Agent port, profile name,
 and a non-secret account identifier instead.
-
-This is the currently implemented first-version path. Formal Recent/Shared
-file surfaces and the final two-identity new-user acceptance matrix remain tracked in
-the repository's local development notes
-and must not be presented as available until their UI and browser acceptance
-are complete.
 
 ## Region navigation
 

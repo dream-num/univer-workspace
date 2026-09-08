@@ -6,6 +6,62 @@ authorizing User can access. Documents are Units managed and persisted by the
 Univer Workspace backend; local paths are used only for task assets and
 import/export, not as document identities.
 
+## Why run in a dedicated DSH profile?
+
+This plugin is part of the Workspace Agent application composition. The supported
+setup installs it into the dedicated `univer-workspace-harness` profile alongside
+the Agent core, skin, and version-matched DSH web bundle. Follow the
+[Agent installation guide](../../apps/agent/README.md#installation-and-first-use)
+([Chinese](../../apps/agent/README.zh-CN.md#安装与首次使用)) instead of adding this
+capability bundle alone to an existing general-purpose `web` profile.
+
+A DSH profile selects an installed bundle set and its composition patches. A
+separate profile matters here for four reasons:
+
+- **Required services and lifecycle.** The plugin consumes the Agent core's
+  `workspaceAuth` and `workspaceRuntime` services. They supply the authorized
+  Workspace connection and account-owned runtime directory. Installing the tools
+  alone does not establish OAuth, Space bindings, or account switching.
+- **Application-wide UI composition.** Agent replaces the native sidebar and
+  reference discovery, and configures the webserver, connection handling,
+  settings, and credentials. The native and replacement sidebar cannot both
+  declare the same child slots. Applying these patches to a user's ordinary
+  profile would also change that profile's interface and behavior.
+- **Tool and document semantics.** Other Univer plugins may use overlapping tool
+  names for local `.univer` files. Here documents are remote, database-backed
+  Workspace Units with Resource identities and Worktree review. Mixing both
+  toolsets in one composition can introduce name collisions and contradictory
+  instructions about where content lives.
+- **Reproducible dependencies.** The profile is a separate pnpm project under
+  `$DSH_HOME/profiles/<profile>`. The profile builder installs the pinned DSH web
+  bundle first, then the three repository bundles, reusing its peer versions.
+  This keeps Agent's supported bundle set separate from another profile's plugin
+  choices. The DSH CLI is also installed outside the repository workspace to
+  keep its React 18 graph separate from Workspace Browser's React 19 graph;
+  choosing a profile alone does not provide that dependency isolation.
+
+### Profile isolation is not account isolation
+
+| Boundary | What owns it |
+| --- | --- |
+| Installed plugins and composition patches | The dedicated DSH profile, assembled by `build-profile.sh` |
+| Workspace connection, login, and account switching | Agent core; one active connection per running instance |
+| Account-specific Sessions, indexes, attachments, and local Space directories | Runtime directories selected by Workspace origin and user ID under `UWH_DSH_DATA_HOME` |
+| Shared local model settings and browser-session signing state | Agent's shared settings and credentials paths |
+| Remote document access and mutation permissions | Workspace server |
+
+Use the same profile when switching Workspace accounts; the application switches
+account-owned services and data directories without reinstalling plugins or
+restarting the HTTP listener. All tabs connected to that Agent instance share
+its current Workspace identity. A profile is not an OS sandbox and does not
+restrict the agent's local filesystem permissions.
+
+The default profile name remains `univer-workspace-harness` after the application
+rename. Keep the builder and launcher on the same `DSH_PROFILE` if choosing a
+custom name. See the [Agent storage guide](../../apps/agent/README.md#local-data-and-storage)
+for installation paths, shared state, and account data; do not use a profile name
+as a substitute for those explicit storage boundaries.
+
 ## Delivered so far
 
 - **Space ↔ dsh-workspace reconciliation**: the User's remote Spaces are
