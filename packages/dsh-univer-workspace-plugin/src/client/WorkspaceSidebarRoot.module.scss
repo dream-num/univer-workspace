@@ -157,7 +157,10 @@
   width: 100%;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  // Native session rows can bleed a few pixels beyond their layout width.
+  // Sidebar navigation scrolls vertically; keep that bleed inside the pane.
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .hidden {
   display: none;

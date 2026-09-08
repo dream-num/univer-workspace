@@ -39,6 +39,18 @@ export const connectionBrowserScript = `(() => {
       return response;
     });
   };
+  // DSH alpha.4 exports use a detached download anchor after a fetch HEAD check.
+  // Navigation cannot send the fetch header. Pin the URL without weakening the
+  // server fence; remove this adapter when DSH exposes a download URL hook.
+  const nativeAnchorClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () {
+    const url = new URL(this.href, location.href);
+    if (this.hasAttribute('download') && owned(url) && !url.searchParams.has('uwhConnection')) {
+      url.searchParams.set('uwhConnection', version);
+      this.href = url.href;
+    }
+    return nativeAnchorClick.call(this);
+  };
   globalThis.WebSocket = class extends NativeWebSocket {
     constructor(input, protocols) {
       const url = new URL(input, location.href);
