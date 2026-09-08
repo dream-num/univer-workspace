@@ -16,8 +16,7 @@ import {
   Button,
   ChevronDownIcon,
   ChevronRightIcon,
-  MessageSquareIcon,
-  PlusIcon,
+  MessageSquarePlusIcon,
   Segmented,
   TrashIcon,
   type SegmentedOption,
@@ -202,8 +201,7 @@ function WorktreeUnitItem(props: {
                   })
                 }
               >
-                <MessageSquareIcon />
-                <PlusIcon className={css.addBadge} />
+                <MessageSquarePlusIcon />
               </Button>
               <Badge variant="outline">
                 {t(viewer !== undefined && viewer.editable ? "card.editable" : "card.readonly")}

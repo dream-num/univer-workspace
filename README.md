@@ -4,7 +4,7 @@
 
 **An open-source Office workspace where people and AI agents create, collaborate, and review together.**
 
-[Univer Docs](https://docs.univer.ai/) · [Office SDK](https://office.univer.ai/) · [CLI guide](apps/cli/README.md) · [Local Harness](apps/harness/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
+[Univer Docs](https://docs.univer.ai/) · [Office SDK](https://office.univer.ai/) · [CLI guide](apps/cli/README.md) · [Workspace Agent](apps/agent/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
@@ -136,11 +136,11 @@ contract.
 ```text
 apps/workspace                 Workspace Browser, Server, HTTP contract, and deployment app
 apps/cli                       Agent-ready remote Workspace automation application
-apps/harness                   Local DSH Web client for one configurable Workspace connection
+apps/agent                     Workspace Agent application for document conversations and review
 packages/client-core           Private Node-hosted Workspace Agent Client capabilities
 packages/reference-provider   Private Browser-only referenced-Unit policy
-packages/dsh-univer-workspace-plugin        Harness Workspace capabilities and browser UI
-packages/dsh-univer-workspace-skin-plugin   Harness Workspace visual skin
+packages/dsh-univer-workspace-plugin        Workspace Agent Workspace capabilities and browser UI
+packages/dsh-univer-workspace-skin-plugin   Workspace Agent Workspace visual skin
 scripts                       SDK version and local CLI release tooling
 ```
 
@@ -222,7 +222,7 @@ the actual package artifact before publication.
 | [Univer Office SDK documentation](https://office.univer.ai/)        | Office SDK stack: Runtime, Collaboration, CLI, and Worktree                  |
 | [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades                 |
 | [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract                   |
-| [Local Harness guide](apps/harness/README.md)                       | Local profile, Device Authorization, sessions, files, Worktree, and identity switching |
+| [Workspace Agent guide](apps/agent/README.md)                       | Local profile, browser OAuth, sessions, files, Worktree, and identity switching |
 | [Client Core package](packages/client-core/README.md)               | Private Node-hosted client capability boundary                               |
 | [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries                     |
 | [HTTP contract](apps/workspace/contracts/http/README.md)            | Product API source and generation workflow                                   |

@@ -39,5 +39,10 @@ export function WorkspaceBrandMark({ size, className }: WorkspaceBrandMarkProps)
 
 /** Render the brand name beside the expanded mark. */
 export function WorkspaceBrandName(_props: PropsRuntime<"sidebar.brand.name">) {
-  return <span className="uwh-skin-brandName">Univer Workspace</span>;
+  return (
+    <span className="uwh-skin-brandName">
+      <span>Univer Workspace</span>
+      <span className="uwh-skin-brandSubtitle">Agent</span>
+    </span>
+  );
 }

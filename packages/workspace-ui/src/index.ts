@@ -40,6 +40,7 @@ export {
   LockIcon,
   ListTreeIcon,
   MessageSquareIcon,
+  MessageSquarePlusIcon,
   PencilIcon,
   PlusIcon,
   RefreshIcon,

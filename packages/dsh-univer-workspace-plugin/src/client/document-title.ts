@@ -1,5 +1,5 @@
 /** The product suffix used by the Harness browser title. */
-export const HARNESS_PRODUCT_TITLE = "Univer Workspace Harness";
+export const AGENT_PRODUCT_TITLE = "Univer Workspace Agent";
 
 /**
  * Format the browser title for the selected DSH session.
@@ -8,8 +8,8 @@ export const HARNESS_PRODUCT_TITLE = "Univer Workspace Harness";
  * own the product suffix in this composition so the published DSH shell does
  * not leak its DeepSeek branding into the Workspace service.
  */
-export function formatHarnessDocumentTitle(sessionTitle: string | undefined): string {
+export function formatAgentDocumentTitle(sessionTitle: string | undefined): string {
   return sessionTitle === undefined
-    ? HARNESS_PRODUCT_TITLE
-    : `${sessionTitle} — ${HARNESS_PRODUCT_TITLE}`;
+    ? AGENT_PRODUCT_TITLE
+    : `${sessionTitle} — ${AGENT_PRODUCT_TITLE}`;
 }

@@ -28,8 +28,8 @@ describe("dsh-univer-workspace-skin-plugin", () => {
     const branded = rewriteWorkspaceIndexBranding(
       '<html><head><title>DeepSeek Harness</title><link rel="icon" href="/deepseek.svg"></head></html>',
     );
-    expect(branded).toContain("Univer Workspace Harness");
+    expect(branded).toContain("Univer Workspace Agent");
     expect(branded).toContain('id="uwh-workspace-favicon"');
-    expect(JSON.parse(WORKSPACE_MANIFEST_JSON)).toMatchObject({ name: "Univer Workspace Harness" });
+    expect(JSON.parse(WORKSPACE_MANIFEST_JSON)).toMatchObject({ name: "Univer Workspace Agent" });
   });
 });

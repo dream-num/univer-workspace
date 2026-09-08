@@ -54,7 +54,7 @@ export function originUserDirectoryPath(
  * Derive the mechanical per-Space directory used by the harness.
  *
  * This is duplicated as a pure compatibility helper rather than imported
- * from `apps/harness`; keeping the hash contract here prevents a package →
+ * from `apps/agent`; keeping the hash contract here prevents a package →
  * application dependency while preserving stable workspace reconciliation.
  */
 export function spaceDirectoryPath(workspaceRoot: string, userId: string, spaceId: string): string {

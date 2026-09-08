@@ -32,7 +32,7 @@
   disabled: true
 - insert:
     - id: workspace-webserver
-      name: "@univerjs/univer-workspace-harness/runtime-webserver"
+      name: "@univerjs/workspace-agent/runtime-webserver"
       inject: [webStartup]
       config:
         host: !!js >-
@@ -98,7 +98,7 @@
 
 - insert:
     - id: univer-workspace-harness
-      name: "@univerjs/univer-workspace-harness"
+      name: "@univerjs/workspace-agent"
       inject: [webStartup]
       config:
         # The Workspace service origin the harness authenticates against and

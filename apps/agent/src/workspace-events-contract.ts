@@ -6,7 +6,7 @@ export interface WorkspaceChange {
   readonly revision: number;
 }
 
-export const workspaceEventsPackage = "@univerjs/univer-workspace-harness/events";
+export const workspaceEventsPackage = "@univerjs/workspace-agent/events";
 export const workspaceEventsDescriptor: InvocationDescriptor = {
   id: `${workspaceEventsPackage}#follow`,
   service: "workspaceEvents",

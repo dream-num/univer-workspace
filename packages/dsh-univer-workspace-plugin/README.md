@@ -73,7 +73,7 @@ import/export, not as document identities.
   left-hand session list.
 - **Capability HTTP routes**: `/api/uwh/me`, `/api/uwh/template-fork`, Space
   rename, the same-origin Space/Node tree, and trash actions are registered by
-  this plugin. The Harness only supplies the authenticated
+  this plugin. The Workspace Agent only supplies the authenticated
   `workspaceAuth` service they consume.
 - **Bundled skill**: `univer` teaches the model the Space/document
   model and the Worktree review rules.
@@ -137,7 +137,7 @@ cannot authorize:
 ## Non-responsibilities
 
 - Authentication and credential storage (`workspaceAuth` belongs to
-  `@univerjs/univer-workspace-harness`).
+  `@univerjs/workspace-agent`).
 - Workspace product APIs, Unit data model, or collaboration contracts
   (owned by the Workspace application and the Univer SDKs).
 - Publication: this is a private workspace package consumed by the harness
@@ -158,12 +158,12 @@ and is externalized by the build:
 - `@univerjs-pro/engine-formula-rust-binding` for the headless formula engine;
 - `@univerjs-pro/exchange-node-binding` for Office import/export.
 
-The consuming Harness image installs these packages once while assembling the
+The consuming Workspace Agent image installs these packages once while assembling the
 profile. pnpm's `supportedArchitectures: current` policy selects only the
 container's platform binary, so runtime resolution is deterministic and does
 not depend on a transitive hoist or a bundled `.node` file.
 
-Account-level Harness sessions use the connected account's personal Space as
+Account-level Workspace Agent sessions use the connected account's personal Space as
 the default destination. Sessions opened in a selected Space keep that Space
 as their default. Explicit targets still require Workspace server permission;
 unrelated local DSH directories are not automatically linked.

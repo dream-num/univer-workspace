@@ -6,7 +6,7 @@ export const WORKSPACE_FAVICON_DATA_URI = `data:image/svg+xml,${encodeURICompone
 
 export const WORKSPACE_MANIFEST_JSON = JSON.stringify({
   id: "/",
-  name: "Univer Workspace Harness",
+  name: "Univer Workspace Agent",
   short_name: "Univer Workspace",
   start_url: "/",
   scope: "/",
@@ -51,6 +51,6 @@ export function rewriteWorkspaceIndexBranding(html: string): string {
   }
   return rewritten.replace(
     /(<title(?:\s[^>]*)?>)DeepSeek Harness(<\/title>)/iu,
-    "$1Univer Workspace Harness$2",
+    "$1Univer Workspace Agent$2",
   );
 }

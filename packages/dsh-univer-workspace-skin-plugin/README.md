@@ -1,6 +1,6 @@
 # dsh-univer-workspace-skin-plugin
 
-The browser skin plugin for DSH in Univer Workspace Harness. It aligns the
+The browser skin plugin for DSH in Univer Workspace Agent. It aligns the
 DSH shell with the Univer Workspace brand.
 
 ## Responsibilities

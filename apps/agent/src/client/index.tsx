@@ -1,5 +1,5 @@
 /**
- * @univerjs/univer-workspace-harness — browser half.
+ * @univerjs/workspace-agent — browser half.
  *
  * Harness browser code is deliberately limited to DSH integration that cannot
  * live in a Workspace capability package: stable session-hash routing.

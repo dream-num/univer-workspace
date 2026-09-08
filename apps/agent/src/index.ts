@@ -5,7 +5,7 @@
  * browser authorization. Account-owned services reload against isolated
  * origin/user directories while the local HTTP listener stays active.
  *
- * @module @univerjs/univer-workspace-harness
+ * @module @univerjs/workspace-agent
  */
 
 import { connectionBrowserScript } from "./connection-browser.ts";

@@ -11,7 +11,9 @@
 
 .changesHeader {
   display: flex;
-  min-height: 52px;
+  box-sizing: border-box;
+  height: var(--uwh-pane-header-height);
+  min-height: var(--uwh-pane-header-height);
   flex: none;
   align-items: center;
   gap: 12px;

@@ -8,7 +8,7 @@
  * Ownership boundary: the generic Harness host derives and validates the
  * account-local directory from the verified Workspace user id. Capability
  * plugins may use this boundary to resolve their own Workspace records.
- * @module @univerjs/univer-workspace-harness/identity
+ * @module @univerjs/workspace-agent/identity
  */
 
 import { createHash } from "node:crypto";

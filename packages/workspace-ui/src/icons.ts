@@ -24,6 +24,7 @@ import {
   LockKeyhole as LucideLock,
   ListTree as LucideListTree,
   MessageSquare as LucideMessageSquare,
+  MessageSquarePlus as LucideMessageSquarePlus,
   Pencil as LucidePencil,
   Plus as LucidePlus,
   RefreshCw as LucideRefresh,
@@ -68,6 +69,7 @@ export const LinkIcon = icon(LucideLink);
 export const LockIcon = icon(LucideLock);
 export const ListTreeIcon = icon(LucideListTree);
 export const MessageSquareIcon = icon(LucideMessageSquare);
+export const MessageSquarePlusIcon = icon(LucideMessageSquarePlus);
 export const PencilIcon = icon(LucidePencil);
 export const PlusIcon = icon(LucidePlus);
 export const RefreshIcon = icon(LucideRefresh);

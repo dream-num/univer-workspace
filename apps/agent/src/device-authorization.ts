@@ -4,7 +4,7 @@
  * This module knows only the remote Workspace exchange. It does not create a
  * local user, cookie, permission, or browser session.
  *
- * @module @univerjs/univer-workspace-harness/device-authorization
+ * @module @univerjs/workspace-agent/device-authorization
  */
 
 import type { UwhIdentity } from "./contract.ts";

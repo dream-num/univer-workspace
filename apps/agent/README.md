@@ -1,11 +1,11 @@
-# @univerjs/univer-workspace-harness
+# Univer Workspace Agent
 
-Univer Workspace Harness is a local DSH (DeepSeek Harness) Web client for one
-local or remote Univer Workspace connection. It is assembled from published
-`@deepseek-ai/*` packages and shipped as three DSH bundles that a local dsh
-profile loads:
+Univer Workspace Agent is a local web application for discussing documents with
+an AI agent and reviewing its changes in Worktrees. It connects to one local or
+remote Univer Workspace service. The application uses DSH (DeepSeek Harness),
+assembled from published `@deepseek-ai/*` packages as three bundles:
 
-- `@univerjs/univer-workspace-harness` (this package) — the service core:
+- `@univerjs/workspace-agent` (this package) — the service core:
   Workspace browser OAuth authorization, one process-wide remote
   connection exposed through the `workspaceAuth` cordis service, the
   Workspace origin settings namespace, and account-scoped service lifecycles
@@ -19,7 +19,7 @@ profile loads:
 ## Responsibilities
 
 - Obtain one remote Workspace session through browser OAuth with PKCE. The local
-  Harness has no users or permissions of its own; every local browser uses the
+  Workspace Agent has no users or permissions of its own; every local browser uses the
   same current connection and Workspace remains authoritative for remote ACLs.
 - Provide `workspaceAuth` to sibling plugins: effective Workspace origin,
   authenticated HTTP client, and current remote identity.
@@ -32,7 +32,7 @@ profile loads:
 
 ## Runtime architecture
 
-The Harness keeps the local DSH process separate from the remote Workspace
+The Workspace Agent keeps the local DSH process separate from the remote Workspace
 service. Workspace remains the authority for identity, permissions, Spaces,
 Nodes, Resources, and collaboration data.
 
@@ -41,7 +41,7 @@ flowchart LR
   Browser[Local browser] -->|HTTP and WebSocket| DSH[DSH child process]
   Launcher[start-local launcher] -->|Start once| DSH
   Core -->|Switch account services| Account[Sessions, storage, directory and collaboration]
-  DSH --> Core[Harness core plugin]
+  DSH --> Core[Workspace Agent core plugin]
   DSH --> Capability[Workspace capability plugin]
   DSH --> Skin[Workspace skin plugin]
   Core -->|OAuth code exchange and session cookie| Workspace[Remote or local Workspace]
@@ -51,7 +51,7 @@ flowchart LR
 
 The core plugin owns connection and identity lifecycle. The capability plugin
 owns Workspace tools and file/document interactions. The skin plugin only owns
-branding and visual tokens. The Harness uses Cordis dependency lifecycles to drain
+branding and visual tokens. The Workspace Agent uses Cordis dependency lifecycles to drain
 account-owned services before activating the new identity. Session logs, search
 indexes, attachments and Workspace records use the existing origin-and-user
 runtime directory; switching back restores that directory. The HTTP listener,
@@ -61,7 +61,7 @@ Each rendered page carries a connection version. HTTP requests and collaboration
 WebSocket upgrades from an old page are rejected after a switch. Other open tabs
 reload when the new runtime is ready, so their old selections cannot operate on
 the new account. Business notifications use a logical Remote stream on DSH's
-existing WebSocket mux. The Harness shares one authenticated Workspace Worktree
+existing WebSocket mux. The Workspace Agent shares one authenticated Workspace Worktree
 feed across local tabs; a reconnect invalidates the open review views and directory
 so missed changes are fetched again. Idle tabs do not poll connection status.
 OAuth completion and logout use short readiness checks for at most 45 seconds.
@@ -86,7 +86,7 @@ identity, and the server-side session credential required by the local DSH
 runtime. Treat the file as sensitive local state. Do not commit it, upload it,
 or include its values in bug reports. Workspace product data, collaboration
 snapshots, and Blob bytes remain in the connected Workspace deployment; the
-Harness does not copy those databases into its local data directory.
+Workspace Agent does not copy those databases into its local data directory.
 
 ## Non-responsibilities
 
@@ -131,7 +131,7 @@ If `UWH_RENDER_PAGE_ROOT` is missing, the tools return an explicit prerequisite
 error and do not claim that visual verification passed.
 
 Native addons used by the capability plugin remain external runtime
-dependencies. The Harness image installs the platform-specific packages once
+dependencies. The Workspace Agent image installs the platform-specific packages once
 while assembling the profile; the runtime container only copies that assembled
 profile and does not download or compile binaries during startup.
 
@@ -148,7 +148,7 @@ pnpm install --frozen-lockfile
 The checked-in `.npmrc` selects the registry for the pinned Univer SDK release.
 The installation also needs access to the public npm registry for DSH packages.
 
-The Harness is a local Web page, not a desktop application. The DSH CLI must be
+The Workspace Agent is a local Web page, not a desktop application. The DSH CLI must be
 installed outside this pnpm workspace so its React 18 dependency tree does not
 enter the Univer React 19 graph. From the repository root, prepare one isolated
 local installation:
@@ -159,23 +159,24 @@ export UWH_DSH_BOOTSTRAP="$UWH_LOCAL_ROOT/dsh-cli"
 export DSH_HOME="$UWH_LOCAL_ROOT/install"
 export UWH_DSH_DATA_HOME="$UWH_LOCAL_ROOT/data"
 mkdir -p "$UWH_DSH_BOOTSTRAP" "$DSH_HOME/internal-packages"
+export UWA_PACKAGES="$(mktemp -d "$DSH_HOME/internal-packages/build.XXXXXX")"
 
 npm install --prefix "$UWH_DSH_BOOTSTRAP" --save-exact \
   @deepseek-ai/dsh@0.1.2-alpha.4
 export DSH_BIN="$UWH_DSH_BOOTSTRAP/node_modules/@deepseek-ai/dsh/lib/bin.js"
 
-pnpm --filter @univerjs/univer-workspace-harness build
+pnpm --filter @univerjs/workspace-agent build
 pnpm --filter dsh-univer-workspace-plugin build
 pnpm --filter dsh-univer-workspace-skin-plugin build
-pnpm --filter @univerjs/univer-workspace-harness pack \
-  --pack-destination "$DSH_HOME/internal-packages"
+pnpm --filter @univerjs/workspace-agent pack \
+  --pack-destination "$UWA_PACKAGES"
 pnpm --filter dsh-univer-workspace-plugin pack \
-  --pack-destination "$DSH_HOME/internal-packages"
+  --pack-destination "$UWA_PACKAGES"
 pnpm --filter dsh-univer-workspace-skin-plugin pack \
-  --pack-destination "$DSH_HOME/internal-packages"
+  --pack-destination "$UWA_PACKAGES"
 
-export DSH_PLUGINS="file:$DSH_HOME/internal-packages/univerjs-univer-workspace-harness-0.1.0.tgz file:$DSH_HOME/internal-packages/dsh-univer-workspace-plugin-0.1.0.tgz file:$DSH_HOME/internal-packages/dsh-univer-workspace-skin-plugin-0.1.0.tgz"
-NPM_CONFIG_USERCONFIG="$PWD/.npmrc" ./apps/harness/scripts/build-profile.sh
+export DSH_PLUGINS="file:$UWA_PACKAGES/univerjs-workspace-agent-0.1.0.tgz file:$UWA_PACKAGES/dsh-univer-workspace-plugin-0.1.0.tgz file:$UWA_PACKAGES/dsh-univer-workspace-skin-plugin-0.1.0.tgz"
+NPM_CONFIG_USERCONFIG="$PWD/.npmrc" ./apps/agent/scripts/build-profile.sh
 
 # Optional but required for univer_lint and univer_screenshot.
 pnpm --filter @univerjs/univer-workspace-client-core build
@@ -183,7 +184,7 @@ export UWH_RENDER_PAGE_ROOT="$PWD/packages/client-core/dist/render-runtime"
 # Point this at a compatible local Chrome/Chromium binary when it is not on PATH.
 export UWH_RENDER_BROWSER="${UWH_RENDER_BROWSER:-$(command -v google-chrome || command -v chromium || true)}"
 
-node apps/harness/scripts/start-local.mjs --port 3101 \
+node apps/agent/scripts/start-local.mjs --port 3101 \
   --no-open --trusted-host 127.0.0.1
 ```
 
@@ -198,7 +199,7 @@ exchange because no DSH browser session cookie exists yet; after the cookie is
 stored, the clean root URL works. If port `3101` is occupied, choose another
 explicit port and use the matching printed URL.
 
-If an agent is starting the Harness for a human, pass the complete `dsh web:`
+If an agent is starting the Workspace Agent for a human, pass the complete `dsh web:`
 URL to the human exactly as printed and ask them to open it in their browser.
 Do not replace it with the bare root URL, remove the query string, put the token
 in another message field, or attempt to complete the browser exchange through
@@ -208,15 +209,15 @@ once; after the user opens it, the browser can use the clean root URL.
 In Settings → Workspace, set the service origin (for the shared test environment use
 `https://workspace.univer.plus`; a local Workspace URL works as well). The first
 login uses browser OAuth: click “Sign in to Workspace”, sign in or register on
-Workspace, then approve the Harness access request. Workspace redirects to the
-local Harness callback; the Harness exchanges the one-time code using PKCE and
+Workspace, then approve the Workspace Agent access request. Workspace redirects to the
+local Workspace Agent callback; the Workspace Agent exchanges the one-time code using PKCE and
 stores the resulting Workspace session server-side. No device code or manual
 completion button is needed. If the request expires, start a new login from Settings.
 
 The Workspace deployment must register the public client
 `univer-workspace-harness` with consent enabled, scopes `identity` and `session`,
 and the exact callback `http://127.0.0.1:3101/auth/oauth/callback` (adjust the
-host and port to your Harness URL). For a local Workspace, configure this client
+host and port to your Workspace Agent URL). For a local Workspace, configure this client
 through `OAUTH_CLIENTS_JSON` using `apps/workspace/.env.example` before startup.
 
 
@@ -232,7 +233,7 @@ current message; each reference is checked against the connected Workspace when
 the message is sent.
 Saving a different Workspace origin selects the destination for the next login.
 Complete browser authorization to activate it, or explicitly disconnect. The
-Harness then reloads account-owned services inside the same process, closes old
+Workspace Agent then reloads account-owned services inside the same process, closes old
 collaboration connections and refreshes the directory and session scope. There
 is no new launch token to open. The completion page waits for the selected
 identity and local application to be ready before returning; its retry button
@@ -269,14 +270,14 @@ Workspace identity:
    carries stable Resource identities; opening a file alone does not silently
    add it to the message context.
 7. To test another Workspace service or identity, return to **Settings →
-   Workspace** and save or authorize the new connection. The Harness
+   Workspace** and save or authorize the new connection. The Workspace Agent
    switches account-owned services to the matching data directory without
    restarting DSH. Verify that the new identity receives its own conversations
    and directory, and that switching back restores the original history.
 
 ## Connect to a local Workspace
 
-The Harness accepts any Workspace HTTP origin. To run the Workspace application
+The Workspace Agent accepts any Workspace HTTP origin. To run the Workspace application
 from this repository, use a second terminal and follow the Workspace application
 guide:
 
@@ -287,14 +288,14 @@ pnpm workspace:dev:server
 
 The API server listens on `http://127.0.0.1:3020` by default. Browser authorization
 also needs the Workspace sign-in UI: run `pnpm workspace:dev:web` in another
-terminal, then set the Harness Workspace origin to `http://127.0.0.1:5173`.
+terminal, then set the Workspace Agent Workspace origin to `http://127.0.0.1:5173`.
 Vite serves the sign-in UI and forwards API and collaboration requests to port
-3020. Register the Harness OAuth client in `OAUTH_CLIENTS_JSON` before starting
-the server, as described above; its callback must match the Harness port.
+3020. Register the Workspace Agent OAuth client in `OAUTH_CLIENTS_JSON` before starting
+the server, as described above; its callback must match the Workspace Agent port.
 
 Port 3020 can be used directly when the Workspace Browser has been built into
 `apps/workspace/dist/public`. On a fresh clone without that build, using port
-3020 as the authorization origin leaves the login page unavailable. The Harness
+3020 as the authorization origin leaves the login page unavailable. The Workspace Agent
 does not create Workspace users or bypass Workspace authentication.
 
 ## Troubleshooting
@@ -316,7 +317,7 @@ does not create Workspace users or bypass Workspace authentication.
   names for diagnosis; preserve the local data directory and session history.
 
 Do not put passwords, Workspace session cookies, device codes, or model API keys
-in bug reports. Record the Workspace origin, local Harness port, profile name,
+in bug reports. Record the Workspace origin, local Workspace Agent port, profile name,
 and a non-secret account identifier instead.
 
 This is the currently implemented first-version path. Formal Recent/Shared
@@ -348,7 +349,7 @@ In Workspace browsing, click a folder name to reference that folder; use its
 arrow or Tab to browse its children. Folder references retain the Space and Node
 identity and are checked against current Workspace access when sending.
 
-**Local files** browses the filesystem of the machine running Harness. This may
+**Local files** browses the filesystem of the machine running Workspace Agent. This may
 be a different machine from the browser when using SSH forwarding or a remote
 installation. Select **Local files** to browse one directory at a time, or paste
 a complete `@/absolute/path` or `@~/Downloads/` query. Select a file or folder to insert an inline
@@ -369,3 +370,25 @@ Workspace document types are retained as display metadata in reference links.
 Message history can therefore show a type-specific icon without fetching every
 referenced document. The native DSH composer currently exposes generic file and
 folder icons; its public reference contract does not expose per-document icons.
+
+## Stable runtime identifiers
+
+The application is named Univer Workspace Agent and its private package is
+`@univerjs/workspace-agent`. The DSH profile, settings namespace, OAuth client ID,
+and existing cache directory retain `univer-workspace-harness` as stable internal
+identifiers. Renaming the application does not move account data, reset sessions,
+or require OAuth client re-registration.
+
+When updating an existing local profile created before the package rename, remove
+the previous core bundle before running the installation commands above:
+
+```bash
+node "$DSH_BIN" plugin --profile univer-workspace-harness remove @univerjs/univer-workspace-harness
+```
+
+This removes the old installed package, not the profile's account data. Keep the
+same `DSH_HOME` and `UWH_DSH_DATA_HOME`, then install the three current bundles.
+
+Use a fresh package directory for each local rebuild, as in the commands above.
+Reusing a tarball path and package version can cause pnpm to reuse an older cached
+bundle even after the tarball contents change.

@@ -1,6 +1,7 @@
 /* Shared DSH viewer tokens. Prefer these over repeating literal values in
    component styles; host theme aliases remain the source of truth when set. */
 :root {
+  --uwh-pane-header-height: 76px;
   --uvf-color-accent: var(--dsw-alias-state-business-primary, #5b63e8);
   --uvf-color-primary: #2743e8;
   --uvf-color-primary-hover: #1f35c5;

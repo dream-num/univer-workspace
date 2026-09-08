@@ -33,7 +33,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 56px;
+  box-sizing: border-box;
+  height: var(--uwh-pane-header-height);
+  min-height: var(--uwh-pane-header-height);
   padding: 0 16px 0 20px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-background);

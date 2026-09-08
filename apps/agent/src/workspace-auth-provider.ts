@@ -1,7 +1,7 @@
 /**
  * Concrete process-wide Workspace connection provider for the local Harness.
  *
- * @module @univerjs/univer-workspace-harness/workspace-auth-provider
+ * @module @univerjs/workspace-agent/workspace-auth-provider
  */
 
 import { randomUUID } from "node:crypto";

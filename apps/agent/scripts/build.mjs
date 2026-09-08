@@ -39,7 +39,7 @@ await build({
   logLevel: "info",
 });
 
-const packageId = "@univerjs/univer-workspace-harness";
+const packageId = "@univerjs/workspace-agent";
 
 await build({
   entryPoints: ["src/client/index.tsx"],

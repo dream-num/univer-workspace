@@ -7,7 +7,7 @@ import {
   apply,
 } from "../src/client/session-route.js";
 
-describe("Workspace Harness session URL", () => {
+describe("Workspace Agent session URL", () => {
   it("encodes a session id in the canonical hash route", () => {
     expect(sessionHashForId("session/with spaces")).toBe(
       "#/?right=session%2Fsession%252Fwith%2520spaces",

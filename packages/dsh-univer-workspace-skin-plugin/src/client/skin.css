@@ -54,6 +54,8 @@ body[data-ds-dark-theme] {
 }
 
 .uwh-skin-brandName {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   color: var(--dsw-alias-label-primary);
   font-size: 15px;
@@ -62,6 +64,13 @@ body[data-ds-dark-theme] {
   line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.uwh-skin-brandSubtitle {
+  color: var(--color-muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 14px;
 }
 
 /* DSH exposes a brand-mark seat for the hero, but not a headline-text seat.

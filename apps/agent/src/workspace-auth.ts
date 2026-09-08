@@ -5,7 +5,7 @@
  * not select a user from a request and this service does not implement local
  * permissions; it exposes the active connection while account-owned services reload.
  *
- * @module @univerjs/univer-workspace-harness/workspace-auth
+ * @module @univerjs/workspace-agent/workspace-auth
  */
 
 import { Service } from "@deepseek-ai/cordis";

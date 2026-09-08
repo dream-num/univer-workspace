@@ -2,7 +2,7 @@
  * The capability plugin's browser-facing API routes.
  *
  * Registered on the DSH web server (no separate gateway): JSON state for the
- * current process identity's Spaces. The local Harness has no browser-user
+ * current process identity's Spaces. The local Workspace Agent has no browser-user
  * authentication layer; the prefix route dispatches on the sub-path.
  * @module dsh-univer-workspace-plugin/webServer
  */
@@ -275,7 +275,7 @@ function parseSpacePayload(value: unknown): { name: string } | undefined {
   return name === "" || name.length > 100 ? undefined : { name };
 }
 
-/** Routes that belong to the Workspace capability, not the Harness core. */
+/** Routes that belong to the Workspace capability, not the Workspace Agent core. */
 function createCapabilityHandler(
   ctx: Context,
   config: WebServerConfig,
@@ -563,7 +563,7 @@ export function createBrowserApiHandler(
       } catch {
         if (!res.destroyed)
           jsonResponse(res, 400, {
-            error: "Local path is unavailable; use an accessible absolute path on the Harness host.",
+            error: "Local path is unavailable; use an accessible absolute path on the Workspace Agent host.",
           });
       } finally {
         res.removeListener("close", abort);

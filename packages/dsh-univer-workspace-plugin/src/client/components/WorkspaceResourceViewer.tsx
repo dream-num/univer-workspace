@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
-import { Button, CloseIcon } from "@univerjs/univer-workspace-ui";
+import { Button, CloseIcon, MessageSquarePlusIcon } from "@univerjs/univer-workspace-ui";
 import { getFileState, subscribeFileStateInvalidation } from "../api/univer-api.ts";
 import { PanelViewer, type ViewerTarget } from "./review-panel.tsx";
 import type { WorkspaceResourceSurface } from "../navigation/workspace-navigation.ts";
@@ -131,7 +131,7 @@ export function WorkspaceResourceViewer(props: WorkspaceResourceViewerProps): Re
             })
           }
         >
-          <ConversationAddIcon />
+          <MessageSquarePlusIcon />
         </Button>
         <button
           type="button"
@@ -170,24 +170,5 @@ export function WorkspaceResourceViewer(props: WorkspaceResourceViewerProps): Re
         )}
       </div>
     </section>
-  );
-}
-
-function ConversationAddIcon(): ReactElement {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M3.5 4.5h9a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H8l-3.5 3v-3H3.5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2Z" />
-      <circle cx="15.2" cy="15.1" r="3.2" fill="var(--color-background)" />
-      <circle cx="15.2" cy="15.1" r="2.5" fill="currentColor" stroke="none" />
-      <path d="M15.2 13.7v2.8M13.8 15.1h2.8" stroke="var(--color-background)" />
-    </svg>
   );
 }

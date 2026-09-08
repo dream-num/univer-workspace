@@ -56,12 +56,14 @@ class FakeResizeObserver {
 
 let scrollport: FakeElement | null;
 let sidebar: FakeElement | null;
+let header: FakeElement | null;
 let reduceMotion: boolean;
 
 beforeEach(() => {
   scrollport = new FakeElement();
   scrollport.parentElement = new FakeElement();
   sidebar = new FakeElement();
+  header = new FakeElement();
   sidebar.right = 312.4;
   reduceMotion = false;
   FakeResizeObserver.current = undefined;
@@ -71,6 +73,7 @@ beforeEach(() => {
   vi.stubGlobal("document", {
     querySelector: (selector: string) => {
       if (selector === "[data-conversation-scroll]") return scrollport;
+      if (selector === '[data-slot="conversation.session.header"] > header') return header;
       if (selector === '[data-plugin="dsh-univer-workspace"][data-surface="sidebar"]') {
         return sidebar;
       }
@@ -179,4 +182,15 @@ describe("Conversation inset adapter", () => {
     stop();
     expect(observer?.disconnect).toHaveBeenCalledOnce();
   });
+});
+
+it("moves the session title with the content and restores its original margin", () => {
+  header!.style.setProperty("margin-left", "8px", "important");
+  applyConversationInset(640);
+  expect(header!.style.getPropertyValue("margin-left")).toBe("640px");
+  applyConversationInset(400);
+  expect(header!.style.getPropertyValue("margin-left")).toBe("400px");
+  clearConversationInset();
+  expect(header!.style.getPropertyValue("margin-left")).toBe("8px");
+  expect(header!.style.getPropertyPriority("margin-left")).toBe("important");
 });

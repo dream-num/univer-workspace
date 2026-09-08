@@ -6,3 +6,13 @@
 [data-slot="conversation.session.header.utilities"] {
   display: none !important;
 }
+
+/* DSH alpha.4 header slot: preserve title, ancestry and view tabs. Remove this
+   adapter when DSH exposes shared pane geometry through its layout contract. */
+[data-slot="conversation.session.header"] > header {
+  box-sizing: border-box;
+  height: var(--uwh-pane-header-height);
+  min-height: var(--uwh-pane-header-height);
+  padding-right: 52px;
+  border-bottom: 1px solid var(--color-border);
+}

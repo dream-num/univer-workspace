@@ -4,7 +4,7 @@
  * The host harness owns authentication and exposes these same-origin routes;
  * the capability plugin owns the Workspace UI that consumes them. Keeping the
  * browser contract here prevents the package from importing implementation
- * code from `apps/harness`.
+ * code from `apps/agent`.
  */
 
 export const WORKSPACE_ME_PATH = "/api/uwh/me";

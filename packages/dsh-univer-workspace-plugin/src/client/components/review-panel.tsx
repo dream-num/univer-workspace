@@ -7,7 +7,7 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { Button, MessageSquareIcon } from "@univerjs/univer-workspace-ui";
+import { Button, MessageSquarePlusIcon } from "@univerjs/univer-workspace-ui";
 import type { DocumentFileState } from "../../shared/state.ts";
 import type { WorktreeAction, WorktreeStatus } from "../../shared/state.ts";
 import type { UniverLocaleKey } from "../locales.ts";
@@ -107,7 +107,7 @@ export function PanelViewer(props: {
             size="sm"
             onClick={() => props.insertResourceReference?.(props.resource!, selection)}
           >
-            <MessageSquareIcon />
+            <MessageSquarePlusIcon />
             {props.runtime.t("selection.addToMessage")}
           </Button>
         </div>

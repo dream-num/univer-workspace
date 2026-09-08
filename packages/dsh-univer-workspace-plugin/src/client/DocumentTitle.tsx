@@ -1,6 +1,6 @@
 /** Browser title projection for the Workspace capability composition. */
 import { useEffect, useSyncExternalStore } from "react";
-import { formatHarnessDocumentTitle } from "./document-title.ts";
+import { formatAgentDocumentTitle } from "./document-title.ts";
 
 /** Minimal observable shape needed from the native session list. */
 export interface HarnessSessionList {
@@ -29,7 +29,7 @@ export function HarnessDocumentTitle({ sessionList }: HarnessDocumentTitleProps)
   );
   const current = snapshot.current;
   const sessionTitle = current === undefined ? undefined : snapshot.byId[current]?.title;
-  const title = formatHarnessDocumentTitle(sessionTitle);
+  const title = formatAgentDocumentTitle(sessionTitle);
 
   // The stock renderer projects its title in a sibling passive effect before
   // the root slot is committed.  Use the same phase from the root-owned

@@ -42,6 +42,31 @@ interface InsetSnapshot {
 
 let insetHost: HTMLElement | null = null;
 let insetSnapshot: InsetSnapshot | null = null;
+let headerHost: HTMLElement | null = null;
+let headerMargin = "";
+let headerMarginPriority = "";
+
+function restoreHeaderInset(): void {
+  if (headerHost === null) return;
+  if (headerMargin) headerHost.style.setProperty("margin-left", headerMargin, headerMarginPriority);
+  else headerHost.style.removeProperty("margin-left");
+  headerHost = null;
+}
+
+function applyHeaderInset(widthPx: number): void {
+  const header = document.querySelector('[data-slot="conversation.session.header"] > header');
+  if (!(header instanceof HTMLElement)) {
+    restoreHeaderInset();
+    return;
+  }
+  if (header !== headerHost) {
+    restoreHeaderInset();
+    headerHost = header;
+    headerMargin = header.style.getPropertyValue("margin-left");
+    headerMarginPriority = header.style.getPropertyPriority("margin-left");
+  }
+  header.style.setProperty("margin-left", `${Math.round(widthPx)}px`);
+}
 
 /** The native Conversation content column: scrollport's parent in alpha.4. */
 function conversationHost(): HTMLElement | null {
@@ -93,6 +118,7 @@ export function observeSurfaceLeft(listener: (left: number) => void): () => void
 }
 
 function restoreInsetHost(): void {
+  restoreHeaderInset();
   if (insetHost === null || insetSnapshot === null) return;
   if (insetSnapshot.paddingLeft === "") {
     insetHost.style.removeProperty("padding-left");
@@ -152,6 +178,7 @@ export function applyConversationInset(widthPx: number, animate = true): HTMLEle
   const transition = animate && !prefersReducedMotion() ? "padding-left 160ms ease-in-out" : "none";
   host.style.setProperty("transition", transition);
   host.style.setProperty("padding-left", `${Math.round(widthPx)}px`);
+  applyHeaderInset(widthPx);
   return host;
 }
 
@@ -187,5 +214,8 @@ export function hideConversation(): () => void {
   apply();
   const observer = new MutationObserver(apply);
   observer.observe(document.body, { childList: true, subtree: true });
-  return () => { observer.disconnect(); restore(); };
+  return () => {
+    observer.disconnect();
+    restore();
+  };
 }

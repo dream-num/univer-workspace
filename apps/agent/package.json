@@ -1,5 +1,5 @@
 {
-  "name": "@univerjs/univer-workspace-harness",
+  "name": "@univerjs/workspace-agent",
   "version": "0.1.0",
   "private": true,
   "description": "DSH-based local Web client for one switchable Univer Workspace connection.",

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build the Univer Workspace Harness profile with the official `dsh plugin`
+# Build the Univer Workspace Agent profile with the official `dsh plugin`
 # command so the profile's package.json and dsh.profile.bundles list are
 # reconciled by the tool instead of being hand-written. DSH_HOME is isolated
 # inside the image build; nothing here touches the profile manifest by hand.

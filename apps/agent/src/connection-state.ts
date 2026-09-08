@@ -1,12 +1,12 @@
 /**
- * Durable connection state for the local Workspace Harness.
+ * Durable connection state for the local Workspace Agent.
  *
  * The local Harness has one process-wide Workspace identity. This file is
  * deliberately stored outside the selected DSH runtime home so the launcher
  * and live connection provider can select an origin-and-user-specific runtime. It is a
  * connection bootstrap record, not a local authorization database.
  *
- * @module @univerjs/univer-workspace-harness/connection-state
+ * @module @univerjs/workspace-agent/connection-state
  */
 
 import { createHash } from "node:crypto";

@@ -13,7 +13,7 @@ import {
   Button,
   ChevronRightIcon,
   ConfirmDialog,
-  PlusIcon,
+  MessageSquarePlusIcon,
   RefreshIcon,
   TrashIcon,
   Tooltip,
@@ -395,7 +395,7 @@ export function FileSidebar({
                         });
                       }}
                     >
-                      <PlusIcon />
+                      <MessageSquarePlusIcon />
                     </Button>
                   </Tooltip>
                 </>

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Univer Workspace Harness image. The chart runs one DSH web container whose
+# Univer Workspace Agent image. The chart runs one DSH web container whose
 # profile bundles the harness core and the two Univer plugins. DSH_HOME and
 # the profile are isolated inside the image; runtime working files live on a
 # bounded emptyDir mounted at /workspace by the chart.
@@ -40,7 +40,7 @@ RUN pnpm -r --if-present build
 
 # Pack the three harness bundles into the image profile directory.
 RUN mkdir -p /opt/dsh/home/internal-packages \
-  && pnpm --filter @univerjs/univer-workspace-harness pack --pack-destination /opt/dsh/home/internal-packages \
+  && pnpm --filter @univerjs/workspace-agent pack --pack-destination /opt/dsh/home/internal-packages \
   && pnpm --filter dsh-univer-workspace-plugin pack --pack-destination /opt/dsh/home/internal-packages \
   && pnpm --filter dsh-univer-workspace-skin-plugin pack --pack-destination /opt/dsh/home/internal-packages
 
@@ -63,8 +63,8 @@ RUN mkdir -p /opt/dsh/bootstrap && cd /opt/dsh/bootstrap \
 ENV DSH_HOME=/opt/dsh/home \
     DSH_BIN=/opt/dsh/bootstrap/node_modules/@deepseek-ai/dsh/lib/bin.js \
     DSH_WEB_BUNDLE="@deepseek-ai/dsh-web-app@0.1.2-alpha.4" \
-    DSH_PLUGINS="file:/opt/dsh/home/internal-packages/univerjs-univer-workspace-harness-0.1.0.tgz file:/opt/dsh/home/internal-packages/dsh-univer-workspace-plugin-0.1.0.tgz file:/opt/dsh/home/internal-packages/dsh-univer-workspace-skin-plugin-0.1.0.tgz"
-RUN NPM_CONFIG_USERCONFIG=/src/.npmrc ./apps/harness/scripts/build-profile.sh
+    DSH_PLUGINS="file:/opt/dsh/home/internal-packages/univerjs-workspace-agent-0.1.0.tgz file:/opt/dsh/home/internal-packages/dsh-univer-workspace-plugin-0.1.0.tgz file:/opt/dsh/home/internal-packages/dsh-univer-workspace-skin-plugin-0.1.0.tgz"
+RUN NPM_CONFIG_USERCONFIG=/src/.npmrc ./apps/agent/scripts/build-profile.sh
 RUN printf 'registry=%s\n' "$NPM_REGISTRY" > /opt/dsh/home/profiles/univer-workspace-harness/.npmrc
 
 # ── Runtime ─────────────────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ RUN if ! getent passwd 1000 >/dev/null; then \
 # so no registry credential reaches runtime.
 COPY --from=build --chown=1000:1000 /opt/dsh/bootstrap/node_modules /opt/dsh/install/node_modules
 COPY --from=build --chown=1000:1000 /opt/dsh/home /opt/dsh/home
-COPY --from=build --chown=1000:1000 /src/apps/harness/scripts/start-local.mjs /opt/dsh/start-local.mjs
+COPY --from=build --chown=1000:1000 /src/apps/agent/scripts/start-local.mjs /opt/dsh/start-local.mjs
 COPY --from=build --chown=1000:1000 /src/packages/client-core/dist/render-runtime /opt/univer/render-runtime
 
 # Fail the image build instead of shipping a harness whose screenshot tools
