@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
-import { Button, ChevronDownIcon, ChevronRightIcon } from "@univerjs/univer-workspace-ui";
+import { Button, DialogRoot, DialogContent, DialogHeader, DialogTitle } from "@univerjs/univer-workspace-ui";
 import type { DocumentFileState } from "../../shared/state.ts";
 import { getFileState, subscribeFileStateInvalidation } from "../api/univer-api.ts";
 import type { UniverLocaleKey } from "../locales.ts";
@@ -55,6 +55,25 @@ export interface WorkspaceWorktreeViewerProps {
 }
 
 export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): ReactElement {
+  const surfaceRef = useRef<HTMLElement | null>(null);
+  const [compactNavigation, setCompactNavigation] = useState(false);
+  const [treeOverlayOpen, setTreeOverlayOpen] = useState(false);
+  const [drawerBounds, setDrawerBounds] = useState<CSSProperties>({});
+  useEffect(() => {
+    const element = surfaceRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) {
+        const bounds = element.getBoundingClientRect();
+        setDrawerBounds({ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height });
+        const compact = entry.contentRect.width < 900;
+        setCompactNavigation(compact);
+        if (!compact) setTreeOverlayOpen(false);
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const [fileState, setFileState] = useState<WorktreeFileState>({ status: "loading" });
   const [mutationVersion, setMutationVersion] = useState(0);
   const [treeCollapsed, setTreeCollapsed] = useState(false);
@@ -211,12 +230,16 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
   };
 
   const reviewable = worktree !== undefined && worktree.capabilities.review;
+  const treeOpen = compactNavigation ? treeOverlayOpen : !treeCollapsed;
 
   return (
-    <section className={surfaceCss.surface} style={surfaceStyle} aria-label={props.target.name}>
+    <section ref={surfaceRef} className={surfaceCss.surface} style={surfaceStyle} aria-label={props.target.name}>
       <WorktreeReviewHeader
         worktree={worktree}
-        workspaceOrigin={state?.workspaceOrigin ?? props.target.workspaceOrigin}
+        spaceNames={[...new Set([
+          ...(worktree?.teamSpace ? [worktree.teamSpace.name] : []),
+          ...pathTree.filter((group) => !group.external).map((group) => group.spaceName),
+        ])]}
         fallbackName={props.target.name}
         t={props.t}
         onClose={props.onClose}
@@ -246,25 +269,40 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
         ) : (
           <div className={css.changes}>
             <div className={css.changesHeader}>
-              <h2 className={css.changesTitle}>{props.t("worktree.changes")}</h2>
               <Button
                 variant="ghost"
-                size="sm"
-                aria-expanded={!treeCollapsed}
+                size="icon-sm"
+                aria-expanded={treeOpen}
                 aria-label={
-                  treeCollapsed ? props.t("worktree.expandPath") : props.t("worktree.collapsePath")
+                  treeOpen ? props.t("worktree.collapsePath") : props.t("worktree.expandPath")
                 }
                 title={
-                  treeCollapsed ? props.t("worktree.expandPath") : props.t("worktree.collapsePath")
+                  treeOpen ? props.t("worktree.collapsePath") : props.t("worktree.expandPath")
                 }
-                onClick={() => setTreeCollapsed((value) => !value)}
+                onClick={() => compactNavigation ? setTreeOverlayOpen((value) => !value) : setTreeCollapsed((value) => !value)}
               >
-                {treeCollapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
-                {props.t("worktree.path")}
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path d="M9 4v16" />
+                  <path d={treeOpen ? "m16 9-3 3 3 3" : "m13 9 3 3-3 3"} />
+                </svg>
               </Button>
+              <h2 className={css.changesTitle}>{props.t("worktree.changes")}</h2>
             </div>
-            <div className={css.changesBody} data-tree-collapsed={treeCollapsed || undefined}>
-              {treeCollapsed ? null : (
+            <DialogRoot modal={false} open={compactNavigation && treeOverlayOpen} onOpenChange={setTreeOverlayOpen}>
+              <DialogContent closeLabel={props.t("dock.close")} className={css.treeDialog}
+                backdropProps={{ style: drawerBounds, className: css.treeBackdrop }}
+                style={{ ...drawerBounds, width: Math.min(340, Number(drawerBounds.width ?? 340)) }}>
+                <DialogHeader><DialogTitle>{props.t("worktree.path")}</DialogTitle></DialogHeader>
+                <WorktreePathTree
+                  spaces={pathTree} loadingUnits={loadingUnits} unavailableUnits={unavailableUnits}
+                  unitTypeOf={unitTypeOf} unitKindOf={unitKindOf} locatedUnitId={locatedUnitId}
+                  onLocate={(unitId) => { locateUnit(unitId); setTreeOverlayOpen(false); }} t={props.t}
+                />
+              </DialogContent>
+            </DialogRoot>
+            <div className={css.changesBody} data-tree-collapsed={compactNavigation || treeCollapsed || undefined}>
+              <div hidden={compactNavigation || treeCollapsed} className={css.treePane}>
                 <WorktreePathTree
                   spaces={pathTree}
                   loadingUnits={loadingUnits}
@@ -275,7 +313,7 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
                   onLocate={locateUnit}
                   t={props.t}
                 />
-              )}
+              </div>
               <div ref={scrollRootRef} className={css.accordionScroll}>
                 <WorktreeUnitAccordion
                   scrollRootRef={scrollRootRef}

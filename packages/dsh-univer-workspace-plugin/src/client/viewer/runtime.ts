@@ -231,7 +231,10 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
         univer.__getInjector().get(IPermissionService),
         opts.unitId,
       );
-    } else if (readOnlyEnforcement === "mutation-gate") {
+    }
+    // Workbook permissions can be refreshed by collaboration. Keep the same
+    // local mutation boundary for every read-only review, including Sheets.
+    if (readOnlyEnforcement !== "none") {
       blockLocalEditingCommands(univer.__getInjector().get(ICommandService));
     }
 

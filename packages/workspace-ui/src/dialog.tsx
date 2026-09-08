@@ -14,15 +14,17 @@ export function DialogContent({
   width = "md",
   hideClose = false,
   closeLabel = "Close",
+  backdropProps,
   ...props
 }: ComponentProps<typeof BaseDialog.Popup> & {
   readonly width?: "sm" | "md" | "lg" | "xl";
   readonly hideClose?: boolean;
   readonly closeLabel?: string;
+  readonly backdropProps?: Pick<ComponentProps<typeof BaseDialog.Backdrop>, "style" | "className">;
 }) {
   return (
     <BaseDialog.Portal>
-      <BaseDialog.Backdrop className={css.backdrop} />
+      <BaseDialog.Backdrop {...backdropProps} className={cn(css.backdrop, backdropProps?.className)} />
       <BaseDialog.Popup className={cn(css.popup, css[width], className)} {...props}>
         {children}
         {hideClose ? null : (

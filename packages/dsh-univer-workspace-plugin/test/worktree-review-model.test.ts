@@ -5,8 +5,8 @@ import {
   LruSet,
   unitLocationTitle,
   type PathTreeUnitEntry,
-} from "./worktree-review-model.ts";
-import type { WorktreeUnitView } from "../../../shared/state.ts";
+} from "../src/client/components/worktree-review/worktree-review-model.ts";
+import type { WorktreeUnitView } from "../src/shared/state.ts";
 
 function unit(overrides: Partial<WorktreeUnitView>): WorktreeUnitView {
   return {
@@ -108,19 +108,18 @@ describe("buildPathTree", () => {
 });
 
 describe("unitLocationTitle", () => {
-  it("includes the Space, directory path, and Unit name", () => {
-    expect(
-      unitLocationTitle(
-        {
-          status: "resolved",
-          spaceId: "s1",
-          spaceName: "设计团队",
-          path: ["2026", "Q3"],
-          shared: false,
-        },
-        "季度报表",
-      ),
-    ).toBe("设计团队 / 2026 / Q3 / 季度报表");
+  it("shows the directory path relative to the Worktree Space context", () => {
+    expect(unitLocationTitle({
+      status: "resolved", spaceId: "s1", spaceName: "Design",
+      path: ["2026", "Q3"], shared: false,
+    }, "Report")).toBe("2026 / Q3 / Report");
+  });
+
+  it("shows only the document name for an external shared document", () => {
+    expect(unitLocationTitle({
+      status: "resolved", spaceId: "external", spaceName: "External",
+      path: ["Shared folder"], shared: true,
+    }, "Report")).toBe("Report");
   });
 
   it("does not invent a path while the server location is unresolved", () => {

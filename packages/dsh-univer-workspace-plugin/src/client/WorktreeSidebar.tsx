@@ -1,3 +1,5 @@
+import { worktreeStatusLabel } from "./worktree-presentation.ts";
+import { WorktreeBranchIcon } from "./components/worktree-review/WorktreeBranchIcon.tsx";
 import { refreshWorktreeWindow } from "./api/worktree-pages.ts";
 /**
  * Worktree tab of the Harness sidebar: origin-level Worktree discovery only —
@@ -345,21 +347,6 @@ async function fetchWorkspaceMe(signal: AbortSignal): Promise<WorkspaceMeView> {
   return (await response.json()) as WorkspaceMeView;
 }
 
-function worktreeStatusLabel(status: WorktreeStatus, t: (key: UniverLocaleKey) => string): string {
-  switch (status) {
-    case "draft":
-      return t("worktree.status.draft");
-    case "ready":
-      return t("worktree.status.ready");
-    case "merging":
-      return t("worktree.status.merging");
-    case "merged":
-      return t("worktree.status.merged");
-    case "discarded":
-      return t("worktree.status.discarded");
-  }
-}
-
 function statusChipClass(status: WorktreeStatus): string | undefined {
   switch (status) {
     case "draft":
@@ -377,25 +364,5 @@ function statusChipClass(status: WorktreeStatus): string | undefined {
 
 function WorktreeStatusIcon({ status }: { readonly status: WorktreeStatus }): ReactElement {
   const className = `${css.statusIcon} ${statusChipClass(status) ?? ""}`;
-  return <WorktreeBranchIcon className={className} />;
-}
-
-function WorktreeBranchIcon({ className }: { readonly className: string }): ReactElement {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="4" cy="3" r="1.5" />
-      <circle cx="4" cy="13" r="1.5" />
-      <circle cx="12" cy="5" r="1.5" />
-      <path d="M4 4.5v7M5.5 3.5c3.8 0 6.5 0 6.5 1.5" />
-    </svg>
-  );
+  return <WorktreeBranchIcon status={status} className={className} />;
 }
