@@ -118,6 +118,76 @@ export const univerTurnDefinition = {
   },
 } satisfies ConversationNodeDefinition<UniverTurnState>;
 
+/** Recover each Turn's document operations without loading its transcript in the browser. */
+export function sessionTurnsFromEvents(events: readonly SessionEvent[]): UniverTurnMatch[] {
+  const turns = new Map<number, UniverTurnState>();
+  for (const event of events) {
+    if (event.type !== "tool/call" && event.type !== "tool/result") continue;
+    const turn = event.data.turn;
+    const state = turns.get(turn) ?? { turn, files: [] };
+    turns.set(turn, event.type === "tool/call" ? addCall(state, event.data) : applyResult(state, event.data));
+  }
+  return [...turns.values()].map(({ turn, files }) => ({
+    turn,
+    files: files.map((file) => ({ ...file, operations: file.operations.filter((operation) =>
+      changesReviewState(operation) || opensFloatingWindow(operation)) })).filter((file) => file.operations.length > 0),
+  })).filter((turn) => turn.files.length > 0);
+}
+
+/** Compact Session-wide intent while preserving per-Turn recovery separately. */
+export function sessionFilesFromTurns(turns: readonly UniverTurnMatch[]): UniverTurnFile[] {
+  const latest = new Map<string, UniverTurnOperation>();
+  for (const state of turns) {
+    for (const file of state.files) {
+      for (const operation of file.operations) {
+        if (!opensFloatingWindow(operation)) continue;
+        const key = `${operation.docKey}:${operation.unitId ?? ""}`;
+        latest.delete(key);
+        latest.set(key, operation);
+      }
+    }
+  }
+  return mergeFiles([...latest.values()].map((operation) => ({ docKey: operation.docKey, operations: [operation] })));
+}
+
+export function sessionFilesFromEvents(events: readonly SessionEvent[]): UniverTurnFile[] {
+  return sessionFilesFromTurns(sessionTurnsFromEvents(events));
+}
+
+/** Merge recovery into the pure timeline used for historical-card and Unit-alias decisions. */
+export function sessionWithRestoredTurns(session: unknown, restored: readonly UniverTurnMatch[]) {
+  const turns = new Map<number, { data: ReadonlyMap<string, unknown> }>();
+  for (const turn of restored) turns.set(turn.turn, { data: new Map([["univerTurn", { files: turn.files }]]) });
+  for (const [id, turn] of timelineTurns(session) ?? []) {
+    const previous = turns.get(id)?.data.get("univerTurn") as UniverTurnData | undefined;
+    const loaded = turn.data.get("univerTurn") as UniverTurnData | undefined;
+    const data = new Map(turn.data);
+    data.set("univerTurn", { files: mergeSessionFiles(previous?.files ?? [], loaded?.files ?? []) });
+    turns.set(id, { data });
+  }
+  return { chat: { timeline: { turns: new Map([...turns].sort(([a], [b]) => a - b)) } } };
+}
+
+/** Loaded chat wins over matching restored operations without duplicating a call. */
+export function mergeSessionFiles(
+  restored: readonly UniverTurnFile[],
+  loaded: readonly UniverTurnFile[],
+): UniverTurnFile[] {
+  const completedCalls = new Set(restored.flatMap((file) => file.operations
+    .filter((operation) => operation.phase === "succeeded")
+    .map((operation) => operation.callId)));
+  // A paged timeline may contain a call before its result. It cannot undo durable completion.
+  const current = loaded.map((file) => ({
+    ...file,
+    operations: file.operations.filter((operation) => operation.phase !== "pending" || !completedCalls.has(operation.callId)),
+  }));
+  const loadedCalls = new Set(current.flatMap((file) => file.operations.map((operation) => operation.callId)));
+  return mergeFiles([
+    ...restored.map((file) => ({ ...file, operations: file.operations.filter((operation) => !loadedCalls.has(operation.callId)) })),
+    ...current,
+  ]);
+}
+
 /** Select a Turn-tail surface only when that Turn touches Univer documents. */
 export function selectUniverTurn(owner: {
   readonly turn: {

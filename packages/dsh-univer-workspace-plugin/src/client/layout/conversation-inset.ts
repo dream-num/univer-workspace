@@ -68,11 +68,13 @@ function applyHeaderInset(widthPx: number): void {
   header.style.setProperty("margin-left", `${Math.round(widthPx)}px`);
 }
 
-/** The native Conversation content column: scrollport's parent in alpha.4. */
+/** The alpha.4 content column, including the new-session body without a scrollport. */
 function conversationHost(): HTMLElement | null {
   if (typeof document === "undefined" || typeof HTMLElement === "undefined") return null;
   const scrollport = document.querySelector("[data-conversation-scroll]");
-  const host = scrollport?.parentElement;
+  // The native new-session hero has the same root/body frame but no scrollport.
+  const host = scrollport?.parentElement ??
+    document.querySelector('[data-slot="conversation"] > div > div');
   return host instanceof HTMLElement ? host : null;
 }
 

@@ -1,7 +1,7 @@
 /**
  * The session-task dock: owns Conversation-level task-card visibility and
- * focus intent across Turns. It derives the candidate set from the public
- * Conversation snapshot, renders exactly one TaskContextCard per Conversation,
+ * focus intent across Turns. A durable Session baseline and the live public
+ * Conversation snapshot drive one TaskContextCard per Conversation,
  * and honours manual open requests from the Turn-tail card. All selection
  * state (pinned Worktree, Unit, expansion) belongs to the card; dismissing
  * unmounts it while the Dock keeps its seen operations and candidates.
@@ -9,6 +9,7 @@
  */
 
 import * as React from "react";
+import { useSessionFiles } from "./hooks/use-session-files.ts";
 import type { ConversationSnapshot } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import {
@@ -16,6 +17,7 @@ import {
   changesReviewState,
   opensFloatingWindow,
   turnFilesOfConversation,
+  mergeSessionFiles,
 } from "./conversation/univer-turn-definition.ts";
 import { invalidateFileState } from "./api/univer-api.ts";
 import { useUniverStates } from "./hooks/use-univer-state.ts";
@@ -50,7 +52,9 @@ export function ViewerDock(props: ViewerDockProps): React.ReactElement {
 /** A keyed owner prevents task-card intent from crossing DSH session boundaries. */
 function UniverSessionDock(props: ViewerDockProps): React.ReactElement {
   const conversation = props.useConversation((snapshot: ConversationSnapshot) => snapshot);
-  const turnFiles = React.useMemo(() => turnFilesOfConversation(conversation), [conversation]);
+  const { files: restoredFiles } = useSessionFiles(props.sessionId);
+  const loadedFiles = React.useMemo(() => turnFilesOfConversation(conversation), [conversation]);
+  const turnFiles = React.useMemo(() => mergeSessionFiles(restoredFiles, loadedFiles), [restoredFiles, loadedFiles]);
   const candidates = React.useMemo(() => sessionCardCandidates(turnFiles), [turnFiles]);
   const [visible, setVisible] = React.useState(false);
   const [focusIntent, setFocusIntent] = React.useState<SessionTaskFocusIntent | null>(null);

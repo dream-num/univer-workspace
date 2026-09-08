@@ -6,6 +6,7 @@
 
 /** Simplified Chinese UI strings (the key source). */
 export const zh = {
+  "review.openDocument": "审阅",
   "review.moreActions": "文档操作",
   "review.collapseDocument": "收起文档",
   "review.expandDocument": "展开文档",
@@ -251,10 +252,10 @@ export const zh = {
   "turn.deletedPreview": "此文档已在 Worktree 中删除，没有可预览的变更。",
   "turn.noUnits": "此 Worktree 还没有文档变更。",
   "turn.noReview": "没有权限查看此 Worktree 的审阅内容。",
-  "turn.reopen": "重新打开",
-  "turn.reopenTitle": "重新打开此 Worktree？",
-  "turn.reopenBody": "重新打开后可以继续修改，之后需要重新提交确认。",
-  "turn.reopenConfirm": "确认重开",
+  "turn.reopen": "转为草稿",
+  "turn.reopenTitle": "将此 Worktree 转为草稿？",
+  "turn.reopenBody": "转为草稿后可以继续修改，之后需要重新提交审阅。",
+  "turn.reopenConfirm": "转为草稿",
   "task.expand": "展开",
   "task.collapse": "收起",
   "task.openMiddle": "查看变更",
@@ -270,6 +271,7 @@ export const zh = {
 
 /** English UI strings. */
 export const en = {
+  "review.openDocument": "Review",
   "review.moreActions": "Document actions",
   "review.collapseDocument": "Collapse document",
   "review.expandDocument": "Expand document",
@@ -523,11 +525,11 @@ export const en = {
     "This document was deleted in the Worktree; there is no AI draft to preview.",
   "turn.noUnits": "This Worktree has no document changes yet.",
   "turn.noReview": "You do not have permission to review this Worktree.",
-  "turn.reopen": "Reopen",
-  "turn.reopenTitle": "Reopen this Worktree?",
+  "turn.reopen": "Convert to draft",
+  "turn.reopenTitle": "Convert this Worktree to a draft?",
   "turn.reopenBody":
-    "Reopening resumes editing; the changes must be submitted for confirmation again.",
-  "turn.reopenConfirm": "Reopen",
+    "Converting to a draft resumes editing; the changes must be submitted for review again.",
+  "turn.reopenConfirm": "Convert to draft",
   "task.expand": "Expand",
   "task.collapse": "Collapse",
   "task.openMiddle": "View changes",

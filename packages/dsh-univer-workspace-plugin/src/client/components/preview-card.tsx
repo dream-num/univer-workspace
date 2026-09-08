@@ -8,12 +8,15 @@
  */
 
 import * as React from "react";
+import { useSessionFiles } from "../hooks/use-session-files.ts";
 import type { PropsLocale } from "@deepseek-ai/dsh-client-ui-slots";
 import {
   isViewerDocKey,
   changesReviewState,
   latestUnitTurns,
   mergeFiles,
+  mergeSessionFiles,
+  sessionWithRestoredTurns,
   outcomeOfTurnFile,
   unitIdentityOfTurnFile,
   type UniverTurnMatch,
@@ -27,19 +30,23 @@ import { absorbWorktreeCoveredTrunkFiles } from "./turn-context-card-model.ts";
 export type PreviewCardProps = PropsLocale<"univer"> &
   ViewerRuntimeProps & {
     readonly matched: UniverTurnMatch;
+    readonly sessionId: string;
     readonly session: unknown;
     readonly navigation: WorkspaceNavigationStore;
   };
 
 /** Render one Turn-context card per Worktree/trunk aggregate of this Turn. */
 export function PreviewCard(props: PreviewCardProps): React.ReactElement {
-  const session = props.session;
+  const recovered = useSessionFiles(props.sessionId);
+  const session = React.useMemo(() => sessionWithRestoredTurns(props.session, recovered.turns), [props.session, recovered.turns]);
+  const restored = recovered.turns.find((turn) => turn.turn === props.matched.turn)?.files;
+  const turnFiles = React.useMemo(() => mergeSessionFiles(restored ?? [], props.matched.files), [restored, props.matched.files]);
   const files = React.useMemo(
     () =>
       absorbWorktreeCoveredTrunkFiles(
-        mergeFiles(props.matched.files).filter((entry) => isViewerDocKey(entry.docKey) && entry.operations.some(changesReviewState)),
+        mergeFiles(turnFiles).filter((entry) => isViewerDocKey(entry.docKey) && entry.operations.some(changesReviewState)),
       ),
-    [props.matched.files],
+    [turnFiles],
   );
   const stateKeys = React.useMemo(() => files.map((entry) => entry.docKey), [files]);
   const { states, missingFiles, errors } = useUniverStates(stateKeys);

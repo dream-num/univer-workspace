@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { Context } from "@deepseek-ai/cordis";
-import type { SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
+import type { Session, SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
 import type { Workspace } from "@deepseek-ai/dsh-workspace";
 import type {} from "@deepseek-ai/dsh-host-webserver";
 import type {} from "../provider/workspace-contract.ts";
@@ -27,6 +27,7 @@ import {
   type WorkspaceTemplate,
 } from "../client/workspace-contract.ts";
 
+import { sessionFilesFromTurns, sessionTurnsFromEvents } from "../client/conversation/univer-turn-definition.ts";
 import { browseLocalFiles, resolveLocalFile } from "./local-files.ts";
 
 const PREFIX = "/univer-workspace/api";
@@ -596,6 +597,44 @@ export function createBrowserApiHandler(
           { error: error instanceof Error ? error.message : "workspace unreachable" },
           { route: "product-proxy", target: productTarget, error: String(error) },
         );
+      }
+      return;
+    }
+    if (req.method === "GET" && subPath === "/session-files") {
+      const user = authenticatedUser(ctx);
+      if (user === null) {
+        jsonResponse(res, 401, { error: "workspace_connection_required" });
+        return;
+      }
+      const id = url.searchParams.get("sessionId") ?? "";
+      if (!/^session-[a-zA-Z0-9-]{1,232}$/.test(id)) {
+        jsonResponse(res, 400, { error: "session_id_invalid" });
+        return;
+      }
+      const authClient = ctx.get("workspaceAuth")?.currentClient();
+      const sessions = ctx.get("sessions") as { get(id: SessionId): Session | undefined } | undefined;
+      const persistence = ctx.get("sessionPersistence") as {
+        load(id: SessionId): Promise<{ events: readonly SessionEvent[] }>;
+      } | undefined;
+      if (sessions === undefined || persistence === undefined) {
+        jsonResponse(res, 503, { error: "session_history_unavailable" });
+        return;
+      }
+      try {
+        // These services belong to the active account runtime. Never open local paths from an ID.
+        const live = sessions.get(id as SessionId);
+        const events = live?.snapshotEvents() ?? (await persistence.load(id as SessionId)).events;
+        const currentClient = ctx.get("workspaceAuth")?.currentClient();
+        if (authClient?.origin !== currentClient?.origin ||
+            authClient?.sessionToken !== currentClient?.sessionToken ||
+            user.userId !== authenticatedUser(ctx)?.userId) {
+          jsonResponse(res, 409, { error: "workspace_connection_changed" });
+          return;
+        }
+        const turns = sessionTurnsFromEvents(events);
+        jsonResponse(res, 200, { files: sessionFilesFromTurns(turns), turns });
+      } catch (error) {
+        jsonResponse(res, 500, { error: "session_history_unavailable" }, { route: "session-files", error: String(error) });
       }
       return;
     }

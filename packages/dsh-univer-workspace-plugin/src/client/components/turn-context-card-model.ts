@@ -285,6 +285,11 @@ export function unitChangeLabel(kind: string, t: (key: UniverLocaleKey) => strin
   return t("turn.unit.unchanged");
 }
 
+/** Unit badges report actionable problems; lifecycle success belongs to the Worktree. */
+export function hasUnitMergeProblem(result: WorktreeUnitView["mergeResult"]): boolean {
+  return result === "conflict" || result === "failed";
+}
+
 export function mergeResultLabel(
   result: WorktreeUnitView["mergeResult"],
   t: (key: UniverLocaleKey) => string,

@@ -139,3 +139,43 @@ describe("Workspace Session context route", () => {
     expect(service.add).not.toHaveBeenCalled();
   });
 });
+
+describe("Session file recovery route", () => {
+  it("uses account-owned history and rejects invalid IDs and stale identity responses", async () => {
+    let userId: string | undefined = "user-1";
+    let changeDuringLoad = false;
+    const load = vi.fn(async () => {
+      if (changeDuringLoad) userId = "user-2";
+      return { events: [] };
+    });
+    const context = {
+      get(name: string) {
+        if (name === "workspaceAuth") return {
+          currentIdentity: () => userId === undefined ? undefined : { userId, username: "test" },
+          currentClient: () => ({ origin: "https://workspace.test", sessionToken: userId }),
+        };
+        if (name === "sessions") return { get: () => undefined };
+        if (name === "sessionPersistence") return { load };
+        return undefined;
+      },
+    } as unknown as Context;
+    const handler = createBrowserApiHandler(context, {
+      license: "", workspaceRoot: "/tmp/session-recovery-test", workspaceOrigin: "https://workspace.test",
+      publicOrigin: "http://127.0.0.1", templates: [],
+    });
+    const server = createServer((req, res) => { void handler(req, res); });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const request = (id = "session-test") => fetch(`${origin}/univer-workspace/api/session-files?sessionId=${encodeURIComponent(id)}`);
+    expect((await request("../other-user")).status).toBe(400);
+    expect(load).not.toHaveBeenCalled();
+    const restored = await request();
+    expect(restored.status).toBe(200);
+    await expect(restored.json()).resolves.toEqual({ files: [], turns: [] });
+    changeDuringLoad = true;
+    expect((await request()).status).toBe(409);
+    userId = undefined;
+    expect((await request()).status).toBe(401);
+  });
+});

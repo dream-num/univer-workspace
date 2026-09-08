@@ -30,6 +30,7 @@ export interface WorkspaceBlobViewerProps {
   readonly surfaceLeft: number | null;
   readonly surfaceWidth: number;
   readonly onClose: () => void;
+  readonly headerAction?: ReactElement | undefined;
   readonly t: (key: UniverLocaleKey) => string;
 }
 
@@ -96,14 +97,16 @@ export function WorkspaceBlobViewer(props: WorkspaceBlobViewerProps): ReactEleme
             {props.t("blob.download")}
           </a>
         ) : null}
-        <button
-          type="button"
-          className={css.close}
-          aria-label={props.t("dock.close")}
-          onClick={props.onClose}
-        >
-          <CloseIcon />
-        </button>
+        {props.headerAction ?? (
+          <button
+            type="button"
+            className={css.close}
+            aria-label={props.t("dock.close")}
+            onClick={props.onClose}
+          >
+            <CloseIcon />
+          </button>
+        )}
       </header>
       <div className={css.content}>
         {state.status === "loading" ? (

@@ -35,6 +35,7 @@ export interface WorktreeReviewHeaderProps {
   readonly fallbackName: string;
   readonly t: (key: UniverLocaleKey) => string;
   readonly onClose: () => void;
+  readonly headerAction?: ReactElement | undefined;
   readonly onActionSettled: () => void;
 }
 
@@ -106,7 +107,7 @@ export function WorktreeReviewHeader(props: WorktreeReviewHeaderProps): ReactEle
         ) : null}
         {worktree !== undefined &&
         worktree.capabilities.reopen &&
-        (worktree.status === "merged" || worktree.status === "discarded") ? (
+        worktree.status === "ready" ? (
           <Button
             variant="secondary"
             size="sm"
@@ -144,15 +145,17 @@ export function WorktreeReviewHeader(props: WorktreeReviewHeaderProps): ReactEle
             {actionError}
           </span>
         )}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t("dock.close")}
-          title={t("dock.close")}
-          onClick={props.onClose}
-        >
-          <CloseIcon />
-        </Button>
+        {props.headerAction ?? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("dock.close")}
+            title={t("dock.close")}
+            onClick={props.onClose}
+          >
+            <CloseIcon />
+          </Button>
+        )}
       </div>
       {dialog === null ? null : (
         <ConfirmDialog

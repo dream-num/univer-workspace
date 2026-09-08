@@ -4,6 +4,10 @@ import {
   changesReviewState,
   opensFloatingWindow,
   mergeFiles,
+  sessionFilesFromEvents,
+  sessionTurnsFromEvents,
+  sessionWithRestoredTurns,
+  mergeSessionFiles,
   turnFilesOfConversation,
   unitIdentityOfTurnFile,
   univerTurnDefinition,
@@ -450,3 +454,58 @@ describe("univer turn projection", () => {
   expect(changesReviewState(operation)).toBe(false);
   expect(opensFloatingWindow(operation)).toBe(false);
  });
+
+
+describe("durable Session card recovery", () => {
+  it("restores intent without a loaded chat timeline and ignores unfinished calls", () => {
+    expect(sessionFilesFromEvents([toolCall().event])).toEqual([]);
+    const files = sessionFilesFromEvents([toolCall().event, toolResult().event]);
+    expect(files[0]?.operations[0]).toMatchObject({ callId: CALL_ID, resourceId: RESOURCE_ID, phase: "succeeded" });
+  });
+
+  it("compacts repeated references but lets loaded events replace matching restored calls", () => {
+    const call = toolCall().event;
+    const result = toolResult().event;
+    const nextCall = structuredClone(call);
+    nextCall.data.callId = "next-call";
+    const nextResult = structuredClone(result);
+    nextResult.data.message.content[0].toolCallId = "next-call";
+    const files = sessionFilesFromEvents([call, result, nextCall, nextResult]);
+    expect(files.flatMap((file) => file.operations)).toHaveLength(1);
+    expect(files[0]?.operations[0]?.callId).toBe("next-call");
+    const loaded = files.map((file) => ({ ...file, operations: file.operations.map((op) => ({ ...op, label: "Updated name" })) }));
+    const merged = mergeSessionFiles(files, loaded);
+    expect(merged.flatMap((file) => file.operations)).toHaveLength(1);
+    expect(merged[0]?.operations[0]?.label).toBe("Updated name");
+  });
+});
+
+
+it("does not regress recovered completion when a paged timeline only contains its call", () => {
+  const restored = sessionFilesFromEvents([toolCall().event, toolResult().event]);
+  const partial = restored.map((file) => ({ ...file, operations: file.operations.map((operation) => ({ ...operation, phase: "pending" as const })) }));
+  const merged = mergeSessionFiles(restored, partial);
+  expect(merged.flatMap((file) => file.operations)).toHaveLength(1);
+  expect(merged[0]?.operations[0]?.phase).toBe("succeeded");
+});
+
+
+it("recovers cards in their original Turns and keeps historical ordering independent of paging", () => {
+  const call1 = toolCall().event;
+  const result1 = toolResult().event;
+  const call2 = structuredClone(call1);
+  call2.data.turn = 2;
+  call2.data.callId = "second-turn-call";
+  const result2 = structuredClone(result1);
+  result2.data.turn = 2;
+  result2.data.message.content[0].toolCallId = "second-turn-call";
+  const recovered = sessionTurnsFromEvents([call1, result1, call2, result2]);
+  expect(recovered.map((turn) => turn.turn)).toEqual([1, 2]);
+  expect(recovered[0]?.files[0]?.operations[0]?.callId).toBe(CALL_ID);
+  expect(recovered[1]?.files[0]?.operations[0]?.callId).toBe("second-turn-call");
+  const restoredSession = sessionWithRestoredTurns({}, recovered);
+  const latest = latestUnitTurns(restoredSession);
+  expect(latest.get(unitIdentityOfTurnFile(recovered[0]!.files[0]!, restoredSession))).toBe(2);
+  const replayed = sessionWithRestoredTurns(restoredSession, recovered);
+  expect(replayed.chat.timeline.turns.get(1)?.data.get("univerTurn")).toEqual({ files: recovered[0]!.files });
+});

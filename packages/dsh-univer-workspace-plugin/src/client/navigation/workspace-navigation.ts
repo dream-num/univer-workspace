@@ -82,6 +82,10 @@ export function reduceWorkspaceNavigation(
         ? state
         : { ...state, navigationMode: intent.navigationMode };
     case "open-content":
+      // Reviewing an already open Unit is still an explicit locate request.
+      if (intent.contentSurface.kind === "worktree" && intent.contentSurface.unitId !== null) {
+        return { ...state, contentSurface: { ...intent.contentSurface } };
+      }
       return sameContentSurface(state.contentSurface, intent.contentSurface)
         ? state
         : { ...state, contentSurface: intent.contentSurface };
