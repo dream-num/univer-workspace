@@ -100,7 +100,7 @@ Workspace 产品数据、协同快照及 Blob 字节仍保存在连接的 Worksp
 
 ## 不负责的内容
 
-- DSH 会话持久化与附件存储的专用实现，由部署方提供 Provider；Internal DSH 提供 S3 实现。
+- DSH 会话持久化与附件存储 Provider 的具体实现。
 - Workspace 产品 API、Unit 数据模型或协同合同，这些归 Workspace 应用及 Univer SDK 所有。
 - 对外发布合同：本包是私有 workspace package，从仓库构建后安装到 DSH Profile，不从 npm Registry 安装。
 

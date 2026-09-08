@@ -129,8 +129,7 @@ Workspace Agent does not copy those databases into its local data directory.
 
 ## Non-responsibilities
 
-- DSH session persistence and attachment storage specialization (a
-  deployment provides its own provider; Internal DSH ships the S3 one).
+- Implementations of DSH session persistence and attachment storage providers.
 - Workspace product APIs, the Unit data model, or collaboration contracts —
   those stay in the Workspace application and the Univer SDKs.
 - Any publication contract: this is a private workspace package, installed
