@@ -9,17 +9,12 @@ import { useEffect, useState } from "react";
 import { ExternalLinkIcon } from "@univerjs/univer-workspace-ui";
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import type { InjectFace } from "@deepseek-ai/dsh-client-ui-slots";
-import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type {} from "@deepseek-ai/dsh-client-ui-sidebar/client";
 import css from "./WorkspaceSwitchButton.module.scss";
 
 export interface WorkspaceSwitchInjected {
   readonly loadWorkspaceOrigin: () => Promise<string | undefined>;
 }
-
-type SessionProps = PropsRuntime<"conversation.session.header.utilities"> &
-  PropsLocale<"univer"> &
-  InjectFace<WorkspaceSwitchInjected>;
 
 type FooterProps = PropsRuntime<"sidebar.footer.action"> &
   PropsLocale<"univer"> &
@@ -56,25 +51,6 @@ function normalizeOrigin(value: string | undefined): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-/** Session-header utility (visible once a real conversation header exists). */
-export function WorkspaceHeaderSwitch({ loadWorkspaceOrigin, t }: SessionProps) {
-  const origin = useOrigin(loadWorkspaceOrigin);
-  if (origin === undefined) return null;
-  return (
-    <a
-      className={css.switch}
-      href={origin}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={t("workspace.openWorkspace")}
-      aria-label={t("workspace.openWorkspace")}
-    >
-      <ExternalLinkIcon />
-      <span>{t("workspace.workspace")}</span>
-    </a>
-  );
 }
 
 /** Sidebar-footer fallback (the conversation header is hidden in the blank hero). */

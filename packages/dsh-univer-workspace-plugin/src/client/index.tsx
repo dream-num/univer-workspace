@@ -31,7 +31,7 @@ import { loadViewerBootstrap } from "./viewer-bootstrap.ts";
 import { en, UNIVER_LOCALE_NAMESPACE, zh } from "./locales.ts";
 import { SpaceDirectoryFlow } from "./SpaceDirectoryFlow.tsx";
 import { TemplateForkAction } from "./TemplateForkAction.tsx";
-import { WorkspaceFooterSwitch, WorkspaceHeaderSwitch } from "./WorkspaceSwitchButton.tsx";
+import { WorkspaceFooterSwitch } from "./WorkspaceSwitchButton.tsx";
 import { OriginSetting, type WorkspaceAuthSettings } from "./OriginSetting.tsx";
 import { HarnessDocumentTitle } from "./DocumentTitle.tsx";
 import { FileWorkspaceOverlay } from "./FileWorkspaceOverlay.tsx";
@@ -513,18 +513,6 @@ export function apply(ctx: ClientContext): void {
 
   const loadWorkspaceOrigin = async (): Promise<string | undefined> =>
     (await loadMe()).workspaceOrigin;
-  ctx.slots.inject("conversation.session.header.utilities", () =>
-    ctx.slots.register(
-      {
-        name: "conversation.session.header.utilities",
-        id: "univer-workspace-open-workspace",
-        order: 10,
-        locale: UNIVER_LOCALE_NAMESPACE,
-        inject: () => ({ loadWorkspaceOrigin }),
-      },
-      WorkspaceHeaderSwitch,
-    ),
-  );
   ctx.slots.inject("sidebar.footer.action", () =>
     ctx.slots.register(
       {

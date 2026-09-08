@@ -2,11 +2,6 @@
 @import "./styles/tokens.css";
 @import "./styles/workspace.css";
 
-/* The app owns the header close action; keep native export/navigation utilities hidden. */
-[data-slot="conversation.session.header.utilities"] {
-  display: none !important;
-}
-
 /* DSH alpha.4 header slot: preserve title, ancestry and view tabs. Remove this
    adapter when DSH exposes shared pane geometry through its layout contract. */
 [data-slot="conversation.session.header"] > header {
