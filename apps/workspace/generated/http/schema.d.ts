@@ -47,7 +47,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Exchange a one-time authorization code for a registered client identity. */
+        /**
+         * Exchange a one-time authorization code for a registered client identity.
+         * @description When the granted scope includes `session`, the response also carries a
+         *     Workspace login session token in `access_token`; the client presents
+         *     it as the `workspace_session` cookie on product and collaboration
+         *     endpoints, acting with the authorizing User's permissions until it
+         *     expires. Identity-only grants return an empty `access_token`.
+         */
         post: operations["oauthToken"];
         delete?: never;
         options?: never;
@@ -1965,25 +1972,35 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    grant_type?: string;
+                    /** @enum {string} */
+                    grant_type: "authorization_code";
                     code: string;
                     client_id: string;
-                    client_secret: string;
+                    /** @description Required for confidential clients; omitted for public PKCE clients. */
+                    client_secret?: string;
                     redirect_uri: string;
                     code_verifier: string;
                 };
             };
         };
         responses: {
-            /** @description The registered client identity. */
+            /** @description The registered client identity and, for `session` grants, a login session token. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
+                        /**
+                         * @description Workspace session token for `session` grants, empty
+                         *     string for identity-only grants.
+                         */
                         access_token?: string;
                         token_type?: string;
+                        /**
+                         * @description Seconds until the issued session expires for `session`
+                         *     grants.
+                         */
                         expires_in?: number;
                         user?: components["schemas"]["User"];
                     };
@@ -3540,7 +3557,11 @@ export interface operations {
     listWorktrees: {
         parameters: {
             query?: {
-                scope?: "active" | "processed";
+                scope?: "active" | "processed" | "all";
+                /** @description Literal substring of name, summary, creator display name or username, or Team Space name. ASCII case-insensitive; other characters match exactly. Applied before pagination. */
+                search?: string;
+                /** @description Descending product timestamp, with ascending Worktree ID as a stable tie-breaker. Cursors must be reused with the same filters and order. */
+                order?: "updatedAtDesc" | "createdAtDesc";
                 kind?: components["schemas"]["WorktreeKind"];
                 teamSpaceId?: string;
                 /** @description Opaque cursor returned by the previous page. */
@@ -3565,6 +3586,7 @@ export interface operations {
                     "application/json": components["schemas"]["WorktreeList"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
         };
     };

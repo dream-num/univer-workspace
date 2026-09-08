@@ -64,6 +64,7 @@ export interface IdentityModule {
   ): Promise<void>;
   getSession(cookieHeader: string | undefined): SessionView;
   requireSession(cookieHeader: string | undefined): AuthenticatedSession;
+  issueSession(user: User): IssuedSession;
   logout(cookieHeader: string | undefined): void;
   updateCurrentUser(
     cookieHeader: string | undefined,
@@ -464,6 +465,7 @@ export function createIdentityModule(options: {
 
     getSession,
     requireSession,
+    issueSession,
 
     logout(cookieHeader) {
       const token = readSessionToken(cookieHeader);

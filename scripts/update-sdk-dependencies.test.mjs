@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   alignManifestSdkDependencies,
@@ -7,6 +8,14 @@ import {
   resolveWorkspaceSdkBaseline,
   validateWorkspaceSdkDependencies,
 } from "./update-sdk-dependencies.mjs";
+
+test("exposes the update:univer-sdk command", () => {
+  const packageJson = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  assert.equal(typeof packageJson.scripts?.["update:univer-sdk"], "string");
+  assert.equal(packageJson.scripts?.["update:" + "sdk"], undefined);
+});
 
 test("requires one exact SDK version", () => {
   assert.equal(
@@ -32,6 +41,7 @@ test("aligns SDK dependencies and preserves independent and workspace versions",
       "@univerjs/core": "1.0.0-insiders.old",
       "@univerjs-pro/cli-assets": "0.1.0",
       "@univerjs-pro/collaboration-service": "1.0.0-insiders.old",
+      "@univerjs-pro/engine-formula-rust-binding": "1.0.0-insiders.native",
       "@univerjs-pro/exchange-node-binding": "0.1.0",
       "@univerjs/icons": "1.34.0",
       "@univerjs/local": "workspace:*",
@@ -72,6 +82,7 @@ test("aligns SDK dependencies and preserves independent and workspace versions",
   );
   assert.equal(manifest.dependencies["@univerjs/icons"], "1.34.0");
   assert.equal(manifest.dependencies["@univerjs-pro/cli-assets"], "0.1.0");
+  assert.equal(manifest.dependencies["@univerjs-pro/engine-formula-rust-binding"], "1.0.0-insiders.native");
   assert.equal(manifest.dependencies["@univerjs-pro/exchange-node-binding"], "0.1.0");
   assert.equal(manifest.dependencies["@univerjs/local"], "workspace:*");
   assert.equal(manifest.dependencies.react, "^19.0.0");

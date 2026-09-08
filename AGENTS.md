@@ -20,8 +20,11 @@ SDK 和 Univer CLI SDK 组装成两个对外应用：
 ```text
 apps/workspace                 Workspace Browser、Server、HTTP contract 与部署应用
 apps/cli                       Univer Workspace CLI
+apps/agent                   Univer Workspace Agent（DSH 定制服务 + 两个预装插件）
 packages/client-core           Node-hosted Workspace Agent Client 共享能力
 packages/reference-provider   Browser 专用的 private referenced-Unit policy
+packages/dsh-univer-workspace-plugin        能力插件（远程 Unit 工具集 + headless runtime）
+packages/dsh-univer-workspace-skin-plugin   皮肤插件（workspace 品牌与 logo）
 scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
 ```
 
@@ -31,9 +34,16 @@ scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
 - `packages/client-core` 拥有 Node-hosted Workspace Agent Client 共享的 HTTP、错误、storage-neutral 认证协议、
   远程产品 workflow 与 worker-backed content runtime；Client Shell 注入 origin、凭据、license 与 packaged
   worker entry，package 不读取 CLI Session 或配置。
+- `apps/agent` 拥有 Workspace Agent 服务：DSH（DeepSeek Harness）定制组装，以 Workspace OAuth
+  授权用户身份提供 agent 操作远程 Workspace 文档（Unit）的能力。它预装两个仓库内开发的插件，
+  本身不发布为公共 SDK。
 - `packages/reference-provider` 只服务于 Workspace Browser。CLI 在自身 application 内维护独立
   Provider；两者共享 persisted identity 和行为语义，但不为消除代码重复而制造跨应用公共合同。
-- `apps/*` 可以组合 SDK 能力；private packages 不得反向依赖 application。
+- `packages/dsh-univer-workspace-plugin` 提供 agent 操作远程 Workspace 文档的能力（工具集、空间对账、
+  headless 协同 runtime、导入导出）。代码与维护独立，通过 harness profile 预装，不发布到 npm。
+- `packages/dsh-univer-workspace-skin-plugin` 只提供 DSH 浏览器面的 workspace 外观（主题令牌与品牌）。
+- `apps/*` 可以组合 SDK 能力；private packages 不得反向依赖 application。`packages/dsh-univer-workspace-plugin`
+  依赖 `apps/agent` 暴露的 `workspaceAuth`/`workspaceSession` 服务，通过 cordis 服务组合而非 npm 依赖。
 
 ## SDK 与仓库边界
 
@@ -48,6 +58,11 @@ scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
 
 只通过已发布 package 的公开 exports 使用其他 SDK。代码、构建、测试和生成流程不得依赖相邻仓库
 checkout、其他仓库的绝对路径或未发布源码目录。
+
+`apps/agent` 与两个 dsh 插件包通过公开 npm 的 `@deepseek-ai/*` 包使用 DSH（dsh 是外部产品，本仓库
+不 fork、不修改其源码）。dsh CLI 二进制在镜像构建时隔离安装（`apps/agent/Dockerfile` 的 bootstrap
+目录），不进入 workspace 依赖图——dsh client 的 react 18 类型树与 Univer SDK 的 react 19 会分裂
+`@wendellhu/redi` 实例。
 
 所有 version-coupled `@univer-cli/*`、`@univerjs/*` 和 `@univerjs-pro/*` 依赖使用同一个精确
 SDK release。升级时运行：
@@ -160,3 +175,35 @@ pnpm package:workspace-cli
 
 目前没有适合放置应用级共享组件的统一位置。临时方案是 `univer-workspace`、`univer-cli` 与 DSH plugin
 各自保留 `packages/unit-comparison-viewer`；修改该 package 时必须同步所有副本。
+
+## React and Redi dependency boundaries
+
+Workspace Browser uses React 19; the published DSH browser packages consumed by
+Workspace Agent use React 18. This is intentional application isolation, not a
+request to deduplicate React across the repository. Shared private UI components
+run with the consuming application's React runtime. Keep the DSH CLI installation
+outside the pnpm workspace, and do not resolve browser React from a neighboring
+application or add a second React runtime to its bundle.
+
+Univer consumers should obtain DI APIs and types through `@univerjs/core`, which
+owns the Redi dependency. Some published SDK `.d.ts` files nevertheless emit
+inferred `import("@wendellhu/redi").IdentifierDecorator` references even though
+runtime code imports from Core. With both React peer contexts installed, an
+undeclared Redi reference can resolve through pnpm's hoisted directory to the
+other application's Redi instance. A single-React installation can hide this
+problem. The same Redi version number does not prove the peer contexts match.
+
+The exact-version Redi `packageExtensions` in `pnpm-workspace.yaml` keep declaration
+resolution in the consuming application's dependency graph. They are temporary
+package-metadata repairs, not dev SDK version overrides. Prefer an upstream fix
+that keeps emitted DI types imported from Core; do not routinely add direct Redi
+imports or dependencies to SDK consumers.
+
+When upgrading the SDK, inspect the published declarations and manifests before
+changing these extensions. Remove obsolete entries only after an isolated clean
+install verifies both Workspace and Agent typechecks and browser startup. Check
+actual resolved Redi peer contexts; `skipLibCheck`, a successful single-app build,
+or an already-populated `node_modules` is insufficient evidence. Do not force a
+single React version, add broad overrides, patch installed SDK files, or weaken
+typechecking to mask the mismatch. Keep any remaining workaround version-scoped
+and document its evidence and removal condition.

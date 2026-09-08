@@ -1,0 +1,24 @@
+.field {
+  display: grid;
+  gap: 6px;
+}
+.label {
+  color: var(--color-foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+.required {
+  margin-left: 2px;
+  color: var(--color-destructive);
+}
+.error,
+.hint {
+  margin: 0;
+  font-size: 13px;
+}
+.error {
+  color: var(--color-destructive);
+}
+.hint {
+  color: var(--color-muted-foreground);
+}

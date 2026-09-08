@@ -156,9 +156,26 @@ session is absent, then returns a one-time short-lived code to the registered
 redirect URI. `POST /api/auth/token` validates the client secret, the registered
 redirect URI, the PKCE verifier, expiry, and one-time use before returning the
 Workspace identity. Registration is deployment-supplied via `OAUTH_CLIENTS_JSON`.
+External browser clients should use `clientType: "public"`, PKCE, and `requiresConsent: true`; they omit `clientSecret` and use an exact registered callback URL. The local Workspace Agent callback is `http://127.0.0.1:3101/auth/oauth/callback`. Internal service clients may remain confidential and use the existing no-consent behavior.
+
+The Agent client is not enabled by default: the entry in `.env.example` is only a
+commented example. For the exact active configuration and the local server, browser,
+account registration, and Agent connection steps, see
+[Connect to a local Workspace](../agent/README.md#connect-to-a-local-workspace).
+
 Existing Workspace login, OAuth callbacks, Cookie behavior, and product APIs
 remain unchanged. The capability is additive and does not add a proxy or
 deployment component.
+
+When the granted scope includes `session` (a scope the deployment registers
+per client), the token response also carries a Workspace login session token
+in `access_token` with its remaining lifetime in `expires_in`. The client
+presents that value as the `workspace_session` cookie on product and
+collaboration endpoints and acts with the authorizing User's permissions
+until the session expires; there is no refresh grant, so an expired token
+means starting the authorization flow again. Granting `session` is a
+deployment trust decision made at client registration, which is why code
+issuance itself stays silent exactly like identity-only grants.
 
 The browser uses the same built-in runtime development license as Workspace
 CLI. Both copies are rotated every 90 days and are application credentials, not
@@ -250,3 +267,21 @@ pnpm db:reset
 
 See [architecture.md](docs/architecture.md), [data-model.md](docs/data-model.md),
 and [application-design.md](docs/application-design.md).
+
+### Worktree discovery API
+
+`GET /api/worktrees` returns a cursor-paginated summary page (`items`, `nextCursor`).
+It defaults to active Worktrees ordered by product update time. `scope=processed`
+loads history and `scope=all` includes both; `kind=user` selects the current user's
+personal Worktrees, while `kind=team&teamSpaceId=<id>` selects one Team Space.
+Omitting the ownership filters provides the current user's accessible overview
+across Spaces without changing visibility or content permissions.
+
+Use `limit` (1–200, default 50), `order=createdAtDesc` for creation order, and
+`search` (up to 200 characters) for a literal substring in names, summaries,
+creator names, or Team Space names. Search is ASCII case-insensitive; other
+characters match exactly. Visibility and search are applied before pagination.
+Pass `nextCursor` as `cursor` with the same filters and order until it is null.
+Each page reflects current data; refresh the first page after lifecycle changes.
+Summary `unitCount` includes all mapped Units, not only changed documents.
+Fetch `/api/worktrees/<id>` only when Unit details are needed.

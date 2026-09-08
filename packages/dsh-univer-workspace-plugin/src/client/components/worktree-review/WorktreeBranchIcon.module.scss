@@ -1,0 +1,10 @@
+.icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--color-muted-foreground);
+
+  &[data-status="ready"] { color: var(--color-success); }
+  &[data-status="merged"], &[data-status="merging"] { color: var(--color-violet); }
+  &[data-status="discarded"] { color: var(--color-destructive); }
+}

@@ -1,0 +1,245 @@
+.heading {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.inviteRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+.search {
+  min-width: 224px;
+  flex: 1;
+}
+.roleSelect {
+  width: 128px;
+}
+.userOption {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.truncate,
+.userName,
+.username,
+.url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.username {
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+}
+.separator {
+  margin: 20px 0;
+}
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sectionHeading .heading {
+  margin: 0;
+}
+.sectionHeading > span {
+  color: var(--color-subtle-foreground);
+  font-size: 12px;
+}
+.empty {
+  padding: 16px 0;
+  color: var(--color-muted-foreground);
+  font-size: 13px;
+  text-align: center;
+}
+.grantList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.grantRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.grantRow:last-child {
+  border-bottom: 0;
+}
+.userIdentity {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+.userName {
+  font-size: 14px;
+  font-weight: 500;
+}
+.grantActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+.effectiveRole {
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+}
+.removeButton:hover {
+  background: var(--color-destructive-soft);
+  color: var(--color-destructive);
+}
+.linkCard {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+}
+.linkSettings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+.globe {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+}
+.globe svg {
+  width: 20px;
+  height: 20px;
+}
+.linkSummary {
+  min-width: 192px;
+  flex: 1;
+}
+.linkTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.linkSummary p {
+  margin: 4px 0 0;
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+  line-height: 20px;
+}
+.statusOn,
+.statusOff {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+.statusOn {
+  background: var(--color-success);
+}
+.statusOff {
+  background: var(--color-subtle-foreground);
+}
+.linkControls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+.switchButton {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--color-input);
+  border-radius: 6px;
+  outline: 0;
+  background: var(--color-background);
+  color: var(--color-secondary-foreground);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+}
+.switchButton:hover {
+  background: var(--color-accent);
+}
+.switchButton:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ring) 40%, transparent);
+}
+.switchButton:disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+.switchOn,
+.switchOff {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border-radius: 999px;
+  transition: background-color 120ms ease;
+}
+.switchOn {
+  background: var(--color-primary);
+}
+.switchOff {
+  background: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent);
+}
+.switchOn span,
+.switchOff span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--color-background);
+  box-shadow: var(--shadow-sm);
+  transition: transform 120ms ease;
+}
+.switchOn span {
+  transform: translateX(12px);
+}
+.linkRoleSelect {
+  width: 112px;
+}
+.linkFooter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+.url {
+  min-width: 0;
+  flex: 1;
+  color: var(--color-subtle-foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+}
+.privacy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  color: var(--color-subtle-foreground);
+  font-size: 11px;
+}
+.privacy svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}

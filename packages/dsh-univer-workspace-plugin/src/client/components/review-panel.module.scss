@@ -1,0 +1,347 @@
+/* Shared shell styles for embedded Workspace viewers. The Univer editor
+ * itself remains owned by the viewer runtime; this module only styles the
+ * host-owned lifecycle controls and loading states. */
+
+.viewerTopbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--uvf-color-border);
+  color: var(--dsw-alias-label-primary, #172033);
+  background: var(--uvf-color-surface);
+  font-size: 11px;
+}
+
+.viewerTopbarIdentity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.viewerTopbarTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewerReadOnly {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid var(--uvf-color-border);
+  border-radius: 999px;
+  color: var(--uvf-color-muted);
+  background: color-mix(in srgb, var(--uvf-color-surface) 92%, var(--uvf-color-border));
+  font-size: 10px;
+}
+
+.viewerTopbarActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewerButton {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--uvf-color-accent) 34%, var(--uvf-color-border));
+  border-radius: var(--uvf-radius-control);
+  color: var(--uvf-color-accent);
+  background: var(--uvf-color-surface);
+  font: 600 11px/16px inherit;
+  cursor: pointer;
+  transition:
+    color var(--uvf-motion-fast),
+    background var(--uvf-motion-fast),
+    border-color var(--uvf-motion-fast);
+}
+
+.viewerButton svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.viewerButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--uvf-color-accent) 52%, var(--uvf-color-border));
+  background: color-mix(in srgb, var(--uvf-color-accent) 8%, var(--uvf-color-surface));
+}
+
+.viewerButton:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.viewerButtonPrimary {
+  border-color: var(--uvf-color-primary);
+  color: #fff;
+  background: var(--uvf-color-primary);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.viewerButtonPrimary:hover:not(:disabled) {
+  border-color: var(--uvf-color-primary-hover);
+  color: #fff;
+  background: var(--uvf-color-primary-hover);
+}
+
+.viewerButtonPrimary:active:not(:disabled) {
+  background: var(--uvf-color-primary-active);
+}
+
+.viewerButtonGhostDanger {
+  border-color: transparent;
+  color: var(--uvf-color-danger);
+  background: transparent;
+  box-shadow: none;
+}
+
+.viewerButtonGhostDanger:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--uvf-color-danger);
+  background: color-mix(in srgb, var(--uvf-color-danger) 10%, transparent);
+}
+
+.viewerButtonDestructive {
+  border-color: var(--uvf-color-danger);
+  color: #fff;
+  background: var(--uvf-color-danger);
+}
+
+.viewerButtonDestructive:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--uvf-color-danger) 90%, #000);
+  color: #fff;
+  background: color-mix(in srgb, var(--uvf-color-danger) 90%, #000);
+}
+
+.viewerActionError {
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--uvf-color-danger);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewerConfirmChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 120px;
+  margin-top: 10px;
+  overflow-y: auto;
+}
+
+.viewerConfirmChip {
+  max-width: 100%;
+  padding: 2px 7px;
+  overflow: hidden;
+  border: 1px solid var(--uvf-color-border);
+  border-radius: 999px;
+  color: var(--dsw-alias-label-secondary, #566174);
+  background: color-mix(in srgb, var(--uvf-color-surface) 92%, var(--uvf-color-border));
+  font-size: 10px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewerModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(13 22 38 / 28%);
+}
+
+.viewerModal {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  width: min(384px, calc(100vw - 32px));
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--uvf-color-border);
+  border-radius: var(--uvf-radius-card);
+  background: var(--uvf-color-surface);
+  box-shadow: var(--uvf-shadow-dialog);
+}
+
+.viewerModalIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--uvf-color-positive);
+  background: color-mix(in srgb, var(--uvf-color-positive) 10%, var(--uvf-color-surface));
+  font-weight: 700;
+}
+
+.viewerConfirmBody {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--dsw-alias-label-primary, #172033);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.viewerConfirmBody > span {
+  overflow: hidden;
+  color: var(--uvf-color-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewerConfirmBody p {
+  margin: 8px 0 0;
+  color: var(--uvf-color-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.viewerConfirmActions {
+  display: flex;
+  grid-column: 2;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.viewerSelectionContext {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px 6px 16px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted-foreground);
+  background: var(--color-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.viewerSelectionContext > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewerStatus {
+  display: flex;
+  min-width: 0;
+  min-height: 96px;
+  flex: 1;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--uvf-color-muted);
+  background: var(--uvf-color-surface);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viewerStatus[role="alert"] {
+  color: var(--uvf-color-danger);
+  background: color-mix(in srgb, var(--uvf-color-danger) 8%, var(--uvf-color-surface));
+}
+
+.viewerRetry {
+  min-height: 28px;
+  padding: 4px 11px;
+  border: 1px solid color-mix(in srgb, var(--uvf-color-accent) 42%, var(--uvf-color-border));
+  border-radius: var(--uvf-radius-control);
+  color: var(--uvf-color-accent);
+  background: var(--uvf-color-surface);
+  font: 600 12px/18px inherit;
+  cursor: pointer;
+}
+
+.viewerRetry:hover {
+  background: color-mix(in srgb, var(--uvf-color-accent) 8%, var(--uvf-color-surface));
+}
+
+.viewerRetry:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--uvf-color-accent) 60%, transparent);
+  outline-offset: 2px;
+}
+
+.viewerEditor {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.viewerContainer {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.viewerContainer > div:first-child {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 680px) {
+  .viewerTopbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .viewerTopbarActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewerButton {
+    transition: none;
+  }
+}

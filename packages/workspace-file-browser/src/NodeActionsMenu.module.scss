@@ -1,0 +1,13 @@
+.menu {
+  width: 224px;
+}
+.destructive {
+  color: var(--color-destructive);
+}
+.destructive[data-highlighted] {
+  background: var(--color-destructive-soft);
+  color: var(--color-destructive);
+}
+.destructive svg {
+  color: var(--color-destructive);
+}

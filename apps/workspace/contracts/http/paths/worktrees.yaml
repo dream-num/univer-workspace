@@ -9,8 +9,21 @@
         required: false
         schema:
           type: string
-          enum: [active, processed]
+          enum: [active, processed, all]
           default: active
+      - name: search
+        in: query
+        description: Literal substring of name, summary, creator display name or username, or Team Space name. ASCII case-insensitive; other characters match exactly. Applied before pagination.
+        schema:
+          type: string
+          maxLength: 200
+      - name: order
+        in: query
+        description: Descending product timestamp, with ascending Worktree ID as a stable tie-breaker. Cursors must be reused with the same filters and order.
+        schema:
+          type: string
+          enum: [updatedAtDesc, createdAtDesc]
+          default: updatedAtDesc
       - name: kind
         in: query
         required: false
@@ -32,6 +45,8 @@
           application/json:
             schema:
               $ref: ../schemas/worktrees.yaml#/WorktreeList
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
   post:

@@ -1,0 +1,158 @@
+.sidebar {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  color: var(--color-foreground);
+  font-family: var(--dsw-font-family);
+  font-size: 13px;
+}
+
+.header,
+.headerTitle {
+  display: flex;
+  align-items: center;
+}
+
+.header button[aria-busy="true"] svg {
+  animation: file-refresh 700ms linear infinite;
+}
+
+@keyframes file-refresh { to { transform: rotate(360deg); } }
+
+.header {
+  min-height: 36px;
+  flex: none;
+  justify-content: space-between;
+  padding: 0 2px;
+  font-weight: 600;
+}
+
+.headerTitle {
+  min-width: 0;
+  gap: 2px;
+}
+
+.headerTitle > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backIcon {
+  transform: rotate(180deg);
+}
+
+.treeViewport,
+.trash {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.status {
+  padding: 18px 8px;
+  color: var(--color-subtle-foreground);
+  text-align: center;
+}
+
+.error,
+.authNotice {
+  margin: 6px 2px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.error {
+  background: var(--color-destructive-soft);
+  color: var(--color-destructive-soft-foreground);
+}
+
+.authNotice {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted-foreground);
+}
+
+.authNotice strong {
+  color: var(--color-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.footerNavigation {
+  flex: none;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.navigationRow {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  outline: 0;
+  background: transparent;
+  color: var(--color-secondary-foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.navigationRow:hover {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+
+.navigationRow:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ring) 40%, transparent);
+}
+
+.navigationRow svg {
+  width: 16px;
+  height: 16px;
+  color: var(--color-subtle-foreground);
+}
+
+.trash {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  margin: 0;
+  padding: 4px 0 0;
+  list-style: none;
+}
+
+.trashRow {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px;
+  border-radius: 6px;
+}
+
+.trashRow:hover {
+  background: var(--color-accent);
+}
+
+.trashRow > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trashActions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}

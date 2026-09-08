@@ -1,0 +1,113 @@
+/* Header of the middle Worktree review surface. */
+
+.header {
+  display: flex;
+  flex: none;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 0;
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.identity {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  padding-top: 2px;
+  color: var(--color-muted-foreground);
+}
+
+.titleBlock {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.titleRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  min-width: 0;
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-subtle-foreground);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary {
+  margin: 0;
+  color: var(--color-muted-foreground);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.actions {
+  display: flex;
+  width: auto;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.mergeAction {
+  border-color: var(--color-success);
+  background: var(--color-success);
+  color: #fff;
+}
+
+.mergeAction:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-success) 88%, #000);
+}
+
+.mergeAction:focus-visible {
+  outline: 2px solid var(--color-success);
+  outline-offset: 2px;
+}
+
+.actionError {
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--color-destructive);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .header {
+    flex-direction: column;
+  }
+
+  .actions {
+    width: 100%;
+  }
+}

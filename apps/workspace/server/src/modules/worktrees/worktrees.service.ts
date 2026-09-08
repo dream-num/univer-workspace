@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { UniverType, type IChangeset } from "@univerjs/protocol";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { TrashModule } from "../trash/index.js";
@@ -150,19 +150,32 @@ export function createWorktreesModule(options: {
         query.teamSpaceId,
         "teamSpaceId"
       );
+      const search = validSearch(query.search);
+      const order = validOrder(query.order);
+      const queryKey = createHash("sha256")
+        .update(JSON.stringify([userId, scope, kind, teamSpaceId, search, order]))
+        .digest("hex");
+      const cursor = decodeCursor(query.cursor);
+      if (cursor && (cursor.queryKey !== undefined
+        ? cursor.queryKey !== queryKey
+        : search !== "" || order !== "updatedAtDesc" || scope === "all")) {
+        throw invalidInput("cursor does not match this query.", "cursor");
+      }
       const rows = options.repository.listCandidates({
         userId,
         scope,
         kind,
         teamSpaceId,
-        cursor: decodeCursor(query.cursor),
+        search,
+        order,
+        cursor,
         limit: limit + 1,
       });
       const visible: Array<{
         readonly row: WorktreeRow;
         readonly summary: WorktreeSummary;
       }> = [];
-      for (const row of rows) {
+      for (const row of rows.slice(0, limit)) {
         if (!isDiscoverable(userId, row)) continue;
         const data = await backendCall(() =>
           options.backend.getWorktree(row.id, userId)
@@ -181,16 +194,17 @@ export function createWorktreesModule(options: {
           summary: summaryView(row, data.status, access.capabilities),
         });
       }
-      const hasNext = visible.length > limit;
-      const page = hasNext ? visible.slice(0, limit) : visible;
+      const hasNext = rows.length > limit;
+      const page = visible;
       const last = page.at(-1);
       return {
         items: page.map((item) => item.summary),
         nextCursor:
           hasNext && last
             ? encodeCursor({
-                updatedAt: last.row.updated_at,
+                timestamp: order === "createdAtDesc" ? last.row.created_at : last.row.updated_at,
                 id: last.row.id,
+                queryKey,
               })
             : null,
       };
@@ -796,13 +810,26 @@ function worktreeCapabilities(
       row.visibility === "space" &&
       teamRole !== null);
   const removed = new Set(states.filter((unit) => unit.removed).map((unit) => unit.unitID));
+  // Read and edit checks run synchronously for one actor. Reuse their resource
+  // resolution only within this calculation, never across awaits or requests.
+  const resources = new Map<string, ResourceAccess | null>();
+  const capabilityAccess: AccessResolver = {
+    ...access,
+    resolveResource(actorId, resourceId) {
+      if (actorId !== userId) return access.resolveResource(actorId, resourceId);
+      if (!resources.has(resourceId)) {
+        resources.set(resourceId, access.resolveResource(actorId, resourceId));
+      }
+      return resources.get(resourceId)!;
+    },
+  };
   const unitRead = units.every(
-    (unit) => removed.has(unit.unit_id) || canReadUnit(userId, row, unit, access),
+    (unit) => removed.has(unit.unit_id) || canReadUnit(userId, row, unit, capabilityAccess),
   );
   const unitEdit = units.every(
     (unit) =>
       (unit.source === "worktree" && removed.has(unit.unit_id)) ||
-      canEditUnit(userId, row, unit, access),
+      canEditUnit(userId, row, unit, capabilityAccess),
   );
   const review = visibleReview && unitRead;
   const creatorCanEdit =
@@ -1399,10 +1426,24 @@ function optionalString(
   return { additionalFields: value };
 }
 
-function validScope(value: unknown): "active" | "processed" {
+function validScope(value: unknown): "active" | "processed" | "all" {
   if (value === undefined || value === "active") return "active";
-  if (value === "processed") return "processed";
+  if (value === "processed" || value === "all") return value;
   throw invalidInput("scope is invalid.", "scope");
+}
+
+function validSearch(value: unknown): string {
+  if (value === undefined) return "";
+  if (typeof value !== "string" || value.length > 200) {
+    throw invalidInput("search must be a string of at most 200 characters.", "search");
+  }
+  return value.trim();
+}
+
+function validOrder(value: unknown): "updatedAtDesc" | "createdAtDesc" {
+  if (value === undefined || value === "updatedAtDesc") return "updatedAtDesc";
+  if (value === "createdAtDesc") return value;
+  throw invalidInput("order is invalid.", "order");
 }
 
 function validOptionalKind(value: unknown): "user" | "team" | null {
@@ -1531,15 +1572,19 @@ function decodeCursor(value: unknown): WorktreeCursor | null {
   try {
     const parsed = JSON.parse(
       Buffer.from(value, "base64url").toString("utf8")
-    ) as Partial<WorktreeCursor>;
+    ) as Partial<WorktreeCursor> & { readonly updatedAt?: number };
+    // Cursors issued before explicit ordering used updatedAt as the position.
+    const timestamp = parsed.timestamp ?? parsed.updatedAt;
     if (
-      !Number.isSafeInteger(parsed.updatedAt) ||
+      !Number.isSafeInteger(timestamp) ||
       typeof parsed.id !== "string" ||
-      !parsed.id
+      !parsed.id ||
+      (parsed.queryKey !== undefined && typeof parsed.queryKey !== "string")
     ) {
       throw new Error("invalid cursor");
     }
-    return parsed as WorktreeCursor;
+    return { timestamp: timestamp as number, id: parsed.id,
+      ...(parsed.queryKey === undefined ? {} : { queryKey: parsed.queryKey }) };
   } catch {
     throw invalidInput("cursor is invalid.", "cursor");
   }
