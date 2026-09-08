@@ -19,10 +19,11 @@ Univer Workspace is a deployable knowledge and collaboration workspace built on 
 relational tables, canvases, and more into one shared runtime, with data and
 references staying connected across artifacts as the workspace changes.
 
-It combines a human-facing Browser, a shared Server, and an agent-ready CLI. Agents
-work in isolated Worktrees, verify their changes, and hand the result to a person for
-review. Humans can continue editing, review agent changes, and stay in control of what
-gets merged.
+Choose the Workspace Browser for direct editing, Workspace Agent for document
+conversations and change review, or the CLI for automation. All three connect to
+the Workspace Server, which owns document storage and permissions. Agents work in
+isolated Worktrees, verify their changes, and hand the result to a person for
+review. Humans can continue editing and stay in control of what gets merged.
 
 ![Univer Workspace showing an English team space with Sheet, Board, Doc, Slide, Base, and folder examples](docs/images/univer-workspace-en.png)
 
@@ -35,12 +36,27 @@ gets merged.
 | Share content with role- and node-aware access control  | Discover version-matched Skills and APIs offline                  | Integrate password, GitHub, Discord, or application OAuth login      |
 | Use Recent, Trash, file import/export, and review views | Work through multiple rounds without changing trunk               | Operate a documented HTTP API with explicit recovery boundaries      |
 
+## Choose your entry point
+
+| Entry point | Use it for | Get started |
+| --- | --- | --- |
+| **Workspace Browser** | Edit documents directly, collaborate, organize Spaces, and review changes | [Start Workspace](#quick-start) |
+| **Workspace Agent** | Chat with an agent beside your documents, reference local or remote files and folders, and review Worktree changes | [Install and use Agent](apps/agent/README.md#installation-and-first-use) |
+| **Workspace CLI** | Automate document tasks from a terminal, scripts, or an existing agent environment | [CLI installation and usage](apps/cli/README.md) |
+
+Workspace Agent is a local web application built on DSH (DeepSeek Harness). Its
+local file references point to the machine running Agent; Workspace documents
+remain on the connected service. Both Agent and CLI can connect to your existing
+Workspace deployment or one you start locally.
+
 ## How it works
 
 ```mermaid
 flowchart LR
     Human([Human]) --> Browser[Workspace Browser]
     Agent([AI agent]) --> CLI[Workspace CLI]
+    Human --> AgentApp[Workspace Agent: local conversation and review]
+    AgentApp --> Server
     Browser --> Server[Workspace Server]
     CLI --> Server
     Server --> Product[(Product data)]
@@ -48,10 +64,11 @@ flowchart LR
     Server --> Blobs[(Blob and asset bytes)]
 ```
 
-The Browser is the interactive editing and review surface. The CLI gives agents a
-structured way to load, understand, edit, validate, and render the same content. The
-Server resolves authoritative identity and permissions, owns Workspace product
-workflows, and composes the Univer Collaboration SDK.
+The Browser is the direct editing and collaboration surface. Workspace Agent
+combines a conversation with document previews and Worktree review. The CLI gives
+agents a structured way to load, understand, edit, validate, and render the same
+content. The Server resolves authoritative identity and permissions, owns
+Workspace product workflows, and composes the Univer Collaboration SDK.
 
 Worktree turns agent editing into an explicit review workflow:
 
@@ -59,7 +76,7 @@ Worktree turns agent editing into an explicit review workflow:
 create Worktree
 → agent edits and verifies an isolated draft
 → Ready
-→ human reviews in the Browser
+→ human reviews in the Browser or Workspace Agent
 → Merge or Reopen
 → trunk
 ```
@@ -68,6 +85,9 @@ Intermediate changes remain isolated from shared content until a person accepts
 them. See the [CLI guide](apps/cli/README.md) for the complete product workflow.
 
 ## Quick start
+
+These commands start the Workspace service and Browser. To add the conversation
+interface, follow the [Workspace Agent guide](apps/agent/README.md#installation-and-first-use).
 
 ### Requirements
 
@@ -103,6 +123,15 @@ The Server can also serve the latest built Browser from port 3020 when
 
 Configuration, authentication, storage, Docker, and database migration details live
 in the [Workspace application guide](apps/workspace/README.md).
+
+## Use Workspace Agent
+
+Install Agent to discuss documents, use `@` references, and review changes beside
+the conversation. The [Agent guide](apps/agent/README.md#installation-and-first-use)
+includes a prompt you can give a coding agent before cloning the repository, as
+well as manual setup and usage instructions. It walks through choosing or starting
+your own Workspace service, registering the OAuth callback, configuring model
+credentials, and opening the complete token URL printed by the local launcher.
 
 ## Use the Workspace CLI
 
