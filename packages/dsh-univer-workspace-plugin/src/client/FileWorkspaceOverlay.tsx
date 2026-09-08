@@ -5,12 +5,15 @@
  * @module dsh-univer-workspace-plugin/client/FileWorkspaceOverlay
  */
 
+import { Button, ChevronRightIcon } from "@univerjs/univer-workspace-ui";
+import { regionQuery, setConversationHidden } from "./navigation/region-route.ts";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import { WorkspaceResourceViewer } from "./components/WorkspaceResourceViewer.tsx";
 import { WorkspaceBlobViewer } from "./components/WorkspaceBlobViewer.tsx";
 import { WorkspaceWorktreeViewer } from "./components/WorkspaceWorktreeViewer.tsx";
 import {
+  hideConversation,
   applyConversationInset,
   clearConversationInset,
   measureWorktreeSurfaceWidth,
@@ -56,6 +59,19 @@ export function FileWorkspaceOverlay(props: FileWorkspaceOverlayProps) {
   // so the adapter re-captures the fresh host (the cleanup restores the old
   // one first). The surface itself must not disappear on a session switch.
   const currentSessionId = props.useSessions((state: SessionListState) => state.current);
+  const [right, setRight] = useState(() => regionQuery(window.location.hash).get("right"));
+  useEffect(() => {
+    const changed = () => setRight(regionQuery(window.location.hash).get("right"));
+    window.addEventListener("hashchange", changed);
+    return () => window.removeEventListener("hashchange", changed);
+  }, []);
+  const conversationVisible =
+    (right !== null && !right.startsWith("hidden/")) ||
+    (currentSessionId === undefined && target === null);
+  useEffect(() => {
+    if (conversationVisible) return;
+    return hideConversation();
+  }, [conversationVisible, currentSessionId]);
   const [surfaceLeft, setSurfaceLeft] = useState<number | null>(null);
   const [preferredSurfaceWidth, setPreferredSurfaceWidth] = useState<number | null>(null);
   const [viewportWidth, setViewportWidth] = useState(() =>
@@ -63,11 +79,13 @@ export function FileWorkspaceOverlay(props: FileWorkspaceOverlayProps) {
   );
   const targetKind = target?.kind ?? null;
   const availableSurfaceWidth = measureWorktreeSurfaceWidth(viewportWidth, surfaceLeft ?? 280);
-  const surfaceWidth = Math.min(
-    preferredSurfaceWidth ??
-      (targetKind === "worktree" ? availableSurfaceWidth : RESOURCE_SURFACE_WIDTH),
-    availableSurfaceWidth,
-  );
+  const surfaceWidth = !conversationVisible
+    ? Math.max(0, viewportWidth - (surfaceLeft ?? 280))
+    : Math.min(
+        preferredSurfaceWidth ??
+          (targetKind === "worktree" ? availableSurfaceWidth : RESOURCE_SURFACE_WIDTH),
+        availableSurfaceWidth,
+      );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -86,21 +104,87 @@ export function FileWorkspaceOverlay(props: FileWorkspaceOverlayProps) {
 
   useEffect(() => {
     if (target === null) return;
-    applyConversationInset(surfaceWidth);
+    if (conversationVisible) applyConversationInset(surfaceWidth);
     return () => {
       clearConversationInset();
     };
-  }, [targetKind, currentSessionId, surfaceWidth]);
+  }, [targetKind, currentSessionId, surfaceWidth, conversationVisible]);
 
-  if (target === null) return null;
-  const resizeHandle = surfaceLeft !== null ? (
-    <ConversationSurfaceResizeHandle left={surfaceLeft} width={surfaceWidth}
-      viewportWidth={viewportWidth} onWidthChange={setPreferredSurfaceWidth} />
-  ) : null;
+  const conversationToggle =
+    currentSessionId !== undefined ? (
+      <div
+        style={{
+          position: "fixed",
+          right: 12,
+          top: conversationVisible ? 12 : undefined,
+          bottom: conversationVisible ? undefined : 12,
+          pointerEvents: "auto",
+          zIndex: 50,
+        }}
+      >
+        <Button
+          variant="ghost"
+          size={conversationVisible ? "icon" : "sm"}
+          aria-label={props.t(conversationVisible ? "session.hide" : "session.show")}
+          title={props.t(conversationVisible ? "session.hide" : "session.show")}
+          onClick={() => setConversationHidden(conversationVisible, currentSessionId)}
+        >
+          {conversationVisible ? <ChevronRightIcon /> : props.t("session.show")}
+        </Button>
+      </div>
+    ) : null;
+  if (target === null) return conversationToggle;
+  const resizeHandle =
+    conversationVisible && surfaceLeft !== null ? (
+      <ConversationSurfaceResizeHandle
+        left={surfaceLeft}
+        width={surfaceWidth}
+        viewportWidth={viewportWidth}
+        onWidthChange={setPreferredSurfaceWidth}
+      />
+    ) : null;
   if (target.kind === "resource") {
-    return (<>
-      <WorkspaceResourceViewer
-        key={`${target.workspaceOrigin}:${target.resourceId}`}
+    return (
+      <>
+        {conversationToggle}
+        <WorkspaceResourceViewer
+          key={`${target.workspaceOrigin}:${target.resourceId}`}
+          target={target}
+          surfaceLeft={surfaceLeft}
+          surfaceWidth={surfaceWidth}
+          onClose={() => props.navigation.dispatch({ type: "close-content" })}
+          loadViewerBootstrap={props.loadViewerBootstrap}
+          getViewerLocale={props.getViewerLocale}
+          t={props.t}
+          insertResourceReference={(resource, selection) =>
+            props.insertResourceReference(currentSessionId, resource, selection)
+          }
+        />
+        {resizeHandle}
+      </>
+    );
+  }
+  if (target.kind === "blob") {
+    return (
+      <>
+        {conversationToggle}
+        <WorkspaceBlobViewer
+          key={`${target.workspaceOrigin}:${target.resourceId}`}
+          target={target}
+          surfaceLeft={surfaceLeft}
+          surfaceWidth={surfaceWidth}
+          onClose={() => props.navigation.dispatch({ type: "close-content" })}
+          t={props.t}
+        />
+        {resizeHandle}
+      </>
+    );
+  }
+  return (
+    <>
+      {conversationToggle}
+      <WorkspaceWorktreeViewer
+        key={`${target.workspaceOrigin}:${target.worktreeId}`}
         target={target}
         surfaceLeft={surfaceLeft}
         surfaceWidth={surfaceWidth}
@@ -113,35 +197,6 @@ export function FileWorkspaceOverlay(props: FileWorkspaceOverlayProps) {
         }
       />
       {resizeHandle}
-    </>);
-  }
-  if (target.kind === "blob") {
-    return (<>
-      <WorkspaceBlobViewer
-        key={`${target.workspaceOrigin}:${target.resourceId}`}
-        target={target}
-        surfaceLeft={surfaceLeft}
-        surfaceWidth={surfaceWidth}
-        onClose={() => props.navigation.dispatch({ type: "close-content" })}
-        t={props.t}
-      />
-      {resizeHandle}
-    </>);
-  }
-  return (<>
-    <WorkspaceWorktreeViewer
-      key={`${target.workspaceOrigin}:${target.worktreeId}`}
-      target={target}
-      surfaceLeft={surfaceLeft}
-      surfaceWidth={surfaceWidth}
-      onClose={() => props.navigation.dispatch({ type: "close-content" })}
-      loadViewerBootstrap={props.loadViewerBootstrap}
-      getViewerLocale={props.getViewerLocale}
-      t={props.t}
-      insertResourceReference={(resource, selection) =>
-        props.insertResourceReference(currentSessionId, resource, selection)
-      }
-    />
-    {resizeHandle}
-  </>);
+    </>
+  );
 }

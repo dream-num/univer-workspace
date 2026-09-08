@@ -59,6 +59,36 @@
   color: var(--dsw-alias-label-tertiary);
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    &:hover {
+      background: color-mix(in srgb, currentColor 10%, transparent);
+      color: var(--dsw-alias-label-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--uvf-color-primary);
+      outline-offset: 2px;
+    }
+  }
 }
 
 @media (hover: hover) {

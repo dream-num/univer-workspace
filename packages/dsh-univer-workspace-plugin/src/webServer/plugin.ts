@@ -12,6 +12,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type { Context } from "@deepseek-ai/cordis";
 import type { SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
 import type { Workspace } from "@deepseek-ai/dsh-workspace";
@@ -25,6 +26,8 @@ import {
   WORKSPACE_TEMPLATE_FORK_PATH,
   type WorkspaceTemplate,
 } from "../client/workspace-contract.ts";
+
+import { browseLocalFiles, resolveLocalFile } from "./local-files.ts";
 
 const PREFIX = "/univer-workspace/api";
 const CLIENT_CSS_PATH = "/plugins/dsh-univer-workspace-plugin/client.css";
@@ -527,7 +530,7 @@ async function proxyWorkspaceProductRequest(
     res.end();
     return;
   }
-  Readable.fromWeb(response.body as never).pipe(res);
+  await pipeline(Readable.fromWeb(response.body as never), res);
 }
 
 /** Build the browser-facing Workspace API prefix handler. */
@@ -542,6 +545,31 @@ export function createBrowserApiHandler(
     }
     const url = new URL(req.url ?? "/", "http://x");
     const subPath = url.pathname.slice(PREFIX.length);
+    if (req.method === "GET" && subPath === "/local-files") {
+      if (authenticatedUser(ctx) === null) {
+        jsonResponse(res, 401, { error: "workspace_connection_required" });
+        return;
+      }
+      res.setHeader("Cache-Control", "no-store");
+      const lifetime = new AbortController();
+      const abort = () => lifetime.abort();
+      res.once("close", abort);
+      try {
+        const result =
+          url.searchParams.get("action") === "resolve"
+            ? await resolveLocalFile(url.searchParams.get("path") ?? "")
+            : await browseLocalFiles(url.searchParams.get("path") ?? "", lifetime.signal);
+        if (!res.destroyed) jsonResponse(res, 200, result);
+      } catch {
+        if (!res.destroyed)
+          jsonResponse(res, 400, {
+            error: "Local path is unavailable; use an accessible absolute path on the Harness host.",
+          });
+      } finally {
+        res.removeListener("close", abort);
+      }
+      return;
+    }
     const productTarget = productProxyTarget(req.method, subPath);
     if (productTarget !== undefined) {
       const user = authenticatedUser(ctx);
@@ -557,6 +585,11 @@ export function createBrowserApiHandler(
       try {
         await proxyWorkspaceProductRequest(client, req, res, `${productTarget}${url.search}`);
       } catch (error) {
+        // A failed download cannot become a JSON response after headers were sent.
+        if (res.headersSent || res.destroyed) {
+          res.destroy();
+          return;
+        }
         jsonResponse(
           res,
           upstreamStatus(error),

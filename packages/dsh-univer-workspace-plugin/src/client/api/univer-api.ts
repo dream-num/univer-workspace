@@ -113,9 +113,23 @@ export async function getWorktrees(query: WorktreeListQuery = {}, signal?: Abort
  * keeps its panel rendering as unavailable, mirroring office. */
 const fileStateRequests = new Map<string, Promise<DocumentFileState>>();
 const fileStateSnapshots = new Map<string, DocumentFileState>();
-const fileStateListeners = new Set<(docKey: string) => void>();
+const fileStateListeners = new Set<(docKey: string | null) => void>();
 
-export function subscribeFileStateInvalidation(listener: (docKey: string) => void): () => void {
+/** Coarse upstream feed: invalidate cached documents and let mounted views reload. */
+export function invalidateWorkspaceState(): void {
+  fileStateSnapshots.clear();
+  fileStateRequests.clear();
+  for (const listener of fileStateListeners) listener(null);
+  for (const listener of workspaceStateListeners) listener();
+}
+
+const workspaceStateListeners = new Set<() => void>();
+export function subscribeWorkspaceInvalidation(listener: () => void): () => void {
+  workspaceStateListeners.add(listener);
+  return () => { workspaceStateListeners.delete(listener); };
+}
+
+export function subscribeFileStateInvalidation(listener: (docKey: string | null) => void): () => void {
   fileStateListeners.add(listener);
   return () => { fileStateListeners.delete(listener); };
 }

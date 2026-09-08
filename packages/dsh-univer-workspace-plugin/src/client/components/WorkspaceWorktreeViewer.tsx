@@ -67,18 +67,18 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
   const initialLocateDoneRef = useRef(false);
 
   useEffect(() => subscribeFileStateInvalidation((key) => {
-    if (key === `wt:${props.target.worktreeId}`) setMutationVersion((value) => value + 1);
+    if (key === null || key === `wt:${props.target.worktreeId}`) setMutationVersion((value) => value + 1);
   }), [props.target.worktreeId]);
 
   useEffect(() => {
     const controller = new AbortController();
-    // Keep an already rendered review page visible while the periodic refresh
+    // Keep an already rendered review page visible while a notified refresh
     // is in flight. Remote Workspaces can take several seconds to answer; if
     // every refresh replaced ready data with a loading state, the page would
     // flicker forever and never expose Changes on a slow connection.
     setFileState((current) => (current.status === "ready" ? current : { status: "loading" }));
     void getFileState(`wt:${props.target.worktreeId}`, controller.signal)
-      .then((value) => setFileState({ status: "ready", value }))
+      .then((value) => { if (!controller.signal.aborted) setFileState({ status: "ready", value }); })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         setFileState({

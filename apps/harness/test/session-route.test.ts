@@ -9,7 +9,9 @@ import {
 
 describe("Workspace Harness session URL", () => {
   it("encodes a session id in the canonical hash route", () => {
-    expect(sessionHashForId("session/with spaces")).toBe("#/s/session%2Fwith%20spaces");
+    expect(sessionHashForId("session/with spaces")).toBe(
+      "#/?right=session%2Fsession%252Fwith%2520spaces",
+    );
     expect(SESSION_HASH_PREFIX).toBe("#/s/");
   });
 
@@ -17,6 +19,7 @@ describe("Workspace Harness session URL", () => {
     expect(sessionIdFromHash("#/s/session%2Fwith%20spaces")).toBe("session/with spaces");
     expect(sessionIdFromHash("#/workspace/space-1")).toBeUndefined();
     expect(sessionIdFromHash("#/s/%E0%A4%A")).toBeUndefined();
+    expect(sessionIdFromHash("#/?right=hidden%2Fsession%2Fa%252Fb")).toBe("a/b");
     expect(sessionIdFromHash("#/s/")).toBeUndefined();
   });
 
@@ -47,6 +50,12 @@ describe("Workspace Harness session URL", () => {
         for (const listener of listeners) listener();
       }),
     };
+    Object.assign(sessions, {
+      clear: vi.fn(() => {
+        snapshot = { ...snapshot, current: undefined };
+        for (const listener of listeners) listener();
+      }),
+    });
     const events = new Map<string, EventListener>();
     vi.stubGlobal("window", {
       location: { hash: "" },
@@ -58,12 +67,13 @@ describe("Workspace Harness session URL", () => {
       effect: (factory: () => unknown) => factory(),
     } as unknown as ClientContext;
 
+    const nativeOpen = sessions.open;
     try {
       apply(ctx);
       snapshot = { ...snapshot, current: sessionId };
       for (const listener of listeners) listener();
       expect(window.location.hash).toBe(sessionHashForId(sessionId));
-      expect(sessions.open).not.toHaveBeenCalled();
+      expect(nativeOpen).not.toHaveBeenCalled();
 
       // A native sidebar click changes `current` before the browser emits a
       // hash event. The route must project the new id instead of reopening the
@@ -75,7 +85,27 @@ describe("Workspace Harness session URL", () => {
       // Conversely, an explicit deep-link navigation opens the listed row.
       window.location.hash = sessionHashForId(sessionId);
       events.get("hashchange")?.(new Event("hashchange"));
-      expect(sessions.open).toHaveBeenCalledWith(sessionId);
+      expect(nativeOpen).toHaveBeenCalledWith(sessionId);
+      expect(window.location.hash).toBe(sessionHashForId(sessionId));
+
+      window.location.hash = "#/?center=resource%2Fdoc&right=hidden%2Fsession%2Fsession-created";
+      events.get("hashchange")?.(new Event("hashchange"));
+      expect(snapshot.current).toBe(sessionId);
+      for (const listener of listeners) listener();
+      expect(window.location.hash).toContain("hidden%2Fsession");
+      sessions.open(sessionId);
+      expect(snapshot.current).toBe(sessionId);
+      expect(window.location.hash).toBe("#/?center=resource%2Fdoc&right=session%2Fsession-created");
+
+      window.location.hash = "#/";
+      events.get("hashchange")?.(new Event("hashchange"));
+      snapshot = { ...snapshot, current: undefined };
+      for (const listener of listeners) listener();
+      snapshot = { ...snapshot, current: sessionId };
+      for (const listener of listeners) listener();
+      expect(window.location.hash).toBe("#/");
+      sessions.open(sessionId);
+      expect(snapshot.current).toBe(sessionId);
       expect(window.location.hash).toBe(sessionHashForId(sessionId));
     } finally {
       vi.unstubAllGlobals();
@@ -105,6 +135,12 @@ describe("Workspace Harness session URL", () => {
         for (const listener of listeners) listener();
       }),
     };
+    Object.assign(sessions, {
+      clear: vi.fn(() => {
+        snapshot = { ...snapshot, current: undefined };
+        for (const listener of listeners) listener();
+      }),
+    });
     const events = new Map<string, EventListener>();
     vi.stubGlobal("window", {
       location: { hash: sessionHashForId(staleId) },
@@ -116,13 +152,14 @@ describe("Workspace Harness session URL", () => {
       effect: (factory: () => unknown) => factory(),
     } as unknown as ClientContext;
 
+    const nativeOpen = sessions.open;
     try {
       apply(ctx);
       // The stale hash is retained while the account list is incomplete. Once
       // the native baseline/action selects a listed row, it must be projected.
       snapshot = { ...snapshot, current: listedId };
       for (const listener of listeners) listener();
-      expect(sessions.open).not.toHaveBeenCalled();
+      expect(nativeOpen).not.toHaveBeenCalled();
       expect(window.location.hash).toBe(sessionHashForId(listedId));
       expect(events.has("hashchange")).toBe(true);
     } finally {

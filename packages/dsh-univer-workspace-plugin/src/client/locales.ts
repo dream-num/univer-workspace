@@ -7,9 +7,14 @@
 
 /** Simplified Chinese UI strings (the key source). */
 export const zh = {
+  "reference.localFiles": "本地文件",
+  "reference.hostFiles": "Harness 所在机器的文件和文件夹",
+  "reference.truncated": "结果未全部显示，请输入更完整的路径前缀",
   title: "Univer 预览",
   expand: "展开预览",
   collapse: "收起预览",
+  "session.hide": "隐藏会话",
+  "session.show": "展开会话",
   "session.new": "新会话",
   "session.new.label": "新建会话",
   "toggle.open": "展开侧栏",
@@ -262,9 +267,14 @@ export const zh = {
 
 /** English UI strings. */
 export const en = {
+  "reference.localFiles": "Local files",
+  "reference.hostFiles": "Files and folders on the Harness host",
+  "reference.truncated": "More entries exist; type a more specific path prefix",
   title: "Univer Preview",
   expand: "Expand preview",
   collapse: "Collapse preview",
+  "session.hide": "Hide conversation",
+  "session.show": "Show conversation",
   "session.new": "New Session",
   "session.new.label": "New session",
   "toggle.open": "Expand sidebar",

@@ -1,3 +1,6 @@
+import { createLocalPathInputSource } from "./path-reference.ts";
+import { bindContentRoute } from "./navigation/region-route.ts";
+import { invalidateWorkspaceState } from "./api/univer-api.ts";
 /**
  * @dsh-univer-workspace-plugin — browser half.
  *
@@ -42,6 +45,7 @@ import { forkTemplate } from "./template-api.ts";
 import { WORKSPACE_ME_PATH, type WorkspaceMeView } from "./workspace-contract.ts";
 import {
   createWorkspaceResourceInputSource,
+  bindReferenceDraftRestoration,
   fetchWorkspaceResourceDescriptor,
   insertWorkspaceResourceReference,
   type WorkspaceResourceDescriptor,
@@ -66,6 +70,10 @@ const WORKSPACE_SETTINGS_NAMESPACE = "univer-workspace-harness";
 
 /** Apply the browser plugin. */
 export function apply(ctx: ClientContext): void {
+  ctx.effect(() => {
+    window.addEventListener("uwh:workspace-changed", invalidateWorkspaceState);
+    return () => window.removeEventListener("uwh:workspace-changed", invalidateWorkspaceState);
+  });
   let storedNavigationMode: string | null = null;
   try {
     storedNavigationMode = window.localStorage.getItem("dsh-univer-workspace/sidebar-tab");
@@ -85,6 +93,7 @@ export function apply(ctx: ClientContext): void {
   const clientSessions = ctx.sessions as unknown as ISessions;
   const services = ctx as unknown as { get: (name: string) => unknown };
   const conversation = services.get("conversation") as IConversation;
+  ctx.effect(() => bindReferenceDraftRestoration({ sessions: clientSessions, conversation }), "univer-workspace: Restore reference drafts");
   let linkedSpaces: Awaited<ReturnType<typeof fetchWorkspaceSpaces>> = [];
   let currentSpaceIdForSession: ((sessionId: string) => string | undefined) | undefined;
   const inputTriggers = services.get("inputTriggers") as {
@@ -107,6 +116,10 @@ export function apply(ctx: ClientContext): void {
       ),
     "univer-workspace: Resource @ source",
   );
+
+  ctx.effect(() => inputTriggers.registerSource(createLocalPathInputSource({
+    localFiles: translate("reference.localFiles"), host: translate("reference.hostFiles"), truncated: translate("reference.truncated"),
+  })), "univer-workspace: Local path @ source");
 
   const openMessageResource = async (resourceId: string): Promise<void> => {
     try {
@@ -171,6 +184,7 @@ export function apply(ctx: ClientContext): void {
     );
     switch (result.kind) {
       case "inserted":
+        if (sessionId !== undefined) openSession(sessionId);
         toast.success(translate("resource.addedToMessage"));
         break;
       case "input-busy":
@@ -357,8 +371,32 @@ export function apply(ctx: ClientContext): void {
     return mePromise;
   };
 
+  ctx.effect(() => bindContentRoute(navigation, async (route, signal) => {
+    const me = await loadMe();
+    if (route.kind === "worktree") return {
+      kind: "worktree", workspaceOrigin: me.workspaceOrigin,
+      worktreeId: route.id, unitId: route.unitId, name: route.id,
+    };
+    if (route.kind === "blob") return {
+      kind: "blob", workspaceOrigin: me.workspaceOrigin, resourceId: route.id,
+      name: route.id, mediaType: "application/octet-stream", byteSize: null,
+    };
+    const resource = await fetchWorkspaceResourceDescriptor(route.id, signal);
+    return {
+      kind: "resource", workspaceOrigin: me.workspaceOrigin,
+      resourceId: resource.resourceId, docKey: `res:${resource.resourceId}`,
+      name: resource.name, unitType: resource.unitType,
+    };
+  }, error => toast.error(translate("window.loadFailed"), {
+    description: error instanceof Error ? error.message : String(error),
+  })));
+
   const getViewerLocale = (): ViewerLocale => viewerLocaleOf(ctx.locale.getSnapshot().active);
-  const sessionHashForId = (sessionId: string): string => `#/s/${encodeURIComponent(sessionId)}`;
+  const sessionHashForId = (sessionId: string): string => {
+    const query = new URLSearchParams(window.location.hash.startsWith("#/?") ? window.location.hash.slice(3) : "");
+    query.set("right", `session/${encodeURIComponent(sessionId)}`);
+    return `#/?${query}`;
+  };
   const openSession = (sessionId: string): void => {
     window.location.hash = sessionHashForId(sessionId);
   };

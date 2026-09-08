@@ -8,6 +8,7 @@
  * composed by the Harness profile.
  */
 import type { ClientContext } from "./dsh-runtime-types.ts";
+import * as workspaceEvents from "./workspace-events.ts";
 import * as sessionRoute from "./session-route.ts";
 
 /** Required services for the two small DSH integration adapters. */
@@ -16,4 +17,5 @@ export const inject = ["sessions"];
 /** Apply only the generic DSH routing adapter. */
 export function apply(ctx: ClientContext): void {
   ctx.plugin(sessionRoute);
+  ctx.plugin(workspaceEvents);
 }

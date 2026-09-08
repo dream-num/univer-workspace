@@ -9,7 +9,7 @@
 
 import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
 import { Button, CloseIcon } from "@univerjs/univer-workspace-ui";
-import { getFileState } from "../api/univer-api.ts";
+import { getFileState, subscribeFileStateInvalidation } from "../api/univer-api.ts";
 import { PanelViewer, type ViewerTarget } from "./review-panel.tsx";
 import type { WorkspaceResourceSurface } from "../navigation/workspace-navigation.ts";
 import type { DocumentFileState } from "../../shared/state.ts";
@@ -70,9 +70,13 @@ function resolveTrunkViewer(state: DocumentFileState): ViewerTarget | undefined 
 export function WorkspaceResourceViewer(props: WorkspaceResourceViewerProps): ReactElement {
   const [fileState, setFileState] = useState<FileState>({ status: "loading" });
 
+  const [revision, setRevision] = useState(0);
+  useEffect(() => subscribeFileStateInvalidation(key => {
+    if (key === null || key === props.target.docKey) setRevision(value => value + 1);
+  }), [props.target.docKey]);
   useEffect(() => {
     let active = true;
-    setFileState({ status: "loading" });
+    setFileState(current => current.status === "ready" ? current : { status: "loading" });
     void getFileState(props.target.docKey)
       .then((value) => {
         if (active) setFileState({ status: "ready", value });
@@ -88,7 +92,7 @@ export function WorkspaceResourceViewer(props: WorkspaceResourceViewerProps): Re
     return () => {
       active = false;
     };
-  }, [props.target.docKey]);
+  }, [props.target.docKey, revision]);
 
   const viewer = fileState.status === "ready" ? resolveTrunkViewer(fileState.value) : undefined;
   const surfaceStyle = {
@@ -115,6 +119,7 @@ export function WorkspaceResourceViewer(props: WorkspaceResourceViewerProps): Re
           </div>
         </div>
         <Button
+          className={css.addToMessage}
           variant="ghost"
           size="icon-sm"
           aria-label={props.t("resource.addToMessage")}

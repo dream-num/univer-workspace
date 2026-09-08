@@ -181,10 +181,6 @@ export function WorkspaceSidebarRoot(props: WorkspaceSidebarRootProps) {
             <span className={css.brandName}>{slot("sidebar.brand.name", {})}</span>
           </div>
           <div className={css.brandActions}>
-            <button type="button" className={css.newSession} onClick={() => props.startSession()}>
-              <IconNewChatOutline16 />
-              <span>{props.t("session.new")}</span>
-            </button>
             <IconButton label={props.t("toggle.collapse")} onClick={props.toggleSidebar}>
               <IconPanelLeftOutline16 />
             </IconButton>
@@ -237,6 +233,10 @@ export function WorkspaceSidebarRoot(props: WorkspaceSidebarRootProps) {
             aria-hidden={tab !== "sessions"}
             className={`${css.regionPane} ${tab === "sessions" ? css.visible : css.hidden}`}
           >
+            <button type="button" className={css.newSession} onClick={() => props.startSession()}>
+              <IconNewChatOutline16 />
+              <span>{props.t("session.new")}</span>
+            </button>
             {slot("sidebar.workspaces", {
               wide: true,
               expandSidebar: props.toggleSidebar,

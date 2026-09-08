@@ -1,3 +1,4 @@
+import { refreshWorktreeWindow } from "./api/worktree-pages.ts";
 /**
  * Worktree tab of the Harness sidebar: origin-level Worktree discovery only —
  * state groups, search, and Worktree rows. There is deliberately no Unit
@@ -56,6 +57,8 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
   const [visibilityFilter, setVisibilityFilter] = useState<WorktreeVisibilityFilter>("open");
   const loadRetryAttempt = useRef(0);
   const [listQuery, setListQuery] = useState<WorktreeListQuery>({ scope: "active", order: "createdAtDesc", limit: 50 });
+  const visibleCount = useRef(0);
+  const refreshWindow = useRef(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,6 +79,7 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
   });
 
   const refresh = useCallback(() => {
+    refreshWindow.current = true;
     setRefreshing(true);
     setNextCursor(null);
     setListQuery(({ cursor: _cursor, ...current }) => current);
@@ -83,7 +87,7 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
   }, []);
 
   useEffect(() => subscribeFileStateInvalidation((key) => {
-    if (key.startsWith("wt:")) refresh();
+    if (key === null || key.startsWith("wt:")) refresh();
   }), [refresh]);
 
   useEffect(() => {
@@ -105,15 +109,24 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
       retryTimer = window.setTimeout(() => setRefreshEpoch((value) => value + 1), delay);
     };
     setPending(true);
-    void Promise.allSettled([getWorktrees(listQuery, abort.signal), fetchWorkspaceMe(abort.signal)])
+    const replaceWindow = refreshWindow.current;
+    refreshWindow.current = false;
+    const listing = replaceWindow
+      ? refreshWorktreeWindow(listQuery, visibleCount.current, query => getWorktrees(query, abort.signal))
+      : getWorktrees(listQuery, abort.signal);
+    void Promise.allSettled([listing, fetchWorkspaceMe(abort.signal)])
       .then(([worktreeResult, meResult]) => {
         if (abort.signal.aborted) return;
 
         let hasFailure = false;
         if (worktreeResult.status === "fulfilled") {
           const page = worktreeResult.value;
-          setWorktrees((current) => listQuery.cursor === undefined ? page.items :
-            [...new Map([...(current ?? []), ...page.items].map((item) => [item.worktreeId, item])).values()]);
+          setWorktrees((current) => {
+            const items = replaceWindow || listQuery.cursor === undefined ? page.items :
+              [...new Map([...(current ?? []), ...page.items].map((item) => [item.worktreeId, item])).values()];
+            visibleCount.current = items.length;
+            return items;
+          });
           setNextCursor(page.nextCursor);
           setError(undefined);
         } else {

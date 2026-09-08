@@ -77,7 +77,8 @@ export function useUniverStates(files: readonly string[]): {
       }
     };
     const unsubscribe = subscribeFileStateInvalidation((file) => {
-      if (trackedFiles.includes(file)) void readOnce([file]);
+      if (file === null) void readOnce();
+      else if (trackedFiles.includes(file)) void readOnce([file]);
     });
     void readOnce();
     return () => {

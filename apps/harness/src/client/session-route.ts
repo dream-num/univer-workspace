@@ -13,14 +13,21 @@ export const name = "univer-workspace-harness-session-route";
 export const inject = ["sessions"];
 
 /** Build the canonical URL fragment for one Session. */
-export function sessionHashForId(sessionId: string): string {
-  return `${SESSION_HASH_PREFIX}${encodeURIComponent(sessionId)}`;
+export function sessionHashForId(sessionId: string, hash = "#/"): string {
+  const query = new URLSearchParams(hash.startsWith("#/?") ? hash.slice(3) : "");
+  query.set("right", `session/${encodeURIComponent(sessionId)}`);
+  return `#/?${query}`;
 }
 
 /** Read a Session ID from the current hash. */
 export function sessionIdFromHash(hash: string): string | undefined {
-  if (!hash.startsWith(SESSION_HASH_PREFIX)) return undefined;
-  const encoded = hash.slice(SESSION_HASH_PREFIX.length);
+  const region = hash.startsWith("#/?") ? new URLSearchParams(hash.slice(3)).get("right") : null;
+  const right = region?.startsWith("hidden/") ? region.slice(7) : region;
+  const encoded = hash.startsWith(SESSION_HASH_PREFIX)
+    ? hash.slice(SESSION_HASH_PREFIX.length)
+    : right?.startsWith("session/")
+      ? right.slice(8)
+      : "";
   if (encoded === "") return undefined;
   try {
     const sessionId = decodeURIComponent(encoded);
@@ -46,6 +53,17 @@ export function apply(ctx: ClientContext): void {
   let listCurrent = sessions.list.getSnapshot().current;
   let hashNavigation = false;
   let opening = false;
+  const nativeOpen = sessions.open;
+  sessions.open = (id) => {
+    opening = true;
+    try {
+      nativeOpen.call(sessions, id);
+    } finally {
+      opening = false;
+    }
+    const nextHash = sessionHashForId(String(id), window.location.hash);
+    if (window.location.hash !== nextHash) window.location.hash = nextHash;
+  };
 
   /** Open a URL target once the authenticated native list has published it. */
   const openHashTarget = (): void => {
@@ -63,7 +81,7 @@ export function apply(ctx: ClientContext): void {
     }
     opening = true;
     try {
-      sessions.open(target as SessionId);
+      nativeOpen.call(sessions, target as SessionId);
     } finally {
       opening = false;
       if (sessions.list.getSnapshot().current === target) hashNavigation = false;
@@ -77,6 +95,10 @@ export function apply(ctx: ClientContext): void {
     const current = snapshot.current;
     const changed = current !== listCurrent;
     listCurrent = current;
+    if (!opening && window.location.hash === "#/" && current !== undefined) {
+      sessions.clear();
+      return;
+    }
 
     // A hash navigation owns the next selection. Keep the requested fragment
     // while its row is still arriving through the downlink/list baseline.
@@ -100,13 +122,24 @@ export function apply(ctx: ClientContext): void {
     // A native DSH action (sidebar row, New Session, reconnect restoration)
     // changed the authoritative current id. Project that id immediately; do
     // not read the previous hash as an instruction and undo the action.
-    if (changed && current !== undefined && snapshot.byId[current] !== undefined) {
-      const nextHash = sessionHashForId(String(current));
+    const explicitClosedRoute =
+      (window.location.hash === "#/" || window.location.hash.startsWith("#/?")) &&
+      sessionIdFromHash(window.location.hash) === undefined;
+    if (
+      !explicitClosedRoute &&
+      changed &&
+      current !== undefined &&
+      snapshot.byId[current] !== undefined
+    ) {
+      const nextHash = sessionHashForId(String(current), window.location.hash);
       if (window.location.hash !== nextHash) window.location.hash = nextHash;
     }
   };
 
   const onHashChange = (): void => {
+    if (window.location.hash === "#/" && sessions.list.getSnapshot().current !== undefined) {
+      sessions.clear();
+    }
     hashNavigation = sessionIdFromHash(window.location.hash) !== undefined;
     openHashTarget();
   };
@@ -117,6 +150,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(
     () => () => {
       disposed = true;
+      sessions.open = nativeOpen;
       window.removeEventListener("hashchange", onHashChange);
       unsubscribe();
     },

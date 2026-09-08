@@ -1,3 +1,8 @@
 @import "./gen-univer.css";
 @import "./styles/tokens.css";
 @import "./styles/workspace.css";
+
+/* The app owns the header close action; keep native export/navigation utilities hidden. */
+[data-slot="conversation.session.header.utilities"] {
+  display: none !important;
+}

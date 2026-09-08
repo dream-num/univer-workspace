@@ -97,6 +97,13 @@
   color: var(--color-foreground);
 }
 
+.header .addToMessage svg,
+.close svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
 .close:focus-visible {
   outline: 2px solid var(--color-ring);
   outline-offset: 2px;

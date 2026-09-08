@@ -1,3 +1,4 @@
+import { subscribeWorkspaceInvalidation } from "./api/univer-api.ts";
 import {
   WorkspaceFileBrowser,
   type WorkspaceFileBrowserDataSource,
@@ -83,6 +84,8 @@ export function FileSidebar({
     setRefreshing(true);
     setRefreshEpoch((value) => value + 1);
   }, []);
+
+  useEffect(() => subscribeWorkspaceInvalidation(refresh), [refresh]);
 
   useEffect(() => {
     const abort = new AbortController();

@@ -9,10 +9,12 @@ function browser() {
     __UWH_CONNECTION_VERSION__: "selected",
     fetch,
     WebSocket: class {
+      listeners = new Map<string, () => void>();
       constructor(readonly url: string, readonly protocols?: string[]) {}
+      addEventListener(name: string, listener: () => void) { this.listeners.set(name, listener); }
     },
     location: { origin: "http://localhost:3101", href: "http://localhost:3101/", replace },
-    Request, Headers, URL,
+    Request, Headers, URL, AbortSignal, setTimeout,
     setInterval: vi.fn(),
     addEventListener: vi.fn(),
   };
@@ -43,12 +45,10 @@ describe("browser connection fence", () => {
     expect(local.protocols).toEqual(["rpc"]);
     const remote = new sandbox.WebSocket("wss://workspace.example/api/connect");
     expect(new URL(remote.url).searchParams.has("uwhConnection")).toBe(false);
-    const poll = sandbox.setInterval.mock.calls[0]![0] as () => Promise<void>;
-    fetch.mockResolvedValueOnce(Response.json({ ready: false, version: "next" }));
-    await poll();
-    expect(replace).not.toHaveBeenCalled();
+    expect(sandbox.setInterval).not.toHaveBeenCalled();
     fetch.mockResolvedValueOnce(Response.json({ ready: true, version: "next" }));
-    await poll();
-    expect(replace).toHaveBeenCalledExactlyOnceWith("/");
+    const mux = new sandbox.WebSocket("ws://localhost:3101/api/remote.mux");
+    mux.listeners.get("close")!();
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith("/"));
   });
 });

@@ -5,15 +5,29 @@ export const connectionBrowserScript = `(() => {
   const NativeWebSocket = globalThis.WebSocket;
   let refreshing = false;
   const owned = url => url.origin === location.origin && (url.pathname === '/api' || url.pathname.startsWith('/api/') || url.pathname === '/univer-workspace' || url.pathname.startsWith('/univer-workspace/') || url.pathname.startsWith('/auth/device/'));
-  async function check() {
-    try {
-      const response = await nativeFetch('/auth/connection/status', {cache:'no-store'});
-      const state = await response.json();
-      if (state.version !== version && state.ready && !refreshing) {
-        refreshing = true;
-        location.replace('/');
-      }
-    } catch {}
+  let checking;
+  // Recover only after a transport loss, an account fence rejection, or page restore.
+  // OAuth switches dispose the native mux; ordinary healthy tabs never poll.
+  function check() {
+    if (checking || refreshing) return;
+    checking = (async () => {
+      const deadline = Date.now() + 45000;
+      do {
+        try {
+          const response = await nativeFetch('/auth/connection/status', {cache: 'no-store', signal: AbortSignal.timeout(3000)});
+          if (!response.ok) return;
+          const state = await response.json();
+          if (state.ready) {
+            if (state.version !== version && !refreshing) {
+              refreshing = true;
+              location.replace('/');
+            }
+            return;
+          }
+        } catch { return; }
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } while (Date.now() < deadline);
+    })().finally(() => { checking = undefined; });
   }
   globalThis.fetch = (input, init) => {
     const request = new Request(input instanceof Request ? input : new URL(input, location.href), init);
@@ -21,7 +35,7 @@ export const connectionBrowserScript = `(() => {
     const headers = new Headers(request.headers);
     headers.set('x-uwh-connection', version);
     return nativeFetch(request, {headers}).then(response => {
-      if (response.status === 409 || response.status === 503) void check();
+      if (response.status === 409 || response.status === 503) check();
       return response;
     });
   };
@@ -31,8 +45,8 @@ export const connectionBrowserScript = `(() => {
       const http = new URL(url); http.protocol = http.protocol === 'wss:' ? 'https:' : 'http:';
       if (owned(http)) url.searchParams.set('uwhConnection', version);
       super(url.href, protocols);
+      if (owned(http) && url.pathname === "/api/remote.mux") this.addEventListener("close", check);
     }
   };
-  setInterval(check, 1000);
   addEventListener('pageshow', check);
 })();`;

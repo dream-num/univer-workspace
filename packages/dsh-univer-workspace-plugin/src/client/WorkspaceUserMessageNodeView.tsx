@@ -1,8 +1,10 @@
+import { pathReferenceFromUrl } from "./path-reference.ts";
+import { UnitTypeIcon } from "./components/worktree-review/unit-markers.tsx";
 import type { ChatNodeViewProps } from "@deepseek-ai/dsh-client-ui-chat/client";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm/types";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { FileTextIcon } from "@univerjs/univer-workspace-ui";
+import { CheckIcon, CopyIcon, FolderIcon } from "@univerjs/univer-workspace-ui";
 import { projectWorkspaceResourceMessageText } from "./workspace-resource-reference.ts";
 import styles from "./WorkspaceUserMessageNodeView.module.scss";
 
@@ -53,7 +55,7 @@ export function WorkspaceUserMessageNodeView(
             })}
           </time>
           <button type="button" aria-label={copied ? "Copied" : "Copy"} onClick={copy}>
-            {copied ? "✓" : "⧉"}
+            {copied ? <CheckIcon aria-hidden="true" /> : <CopyIcon aria-hidden="true" />}
           </button>
         </div>
       </div>
@@ -71,8 +73,12 @@ export function WorkspaceUserMessageNodeView(
  * projection is deliberately presentation-only; the logged message and its
  * wire reference remain unchanged.
  */
-function renderDisplayText(text: string, onOpenResource: (resourceId: string) => Promise<void>): ReactNode {
-  const reference = /@\[((?:\\.|[^\]\n])+)\]\((?:dsh-session:)?univer-workspace-resource:([A-Za-z0-9%._~-]+)\)/gu;
+function renderDisplayText(
+  text: string,
+  onOpenResource: (resourceId: string) => Promise<void>,
+): ReactNode {
+  const reference =
+    /@\[((?:\\.|[^\]\n])+)\]\((?:dsh-session:)?(univer-(?:workspace-resource|workspace-folder|local-path):[^\s)]+)\)/gu;
   const parts: ReactNode[] = [];
   let cursor = 0;
   let index = 0;
@@ -80,14 +86,45 @@ function renderDisplayText(text: string, onOpenResource: (resourceId: string) =>
     const start = match.index ?? 0;
     if (start > cursor) parts.push(text.slice(cursor, start));
     const label = match[1]?.replaceAll(/\\([\\\]])/g, "$1");
-    const resourceId = match[2];
-    if (label !== undefined && resourceId !== undefined) {
-      parts.push(
-        <ResourceReference key={`workspace-reference-${index}`} label={label}
-          resourceId={decodeURIComponent(resourceId)} onOpen={onOpenResource} />,
-      );
-      index += 1;
+    const target = match[2];
+    let node: ReactNode = match[0];
+    if (label !== undefined && target !== undefined) {
+      try {
+        const url = new URL(target);
+        if (url.protocol === "univer-workspace-resource:")
+          node = (
+            <ResourceReference
+              key={`workspace-reference-${index}`}
+              label={label}
+              resourceId={decodeURIComponent(url.pathname)}
+              unitType={url.searchParams.get("unitType") ?? ""}
+              onOpen={onOpenResource}
+            />
+          );
+        else {
+          const value = pathReferenceFromUrl(target, label);
+          if (value !== undefined)
+            node = (
+              <span
+                key={`path-reference-${index}`}
+                className={styles.reference}
+                title={"path" in value ? value.path : `Workspace folder: ${value.name}`}
+              >
+                {value.kind === "local-file" ? (
+                  <UnitTypeIcon type={localUnitType(value.path)} />
+                ) : (
+                  <FolderIcon />
+                )}
+                <span>{label}</span>
+              </span>
+            );
+        }
+      } catch {
+        /* Malformed historical references remain readable text. */
+      }
     }
+    parts.push(node);
+    index++;
     cursor = start + match[0].length;
   }
   if (cursor < text.length) parts.push(text.slice(cursor));
@@ -97,18 +134,32 @@ function renderDisplayText(text: string, onOpenResource: (resourceId: string) =>
 function ResourceReference(props: {
   readonly label: string;
   readonly resourceId: string;
+  readonly unitType: string;
   readonly onOpen: (resourceId: string) => Promise<void>;
 }): JSX.Element {
   const [opening, setOpening] = useState(false);
   return (
-    <button type="button" className={styles.reference} title={props.label}
-      aria-busy={opening} disabled={opening}
+    <button
+      type="button"
+      className={styles.reference}
+      title={props.label}
+      aria-busy={opening}
+      disabled={opening}
       onClick={() => {
         setOpening(true);
         void props.onOpen(props.resourceId).finally(() => setOpening(false));
-      }}>
-      <FileTextIcon />
+      }}
+    >
+      <UnitTypeIcon type={props.unitType} />
       <span>{props.label}</span>
     </button>
   );
+}
+
+function localUnitType(path: string): string {
+  const extension = path.split(".").at(-1)?.toLowerCase() ?? "";
+  if (["xlsx", "xls", "csv", "ods"].includes(extension)) return "sheet";
+  if (["docx", "doc", "odt", "txt", "md"].includes(extension)) return "doc";
+  if (["pptx", "ppt", "odp"].includes(extension)) return "slide";
+  return "";
 }

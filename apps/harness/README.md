@@ -60,7 +60,13 @@ browser authentication, model credentials and settings remain running.
 Each rendered page carries a connection version. HTTP requests and collaboration
 WebSocket upgrades from an old page are rejected after a switch. Other open tabs
 reload when the new runtime is ready, so their old selections cannot operate on
-the new account. Switching stops the previous account's active agent runtime;
+the new account. Business notifications use a logical Remote stream on DSH's
+existing WebSocket mux. The Harness shares one authenticated Workspace Worktree
+feed across local tabs; a reconnect invalidates the open review views and directory
+so missed changes are fetched again. Idle tabs do not poll connection status.
+OAuth completion and logout use short readiness checks for at most 45 seconds.
+A lost DSH connection or rejected stale-account request also checks readiness
+before reopening the application. Switching stops the previous account's active agent runtime;
 already accepted remote operations remain owned by the Workspace server.
 
 ## Local data and storage
@@ -279,12 +285,17 @@ cp apps/workspace/.env.example apps/workspace/.env
 pnpm workspace:dev:server
 ```
 
-The local Workspace server listens on `http://127.0.0.1:3020` by default. If you
-also need the Browser application, run `pnpm workspace:dev:web` and open
-`http://127.0.0.1:5173`. In the Harness Settings page, set the Workspace origin
-to `http://127.0.0.1:3020` and complete browser authorization through the local
-Workspace sign-in flow. The Harness does not create Workspace users or bypass
-Workspace authentication.
+The API server listens on `http://127.0.0.1:3020` by default. Browser authorization
+also needs the Workspace sign-in UI: run `pnpm workspace:dev:web` in another
+terminal, then set the Harness Workspace origin to `http://127.0.0.1:5173`.
+Vite serves the sign-in UI and forwards API and collaboration requests to port
+3020. Register the Harness OAuth client in `OAUTH_CLIENTS_JSON` before starting
+the server, as described above; its callback must match the Harness port.
+
+Port 3020 can be used directly when the Workspace Browser has been built into
+`apps/workspace/dist/public`. On a fresh clone without that build, using port
+3020 as the authorization origin leaves the login page unavailable. The Harness
+does not create Workspace users or bypass Workspace authentication.
 
 ## Troubleshooting
 
@@ -313,3 +324,48 @@ file surfaces and the final two-identity new-user acceptance matrix remain track
 the repository's local development notes
 and must not be presented as available until their UI and browser acceptance
 are complete.
+
+## Region navigation
+
+The URL independently records the middle document/review region (`center`) and
+the conversation region (`right`), for example
+`#/?center=worktree%2Freview-id&right=session%2Fsession-id`. Closing the middle region
+preserves the conversation. Hiding the conversation releases its screen space
+while retaining its selected Session and draft; the `right` value becomes
+`hidden/session/<session-id>`. **Show conversation**, selecting a Session, or
+successfully adding a document to the current message expands it again. Hiding
+does not delete a Session or cancel its agent. Browser history and refresh
+restore both the selection and visibility. An empty route shows the new-session
+composer. Existing
+`#/s/<session-id>` links still open their conversation. Document names and
+permissions are resolved from the connected Workspace, not stored in the URL.
+
+
+## File and folder mentions
+
+Type `@` to choose a Workspace document, **Browse Workspace**, or **Local files**.
+In Workspace browsing, click a folder name to reference that folder; use its
+arrow or Tab to browse its children. Folder references retain the Space and Node
+identity and are checked against current Workspace access when sending.
+
+**Local files** browses the filesystem of the machine running Harness. This may
+be a different machine from the browser when using SSH forwarding or a remote
+installation. Select **Local files** to browse one directory at a time, or paste
+a complete `@/absolute/path` or `@~/Downloads/` query. Select a file or folder to insert an inline
+reference. Use a folder's arrow or Tab to descend into it. Paths containing
+spaces can be entered after `@"`; directory navigation handles quoting for you.
+Directory completion is bounded; narrow the path prefix if the menu reports
+that additional entries exist. The current DSH editor can leave path suggestions
+on a previous directory during character-by-character path entry; use directory
+navigation or paste the complete query if that occurs.
+
+Local references contain real host paths, not uploaded copies. Referencing does
+not upload, read, or recursively expand a file or folder, and does not grant the
+agent additional filesystem permissions. Missing paths, changed file types, or
+revoked Workspace access are checked again when the message is sent. Operating
+system drag-and-drop upload is not part of this feature.
+
+Workspace document types are retained as display metadata in reference links.
+Message history can therefore show a type-specific icon without fetching every
+referenced document. The native DSH composer currently exposes generic file and
+folder icons; its public reference contract does not expose per-document icons.

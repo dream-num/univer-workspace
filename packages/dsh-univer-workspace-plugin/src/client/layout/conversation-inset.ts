@@ -159,3 +159,33 @@ export function applyConversationInset(widthPx: number, animate = true): HTMLEle
 export function clearConversationInset(): void {
   restoreInsetHost();
 }
+
+/** Hide presentation only; the native session and agent continue to live. */
+export function hideConversation(): () => void {
+  let host: HTMLElement | null = null;
+  let visibility = "";
+  let priority = "";
+  let inert = false;
+  const restore = () => {
+    if (host === null) return;
+    if (visibility) host.style.setProperty("visibility", visibility, priority);
+    else host.style.removeProperty("visibility");
+    host.inert = inert;
+  };
+  const apply = () => {
+    const next = conversationHost()?.parentElement ?? null;
+    if (next === host) return;
+    restore();
+    host = next;
+    if (host === null) return;
+    visibility = host.style.getPropertyValue("visibility");
+    priority = host.style.getPropertyPriority("visibility");
+    inert = host.inert;
+    host.style.setProperty("visibility", "hidden");
+    host.inert = true;
+  };
+  apply();
+  const observer = new MutationObserver(apply);
+  observer.observe(document.body, { childList: true, subtree: true });
+  return () => { observer.disconnect(); restore(); };
+}

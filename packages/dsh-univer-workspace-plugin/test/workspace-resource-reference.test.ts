@@ -93,7 +93,7 @@ describe("Workspace Resource reference", () => {
     });
 
     expect(projectWorkspaceResourceMessageText(`Compare ${first} and ${second}`)).toBe(
-      "Compare @[Q3 Budget](dsh-session:univer-workspace-resource:resource-1) and @[Project Overview](dsh-session:univer-workspace-resource:resource-2)",
+      "Compare @[Q3 Budget](dsh-session:univer-workspace-resource:resource-1?unitType=sheet) and @[Project Overview](dsh-session:univer-workspace-resource:resource-2?unitType=doc)",
     );
     expect(projectWorkspaceResourceMessageText('{"kind":"other","name":"Plain object"}')).toBe(
       '{"kind":"other","name":"Plain object"}',
@@ -419,7 +419,7 @@ describe("Workspace Resource reference", () => {
         source: "univer-workspace-resource",
         label: "Q3 Budget",
         appearance: "file",
-        clipboardText: "@[Q3 Budget](univer-workspace-resource:resource-1)",
+        clipboardText: "@[Q3 Budget](univer-workspace-resource:resource-1?unitType=sheet)",
       }),
       { start: 20, end: 20, draftRev: 7 },
     );

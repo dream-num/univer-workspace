@@ -1,3 +1,10 @@
+import {
+  decodePathReference,
+  pathReferenceInsert,
+  pathReferenceText,
+  resolvePathReference,
+  pathReferenceFromUrl,
+} from "./path-reference.ts";
 /**
  * Workspace Resource references for the native DSH composer.
  *
@@ -51,6 +58,7 @@ export interface WorkspaceResourceDescriptor {
 export interface WorkspaceResourceReferenceValue {
   readonly resourceId: string;
   readonly label: string;
+  readonly unitType?: WorkspaceUnitType;
   readonly selection?: ViewerSelection;
 }
 
@@ -207,6 +215,7 @@ export function encodeWorkspaceResourceReference(value: WorkspaceResourceReferen
     v: 1,
     resourceId: value.resourceId,
     label: value.label,
+    ...(value.unitType === undefined ? {} : { unitType: value.unitType }),
     ...(value.selection === undefined ? {} : { selection: value.selection }),
   });
 }
@@ -226,7 +235,16 @@ export function decodeWorkspaceResourceReference(ref: string): WorkspaceResource
   if (decoded?.v !== 1 || resourceId === undefined || label === undefined) {
     throw new Error("workspace_reference_invalid");
   }
-  return selection === undefined ? { resourceId, label } : { resourceId, label, selection };
+  const unitType =
+    typeof decoded.unitType === "string" && UNIT_TYPES.has(decoded.unitType as WorkspaceUnitType)
+      ? (decoded.unitType as WorkspaceUnitType)
+      : undefined;
+  return {
+    resourceId,
+    label,
+    ...(unitType === undefined ? {} : { unitType }),
+    ...(selection === undefined ? {} : { selection }),
+  };
 }
 
 function narrowViewerSelection(value: unknown): ViewerSelection | undefined {
@@ -261,7 +279,7 @@ export function workspaceResourceClipboardText(ref: string): string {
     value.selection === undefined
       ? ""
       : ` · ${value.selection.kind === "sheet-range" ? `${value.selection.sheetName}!${value.selection.a1Notation}` : value.selection.text}`;
-  return `@[${escapeMarkdownLabel(`${value.label}${suffix}`)}](univer-workspace-resource:${encodeURIComponent(value.resourceId)})`;
+  return `@[${escapeMarkdownLabel(`${value.label}${suffix}`)}](univer-workspace-resource:${encodeURIComponent(value.resourceId)}${value.unitType === undefined ? "" : `?unitType=${value.unitType}`})`;
 }
 
 /**
@@ -314,6 +332,8 @@ function balancedJsonObjectEnd(text: string, start: number): number | undefined 
 function workspaceResourceMessageProjection(value: string): string | undefined {
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (["workspace-folder", "local-file", "local-folder"].includes(String(parsed.kind)))
+      return pathReferenceText(decodePathReference(value));
     const resourceId = nonEmptyString(
       parsed.kind === "univer-workspace-resource" ? parsed.resourceId : undefined,
     );
@@ -321,7 +341,7 @@ function workspaceResourceMessageProjection(value: string): string | undefined {
       parsed.kind === "univer-workspace-resource" ? parsed.name : undefined,
     );
     if (resourceId === undefined || name === undefined) return undefined;
-    return `@[${escapeMarkdownLabel(name)}](dsh-session:univer-workspace-resource:${encodeURIComponent(resourceId)})`;
+    return `@[${escapeMarkdownLabel(name)}](dsh-session:univer-workspace-resource:${encodeURIComponent(resourceId)}${typeof parsed.unitType === "string" && UNIT_TYPES.has(parsed.unitType as WorkspaceUnitType) ? `?unitType=${parsed.unitType}` : ""})`;
   } catch {
     return undefined;
   }
@@ -329,12 +349,14 @@ function workspaceResourceMessageProjection(value: string): string | undefined {
 
 /** Build the native DSH structured-reference payload for a known Resource. */
 export function createWorkspaceResourceReferenceInsert(
-  resource: Pick<WorkspaceResourceDescriptor, "resourceId" | "name">,
+  resource: Pick<WorkspaceResourceDescriptor, "resourceId" | "name"> &
+    Partial<Pick<WorkspaceResourceDescriptor, "unitType">>,
   selection?: ViewerSelection,
 ): ReferenceInsert {
   const ref = encodeWorkspaceResourceReference({
     resourceId: resource.resourceId,
     label: resource.name,
+    ...(resource.unitType === undefined ? {} : { unitType: resource.unitType }),
     ...(selection === undefined ? {} : { selection }),
   });
   return {
@@ -617,6 +639,7 @@ function resourceCandidate(resource: WorkspaceResourceDescriptor): InputTriggerC
     value: encodeWorkspaceResourceReference({
       resourceId: resource.resourceId,
       label: resource.name,
+      unitType: resource.unitType,
     }),
   };
 }
@@ -877,8 +900,21 @@ export function createWorkspaceResourceReferenceCodec(
   resolve: WorkspaceResourceResolver = fetchWorkspaceResourceDescriptor,
 ): ReferenceCodec {
   return {
-    clipboardText: workspaceResourceClipboardText,
+    clipboardText: (ref) => {
+      try {
+        return pathReferenceText(decodePathReference(ref));
+      } catch {
+        return workspaceResourceClipboardText(ref);
+      }
+    },
     async serialize(ref, signal) {
+      let folder;
+      try {
+        folder = decodePathReference(ref);
+      } catch {
+        /* Resource codec follows. */
+      }
+      if (folder !== undefined) return JSON.stringify(await resolvePathReference(folder, signal));
       const { resourceId, selection } = decodeWorkspaceResourceReference(ref);
       const resource = await resolve(resourceId, signal);
       return JSON.stringify({
@@ -908,6 +944,7 @@ export function createWorkspaceResourceInputSource(
     order: 50,
     showGroupTitle: false,
     async candidates(session, request) {
+      if (/^(?:local:|\/|~(?:\/|$)|[A-Za-z]:[\\/])/.test(request.query)) return [];
       if (request.query.startsWith(WORKSPACE_BROWSE_PREFIX)) {
         return browseWorkspaceCandidates(request.query, request.signal, labels);
       }
@@ -919,13 +956,15 @@ export function createWorkspaceResourceInputSource(
         // Suggestions are optional; the authoritative directory remains usable
         // when a recent/owned/shared projection is unavailable.
         if (resolveCandidates !== DEFAULT_WORKSPACE_RESOURCE_CANDIDATE_RESOLVER) throw error;
-        return [{
-          name: labels.browseWorkspace,
-          description: labels.retry,
-          icon: "folder",
-          drill: true,
-          value: browseValue([]),
-        }];
+        return [
+          {
+            name: labels.browseWorkspace,
+            description: labels.retry,
+            icon: "folder",
+            drill: true,
+            value: browseValue([]),
+          },
+        ];
       }
       if (request.signal.aborted) return [];
       const candidates = prioritizeWorkspaceResources(
@@ -962,12 +1001,30 @@ export function createWorkspaceResourceInputSource(
             // text and close the menu after the first drill.
             { text: `@${encodeWorkspaceBrowsePath(path)}`, continue: true };
       }
+      const folderPath = decodeBrowseValue(candidate.value);
+      if (folderPath !== undefined) {
+        const last = folderPath.at(-1);
+        if (last?.kind === "folder")
+          return {
+            insert: pathReferenceInsert(
+              {
+                kind: "workspace-folder",
+                nodeId: last.id,
+                spaceId: folderPath[0]!.id,
+                name: last.name,
+              },
+              WORKSPACE_RESOURCE_REFERENCE_SOURCE,
+            ),
+          };
+        return { text: `@${encodeWorkspaceBrowsePath(folderPath)}`, continue: true };
+      }
       try {
         const value = decodeWorkspaceResourceReference(candidate.value);
         return {
           insert: createWorkspaceResourceReferenceInsert({
             resourceId: value.resourceId,
             name: value.label,
+            ...(value.unitType === undefined ? {} : { unitType: value.unitType }),
           }),
         };
       } catch {
@@ -988,7 +1045,8 @@ export function createWorkspaceResourceInputSource(
 export function insertWorkspaceResourceReference(
   ctx: WorkspaceResourceReferenceContext,
   sessionId: string,
-  resource: Pick<WorkspaceResourceDescriptor, "resourceId" | "name">,
+  resource: Pick<WorkspaceResourceDescriptor, "resourceId" | "name"> &
+    Partial<Pick<WorkspaceResourceDescriptor, "unitType">>,
   selection?: ViewerSelection,
 ): WorkspaceResourceReferenceInsertResult {
   const input = resolveSessionInput(ctx, sessionId);
@@ -1012,4 +1070,90 @@ export function insertWorkspaceResourceReference(
     }
   }
   return { kind: "input-changed" };
+}
+
+/** Rehydrate our persisted clipboard links without I/O; codecs validate targets at send time. */
+export function restoreReferenceDraftChips(input: SessionInput): void {
+  const initial = input.state.getSnapshot();
+  if (initial.phase !== "plain") return;
+  const links = [
+    ...initial.draft.matchAll(
+      /@\[((?:\\.|[^\]\n])+)\]\((univer-(?:workspace-resource|workspace-folder|local-path):[^\s)]+)\)/gu,
+    ),
+  ];
+  for (const match of links.reverse()) {
+    const snapshot = input.state.getSnapshot();
+    if (snapshot.phase !== "plain") return;
+    if (
+      (snapshot.occurrences ?? []).some(
+        (item: { offset: number; length: number }) =>
+          item.offset === match.index && item.length === match[0].length,
+      )
+    )
+      continue;
+    if (snapshot.draft.slice(match.index, match.index + match[0].length) !== match[0]) continue;
+    try {
+      const label = unescapeMarkdownLabel(match[1]!);
+      const url = new URL(match[2]!);
+      const path = pathReferenceFromUrl(match[2]!, label);
+      let reference: ReferenceInsert;
+      if (path !== undefined)
+        reference = pathReferenceInsert(
+          path,
+          path.kind === "workspace-folder" ? WORKSPACE_RESOURCE_REFERENCE_SOURCE : undefined,
+        );
+      else if (url.protocol === "univer-workspace-resource:") {
+        const type = url.searchParams.get("unitType") as WorkspaceUnitType | null;
+        const selection = selectionFromClipboardLabel(label);
+        const name = selection === undefined ? label : label.slice(0, label.lastIndexOf(" · "));
+        reference = createWorkspaceResourceReferenceInsert(
+          {
+            resourceId: decodeURIComponent(url.pathname),
+            name,
+            ...(type !== null && UNIT_TYPES.has(type) ? { unitType: type } : {}),
+          },
+          selection,
+        );
+      } else continue;
+      input.insertReference(reference, {
+        start: detectOffsetAtClipboardOffset(snapshot, match.index),
+        end: detectOffsetAtClipboardOffset(snapshot, match.index + match[0].length),
+        draftRev: snapshot.draftRev,
+      });
+    } catch {
+      /* Unknown or malformed historical text remains editable. */
+    }
+  }
+}
+
+/** Follow the active native input lifecycle; never replace the Session or its draft. */
+export function bindReferenceDraftRestoration(ctx: WorkspaceResourceReferenceContext): () => void {
+  let currentInput: SessionInput | undefined;
+  let stopInput = () => {};
+  let restoring = false;
+  const restore = () => {
+    if (restoring || currentInput === undefined) return;
+    restoring = true;
+    try {
+      restoreReferenceDraftChips(currentInput);
+    } finally {
+      restoring = false;
+    }
+  };
+  const attach = () => {
+    const id = ctx.sessions.list.getSnapshot().current;
+    const input = id === undefined ? undefined : resolveSessionInput(ctx, id);
+    if (input === currentInput) return;
+    stopInput();
+    currentInput = input;
+    stopInput = input?.state.subscribe(restore) ?? (() => {});
+    restore();
+  };
+  const stopSessions = ctx.sessions.list.subscribe(attach);
+  attach();
+  return () => {
+    stopSessions();
+    stopInput();
+    currentInput = undefined;
+  };
 }

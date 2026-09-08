@@ -18,6 +18,19 @@ afterEach(async () => {
 });
 
 describe("Workspace product proxy allowlist", () => {
+  it("serves host path metadata only to a trusted connected browser", async () => {
+    const request = vi.fn();
+    const server = await serve(request);
+    const path = `/univer-workspace/api/local-files?action=resolve&path=${encodeURIComponent(process.execPath)}`;
+    const response = await fetch(server.origin + path);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ kind: "file" });
+    expect((await fetch(server.origin + path, { headers: { origin: "https://foreign.example" } })).status).toBe(403);
+    expect((await fetch(server.origin + "/univer-workspace/api/local-files?action=resolve&path=relative")).status).toBe(400);
+    const disconnected = await serve(request, false);
+    expect((await fetch(disconnected.origin + path)).status).toBe(401);
+    expect(request).not.toHaveBeenCalled();
+  });
   it.each([
     ["POST", "/team-spaces", "/api/team-spaces"],
     ["GET", "/users/search", "/api/users/search"],
@@ -63,6 +76,24 @@ describe("Workspace product proxy allowlist", () => {
     ["POST", "/auth/logout"],
   ])("rejects %s %s", (method, path) => {
     expect(productProxyTarget(method, path)).toBeUndefined();
+  });
+
+  it("contains an upstream download failure and continues serving subsequent requests", async () => {
+    let fail!: () => void;
+    const request = vi.fn().mockImplementationOnce(async () => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("partial"));
+        fail = () => controller.error(new Error("Upstream disconnected"));
+      },
+    }))).mockResolvedValueOnce(new Response("healthy"));
+    const server = await serve(request);
+    const url = `${server.origin}/univer-workspace/api/blob-resources/resource-1/download`;
+    const response = await fetch(url);
+    const body = response.text();
+    const rejected = expect(body).rejects.toThrow();
+    fail();
+    await rejected;
+    expect(await (await fetch(url)).text()).toBe("healthy");
   });
 
   it("streams Blob ranges without losing conditional or download headers", async () => {
@@ -177,12 +208,13 @@ describe("Workspace product proxy allowlist", () => {
 
 async function serve(
   request: (path: string, init?: RequestInit) => Promise<Response>,
+  authorized = true,
 ): Promise<{ origin: string }> {
   const context = {
     get(name: string) {
       if (name === "workspaceAuth") {
         return {
-          currentIdentity: () => ({ userId: "user-1", username: "alice" }),
+          currentIdentity: () => authorized ? ({ userId: "user-1", username: "alice" }) : undefined,
           currentClient: () => ({ request }),
         };
       }
