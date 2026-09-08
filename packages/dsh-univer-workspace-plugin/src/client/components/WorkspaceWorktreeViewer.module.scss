@@ -49,8 +49,42 @@
   background: color-mix(in srgb, var(--uvf-color-border, #dfe3eb) 8%, var(--uvf-color-surface, #fff));
 }
 
-@media (max-width: 960px) {
-  .changesBody {
-    grid-template-columns: 208px minmax(0, 1fr);
+.treePane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+
+  > nav { flex: 1; }
+}
+.treePane[hidden] { display: none; }
+.treeDialog.treeDialog {
+  box-sizing: border-box;
+  max-width: none;
+  max-height: none;
+  padding: 16px 0 0;
+  border-radius: 0;
+  overflow: hidden;
+  transform: translateX(0);
+  transition: transform 180ms ease-out;
+
+  &[data-starting-style], &[data-ending-style] {
+    opacity: 1;
+    scale: 1;
+    transform: translateX(-100%);
   }
+
+  > div:first-child { margin: 0; padding: 4px 48px 16px 16px; }
+  > nav { flex: 1; min-height: 0; border-right: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .treeDialog.treeDialog { transition: none; }
+}
+
+.treeBackdrop.treeBackdrop {
+  inset: auto;
+  backdrop-filter: none;
+  background: rgb(0 0 0 / 18%);
 }

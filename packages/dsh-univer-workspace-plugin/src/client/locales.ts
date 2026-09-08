@@ -7,6 +7,9 @@
 
 /** Simplified Chinese UI strings (the key source). */
 export const zh = {
+  "review.moreActions": "文档操作",
+  "review.collapseDocument": "收起文档",
+  "review.expandDocument": "展开文档",
   "review.height.label": "文档预览高度",
   "review.height.compact": "紧凑",
   "review.height.auto": "自动",
@@ -274,6 +277,9 @@ export const zh = {
 
 /** English UI strings. */
 export const en = {
+  "review.moreActions": "Document actions",
+  "review.collapseDocument": "Collapse document",
+  "review.expandDocument": "Expand document",
   "review.height.label": "Document preview height",
   "review.height.compact": "Compact",
   "review.height.auto": "Auto",

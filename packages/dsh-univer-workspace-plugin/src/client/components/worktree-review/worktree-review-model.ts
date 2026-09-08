@@ -136,7 +136,7 @@ function freezeNode(node: MutableTreeNode, keyPrefix: string): PathTreeNode {
  */
 export function unitLocationTitle(location: UnitLocationState, unitName: string): string {
   if (location.status !== "resolved") return unitName;
-  return [location.spaceName, ...location.path, unitName].join(" / ");
+  return [...(location.shared ? [] : location.path), unitName].join(" / ");
 }
 
 /** Merge a run of unary directory nodes into one label; leaves stay intact. */

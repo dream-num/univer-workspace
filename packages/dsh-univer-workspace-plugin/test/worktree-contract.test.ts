@@ -211,7 +211,7 @@ describe("Workspace Worktree contract", () => {
           if (path !== "/api/worktrees/wt-1") return new Response(null, { status: 404 });
           return Response.json({ worktree: {
             ...summary, state,
-            units: [{ ...unit, nodeId: null, change: "deleted", mergeResult: state === "merged" ? "removed" : "pending" }],
+            units: [{ ...unit, source: "trunk", target: null, activationState: "notApplicable", nodeId: null, change: "deleted", mergeResult: state === "merged" ? "removed" : "pending" }],
           } });
         },
       } as WorkspaceHttpClient;
@@ -222,6 +222,40 @@ describe("Workspace Worktree contract", () => {
       expect(calls).toEqual(["/api/worktrees/wt-1"]);
     },
   );
+
+  it.each(["draft", "ready", "merged"])(
+    "omits canceled creations from review and counts but keeps original deletions (%s)",
+    async (state) => {
+      const canceled = { ...unit, change: "deleted", nodeId: null };
+      const removed = { ...unit, unitId: "existing", resourceId: "existing-resource",
+        source: "trunk", target: null, activationState: "notApplicable", change: "deleted" };
+      const payload = { worktree: { ...summary, state, unitCount: 2, units: [canceled, removed] } };
+      const client = {
+        origin: "https://workspace.test", sessionToken: "token",
+        async request(path: string) {
+          expect(path).toBe("/api/worktrees/wt-1");
+          return Response.json(payload);
+        },
+      } as WorkspaceHttpClient;
+      const review = await getWorktreeFileState(client, "wt-1");
+      expect(review.worktrees[0]?.units.map((value) => value.unitId)).toEqual(["existing"]);
+      expect(review.worktrees[0]?.unitCount).toBe(1);
+      expect(review.viewerTarget).toBeNull();
+      expect(narrowWorktreeDetail(payload).units).toHaveLength(2);
+    },
+  );
+
+  it("returns an empty review without opening a resource when every creation was canceled", async () => {
+    const client = {
+      origin: "https://workspace.test", sessionToken: "token",
+      async request(path: string) {
+        expect(path).toBe("/api/worktrees/wt-1");
+        return Response.json({ worktree: { ...summary, units: [{ ...unit, change: "deleted" }] } });
+      },
+    } as WorkspaceHttpClient;
+    const review = await getWorktreeFileState(client, "wt-1");
+    expect(review.worktrees[0]).toMatchObject({ units: [], unitCount: 0, worktreeTarget: null, mergeTarget: null });
+  });
 
   it("preserves complete Worktree metadata in the browser file-state projection", async () => {
     const client: WorkspaceHttpClient = {

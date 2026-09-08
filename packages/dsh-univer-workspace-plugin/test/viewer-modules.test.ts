@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildViewerUrls } from "../src/client/viewer/proxy.ts";
 import {
+  blockLocalEditingCommands,
   resolveViewerReadOnlyEnforcement,
   withReadOnlyPermissionLocale,
 } from "../src/client/viewer/readonly.ts";
-import type { ILanguagePack } from "@univerjs/core";
+import { CommandType, type ICommandService, type ILanguagePack } from "@univerjs/core";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -33,6 +34,21 @@ describe("embedded viewer seams", () => {
     expect(resolveViewerReadOnlyEnforcement("sheet", false)).toBe("sheet-permission");
     expect(resolveViewerReadOnlyEnforcement("doc", false)).toBe("mutation-gate");
     expect(resolveViewerReadOnlyEnforcement("sheet", true)).toBe("none");
+  });
+
+  it("blocks local mutations without blocking collaboration or local rendering", () => {
+    let listener!: Parameters<ICommandService["beforeCommandExecuted"]>[0];
+    blockLocalEditingCommands({
+      beforeCommandExecuted: (callback) => {
+        listener = callback;
+        return { dispose() {} };
+      },
+    });
+    const mutation = { id: "test.mutation", type: CommandType.MUTATION };
+    expect(() => listener(mutation)).toThrow("viewer is read-only");
+    expect(() => listener(mutation, { fromCollab: true })).not.toThrow();
+    expect(() => listener(mutation, { onlyLocal: true })).not.toThrow();
+    expect(() => listener({ id: "test.selection", type: CommandType.OPERATION })).not.toThrow();
   });
 
   it("deep-merges read-only copy without dropping native locale entries", () => {

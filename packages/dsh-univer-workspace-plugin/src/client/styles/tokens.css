@@ -16,6 +16,8 @@
   --color-success: #1a7f37;
   --color-success-soft: #dafbe1;
   --color-success-soft-foreground: #116329;
+  --color-board: var(--color-violet-soft-foreground);
+  --color-board-soft: var(--color-violet-soft);
   --color-violet: #8250df;
   --color-violet-soft: #fbefff;
   --color-violet-soft-foreground: #6639ba;

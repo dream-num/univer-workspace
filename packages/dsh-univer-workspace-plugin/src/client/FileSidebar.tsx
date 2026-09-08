@@ -288,7 +288,9 @@ export function FileSidebar({
         },
       },
     }),
-    [refresh, workspaceOrigin],
+    // Changing the loader identity invalidates mounted tree branches while
+    // preserving their expansion and selection state.
+    [refresh, refreshEpoch, workspaceOrigin],
   );
 
   const treeSpaces = useMemo(() => spaces.map(toWorkspaceFileSpace), [spaces]);

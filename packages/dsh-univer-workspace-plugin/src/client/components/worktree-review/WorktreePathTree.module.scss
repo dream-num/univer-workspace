@@ -3,11 +3,13 @@
  * color-mix. */
 
 .tree {
+  box-sizing: border-box;
   display: flex;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
   gap: 14px;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 16px 12px;
   border-right: 1px solid var(--color-border);
@@ -15,6 +17,8 @@
 }
 
 .space {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
   display: grid;
   gap: 2px;
 }
@@ -64,6 +68,8 @@
 }
 
 .nodeList {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
   display: grid;
   gap: 1px;
   margin: 0;
@@ -175,3 +181,6 @@
   font-size: 10px;
   line-height: 16px;
 }
+
+.spaceName, .directory, .leaf { box-sizing: border-box; }
+.nodeList > li { min-width: 0; }

@@ -3,7 +3,7 @@
  * starts expanded (the confirmed default for this surface, unlike the
  * in-message Changes card); expensive Univer runtimes mount only near the
  * viewport and are retained under a bounded LRU after scrolling away. Each
- * item shows the Unit's real `Space / clipped path / name` location with a
+ * item shows the Unit's server-clipped `path / name` location with a
  * low-emphasis "共享文件" mark for Direct Share Units, and degrades to a safe
  * "位置不可用" state when the server cannot resolve a location — it never
  * fabricates a place in the current user's file tree.
@@ -13,6 +13,15 @@
 import { useEffect, useRef, useState, useId, type RefObject, type ReactElement } from "react";
 import {
   Badge,
+  CheckIcon,
+  EllipsisIcon,
+  MenuContent,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuRoot,
+  MenuSeparator,
+  MenuTrigger,
   Button,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -168,30 +177,36 @@ function WorktreeUnitItem(props: {
       data-review-unit-id={unit.unitId}
       data-located={props.located || undefined}
     >
-      <button
-        type="button"
-        className={css.itemHeader}
-        aria-expanded={props.expanded}
-        data-deleted={unit.kind === "deleted" || undefined}
-        onClick={props.onToggle}
-      >
-        {props.expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-        <UnitTypeIcon type={unit.unitType} className={css.headerTypeIcon} />
-        <span className={css.unitName} title={locationTitle}>
-          {locationTitle}
-        </span>
-        <span className={css.unitChange}>
-          <UnitChangeIcon kind={unit.kind} />
-          {unitChangeLabel(unit.kind, t)}
-        </span>
-        {mergeResult === "pending" ? null : (
-          <Badge variant={mergeResultVariant(mergeResult)}>
-            {mergeResultLabel(mergeResult, t)}
-          </Badge>
-        )}
-      </button>
-      {props.expanded ? (
-        <div className={css.itemBody}>
+      <div className={css.cardHeader}>
+        <div className={css.itemHeader} data-deleted={unit.kind === "deleted" || undefined}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-expanded={props.expanded}
+            aria-label={`${t(props.expanded ? "review.collapseDocument" : "review.expandDocument")}: ${unit.name}`}
+            title={t(props.expanded ? "review.collapseDocument" : "review.expandDocument")}
+            onClick={props.onToggle}
+          >
+            {props.expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+          </Button>
+          <UnitTypeIcon type={unit.unitType} className={css.headerTypeIcon} />
+          <span className={css.unitName} title={locationTitle}>
+            {locationTitle}
+          </span>
+          <span className={css.unitChange}>
+            <UnitChangeIcon kind={unit.kind} />
+            {unitChangeLabel(unit.kind, t)}
+          </span>
+          {props.location.status === "resolved" && props.location.shared ? (
+            <Badge variant="outline">{t("worktree.sharedFile")}</Badge>
+          ) : null}
+          {mergeResult === "conflict" || mergeResult === "failed" ? (
+            <Badge variant={mergeResultVariant(mergeResult)}>
+              {mergeResultLabel(mergeResult, t)}
+            </Badge>
+          ) : null}
+        </div>
+        {props.expanded ? (
           <div className={css.unitHeader}>
             <div className={css.controls}>
               {worktree.status === "draft" && worktree.capabilities.editDraft ? (
@@ -213,9 +228,6 @@ function WorktreeUnitItem(props: {
               >
                 <MessageSquarePlusIcon />
               </Button>
-              <Badge variant="outline">
-                {t(viewer !== undefined && viewer.editable ? "card.editable" : "card.readonly")}
-              </Badge>
               <Segmented<TurnViewMode>
                 aria-label={t("viewer.readOnlyPreview")}
                 size="sm"
@@ -238,7 +250,50 @@ function WorktreeUnitItem(props: {
                 onValueChange={sizing.setPreset}
               />
             ) : null}
+            <div className={css.overflowControls}>
+              <MenuRoot>
+                <MenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("review.moreActions")} title={t("review.moreActions")} />}>
+                  <EllipsisIcon />
+                </MenuTrigger>
+                <MenuContent align="end">
+                  <MenuGroup>
+                    <MenuGroupLabel>{t("viewer.readOnlyPreview")}</MenuGroupLabel>
+                    {viewOptions.map((option) => (
+                      <MenuItem key={option.value} disabled={option.disabled === true} onClick={() => props.onViewChange(option.value)}>
+                        {option.value === activeView ? <CheckIcon /> : null}{option.label}
+                      </MenuItem>
+                    ))}
+                  </MenuGroup>
+                  <MenuSeparator />
+                  <MenuItem onClick={() => props.insertResourceReference({ resourceId: unit.resourceId, name: unit.name })}>
+                    <MessageSquarePlusIcon />{t("resource.addToMessage")}
+                  </MenuItem>
+                  {worktree.status === "draft" && worktree.capabilities.editDraft ? (
+                    <MenuItem disabled={busy} onClick={updateRemoval}>
+                      {t(unit.kind === "deleted" ? "turn.undoRemoval" : "turn.removeUnit")}
+                    </MenuItem>
+                  ) : null}
+                  {viewer !== undefined && viewer.unitType !== "unsupported" ? (
+                    <>
+                      <MenuSeparator />
+                      <MenuGroup>
+                        <MenuGroupLabel>{t("review.height.label")}</MenuGroupLabel>
+                        {(["compact", "auto", "fill"] as const).map((preset) => (
+                          <MenuItem key={preset} onClick={() => sizing.setPreset(preset)}>
+                            {sizing.preset === preset ? <CheckIcon /> : null}{t(`review.height.${preset}`)}
+                          </MenuItem>
+                        ))}
+                      </MenuGroup>
+                    </>
+                  ) : null}
+                </MenuContent>
+              </MenuRoot>
+            </div>
           </div>
+        ) : null}
+      </div>
+      {props.expanded ? (
+        <div className={css.itemBody}>
           {actionError === null ? null : <div role="alert">{actionError}</div>}
           {!previewable ? (
             <div className={css.deletedEmpty} role="status">

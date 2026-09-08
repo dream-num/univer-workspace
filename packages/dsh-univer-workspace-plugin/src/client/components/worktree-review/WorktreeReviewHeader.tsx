@@ -1,7 +1,6 @@
 /**
  * Header of the middle Worktree review surface: title, status, description,
- * real metadata (creator, updatedAt, and the bound Team Space only when the
- * Worktree is a team one — never a "个人空间" label or a bare user/team kind)
+ * real metadata (creator, updatedAt, and resolved Space context)
  * plus lifecycle actions driven solely by server capabilities. Actions confirm
  * through the shared ConfirmDialog; the surface refetches after a transition.
  * @module dsh-univer-workspace-plugin/client/components/worktree-review/WorktreeReviewHeader
@@ -32,7 +31,7 @@ import css from "./WorktreeReviewHeader.module.scss";
 
 export interface WorktreeReviewHeaderProps {
   readonly worktree: DocumentWorktreeState | undefined;
-  readonly workspaceOrigin: string;
+  readonly spaceNames: readonly string[];
   readonly fallbackName: string;
   readonly t: (key: UniverLocaleKey) => string;
   readonly onClose: () => void;
@@ -47,8 +46,7 @@ export function WorktreeReviewHeader(props: WorktreeReviewHeaderProps): ReactEle
 
   const metaParts: string[] = [];
   if (worktree !== undefined) {
-    if (worktree.kind === "team" && worktree.teamSpace !== null)
-      metaParts.push(worktree.teamSpace.name);
+    metaParts.push(...props.spaceNames);
     metaParts.push(worktree.creator.displayName);
     const updatedAt = formatOptionalDateTime(worktree.updatedAt);
     if (updatedAt !== null) metaParts.push(updatedAt);

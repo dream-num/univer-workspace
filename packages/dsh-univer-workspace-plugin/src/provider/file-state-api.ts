@@ -4,12 +4,17 @@
  */
 
 import type { WorkspaceHttpClient } from "./workspace-contract.ts";
-import type { DocumentFileState } from "../shared/state.ts";
+import type { DocumentFileState, WorktreeUnitView } from "../shared/state.ts";
 import { WorkspaceApiError } from "./api-errors.ts";
 import { openResource } from "./resources-api.ts";
 import { getWorktreeDetail, listReviewWorktrees, openWorktreeUnit } from "./worktree-api.ts";
 
 export type { DocumentFileState };
+
+/** Review net changes while retaining canceled creations in the operation API. */
+function reviewUnits(units: readonly WorktreeUnitView[]): readonly WorktreeUnitView[] {
+  return units.filter((unit) => !(unit.source === "worktree" && unit.kind === "deleted"));
+}
 
 /** FileState for a WORKTREE key: first unit anchors the trunk viewer, and the
  * worktree itself is the only related entry. */
@@ -30,7 +35,8 @@ export async function getWorktreeFileState(
   });
   // Removed Units remain review records, but cannot anchor an editor after
   // publication. Canceled local Units likewise have no trunk resource to open.
-  const first = worktree.units.find(
+  const effectiveUnits = reviewUnits(worktree.units);
+  const first = effectiveUnits.find(
     (unit) => unit.kind !== "deleted" && unit.activationState !== "discarded",
   );
   let viewerTarget: DocumentFileState["viewerTarget"] = null;
@@ -62,7 +68,7 @@ export async function getWorktreeFileState(
       workspaceUrl = workspaceDocumentUrl(client, open.nodeId);
     }
   }
-  const units = worktree.units.map((unit) => ({
+  const units = effectiveUnits.map((unit) => ({
     ...unit,
     ...(worktree.status === "draft"
       ? { worktreeUrl: workspaceWorktreeUrl(client, worktreeId, unit.unitId) }
@@ -81,6 +87,7 @@ export async function getWorktreeFileState(
     worktrees: [
       {
         ...worktree,
+        unitCount: effectiveUnits.length,
         units,
         worktreeTarget:
           (worktree.status === "draft" || worktree.status === "ready") && first !== undefined
@@ -111,7 +118,8 @@ export async function getFileState(
   const all = await listReviewWorktrees(client);
   const related = all
     .map((worktree) => {
-      const units = worktree.units
+      const effectiveUnits = reviewUnits(worktree.units);
+      const units = effectiveUnits
         .filter((unit) => unit.resourceId === resourceId)
         .map((unit) => ({
           ...unit,
@@ -128,6 +136,7 @@ export async function getFileState(
       const first = units[0]!;
       return {
         ...worktree,
+        unitCount: effectiveUnits.length,
         units,
         worktreeTarget:
           worktree.status === "draft" || worktree.status === "ready"
