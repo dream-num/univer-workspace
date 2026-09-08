@@ -1,3 +1,4 @@
+import { worktreeStatusLabel } from "../worktree-presentation.ts";
 /**
  * Pure presentation derivations for the in-message Turn-context card. Every
  * helper here projects existing Turn operations and live Worktree state into
@@ -269,11 +270,9 @@ export function statusVariant(status: TurnCardStatus): NonNullable<BadgeProps["v
 }
 
 export function statusLabel(status: TurnCardStatus, t: (key: UniverLocaleKey) => string): string {
-  if (status === "draft") return t("dock.draft");
-  if (status === "ready") return t("dock.mergeReady");
-  if (status === "merging") return t("dock.merging");
-  if (status === "merged") return t("dock.merged");
-  if (status === "discarded") return t("dock.discarded");
+  if (status === "draft" || status === "ready" || status === "merging" || status === "merged" || status === "discarded") {
+    return worktreeStatusLabel(status, t);
+  }
   if (status === "loading") return t("dock.loading");
   if (status === "unavailable") return t("dock.unavailable");
   return t("dock.currentVersion");
@@ -290,7 +289,7 @@ export function mergeResultLabel(
   result: WorktreeUnitView["mergeResult"],
   t: (key: UniverLocaleKey) => string,
 ): string {
-  if (result === "merged") return t("dock.merged");
+  if (result === "merged") return t("worktree.status.merged");
   if (result === "unchanged") return t("turn.unit.unchanged");
   if (result === "removed") return t("turn.merge.removed");
   if (result === "conflict") return t("dock.unit.conflict");

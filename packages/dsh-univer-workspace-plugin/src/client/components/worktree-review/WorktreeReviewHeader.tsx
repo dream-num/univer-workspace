@@ -13,7 +13,6 @@ import {
   CheckIcon,
   CloseIcon,
   ConfirmDialog,
-  ListTreeIcon,
   RefreshIcon,
   SendIcon,
   TrashIcon,
@@ -27,6 +26,7 @@ import {
   statusLabel,
   statusVariant,
 } from "../turn-context-card-model.ts";
+import { WorktreeBranchIcon } from "./WorktreeBranchIcon.tsx";
 import css from "./WorktreeReviewHeader.module.scss";
 
 export interface WorktreeReviewHeaderProps {
@@ -73,7 +73,7 @@ export function WorktreeReviewHeader(props: WorktreeReviewHeaderProps): ReactEle
     <header className={css.header}>
       <div className={css.identity}>
         <span className={css.glyph} aria-hidden="true">
-          <ListTreeIcon />
+          <WorktreeBranchIcon status={worktree?.status ?? "draft"} />
         </span>
         <div className={css.titleBlock}>
           <div className={css.titleRow}>
