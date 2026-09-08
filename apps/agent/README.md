@@ -369,13 +369,7 @@ Ask the agent to make a document change, then inspect the resulting Worktree
 before merging. Its review view shows added, modified, and deleted documents;
 select an entry to inspect it and use the merge or discard controls when ready.
 The Worktree selector switches between related Worktrees; the document list shows
-the selected Worktree's contents. Document previews default to **Auto** height:
-a single document uses the available review area, while multiple documents use
-larger previews in a scrollable list. Each card offers **Compact / Auto / Fill**
-and a bottom resize handle that appears on hover or keyboard focus. Drag the
-handle or focus it and use the up/down arrow
-keys; double-click it to return to Auto. Height choices are local to the open
-review and do not change system settings.
+the selected Worktree's contents.
 
 Use **Hide conversation** to give the document more room while retaining the
 Session and its draft. **Show conversation** or **Add to message** brings it back.
