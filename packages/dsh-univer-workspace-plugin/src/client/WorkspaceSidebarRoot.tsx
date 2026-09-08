@@ -1,3 +1,4 @@
+import type { PathReference } from "./path-reference.ts";
 import {
   useEffect,
   useState,
@@ -60,6 +61,10 @@ function IconButton({
 
 export interface WorkspaceSidebarRootProps extends SidebarRootComponentProps {
   readonly navigation: WorkspaceNavigationStore;
+  readonly insertFolderReference: (
+    sessionId: string | undefined,
+    folder: Extract<PathReference, { kind: "workspace-folder" }>,
+  ) => WorkspaceResourceReferenceInsertResult;
   readonly insertResourceReference: (
     sessionId: string | undefined,
     resource: Pick<WorkspaceResourceDescriptor, "resourceId" | "name">,
@@ -254,6 +259,7 @@ export function WorkspaceSidebarRoot(props: WorkspaceSidebarRootProps) {
                 }
                 currentSessionId={currentSessionId}
                 insertResourceReference={props.insertResourceReference}
+                insertFolderReference={props.insertFolderReference}
                 t={props.translate}
                 locale={workspaceFileLocale}
               />

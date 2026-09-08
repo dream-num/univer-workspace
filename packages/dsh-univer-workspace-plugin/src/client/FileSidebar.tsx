@@ -1,3 +1,4 @@
+import type { PathReference } from "./path-reference.ts";
 import { subscribeWorkspaceInvalidation } from "./api/univer-api.ts";
 import {
   WorkspaceFileBrowser,
@@ -46,6 +47,7 @@ const IMPORTABLE_DOCUMENT_EXTENSION = /\.(?:xls|xlsx|csv|tsv|doc|docx|ppt|pptx)$
 export interface FileSidebarProps {
   readonly onOpenResource: (surface: WorkspaceContentSurface) => void;
   readonly currentSessionId: string | undefined;
+  readonly insertFolderReference: (sessionId: string | undefined, folder: Extract<PathReference, { kind: "workspace-folder" }>) => WorkspaceResourceReferenceInsertResult;
   readonly insertResourceReference: (
     sessionId: string | undefined,
     resource: Pick<WorkspaceResourceDescriptor, "resourceId" | "name">,
@@ -58,6 +60,7 @@ export function FileSidebar({
   onOpenResource,
   currentSessionId,
   insertResourceReference,
+  insertFolderReference,
   t,
   locale,
 }: FileSidebarProps) {
@@ -379,7 +382,7 @@ export function FileSidebar({
             }}
             renderNodeActions={(node: WorkspaceFileNode, _controls: WorkspaceFileTreeControls) => {
               const resource = node.resource;
-              if (resource?.kind !== "univer") return null;
+              if (resource !== null && resource?.kind !== "univer") return null;
               return (
                 <>
                   <Tooltip content={t("resource.addToMessage")}>
@@ -389,10 +392,13 @@ export function FileSidebar({
                       aria-label={t("resource.addToMessage")}
                       onClick={(event) => {
                         event.stopPropagation();
-                        insertResourceReference(currentSessionId, {
-                          resourceId: resource.id,
-                          name: node.name,
-                        });
+                        if (resource === null) {
+                          insertFolderReference(currentSessionId, {
+                            kind: "workspace-folder", nodeId: node.id, spaceId: node.spaceId, name: node.name,
+                          });
+                        } else if (resource?.kind === "univer") {
+                          insertResourceReference(currentSessionId, {resourceId: resource.id, name: node.name});
+                        }
                       }}
                     >
                       <MessageSquarePlusIcon />

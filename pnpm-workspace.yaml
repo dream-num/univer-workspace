@@ -9,8 +9,10 @@ allowBuilds:
 
 # This SDK release emits direct Redi type imports without declaring the
 # dependency. Keep service identifiers in their host's React peer graph instead
-# of resolving the workspace's hoisted copy. Remove these extensions when the
-# upstream package manifests declare Redi themselves.
+# of resolving the workspace's hoisted copy. Prefer upstream declaration output
+# that references DI types through @univerjs/core. Remove each extension once
+# published declarations no longer leak an undeclared direct Redi import, and
+# clean installs/typechecks pass in both host React peer graphs.
 packageExtensions:
   "@univerjs/engine-render@1.0.0-insiders.20260907-70fc579":
     dependencies:

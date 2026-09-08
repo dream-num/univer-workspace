@@ -1,4 +1,4 @@
-import { createLocalPathInputSource } from "./path-reference.ts";
+import { createLocalPathInputSource, pathReferenceInsert, type PathReference } from "./path-reference.ts";
 import { bindContentRoute } from "./navigation/region-route.ts";
 import { invalidateWorkspaceState } from "./api/univer-api.ts";
 /**
@@ -48,6 +48,8 @@ import {
   bindReferenceDraftRestoration,
   fetchWorkspaceResourceDescriptor,
   insertWorkspaceResourceReference,
+  insertWorkspaceReference,
+  WORKSPACE_RESOURCE_REFERENCE_SOURCE,
   type WorkspaceResourceDescriptor,
   type WorkspaceResourceReferenceInsertResult,
 } from "./workspace-resource-reference.ts";
@@ -93,7 +95,10 @@ export function apply(ctx: ClientContext): void {
   const clientSessions = ctx.sessions as unknown as ISessions;
   const services = ctx as unknown as { get: (name: string) => unknown };
   const conversation = services.get("conversation") as IConversation;
-  ctx.effect(() => bindReferenceDraftRestoration({ sessions: clientSessions, conversation }), "univer-workspace: Restore reference drafts");
+  ctx.effect(
+    () => bindReferenceDraftRestoration({ sessions: clientSessions, conversation }),
+    "univer-workspace: Restore reference drafts",
+  );
   let linkedSpaces: Awaited<ReturnType<typeof fetchWorkspaceSpaces>> = [];
   let currentSpaceIdForSession: ((sessionId: string) => string | undefined) | undefined;
   const inputTriggers = services.get("inputTriggers") as {
@@ -117,9 +122,17 @@ export function apply(ctx: ClientContext): void {
     "univer-workspace: Resource @ source",
   );
 
-  ctx.effect(() => inputTriggers.registerSource(createLocalPathInputSource({
-    localFiles: translate("reference.localFiles"), host: translate("reference.hostFiles"), truncated: translate("reference.truncated"),
-  })), "univer-workspace: Local path @ source");
+  ctx.effect(
+    () =>
+      inputTriggers.registerSource(
+        createLocalPathInputSource({
+          localFiles: translate("reference.localFiles"),
+          host: translate("reference.hostFiles"),
+          truncated: translate("reference.truncated"),
+        }),
+      ),
+    "univer-workspace: Local path @ source",
+  );
 
   const openMessageResource = async (resourceId: string): Promise<void> => {
     try {
@@ -171,17 +184,10 @@ export function apply(ctx: ClientContext): void {
     ),
   );
 
-  const insertResourceReference = (
+  const finishReferenceInsert = (
     sessionId: string | undefined,
-    resource: Pick<WorkspaceResourceDescriptor, "resourceId" | "name">,
-    selection?: import("./viewer/contracts.ts").ViewerSelection,
+    result: WorkspaceResourceReferenceInsertResult,
   ): WorkspaceResourceReferenceInsertResult => {
-    const result = insertWorkspaceResourceReference(
-      { sessions: clientSessions, conversation },
-      sessionId ?? "",
-      resource,
-      selection,
-    );
     switch (result.kind) {
       case "inserted":
         if (sessionId !== undefined) openSession(sessionId);
@@ -199,6 +205,31 @@ export function apply(ctx: ClientContext): void {
     }
     return result;
   };
+  const insertResourceReference = (
+    sessionId: string | undefined,
+    resource: Pick<WorkspaceResourceDescriptor, "resourceId" | "name">,
+    selection?: import("./viewer/contracts.ts").ViewerSelection,
+  ): WorkspaceResourceReferenceInsertResult => {
+    const result = insertWorkspaceResourceReference(
+      { sessions: clientSessions, conversation },
+      sessionId ?? "",
+      resource,
+      selection,
+    );
+    return finishReferenceInsert(sessionId, result);
+  };
+  const insertFolderReference = (
+    sessionId: string | undefined,
+    folder: Extract<PathReference, { kind: "workspace-folder" }>,
+  ) =>
+    finishReferenceInsert(
+      sessionId,
+      insertWorkspaceReference(
+        { sessions: clientSessions, conversation },
+        sessionId ?? "",
+        pathReferenceInsert(folder, WORKSPACE_RESOURCE_REFERENCE_SOURCE),
+      ),
+    );
 
   const workspaceNavigation = ctx.uiWorkspace as unknown as {
     startSession: (workspaceId?: string) => void;
@@ -228,6 +259,7 @@ export function apply(ctx: ClientContext): void {
           },
           navigation,
           insertResourceReference,
+          insertFolderReference,
           translate,
           getWorkspaceFileLocale: () => viewerLocaleOf(ctx.locale.getSnapshot().active),
           subscribeWorkspaceLocale: (listener: () => void) => ctx.locale.subscribe(listener),
@@ -371,29 +403,50 @@ export function apply(ctx: ClientContext): void {
     return mePromise;
   };
 
-  ctx.effect(() => bindContentRoute(navigation, async (route, signal) => {
-    const me = await loadMe();
-    if (route.kind === "worktree") return {
-      kind: "worktree", workspaceOrigin: me.workspaceOrigin,
-      worktreeId: route.id, unitId: route.unitId, name: route.id,
-    };
-    if (route.kind === "blob") return {
-      kind: "blob", workspaceOrigin: me.workspaceOrigin, resourceId: route.id,
-      name: route.id, mediaType: "application/octet-stream", byteSize: null,
-    };
-    const resource = await fetchWorkspaceResourceDescriptor(route.id, signal);
-    return {
-      kind: "resource", workspaceOrigin: me.workspaceOrigin,
-      resourceId: resource.resourceId, docKey: `res:${resource.resourceId}`,
-      name: resource.name, unitType: resource.unitType,
-    };
-  }, error => toast.error(translate("window.loadFailed"), {
-    description: error instanceof Error ? error.message : String(error),
-  })));
+  ctx.effect(() =>
+    bindContentRoute(
+      navigation,
+      async (route, signal) => {
+        const me = await loadMe();
+        if (route.kind === "worktree")
+          return {
+            kind: "worktree",
+            workspaceOrigin: me.workspaceOrigin,
+            worktreeId: route.id,
+            unitId: route.unitId,
+            name: route.id,
+          };
+        if (route.kind === "blob")
+          return {
+            kind: "blob",
+            workspaceOrigin: me.workspaceOrigin,
+            resourceId: route.id,
+            name: route.id,
+            mediaType: "application/octet-stream",
+            byteSize: null,
+          };
+        const resource = await fetchWorkspaceResourceDescriptor(route.id, signal);
+        return {
+          kind: "resource",
+          workspaceOrigin: me.workspaceOrigin,
+          resourceId: resource.resourceId,
+          docKey: `res:${resource.resourceId}`,
+          name: resource.name,
+          unitType: resource.unitType,
+        };
+      },
+      (error) =>
+        toast.error(translate("window.loadFailed"), {
+          description: error instanceof Error ? error.message : String(error),
+        }),
+    ),
+  );
 
   const getViewerLocale = (): ViewerLocale => viewerLocaleOf(ctx.locale.getSnapshot().active);
   const sessionHashForId = (sessionId: string): string => {
-    const query = new URLSearchParams(window.location.hash.startsWith("#/?") ? window.location.hash.slice(3) : "");
+    const query = new URLSearchParams(
+      window.location.hash.startsWith("#/?") ? window.location.hash.slice(3) : "",
+    );
     query.set("right", `session/${encodeURIComponent(sessionId)}`);
     return `#/?${query}`;
   };

@@ -1049,9 +1049,21 @@ export function insertWorkspaceResourceReference(
     Partial<Pick<WorkspaceResourceDescriptor, "unitType">>,
   selection?: ViewerSelection,
 ): WorkspaceResourceReferenceInsertResult {
+  return insertWorkspaceReference(
+    ctx,
+    sessionId,
+    createWorkspaceResourceReferenceInsert(resource, selection),
+  );
+}
+
+/** Append an already encoded reference through the native input's guarded API. */
+export function insertWorkspaceReference(
+  ctx: WorkspaceResourceReferenceContext,
+  sessionId: string,
+  reference: ReferenceInsert,
+): WorkspaceResourceReferenceInsertResult {
   const input = resolveSessionInput(ctx, sessionId);
   if (input === undefined) return { kind: "session-unavailable" };
-  const reference = createWorkspaceResourceReferenceInsert(resource, selection);
   // The native editor can commit a chip between reading its snapshot and
   // applying this explicit button action. Re-read once for that short CAS
   // race; a second miss still fails closed rather than overwriting input.

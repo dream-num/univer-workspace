@@ -175,3 +175,35 @@ pnpm package:workspace-cli
 
 目前没有适合放置应用级共享组件的统一位置。临时方案是 `univer-workspace`、`univer-cli` 与 DSH plugin
 各自保留 `packages/unit-comparison-viewer`；修改该 package 时必须同步所有副本。
+
+## React and Redi dependency boundaries
+
+Workspace Browser uses React 19; the published DSH browser packages consumed by
+Workspace Agent use React 18. This is intentional application isolation, not a
+request to deduplicate React across the repository. Shared private UI components
+run with the consuming application's React runtime. Keep the DSH CLI installation
+outside the pnpm workspace, and do not resolve browser React from a neighboring
+application or add a second React runtime to its bundle.
+
+Univer consumers should obtain DI APIs and types through `@univerjs/core`, which
+owns the Redi dependency. Some published SDK `.d.ts` files nevertheless emit
+inferred `import("@wendellhu/redi").IdentifierDecorator` references even though
+runtime code imports from Core. With both React peer contexts installed, an
+undeclared Redi reference can resolve through pnpm's hoisted directory to the
+other application's Redi instance. A single-React installation can hide this
+problem. The same Redi version number does not prove the peer contexts match.
+
+The exact-version Redi `packageExtensions` in `pnpm-workspace.yaml` keep declaration
+resolution in the consuming application's dependency graph. They are temporary
+package-metadata repairs, not dev SDK version overrides. Prefer an upstream fix
+that keeps emitted DI types imported from Core; do not routinely add direct Redi
+imports or dependencies to SDK consumers.
+
+When upgrading the SDK, inspect the published declarations and manifests before
+changing these extensions. Remove obsolete entries only after an isolated clean
+install verifies both Workspace and Agent typechecks and browser startup. Check
+actual resolved Redi peer contexts; `skipLibCheck`, a successful single-app build,
+or an already-populated `node_modules` is insufficient evidence. Do not force a
+single React version, add broad overrides, patch installed SDK files, or weaken
+typechecking to mask the mismatch. Keep any remaining workaround version-scoped
+and document its evidence and removal condition.
