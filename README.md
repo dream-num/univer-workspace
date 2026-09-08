@@ -14,13 +14,15 @@ English | [简体中文](README.zh-CN.md)
 
 </div>
 
-Univer Workspace is a deployable knowledge and collaboration product built on the
-[Univer SDK](https://docs.univer.ai/). It combines a human-facing Browser, a shared
-Server, and an agent-ready CLI so people and AI agents can work on the same Sheets,
-Docs, Slides, Bases, and Boards.
+Univer Workspace is a deployable knowledge and collaboration workspace built on the
+[Univer Office SDK](https://office.univer.ai/). It brings Sheets, Docs, Slides,
+relational tables, canvases, and more into one shared runtime, with data and
+references staying connected across artifacts as the workspace changes.
 
-Agents work in isolated Worktrees, verify their changes, and hand the result to a
-person for review. People stay in control of what is merged into the shared trunk.
+It combines a human-facing Browser, a shared Server, and an agent-ready CLI. Agents
+work in isolated Worktrees, verify their changes, and hand the result to a person for
+review. Humans can continue editing, review agent changes, and stay in control of what
+gets merged.
 
 ![Univer Workspace showing an English team space with Sheet, Board, Doc, Slide, Base, and folder examples](docs/images/univer-workspace-en.png)
 
