@@ -155,7 +155,7 @@ describe("Session file recovery route", () => {
           currentClient: () => ({ origin: "https://workspace.test", sessionToken: userId }),
         };
         if (name === "sessions") return { get: () => undefined };
-        if (name === "sessionPersistence") return { load };
+        if (name === "sessionPersistence") return { open: vi.fn(async () => ({ read: load, close: vi.fn(async () => {}) })) };
         return undefined;
       },
     } as unknown as Context;

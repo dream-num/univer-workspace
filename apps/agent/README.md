@@ -246,7 +246,7 @@ mkdir -p "$UWH_DSH_BOOTSTRAP" "$DSH_HOME/internal-packages"
 export UWA_PACKAGES="$(mktemp -d "$DSH_HOME/internal-packages/build.XXXXXX")"
 
 npm install --prefix "$UWH_DSH_BOOTSTRAP" --save-exact \
-  @deepseek-ai/dsh@0.1.2-alpha.4
+  @deepseek-ai/dsh@0.1.3-alpha.2
 export DSH_BIN="$UWH_DSH_BOOTSTRAP/node_modules/@deepseek-ai/dsh/lib/bin.js"
 
 pnpm --filter @univerjs/workspace-agent build

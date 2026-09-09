@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { Context } from "@deepseek-ai/cordis";
-import type { Session, SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
+import { SessionLogOffset, type SessionEvent, type SessionId } from "@deepseek-ai/dsh-session";
 import type { Workspace } from "@deepseek-ai/dsh-workspace";
 import type {} from "@deepseek-ai/dsh-host-webserver";
 import type {} from "../provider/workspace-contract.ts";
@@ -28,6 +28,7 @@ import {
 } from "../client/workspace-contract.ts";
 
 import { sessionFilesFromTurns, sessionTurnsFromEvents } from "../client/conversation/univer-turn-definition.ts";
+import { readSessionEvents } from "../session-history.ts";
 import { browseLocalFiles, resolveLocalFile } from "./local-files.ts";
 
 const PREFIX = "/univer-workspace/api";
@@ -225,31 +226,32 @@ async function templateFork(
   userId: string,
   template: WorkspaceTemplate,
 ): Promise<string> {
-  const persistence = ctx.get("sessionPersistence") as {
-    load(id: SessionId): Promise<{ events: readonly SessionEvent[] }>;
-  };
-  const sessions = ctx.get("sessions") as {
-    create(
-      id: SessionId,
-      options: { seed: readonly SessionEvent[]; meta: Record<string, unknown> },
-    ): unknown;
-  };
+  const persistence = ctx.get("sessionPersistence");
+  const sessions = ctx.get("sessions");
+  if (persistence === undefined || sessions === undefined) throw new Error("Session services unavailable");
   const sourceId = template.sessionId as SessionId;
-  const source = await persistence.load(sourceId);
-  const cut = seedCut(source.events);
+  const events = await readSessionEvents(persistence, sourceId);
+  const cut = seedCut(events);
   const workspace = await ensureUserWorkspace(ctx, config, userId, userId);
   const childId = `session-${randomUUID()}` as SessionId;
-  sessions.create(childId, {
-    seed: source.events.slice(0, cut),
+  const child = sessions.prepare(childId, {
+    seed: events.slice(0, cut),
+    inheritedEventCount: SessionLogOffset(cut),
     meta: {
       cwd: workspace.path,
       parentSession: sourceId,
-      seedLength: cut,
+      isSeeded: true,
       ...(template.agentPreset === undefined || template.agentPreset === ""
         ? {}
         : { agentPreset: template.agentPreset }),
     },
   });
+  const handle = await persistence.create(child.header, { inheritedEventCount: child.inheritedEventCount });
+  try {
+    await handle.append(child.snapshotEvents());
+  } finally {
+    await handle.close();
+  }
   await workspace.attachSession(childId);
   return childId;
 }
@@ -612,10 +614,8 @@ export function createBrowserApiHandler(
         return;
       }
       const authClient = ctx.get("workspaceAuth")?.currentClient();
-      const sessions = ctx.get("sessions") as { get(id: SessionId): Session | undefined } | undefined;
-      const persistence = ctx.get("sessionPersistence") as {
-        load(id: SessionId): Promise<{ events: readonly SessionEvent[] }>;
-      } | undefined;
+      const sessions = ctx.get("sessions");
+      const persistence = ctx.get("sessionPersistence");
       if (sessions === undefined || persistence === undefined) {
         jsonResponse(res, 503, { error: "session_history_unavailable" });
         return;
@@ -623,7 +623,7 @@ export function createBrowserApiHandler(
       try {
         // These services belong to the active account runtime. Never open local paths from an ID.
         const live = sessions.get(id as SessionId);
-        const events = live?.snapshotEvents() ?? (await persistence.load(id as SessionId)).events;
+        const events = live?.snapshotEvents() ?? await readSessionEvents(persistence, id as SessionId);
         const currentClient = ctx.get("workspaceAuth")?.currentClient();
         if (authClient?.origin !== currentClient?.origin ||
             authClient?.sessionToken !== currentClient?.sessionToken ||
