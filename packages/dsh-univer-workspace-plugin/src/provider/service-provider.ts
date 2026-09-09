@@ -14,6 +14,7 @@ import { mkdir } from "node:fs/promises";
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
+import type {} from "@deepseek-ai/dsh-session-persistence";
 import type { SessionHeader } from "@deepseek-ai/dsh-session";
 import type { Workspace, WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import type {
@@ -387,11 +388,9 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   }
 
   private async persistedSessionHeaders(): Promise<readonly SessionHeader[]> {
-    const persistence = this.ctx.get("sessionPersistence") as
-      | { list(): Promise<readonly SessionHeader[]> }
-      | undefined;
+    const persistence = this.ctx.get("sessionPersistence");
     if (persistence === undefined) return [];
-    return await persistence.list();
+    return (await persistence.list()).map((snapshot) => snapshot.header);
   }
 
   private async attachPersistedSessions(
