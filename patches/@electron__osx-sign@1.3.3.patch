@@ -1,0 +1,56 @@
+--- a/dist/cjs/util.js
++++ b/dist/cjs/util.js
+@@ -151,9 +151,14 @@
+     (0, exports.debugLog)('Walking... ' + dirPath);
+     async function _walkAsync(dirPath) {
+         const children = await fs.readdir(dirPath);
+-        return await Promise.all(children.map(async (child) => {
++        const results = [];
++        for (const child of children) {
++            results.push(await visitChild(child));
++        }
++        return results;
++        async function visitChild(child) {
+             const filePath = path.resolve(dirPath, child);
+-            const stat = await fs.stat(filePath);
++            const stat = await fs.lstat(filePath);
+             if (stat.isFile()) {
+                 switch (path.extname(filePath)) {
+                     case '.cstemp': // Temporary file generated from past codesign
+@@ -174,7 +179,7 @@
+                 return walkResult;
+             }
+             return null;
+-        }));
++        }
+     }
+     const allPaths = await _walkAsync(dirPath);
+     return compactFlattenedList(allPaths);
+--- a/dist/esm/util.js
++++ b/dist/esm/util.js
+@@ -115,9 +115,14 @@
+     debugLog('Walking... ' + dirPath);
+     async function _walkAsync(dirPath) {
+         const children = await fs.readdir(dirPath);
+-        return await Promise.all(children.map(async (child) => {
++        const results = [];
++        for (const child of children) {
++            results.push(await visitChild(child));
++        }
++        return results;
++        async function visitChild(child) {
+             const filePath = path.resolve(dirPath, child);
+-            const stat = await fs.stat(filePath);
++            const stat = await fs.lstat(filePath);
+             if (stat.isFile()) {
+                 switch (path.extname(filePath)) {
+                     case '.cstemp': // Temporary file generated from past codesign
+@@ -138,7 +143,7 @@
+                 return walkResult;
+             }
+             return null;
+-        }));
++        }
+     }
+     const allPaths = await _walkAsync(dirPath);
+     return compactFlattenedList(allPaths);

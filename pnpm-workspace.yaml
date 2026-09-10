@@ -3,6 +3,11 @@ packages:
   - apps/agent/desktop
   - packages/*
 
+# Like DSH's signer patch, skip Framework symlinks; also bound file probing
+# for the external runtime. Remove once osx-sign fixes both in a release.
+patchedDependencies:
+  "@electron/osx-sign@1.3.3": patches/@electron__osx-sign@1.3.3.patch
+
 allowBuilds:
   # electron-builder includes Squirrel tooling; desktop uses NSIS instead.
   electron-winstaller: false

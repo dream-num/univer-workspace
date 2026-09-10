@@ -9,6 +9,7 @@ module.exports = {
   icon: ".build/icon.png",
   extraMetadata: { version },
   directories: { output: "artifacts" },
+  asar: true,
   files: ["src/**/*.cjs", "package.json"],
   extraResources: [{ from: ".build/runtime", to: "runtime" }],
   artifactName: "Univer-Workspace-Agent-${version}-${os}-${arch}.${ext}",
