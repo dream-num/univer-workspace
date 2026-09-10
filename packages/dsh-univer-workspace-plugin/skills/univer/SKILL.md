@@ -14,7 +14,7 @@ Use the structured `univer_*` tools whenever the task creates, reads, changes, c
 - Office source (`.xlsx`, `.csv`, `.tsv`, `.docx`, `.pptx`): create an empty draft worktree, then call `univer_import` in that worktree. Import creates the new Unit; no placeholder document is needed.
 - `univer_new` and `univer_create` create a document directly in the Space's trunk. Use them only when the user explicitly requests immediate creation outside the review workflow.
 - Before authoring content, load the matching Unit skill: `univer-sheet`, `univer-doc`, `univer-slide`, `univer-base`, or `univer-board`.
-- For an Embed, also load `univer-embed`. For formulas that read another Unit, also load `univer-cross-unit-formula`.
+- For an Embed or a Chart backed by another Unit's data, also load `univer-embed`. For formulas that read another Unit, also load `univer-cross-unit-formula`.
 
 ## Mental model
 
@@ -57,7 +57,7 @@ For document deletion, use `univer_unit` with `action: "remove"`, `worktreeId`, 
 4. Load the matching Unit skill before writing Facade code.
 5. Resolve unfamiliar Facade usage with `univer_api` following the lookup rules above. Never guess an unfamiliar signature, parameter type, or enum.
 6. Mutate through `univer_execute`, or through `univer_compile_svg` for generated Slide page content.
-7. Read the changed scope with `univer_inspect`; use a fresh read-only `univer_execute` when inspection omits a required model field.
+7. Read the changed scope with `univer_inspect`; use a fresh `univer_edit` with `mode: "read"` when inspection omits a required model field.
 8. For every changed Slide page, call `univer_lint` and resolve or explicitly justify each finding.
 9. For visually relevant changes, call `univer_screenshot` with an explicit workspace output directory and the narrowest useful Unit-specific target. Inspect every returned image; screenshots complement rather than replace structural readback or Slide lint.
 10. Export with `univer_export` only when requested and only from the verified scope.

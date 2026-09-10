@@ -251,3 +251,10 @@ new Worktree-local Units. Their merge previews also work when the server evaluat
 confirms a Worktree-created Unit and its returned snapshot matches the exact ready
 revision. Other unsupported historical modes report that the server
 needs updating; they never silently fall back to current trunk or draft.
+
+## Bundled authoring guidance
+
+Board guidance keeps the entrypoint compact and loads diagram semantics, native content, connector labels,
+and routing references only when needed. References ship with the application and resolve from the
+installed skill directory. The Agent also documents Base injected handles and cross-Unit Chart references;
+Workspace Unit identities, source permissions, and Worktree review rules remain authoritative.

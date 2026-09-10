@@ -46,8 +46,31 @@ For another child type, change both `unitType` and the ResourceRef `type` to the
 
 After mutation:
 
-1. Re-read the returned child Facade and descriptor in a fresh `univer_execute`.
+1. Re-read the returned child Facade and descriptor through `univer_edit` with `mode: "read"`.
 2. Verify the exact child Unit ID/type, ResourceRef, host surface, interaction mode, and host anchor/placement.
 3. Inspect both host and child Units with `univer_inspect` where useful.
 4. Follow the Host Unit Skill's `univer_screenshot` workflow and inspect the returned PNG to confirm the child renders inside its host. Structural ResourceRef readback remains required because a screenshot alone does not prove the child ID/type binding.
 5. Follow the `univer` ready/status workflow.
+
+## Referencing another Unit's data from a Chart
+
+When a Chart on a Slide, Doc, or Board should reflect a range in another Unit, bind a ResourceRef instead
+of copying values. Copied values are a snapshot. Use `univer_api` to show `IResourceRefChartDataSourceInput`
+before constructing the exact reference. Pass its contents (`{ file?, unit, part }`) directly to
+`newChart(...).setSource(ref)`; for an existing live Chart use `await chart.setDataSource(ref)`.
+Wrapping the ref as `{ source: { kind, ref } }` fails normalization with `RESOURCE_REF_INVALID_UNIT`.
+
+Verify that the stored `dataSource.source.kind` is `resource-ref`, then read back the exact source Unit,
+selector, range, and resolved Chart data through `univer_edit` with `mode: "read"`. A stored reference alone does not
+prove that the source loads or that the Chart refreshes.
+
+Use stable Unit IDs in the same Workspace deployment and keep the explicit host Worktree or trunk scope.
+Verify that the source is accessible in that scope; this Agent's worker does not establish the CLI's
+fallback-to-trunk behavior. Referenced sources are read-only; do not stage or modify one merely to make
+a Chart load. Use `univer_edit` with `mode: "read"` for structural readback.
+
+Verify that this Agent runtime materializes the authorized source; access alone does not prove loading.
+`univer_screenshot` does not preload a source referenced only by a Chart, so a placeholder there requires live Workspace Viewer review.
+Live refresh requires a registered `watchData` provider. Check whether requested source edits refresh
+the Chart in this Viewer and report unavailable refresh; a stored reference or headless read is not proof.
+Report missing access or runtime support without broadening authorization.

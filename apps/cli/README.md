@@ -154,3 +154,10 @@ The channel is derived from the version; there is no channel input.
 `dry_run` defaults to true. Explicitly set `dry_run=false` to publish the
 verified tarball to insider-npm. The source manifest remains `0.0.0`; public npm promotion
 and Workspace deployment are separate operations.
+
+## Bundled authoring guidance
+
+Board guidance keeps the entrypoint compact and loads diagram semantics, native content, connector labels,
+and routing references only when needed. References ship with the application and resolve from the
+installed skill directory through `skills path board`; `skills get board --full` explicitly loads all references.
+Workspace Unit identities, source permissions, and Worktree review rules remain authoritative.
