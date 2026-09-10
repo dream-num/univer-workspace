@@ -6,6 +6,9 @@ settings:
 
 packageExtensionsChecksum: sha256-SBrIAHV05yXJsighztGAZdol0wokvJTfRXJsx302pqw=
 
+patchedDependencies:
+  '@electron/osx-sign@1.3.3': 696166bebf77985fc1af6136f5bfebf07350f93a576ed9d22d8e87cdf4d0c59c
+
 importers:
 
   .:
@@ -142,7 +145,7 @@ importers:
     devDependencies:
       '@electron/osx-sign':
         specifier: 1.3.3
-        version: 1.3.3(supports-color@10.2.2)
+        version: 1.3.3(patch_hash=696166bebf77985fc1af6136f5bfebf07350f93a576ed9d22d8e87cdf4d0c59c)(supports-color@10.2.2)
       electron:
         specifier: 44.0.0
         version: 44.0.0(supports-color@10.2.2)
@@ -4866,7 +4869,7 @@ packages:
     os: [darwin]
 
   '@univerjs-pro/engine-formula-rust-binding-darwin-arm64@1.0.0-insiders.20260829-2e3c387':
-    resolution: {integrity: sha512-31GP3q3hBXDQvtCHDBsXU7HqTEfxZTY6fJyMoyf5eEUldSZ7M9/Bzc1UmUpD+LRZvafq/z4Ud5MrLdKW8Rv50g==}
+    resolution: {integrity: sha512-31GP3q3hBXDQvtCHDBsXU7HqTEfxZTY6fJyMoyf5eEUldSZ7M9/Bzc1UmUpD+LRZvafq/z4Ud5MrLdKW8Rv50g==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-darwin-arm64/-/engine-formula-rust-binding-darwin-arm64-1.0.0-insiders.20260829-2e3c387.tgz}
     cpu: [arm64]
     os: [darwin]
 
@@ -4877,7 +4880,7 @@ packages:
     libc: [glibc]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu@1.0.0-insiders.20260829-2e3c387':
-    resolution: {integrity: sha512-FgYnbBQkSOFcc6z3+pg2LlPXKpdZTE/gTXq20ZMAgGeq0E1inPvHtbPMsdMeEiRmICVV2CCs+TdtxNQRMXvG+A==}
+    resolution: {integrity: sha512-FgYnbBQkSOFcc6z3+pg2LlPXKpdZTE/gTXq20ZMAgGeq0E1inPvHtbPMsdMeEiRmICVV2CCs+TdtxNQRMXvG+A==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu/-/engine-formula-rust-binding-linux-arm64-gnu-1.0.0-insiders.20260829-2e3c387.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
@@ -4889,7 +4892,7 @@ packages:
     libc: [glibc]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu@1.0.0-insiders.20260829-2e3c387':
-    resolution: {integrity: sha512-9I/Yzc8ZL1Tq6OG7dutV1UvmwCR8CLR6k1VwSSx6t/JskfJy2IPP/Q1r3qUVT5lz3Cc4Pv3azAUcvHIJ8/3s9w==}
+    resolution: {integrity: sha512-9I/Yzc8ZL1Tq6OG7dutV1UvmwCR8CLR6k1VwSSx6t/JskfJy2IPP/Q1r3qUVT5lz3Cc4Pv3azAUcvHIJ8/3s9w==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu/-/engine-formula-rust-binding-linux-x64-gnu-1.0.0-insiders.20260829-2e3c387.tgz}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
@@ -4900,7 +4903,7 @@ packages:
     os: [win32]
 
   '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc@1.0.0-insiders.20260829-2e3c387':
-    resolution: {integrity: sha512-XlAFS6bE65pDdY7Rr5L2HAikMMchZtPscdFfQVTtv6SPa/8OkO0ndFMFhlM2CckB+ueRKEsoUHBmKdQEW0gG+A==}
+    resolution: {integrity: sha512-XlAFS6bE65pDdY7Rr5L2HAikMMchZtPscdFfQVTtv6SPa/8OkO0ndFMFhlM2CckB+ueRKEsoUHBmKdQEW0gG+A==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc/-/engine-formula-rust-binding-win32-x64-msvc-1.0.0-insiders.20260829-2e3c387.tgz}
     cpu: [x64]
     os: [win32]
 
@@ -4908,7 +4911,7 @@ packages:
     resolution: {integrity: sha512-ZYEgg21fgW0XvCjAZgyvzquZk1jZtKXnk5Aa7N0WgV73iLIhwOtfqhsnrG+J8RKh/ps9V2BXnDDHR/9x52W6UA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding/-/engine-formula-rust-binding-1.0.0-insiders.20260819-8209aa8.tgz}
 
   '@univerjs-pro/engine-formula-rust-binding@1.0.0-insiders.20260829-2e3c387':
-    resolution: {integrity: sha512-2A9Okfy4bKjB4x3NO9BG9uMP5uWG5ToSiZy3Spmkl84hH8/NbJ1B2V1SLZwWehUh3C1epfE5UEYicmPeM9n9aw==}
+    resolution: {integrity: sha512-2A9Okfy4bKjB4x3NO9BG9uMP5uWG5ToSiZy3Spmkl84hH8/NbJ1B2V1SLZwWehUh3C1epfE5UEYicmPeM9n9aw==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding/-/engine-formula-rust-binding-1.0.0-insiders.20260829-2e3c387.tgz}
 
   '@univerjs-pro/engine-formula-rust@1.0.0-insiders.20260907-70fc579':
     resolution: {integrity: sha512-qFhCKiNc9XSP/Khep0O9bICye2Qk14H3JvwPvZofCR4nGYTgcnp16b6P8ZkmrEZdlEPwVFw1cEeUdozMxhwxhQ==}
@@ -8761,7 +8764,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@electron/osx-sign@1.3.3(supports-color@10.2.2)':
+  '@electron/osx-sign@1.3.3(patch_hash=696166bebf77985fc1af6136f5bfebf07350f93a576ed9d22d8e87cdf4d0c59c)(supports-color@10.2.2)':
     dependencies:
       compare-version: 0.1.2
       debug: 4.4.3(supports-color@10.2.2)
@@ -8791,7 +8794,7 @@ snapshots:
       dir-compare: 4.2.0
       fs-extra: 11.4.0
       minimatch: 9.0.9
-      plist: 3.1.0
+      plist: 3.1.1
     transitivePeerDependencies:
       - supports-color
 
@@ -17828,7 +17831,7 @@ snapshots:
       '@electron/fuses': 1.8.0
       '@electron/get': 3.1.0(supports-color@10.2.2)
       '@electron/notarize': 2.5.0(supports-color@10.2.2)
-      '@electron/osx-sign': 1.3.3(supports-color@10.2.2)
+      '@electron/osx-sign': 1.3.3(patch_hash=696166bebf77985fc1af6136f5bfebf07350f93a576ed9d22d8e87cdf4d0c59c)(supports-color@10.2.2)
       '@electron/rebuild': 4.2.0(supports-color@10.2.2)
       '@electron/universal': 2.0.3(supports-color@10.2.2)
       '@malept/flatpak-bundler': 0.4.0(supports-color@10.2.2)

@@ -6,6 +6,13 @@ Workspace bundles, not a fork of DSH or a public SDK. Electron packaging tools b
 `pnpm-lock.yaml`. The generated DSH runtime remains isolated from that workspace
 and its React dependency graph.
 
+Like DSH Desktop, the Electron shell explicitly uses ASAR while the standalone
+Node/DSH runtime stays in `extraResources`; ordinary Node cannot load modules
+directly from Electron's ASAR. The version-scoped osx-sign patch follows DSH's
+`lstat` fix for Framework aliases and additionally scans files sequentially to
+avoid exhausting file descriptors. Remove it when an upstream release provides
+both fixes. Raising the descriptor limit alone did not fix the native build.
+
 ## Downloads and updates
 
 The initial download entry is [GitHub Releases](https://github.com/dream-num/univer-workspace/releases).
