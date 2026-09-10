@@ -36,7 +36,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - **Univer Workspace CLI** — the internally packaged `univer-workspace-cli` application for agent-driven remote
   Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, with browser-approved
   passwordless CLI session handoff for password and external-identity users. Contract:
-  [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli.yml).
+  [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli-manual.yml).
 
 - **Univer Workspace Agent** — the local browser application for conversations, document references,
   and agent Worktree review, composed from published DSH packages. Contract: [Agent README](apps/agent/README.md).
@@ -84,7 +84,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - OAuth secrets, trusted Bot credentials, registry credentials, production licenses, and deployment credentials are
   environment or build configuration and must not be committed to the repository.
 - Stable `vX.Y.Z` tags are immutable source coordinates shared by the stable CLI release and Workspace deployments
-  that select a release tag. Tag push publishes only the CLI; deployment remains a separate manual workflow.
+  that select a release tag. Tag pushes trigger no CI or publication. CLI releases and deployment require separate manual workflow dispatches.
 - Workspace images use either the selected release tag or `sha-<commit>` for an untagged workflow dispatch and are
   handed off to the private deployment repository; database migration and rollout ordering remain part of the
   Workspace application contract.
@@ -98,3 +98,14 @@ Update this file in the same change when any of these facts change:
 - outgoing cross-repository dependencies;
 - public APIs, protocols, events, images, artifacts, or deployment handoff;
 - persistence layout, protected data classification, or credential handling.
+
+## Agent desktop delivery
+
+`apps/agent/desktop` owns experimental Electron packaging of the existing Agent
+for Windows x64, macOS Apple Silicon, and Linux x64. It bundles standalone Node,
+the published DSH CLI, local plugins, and Chromium outside the workspace graph.
+GitHub Releases (`agent-vX.Y.Z`, `agent-vX.Y.Z-alpha.N`) are the download and update channel; CI requires
+explicit manual dispatch and publication opt-in. Account data stays in the OS
+application user-data directory, separate from replaceable runtime resources and
+the local `workspace/` working directory.
+See the [desktop contract](apps/agent/desktop/README.md).

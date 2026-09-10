@@ -3,7 +3,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { chmod, copyFile, lstat, mkdir, readFile, readlink, symlink } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, readFile, realpath, symlink } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 const installHome = resolve(requiredEnvironment("DSH_HOME"));
@@ -88,7 +88,12 @@ function runChild(environment) {
   return new Promise((resolveResult) => {
     child = spawn(process.execPath, dshArgs, {
       env: environment,
-      stdio: "inherit",
+      stdio: process.send ? ["inherit", "inherit", "inherit", "ipc"] : "inherit",
+    });
+    if (process.send) child.on("message", (message) => {
+      if (message && typeof message === "object" && message.type === "uwh-desktop-ready" && typeof message.url === "string") {
+        process.send?.({ type: "uwh-desktop-ready", url: message.url });
+      }
     });
     child.once("error", (error) => {
       child = undefined;
@@ -161,14 +166,14 @@ async function ensureProfileLink(linkPath, targetPath) {
     if (!entry.isSymbolicLink()) {
       throw new Error(`${linkPath} exists and is not a symbolic link`);
     }
-    if (resolve(dirname(linkPath), await readlink(linkPath)) !== targetPath) {
+    if (await realpath(linkPath) !== await realpath(targetPath)) {
       throw new Error(`${linkPath} points at an unexpected profile directory`);
     }
     return;
   } catch (error) {
     if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
   }
-  await symlink(targetPath, linkPath, "dir");
+  await symlink(targetPath, linkPath, process.platform === "win32" ? "junction" : "dir");
 }
 
 async function migrateSharedCredentials(targetPath) {

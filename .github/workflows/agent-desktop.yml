@@ -1,0 +1,126 @@
+name: Build and release Agent desktop (manual)
+run-name: Agent desktop ${{ inputs.version }}${{ inputs.publish && ' (publish)' || ' (build only)' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact desktop version (X.Y.Z or X.Y.Z-alpha.N)
+        type: string
+        required: true
+      publish:
+        description: Publish a GitHub Release (macOS signed, Windows unsigned) (requires matching agent-vX.Y.Z workflow ref)
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-desktop-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64
+          - os: macos-15
+            target: mac-arm64
+          - os: windows-2025
+            target: win-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      AGENT_DESKTOP_VERSION: ${{ inputs.version }}
+      AGENT_DESKTOP_OFFICIAL: ${{ inputs.publish }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release source
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          [[ "$AGENT_DESKTOP_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-alpha\.(0|[1-9][0-9]*))?$ ]]
+          if [[ "$AGENT_DESKTOP_OFFICIAL" == "true" ]]; then
+            [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" == "agent-v$AGENT_DESKTOP_VERSION" ]]
+            git merge-base --is-ancestor HEAD "origin/$BASE_BRANCH"
+          fi
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.17.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npm ci --prefix apps/agent/desktop
+      - name: Install Linux browser libraries
+        if: runner.os == 'Linux'
+        run: node apps/agent/desktop/node_modules/playwright/cli.js install-deps chromium
+      - run: pnpm --filter @univerjs/workspace-agent typecheck
+      - run: pnpm --filter @univerjs/workspace-agent test
+      - run: node --test apps/agent/desktop/test/*.test.mjs
+      - run: pnpm --dir apps/agent/desktop prepare:runtime
+      - name: Verify relocated runtime
+        run: node apps/agent/desktop/scripts/smoke.mjs
+      - name: Build installers without publishing
+        run: npm --prefix apps/agent/desktop run package
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ inputs.publish && matrix.target == 'mac-arm64' && 'true' || 'false' }}
+          CSC_LINK: ${{ inputs.publish && matrix.target == 'mac-arm64' && secrets.GO_BUILD_CERTIFICATE_BASE64 || '' }}
+          CSC_KEY_PASSWORD: ${{ inputs.publish && matrix.target == 'mac-arm64' && secrets.GO_P12_PASSWORD || '' }}
+          APPLE_ID: ${{ inputs.publish && matrix.target == 'mac-arm64' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ inputs.publish && matrix.target == 'mac-arm64' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ inputs.publish && matrix.target == 'mac-arm64' && secrets.APPLE_TEAM_ID || '' }}
+      - name: Verify packaged runtime after signing
+        run: node apps/agent/desktop/scripts/smoke.mjs --packaged
+      - name: Verify Linux Electron window
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --no-sandbox
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-desktop-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            apps/agent/desktop/artifacts/*.exe
+            apps/agent/desktop/artifacts/*.dmg
+            apps/agent/desktop/artifacts/*.zip
+            apps/agent/desktop/artifacts/*.AppImage
+            apps/agent/desktop/artifacts/*.blockmap
+            apps/agent/desktop/artifacts/latest*.yml
+            apps/agent/desktop/artifacts/alpha*.yml
+  publish:
+    if: ${{ inputs.publish }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-desktop-*
+          merge-multiple: true
+          path: artifacts
+      - name: Publish all platforms together
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="agent-v$VERSION"
+          # Refuse to overwrite an existing release or mutate a published feed.
+          PRERELEASE=()
+          if [[ "$VERSION" == *-alpha.* ]]; then PRERELEASE=(--prerelease); fi
+          gh release create "$TAG" "${PRERELEASE[@]}" --verify-tag --draft --title "Workspace Agent $VERSION" --notes "Desktop installers for Windows x64, macOS Apple Silicon, and Linux x64. macOS ZIP is also used by automatic updates. Windows installers are unsigned and may show unknown-publisher or SmartScreen warnings." artifacts/*
+          gh release edit "$TAG" --draft=false --latest=false

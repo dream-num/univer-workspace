@@ -541,3 +541,10 @@ same `DSH_HOME` and `UWH_DSH_DATA_HOME`, then install the three current bundles.
 Use a fresh package directory for each local rebuild, as in the commands above.
 Reusing a tarball path and package version can cause pnpm to reuse an older cached
 bundle even after the tarball contents change.
+
+## Desktop packaging
+
+An experimental Electron delivery is available to build for Windows x64, macOS
+Apple Silicon, and Linux x64. See the [desktop guide](desktop/README.md) for native
+builds, manual CI, GitHub Releases, updates, and login prerequisites. No desktop
+Release is published merely by adding a tag.
