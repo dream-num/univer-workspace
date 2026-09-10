@@ -62,6 +62,8 @@ module.exports = {
   forceCodeSigning: official && process.platform === "darwin",
   mac: {
     sign: require("./scripts/sign-mac.cjs").sign,
+    // Like DSH Desktop, seal Chromium PAK data through its enclosing bundle.
+    signIgnore: ["\\.pak$"],
     target: [
       { target: "dmg", arch: ["arm64"] },
       { target: "zip", arch: ["arm64"] },
