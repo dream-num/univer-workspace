@@ -23,18 +23,18 @@
 }
 
 .header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px 12px;
   padding: 10px 12px;
 }
+.metadata { grid-column: 1 / -1; min-width: 0; }
 
 .titleBlock {
   display: flex;
   min-width: 0;
-  flex: 1 1 180px;
+  flex: none;
   flex-direction: column;
   gap: 3px;
 }
@@ -42,8 +42,7 @@
 .titleRow {
   display: flex;
   min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -98,7 +97,7 @@
 
 .notice {
   display: grid;
-  min-height: 120px;
+  min-height: 48px;
   place-items: center;
   padding: 16px;
   color: var(--color-muted-foreground);
@@ -210,8 +209,7 @@
 
 .controls {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -231,7 +229,7 @@
 
 .deletedEmpty {
   display: flex;
-  min-height: 120px;
+  min-height: 48px;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -280,3 +278,28 @@
   margin-left: auto;
   flex: none;
 }
+
+.titleLink {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.titleLink:hover { text-decoration: underline; }
+.accordionHeader { cursor: pointer; }
+.accordionHeader:hover { background: var(--color-accent); }
+.accordionHeader:focus-visible, .titleLink:focus-visible { outline: 2px solid var(--color-ring); outline-offset: -2px; }
+
+.titleRow > svg, .titleRow > span { flex: none; }
+.titleRow > svg { width: 20px; height: 20px; }
+.titleLink { flex: 1; overflow-wrap: anywhere; line-height: 22px; }
+.reopenAction { color: var(--color-muted-foreground); font-size: 12px; padding: 0 4px; height: auto; min-height: 24px; background: transparent; border: 0; box-shadow: none; }
+.reopenAction:hover:not(:disabled) { text-decoration: underline; background: transparent; }
+
+.titleRow { align-items: center; }
+.titleLink { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

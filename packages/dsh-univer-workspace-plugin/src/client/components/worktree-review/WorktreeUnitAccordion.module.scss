@@ -2,9 +2,9 @@
 
 .stream {
   display: grid;
-  gap: 12px;
+  gap: 0;
   margin: 0;
-  padding: 12px 20px 20px;
+  padding: 0;
   list-style: none;
 }
 
@@ -12,10 +12,11 @@
   container-type: inline-size;
   container-name: review-card;
   display: grid;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
   background: var(--uvf-color-surface, #fff);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-foreground) 5%, transparent);
+
 }
 
 .item[data-located] {
@@ -26,7 +27,7 @@
 .cardHeader {
   display: flex;
   min-width: 0;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
   padding: 4px 12px 4px 4px;
@@ -93,7 +94,7 @@
   display: grid;
   min-width: 0;
   gap: 12px;
-  padding: 10px 12px 14px;
+  padding: 0;
   border-top: 1px solid var(--color-border);
   background: var(--uvf-color-surface, #fff);
 }
@@ -170,8 +171,8 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border: 0;
+  border-radius: 0;
 }
 
 .viewerPlaceholder {
@@ -250,11 +251,8 @@
   outline-offset: -2px;
 }
 
-.overflowControls { display: none; }
-
 @container review-card (max-width: 760px) {
-  .controls, .heightControls { display: none; }
-  .overflowControls { display: flex; }
-  .itemHeader { flex-basis: 0; }
-  .unitChange { display: none; }
+  .itemHeader { flex-basis: 100%; }
+  .unitHeader { margin-left: 8px; padding-bottom: 4px; overflow-x: auto; }
+  .controls { justify-content: flex-start; }
 }

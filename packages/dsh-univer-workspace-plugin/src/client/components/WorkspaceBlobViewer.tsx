@@ -1,10 +1,10 @@
 /**
  * Read-only middle surface for a Workspace Blob Resource. Blob content is not
  * a Univer Unit, so it deliberately does not mount the Univer collaboration
- * runtime; it uses the Workspace content/download proxy and the same three
- * column shell as a Resource Viewer.
+ * runtime; it uses the Workspace content/download proxy and the same parent-sized
+ * shell as a Resource Viewer.
  */
-import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { CloseIcon, ExternalLinkIcon, FileIcon, FileTextIcon } from "@univerjs/univer-workspace-ui";
 import type { WorkspaceBlobSurface } from "../navigation/workspace-navigation.ts";
 import type { UniverLocaleKey } from "../locales.ts";
@@ -27,8 +27,6 @@ type BlobState =
 
 export interface WorkspaceBlobViewerProps {
   readonly target: WorkspaceBlobSurface;
-  readonly surfaceLeft: number | null;
-  readonly surfaceWidth: number;
   readonly onClose: () => void;
   readonly headerAction?: ReactElement | undefined;
   readonly t: (key: UniverLocaleKey) => string;
@@ -70,17 +68,8 @@ export function WorkspaceBlobViewer(props: WorkspaceBlobViewerProps): ReactEleme
     return () => controller.abort();
   }, [props.target.name, props.target.resourceId]);
 
-  const surfaceStyle = {
-    "--uwh-resource-surface-left":
-      props.surfaceLeft === null ? undefined : `${props.surfaceLeft}px`,
-    "--uwh-resource-surface-width": `${props.surfaceWidth}px`,
-  } as CSSProperties & {
-    "--uwh-resource-surface-left": string | undefined;
-    "--uwh-resource-surface-width": string;
-  };
-
   return (
-    <section className={css.surface} style={surfaceStyle} aria-label={props.target.name}>
+    <section className={css.surface} aria-label={props.target.name}>
       <header className={css.header}>
         <div className={css.identity}>
           <span className={css.glyph} aria-hidden="true">

@@ -1,12 +1,12 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef } from "react";
 
 const SELECTED_DIFF_SELECTOR = '[data-diff-sidebar-selected="true"]';
 
 /** Keeps the selected diff entry visible without moving a sidebar that already shows it. */
 export function useEnsureSelectedDiffVisible<T extends HTMLElement>(
   selectedItemId: string | null | undefined,
-): RefObject<T | null> {
-  const containerRef = useRef<T | null>(null);
+): { readonly current: T | null } {
+  const containerRef = useRef<T>(null);
 
   useEffect(() => {
     const container = containerRef.current;

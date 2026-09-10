@@ -66,3 +66,12 @@ runtime 只读。Viewer 为每个可见侧调用一次 factory，并负责调用
 package 自带与 collaboration viewer 相同的 17 种完整 Viewer 语言包；不支持的 `LocaleType` 回退到
 英文。实体名称、属性路径和 schema enum 值来自对应的 Univer History SDK locale，用户内容不会被翻译。
 宿主通常不需要传入 `messages`。
+
+## 宿主依赖隔离
+
+Workspace Browser 通过 workspace link 使用 React 19。Workspace Agent 通过 private `file:`
+开发依赖安装同一目录的源码，让 pnpm 使用 Agent 的 React 18 peer context。Agent 将组件内联到
+浏览器产物，React 由 DSH 提供；此 private package 不是安装时的运行依赖。React、React DOM、
+对应类型及 Univer DI 必须留在消费应用的依赖树中。修改源码后，先运行
+`pnpm --filter dsh-univer-workspace-plugin update @univer/unit-comparison-viewer` 刷新本地文件依赖，
+再构建 Agent。

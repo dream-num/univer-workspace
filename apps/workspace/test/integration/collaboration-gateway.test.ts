@@ -573,6 +573,76 @@ describe("collaboration gateway", () => {
     }
   });
 
+  it("retains Base-to-draft comparison after merge/discard and pins the recorded merge revision", async () => {
+    const { application, origin } = await startApplication();
+    const issued = await application.identity.registerWithPassword({
+      username: "history-review", displayName: "History reviewer",
+      password: "correct horse battery staple",
+    });
+    const userId = issued.view.user.id;
+    const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
+    const space = application.spaces.list(userId).spaces[0]!;
+    const created = await application.resources.create(userId, "history-resource-0001", {
+      kind: "univer", spaceId: space.id, parentNodeId: null, name: "History", unitType: "sheet",
+    });
+    if (created.status === 202) throw new Error("Resource creation pending");
+    const resourceId = created.body.node.resource!.id;
+    for (const status of ["merged", "discarded"] as const) {
+      const worktree = await application.worktrees.create(userId, `history-${status}-0001`, {
+        kind: "user", name: `History ${status}`, summary: null,
+      });
+      const worktreeId = worktree.body.id;
+      const added = await application.worktrees.addUnit(userId, worktreeId, `history-unit-${status}-0001`, {
+        source: "trunk", resourceId,
+      });
+      const unitId = added.body.unit.unitId;
+      const endpoint = `${origin}/universer-api/worktrees/${worktreeId}/units/${unitId}/comparison`;
+      const before = await fetch(`${endpoint}?baseMode=base`, { headers: { cookie } });
+      expect(before.status).toBe(200);
+      const baseline = await before.json();
+      const revision = baseline.right.revision;
+      await application.worktrees.submitChangeset(userId, worktreeId, unitId, {
+        changeset: { unitID: unitId, type: UniverType.UNIVER_SHEET,
+          baseRev: revision, revision: revision + 1, sid: "history-review", reqId: 1,
+          userID: "", memberID: "", createTime: 1, mutations: [],
+        },
+      });
+      if (status === "merged") {
+        await application.worktrees.markReady(userId, worktreeId);
+        const preview = await fetch(`${endpoint}?baseMode=base&view=preview`, { headers: { cookie } });
+        expect(preview.status).toBe(200);
+        expect(await preview.json()).toMatchObject({ baseMode: "base", view: "preview" });
+        await application.worktrees.merge(userId, worktreeId, "history-merge-0001");
+      } else {
+        await application.worktrees.discard(userId, worktreeId, "history-discard-0001");
+      }
+      const historical = await fetch(`${endpoint}?baseMode=base`, { headers: { cookie } });
+      expect(historical.status).toBe(200);
+      expect(await historical.json()).toMatchObject({
+        baseMode: "base", view: "draft",
+        left: baseline.left,
+        right: { revision: revision + 1, unitData: { id: unitId } },
+      });
+      if (status === "merged") {
+        const result = await fetch(`${endpoint}?baseMode=base&view=merged`, { headers: { cookie } });
+        expect(result.status).toBe(200);
+        expect(await result.json()).toMatchObject({
+          view: "merged", left: baseline.left, right: { unitData: { id: unitId } },
+        });
+      }
+      if (status === "discarded") {
+        for (const view of ["merged", "preview"]) {
+          const unavailable = await fetch(`${endpoint}?baseMode=base&view=${view}`, { headers: { cookie } });
+          expect(unavailable.status).toBe(409);
+        }
+      }
+      const invalid = await fetch(`${endpoint}?baseMode=invalid`, { headers: { cookie } });
+      expect(invalid.status).toBe(400);
+      const unauthorized = await fetch(`${endpoint}?baseMode=base`);
+      expect(unauthorized.status).toBe(401);
+    }
+  }, 60_000);
+
   it("binds the authenticated product user and Node permissions to Univer protocol", async () => {
     const { application, origin, collaborationDatabaseFilename } =
       await startApplication();

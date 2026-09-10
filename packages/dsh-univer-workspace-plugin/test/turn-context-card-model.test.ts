@@ -229,3 +229,20 @@ it("only previews existing trunk content before a deletion is merged", () => {
   expect(resolveTurnViewer(worktree({ status: "merged" }), removed, "trunk")).toBeUndefined();
   expect(resolveTurnViewer(worktree(), { ...removed, nodeId: null }, "trunk")).toBeUndefined();
 });
+
+
+describe("historical Worktree review", () => {
+  it.each(["merged", "discarded"] as const)("retains a %s draft without requiring a trunk Resource", status => {
+    const local = unit("history-unit", "unpublished-resource", {
+      source: "worktree", activationState: "discarded", kind: "added", nodeId: null,
+    });
+    const historical = worktree({ status, units: [local],
+      worktreeTarget: { unitId: local.unitId, unitType: "sheet", readOnly: true },
+    });
+    expect(activeViewerMode("agent", historical, local)).toBe("agent");
+    expect(resolveTurnViewer(historical, local, "agent")).toMatchObject({
+      editable: false, unitId: local.unitId, scope: { kind: "worktree", worktreeId: "wt-1" },
+    });
+    expect(canViewMergePreview(historical)).toBe(false);
+  });
+});

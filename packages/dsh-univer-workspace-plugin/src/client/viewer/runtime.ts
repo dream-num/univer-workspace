@@ -51,7 +51,9 @@ import {
 import { installHistoryShapeFormulaCompatibility } from "./history-compatibility.ts";
 import { ViewAssetIoOwner, registerViewerRendering } from "./rendering.ts";
 import { createSheetResourceRefDataProvider } from "./resource-ref.ts";
-import { buildViewerUrls, loadViewerMergePreviewConfig } from "./proxy.ts";
+import { buildViewerUrls } from "./proxy.ts";
+import { comparisonUniverFactory, createComparisonUnit } from "./comparison.ts";
+import { loadComparison } from "../api/comparison-api.ts";
 import type { ViewerHandle, ViewerOptions } from "./contracts.ts";
 
 // The history viewer creates a nested Univer composition. Install its formula
@@ -66,21 +68,31 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
     );
   }
 
-  // Office keeps the original edits visible when a ready Worktree cannot
-  // materialize a merge preview (for example, there are no changesets to
-  // replay). Never blank the Viewer in that case: fall back to the Worktree
-  // stream, read-only, while the surrounding status remains "awaiting confirmation".
-  let scope = opts.scope;
-  if (opts.scope.kind === "mergePreview") {
+  const scope = opts.scope;
+  if (scope.kind === "mergePreview") {
+    const comparison = await loadComparison(scope.worktreeId, opts.unitId, "preview",
+      { base: "Base", result: "Merge preview" }, new AbortController().signal);
+    const container = document.getElementById(opts.container);
+    if (!container || comparison.right.unitData === null) throw new Error("Merge preview content is unavailable.");
+    const instance = await comparisonUniverFactory(opts.license)({
+      container, unitType: comparison.result.unit.type, locale: opts.locale,
+      darkMode: opts.darkMode === true,
+    });
     try {
-      await loadViewerMergePreviewConfig(opts.scope.worktreeId, opts.unitId);
-      // The current embedded runtime has no snapshot-replay adapter yet. The
-      // successful evaluator result is therefore still rendered from the
-      // canonical Worktree stream until that adapter is available.
-    } catch {
-      // Same fallback for evaluator errors (conflict, no changesets, etc.).
+      createComparisonUnit(instance.univer, comparison);
+      const api = FUniver.newAPI(instance.univer);
+      return {
+        dispose: () => { api.dispose(); instance.dispose(); },
+        setDarkMode: value => api.toggleDarkMode(value),
+        setLocale: async locale => {
+          api.loadLocales(locale, LOCALE_PACKS[localeKeyOf(locale)]);
+          api.setLocale(locale);
+        },
+      };
+    } catch (error) {
+      instance.dispose();
+      throw error;
     }
-    scope = { kind: "worktree", worktreeId: opts.scope.worktreeId };
   }
 
   const editable = opts.editable === true;

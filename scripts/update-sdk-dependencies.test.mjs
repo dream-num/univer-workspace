@@ -106,3 +106,16 @@ test("every workspace consumer uses one SDK baseline", async () => {
   const baseline = resolveWorkspaceSdkBaseline(packages);
   assert.ok(validateWorkspaceSdkDependencies(packages, baseline) > 0);
 });
+
+test("allows only the Agent development comparison copy for React peer isolation", () => {
+  const validate = (consumer, field, specifier) => validateWorkspaceSdkDependencies([
+    { manifest: { name: "@univer/unit-comparison-viewer", dependencies: { "@univerjs/core": "1.0.0" } } },
+    { manifest: { name: consumer, [field]: { "@univer/unit-comparison-viewer": specifier } } },
+  ], "1.0.0");
+  assert.doesNotThrow(() => validate("dsh-univer-workspace-plugin", "devDependencies", "file:../unit-comparison-viewer"));
+  for (const [consumer, field, specifier] of [
+    ["other", "devDependencies", "file:../unit-comparison-viewer"],
+    ["dsh-univer-workspace-plugin", "dependencies", "file:../unit-comparison-viewer"],
+    ["dsh-univer-workspace-plugin", "devDependencies", "file:../../other"],
+  ]) assert.throws(() => validate(consumer, field, specifier), /must use workspace/);
+});

@@ -1,5 +1,5 @@
 import { createLocalPathInputSource, pathReferenceInsert, type PathReference } from "./path-reference.ts";
-import { bindContentRoute } from "./navigation/region-route.ts";
+import { bindContentRoute, regionQuery } from "./navigation/region-route.ts";
 import { invalidateWorkspaceState } from "./api/univer-api.ts";
 /**
  * @dsh-univer-workspace-plugin — browser half.
@@ -34,7 +34,7 @@ import { TemplateForkAction } from "./TemplateForkAction.tsx";
 import { WorkspaceFooterSwitch } from "./WorkspaceSwitchButton.tsx";
 import { OriginSetting, type WorkspaceAuthSettings } from "./OriginSetting.tsx";
 import { HarnessDocumentTitle } from "./DocumentTitle.tsx";
-import { FileWorkspaceOverlay } from "./FileWorkspaceOverlay.tsx";
+import { WorkspaceSidecar, WorkspaceSidecarTitle, WORKSPACE_SIDECAR_KIND } from "./WorkspaceSidecar.tsx";
 import { fetchWorkspaceSpaces, renameWorkspaceSpace } from "./space-api.ts";
 import { WorkspaceSidebarRoot } from "./WorkspaceSidebarRoot.tsx";
 import {
@@ -66,6 +66,8 @@ export const inject = [
   "workspaces",
   "uiWorkspace",
   "layout",
+  "sidebarRight",
+  "sidebarRightTabs",
 ];
 
 const WORKSPACE_SETTINGS_NAMESPACE = "univer-workspace-harness";
@@ -451,6 +453,7 @@ export function apply(ctx: ClientContext): void {
     return `#/?${query}`;
   };
   const openSession = (sessionId: string): void => {
+    clientSessions.open(sessionId as Parameters<typeof clientSessions.open>[0]);
     window.location.hash = sessionHashForId(sessionId);
   };
 
@@ -537,23 +540,83 @@ export function apply(ctx: ClientContext): void {
     ),
   );
 
-  ctx.slots.inject("shell.overlay", () =>
-    ctx.slots.register(
-      {
-        name: "shell.overlay",
-        id: "univer-workspace-file-workspace",
-        order: 20,
-        inject: () => ({
-          loadViewerBootstrap,
-          getViewerLocale,
-          t: translate,
-          navigation,
-          insertResourceReference,
-        }),
-      },
-      FileWorkspaceOverlay,
-    ),
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id: WORKSPACE_SIDECAR_KIND,
+    kind: WORKSPACE_SIDECAR_KIND,
+    title: () => translate("file.title"),
+  }));
+  ctx.slots.inject("sidebar.right.pane.tab.title", () =>
+    ctx.slots.register({
+      name: "sidebar.right.pane.tab.title",
+      key: WORKSPACE_SIDECAR_KIND,
+      inject: () => ({ t: translate }),
+    }, WorkspaceSidecarTitle),
   );
+  ctx.slots.inject("sidebar.right.pane.tab", () =>
+    ctx.slots.register({
+      name: "sidebar.right.pane.tab",
+      key: WORKSPACE_SIDECAR_KIND,
+      inject: () => ({ loadViewerBootstrap, getViewerLocale, t: translate, insertResourceReference }),
+    }, WorkspaceSidecar),
+  );
+
+  ctx.effect(() => {
+    let disposed = false;
+    let generation = 0;
+    let previous = navigation.getSnapshot().contentSurface;
+    const open = async () => {
+      const target = navigation.getSnapshot().contentSurface;
+      const request = ++generation;
+      if (!target) return;
+      try {
+        // Initial deep links can resolve before DSH's catalog/navigation baseline.
+        for (let attempt = 0; clientSessions.list.getSnapshot().phase !== "ready"; attempt++) {
+          if (attempt === 200) throw new Error("Session navigation is not ready.");
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+          if (disposed || request !== generation) return;
+        }
+        if (clientSessions.list.getSnapshot().current === undefined) {
+          const legacySession = regionQuery(window.location.hash).get("right")?.replace(/^hidden\//, "");
+          const sessionId = legacySession?.startsWith("session/") ? decodeURIComponent(legacySession.slice(8)) : undefined;
+          if (sessionId && clientSessions.list.getSnapshot().byId[sessionId]) {
+            clientSessions.open(sessionId as Parameters<typeof clientSessions.open>[0]);
+          }
+        }
+        if (clientSessions.list.getSnapshot().current === undefined) {
+          const spaces = await loadSpaces();
+          const workspaceId = spaces[0]?.dshWorkspaceId;
+          if (workspaceId === undefined) throw new Error("No connected Workspace Space is available.");
+          const sessionId = await ctx.uiWorkspace.connectWorkspace(workspaceId as Parameters<typeof ctx.uiWorkspace.connectWorkspace>[0]);
+          if (disposed || request !== generation) return;
+          clientSessions.open(sessionId);
+        }
+        const ownerSession = clientSessions.list.getSnapshot().current;
+        // The session selection commits before React mounts its native panel seat.
+        for (let attempt = 0; attempt < 40; attempt++) {
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+          if (disposed || request !== generation || clientSessions.list.getSnapshot().current !== ownerSession) return;
+          try {
+            ctx.sidebarRight.openTab(WORKSPACE_SIDECAR_KIND, { params: { target }, revealIfOpened: true });
+            return;
+          } catch (error) {
+            if (!(error instanceof Error) || error.message !== "sidebarRight: no session surface is mounted" || attempt === 39) throw error;
+          }
+        }
+      } catch (error) {
+        if (!disposed && request === generation) toast.error(translate("window.loadFailed"), {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
+    const unsubscribe = navigation.subscribe(() => {
+      const next = navigation.getSnapshot().contentSurface;
+      if (next === previous) return;
+      previous = next;
+      void open();
+    });
+    if (previous) void open();
+    return () => { disposed = true; generation++; unsubscribe(); };
+  });
 
   ctx.uiConversation.events.register(univerTurnDefinition);
 

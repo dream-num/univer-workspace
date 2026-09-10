@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ApplicationError } from "../../middleware/errors.js";
 import { BasesUnitComparisonAdapter } from "@univerjs-pro/bases-history";
 import { BoardsUnitComparisonAdapter } from "@univerjs-pro/boards-history";
 import {
@@ -53,6 +54,8 @@ interface ComparisonSide {
 }
 
 export interface WorkspaceUnitComparisonPayload {
+  readonly baseMode: "trunk" | "base";
+  readonly view: "draft" | "merged" | "preview";
   readonly result: Omit<IUnitComparisonResult, "items" | "productContext"> & {
     readonly items: readonly (IUnitComparisonItem & {
       readonly title: string;
@@ -74,6 +77,8 @@ export async function createWorkspaceUnitComparison(input: {
   readonly unitType: UnitType;
   readonly source: "trunk" | "worktree";
   readonly change: "modified" | "added" | "deleted" | "unchanged";
+  readonly baseMode?: "trunk" | "base";
+  readonly view?: "draft" | "merged" | "preview";
 }): Promise<WorkspaceUnitComparisonPayload> {
   const type = toUniverType(input.unitType);
   const context = {
@@ -95,35 +100,39 @@ export async function createWorkspaceUnitComparison(input: {
     );
   }
 
-  const leftPromise =
-    input.source === "trunk"
-      ? loadTrunkSide(input.service, input.unitId, type, context)
-      : Promise.resolve(null);
-  const rightPromise =
-    input.change === "deleted"
-      ? Promise.resolve(null)
-      : loadWorktreeSide(
-          input.worktreeService,
-          input.worktreeId,
-          unit,
-          type,
-          context,
-        );
+  const baseMode = input.baseMode ?? "trunk";
+  const view = input.view ?? "draft";
+  if (view === "merged" && worktree.status !== "merged") {
+    throw new ApplicationError("CONFLICT", 409, "A merged result is only available for a merged Worktree.");
+  }
+  if (view === "preview" && worktree.status !== "ready") {
+    throw new ApplicationError("CONFLICT", 409, "A merge preview is only available for a ready Worktree.");
+  }
+  if (baseMode === "base" && input.source === "trunk" && unit.baselineTrunkRevision === undefined) {
+    throw new ApplicationError("CONFLICT", 409, "The Worktree base revision is unavailable.");
+  }
+  const leftPromise = input.source === "trunk"
+    ? loadTrunkSide(input.service, input.unitId, type, context,
+        baseMode === "base" ? unit.baselineTrunkRevision : undefined)
+    : Promise.resolve(null);
+  const rightPromise = input.change === "deleted"
+    ? Promise.resolve(null)
+    : view === "merged"
+      ? loadMergedSide(input.service, unit, type, context)
+      : view === "preview"
+        ? loadPreviewSide(input.worktreeService, input.worktreeId, unit, type, context)
+        : loadWorktreeSide(input.worktreeService, input.worktreeId, unit, type, context);
   const [left, right] = await Promise.all([leftPromise, rightPromise]);
-  const history = await loadComparisonHistory({
+  const history = view === "draft" ? await loadComparisonHistory({
     service: input.service,
     worktreeService: input.worktreeService,
     worktreeId: input.worktreeId,
     unit,
     type,
-    ...(left?.revision === undefined
-      ? {}
-      : { leftRevision: left.revision }),
-    ...(right?.revision === undefined
-      ? {}
-      : { rightRevision: right.revision }),
+    ...(left?.revision === undefined ? {} : { leftRevision: left.revision }),
+    ...(right?.revision === undefined ? {} : { rightRevision: right.revision }),
     context,
-  });
+  }) : snapshotHistory();
   const comparisonId = `workspace-comparison-${randomUUID()}`;
   const prepared = comparisonEngine.prepare({
     comparisonId,
@@ -142,6 +151,8 @@ export async function createWorkspaceUnitComparison(input: {
   });
 
   return {
+    baseMode,
+    view,
     result: completeComparisonResult(prepared),
     left: left ?? { unitData: null },
     right: right ?? { unitData: null },
@@ -153,11 +164,15 @@ async function loadTrunkSide(
   unitId: string,
   type: UniverType,
   context: Parameters<UniverCollabService["getUnitLoadDataWithBlocks"]>[1],
+  revision?: number,
 ): Promise<ComparisonSide> {
   let loadData = await service.getUnitLoadDataWithBlocks(
-    { unitID: unitId, type, revision: 0 },
+    { unitID: unitId, type, revision: revision ?? 0 },
     context,
   );
+  if (revision !== undefined && loadData.targetRevision !== revision) {
+    throw new ApplicationError("CONFLICT", 409, "The requested historical revision is unavailable.");
+  }
   if (loadData.snapshot.workbook && loadData.sheetBlocks.length === 0) {
     loadData = {
       ...loadData,
@@ -171,6 +186,42 @@ async function loadTrunkSide(
     };
   }
   return materializeSide(loadData, type);
+}
+
+async function loadMergedSide(
+  service: UniverCollabService,
+  unit: WorktreeUnitData,
+  type: UniverType,
+  context: Parameters<UniverCollabService["getUnitLoadDataWithBlocks"]>[1],
+): Promise<ComparisonSide> {
+  if (unit.mergeResult?.status !== "merged") {
+    // The SDK does not record a merge-time trunk revision for unchanged Units.
+    // A current trunk read would misrepresent it as an immutable merge result.
+    throw new ApplicationError("CONFLICT", 409, "This Unit has no recorded merge-result revision.");
+  }
+  return loadTrunkSide(service, unit.unitID, type, context, unit.mergeResult.trunkRevision);
+}
+
+async function loadPreviewSide(
+  service: UniverCollabWorktreeService,
+  worktreeId: string,
+  unit: WorktreeUnitData,
+  type: UniverType,
+  context: Parameters<UniverCollabWorktreeService["getUnitLoadData"]>[1],
+): Promise<ComparisonSide> {
+  const evaluation = await service.evaluateWorktreeUnitMerge(
+    { worktreeID: worktreeId, unitID: unit.unitID }, context,
+  );
+  if (evaluation.status === "not-behind" ||
+      (evaluation.status === "not-applicable" && evaluation.reason === "worktree-created-unit")) {
+    return loadWorktreeSide(service, worktreeId, unit, type, context);
+  }
+  if (evaluation.status !== "preview") {
+    throw new ApplicationError("CONFLICT", 409, `Merge preview is unavailable: ${evaluation.status}.`);
+  }
+  return {
+    unitData: await decodeUnitData(type, evaluation.preview.snapshot, evaluation.preview.sheetBlocks ?? []),
+  };
 }
 
 async function loadWorktreeSide(
@@ -325,6 +376,7 @@ async function loadComparisonHistory(input: {
 }
 
 function snapshotHistory(): {
+  readonly commonBaseRevision?: number;
   readonly fidelity: UnitComparisonFidelity;
   readonly leftChangesets: readonly [];
   readonly rightChangesets: readonly [];

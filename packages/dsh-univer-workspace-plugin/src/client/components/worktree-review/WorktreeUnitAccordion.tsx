@@ -13,15 +13,6 @@
 import { useEffect, useRef, useState, useId, type RefObject, type ReactElement } from "react";
 import {
   Badge,
-  CheckIcon,
-  EllipsisIcon,
-  MenuContent,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuRoot,
-  MenuSeparator,
-  MenuTrigger,
   Button,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -43,7 +34,6 @@ import {
   resolveTurnViewer,
   unitChangeLabel,
   viewerKey,
-  type TurnViewMode,
 } from "../turn-context-card-model.ts";
 import type { UnitLocationMap } from "./use-unit-locations.ts";
 import type { ViewportMount } from "./use-viewport-mount.ts";
@@ -58,6 +48,8 @@ import { postWorktreeUnitRemoval } from "../../api/univer-api.ts";
 import { useReviewHeight } from "./use-review-height.ts";
 import css from "./WorktreeUnitAccordion.module.scss";
 
+export type WorktreeDocumentView = "result" | "diff" | "trunk" | "preview" | "merged";
+
 export interface WorktreeUnitAccordionProps {
   readonly scrollRootRef: RefObject<HTMLElement | null>;
   readonly worktree: DocumentWorktreeState;
@@ -66,7 +58,7 @@ export interface WorktreeUnitAccordionProps {
   readonly expandedIds: ReadonlySet<string>;
   readonly locatedUnitId: string | null;
   readonly locateVersion: number;
-  readonly viewByUnitId: Readonly<Record<string, TurnViewMode>>;
+  readonly viewByUnitId: Readonly<Record<string, WorktreeDocumentView>>;
   readonly mount: ViewportMount;
   readonly runtime: ViewerRuntimeProps;
   readonly insertResourceReference: (
@@ -75,7 +67,7 @@ export interface WorktreeUnitAccordionProps {
   ) => WorkspaceResourceReferenceInsertResult;
   readonly onActionSettled: () => void;
   readonly onToggle: (unitId: string) => void;
-  readonly onViewChange: (unitId: string, mode: TurnViewMode) => void;
+  readonly onViewChange: (unitId: string, mode: WorktreeDocumentView) => void;
 }
 
 export function WorktreeUnitAccordion(props: WorktreeUnitAccordionProps): ReactElement {
@@ -92,7 +84,7 @@ export function WorktreeUnitAccordion(props: WorktreeUnitAccordionProps): ReactE
           expanded={props.expandedIds.has(unit.unitId)}
           located={props.locatedUnitId === unit.unitId}
           locateVersion={props.locateVersion}
-          view={props.viewByUnitId[unit.unitId] ?? "agent"}
+          view={props.viewByUnitId[unit.unitId] ?? (props.worktree.status === "merged" ? "diff" : "result")}
           mount={props.mount}
           runtime={props.runtime}
           insertResourceReference={props.insertResourceReference}
@@ -114,7 +106,7 @@ function WorktreeUnitItem(props: {
   readonly expanded: boolean;
   readonly located: boolean;
   readonly locateVersion: number;
-  readonly view: TurnViewMode;
+  readonly view: WorktreeDocumentView;
   readonly mount: ViewportMount;
   readonly runtime: ViewerRuntimeProps;
   readonly insertResourceReference: (
@@ -123,7 +115,7 @@ function WorktreeUnitItem(props: {
   ) => WorkspaceResourceReferenceInsertResult;
   readonly onActionSettled: () => void;
   readonly onToggle: () => void;
-  readonly onViewChange: (mode: TurnViewMode) => void;
+  readonly onViewChange: (mode: WorktreeDocumentView) => void;
 }): ReactElement {
   const { worktree, unit, runtime } = props;
   const t = runtime.t;
@@ -156,7 +148,10 @@ function WorktreeUnitItem(props: {
     root.scrollTop += item.getBoundingClientRect().top - root.getBoundingClientRect().top;
   }, [props.located, props.locateVersion, props.expanded, props.scrollRootRef]);
 
-  const activeView = activeViewerMode(props.view, worktree, unit);
+  const requestedMode = props.view === "trunk" || props.view === "preview" ? props.view : "agent";
+  const activeView = activeViewerMode(requestedMode, worktree, unit);
+  const selectedView: WorktreeDocumentView = activeView !== "agent" ? activeView
+    : props.view === "diff" || (props.view === "merged" && worktree.status === "merged") ? props.view : "result";
   const previewable =
     unit.kind !== "deleted" ||
     (activeView === "trunk" && worktree.status !== "merged" && unit.nodeId !== null);
@@ -172,12 +167,15 @@ function WorktreeUnitItem(props: {
   );
   const mergeResult = unit.mergeResult;
   const locationTitle = unitLocationTitle(props.location, unit.name);
-  const viewOptions: SegmentedOption<TurnViewMode>[] = [
-    { value: "trunk", label: t("turn.view.trunk"), disabled: !canViewTrunk(unit) },
-    { value: "agent", label: t("turn.view.agent"), disabled: !canViewAgentDraft(worktree) },
-    ...(canViewMergePreview(worktree)
-      ? [{ value: "preview" as const, label: t("turn.view.preview") }]
-      : []),
+  const viewOptions: SegmentedOption<WorktreeDocumentView>[] = [
+    ...(canViewAgentDraft(worktree) ? [
+      { value: "result" as const, label: t("comparison.effect") },
+      { value: "diff" as const, label: t("comparison.diff") },
+    ] : []),
+    ...(canViewTrunk(unit) ? [{ value: "trunk" as const, label: t("turn.view.trunk") }] : []),
+    ...(canViewMergePreview(worktree) ? [{ value: "preview" as const, label: t("turn.view.preview") }] : []),
+    ...(worktree.status === "merged" && canViewAgentDraft(worktree)
+      ? [{ value: "merged" as const, label: t("comparison.merged") }] : []),
   ];
 
   return (
@@ -238,67 +236,15 @@ function WorktreeUnitItem(props: {
               >
                 <MessageSquarePlusIcon />
               </Button>
-              <Segmented<TurnViewMode>
+              <Segmented<WorktreeDocumentView>
                 aria-label={t("viewer.readOnlyPreview")}
                 size="sm"
-                value={activeView}
+                value={selectedView}
                 options={viewOptions}
                 onValueChange={props.onViewChange}
               />
             </div>
-            {viewer !== undefined && viewer.unitType !== "unsupported" ? (
-              <Segmented
-                aria-label={t("review.height.label")}
-                size="sm"
-                className={css.heightControls ?? ""}
-                value={sizing.preset}
-                options={[
-                  { value: "compact", label: t("review.height.compact") },
-                  { value: "auto", label: t("review.height.auto") },
-                  { value: "fill", label: t("review.height.fill") },
-                ]}
-                onValueChange={sizing.setPreset}
-              />
-            ) : null}
-            <div className={css.overflowControls}>
-              <MenuRoot>
-                <MenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("review.moreActions")} title={t("review.moreActions")} />}>
-                  <EllipsisIcon />
-                </MenuTrigger>
-                <MenuContent align="end">
-                  <MenuGroup>
-                    <MenuGroupLabel>{t("viewer.readOnlyPreview")}</MenuGroupLabel>
-                    {viewOptions.map((option) => (
-                      <MenuItem key={option.value} disabled={option.disabled === true} onClick={() => props.onViewChange(option.value)}>
-                        {option.value === activeView ? <CheckIcon /> : null}{option.label}
-                      </MenuItem>
-                    ))}
-                  </MenuGroup>
-                  <MenuSeparator />
-                  <MenuItem onClick={() => props.insertResourceReference({ resourceId: unit.resourceId, name: unit.name })}>
-                    <MessageSquarePlusIcon />{t("resource.addToMessage")}
-                  </MenuItem>
-                  {worktree.status === "draft" && worktree.capabilities.editDraft ? (
-                    <MenuItem disabled={busy} onClick={updateRemoval}>
-                      {t(unit.kind === "deleted" ? "turn.undoRemoval" : "turn.removeUnit")}
-                    </MenuItem>
-                  ) : null}
-                  {viewer !== undefined && viewer.unitType !== "unsupported" ? (
-                    <>
-                      <MenuSeparator />
-                      <MenuGroup>
-                        <MenuGroupLabel>{t("review.height.label")}</MenuGroupLabel>
-                        {(["compact", "auto", "fill"] as const).map((preset) => (
-                          <MenuItem key={preset} onClick={() => sizing.setPreset(preset)}>
-                            {sizing.preset === preset ? <CheckIcon /> : null}{t(`review.height.${preset}`)}
-                          </MenuItem>
-                        ))}
-                      </MenuGroup>
-                    </>
-                  ) : null}
-                </MenuContent>
-              </MenuRoot>
-            </div>
+
           </div>
         ) : null}
       </div>
@@ -331,6 +277,9 @@ function WorktreeUnitItem(props: {
                 <PanelViewer
                   key={viewerKey(viewer)}
                   viewer={viewer}
+                  comparisonPresentation={selectedView === "diff" ? "diff" : "version"}
+                  comparisonView={selectedView === "merged" ? "merged" : undefined}
+                  status={worktree.status}
                   runtime={runtime}
                   resource={{ resourceId: unit.resourceId, name: unit.name }}
                   insertResourceReference={props.insertResourceReference}

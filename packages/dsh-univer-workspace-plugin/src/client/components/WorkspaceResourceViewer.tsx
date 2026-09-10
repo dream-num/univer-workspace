@@ -1,5 +1,5 @@
 /**
- * Full-height middle Workspace surface for ONE opened Resource: a restrained
+ * Full-height Workspace Sidecar content for ONE opened Resource: a restrained
  * header (name + close) above the shared Viewer kernel. It deliberately does
  * NOT reuse the message-embedded ReviewPanel card shell — the two surfaces
  * only share the kernel (`PanelViewer` → `ViewerMount` → Univer runtime), so
@@ -7,7 +7,7 @@
  * @module dsh-univer-workspace-plugin/client/components/WorkspaceResourceViewer
  */
 
-import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { Button, CloseIcon, MessageSquarePlusIcon } from "@univerjs/univer-workspace-ui";
 import { getFileState, subscribeFileStateInvalidation } from "../api/univer-api.ts";
 import { PanelViewer, type ViewerTarget } from "./review-panel.tsx";
@@ -28,11 +28,6 @@ type FileState =
 
 export interface WorkspaceResourceViewerProps {
   readonly target: WorkspaceResourceSurface;
-  /** Measured sidebar right edge from the inset adapter; `null` falls back to
-   * the CSS default so the surface still renders (and closes) when the
-   * conversation host is missing. */
-  readonly surfaceLeft: number | null;
-  readonly surfaceWidth: number;
   readonly onClose: () => void;
   readonly headerAction?: ReactElement | undefined;
   readonly loadViewerBootstrap: () => Promise<ViewerBootstrap>;
@@ -96,17 +91,9 @@ export function WorkspaceResourceViewer(props: WorkspaceResourceViewerProps): Re
   }, [props.target.docKey, revision]);
 
   const viewer = fileState.status === "ready" ? resolveTrunkViewer(fileState.value) : undefined;
-  const surfaceStyle = {
-    "--uwh-resource-surface-left":
-      props.surfaceLeft === null ? undefined : `${props.surfaceLeft}px`,
-    "--uwh-resource-surface-width": `${props.surfaceWidth}px`,
-  } as CSSProperties & {
-    "--uwh-resource-surface-left": string | undefined;
-    "--uwh-resource-surface-width": string;
-  };
 
   return (
-    <section className={css.surface} style={surfaceStyle} aria-label={props.target.name}>
+    <section className={css.surface} aria-label={props.target.name}>
       <header className={css.header}>
         <div className={css.identity}>
           <span className={css.glyph} aria-hidden="true">

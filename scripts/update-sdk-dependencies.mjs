@@ -95,6 +95,14 @@ export function validateWorkspaceSdkDependencies(packages, baselineVersion) {
     for (const field of DEPENDENCY_FIELDS) {
       for (const [name, specifier] of Object.entries(manifest[field] ?? {})) {
         if (workspaceNames.has(name)) {
+          // Agent must instantiate this source with React 18 peers, separately
+          // from Workspace Browser's React 19 workspace link. Keep this single
+          // development-only copy explicit; do not allow arbitrary file SDKs.
+          if (manifest.name === "dsh-univer-workspace-plugin" &&
+              field === "devDependencies" && name === "@univer/unit-comparison-viewer" &&
+              specifier === "file:../unit-comparison-viewer") {
+            continue;
+          }
           if (specifier !== "workspace:*") {
             throw new Error(`${manifest.name} ${field}.${name} must use workspace:*.`);
           }

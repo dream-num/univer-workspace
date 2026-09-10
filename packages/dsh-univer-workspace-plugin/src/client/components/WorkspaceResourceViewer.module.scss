@@ -1,14 +1,14 @@
-/* Middle full-height Workspace Resource surface. */
+/* Fill the native DSH Sidecar content seat. */
 .surface {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  left: var(--uwh-resource-surface-left, var(--uwh-sidebar-width, 280px));
-  width: var(--uwh-resource-surface-width);
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: 0;
   overflow: hidden;
   background: var(--color-background);
   color: var(--color-foreground);

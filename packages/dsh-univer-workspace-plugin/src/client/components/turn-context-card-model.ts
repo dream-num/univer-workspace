@@ -123,10 +123,10 @@ export function canViewMergePreview(worktree: DocumentWorktreeState): boolean {
   return worktree.status === "ready" && worktree.mergeTarget !== null;
 }
 
-/** Agent Draft exists only while the Worktree exposes a draft target. */
+/** Historical drafts remain reviewable after merge or discard. */
 export function canViewAgentDraft(worktree: DocumentWorktreeState): boolean {
   return (
-    (worktree.status === "draft" || worktree.status === "ready") && worktree.worktreeTarget !== null
+    worktree.status !== "merging" && worktree.worktreeTarget !== null
   );
 }
 

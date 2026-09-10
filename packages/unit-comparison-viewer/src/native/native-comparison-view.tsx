@@ -16,19 +16,19 @@ import {
 } from "react";
 import { Badge } from "../ui/badge.js";
 import { Spinner } from "../ui/spinner.js";
-import { structuralDiffItemsFromContext } from "../comparison-presentation";
-import { structuralDiffFocusTarget } from "./comparison-focus";
+import { structuralDiffItemsFromContext } from "../comparison-presentation.js";
+import { structuralDiffFocusTarget } from "./comparison-focus.js";
 import { useUnitComparisonViewerMessages } from "../i18n/messages.js";
 import { cn } from "../ui/cn.js";
-import { ComparisonPageTabs, type ComparisonPageTabOption } from "../shared/scope-tabs";
-import { shouldClearDiffSidebarSelection } from "../shared/sidebar-selection";
+import { ComparisonPageTabs, type ComparisonPageTabOption } from "../shared/scope-tabs.js";
+import { shouldClearDiffSidebarSelection } from "../shared/sidebar-selection.js";
 import {
   structuralDiffItemEntityLabel,
   structuralDiffItemLabel,
-} from "../shared/structural-diff-item-label";
-import { useEnsureSelectedDiffVisible } from "../shared/use-ensure-selected-diff-visible";
-import type { NativeComparisonViewerValue, UnitComparisonUniverFactory } from "../comparison-types";
-import { createComparisonPane, type ComparisonPaneHandle } from "./comparison-pane";
+} from "../shared/structural-diff-item-label.js";
+import { useEnsureSelectedDiffVisible } from "../shared/use-ensure-selected-diff-visible.js";
+import type { NativeComparisonViewerValue, UnitComparisonUniverFactory } from "../comparison-types.js";
+import { createComparisonPane, type ComparisonPaneHandle } from "./comparison-pane.js";
 
 const EMPTY_PARAGRAPH_ALIGNMENT = [] as const;
 
@@ -298,8 +298,8 @@ export function NativeComparisonView(input: {
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto bg-muted/30 p-2">
-      <div className="grid h-full min-h-[420px] grid-cols-[240px_minmax(720px,1fr)] overflow-hidden rounded-xl border border-border bg-border shadow-[0_12px_32px_rgb(15_23_42/0.08),0_1px_2px_rgb(15_23_42/0.06)] max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-1">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/30 p-2">
+      <div className="grid h-full min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-border shadow-[0_12px_32px_rgb(15_23_42/0.08),0_1px_2px_rgb(15_23_42/0.06)] max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-1">
         <NativeDiffSidebar
           items={scopedItems}
           fidelity={result.fidelity}
@@ -307,9 +307,9 @@ export function NativeComparisonView(input: {
           onClear={clearFocusedItem}
           onSelect={focusItem}
         />
-        <div className="grid min-h-0 grid-rows-[minmax(0,1fr)] bg-card">
+        <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] bg-card">
           <div
-            className="grid min-h-0 grid-cols-2 gap-px bg-border max-[1023px]:h-full max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-2"
+            className="grid min-h-0 min-w-0 grid-cols-2 gap-px bg-border max-[1023px]:h-full max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-2"
             data-testid="native-diff-panes"
           >
             <NativeDiffSide
@@ -438,7 +438,7 @@ function NativeDiffSidebar(input: {
   const sidebarRef = useEnsureSelectedDiffVisible<HTMLElement>(input.selectedItemId);
   return (
     <aside
-      className="min-h-0 overflow-auto border-r bg-card p-3 max-[1023px]:hidden"
+      className="min-h-0 overflow-auto overscroll-contain border-r bg-card p-3 max-[1023px]:hidden"
       ref={sidebarRef}
       onClick={(event) => {
         if (shouldClearDiffSidebarSelection(event.target)) input.onClear();
@@ -555,7 +555,7 @@ function NativeDiffSide(input: {
   return (
     <section
       className={cn(
-        "grid min-h-0 bg-background",
+        "grid min-h-0 min-w-0 overflow-hidden bg-background",
         input.pageTabs.length > 0
           ? "grid-rows-[56px_auto_minmax(0,1fr)]"
           : "grid-rows-[56px_minmax(0,1fr)]",
@@ -565,7 +565,7 @@ function NativeDiffSide(input: {
         {input.leftHeaderControl ?? (
           <div className="grid min-w-0 gap-0.5">
             <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground">
-              {messages.rightCurrentVersion}
+              {messages.side[input.side]}
             </span>
             <span
               className="truncate text-[12px] font-semibold text-foreground"

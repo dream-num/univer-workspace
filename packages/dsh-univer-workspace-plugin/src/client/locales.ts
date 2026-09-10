@@ -6,6 +6,18 @@
 
 /** Simplified Chinese UI strings (the key source). */
 export const zh = {
+  "comparison.emptyBase": "此文档在 Base 中尚不存在。",
+  "comparison.snapshotNotice": "正在对比所选版本的完整内容。",
+  "comparison.effect": "修改效果",
+  "comparison.diff": "差异",
+  "comparison.version": "修改后版本",
+  "comparison.title": "版本对比",
+  "comparison.base": "Base · 起始版本",
+  "comparison.draft": "Worktree 修改",
+  "comparison.preview": "合入预览",
+  "comparison.merged": "实际合入结果",
+  "comparison.readOnly": "只读 · 相对于 Base",
+
   "review.openDocument": "审阅",
   "review.moreActions": "文档操作",
   "review.collapseDocument": "收起文档",
@@ -103,7 +115,7 @@ export const zh = {
   "window.retry": "重试",
   "viewer.readOnlyPreview": "只读预览",
   "viewer.submitForReview": "提交审阅",
-  "viewer.mergeToCurrent": "合入当前版本",
+  "viewer.mergeToCurrent": "合入",
   "viewer.discard": "关闭",
   "viewer.readyTitle": "提交这处修改等待确认?",
   "viewer.mergeTitle": "合入这处修改?",
@@ -234,7 +246,7 @@ export const zh = {
   "turn.ribbon": "Changes",
   "turn.units": "个文档",
   "turn.unit.added": "新增",
-  "turn.unit.modified": "变更",
+  "turn.unit.modified": "修改",
   "turn.unit.deleted": "删除",
   "turn.unit.unchanged": "未变更",
   "turn.merge.failed": "合入失败",
@@ -246,13 +258,14 @@ export const zh = {
   "turn.type.slide": "演示文稿",
   "turn.type.board": "白板",
   "turn.type.base": "多维表格",
-  "turn.view.trunk": "正式版本",
+  "turn.view.trunk": "当前文档",
   "turn.view.agent": "变更",
   "turn.view.preview": "合入预览",
   "turn.deletedPreview": "此文档已在 Worktree 中删除，没有可预览的变更。",
   "turn.noUnits": "此 Worktree 还没有文档变更。",
   "turn.noReview": "没有权限查看此 Worktree 的审阅内容。",
   "turn.reopen": "转为草稿",
+  "worktree.moreActions": "更多操作",
   "turn.reopenTitle": "将此 Worktree 转为草稿？",
   "turn.reopenBody": "转为草稿后可以继续修改，之后需要重新提交审阅。",
   "turn.reopenConfirm": "转为草稿",
@@ -267,10 +280,24 @@ export const zh = {
   "task.group.processed": "已结束",
   "task.previewBadge": "任务上下文预览",
   "task.new": "新",
+  "task.listTitle": "Worktree",
+  "task.drag": "拖动任务列表",
 } as const;
 
 /** English UI strings. */
 export const en = {
+  "comparison.emptyBase": "This document did not exist in Base.",
+  "comparison.snapshotNotice": "Comparing the complete content of the selected versions.",
+  "comparison.effect": "Result",
+  "comparison.diff": "Changes",
+  "comparison.version": "Resulting version",
+  "comparison.title": "Compare versions",
+  "comparison.base": "Base · Starting version",
+  "comparison.draft": "Worktree changes",
+  "comparison.preview": "Merge preview",
+  "comparison.merged": "Recorded merge result",
+  "comparison.readOnly": "Read-only · Compared with Base",
+
   "review.openDocument": "Review",
   "review.moreActions": "Document actions",
   "review.collapseDocument": "Collapse document",
@@ -368,7 +395,7 @@ export const en = {
   "window.retry": "Retry",
   "viewer.readOnlyPreview": "Read-only preview",
   "viewer.submitForReview": "Submit for confirmation",
-  "viewer.mergeToCurrent": "Merge into current version",
+  "viewer.mergeToCurrent": "Merge",
   "viewer.discard": "Close",
   "viewer.readyTitle": "Submit this modification for confirmation?",
   "viewer.mergeTitle": "Merge this modification?",
@@ -518,7 +545,7 @@ export const en = {
   "turn.type.slide": "Presentation",
   "turn.type.board": "Board",
   "turn.type.base": "Base",
-  "turn.view.trunk": "Current version",
+  "turn.view.trunk": "Current document",
   "turn.view.agent": "Changes",
   "turn.view.preview": "Merge preview",
   "turn.deletedPreview":
@@ -526,6 +553,7 @@ export const en = {
   "turn.noUnits": "This Worktree has no document changes yet.",
   "turn.noReview": "You do not have permission to review this Worktree.",
   "turn.reopen": "Convert to draft",
+  "worktree.moreActions": "More actions",
   "turn.reopenTitle": "Convert this Worktree to a draft?",
   "turn.reopenBody":
     "Converting to a draft resumes editing; the changes must be submitted for review again.",
@@ -541,6 +569,8 @@ export const en = {
   "task.group.processed": "Finished",
   "task.previewBadge": "Task context preview",
   "task.new": "New",
+  "task.listTitle": "Worktrees",
+  "task.drag": "Move task list",
 } satisfies Record<keyof typeof zh, string>;
 
 export type UniverLocaleKey = keyof typeof zh;

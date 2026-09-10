@@ -37,7 +37,7 @@ export async function getWorktreeFileState(
   // publication. Canceled local Units likewise have no trunk resource to open.
   const effectiveUnits = reviewUnits(worktree.units);
   const first = effectiveUnits.find(
-    (unit) => unit.kind !== "deleted" && unit.activationState !== "discarded",
+    (unit) => unit.kind !== "deleted",
   );
   let viewerTarget: DocumentFileState["viewerTarget"] = null;
   let resourceId = first?.resourceId ?? "";
@@ -47,20 +47,12 @@ export async function getWorktreeFileState(
     // resource is deliberately not discoverable through `/api/resources`.
     // Open through the Worktree contract instead of treating it as a trunk
     // Resource; otherwise every fresh local Unit gets stuck in Loading.
-    const mode =
-      worktree.status === "draft"
-        ? "draft"
-        : worktree.status === "ready"
-          ? "mergePreview"
-          : "trunk";
-    if (!(first.source === "worktree" && worktree.status === "discarded")) {
-      const opened = await openWorktreeUnit(client, worktreeId, first.unitId, mode);
-      viewerTarget = {
-        unitId: opened.unitId,
-        unitType: opened.unitType,
-        readOnly: opened.editorMode !== "edit",
-      };
-    }
+    const opened = await openWorktreeUnit(client, worktreeId, first.unitId, "draft");
+    viewerTarget = {
+      unitId: opened.unitId,
+      unitType: opened.unitType,
+      readOnly: true,
+    };
     // Only activated/trunk Units have a Workspace browser Node.  Keep the
     // link null for a draft-local Unit rather than manufacturing a dead URL.
     if (first.source === "trunk" || worktree.status === "merged") {
@@ -90,7 +82,7 @@ export async function getWorktreeFileState(
         unitCount: effectiveUnits.length,
         units,
         worktreeTarget:
-          (worktree.status === "draft" || worktree.status === "ready") && first !== undefined
+          worktree.status !== "merging" && first !== undefined
             ? { unitId: first.unitId, unitType: first.unitType, readOnly: true }
             : null,
         mergeTarget:
@@ -139,7 +131,7 @@ export async function getFileState(
         unitCount: effectiveUnits.length,
         units,
         worktreeTarget:
-          worktree.status === "draft" || worktree.status === "ready"
+          worktree.status !== "merging"
             ? { unitId: first.unitId, unitType: first.unitType, readOnly: true }
             : null,
         mergeTarget:

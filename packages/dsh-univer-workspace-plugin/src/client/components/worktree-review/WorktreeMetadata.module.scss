@@ -1,0 +1,4 @@
+.metadata { display: grid; gap: 6px; min-width: 0; color: var(--color-muted-foreground); font-size: 12px; line-height: 18px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.fact { display: inline-flex; align-items: flex-start; gap: 5px; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.fact svg { width: 14px; height: 14px; margin-top: 2px; flex: none; }

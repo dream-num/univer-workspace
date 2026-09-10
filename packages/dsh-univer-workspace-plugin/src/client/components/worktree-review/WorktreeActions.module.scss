@@ -1,0 +1,4 @@
+.actions { display: flex; flex: none; align-items: center; gap: 6px; white-space: nowrap; }
+.actions svg { width: 14px; height: 14px; }
+.destructive { color: var(--color-destructive); }
+.error { max-width: 160px; white-space: normal; color: var(--color-destructive); font-size: 12px; }

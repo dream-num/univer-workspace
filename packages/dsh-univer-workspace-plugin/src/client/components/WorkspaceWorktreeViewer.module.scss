@@ -29,6 +29,7 @@
 }
 
 .changesBody {
+  position: relative;
   display: grid;
   min-width: 0;
   min-height: 0;
@@ -42,6 +43,9 @@
 }
 
 .accordionScroll {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -59,32 +63,29 @@
   > nav { flex: 1; }
 }
 .treePane[hidden] { display: none; }
-.treeDialog.treeDialog {
-  box-sizing: border-box;
-  max-width: none;
-  max-height: none;
-  padding: 16px 0 0;
-  border-radius: 0;
+.treeOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
   overflow: hidden;
-  transform: translateX(0);
-  transition: transform 180ms ease-out;
-
-  &[data-starting-style], &[data-ending-style] {
-    opacity: 1;
-    scale: 1;
-    transform: translateX(-100%);
-  }
-
-  > div:first-child { margin: 0; padding: 4px 48px 16px 16px; }
-  > nav { flex: 1; min-height: 0; border-right: 0; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .treeDialog.treeDialog { transition: none; }
-}
-
-.treeBackdrop.treeBackdrop {
-  inset: auto;
-  backdrop-filter: none;
+.treeBackdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
   background: rgb(0 0 0 / 18%);
+}
+
+.treeDrawer {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: flex;
+  width: min(280px, 85%);
+  background: var(--color-background);
+  box-shadow: 4px 0 12px rgb(0 0 0 / 12%);
+  > nav { flex: 1; min-width: 0; min-height: 0; }
 }

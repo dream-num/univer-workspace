@@ -365,7 +365,7 @@ export function WorkbookDiffViewer(input: {
               }}
             />
           </header>
-          <div className="min-h-0 overflow-auto px-3 py-3" ref={sidebarScrollRef}>
+          <div className="min-h-0 overflow-auto overscroll-contain px-3 py-3" ref={sidebarScrollRef}>
             {sidebarTree.length === 0 ? (
               <div className="grid content-center gap-2 rounded-lg border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
                 <span>{messages.noItems}</span>
@@ -495,7 +495,7 @@ function DiffPane(input: {
   const hasSnapshot = input.snapshot !== null;
 
   return (
-    <section className="grid min-h-[360px] min-w-0 grid-rows-[auto_auto_auto_minmax(0,1fr)] bg-card max-[1023px]:min-h-0">
+    <section className="grid min-h-0 min-w-0 grid-rows-[auto_auto_auto_minmax(0,1fr)] bg-card max-[1023px]:min-h-0">
       <header className="grid h-14 grid-cols-[minmax(124px,220px)_minmax(0,1fr)] items-center gap-3 border-b border-border bg-card px-3.5">
         {input.sourceControl ?? <DiffPaneRefLabel label={input.label} pane={input.pane} />}
         <div className="flex min-w-0 items-center justify-end gap-2">

@@ -193,7 +193,7 @@ mkdir -p "$UWH_DSH_BOOTSTRAP" "$DSH_HOME/internal-packages"
 export UWA_PACKAGES="$(mktemp -d "$DSH_HOME/internal-packages/build.XXXXXX")"
 
 npm install --prefix "$UWH_DSH_BOOTSTRAP" --save-exact \
-  @deepseek-ai/dsh@0.1.3-alpha.2
+  @deepseek-ai/dsh@0.1.5-alpha.1
 export DSH_BIN="$UWH_DSH_BOOTSTRAP/node_modules/@deepseek-ai/dsh/lib/bin.js"
 
 pnpm --filter @univerjs/workspace-agent build
@@ -245,8 +245,8 @@ Workspace 部署必须注册公共客户端 `univer-workspace-harness`，启用�
 登录后，侧栏提供 **会话 / 文件 / Worktree** 页签。
 会话导航保留原生 DSH 行为；文件管理浏览当前连接的 Space/Node/Resource 树；
 Worktree 列出该服务范围内的个人和团队任务，支持待处理、全部和已关闭筛选。
-可以独立于会话打开或创建文件。打开文档时 Viewer 出现在中间，右侧仍为原来的 DSH 对话，
-不会创建第二个对话、输入框或固定会话标签。在原生输入框键入 `@`，可为当前消息选择多个 Workspace Resource；
+文件和 Worktree 在当前会话的原生右侧 Sidecar 中展示。未选择会话时，打开文件会通过原生流程复用或创建连接空间内的空会话。
+在原生输入框键入 `@`，可为当前消息选择多个 Workspace Resource；
 发送时会基于当前 Workspace 校验每个引用。
 
 保存另一个 Workspace 地址只是选择下次登录的目标，需要完成浏览器授权才会激活，也可以显式断开连接。
@@ -262,7 +262,7 @@ Agent 在同一进程内重新加载账号所属服务，关闭旧协同连接�
    调用模型还需要本地 DSH 模型凭据；Workspace 登录只授权 Workspace 数据。
 2. 打开 **文件**，选择个人或团队 Space，通过 **新建** 创建文件夹或 Univer 文档。
    同一菜单支持上传文件；受支持的 Office 文件会导入为 Univer Resource。
-3. 在树中选择 Univer Resource，中间打开全高 Viewer，右侧保持当前对话。
+3. 在树中选择 Univer Resource，在原生右侧 Sidecar 打开 Viewer，对话保持可见。
    返回 **会话** 只改变左侧导航，不应关闭 Viewer。
 4. 使用文件行菜单执行 Workspace 授予的操作，例如重命名、移动、分享、复制链接或移入回收站。
    菜单按能力展示，只读共享 Resource 的操作会更少。
@@ -359,13 +359,13 @@ Workspace 默认**不会**注册 Agent OAuth 客户端；仅复制 `.env.example
 
 ## 区域导航
 
-URL 独立记录中间文档/审查区 `center` 与右侧会话区 `right`，例如
-`#/?center=worktree%2Freview-id&right=session%2Fsession-id`。
-关闭中间区域会保留会话。隐藏会话会释放空间但保留选中的 Session 和草稿，`right` 变为
-`hidden/session/<session-id>`。**显示会话**、选择 Session，或成功向当前消息添加文档都会再次展开会话。
-隐藏不会删除 Session 或取消 Agent。浏览器历史和刷新会恢复选择及可见状态。
-空路由展示新会话输入界面。现有的 `#/s/<session-id>` 链接仍可打开对应会话。
-文档名称和权限来自当前 Workspace，不存入 URL。
+文件和 Worktree 共用每个会话的一个 Workspace 预览标签页；点击其他文件切换内容，
+重复点击会重新显示或打开标签页。缩放、分屏、全屏和关闭由 DSH 原生 Sidecar 管理。
+Sidecar 布局状态按会话保留在内存中。Worktree 标签显示任务标题和状态，已合入 Worktree 默认展示“差异”，其他状态默认展示“修改效果”，用户可主动切换。
+标题和操作始终同行：宽容器显式展示“关闭”，较窄时收进更多菜单；“转为草稿”始终在菜单内，“合入”保持为主操作。
+对话中的文件行和悬浮任务列表只负责打开 Sidecar，不再内嵌文档预览。悬浮窗显示各 Worktree 的新增、修改、删除文件数，可在整个浏览器窗口内拖拽。
+旧 `center=resource/...`、`center=blob/...` 和
+`center=worktree/...` 链接继续请求预览，但内容现在显示在 Sidecar 内，不再创建中间分栏或隐藏对话。
 
 ## 文件与文件夹引用
 

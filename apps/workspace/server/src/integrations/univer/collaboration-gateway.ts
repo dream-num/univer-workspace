@@ -358,6 +358,13 @@ export function createCollaborationGateway(options: {
   router.get(
     "/worktrees/:worktreeId/units/:unitId/comparison",
     async (request, response) => {
+      const baseMode = request.query.baseMode ?? "trunk";
+      const view = request.query.view ?? "draft";
+      if ((baseMode !== "trunk" && baseMode !== "base") ||
+          (view !== "draft" && view !== "merged" && view !== "preview")) {
+        response.status(400).json({ message: "Invalid comparison mode." });
+        return;
+      }
       const userId = response.locals.session.user.id as string;
       const detail = await worktrees.get(userId, request.params.worktreeId);
       const unit = detail.worktree.units.find(
@@ -378,6 +385,8 @@ export function createCollaborationGateway(options: {
           unitType: unit.unitType,
           source: unit.source,
           change: unit.change,
+          baseMode,
+          view,
         })
       );
     }
