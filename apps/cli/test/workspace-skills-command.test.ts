@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command, type OutputConfiguration } from "commander";
@@ -36,6 +37,28 @@ describe("Workspace CLI skills command", () => {
     });
   });
 
+  it("loads Board references only on demand and resolves their installed paths", async () => {
+    const entry = await runSkills(["skills", "get", "board", "--json"]);
+    const data = entry.data as Array<{ content: string; files?: unknown }>;
+    expect(data[0]?.files).toBeUndefined();
+    const full = await runSkills(["skills", "get", "board", "--full", "--json"]);
+    const files = (full.data as Array<{ files: Array<{ path: string; content: string }> }>)[0]!
+      .files;
+    expect(files).toHaveLength(10);
+    const located = await runSkills(["skills", "path", "board", "--json"]);
+    const root = (located.data as { path: string }).path;
+    const documents = [{ path: "SKILL.md", content: data[0]!.content }, ...files];
+    for (const document of documents) {
+      for (const link of document.content.matchAll(/\]\(([^)]+\.md)\)/g)) {
+        if (/^[a-z]+:/i.test(link[1]!)) continue;
+        const target = resolve(root, dirname(document.path), link[1]!);
+        expect(await readFile(target, "utf8")).not.toBe("");
+      }
+    }
+    for (const file of files)
+      expect(await readFile(join(root, file.path), "utf8")).toBe(file.content);
+  });
+
   it("bundles the current direct-owner Chart Facade contract", async () => {
     const contracts = [
       {
@@ -67,9 +90,12 @@ describe("Workspace CLI skills command", () => {
     ] as const;
 
     for (const contract of contracts) {
-      const result = await runSkills(["skills", "get", contract.name, "--json"]);
-      const data = result.data as Array<{ content: string }>;
-      const content = data[0]?.content;
+      const result = await runSkills(["skills", "get", contract.name, "--full", "--json"]);
+      const data = result.data as Array<{ content: string; files: Array<{ content: string }> }>;
+      const content = [
+        data[0]?.content,
+        ...(data[0]?.files ?? []).map((file) => file.content),
+      ].join("\n");
       expect(content).toEqual(expect.any(String));
       expect(content).toContain(contract.owner);
       expect(content).toContain(contract.insert);

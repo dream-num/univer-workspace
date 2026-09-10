@@ -51,3 +51,25 @@ After mutation:
 3. Inspect both host and child Units with `univer_inspect` where useful.
 4. Follow the Host Unit Skill's `univer_screenshot` workflow and inspect the returned PNG to confirm the child renders inside its host. Structural ResourceRef readback remains required because a screenshot alone does not prove the child ID/type binding.
 5. Follow the `univer` ready/status workflow.
+
+## Referencing another Unit's data from a Chart
+
+When a Chart on a Slide, Doc, or Board should reflect a range in a different Unit, bind it as a
+ResourceRef instead of pasting the values. Values are a snapshot: a source edit will not change the
+Chart. A ResourceRef keeps the Chart live.
+
+The source and host are authorized Units in the same Workspace deployment, addressed by `unitId`. Resolve
+the exact source object with `univer_api` (`action: "show"`, `queries: ["IResourceRefChartDataSourceInput"]`),
+then pass it straight
+to the host Chart's `setSource` — it accepts the ref contents (`{ file?, unit, part }`) directly.
+Wrapping it as `{ source: { kind, ref } }` fails normalization with `RESOURCE_REF_INVALID_UNIT`.
+
+Verify the stored source is a reference (its `dataSource.source.kind` is `resource-ref`), and confirm
+the Chart reads the referenced range through `univer_edit` with `mode: "read"`. A cross-Unit reference resolves only when
+the source Unit is loaded in the same runtime as the host — in the Viewer both are open together (for
+example both embedded in a Board). If the source is not loaded, the headless read or `univer_screenshot` can show a placeholder;
+review the Chart in the Workspace Viewer.
+
+Live refresh works when the runtime registers a referenced-source data provider (`watchData`) that
+watches the source range. A runtime without this provider never updates the Chart on a source edit. Verify provider support
+in the Workspace Viewer; headless reads and `univer_screenshot` do not drive this refresh.

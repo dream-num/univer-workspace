@@ -78,6 +78,26 @@ try {
   }
   await run(executable, ["--help"], installRoot, smokeEnv);
   await run(executable, ["skills", "list", "--json"], installRoot, smokeEnv);
+  const boardEntry = JSON.parse(
+    (await run(executable, ["skills", "get", "board", "--json"], installRoot, smokeEnv)).stdout,
+  ).data[0];
+  if (boardEntry.files !== undefined) throw new Error("Board entrypoint eagerly loaded references");
+  const boardRoot = JSON.parse(
+    (await run(executable, ["skills", "path", "board", "--json"], installRoot, smokeEnv)).stdout,
+  ).data.path;
+  const boardFull = JSON.parse(
+    (await run(executable, ["skills", "get", "board", "--full", "--json"], installRoot, smokeEnv))
+      .stdout,
+  ).data[0];
+  if (boardFull.files.length !== 10) throw new Error("Packaged Board references are incomplete");
+  for (const file of boardFull.files) {
+    if ((await readFile(join(boardRoot, file.path), "utf8")) !== file.content)
+      throw new Error(`Packaged reference mismatch: ${file.path}`);
+  }
+  for (const link of boardEntry.content.matchAll(/\]\((references\/[^)]+\.md)\)/g)) {
+    await readFile(join(boardRoot, link[1]), "utf8");
+  }
+
   await run(executable, ["api", "--help"], installRoot, smokeEnv);
   await run(executable, ["space", "--help"], installRoot, smokeEnv);
   const installedPackageRoot = join(installRoot, "node_modules", "univer-workspace-cli");

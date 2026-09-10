@@ -5,116 +5,92 @@ description: Create, edit, chart, inspect, and review Univer Board canvas Units 
 
 # Univer Board Units
 
-Load `univer` first. Create the Board with `univer_unit` in a draft worktree and retain its `unitId`. `univer_execute` provides `univerAPI`, `api`, and the selected `FBoard` as `board`; do not redeclare them.
+Load `univer` first. Use an explicit draft worktree for writes and retain the Board `unitId` returned by `univer_unit`. The Board is a remote Workspace Unit; Resource and Node IDs are not content Unit IDs.
 
-Resolve exact methods with `univer_api`, especially `FBoard.insertShape`, `FBoard.insertShapes`,
-`FShape`, connector methods, `FBoard.newChart`, `FBoard.insertChart`, `FBoard.getCharts`, and
-`FBoard.getChart`.
+Use native editable Board elements to express the user's intent. Choose shape types, layout, spacing, colors, and
+emphasis for the actual content; examples are not templates that every Board must follow.
+
+## Start with the task
+
+- Inspect an existing Board before editing; preserve unrelated content and deliberate manual layout.
+- For a new relationship-heavy diagram, draft a compact [BoardSpec](references/board-spec.md) to preserve meaning
+  before choosing geometry. Translate it through Facade APIs; it is not an SDK input or another persisted model.
+- Direct edits, standalone charts, images, sticky notes, and freehand work can call their dedicated APIs without
+  a spec. Do not invent graph relations just to use one.
+- Read only the relevant reference below, relative to the skill directory supplied by DSH when it loads
+  `univer-board`. Use the available file-reading tool for selected files; do not load every reference for ordinary tasks.
+
+| Task                                                            | Read when needed                                     |
+| --------------------------------------------------------------- | ---------------------------------------------------- |
+| Relationship planning, semantic IDs and nesting                 | [BoardSpec](references/board-spec.md)                |
+| Flowcharts, activity lanes, fork/join, composite states         | [Flow and state](references/flow-state.md)           |
+| Lifelines, activation bars, messages and fragments              | [Sequence](references/sequence.md)                   |
+| Class/ER compartments, relation ends and cardinalities          | [Class and ER](references/class-er.md)               |
+| Use cases, component interfaces, deployment/package nesting     | [Structural UML](references/uml-structure.md)        |
+| Mind maps, trees, timelines and family selection                | [Mind maps](references/mind-map.md)                  |
+| Tables, charts, images, sticky notes, resources, embeds and Ink | [Content selection](references/content-selection.md) |
+| Endpoint selection, routing diagnostics or animation            | [Connector routing](references/connector-routing.md) |
+| Multiple texts, label sizing, wrapping or placement             | [Connector labels](references/connector-labels.md)   |
+| Explicit multi-profile coverage or UI regression testing        | [Diagram review](references/diagram-review.md)       |
+
+The profile narrows the search, not the design. Mix native primitives where the intent warrants it; no fixed node
+size, layout direction, color palette, or animation count is required.
+
+## Work through the installed API
+
+Create a Board with `univer_unit` only when a new Unit is needed. Use `univer_inspect` with its `unitId` and `unitType: "board"`
+for a read-only overview. For selected elements, use `univer_edit` with `mode: "read"` and
+`board.describeElements()` or `board.getElements()`; this inspect tool has no `elementIds` parameter.
+Discover existing IDs before editing.
+
+Use `univer_api` with `find` / `show` to query only the Facade methods/types needed for the next operation.
+`univer_execute` predefines `univerAPI`, `api`, and the selected `FBoard` as `board`; do not redeclare them. The installed
+SDK is authoritative: before a large batch, probe selected runtime methods/enums in a read-only call if their
+availability is uncertain. An indexed type alone does not establish runtime support. Do not invent parameters or
+upgrade dependencies to match a reference; report unavailable capabilities or explain a semantics-preserving fallback.
+
+Run this code through `univer_execute` with `unitType: "board"`, the Board `unitId`, and its draft `worktreeId`:
 
 ```js
 const shape = board.insertShape({
   shapeType: api.Enum.ShapeTypeEnum.RoundRect,
-  transform: { left: 80, top: 80, width: 180, height: 100 },
+  transform: { left: 80, top: 80, width: 180, height: 100 }
 });
 if (!shape) throw new Error("Cannot insert Board shape");
 shape.getText().setText("Review");
 return { shapeId: shape.getId(), elements: board.describeElements() };
 ```
 
-`insertShape` accepts `IShapeCreateInput`: geometry belongs in `transform`, visual data belongs in `shapeData`, and text is edited through the returned live handle. It does not accept top-level `id`, `left`, `top`, `width`, `height`, or `text`. Retain generated IDs immediately.
+`insertShape` takes geometry in `transform`, visual properties in `shapeData`, and text through the returned
+live handle—not top-level `id`, coordinates, or `text`. Retain generated IDs and map semantic IDs to them.
+Await asynchronous operations according to their installed signatures before dependent calls or readback.
 
-Use `board.getElements()`, `board.describeElements()`, or `board.save()` for persisted model readback.
+Create and arrange nodes before their connectors. Use element-bound endpoints; for ordinary automatic connections,
+start with `fromElementId` / `toElementId` and omit sides/routing overrides. Introduce explicit ports or routes for
+diagram semantics or a diagnosed layout problem, not guessed pixel endpoints. Native map branches belong to their
+layout owner. Sequence messages need the lifeline/activation rules in their reference.
 
-## Connectors and layout
+Create known parents before children. Direct insertion into a parent uses parent-local coordinates;
+`insertShapeAtPoint()` resolves a Board-world top-left point. Read back `parentId`, `laneId` and world bounds:
+a shape drawn inside a box is not necessarily its child.
 
-Create related shapes with `insertShapes()` before creating connectors. Use generated element IDs and bound endpoints. For multi-node diagrams, prefer `routing: "orthogonal"` and `routingMode: "auto"`; use straight for a short clear corridor, curve for a self-loop or compact feedback edge, and free polyline only for intentionally manual geometry.
+## Verify in proportion to the change
 
-Choose outward connection sites from planned geometry: Right → Left for left-to-right flow and Bottom → Top for top-to-bottom flow. Keep feedback edges on an outer lane.
+For a generated diagram, follow intent → spec when useful → layout decisions → Facade calls → check → targeted repair:
 
-```js
-const shapes = board.insertShapes([
-  {
-    shapeType: api.Enum.ShapeTypeEnum.RoundRect,
-    transform: { left: 80, top: 80, width: 180, height: 100 },
-  },
-  {
-    shapeType: api.Enum.ShapeTypeEnum.RoundRect,
-    transform: { left: 400, top: 80, width: 180, height: 100 },
-  },
-]);
-if (!shapes || shapes.length !== 2) throw new Error("Cannot insert Board shapes");
-const [source, target] = shapes;
-const connectors = board.insertConnectors([
-  {
-    fromElementId: source.getId(),
-    toElementId: target.getId(),
-    fromConnectionSiteId: api.Enum.BoardConnectorSite.Right,
-    toConnectionSiteId: api.Enum.BoardConnectorSite.Left,
-    routing: "orthogonal",
-    routingMode: "auto",
-    style: { endMarker: { type: "filledTriangle", size: "md" } },
-  },
-]);
-if (!connectors) throw new Error("Cannot insert Board connectors");
-const analysis = board.analyzeModelLayout(48);
-if (!analysis) throw new Error("Cannot analyze Board layout");
-return { connectorIds: connectors.map((item) => item.id), analysis };
-```
+1. Read back persisted elements/text, ownership and bindings with `describeElements()`, `getElements()`, or
+   `univer_edit` with `mode: "read"`. Check the requested meaning, not only counts.
+2. Run `board.analyzeModelLayout(48)`, then a full `univer_screenshot`. Inspect the image and
+   each returned image's `metadata.layoutAnalysis`; headless analysis cannot establish final font metrics or automatic routes.
+3. Repair implicated elements and recapture. Use [routing](references/connector-routing.md) or
+   [label](references/connector-labels.md) guidance for their diagnostics. Never silently discard semantics to pass.
+4. Hand off an overview and any needed readable details. Distinguish clean results, visually reviewed diagnostic
+   exceptions, and blockers; command success alone is not visual verification.
 
-Treat `element-overlap`, `connector-through-element`, and `connector-collinear-overlap` as blocking. Treat `connector-crossing` as a warning that still requires review. Model analysis reports auto connectors without persisted route points as unresolved because the browser owns final routing; do not infer a clear route from missing points.
+For a localized edit, inspect the changed region and affected relationships; do not regenerate the Board or run
+an unrelated profile matrix. Full drag/menu/Undo/Redo testing belongs to explicit interaction or coverage requests,
+not every authoring task. A static screenshot does not prove UI behavior.
 
-Endpoint lint applies to every connector. A free endpoint close to a connectable element should be rebound with `board.setConnectorConnection()`. For sequence diagrams, use the declared sequence-shape and lifeline endpoint contracts; do not fake lifelines with dashed connectors. `normalizeConnectorRouting()` does not repair endpoint semantics.
-
-Specify connector intent, marker type/size/offset, and routing. Imported/manual routes can expose marker-target overlap, corner overlap, marker collision, short terminal stems, or dash discontinuity. Treat overlaps/collisions as errors and review stem/dash warnings. Normalize only the named affected connectors, at most once, then read model analysis again; do not loop or move unrelated elements automatically.
-
-## Images
-
-Use user-provided workspace assets or the bundled SVG resource library. For bundled icons, logos, emoji, or illustrations, call `univer_resources` with `action: "find"`, then `action: "export"` into a workspace directory. Pass local SVG or bitmap data as a Base64 data URI to `board.insertImage()` with `ImageSourceType.BASE64`. Preserve intrinsic colors unless the resource reports `colorEditable: true`. Record the returned element ID and verify source type, bounds, and stacking order through a fresh read.
-
-Do not use Unicode glyphs as a substitute for required icons or illustrations. Do not persist temporary signed URLs.
-
-## Native charts
-
-Native Board charts are owned directly by `FBoard`. Build detached chart information, then await
-insertion to obtain a live `FBoardChart`:
-
-```js
-const info = board
-  .newChart(univerAPI.Enum.ChartTypeString.Column)
-  .setTitle({ text: "Quarterly Revenue" })
-  .setSource([
-    ["Quarter", "Revenue"],
-    ["Q1", 12],
-    ["Q2", 18],
-    ["Q3", 15],
-  ])
-  .setCategoryField(0)
-  .setValueFields([1])
-  .setAbsolutePosition(80, 80)
-  .setSize(640, 360)
-  .build();
-const inserted = await board.insertChart(info);
-return { chartId: inserted.getId(), info: inserted.getInfo(), data: inserted.getDataSource() };
-```
-
-`board.getCharts()` and `board.getChart(id)` return live charts. Common setters update the live
-chart; await `chart.setDataSource(values)` for data changes. For a complete replacement, use
-`chart.toBuilder().build()` and `await chart.update(info)`. Remove it with `await chart.remove()`
-and check the boolean. Await insertion, data updates, replacement, and removal before execution
-returns.
-
-Verify in a later read-only execution with
-`board.getCharts().map((item) => ({ id: item.getId(), type: item.getType(), info: item.getInfo(), data: item.getDataSource() }))`,
-confirming ID, count, type, title, position, size, and data.
-
-## Verification
-
-After every mutation:
-
-1. Read back all relevant elements with `board.describeElements()` or `board.save()` in a fresh `univer_execute`.
-2. Verify IDs, kinds, bounds, text, styles, stacking, connector endpoints/routing, image sources, chart descriptions, and any layout-analysis findings.
-3. Review the DSH live preview for final route placement, clipping, marker paint, contrast, and overall canvas composition. Model readback alone cannot establish browser-routed geometry.
-4. Call `univer_screenshot` for the full Board and inspect its returned metadata, including rendered connector layout analysis when present. For a defect, capture either its `focusBounds` as `region` or the connector and endpoint IDs as `elementIds`, with useful `padding` and `scale`, then inspect the focused PNG. Re-run one full overview after fixes.
-5. Follow the `univer` ready/status workflow.
-
-Mind maps, tables, ink, and advanced editing remain outside this Skill's verified authoring contract. Board export is unsupported; deliver the ready worktree preview.
+Call `univer_screenshot` with `unitType: "board"`, the selected `unitId`, `worktreeId`, and an authorized workspace `output`
+directory. Use the DSH live Board preview for requested interaction or animation checks. Follow the
+`univer` ready/status handoff; merge and discard remain user-authorized. Board Office export is unsupported.

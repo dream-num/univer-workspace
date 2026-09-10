@@ -14,7 +14,7 @@ Use the structured `univer_*` tools whenever the task creates, reads, changes, c
 - Office source (`.xlsx`, `.csv`, `.tsv`, `.docx`, `.pptx`): create an empty draft worktree, then call `univer_import` in that worktree. Import creates the new Unit; no placeholder document is needed.
 - `univer_new` and `univer_create` create a document directly in the Space's trunk. Use them only when the user explicitly requests immediate creation outside the review workflow.
 - Before authoring content, load the matching Unit skill: `univer-sheet`, `univer-doc`, `univer-slide`, `univer-base`, or `univer-board`.
-- For an Embed, also load `univer-embed`. For formulas that read another Unit, also load `univer-cross-unit-formula`.
+- For an Embed or a Chart backed by another Unit's data, also load `univer-embed`. For formulas that read another Unit, also load `univer-cross-unit-formula`.
 
 ## Mental model
 
