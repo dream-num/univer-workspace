@@ -5,7 +5,7 @@ const filesystem = process.versions.electron
 const { cp, mkdir, readFile, rename, rm, stat } = filesystem;
 const { createHash } = require("node:crypto");
 const { resolve, join, sep } = require("node:path");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const net = require("node:net");
 
 async function exists(path) {
@@ -84,17 +84,41 @@ async function stopBackend(child) {
   if (!child?.pid) return;
   if (process.platform === "win32") {
     if (child.exitCode !== null || child.signalCode !== null) return;
-    await new Promise((done, reject) => {
-      const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
-        windowsHide: true,
-        stdio: "ignore",
-      });
-      killer.once("error", reject);
-      killer.once("exit", (code) => {
-        if (code === 0 || child.exitCode !== null || child.signalCode !== null) done();
-        else reject(new Error("Unable to stop the local service process tree"));
-      });
+    // taskkill can exit before Windows releases the terminated process handles.
+    let onClose;
+    const closed = new Promise((done) => {
+      onClose = done;
+      child.once("close", onClose);
     });
+    try {
+      await new Promise((done, reject) => {
+        const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+          windowsHide: true,
+          stdio: "ignore",
+        });
+        killer.once("error", reject);
+        killer.once("exit", (code) => {
+          if (code === 0 || child.exitCode !== null || child.signalCode !== null) done();
+          else reject(new Error("Unable to stop the local service process tree"));
+        });
+      });
+      let timer;
+      try {
+        await Promise.race([
+          closed,
+          new Promise((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error("Local service did not close after taskkill")),
+              8000,
+            );
+          }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    } finally {
+      child.off("close", onClose);
+    }
     return;
   }
   // The group can outlive its launcher. Wait for the group, not only the direct
@@ -105,6 +129,22 @@ async function stopBackend(child) {
       return true;
     } catch (error) {
       if (error.code === "ESRCH") return false;
+      if (error.code === "EPERM") {
+        // macOS can report EPERM while a terminated group is being reaped.
+        // Only treat it as stopped when ps confirms no live group members;
+        // retain permission failures for any process that could still run.
+        const result = spawnSync("/bin/ps", ["-axo", "pgid=,stat="], {
+          encoding: "utf8",
+          timeout: 2000,
+        });
+        if (!result.error && result.status === 0 && result.stdout.trim()) {
+          const live = result.stdout.trim().split("\n").some((line) => {
+            const [group, state] = line.trim().split(/\s+/);
+            return Number(group) === child.pid && !state?.startsWith("Z");
+          });
+          if (!live) return false;
+        }
+      }
       throw error;
     }
   };

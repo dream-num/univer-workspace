@@ -52,28 +52,46 @@ test("rejects empty and escaping inventories", async (t) => {
   }
 });
 
+test("shutdown stops its owned process without touching another process", async (t) => {
+  const { spawn } = await import("node:child_process");
+  const { once } = await import("node:events");
+  const launch = () =>
+    spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      detached: true,
+      stdio: "ignore",
+    });
+  const owned = launch(),
+    unrelated = launch();
+  t.after(() => {
+    owned.kill("SIGKILL");
+    unrelated.kill("SIGKILL");
+  });
+  await Promise.all([once(owned, "spawn"), once(unrelated, "spawn")]);
+  await runtime.stopBackend(owned);
+  assert.ok(owned.signalCode || owned.exitCode !== null);
+  assert.equal(unrelated.exitCode, null);
+  assert.equal(unrelated.signalCode, null);
+});
+
 test(
-  "shutdown stops its owned process without touching another process",
+  "permission errors are ignored only for groups with no live processes",
   { skip: process.platform === "win32" },
   async (t) => {
     const { spawn } = await import("node:child_process");
     const { once } = await import("node:events");
-    const launch = () =>
-      spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
-        detached: true,
-        stdio: "ignore",
-      });
-    const owned = launch(),
-      unrelated = launch();
-    t.after(() => {
-      owned.kill("SIGKILL");
-      unrelated.kill("SIGKILL");
+    const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      detached: true,
+      stdio: "ignore",
     });
-    await Promise.all([once(owned, "spawn"), once(unrelated, "spawn")]);
-    await runtime.stopBackend(owned);
-    assert.ok(owned.signalCode || owned.exitCode !== null);
-    assert.equal(unrelated.exitCode, null);
-    assert.equal(unrelated.signalCode, null);
+    t.after(() => child.kill("SIGKILL"));
+    await once(child, "spawn");
+    const denied = Object.assign(new Error("kill EPERM"), { code: "EPERM" });
+    t.mock.method(process, "kill", () => { throw denied; });
+    await assert.rejects(runtime.stopBackend(child), { code: "EPERM" });
+    const closed = once(child, "close");
+    child.kill("SIGKILL");
+    await closed;
+    await runtime.stopBackend(child);
   },
 );
 

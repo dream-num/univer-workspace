@@ -158,5 +158,6 @@ try {
   );
 } finally {
   await runtimeTools.stopBackend(child);
-  await rm(root, { recursive: true, force: true });
+  // Windows can briefly retain executable/DLL locks after process termination.
+  await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
