@@ -5,7 +5,7 @@ const filesystem = process.versions.electron
 const { cp, mkdir, readFile, rename, rm, stat } = filesystem;
 const { createHash } = require("node:crypto");
 const { resolve, join, sep } = require("node:path");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const net = require("node:net");
 
 async function exists(path) {
@@ -129,6 +129,22 @@ async function stopBackend(child) {
       return true;
     } catch (error) {
       if (error.code === "ESRCH") return false;
+      if (error.code === "EPERM") {
+        // macOS can report EPERM while a terminated group is being reaped.
+        // Only treat it as stopped when ps confirms no live group members;
+        // retain permission failures for any process that could still run.
+        const result = spawnSync("/bin/ps", ["-axo", "pgid=,stat="], {
+          encoding: "utf8",
+          timeout: 2000,
+        });
+        if (!result.error && result.status === 0 && result.stdout.trim()) {
+          const live = result.stdout.trim().split("\n").some((line) => {
+            const [group, state] = line.trim().split(/\s+/);
+            return Number(group) === child.pid && !state?.startsWith("Z");
+          });
+          if (!live) return false;
+        }
+      }
       throw error;
     }
   };

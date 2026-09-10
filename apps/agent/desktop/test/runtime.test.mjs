@@ -74,6 +74,28 @@ test("shutdown stops its owned process without touching another process", async 
 });
 
 test(
+  "permission errors are ignored only for groups with no live processes",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    const { spawn } = await import("node:child_process");
+    const { once } = await import("node:events");
+    const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      detached: true,
+      stdio: "ignore",
+    });
+    t.after(() => child.kill("SIGKILL"));
+    await once(child, "spawn");
+    const denied = Object.assign(new Error("kill EPERM"), { code: "EPERM" });
+    t.mock.method(process, "kill", () => { throw denied; });
+    await assert.rejects(runtime.stopBackend(child), { code: "EPERM" });
+    const closed = once(child, "close");
+    child.kill("SIGKILL");
+    await closed;
+    await runtime.stopBackend(child);
+  },
+);
+
+test(
   "relocation preserves relative executable links",
   { skip: process.platform === "win32" },
   async (t) => {
