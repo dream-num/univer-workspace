@@ -16,10 +16,14 @@ FUniver
         └── FBaseTableView    projection of the same table records
 ```
 
-- Tables own their fields, records, and views; views only add filter, sort, group, visibility, and type-specific presentation.
-- The primary field is the record's visible identity for links, cards, and details. Define it with `insertTable(..., { primaryFieldName })` instead of adding a duplicate label field.
-- Use stable Unit/Table/Field/Record/View IDs in Facade relationships and user-facing names for display. Record values and view config normally refer to Field IDs.
-- `table.getFormulaName()` is only the structured-reference name for formulas; it may differ from the table's display name.
+- Resolve `FBase` by Unit ID. Tables own their fields, records, and views; views only add filter,
+  sort, group, visibility, and type-specific presentation.
+- The primary field is the record's visible identity for links, cards, and details. Define it with
+  `insertTable(..., { primaryFieldName })` instead of adding a duplicate label field.
+- Use stable Unit/Table/Field/Record/View IDs in Facade relationships and user-facing names for
+  display. Record values and view config normally refer to Field IDs.
+- `table.getFormulaName()` is only the structured-reference name for formulas; it may differ from
+  the table's display name.
 
 ## Entry
 
@@ -41,10 +45,13 @@ Use focused discovery such as `recordLink` with the Base Unit filter. Follow eve
 
 - Add fields one at a time with `FBaseTable.addField(...)`; there is no `addFields` method.
 - Single/MultiSelect options use `{ id, name, color? }`; records store option IDs, not labels.
-- Progress values follow its configured range: with `{ start: 0, end: 100 }`, 75% is `75`, not `0.75`.
+- Progress values follow its configured range: with `{ start: 0, end: 100 }`, 75% is `75`, not
+  `0.75`.
 - Money uses `BaseFieldType.Currency` and numeric values; Number is not a semantic substitute.
-- RecordLink config targets a Table ID and stores target Record IDs. Prefer its dedicated Facade methods when editing links.
-- View config uses Field IDs. Kanban/Gallery card title and fields follow `ICardLayoutConfig`; `fieldSettings` does not replace the card contract.
+- RecordLink config targets a Table ID and stores target Record IDs. Prefer its dedicated Facade
+  methods when editing links.
+- View config uses Field IDs. Kanban/Gallery card title and fields follow `ICardLayoutConfig`;
+  `fieldSettings` does not replace the card contract.
 
 ## OOXML Base table formulas
 

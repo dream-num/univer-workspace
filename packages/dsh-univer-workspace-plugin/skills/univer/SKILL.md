@@ -57,7 +57,7 @@ For document deletion, use `univer_unit` with `action: "remove"`, `worktreeId`, 
 4. Load the matching Unit skill before writing Facade code.
 5. Resolve unfamiliar Facade usage with `univer_api` following the lookup rules above. Never guess an unfamiliar signature, parameter type, or enum.
 6. Mutate through `univer_execute`, or through `univer_compile_svg` for generated Slide page content.
-7. Read the changed scope with `univer_inspect`; use a fresh `univer_edit` with `mode: "read"` when inspection omits a required model field.
+7. Read the changed scope with `univer_inspect`; use a fresh read-only `univer_execute` when inspection omits a required model field.
 8. For every changed Slide page, call `univer_lint` and resolve or explicitly justify each finding.
 9. For visually relevant changes, call `univer_screenshot` with an explicit workspace output directory and the narrowest useful Unit-specific target. Inspect every returned image; screenshots complement rather than replace structural readback or Slide lint.
 10. Export with `univer_export` only when requested and only from the verified scope.
