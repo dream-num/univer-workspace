@@ -52,30 +52,26 @@ test("rejects empty and escaping inventories", async (t) => {
   }
 });
 
-test(
-  "shutdown stops its owned process without touching another process",
-  { skip: process.platform === "win32" },
-  async (t) => {
-    const { spawn } = await import("node:child_process");
-    const { once } = await import("node:events");
-    const launch = () =>
-      spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
-        detached: true,
-        stdio: "ignore",
-      });
-    const owned = launch(),
-      unrelated = launch();
-    t.after(() => {
-      owned.kill("SIGKILL");
-      unrelated.kill("SIGKILL");
+test("shutdown stops its owned process without touching another process", async (t) => {
+  const { spawn } = await import("node:child_process");
+  const { once } = await import("node:events");
+  const launch = () =>
+    spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      detached: true,
+      stdio: "ignore",
     });
-    await Promise.all([once(owned, "spawn"), once(unrelated, "spawn")]);
-    await runtime.stopBackend(owned);
-    assert.ok(owned.signalCode || owned.exitCode !== null);
-    assert.equal(unrelated.exitCode, null);
-    assert.equal(unrelated.signalCode, null);
-  },
-);
+  const owned = launch(),
+    unrelated = launch();
+  t.after(() => {
+    owned.kill("SIGKILL");
+    unrelated.kill("SIGKILL");
+  });
+  await Promise.all([once(owned, "spawn"), once(unrelated, "spawn")]);
+  await runtime.stopBackend(owned);
+  assert.ok(owned.signalCode || owned.exitCode !== null);
+  assert.equal(unrelated.exitCode, null);
+  assert.equal(unrelated.signalCode, null);
+});
 
 test(
   "relocation preserves relative executable links",

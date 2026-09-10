@@ -84,17 +84,41 @@ async function stopBackend(child) {
   if (!child?.pid) return;
   if (process.platform === "win32") {
     if (child.exitCode !== null || child.signalCode !== null) return;
-    await new Promise((done, reject) => {
-      const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
-        windowsHide: true,
-        stdio: "ignore",
-      });
-      killer.once("error", reject);
-      killer.once("exit", (code) => {
-        if (code === 0 || child.exitCode !== null || child.signalCode !== null) done();
-        else reject(new Error("Unable to stop the local service process tree"));
-      });
+    // taskkill can exit before Windows releases the terminated process handles.
+    let onClose;
+    const closed = new Promise((done) => {
+      onClose = done;
+      child.once("close", onClose);
     });
+    try {
+      await new Promise((done, reject) => {
+        const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+          windowsHide: true,
+          stdio: "ignore",
+        });
+        killer.once("error", reject);
+        killer.once("exit", (code) => {
+          if (code === 0 || child.exitCode !== null || child.signalCode !== null) done();
+          else reject(new Error("Unable to stop the local service process tree"));
+        });
+      });
+      let timer;
+      try {
+        await Promise.race([
+          closed,
+          new Promise((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error("Local service did not close after taskkill")),
+              8000,
+            );
+          }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    } finally {
+      child.off("close", onClose);
+    }
     return;
   }
   // The group can outlive its launcher. Wait for the group, not only the direct
