@@ -49,6 +49,16 @@ module.exports = {
     );
   },
   // Windows is distributed unsigned until a signing certificate is available.
+  afterSign: async (context) => {
+    if (context.electronPlatformName !== "darwin" || !official) return;
+    const { promisify } = require("node:util");
+    const execFile = promisify(require("node:child_process").execFile);
+    const app = require("node:path").join(
+      context.appOutDir, `${context.packager.appInfo.productFilename}.app`,
+    );
+    await execFile("/usr/bin/codesign", ["--verify", "--deep", "--strict", app]);
+    await execFile("/usr/bin/xcrun", ["stapler", "validate", app]);
+  },
   forceCodeSigning: official && process.platform === "darwin",
   mac: {
     sign: require("./scripts/sign-mac.cjs").sign,
