@@ -82,13 +82,8 @@ export function reduceWorkspaceNavigation(
         ? state
         : { ...state, navigationMode: intent.navigationMode };
     case "open-content":
-      // Reviewing an already open Unit is still an explicit locate request.
-      if (intent.contentSurface.kind === "worktree" && intent.contentSurface.unitId !== null) {
-        return { ...state, contentSurface: { ...intent.contentSurface } };
-      }
-      return sameContentSurface(state.contentSurface, intent.contentSurface)
-        ? state
-        : { ...state, contentSurface: intent.contentSurface };
+      // Opening an existing preview must also reveal a collapsed or closed native tab.
+      return { ...state, contentSurface: { ...intent.contentSurface } };
     case "close-content":
       return state.contentSurface === null ? state : { ...state, contentSurface: null };
   }
@@ -113,39 +108,4 @@ export function createWorkspaceNavigationStore(
       for (const listener of listeners) listener();
     },
   };
-}
-
-function sameContentSurface(
-  left: WorkspaceContentSurface | null,
-  right: WorkspaceContentSurface,
-): boolean {
-  if (left === null || left.kind !== right.kind) return false;
-  if (left.kind === "resource" && right.kind === "resource") {
-    return (
-      left.workspaceOrigin === right.workspaceOrigin &&
-      left.resourceId === right.resourceId &&
-      left.docKey === right.docKey &&
-      left.name === right.name &&
-      left.unitType === right.unitType
-    );
-  }
-  if (left.kind === "worktree" && right.kind === "worktree") {
-    return (
-      left.workspaceOrigin === right.workspaceOrigin &&
-      left.worktreeId === right.worktreeId &&
-      left.name === right.name &&
-      left.unitId === right.unitId
-      && left.sessionId === right.sessionId
-    );
-  }
-  if (left.kind === "blob" && right.kind === "blob") {
-    return (
-      left.workspaceOrigin === right.workspaceOrigin &&
-      left.resourceId === right.resourceId &&
-      left.name === right.name &&
-      left.mediaType === right.mediaType &&
-      left.byteSize === right.byteSize
-    );
-  }
-  return false;
 }

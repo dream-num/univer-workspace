@@ -1,3 +1,5 @@
+import { LocaleType } from "@univerjs/core";
+import { WorktreeComparison } from "./worktree-comparison.tsx";
 /**
  * The unified Turn-tail review panel for trunk, worktree, loading, terminal,
  * and historical views — ported from the dsh-univer-office ReviewPanel with
@@ -31,6 +33,9 @@ export interface ViewerRuntimeProps {
 
 /** Mounts the embedded editor for one resolved target. */
 export function PanelViewer(props: {
+  readonly comparisonControlsContainer?: HTMLElement | null | undefined;
+  readonly comparisonPresentation?: "diff" | "version" | undefined;
+  readonly comparisonView?: "draft" | "merged" | "preview" | undefined;
   readonly viewer: ViewerTarget;
   readonly runtime: ViewerRuntimeProps;
   readonly worktreeId?: string | null | undefined;
@@ -112,7 +117,17 @@ export function PanelViewer(props: {
           </Button>
         </div>
       ) : null}
-      <ViewerMount
+      {props.viewer.scope.kind !== "trunk" ? <WorktreeComparison
+        controlsContainer={props.comparisonControlsContainer}
+        presentation={props.comparisonPresentation}
+        worktreeId={props.viewer.scope.worktreeId}
+        unitId={props.viewer.unitId}
+        initialView={props.comparisonView ?? (props.viewer.scope.kind === "mergePreview" ? "preview" : "draft")}
+        status={props.status ?? (props.viewer.scope.kind === "mergePreview" ? "ready" : "draft")}
+        locale={props.runtime.getViewerLocale() === "en-US" ? LocaleType.EN_US : LocaleType.ZH_CN}
+        license={state.bootstrap.license}
+        t={props.runtime.t}
+      /> : <ViewerMount
         unitId={props.viewer.unitId}
         unitType={props.viewer.unitType}
         editable={props.viewer.editable}
@@ -123,7 +138,7 @@ export function PanelViewer(props: {
         {...(props.resource === undefined || props.insertResourceReference === undefined
           ? {}
           : { onSelectionChange: setSelection })}
-      />
+      />}
     </>
   );
 }
@@ -374,7 +389,10 @@ export function resolveViewerTarget(input: {
       : "unsupported";
   };
   if (input.state === undefined) return undefined;
-  if (input.worktreeId === null || input.status === "merged" || input.status === "discarded") {
+  // A merged or discarded Worktree still represents a historical draft. Keep
+  // resolving its Unit against that Worktree so the Base-to-draft view remains
+  // available; lifecycle completion does not mean the Unit was deleted.
+  if (input.worktreeId === null) {
     const target = input.state.viewerTarget;
     if (target === null) return undefined;
     const unitId = input.selectedUnit ?? input.fallbackUnitId ?? target.unitId;
@@ -392,8 +410,7 @@ export function resolveViewerTarget(input: {
   const unitId = input.selectedUnit ?? input.fallbackUnitId ?? input.units[0]?.unitId;
   if (unitId === undefined) return undefined;
   if (input.status === "draft") {
-    if (worktree.worktreeTarget === null) return undefined;
-    const resolvedType = unitTypeOf(unitId, worktree.worktreeTarget.unitType);
+    const resolvedType = unitTypeOf(unitId, worktree.worktreeTarget?.unitType ?? input.fallbackUnitType);
     return {
       unitId,
       unitType: resolvedType,
@@ -402,6 +419,16 @@ export function resolveViewerTarget(input: {
       ...(resolvedType === "unsupported"
         ? { unsupportedType: rawUnitType(input.fallbackUnitType) }
         : {}),
+    };
+  }
+  if (input.status === "merged" || input.status === "discarded") {
+    const resolvedType = unitTypeOf(unitId, worktree.worktreeTarget?.unitType ?? input.fallbackUnitType);
+    return {
+      unitId,
+      unitType: resolvedType,
+      editable: false,
+      scope: { kind: "worktree", worktreeId: input.worktreeId },
+      ...(resolvedType === "unsupported" ? { unsupportedType: rawUnitType(input.fallbackUnitType) } : {}),
     };
   }
   // Workspace permits mergePreview only while a Worktree is ready.  A

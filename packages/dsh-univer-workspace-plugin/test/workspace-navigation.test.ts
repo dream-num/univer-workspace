@@ -113,7 +113,7 @@ describe("Workspace navigation state", () => {
     expect(Object.keys(initial).sort()).toEqual(["contentSurface", "navigationMode"]);
   });
 
-  it("publishes real changes once and ignores equivalent intents", () => {
+  it("publishes repeated file opens so a closed native tab can reopen", () => {
     const store = createWorkspaceNavigationStore(initial);
     const listener = vi.fn();
     const unsubscribe = store.subscribe(listener);
@@ -125,11 +125,11 @@ describe("Workspace navigation state", () => {
     store.dispatch({ type: "close-content" });
     store.dispatch({ type: "close-content" });
 
-    expect(listener).toHaveBeenCalledTimes(3);
+    expect(listener).toHaveBeenCalledTimes(4);
     expect(store.getSnapshot()).toEqual({ navigationMode: "files", contentSurface: null });
 
     unsubscribe();
     store.dispatch({ type: "select-navigation", navigationMode: "sessions" });
-    expect(listener).toHaveBeenCalledTimes(3);
+    expect(listener).toHaveBeenCalledTimes(4);
   });
 });

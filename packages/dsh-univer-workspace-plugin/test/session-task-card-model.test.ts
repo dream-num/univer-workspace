@@ -9,7 +9,6 @@ import {
   sessionCardCandidates,
   type SessionWorktreeCandidate,
 } from "../src/client/components/session-task-card-model.ts";
-import { en, zh } from "../src/client/locales.ts";
 import type { WorktreeStatus } from "../src/shared/state.ts";
 
 function operation(
@@ -238,29 +237,11 @@ describe("Session task-card source contract", () => {
     expect(cardSource).not.toMatch(/\buseExclusiveViewer\s*\(/);
   });
 
-  it("keeps Changes cards independent from the middle Workspace Viewer", async () => {
-    const [turnSource, previewSource, clientSource] = await Promise.all([
-      readFile(new URL("../src/client/components/TurnContextCard.tsx", import.meta.url), "utf8"),
-      readFile(new URL("../src/client/components/preview-card.tsx", import.meta.url), "utf8"),
-      readFile(new URL("../src/client/index.tsx", import.meta.url), "utf8"),
-    ]);
-
-    expect(zh["turn.ribbon"]).toBe("Changes");
-    expect(en["turn.ribbon"]).toBe("Changes");
-    expect(previewSource).toContain(
-      'const firstWorktreeIndex = files.findIndex((entry) => entry.docKey.startsWith("wt:"))',
-    );
-    expect(previewSource).toContain(
-      "initiallyExpanded={worktreeId !== null && index === firstWorktreeIndex}",
-    );
-    expect(turnSource).toContain("React.useState(!props.initiallyExpanded)");
-    expect(turnSource.match(/props\.t\("task\.openMiddle"\)/g)).toHaveLength(2);
-    expect(turnSource).toContain('unitId: unit.unitId');
-    expect(turnSource).not.toContain("OPEN_VIEWER_EVENT");
-    expect(turnSource).not.toMatch(/from\s+["']\.\/use-exclusive-viewer/);
-    expect(turnSource).not.toMatch(/\buseExclusiveViewer\s*\(/);
-    expect(clientSource).toMatch(
-      /name:\s*"conversation\.chat\.turnTail"[\s\S]{0,400}inject:\s*\(\)\s*=>\s*\(\{[\s\S]{0,100}\bnavigation\b/,
-    );
+  it("keeps document runtimes out of conversation and floating summaries", async () => {
+    for (const filename of ["TurnContextCard", "TaskContextCard"]) {
+      const source = await readFile(new URL(`../src/client/components/${filename}.tsx`, import.meta.url), "utf8");
+      expect(source).not.toMatch(/<PanelViewer\b|<ViewerMount\b|<WorktreeComparison\b/);
+      expect(source).toContain('type: "open-content"');
+    }
   });
 });

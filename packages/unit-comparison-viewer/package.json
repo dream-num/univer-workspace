@@ -54,8 +54,8 @@
     "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": ">=18 <20",
+    "react-dom": ">=18 <20",
     "tailwindcss": ">=4"
   }
 }

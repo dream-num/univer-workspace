@@ -1,9 +1,11 @@
 import { defineConfig } from "vite";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 
 const packageId = "dsh-univer-workspace-plugin";
 
 export default defineConfig({
+  plugins: [tailwindcss()],
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
   },

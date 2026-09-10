@@ -345,3 +345,34 @@
     transition: none;
   }
 }
+
+.comparisonContainer {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  > [data-unit-comparison-viewer] { flex: 1; min-height: 0; }
+  select { font: inherit; color: inherit; background: var(--background, white); border: 1px solid #aaa5; padding: 4px 8px; border-radius: 6px; }
+}
+
+.comparisonScroll { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.comparisonSurface { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+
+.comparisonContainer .viewerTopbar { flex-wrap: wrap; gap: 8px; }
+.comparisonContainer .viewerTopbar > div { display: flex; align-items: center; gap: 6px; }
+.comparisonContainer button[aria-pressed="true"] { color: var(--color-primary); background: var(--color-accent); }
+
+.comparisonSelect {
+  min-height: 28px;
+  max-width: 160px;
+  border: 1px solid var(--uvf-color-border);
+  border-radius: var(--uvf-radius-control);
+  padding: 3px 6px;
+  background: var(--uvf-color-surface);
+  color: var(--uvf-color-muted);
+  font-family: inherit;
+  font-size: 11px;
+}

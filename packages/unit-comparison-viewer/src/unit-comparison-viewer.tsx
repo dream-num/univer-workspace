@@ -6,15 +6,15 @@ import {
   UNIT_TYPE_SLIDE,
 } from "./unit-types.js";
 import { lazy, Suspense, type ReactElement } from "react";
-import { structuralDiffItemsFromContext } from "./comparison-presentation";
-import { BaseTableDiffViewer } from "./base/base-comparison-view";
+import { structuralDiffItemsFromContext } from "./comparison-presentation.js";
+import { BaseTableDiffViewer } from "./base/base-comparison-view.js";
 import type {
   BaseComparisonViewerValue,
   IUnitComparisonViewerProps,
   NativeComparisonViewerValue,
   SheetComparisonViewerValue,
-} from "./comparison-types";
-import { NativeComparisonView } from "./native/native-comparison-view";
+} from "./comparison-types.js";
+import { NativeComparisonView } from "./native/native-comparison-view.js";
 import {
   UnitComparisonMessagesProvider,
   useUnitComparisonViewerMessages,
@@ -22,7 +22,7 @@ import {
 } from "./i18n/messages.js";
 
 const WorkbookDiffViewer = lazy(async () => {
-  const module = await import("./sheet/sheet-comparison-view");
+  const module = await import("./sheet/sheet-comparison-view.js");
   return { default: module.WorkbookDiffViewer };
 });
 
@@ -33,7 +33,7 @@ export type {
   IUnitComparisonViewerSide,
   UnitComparisonUniverFactory,
   UnitComparisonViewerValue,
-} from "./comparison-types";
+} from "./comparison-types.js";
 
 export function UnitComparisonViewer(props: IUnitComparisonViewerProps): ReactElement {
   return (

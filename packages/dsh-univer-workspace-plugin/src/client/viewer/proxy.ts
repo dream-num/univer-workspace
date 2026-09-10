@@ -119,3 +119,22 @@ function mergePreviewFailure(status: string): string {
 function basePath(worktreeSeg: string): string {
   return `/universer-api${worktreeSeg}`;
 }
+
+/** Legacy comparison responses can represent a new Unit's merge preview only
+ * when the evaluator confirms its source and the snapshot is the ready head. */
+export async function confirmCreatedUnitMergePreview(
+  worktreeId: string, unitId: string, revision: number, signal: AbortSignal,
+): Promise<boolean> {
+  const client = new WorktreeClient({
+    origin: window.location.origin,
+    fetch: (input, init) => proxyFetch(input, { ...init, signal }),
+  });
+  const evaluation = await client.evaluateUnitMerge(worktreeId, unitId);
+  if (evaluation.worktreeID !== worktreeId || evaluation.unitID !== unitId ||
+      evaluation.status !== "not-applicable" || evaluation.reason !== "worktree-created-unit") return false;
+  const worktree = await client.getWorktree(worktreeId);
+  const unit = worktree.units.find(candidate => candidate.unitID === unitId);
+  return worktree.worktreeID === worktreeId && worktree.status === "ready" &&
+    unit?.source === "worktree" && unit.removed !== true &&
+    unit.readyDraftHeadRevision === revision && unit.draftHeadRevision === revision;
+}

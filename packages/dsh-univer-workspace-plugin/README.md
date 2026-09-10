@@ -119,27 +119,27 @@ as a substitute for those explicit storage boundaries.
   Space/Node/Resource tree, creates items in permitted folders, renames and
   trashes nodes, and exposes a capability-gated trash view with restore and
   permanent removal. Univer Resources open in the embedded Viewer; Blob
-  Resources use the middle surface for read-only image, video, audio, PDF, and
+  Resources use the native DSH Sidecar for read-only image, video, audio, PDF, and
   text previews, while unsupported media remains download-only. Blob editing
   is intentionally outside this plugin surface.
-- **File conversation companion**: opening a Workspace Resource emits a
-  file-scoped event consumed by a stable middle Viewer + right-side DSH
-  conversation surface. The companion reuses the selected native DSH session
-  and adds the Resource id/name as context; it does not create or mutate the
-  left-hand session list.
+- **Native Sidecar preview**: file and Worktree opens update one Workspace preview
+  tab in the current session's native right sidebar. DSH owns tab closing,
+  resizing, splitting and fullscreen; Workspace renders the content inside it.
+  With no selected session, the native flow reuses or creates a blank session
+  in a connected Space. Other native tab types remain available.
 - **Capability HTTP routes**: `/api/uwh/me`, `/api/uwh/template-fork`, Space
   rename, the same-origin Space/Node tree, and trash actions are registered by
   this plugin. The Workspace Agent only supplies the authenticated
   `workspaceAuth` service they consume.
 - **Bundled skill**: `univer` teaches the model the Space/document
   model and the Worktree review rules.
-- **Turn preview and live viewer**: successful document/Worktree operations are
-  folded into one replay-safe turn card; while a session is running, a live
-  collaboration editor floats in the input dock, and it is removed when the
-  session completes while the historical review card remains.
-- **Unit-level history folding**: repeated references to the same remote Unit
-  (including `resourceId`/`unitId`/Worktree aliases across Turns) keep only the
-  latest embedded viewer; older Turns retain a collapsed review card.
+- **Conversation change summaries**: turn cards list the documents touched by
+  that Turn. Clicking a row opens its Worktree in Sidecar and locates the document;
+  conversation cards do not mount document runtimes or offer preview accordions.
+- **Floating task list**: one compact session list shows each Worktree's status
+  and counts of added, modified and deleted documents. Rows open Sidecar. The
+  list is portaled to the document and can be dragged across the entire viewport,
+  independently of conversation and Sidecar layout.
 
 ## Not yet delivered (tracked as follow-up stages)
 
@@ -233,3 +233,21 @@ The Team and personal groups describe the loaded rows, not global totals.
 Conversation cards continue resolving their known Worktree IDs independently.
 This sidebar requires a Workspace server supporting `scope=all`, `search`, and
 `order=createdAtDesc` on `GET /api/worktrees`; update the server before the plugin.
+
+### Historical Worktree review
+
+Merged Worktrees open the Base-to-draft comparison by default. Draft, ready, and
+discarded Worktrees open the read-only resulting draft document; choose Changes
+to inspect the comparison. New Worktree-local Units have an empty Base, including those
+in discarded Worktrees. Switch between structured changes and the resulting full
+version. Ready Worktrees also offer the evaluated merge preview; merged Units can
+show their recorded merge revision. A Unit without a recorded merge revision reports
+that limitation instead of showing the current trunk as a historical result.
+Canceled creations are omitted and deleted Units remain individual review records.
+
+Fixed-Base and recorded-result modes require the matching Workspace Server comparison
+endpoint. Older servers can still display the equivalent empty-Base comparison for
+new Worktree-local Units. Their merge previews also work when the server evaluator
+confirms a Worktree-created Unit and its returned snapshot matches the exact ready
+revision. Other unsupported historical modes report that the server
+needs updating; they never silently fall back to current trunk or draft.

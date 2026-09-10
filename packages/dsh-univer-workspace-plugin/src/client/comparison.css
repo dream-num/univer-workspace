@@ -1,0 +1,22 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "@univer/unit-comparison-viewer/styles.css";
+
+/* The comparison utilities expect Tailwind's base reset. Scope it to this
+ * host's comparison surface, and keep it below utilities so explicit borders
+ * and spacing still win. DSH and other document viewers keep their own base. */
+@layer base {
+  :where([data-unit-comparison-viewer], [data-unit-comparison-viewer] *) {
+    box-sizing: border-box;
+    border: 0 solid;
+  }
+  :where([data-unit-comparison-viewer]) :where(button, input, select, textarea) {
+    font: inherit;
+    color: inherit;
+    background-color: transparent;
+  }
+  :where([data-unit-comparison-viewer]) :where(button) {
+    appearance: button;
+  }
+}

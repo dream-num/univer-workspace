@@ -29,7 +29,7 @@ export function UnitComparisonMessagesProvider(input: {
     [input.locale, input.messages],
   );
   return (
-    <UnitComparisonMessagesContext value={messages}>{input.children}</UnitComparisonMessagesContext>
+    <UnitComparisonMessagesContext.Provider value={messages}>{input.children}</UnitComparisonMessagesContext.Provider>
   );
 }
 

@@ -54,7 +54,13 @@ decodes the authoritative Trunk and draft states, computes semantic differences
 with the matching History SDK adapter, and returns them through the
 authenticated internal `/universer-api` boundary. The Browser supplies its own
 Univer presets and plugins to the comparison viewer; official, agent, and
-merge-preview iframe views remain available.
+merge-preview iframe views remain available. The internal comparison endpoint accepts
+`baseMode=base` to pin the left side to the Unit's captured baseline, and `view=draft`,
+`view=preview` (ready only), or `view=merged` (merged only) for the right side.
+Recorded merge views use the SDK's stored merge revision; Units without that revision
+cannot claim an immutable merge result. The default remains current Trunk versus draft
+for existing Browser consumers. Agent requires these modes for historical Base review;
+new Worktree-local Units have an empty Base and remain reviewable after discard.
 
 Draft Worktrees can also mark individual Units for deletion and undo that intent.
 Ready Worktrees freeze the intent; reopen one before changing it. Merging excludes

@@ -246,7 +246,7 @@ mkdir -p "$UWH_DSH_BOOTSTRAP" "$DSH_HOME/internal-packages"
 export UWA_PACKAGES="$(mktemp -d "$DSH_HOME/internal-packages/build.XXXXXX")"
 
 npm install --prefix "$UWH_DSH_BOOTSTRAP" --save-exact \
-  @deepseek-ai/dsh@0.1.3-alpha.2
+  @deepseek-ai/dsh@0.1.5-rc.1
 export DSH_BIN="$UWH_DSH_BOOTSTRAP/node_modules/@deepseek-ai/dsh/lib/bin.js"
 
 pnpm --filter @univerjs/workspace-agent build
@@ -339,8 +339,8 @@ Workspace identity:
 2. Open **Files**, select a Personal or Team Space, then use **New** to create
    a folder or Univer document. The same menu accepts file uploads; supported
    Office files are imported as Univer Resources.
-3. Select a Univer Resource in the tree. Its full-height Viewer opens in the
-   middle, while the current native DSH conversation stays on the right. Going
+3. Select a Univer Resource in the tree. Its Viewer opens in the
+   native DSH right sidebar (Sidecar), beside the conversation. Going
    back to **Sessions** changes only the left navigation and must not close the
    Viewer.
 4. Use a file row's action menu for the capabilities granted by Workspace,
@@ -474,19 +474,22 @@ and a non-secret account identifier instead.
 
 ## Region navigation
 
-The URL independently records the middle document/review region (`center`) and
-the conversation region (`right`), for example
-`#/?center=worktree%2Freview-id&right=session%2Fsession-id`. Closing the middle region
-preserves the conversation. Hiding the conversation releases its screen space
-while retaining its selected Session and draft; the `right` value becomes
-`hidden/session/<session-id>`. **Show conversation**, selecting a Session, or
-successfully adding a document to the current message expands it again. Hiding
-does not delete a Session or cancel its agent. Browser history and refresh
-restore both the selection and visibility. An empty route shows the new-session
-composer. Existing
-`#/s/<session-id>` links still open their conversation. Document names and
-permissions are resolved from the connected Workspace, not stored in the URL.
-
+Workspace file and Worktree previews share one native Sidecar tab per session.
+DSH owns its resize, split, fullscreen and close controls. Opening another file
+updates that preview; clicking the same file reveals or reopens it. With no
+selected session, opening a file uses the native blank-session flow in a
+connected Space. Sidecar layout state is session-local and memory-only.
+Worktree tab titles show the task name and status. Merged Worktrees initially show
+Changes; other states initially show Result. Users can switch explicitly.
+Title and lifecycle actions stay on one line. Wide headers show Close; narrower
+headers move it into More actions. Convert to draft stays in that menu, and Merge
+remains the primary action. Conversation rows and the draggable
+floating Worktree list open this same Sidecar instead of embedding another viewer.
+The floating list shows added, modified and deleted document counts and can move
+across the whole browser viewport.
+Legacy `center=resource/...`, `center=blob/...` and `center=worktree/...` links
+still request a preview, now inside Sidecar. They no longer define a separate
+middle column or hide the conversation.
 
 ## File and folder mentions
 

@@ -18,7 +18,7 @@ import {
   UNIT_TYPE_SLIDE,
   type UnitType,
 } from "../unit-types.js";
-import type { ComparisonSide, ComparisonTone } from "./document-decoration";
+import type { ComparisonSide, ComparisonTone } from "./document-decoration.js";
 import type { UnitStructuralDiffItem } from "../shared/structural-diff.js";
 
 interface HighlightBounds {

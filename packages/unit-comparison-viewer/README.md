@@ -69,3 +69,14 @@ The package owns complete Viewer message packs for the same 17 locales supported
 collaboration viewer. It falls back to English for an unsupported `LocaleType`. Entity names,
 property paths, and schema enum values come from the matching Univer History SDK locale; user
 content is never translated. Hosts normally do not need to pass `messages`.
+
+## Host dependency isolation
+
+Workspace Browser consumes the workspace link with React 19. Workspace Agent consumes
+this directory as a private `file:` development dependency so pnpm installs the same
+source with the Agent's React 18 peers. Agent bundles the component into its browser
+artifact and resolves React from DSH; the private package is not an installation-time
+runtime dependency. Keep React, React DOM, their types, and the Univer DI graph in the
+consuming application's peer context. After changing this source, refresh the local
+file dependency with `pnpm --filter dsh-univer-workspace-plugin update @univer/unit-comparison-viewer`
+before rebuilding Agent.

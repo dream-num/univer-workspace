@@ -51,13 +51,10 @@ export function PreviewCard(props: PreviewCardProps): React.ReactElement {
   const stateKeys = React.useMemo(() => files.map((entry) => entry.docKey), [files]);
   const { states, missingFiles, errors } = useUniverStates(stateKeys);
   const latestTurns = React.useMemo(() => latestUnitTurns(session), [session]);
-  // The first Worktree card of a Turn starts expanded, historical or not; if
-  // it turns out missing and is hidden, no second card is expanded in compensation.
-  const firstWorktreeIndex = files.findIndex((entry) => entry.docKey.startsWith("wt:"));
 
   return (
     <>
-      {files.map((target, index) => {
+      {files.map((target) => {
         // Another tool may remove a document after its structured operations.
         // The host's current state is authoritative, so no historical shell renders.
         if (missingFiles.has(target.docKey)) return null;
@@ -79,7 +76,6 @@ export function PreviewCard(props: PreviewCardProps): React.ReactElement {
             state={states[target.docKey]}
             stateError={errors[target.docKey]}
             historical={historical}
-            initiallyExpanded={worktreeId !== null && index === firstWorktreeIndex}
             navigation={props.navigation}
             t={props.t}
             loadViewerBootstrap={props.loadViewerBootstrap}

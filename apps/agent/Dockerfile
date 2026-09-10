@@ -55,14 +55,14 @@ RUN mkdir -p /opt/dsh/bootstrap && cd /opt/dsh/bootstrap \
       --allow-build=koffi \
       --allow-build=node-pty \
       --allow-build=protobufjs \
-      @deepseek-ai/dsh@0.1.3-alpha.2
+      @deepseek-ai/dsh@0.1.5-rc.1
 
 # Build the profile through the official `dsh plugin` command so the profile's
 # package.json and dsh.profile.bundles list are reconciled by the tool — never
 # hand-written. DSH_HOME is isolated inside the image.
 ENV DSH_HOME=/opt/dsh/home \
     DSH_BIN=/opt/dsh/bootstrap/node_modules/@deepseek-ai/dsh/lib/bin.js \
-    DSH_WEB_BUNDLE="@deepseek-ai/dsh-web-app@0.1.3-alpha.2" \
+    DSH_WEB_BUNDLE="@deepseek-ai/dsh-web-app@0.1.5-rc.1" \
     DSH_PLUGINS="file:/opt/dsh/home/internal-packages/univerjs-workspace-agent-0.1.0.tgz file:/opt/dsh/home/internal-packages/dsh-univer-workspace-plugin-0.1.0.tgz file:/opt/dsh/home/internal-packages/dsh-univer-workspace-skin-plugin-0.1.0.tgz"
 RUN NPM_CONFIG_USERCONFIG=/src/.npmrc ./apps/agent/scripts/build-profile.sh
 RUN printf 'registry=%s\n' "$NPM_REGISTRY" > /opt/dsh/home/profiles/univer-workspace-harness/.npmrc

@@ -27,14 +27,14 @@ import { ISlideDrawingStateService } from "@univerjs-pro/slides-ui";
 import { ICommandService, type LocaleType } from "@univerjs/core";
 import { SetDocZoomRatioOperation } from "@univerjs/docs-ui";
 import type { UnitStructuralDiffItem } from "../shared/structural-diff.js";
-import type { UnitComparisonUniverFactory } from "../comparison-types";
+import type { UnitComparisonUniverFactory } from "../comparison-types.js";
 import {
   decorateDocumentComparisonSide,
   type ComparisonSide,
   type DocumentComparisonInput,
-} from "./document-decoration";
-import { createNativeComparisonHighlightController } from "./native-highlights";
-import { focusPreviewComparisonTarget, type PreviewFocusTarget } from "./comparison-focus";
+} from "./document-decoration.js";
+import { createNativeComparisonHighlightController } from "./native-highlights.js";
+import { focusPreviewComparisonTarget, type PreviewFocusTarget } from "./comparison-focus.js";
 
 type ComparisonUnitData = IWorkbookData | IDocumentData | ISlideData | IBaseSnapshot | IBoardData;
 

@@ -164,6 +164,7 @@ import "@univerjs-pro/slides-exchange-client/facade";
 import "@univerjs-pro/slides-print/facade";
 import "@univerjs-pro/slides-table/facade";
 import "@univerjs/docs/facade";
+import "@univerjs/docs-ui/facade";
 import "@univerjs/sheets/facade";
 
 export interface ViewExchangeClientConfig {
@@ -185,6 +186,7 @@ export interface ViewRenderingOptions {
   readonly assetIoOwner: ViewAssetIoOwner;
   readonly license: string;
   readonly workbenchChrome: "hidden" | "visible";
+  readonly readOnly?: boolean;
   readonly ribbonType?: RibbonType;
   /** Omit for a headless/local composition that does not need output plugins. */
   readonly unitType?: UniverInstanceType;
@@ -208,7 +210,7 @@ export function registerViewerRendering(univer: Univer, options: ViewRenderingOp
   registerDocPlugins(univer);
   registerSheetPlugins(univer);
   registerSlidePlugins(univer);
-  registerBaseUnitPlugins(univer, collaborationOwnsAssetIo);
+  registerBaseUnitPlugins(univer, collaborationOwnsAssetIo, options.readOnly ?? false);
   registerBoardPlugins(univer);
   options.registerBeforeEmbedCore?.();
   if (options.unitType !== undefined) {
@@ -246,7 +248,9 @@ function registerBasePlugins(
   univer.registerPlugin(UniverProFormulaEnginePlugin, { notExecuteFormula: false });
   univer.registerPlugin(UniverRangePreprocessPlugin);
   univer.registerPlugin(UniverDocsPlugin);
-  univer.registerPlugin(UniverDocsUIPlugin);
+  univer.registerPlugin(UniverDocsUIPlugin, hideWorkbenchChrome ? {
+    fitToWidth: { mode: "fit-width", target: "container", paddingX: 16, minScale: 0.1, maxScale: 1 },
+  } : undefined);
   univer.registerPlugin(UniverDocsLatexPlugin);
   univer.registerPlugin(UniverDocsLatexUIPlugin);
   univer.registerPlugin(UniverDocsDrawingPlugin);
@@ -328,11 +332,16 @@ function registerSlidePlugins(univer: Univer): void {
   univer.registerPlugin(UniverSlidesTableUIPlugin);
 }
 
-function registerBaseUnitPlugins(univer: Univer, collaborationOwnsAssetIo: boolean): void {
+function registerBaseUnitPlugins(univer: Univer, collaborationOwnsAssetIo: boolean, readOnly: boolean): void {
   univer.registerPlugin(UniverBasesPlugin);
   univer.registerPlugin(
     UniverBasesUIPlugin,
-    collaborationOwnsAssetIo ? { override: [[IAttachmentIoService, null]] } : undefined,
+    {
+      disableEdit: readOnly,
+      ...(collaborationOwnsAssetIo ? { override: [[IAttachmentIoService, null]] } : {}),
+      // Local snapshots have no live collaboration entity to observe.
+      workbench: { collaborationStatus: collaborationOwnsAssetIo },
+    },
   );
 }
 

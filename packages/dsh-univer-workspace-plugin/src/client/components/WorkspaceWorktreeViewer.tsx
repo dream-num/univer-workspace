@@ -1,5 +1,5 @@
 /**
- * Full-height middle Workspace surface for one Worktree: an independent
+ * Full-height Workspace Sidecar content for one Worktree: an independent
  * Changes review shell with a real header (title / description / status /
  * creator / team scope / capability-driven lifecycle actions), a collapsible
  * smart path tree over the Units' real Spaces, and a default-expanded Unit
@@ -9,15 +9,15 @@
  * @module dsh-univer-workspace-plugin/client/components/WorkspaceWorktreeViewer
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
-import { Button, DialogRoot, DialogContent, DialogHeader, DialogTitle } from "@univerjs/univer-workspace-ui";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { Button } from "@univerjs/univer-workspace-ui";
 import type { DocumentFileState } from "../../shared/state.ts";
 import { getFileState, subscribeFileStateInvalidation } from "../api/univer-api.ts";
 import type { UniverLocaleKey } from "../locales.ts";
 import type { WorkspaceWorktreeSurface } from "../navigation/workspace-navigation.ts";
 import type { ViewerBootstrap } from "../viewer-bootstrap.ts";
 import type { ViewerLocale } from "../viewer-locale.ts";
-import type { TurnViewMode } from "./turn-context-card-model.ts";
+import type { WorktreeDocumentView } from "./worktree-review/WorktreeUnitAccordion.tsx";
 import type {
   WorkspaceResourceDescriptor,
   WorkspaceResourceReferenceInsertResult,
@@ -42,10 +42,6 @@ type WorktreeFileState =
 
 export interface WorkspaceWorktreeViewerProps {
   readonly target: WorkspaceWorktreeSurface;
-  readonly surfaceLeft: number | null;
-  readonly surfaceWidth: number;
-  readonly onClose: () => void;
-  readonly headerAction?: ReactElement | undefined;
   readonly loadViewerBootstrap: () => Promise<ViewerBootstrap>;
   readonly getViewerLocale: () => ViewerLocale;
   readonly t: (key: UniverLocaleKey) => string;
@@ -59,14 +55,11 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
   const surfaceRef = useRef<HTMLElement | null>(null);
   const [compactNavigation, setCompactNavigation] = useState(false);
   const [treeOverlayOpen, setTreeOverlayOpen] = useState(false);
-  const [drawerBounds, setDrawerBounds] = useState<CSSProperties>({});
   useEffect(() => {
     const element = surfaceRef.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
       if (entry) {
-        const bounds = element.getBoundingClientRect();
-        setDrawerBounds({ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height });
         const compact = entry.contentRect.width < 900;
         setCompactNavigation(compact);
         if (!compact) setTreeOverlayOpen(false);
@@ -80,7 +73,7 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   // null = the user has not toggled anything; every Unit stays expanded.
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
-  const [viewByUnitId, setViewByUnitId] = useState<Readonly<Record<string, TurnViewMode>>>({});
+  const [viewByUnitId, setViewByUnitId] = useState<Readonly<Record<string, WorktreeDocumentView>>>({});
   const [locatedUnitId, setLocatedUnitId] = useState<string | null>(null);
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
@@ -121,13 +114,6 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
     setViewByUnitId({});
     setLocatedUnitId(null);
   }, [props.target.worktreeId]);
-
-  // Univer measures its canvas on the window resize signal. The review surface
-  // can also change width without a window resize, so forward that layout
-  // change to the embedded read-only viewer.
-  useEffect(() => {
-    window.dispatchEvent(new Event("resize"));
-  }, [props.surfaceWidth]);
 
   const state = fileState.status === "ready" ? fileState.value : undefined;
   const worktree = state?.worktrees.find(
@@ -228,20 +214,11 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
     });
   };
 
-  const surfaceStyle = {
-    "--uwh-resource-surface-left":
-      props.surfaceLeft === null ? undefined : `${props.surfaceLeft}px`,
-    "--uwh-resource-surface-width": `${props.surfaceWidth}px`,
-  } as CSSProperties & {
-    "--uwh-resource-surface-left": string | undefined;
-    "--uwh-resource-surface-width": string;
-  };
-
   const reviewable = worktree !== undefined && worktree.capabilities.review;
   const treeOpen = compactNavigation ? treeOverlayOpen : !treeCollapsed;
 
   return (
-    <section ref={surfaceRef} className={surfaceCss.surface} style={surfaceStyle} aria-label={props.target.name}>
+    <section ref={surfaceRef} className={surfaceCss.surface} aria-label={props.target.name}>
       <WorktreeReviewHeader
         worktree={worktree}
         spaceNames={[...new Set([
@@ -250,8 +227,6 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
         ])]}
         fallbackName={props.target.name}
         t={props.t}
-        onClose={props.onClose}
-        headerAction={props.headerAction}
         onActionSettled={() => setMutationVersion((value) => value + 1)}
       />
       <div className={surfaceCss.content}>
@@ -276,7 +251,7 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
             {props.t("worktree.noDocumentChanges")}
           </div>
         ) : (
-          <div className={css.changes}>
+          <div className={css.changes} onKeyDown={event => { if (event.key === "Escape") setTreeOverlayOpen(false); }}>
             <div className={css.changesHeader}>
               <Button
                 variant="ghost"
@@ -298,19 +273,21 @@ export function WorkspaceWorktreeViewer(props: WorkspaceWorktreeViewerProps): Re
               </Button>
               <h2 className={css.changesTitle}>{props.t("worktree.changes")}</h2>
             </div>
-            <DialogRoot modal={false} open={compactNavigation && treeOverlayOpen} onOpenChange={setTreeOverlayOpen}>
-              <DialogContent closeLabel={props.t("dock.close")} className={css.treeDialog}
-                backdropProps={{ style: drawerBounds, className: css.treeBackdrop }}
-                style={{ ...drawerBounds, width: Math.min(340, Number(drawerBounds.width ?? 340)) }}>
-                <DialogHeader><DialogTitle>{props.t("worktree.path")}</DialogTitle></DialogHeader>
-                <WorktreePathTree
-                  spaces={pathTree} loadingUnits={loadingUnits} unavailableUnits={unavailableUnits}
-                  unitTypeOf={unitTypeOf} unitKindOf={unitKindOf} locatedUnitId={locatedUnitId}
-                  onLocate={(unitId) => { locateUnit(unitId); setTreeOverlayOpen(false); }} t={props.t}
-                />
-              </DialogContent>
-            </DialogRoot>
             <div className={css.changesBody} data-tree-collapsed={compactNavigation || treeCollapsed || undefined}>
+              {compactNavigation && treeOverlayOpen ? (
+                <div className={css.treeOverlay}>
+                  <button className={css.treeBackdrop} aria-label={props.t("worktree.collapsePath")}
+                    onClick={() => setTreeOverlayOpen(false)} />
+                  <aside className={css.treeDrawer} aria-label={props.t("worktree.path")}
+                    onKeyDown={event => { if (event.key === "Escape") setTreeOverlayOpen(false); }}>
+                    <WorktreePathTree
+                      spaces={pathTree} loadingUnits={loadingUnits} unavailableUnits={unavailableUnits}
+                      unitTypeOf={unitTypeOf} unitKindOf={unitKindOf} locatedUnitId={locatedUnitId}
+                      onLocate={(unitId) => { locateUnit(unitId); setTreeOverlayOpen(false); }} t={props.t}
+                    />
+                  </aside>
+                </div>
+              ) : null}
               <div hidden={compactNavigation || treeCollapsed} className={css.treePane}>
                 <WorktreePathTree
                   spaces={pathTree}

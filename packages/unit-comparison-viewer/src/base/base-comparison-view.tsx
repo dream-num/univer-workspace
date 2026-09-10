@@ -18,7 +18,7 @@ import {
   type BaseDiffField,
   type BaseDiffRecord,
   type BaseTableDiff,
-} from "./base-table-diff";
+} from "./base-table-diff.js";
 import {
   baseTableIdOfDiffItem,
   filterBaseTableDiffItems,
@@ -27,10 +27,10 @@ import {
 } from "../shared/structural-diff.js";
 import { cn } from "../ui/cn.js";
 import { useUnitComparisonViewerMessages } from "../i18n/messages.js";
-import { ComparisonPageTabs } from "../shared/scope-tabs";
-import { shouldClearDiffSidebarSelection } from "../shared/sidebar-selection";
-import { useEnsureSelectedDiffVisible } from "../shared/use-ensure-selected-diff-visible";
-import { structuralDiffItemLabel } from "../shared/structural-diff-item-label";
+import { ComparisonPageTabs } from "../shared/scope-tabs.js";
+import { shouldClearDiffSidebarSelection } from "../shared/sidebar-selection.js";
+import { useEnsureSelectedDiffVisible } from "../shared/use-ensure-selected-diff-visible.js";
+import { structuralDiffItemLabel } from "../shared/structural-diff-item-label.js";
 
 export function BaseTableDiffViewer(input: {
   readonly fidelity: "history" | "snapshot";
@@ -78,8 +78,8 @@ export function BaseTableDiffViewer(input: {
   };
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto bg-muted/30 p-2">
-      <div className="grid h-full min-h-[420px] grid-cols-[240px_minmax(720px,1fr)] overflow-hidden rounded-xl border border-border bg-border shadow-[0_12px_32px_rgb(15_23_42/0.08),0_1px_2px_rgb(15_23_42/0.06)] max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-1">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/30 p-2">
+      <div className="grid h-full min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-border shadow-[0_12px_32px_rgb(15_23_42/0.08),0_1px_2px_rgb(15_23_42/0.06)] max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-1">
         <BaseDiffSidebar
           fidelity={input.fidelity}
           items={scopedItems}
@@ -88,7 +88,7 @@ export function BaseTableDiffViewer(input: {
           onClear={() => setSelectedItemId(undefined)}
           onSelect={selectItem}
         />
-        <div className="grid min-h-0 grid-rows-[minmax(0,1fr)] bg-card">
+        <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] bg-card">
           <BaseDiffPanes
             activeTable={activeTable}
             activeTableId={activeTable?.id ?? null}
@@ -496,7 +496,7 @@ function BaseDiffSidebar(input: {
   const sidebarRef = useEnsureSelectedDiffVisible<HTMLElement>(input.selectedItemId);
   return (
     <aside
-      className="min-h-0 overflow-auto border-r bg-card p-3 max-[1023px]:hidden"
+      className="min-h-0 overflow-auto overscroll-contain border-r bg-card p-3 max-[1023px]:hidden"
       ref={sidebarRef}
       onClick={(event) => {
         if (shouldClearDiffSidebarSelection(event.target)) input.onClear();

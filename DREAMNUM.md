@@ -24,7 +24,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - The private Browser reference-provider policy under `packages/reference-provider`. It is an internal module,
   not a separately provided application or a cross-repository SDK contract.
 - The private read-only Unit comparison UI under `packages/unit-comparison-viewer`, including decoded-UnitData
-  rendering and its host-injected Univer runtime boundary. Until an application-level shared component home is
+  rendering and its host-injected Univer runtime boundary. Workspace Browser and Workspace Agent consume
+  the same repository source in separate React/Univer peer contexts; Agent bundles its copy into its browser artifact. Until an application-level shared component home is
   available, changes remain synchronized with the copies in `dream-num/univer-cli` and the DSH plugin.
 
 ## Provides
@@ -36,6 +37,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, with browser-approved
   passwordless CLI session handoff for password and external-identity users. Contract:
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli.yml).
+
+- **Univer Workspace Agent** — the local browser application for conversations, document references,
+  and agent Worktree review, composed from published DSH packages. Contract: [Agent README](apps/agent/README.md).
 
 ## Depends on
 
@@ -90,7 +94,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 Update this file in the same change when any of these facts change:
 
 - repository responsibilities or ownership boundaries;
-- either of the two externally provided applications or their contracts;
+- externally provided applications or their contracts;
 - outgoing cross-repository dependencies;
 - public APIs, protocols, events, images, artifacts, or deployment handoff;
 - persistence layout, protected data classification, or credential handling.

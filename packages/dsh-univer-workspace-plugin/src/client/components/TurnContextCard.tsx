@@ -1,74 +1,20 @@
-/**
- * In-message Turn-context card. One `wt:<id>` Turn projection renders as one
- * Worktree turn card (header + per-Unit accordion over THIS Turn's Units);
- * an independent trunk `res:<id>` projection renders as one Resource turn
- * card. The embedded Viewer reuses the shared kernel
- * (`PanelViewer` → `ViewerMount`) without the lifecycle bar; lifecycle actions
- * live in the Worktree header and are driven only by server capabilities.
- * All Turn-membership decisions are presentation projections computed in
- * `turn-context-card-model.ts`; the domain Turn log is never rewritten.
- * @module dsh-univer-workspace-plugin/client/components/TurnContextCard
- */
-
+/** Compact Turn summaries; all document previews belong to the native Sidecar. */
 import * as React from "react";
-import {
-  Badge,
-  BasesMultiIcon,
-  BoardsMultiIcon,
-  Button,
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  ConfirmDialog,
-  DocsMultiIcon,
-  ExternalLinkIcon,
-  FileIcon,
-  PencilIcon,
-  PlusIcon,
-  RefreshIcon,
-  Segmented,
-  SendIcon,
-  SheetsMultiIcon,
-  SlidesMultiIcon,
-  TrashIcon,
-  type SegmentedOption,
-  type WorkspaceIconComponent,
-} from "@univerjs/univer-workspace-ui";
-import type {
-  DocumentFileState,
-  DocumentWorktreeState,
-  WorktreeAction,
-  WorktreeUnitView,
-} from "../../shared/state.ts";
+import { Badge, BasesMultiIcon, BoardsMultiIcon,  DocsMultiIcon,
+  ExternalLinkIcon, FileIcon, PencilIcon, PlusIcon, SheetsMultiIcon,
+  SlidesMultiIcon, TrashIcon, type WorkspaceIconComponent } from "@univerjs/univer-workspace-ui";
+import type { DocumentFileState } from "../../shared/state.ts";
 import type { UniverTurnOperation } from "../conversation/univer-turn-definition.ts";
-import { postWorktreeAction } from "../api/univer-api.ts";
-import type { UniverLocaleKey } from "../locales.ts";
 import type { WorkspaceNavigationStore } from "../navigation/workspace-navigation.ts";
-import { PanelViewer, type ViewerRuntimeProps, type ViewerTarget } from "./review-panel.tsx";
-import {
-  actionDialogCopy,
-  activeViewerMode,
-  canViewMergePreview,
-  canViewTrunk,
-  defaultExpandedUnits,
-  formatOptionalDateTime,
-  hasUnitMergeProblem,
-  mergeResultLabel,
-  mergeResultVariant,
-  resolveTurnViewer,
-  selectTurnUnits,
-  statusLabel,
-  statusVariant,
-  unitChangeLabel,
-  unitTypeLabel,
-  viewerKey,
-  viewerUnitTypeOf,
-  type TurnCardStatus,
-  type TurnViewMode,
-} from "./turn-context-card-model.ts";
-import { useUnitLocations, type UnitLocationMap } from "./worktree-review/use-unit-locations.ts";
-import css from "./TurnContextCard.module.scss";
+import type { ViewerRuntimeProps } from "./review-panel.tsx";
+import { hasUnitMergeProblem, mergeResultLabel,
+  mergeResultVariant, selectTurnUnits, statusLabel, statusVariant, unitChangeLabel,
+  type TurnCardStatus } from "./turn-context-card-model.ts";
+import { useUnitLocations } from "./worktree-review/use-unit-locations.ts";
 import { WorktreeBranchIcon } from "./worktree-review/WorktreeBranchIcon.tsx";
+import { WorktreeMetadata } from "./worktree-review/WorktreeMetadata.tsx";
+import { WorktreeActions } from "./worktree-review/WorktreeActions.tsx";
+import css from "./TurnContextCard.module.scss";
 
 export interface TurnContextCardProps extends ViewerRuntimeProps {
   readonly docKey: string;
@@ -82,516 +28,91 @@ export interface TurnContextCardProps extends ViewerRuntimeProps {
   readonly state: DocumentFileState | undefined;
   readonly stateError?: string | undefined;
   readonly historical: boolean;
-  /** The first Worktree card in this Turn starts expanded; others collapse. */
-  readonly initiallyExpanded: boolean;
   readonly navigation: WorkspaceNavigationStore;
 }
 
-/** Dispatch one Turn projection to its Worktree or trunk Resource card. */
 export function TurnContextCard(props: TurnContextCardProps): React.ReactElement {
-  if (props.worktreeId !== null) {
-    return <WorktreeTurnCard {...props} worktreeId={props.worktreeId} />;
-  }
-  return <ResourceTurnCard {...props} />;
+  return props.worktreeId === null ? <ResourceTurnCard {...props} />
+    : <WorktreeTurnCard {...props} worktreeId={props.worktreeId} />;
 }
 
-function WorktreeTurnCard(
-  props: TurnContextCardProps & { readonly worktreeId: string },
-): React.ReactElement {
-  const [collapsed, setCollapsed] = React.useState(!props.initiallyExpanded);
-  // null = the user has not toggled yet; derive the default expanded Unit from
-  // the live state so late-arriving polls still expand the relevant Unit once.
-  const [expandedIds, setExpandedIds] = React.useState<readonly string[] | null>(null);
-  const [viewByUnitId, setViewByUnitId] = React.useState<Readonly<Record<string, TurnViewMode>>>(
-    {},
-  );
-  const wasHistorical = React.useRef(props.historical);
-
-  React.useEffect(() => {
-    if (!wasHistorical.current && props.historical) setCollapsed(true);
-    wasHistorical.current = props.historical;
-  }, [props.historical]);
-
-  const worktree = props.state?.worktrees.find((entry) => entry.worktreeId === props.worktreeId);
-  const status: TurnCardStatus =
-    props.state === undefined
-      ? props.stateError === undefined
-        ? "loading"
-        : "unavailable"
-      : (worktree?.status ?? "unavailable");
-  // Only the Units this Turn actually touched are this card's review surface;
-  // worktree.unitCount describes the whole Worktree and must not pose as the
-  // per-Turn count.
-  const turnUnits = worktree === undefined ? [] : selectTurnUnits(worktree.units, props.operations);
-  const locations = useUnitLocations(collapsed ? [] : turnUnits, 0);
-  const expandedUnitIds =
-    expandedIds ?? defaultExpandedUnits(turnUnits, props.preferredUnitId, props.historical);
-  const toggleUnit = (unitId: string): void => {
-    setExpandedIds(
-      expandedUnitIds.includes(unitId)
-        ? expandedUnitIds.filter((id) => id !== unitId)
-        : [...expandedUnitIds, unitId],
-    );
-  };
-
+function WorktreeTurnCard(props: TurnContextCardProps & { worktreeId: string }): React.ReactElement {
+  const worktree = props.state?.worktrees.find(item => item.worktreeId === props.worktreeId);
+  const status: TurnCardStatus = worktree?.status ?? (props.stateError ? "unavailable" : "loading");
+  const units = worktree ? selectTurnUnits(worktree.units, props.operations) : [];
+  const locations = useUnitLocations(worktree?.units ?? [], 0);
   const title = worktree?.name ?? props.label ?? props.t("card.title");
-  const updatedAt = worktree === undefined ? null : formatOptionalDateTime(worktree.updatedAt);
-  const metaParts: string[] = [];
-  if (worktree !== undefined) {
-    if (worktree.kind === "team" && worktree.teamSpace !== null)
-      metaParts.push(worktree.teamSpace.name);
-    metaParts.push(worktree.creator.displayName);
-    if (updatedAt !== null) metaParts.push(updatedAt);
-  }
-
-  // The middle Workspace surface opens the whole Worktree; the in-card preview
-  // keeps its own expansion state and is never collapsed by this action.
-  const canOpenMiddle =
-    props.state !== undefined && worktree !== undefined && worktree.name.trim() !== "";
-  const openMiddle = (): void => {
-    if (!canOpenMiddle || props.state === undefined || worktree === undefined) return;
-    props.navigation.dispatch({
-      type: "open-content",
-      contentSurface: {
-        kind: "worktree",
-        workspaceOrigin: props.state.workspaceOrigin,
-        worktreeId: props.worktreeId,
-        name: worktree.name,
-        unitId: null,
-      },
-    });
+  const open = (unitId: string | null) => {
+    if (!props.state || !worktree?.capabilities.review) return;
+    props.navigation.dispatch({ type: "open-content", contentSurface: {
+      kind: "worktree", workspaceOrigin: props.state.workspaceOrigin,
+      worktreeId: worktree.worktreeId, name: worktree.name, unitId,
+    } });
   };
+  return <article className={css.card} data-turn-context-card data-worktree-id={props.worktreeId}
+    data-status={status} aria-label={title}>
+    <header className={css.header}>
+      <div className={css.titleBlock}>
+        <div className={css.titleRow}>
+          <WorktreeBranchIcon status={status} />
+          <Badge variant={statusVariant(status)}>{statusLabel(status, props.t)}</Badge>
+          <button className={css.titleLink} disabled={!worktree?.capabilities.review} onClick={() => open(null)}>{title}</button>
+        </div>
 
-  return (
-    <article
-      className={css.card}
-      data-turn-context-card=""
-      data-worktree-id={props.worktreeId}
-      data-status={status}
-      aria-label={title}
-    >
-      <div className={css.ribbon}>
-        <Badge variant="outline">{props.t("turn.ribbon")}</Badge>
       </div>
-      <header className={css.header}>
-        <div className={css.titleBlock}>
-          <div className={css.titleRow}>
-            <WorktreeBranchIcon status={status} />
-            <h3 className={css.title}>{title}</h3>
-            <Badge variant={statusVariant(status)}>{statusLabel(status, props.t)}</Badge>
-          </div>
-          {metaParts.length > 0 ? <p className={css.meta}>{metaParts.join(" · ")}</p> : null}
-          {worktree !== undefined && worktree.summary !== null && worktree.summary !== "" ? (
-            <p className={css.summary}>{worktree.summary}</p>
-          ) : null}
-        </div>
-        <div className={css.actions}>
-          {worktree === undefined ? null : <WorktreeActions worktree={worktree} t={props.t} />}
-          <Button variant="ghost" size="sm" disabled={!canOpenMiddle} onClick={openMiddle}>
-            <ExternalLinkIcon />
-            {props.t("task.openMiddle")}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-expanded={!collapsed}
-            aria-label={props.t(collapsed ? "dock.expand" : "dock.fold")}
-            title={props.t(collapsed ? "dock.expand" : "dock.fold")}
-            onClick={() => setCollapsed((value) => !value)}
-          >
-            {collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
-          </Button>
-        </div>
-      </header>
-      {collapsed ? null : (
-        <div className={css.body}>
-          {renderWorktreeBody({
-            props,
-            worktree,
-            turnUnits,
-            locations,
-            expandedUnitIds,
-            viewByUnitId,
-            toggleUnit,
-            setViewByUnitId,
-          })}
-        </div>
-      )}
-    </article>
-  );
+      {worktree ? <WorktreeActions worktree={worktree} t={props.t} /> : null}
+      <div className={css.metadata}>
+        {worktree ? <WorktreeMetadata worktree={worktree}
+          spaceNames={[...new Set([
+            ...(worktree.teamSpace ? [worktree.teamSpace.name] : []),
+            ...Object.values(locations).flatMap(location => location.status === "resolved" && !location.shared ? [location.spaceName] : []),
+          ])]} emptyDescription={props.t("worktree.noDescription")} /> : null}
+      </div>
+    </header>
+    {props.stateError ? <div className={css.notice} role="alert">{props.stateError}</div> : !worktree ?
+      <div className={css.notice} role="status">{props.t("dock.loading")}</div> :
+      !worktree.capabilities.review ? <div className={css.notice}>{props.t("turn.noReview")}</div> :
+      units.length === 0 ? <div className={css.notice}>{props.t("turn.noUnits")}</div> :
+      <ul className={css.accordionList}>
+        {units.map(unit => {
+          const location = locations[unit.unitId];
+          const directory = location?.status === "resolved" && !location.shared ? location.path.join(" / ") : "";
+          const ChangeIcon = UNIT_CHANGE_ICONS[unit.kind];
+          return <li key={unit.unitId} className={css.accordionItem} data-unit-id={unit.unitId}>
+            <button className={css.accordionHeader} data-deleted={unit.kind === "deleted" || undefined}
+              onClick={() => open(unit.unitId)} title={[directory, unit.name].filter(Boolean).join(" / ")}>
+              <UnitTypeIcon type={unit.unitType} />
+              <span className={css.unitName}>{unit.name}</span>
+              {directory ? <span className={css.directoryPath}>{directory}</span> : null}
+              <span className={css.unitChange}>{ChangeIcon ? <ChangeIcon /> : null}{unitChangeLabel(unit.kind, props.t)}</span>
+              {hasUnitMergeProblem(unit.mergeResult) ? <Badge variant={mergeResultVariant(unit.mergeResult)}>
+                {mergeResultLabel(unit.mergeResult, props.t)}</Badge> : null}
+              <ExternalLinkIcon className={css.unitIcon} />
+            </button>
+          </li>;
+        })}
+      </ul>}
+  </article>;
 }
 
-/** Body gate: loading / error / unavailable / no review permission / no Units. */
-function renderWorktreeBody(input: {
-  readonly props: TurnContextCardProps & { readonly worktreeId: string };
-  readonly worktree: DocumentWorktreeState | undefined;
-  readonly turnUnits: readonly WorktreeUnitView[];
-  readonly locations: UnitLocationMap;
-  readonly expandedUnitIds: readonly string[];
-  readonly viewByUnitId: Readonly<Record<string, TurnViewMode>>;
-  readonly toggleUnit: (unitId: string) => void;
-  readonly setViewByUnitId: React.Dispatch<
-    React.SetStateAction<Readonly<Record<string, TurnViewMode>>>
-  >;
-}): React.ReactNode {
-  const { props, worktree, turnUnits } = input;
-  const workspaceOrigin = props.state?.workspaceOrigin;
-  if (workspaceOrigin === undefined) {
-    return (
-      <div className={css.notice} role={props.stateError === undefined ? "status" : "alert"}>
-        {props.stateError === undefined
-          ? props.t("dock.loading")
-          : `${props.t("window.loadFailed")}: ${props.stateError}`}
-      </div>
-    );
-  }
-  if (worktree === undefined) {
-    return (
-      <div className={css.notice} role="status">
-        {props.t("dock.unavailable")}
-      </div>
-    );
-  }
-  if (!worktree.capabilities.review) {
-    return (
-      <div className={css.notice} role="status">
-        {props.t("turn.noReview")}
-      </div>
-    );
-  }
-  if (turnUnits.length === 0) {
-    return (
-      <div className={css.notice} role="status">
-        {props.t("turn.noUnits")}
-      </div>
-    );
-  }
-  return (
-    <ul className={css.accordionList}>
-      {turnUnits.map((unit) => (
-        <TurnUnitItem
-          key={unit.unitId}
-          worktree={worktree}
-          unit={unit}
-          location={input.locations[unit.unitId]}
-          onReview={() =>
-            props.navigation.dispatch({
-              type: "open-content",
-              contentSurface: {
-                kind: "worktree",
-                workspaceOrigin,
-                worktreeId: worktree.worktreeId,
-                name: worktree.name,
-                unitId: unit.unitId,
-              },
-            })
-          }
-          expanded={input.expandedUnitIds.includes(unit.unitId)}
-          view={input.viewByUnitId[unit.unitId] ?? "agent"}
-          runtime={props}
-          onToggle={() => input.toggleUnit(unit.unitId)}
-          onViewChange={(mode) =>
-            input.setViewByUnitId((current) => ({ ...current, [unit.unitId]: mode }))
-          }
-        />
-      ))}
-    </ul>
-  );
-}
-
-/** One Unit accordion item; mounts the real Viewer only while expanded. */
-function TurnUnitItem(props: {
-  readonly worktree: DocumentWorktreeState;
-  readonly unit: WorktreeUnitView;
-  readonly location: UnitLocationMap[string] | undefined;
-  readonly onReview: () => void;
-  readonly expanded: boolean;
-  readonly view: TurnViewMode;
-  readonly runtime: ViewerRuntimeProps;
-  readonly onToggle: () => void;
-  readonly onViewChange: (mode: TurnViewMode) => void;
-}): React.ReactElement {
-  const { worktree, unit } = props;
-  const activeView = activeViewerMode(props.view, worktree, unit);
-  const previewable = activeView !== "agent" || unit.kind !== "deleted";
-  const viewer =
-    props.expanded && previewable ? resolveTurnViewer(worktree, unit, activeView) : undefined;
-
-  const directory = props.location?.status === "resolved" && !props.location.shared
-    ? props.location.path.join(" / ") : "";
-  const ChangeIcon = UNIT_CHANGE_ICONS[unit.kind];
-  const mergeResult = unit.mergeResult;
-  const viewOptions: SegmentedOption<TurnViewMode>[] = [
-    { value: "trunk", label: props.runtime.t("turn.view.trunk"), disabled: !canViewTrunk(unit) },
-    { value: "agent", label: props.runtime.t("turn.view.agent") },
-    ...(canViewMergePreview(worktree)
-      ? [{ value: "preview" as const, label: props.runtime.t("turn.view.preview") }]
-      : []),
-  ];
-
-  return (
-    <li className={css.accordionItem} data-unit-id={unit.unitId}>
-      <div className={css.documentRow}>
-        <div
-          className={css.accordionHeader}
-          data-deleted={unit.kind === "deleted" || undefined}
-        >
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-expanded={props.expanded}
-            aria-label={`${props.runtime.t(props.expanded ? "dock.fold" : "dock.expand")}: ${unit.name}`}
-            title={props.runtime.t(props.expanded ? "dock.fold" : "dock.expand")}
-            onClick={props.onToggle}
-          >
-            {props.expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-          </Button>
-          <UnitTypeIcon type={unit.unitType} />
-          <span className={css.unitName} title={unit.name}>{unit.name}</span>
-          {directory ? <span className={css.directoryPath} title={directory}>{directory}</span> : null}
-          <span className={css.unitChange}>
-            {ChangeIcon === undefined ? null : <ChangeIcon aria-hidden="true" />}
-            {unitChangeLabel(unit.kind, props.runtime.t)}
-          </span>
-          {hasUnitMergeProblem(mergeResult) ? (
-            <Badge variant={mergeResultVariant(mergeResult)}>
-              {mergeResultLabel(mergeResult, props.runtime.t)}
-            </Badge>
-          ) : null}
-        </div>
-        <Button variant="secondary" size="sm" onClick={props.onReview}>
-          {props.runtime.t("review.openDocument")}
-        </Button>
-      </div>
-      {props.expanded ? (
-        <div className={css.accordionBody}>
-          <div className={css.unitHeader}>
-            <div className={css.controls}>
-              <Segmented<TurnViewMode>
-                aria-label={props.runtime.t("viewer.readOnlyPreview")}
-                size="sm"
-                value={activeView}
-                options={viewOptions}
-                onValueChange={props.onViewChange}
-              />
-            </div>
-          </div>
-          {!previewable ? (
-            <div className={css.deletedEmpty} role="status">
-              <TrashIcon aria-hidden="true" />
-              <span>{props.runtime.t("turn.deletedPreview")}</span>
-            </div>
-          ) : viewer === undefined ? (
-            <div className={css.notice} role="status">
-              {props.runtime.t("dock.unavailable")}
-            </div>
-          ) : (
-            <div className={css.viewerWrap}>
-              <div className={css.viewer} data-view-mode={activeView}>
-                <PanelViewer key={viewerKey(viewer)} viewer={viewer} runtime={props.runtime} />
-              </div>
-            </div>
-          )}
-        </div>
-      ) : null}
-    </li>
-  );
-}
-
-/** Capability-driven lifecycle actions on the Worktree header. */
-function WorktreeActions(props: {
-  readonly worktree: DocumentWorktreeState;
-  readonly t: (key: UniverLocaleKey) => string;
-}): React.ReactElement {
-  const [pending, setPending] = React.useState<WorktreeAction | null>(null);
-  const [busy, setBusy] = React.useState<WorktreeAction | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-  const capabilities = props.worktree.capabilities;
-  const dialog = pending === null ? null : actionDialogCopy(pending, props.t);
-
-  const confirm = (): void => {
-    const action = pending;
-    if (action === null || busy !== null) return;
-    setBusy(action);
-    setError(null);
-    // The existing state polling converges the card after the transition.
-    void postWorktreeAction(props.worktree.worktreeId, action)
-      .catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : String(reason));
-      })
-      .finally(() => setBusy(null));
-  };
-
-  return (
-    <>
-      {capabilities.discard ? (
-        <Button
-          variant="destructive-ghost"
-          size="sm"
-          disabled={busy !== null}
-          onClick={() => setPending("discard")}
-        >
-          <TrashIcon />
-          {props.t("viewer.discard")}
-        </Button>
-      ) : null}
-      {capabilities.reopen ? (
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={busy !== null}
-          onClick={() => setPending("reopen")}
-        >
-          <RefreshIcon />
-          {props.t("turn.reopen")}
-        </Button>
-      ) : null}
-      {capabilities.markReady ? (
-        <Button size="sm" disabled={busy !== null} onClick={() => setPending("ready")}>
-          <SendIcon />
-          {props.t("viewer.submitForReview")}
-        </Button>
-      ) : null}
-      {capabilities.merge ? (
-        <Button variant="success" size="sm" disabled={busy !== null} onClick={() => setPending("merge")}>
-          <CheckIcon />
-          {props.t("viewer.mergeToCurrent")}
-        </Button>
-      ) : null}
-      {error === null ? null : (
-        <span className={css.actionError} role="status">
-          {error}
-        </span>
-      )}
-      {dialog === null ? null : (
-        <ConfirmDialog
-          open={pending !== null}
-          onOpenChange={(open) => {
-            if (!open) setPending(null);
-          }}
-          title={dialog.title}
-          description={dialog.description}
-          confirmText={dialog.confirmText}
-          cancelText={props.t("viewer.cancel")}
-          danger={dialog.danger}
-          disabled={busy !== null}
-          onConfirm={confirm}
-        />
-      )}
-    </>
-  );
-}
-
-/** Turn card for an independent trunk Resource projection. */
 function ResourceTurnCard(props: TurnContextCardProps): React.ReactElement {
-  const [open, setOpen] = React.useState(!props.historical);
-  const wasHistorical = React.useRef(props.historical);
-
-  React.useEffect(() => {
-    if (!wasHistorical.current && props.historical) setOpen(false);
-    wasHistorical.current = props.historical;
-  }, [props.historical]);
-
-  const status: TurnCardStatus =
-    props.state === undefined
-      ? props.stateError === undefined
-        ? "loading"
-        : "unavailable"
-      : "trunk";
-  const target = props.state?.viewerTarget ?? null;
-  const unitId = props.preferredUnitId ?? target?.unitId ?? null;
-  const viewer: ViewerTarget | undefined =
-    props.state === undefined || target === null || unitId === null
-      ? undefined
-      : {
-          unitId,
-          unitType: viewerUnitTypeOf(target.unitType !== "" ? target.unitType : props.unitType),
-          editable: !target.readOnly,
-          scope: { kind: "trunk" },
-        };
   const title = props.label ?? props.t("card.title");
-
-  // The middle Workspace surface opens this Resource; the in-card preview keeps
-  // its own expansion state and is never collapsed by this action.
-  const canOpenMiddle = props.state !== undefined && props.resourceId !== null;
-  const openMiddle = (): void => {
-    if (props.state === undefined || props.resourceId === null) return;
-    const resourceId = props.resourceId;
-    props.navigation.dispatch({
-      type: "open-content",
-      contentSurface: {
-        kind: "resource",
-        workspaceOrigin: props.state.workspaceOrigin,
-        resourceId,
-        docKey: `res:${resourceId}`,
-        name: title,
-        unitType: props.unitType ?? props.state.viewerTarget?.unitType ?? null,
-      },
-    });
+  const resourceId = props.resourceId ?? (props.docKey.startsWith("res:") ? props.docKey.slice(4) : null);
+  const open = () => {
+    if (!props.state || !resourceId) return;
+    props.navigation.dispatch({ type: "open-content", contentSurface: {
+      kind: "resource", workspaceOrigin: props.state.workspaceOrigin, resourceId,
+      docKey: `res:${resourceId}`, name: title,
+      unitType: props.unitType ?? props.state.viewerTarget?.unitType ?? null,
+    } });
   };
-
-  return (
-    <article
-      className={css.card}
-      data-turn-context-card=""
-      {...(props.resourceId === null ? {} : { "data-resource-id": props.resourceId })}
-      data-status={status}
-      aria-label={title}
-    >
-      <div className={css.ribbon}>
-        <Badge variant="outline">{props.t("turn.ribbon")}</Badge>
-      </div>
-      <header className={css.header}>
-        <div className={css.titleBlock}>
-          <div className={css.titleRow}>
-            <UnitTypeIcon type={viewer?.unitType ?? props.unitType ?? ""} />
-            <h3 className={css.title}>{title}</h3>
-            <Badge variant="outline">{props.t("dock.currentVersion")}</Badge>
-          </div>
-        </div>
-        <div className={css.actions}>
-          <Button variant="ghost" size="sm" disabled={!canOpenMiddle} onClick={openMiddle}>
-            <ExternalLinkIcon />
-            {props.t("task.openMiddle")}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-expanded={open}
-            aria-label={props.t(open ? "dock.fold" : "dock.expand")}
-            title={props.t(open ? "dock.fold" : "dock.expand")}
-            onClick={() => setOpen((value) => !value)}
-          >
-            {open ? <ChevronDownIcon /> : <ChevronRightIcon />}
-          </Button>
-        </div>
-      </header>
-      {open ? (
-        <div className={css.body}>
-          {props.state === undefined ? (
-            <div className={css.notice} role={props.stateError === undefined ? "status" : "alert"}>
-              {props.stateError === undefined
-                ? props.t("dock.loading")
-                : `${props.t("window.loadFailed")}: ${props.stateError}`}
-            </div>
-          ) : viewer === undefined ? (
-            <div className={css.notice} role="status">
-              {props.t("dock.unavailable")}
-            </div>
-          ) : (
-            <div className={css.viewerWrap}>
-              <div className={css.viewer} data-view-mode="trunk">
-                <PanelViewer key={viewerKey(viewer)} viewer={viewer} runtime={props} />
-              </div>
-            </div>
-          )}
-        </div>
-      ) : null}
-    </article>
-  );
+  return <article className={css.card} data-turn-context-card aria-label={title}>
+    <button className={css.accordionHeader} onClick={open} disabled={!props.state || !resourceId}>
+      <UnitTypeIcon type={props.unitType ?? ""} /><span className={css.unitName}>{title}</span><ExternalLinkIcon />
+    </button>
+    {props.stateError ? <div role="alert" className={css.notice}>{props.stateError}</div> : null}
+  </article>;
 }
-
-/* ————— Local presentation helpers (icons) ————— */
 
 const UNIT_TYPE_ICONS: Readonly<Record<string, WorkspaceIconComponent>> = {
   sheet: SheetsMultiIcon,
