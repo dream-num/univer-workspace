@@ -77,7 +77,13 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Build signed macOS installers
         if: ${{ !inputs.dry_run && runner.os == 'macOS' }}
-        run: pnpm --dir apps/agent/desktop package
+        shell: bash
+        run: |
+          # @electron/osx-sign 1.3.3 probes files concurrently. The bundled DSH
+          # graph exceeds macOS's default descriptor limit. Remove this when
+          # the signer bounds its traversal concurrency.
+          ulimit -n 65536
+          pnpm --dir apps/agent/desktop package
         env:
           CSC_LINK: ${{ secrets.GO_BUILD_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.GO_P12_PASSWORD }}
