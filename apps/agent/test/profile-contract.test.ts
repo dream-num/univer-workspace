@@ -1,5 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -46,7 +47,7 @@ describe("Harness profile command-line contract", () => {
     expect(entry).toContain("ctx.webServer.register(route)");
 
     for (const root of compositionSourceRoots) {
-      for (const path of await collectSources(root.pathname)) {
+      for (const path of await collectSources(fileURLToPath(root))) {
         const source = await readFile(path, "utf8");
         expect(source, path).not.toContain(".upgrades");
         expect(source, path).not.toContain(".prefixes");

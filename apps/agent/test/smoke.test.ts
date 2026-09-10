@@ -167,7 +167,7 @@ describe("univer-workspace-harness plugin", () => {
     expect(current.ok).toBe(true);
     if (!current.ok) return;
     await expect(lstat(current.path)).resolves.toMatchObject({ isDirectory: expect.any(Function) });
-    await expect(realpath(legacy.path)).resolves.toBe(current.path);
+    await expect(realpath(legacy.path)).resolves.toBe(await realpath(current.path));
   });
 
   it("runs the Device Authorization start and exchange contract without leaking the token", async () => {

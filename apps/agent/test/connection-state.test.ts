@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, readlink, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import {
@@ -33,7 +34,7 @@ describe("local Workspace connection state", () => {
       origin: "https://workspace-b.example",
     });
 
-    expect(runtimeHomeFor("/data", undefined)).toBe("/data/runtimes/bootstrap");
+    expect(runtimeHomeFor("/data", undefined)).toBe(resolve("/data", "runtimes", "bootstrap"));
     expect(new Set([aliceA, bobA, aliceB]).size).toBe(3);
     expect(aliceA).toContain(connectionIdentityKey("https://workspace.example", "user-1"));
   });
@@ -47,7 +48,8 @@ describe("local Workspace connection state", () => {
       version: 1,
       active: { ...connection, origin: "https://workspace.example" },
     });
-    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    // POSIX mode bits are not Windows ACLs; Windows inherits the user profile ACL.
+    if (process.platform !== "win32") expect((await stat(path)).mode & 0o777).toBe(0o600);
     expect(await readFile(path, "utf8")).not.toContain("/path");
   });
 
@@ -132,7 +134,7 @@ describe("local Workspace connection state", () => {
     const run = async (): Promise<Record<string, unknown>> => {
       await execFileAsync(
         process.execPath,
-        [new URL("../scripts/start-local.mjs", import.meta.url).pathname],
+        [fileURLToPath(new URL("../scripts/start-local.mjs", import.meta.url))],
         {
           env: {
             ...process.env,
@@ -157,13 +159,17 @@ describe("local Workspace connection state", () => {
     expect(await readFile(String(bootstrap.sharedCredentials), "utf8")).toBe(
       "legacy-browser-secret",
     );
-    expect(await readlink(join(String(bootstrap.home), "profiles"))).toBe(profileRoot);
+    expect(await realpath(join(String(bootstrap.home), "profiles"))).toBe(
+      await realpath(profileRoot),
+    );
 
     await writeConnectionState(statePath, connection);
     const connected = await run();
     expect(connected.home).toBe(runtimeHomeFor(dataHome, connection));
     expect(connected.origin).toBe("https://workspace.example");
-    expect(await readlink(join(String(connected.home), "profiles"))).toBe(profileRoot);
+    expect(await realpath(join(String(connected.home), "profiles"))).toBe(
+      await realpath(profileRoot),
+    );
   });
 
   it("keeps the same DSH process when the active connection changes", async () => {
@@ -194,7 +200,7 @@ if (count === 1) {
     await execFileAsync(
       process.execPath,
       [
-        new URL("../scripts/start-local.mjs", import.meta.url).pathname,
+        fileURLToPath(new URL("../scripts/start-local.mjs", import.meta.url)),
         "--port",
         "3999",
         "--trusted-host",

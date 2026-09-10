@@ -44,6 +44,8 @@ run(process.execPath, [
   "--filter",
   "@univerjs/workspace-agent...",
   "--filter",
+  "@univerjs/univer-workspace-client-core...",
+  "--filter",
   "dsh-univer-workspace-plugin...",
   "--filter",
   "dsh-univer-workspace-skin-plugin...",
