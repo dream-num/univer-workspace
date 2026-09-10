@@ -38,12 +38,14 @@ module.exports = {
   },
   afterPack: async (context) => {
     // Seal the actual copied resources: builder filters placeholders such as
-    // .gitkeep, and Windows also signs EXEs during this copy. macOS is sealed
-    // by the custom signing hook after its nested binaries have been signed.
-    if (context.electronPlatformName !== "darwin")
-      await require("./scripts/inventory.cjs").writeInventory(
-        require("node:path").join(context.appOutDir, "resources", "runtime"),
-      );
+    // .gitkeep, and Windows also signs EXEs during this copy. macOS signing
+    // refreshes this again when enabled; unsigned previews still need it here.
+    const resources = context.electronPlatformName === "darwin"
+      ? ["Univer Workspace Agent.app", "Contents", "Resources"]
+      : ["resources"];
+    await require("./scripts/inventory.cjs").writeInventory(
+      require("node:path").join(context.appOutDir, ...resources, "runtime"),
+    );
   },
   // Windows is distributed unsigned until a signing certificate is available.
   forceCodeSigning: official && process.platform === "darwin",
