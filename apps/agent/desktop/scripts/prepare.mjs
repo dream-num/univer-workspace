@@ -62,7 +62,8 @@ for (const name of [
 }
 
 // Verify the official standalone Node download before extracting any bytes.
-const nodeVersion = "24.17.0";
+// Node 24.18 fixes the stream regression that hangs Playwright archive extraction (#63834).
+const nodeVersion = "24.18.0";
 const target = platform === "win32" ? "win" : platform;
 const stem = `node-v${nodeVersion}-${target}-${arch}`;
 const archive = `${stem}.${platform === "win32" ? "zip" : "tar.gz"}`;
