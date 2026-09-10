@@ -54,11 +54,11 @@ export function assertReleaseContext(channel, version, env) {
   }
   if (channel === "latest") {
     if (
-      env.GITHUB_EVENT_NAME !== "push" ||
+      env.GITHUB_EVENT_NAME !== "workflow_dispatch" ||
       env.GITHUB_REF_TYPE !== "tag" ||
       env.GITHUB_REF_NAME !== `v${version}`
     ) {
-      throw new Error(`latest must be triggered by pushing git tag v${version}.`);
+      throw new Error(`latest must be manually dispatched from git tag v${version}.`);
     }
     return;
   }

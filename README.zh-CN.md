@@ -216,8 +216,8 @@ pnpm update:univer-sdk --sdk_version <exact-sdk-version>
 
 CLI 与 Workspace 部署基于同一份源码，但各自独立交付：
 
-- `main` 上的稳定 `vX.Y.Z` tag 会发布 `univer-workspace-cli@X.Y.Z`，并使用 `latest`
-  dist-tag。
+- 在 `main` 包含的稳定 `vX.Y.Z` tag 上手动触发 CLI 发布 workflow，
+  并显式设置 `dry_run=false`，才会发布 `univer-workspace-cli@X.Y.Z`。创建、推送 tag 不触发 CI 或发布。
 - Workspace 使用独立的手动部署 workflow，构建已有稳定 tag，或把精确 commit 标记为
   `sha-<commit>`。推送 release tag 不会部署 Server。
 

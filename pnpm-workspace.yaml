@@ -1,8 +1,11 @@
 packages:
   - apps/*
+  - apps/agent/desktop
   - packages/*
 
 allowBuilds:
+  # electron-builder includes Squirrel tooling; desktop uses NSIS instead.
+  electron-winstaller: false
   "@parcel/watcher": true
   esbuild: true
   protobufjs: true

@@ -29,6 +29,10 @@
     "./runtime-webserver": {
       "types": "./src/runtime-webserver.ts",
       "default": "./lib/runtime-webserver.js"
+    },
+    "./desktop-ready": {
+      "types": "./src/desktop-ready.ts",
+      "default": "./lib/desktop-ready.js"
     }
   },
   "scripts": {
@@ -69,7 +73,8 @@
     "esbuild": "0.27.7",
     "typescript": "5.9.3",
     "vitest": "4.1.10",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "@deepseek-ai/dsh-cmdline": "0.1.5-rc.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.2",
@@ -78,7 +83,8 @@
     "@deepseek-ai/dsh-session-persistence": "0.1.5-rc.1",
     "@deepseek-ai/dsh-settings": "0.1.5-rc.1",
     "@deepseek-ai/dsh-storage-domain": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-workspace": "0.1.5-rc.1"
+    "@deepseek-ai/dsh-workspace": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-cmdline": "0.1.5-rc.1"
   },
   "dsh": {
     "bundle": {

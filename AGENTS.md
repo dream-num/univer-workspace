@@ -112,7 +112,7 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 - `apps/cli/package.json` 的 source version 固定为 `0.0.0`；稳定 CLI 版本只来自 `vX.Y.Z` git tag，
   insiders 版本由 release workflow 的完整 `X.Y.Z-insider.<suffix>` 输入提供，发布过程不得改写 source
   manifest。
-- CLI 只有 `latest`、`insiders` 和 `dev` 三个发布通道。`latest` 只由默认分支上的稳定 tag push
+- CLI 只有 `latest`、`insiders` 和 `dev` 三个发布通道。`latest` 只由手动 CI 在默认分支包含的稳定 tag 上
   触发，`insiders` 只由默认分支手动 CI 触发，`dev` 只允许本地触发。`latest` 和 `insiders`
   发布前必须检查整个 workspace 的单一 SDK baseline；`dev` 明确跳过该检查。
 - CLI package artifact 必须只包含运行所需代码、资源和版本匹配的 Skills，不得依赖当前 checkout。
@@ -123,7 +123,7 @@ pnpm update:sdk --sdk_version <exact-sdk-version>
 - `packages/unit-comparison-viewer` 不拥有数据请求、wire payload 解码或 Univer Runtime 装配；宿主只向其
   传入已解码 UnitData、comparison result 和 Univer factory。
 - 稳定 `vX.Y.Z` tag 在被选择时是 CLI release 与 Workspace deployment 共享的不可变源码坐标；tag push
-  只发布 CLI。部署 workflow 也可以不选 tag，改为手动部署 workflow dispatch 的精确 commit，并使用
+  不触发 CI 或发布；CLI 发布必须单独手动触发 workflow。部署 workflow 也可以不选 tag，改为手动部署 workflow dispatch 的精确 commit，并使用
   `sha-<commit>` image tag。Docker image 和 CLI artifact 的交付时机与执行流程仍然独立。
 - 当前 release workflow 只写 insider-npm；公开 npm Promotion 属于独立后续工作，不得加入该 workflow。
 
@@ -207,3 +207,10 @@ or an already-populated `node_modules` is insufficient evidence. Do not force a
 single React version, add broad overrides, patch installed SDK files, or weaken
 typechecking to mask the mismatch. Keep any remaining workaround version-scoped
 and document its evidence and removal condition.
+
+## PR 标题与 Commit Message
+
+PR 标题与 commit message 遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)，
+使用英文，格式为 `type(scope): description`，其中 scope 可省略。
+常用 type 包括 `feat`、`fix`、`docs`、`refactor`、`test`、`build`、`ci` 和 `chore`。
+不兼容变更使用 `!` 或正文中的 `BREAKING CHANGE:` 标记；合并时的 squash commit 标题也遵循此格式。

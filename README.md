@@ -133,6 +133,10 @@ well as manual setup and usage instructions. It walks through choosing or starti
 your own Workspace service, registering the OAuth callback, configuring model
 credentials, and opening the complete token URL printed by the local launcher.
 
+Desktop Agent packaging and manual CI are described in the
+[desktop guide](apps/agent/desktop/README.md). Downloads use GitHub Releases;
+Agent release tags never trigger automatic publication.
+
 ## Use the Workspace CLI
 
 Install the agent-facing CLI:
@@ -234,8 +238,9 @@ pnpm update:univer-sdk --sdk_version <exact-sdk-version>
 
 The CLI and Workspace deployment are delivered independently from the same source:
 
-- A stable `vX.Y.Z` tag on `main` releases `univer-workspace-cli@X.Y.Z` with the
-  `latest` dist-tag.
+- Manually dispatch the CLI release workflow on a stable `vX.Y.Z` tag contained in
+  `main` and explicitly set `dry_run=false` to publish `univer-workspace-cli@X.Y.Z`.
+  Creating or pushing tags never triggers CI or publication.
 - Workspace deployment is a separate manual workflow. It builds either an existing
   stable tag or an exact commit as `sha-<commit>`. Pushing a release tag does not
   deploy the Server.

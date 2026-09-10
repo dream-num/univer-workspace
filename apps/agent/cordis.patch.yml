@@ -146,3 +146,18 @@
 - id: settings
   config:
     path: !!js process.env.UWH_SHARED_SETTINGS_PATH ?? dshHomePath('settings.yaml')
+
+# The desktop shell receives its process-owned authentication URL over IPC.
+# Web deployments keep their normal printed startup URL.
+- id: web-runtime
+  name: "@deepseek-ai/dsh-web-app"
+  inject: [webStartup]
+  config:
+    openBrowser: !!js ctx.webStartup.openBrowser
+    surfaceContext: true
+    trustedHosts: !!js ctx.webStartup.trustedHosts
+    printUrl: !!js process.env.UWA_DESKTOP !== '1'
+- insert:
+    - id: workspace-desktop-ready
+      name: "@univerjs/workspace-agent/desktop-ready"
+      disabled: !!js process.env.UWA_DESKTOP !== '1'

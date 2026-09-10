@@ -12,7 +12,7 @@ await rm("lib", { recursive: true, force: true });
 await mkdir("lib", { recursive: true });
 
 await build({
-  entryPoints: ["src/index.ts", "src/runtime-webserver.ts"],
+  entryPoints: ["src/index.ts", "src/runtime-webserver.ts", "src/desktop-ready.ts"],
   outdir: "lib",
   bundle: true,
   platform: "node",

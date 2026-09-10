@@ -1,15 +1,11 @@
-name: Release CLI to insider-npm
-run-name: Release CLI to insider-npm ${{ github.event_name == 'push' && github.ref_name || inputs.version }}${{ inputs.dry_run && ' (dry-run)' || '' }}
+name: Build and release CLI (manual)
+run-name: Release CLI to insider-npm ${{ inputs.version }}${{ inputs.dry_run && ' (build only)' || '' }}
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
-      - "!v*-*"
   workflow_dispatch:
     inputs:
       version:
-        description: Exact insiders version in X.Y.Z-insider.<suffix> form
+        description: Exact version (X.Y.Z for latest; X.Y.Z-insider.<suffix> for insiders)
         required: true
         type: string
       dry_run:
@@ -63,18 +59,24 @@ jobs:
           DISPATCH_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="$DISPATCH_VERSION"
+          if [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             CHANNEL="latest"
-            DRY_RUN="false"
+          elif [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-insider\.[0-9A-Za-z.-]+$ ]]; then
+            CHANNEL="insiders"
           else
-            if [[ "$GITHUB_REF_NAME" != "$BASE_BRANCH" ]]; then
-              echo "insiders releases must be dispatched from $BASE_BRANCH, got $GITHUB_REF_NAME." >&2
+            echo "Expected X.Y.Z or X.Y.Z-insider.<suffix>." >&2
+            exit 1
+          fi
+          DRY_RUN="$DISPATCH_DRY_RUN"
+          if [[ "$CHANNEL" == "latest" ]]; then
+            if [[ "$GITHUB_REF_TYPE" != "tag" || "$GITHUB_REF_NAME" != "v$VERSION" ]]; then
+              echo "Select the matching v$VERSION tag as the workflow ref for latest." >&2
               exit 1
             fi
-            VERSION="$DISPATCH_VERSION"
-            CHANNEL="insiders"
-            DRY_RUN="$DISPATCH_DRY_RUN"
+          elif [[ "$CHANNEL" != "insiders" || "$GITHUB_REF_TYPE" != "branch" || "$GITHUB_REF_NAME" != "$BASE_BRANCH" ]]; then
+            echo "insiders releases must be dispatched from $BASE_BRANCH." >&2
+            exit 1
           fi
           {
             echo "version=$VERSION"

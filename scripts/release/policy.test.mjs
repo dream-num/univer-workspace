@@ -49,16 +49,17 @@ test("parses one explicit release mode", () => {
   );
 });
 
-test("gates latest to a matching stable tag push from GitHub Actions", () => {
+test("gates latest to a manual dispatch on a matching stable tag from GitHub Actions", () => {
   const env = {
     BASE_BRANCH: "main",
     CI: "true",
     GITHUB_ACTIONS: "true",
-    GITHUB_EVENT_NAME: "push",
+    GITHUB_EVENT_NAME: "workflow_dispatch",
     GITHUB_REF_NAME: "v0.50.0",
     GITHUB_REF_TYPE: "tag",
   };
   assert.doesNotThrow(() => assertReleaseContext("latest", "0.50.0", env));
+  assert.throws(() => assertReleaseContext("latest", "0.50.0", { ...env, GITHUB_EVENT_NAME: "push" }), /manually dispatched/u);
   assert.throws(
     () => assertReleaseContext("latest", "0.51.0", env),
     /tag v0\.51\.0/u,
