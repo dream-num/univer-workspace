@@ -56,7 +56,42 @@ test("alpha updates stay ordered and graduate to stable without enrolling stable
     policy.releaseFeed(releases[0]),
     "https://github.com/dream-num/univer-workspace/releases/download/agent-v0.1.0-alpha.2/",
   );
-  for (const version of ["v1.0.0", "1.0.0-alpha.01", "1.0.0-beta.1", "1.0.0+build", "1.0.0/evil"]) {
+  for (const version of [
+    "v1.0.0",
+    "1.0.0-alpha.01",
+    "1.0.0-preview.1",
+    "1.0.0+build",
+    "1.0.0/evil",
+  ]) {
     assert.equal(policy.validVersion(version), false);
+  }
+});
+
+test("all release stages accept only forward versions and same-or-later stages", () => {
+  const stages = ["alpha", "beta", "rc", "latest"];
+  const version = (base, stage) => base + (stage === "latest" ? "" : "-" + stage + ".1");
+  for (const [fromIndex, from] of stages.entries()) {
+    for (const [toIndex, to] of stages.entries()) {
+      const current = version("1.0.0", from);
+      const next = version("2.0.0", to);
+      const release = { tag_name: "agent-v" + next, prerelease: to !== "latest" };
+      assert.equal(policy.releaseChannel(next), to);
+      assert.equal(
+        Boolean(policy.selectRelease([release], current)),
+        toIndex >= fromIndex,
+        from + " -> " + to,
+      );
+      assert.equal(
+        policy.selectRelease([{ ...release, tag_name: "agent-v" + version("0.9.0", to) }], current),
+        undefined,
+      );
+    }
+  }
+  const chain = stages.map((stage) => ({
+    tag_name: "agent-v" + version("1.0.0", stage),
+    prerelease: stage !== "latest",
+  }));
+  for (let i = 0; i < chain.length - 1; i++) {
+    assert.equal(policy.selectRelease([chain[i + 1]], version("1.0.0", stages[i])), chain[i + 1]);
   }
 });

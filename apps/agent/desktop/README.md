@@ -8,7 +8,7 @@ with npm, outside the pnpm workspace and its React dependency graph.
 ## Downloads and updates
 
 The initial download entry is [GitHub Releases](https://github.com/dream-num/univer-workspace/releases).
-No separate download website is required. Desktop releases use `agent-vX.Y.Z` or `agent-vX.Y.Z-alpha.N`;
+No separate download website is required. Desktop releases use `agent-vX.Y.Z` or `agent-vX.Y.Z-{alpha,beta,rc}.N`;
 CLI versions use `vX.Y.Z`. Creating or pushing either tag does **not** start CI or
 publish anything.
 
@@ -18,9 +18,13 @@ publish anything.
 | macOS Apple Silicon | `.dmg` | `.zip` |
 | Linux x64 (glibc) | `.AppImage` | Same `.AppImage` |
 
-Build-only installers have updates disabled. Published stable builds check only stable Agent releases; published alpha builds
-receive newer alpha releases and can graduate to stable. Checks run after startup,
-every six hours, or from **Help → Check for Updates**. Both channels exclude CLI
+Build-only installers have updates disabled. Release stages progress through **alpha → beta → rc → stable**. An installation
+accepts newer versions in its current or a later stage, never an earlier stage
+(even for a newer version line). Stable installations receive only stable releases.
+The channel is derived automatically from the version, with no separate selection.
+The stable metadata channel is named `latest`; prereleases use `alpha`, `beta`, and
+`rc` respectively. For example: `0.1.0-alpha.1`, `0.1.0-beta.1`, `0.1.0-rc.1`, `0.1.0`. Checks run after startup,
+every six hours, or from **Help → Check for Updates**. All channels exclude CLI
 releases and use the selected release's immutable generic update feed,
 not GitHub's repository-wide latest release. The app asks before downloading and
 restarting. Active tasks should finish before accepting. Metadata and blockmaps
@@ -46,7 +50,7 @@ npm --prefix apps/agent/desktop run package
 node apps/agent/desktop/scripts/smoke.mjs --packaged
 ```
 
-Set `AGENT_DESKTOP_VERSION=X.Y.Z` (or `X.Y.Z-alpha.N`) for both preparation and packaging (default
+Set `AGENT_DESKTOP_VERSION=X.Y.Z` (or `X.Y.Z-{alpha,beta,rc}.N`) for both preparation and packaging (default
 `0.1.0`). Preparation builds repository bundles, installs the pinned published
 DSH graph separately, downloads a checksum-verified standalone Node and pinned
 Chromium, and inventories the runtime. It never needs a neighboring checkout.
@@ -65,11 +69,11 @@ smoke result does not validate their signing, OAuth, or installer behavior.
 
 ## Manual CI and publication
 
-Run **Build and release Agent desktop (manual)** in GitHub Actions with an exact version. `publish`
-defaults to false; all three native jobs upload Actions artifacts. To publish,
-first create an `agent-vX.Y.Z` or `agent-vX.Y.Z-alpha.N` tag contained in the default branch, select that
-tag as the workflow ref, enter the matching version, and explicitly enable
-`publish`. All three jobs must succeed before a draft Release is populated and
+Run **Build and release Agent desktop (manual)** in GitHub Actions with an exact version. `dry_run`
+defaults to true; all three native jobs upload Actions artifacts. To publish,
+first create an `agent-vX.Y.Z` or `agent-vX.Y.Z-{alpha,beta,rc}.N` tag contained in the default branch, select that
+tag as the workflow ref, enter the matching version, and explicitly disable
+`dry_run`. All three jobs must succeed before a draft Release is populated and
 made public. Existing Releases are not overwritten. No Release is created by
 ordinary tag operations.
 
@@ -108,7 +112,7 @@ that Later keeps the current app running, and that accepting downloads, stops
 the local service, installs and restarts into alpha.2 with account data intact.
 On Linux run the AppImage itself, not the unpacked executable. Verify that a
 failed download leaves the current app running and can be retried. Repeat the
-alpha-to-stable transition before graduating the channel. Windows remains unsigned.
+alpha-to-beta, beta-to-rc, and rc-to-stable transitions before graduating each stage. Windows remains unsigned.
 
 The automated tests cover selection, metadata channel/version matching, consent,
 retry, and shutdown/install order. Native CI smoke tests cover packaged startup;

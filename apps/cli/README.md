@@ -142,14 +142,15 @@ to override the bundled credential.
 Creating or pushing a tag never starts CI or publishes a package. In GitHub
 Actions, manually run **Build and release CLI (manual)**:
 
-- Stable: select the existing `vX.Y.Z` tag as the workflow ref, choose `latest`,
+- Stable: select the existing `vX.Y.Z` tag as the workflow ref
   and enter the matching `X.Y.Z` version. The commit must be contained in `main`.
-- Insiders: select `main`, choose `insiders`, and enter `X.Y.Z-insider.<suffix>`.
+- Insiders: select `main` and enter `X.Y.Z-insider.<suffix>`.
 
 The old `release-cli.yml` workflow is disabled in repository Actions settings;
 keep it disabled so historical tags cannot reactivate its tag-push release path.
 The replacement workflow is `release-cli-manual.yml`.
 
-Publishing is disabled by default. Explicitly enable `publish` to publish the
+The channel is derived from the version; there is no channel input.
+`dry_run` defaults to true. Explicitly set `dry_run=false` to publish the
 verified tarball to insider-npm. The source manifest remains `0.0.0`; public npm promotion
 and Workspace deployment are separate operations.

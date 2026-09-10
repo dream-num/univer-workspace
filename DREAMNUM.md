@@ -104,7 +104,7 @@ Update this file in the same change when any of these facts change:
 `apps/agent/desktop` owns experimental Electron packaging of the existing Agent
 for Windows x64, macOS Apple Silicon, and Linux x64. It bundles standalone Node,
 the published DSH CLI, local plugins, and Chromium outside the workspace graph.
-GitHub Releases (`agent-vX.Y.Z`, `agent-vX.Y.Z-alpha.N`) are the download and update channel; CI requires
+GitHub Releases (`agent-vX.Y.Z`, `agent-vX.Y.Z-{alpha,beta,rc}.N`) are the download and update channel; CI requires
 explicit manual dispatch and publication opt-in. Account data stays in the OS
 application user-data directory, separate from replaceable runtime resources and
 the local `workspace/` working directory.

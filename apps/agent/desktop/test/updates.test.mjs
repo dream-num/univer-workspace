@@ -39,7 +39,7 @@ function fixture({
           ok: true,
           json: async () => [
             { tag_name: "v99.0.0" },
-            { tag_name: `agent-v${next}`, prerelease: next.includes("-alpha.") },
+            { tag_name: `agent-v${next}`, prerelease: next.includes("-") },
           ],
         };
       },
@@ -100,4 +100,20 @@ test("mismatched release metadata cannot be downloaded", async () => {
   await check(true);
   assert.equal(events.includes("download"), false);
   assert.equal(events.at(-1)[1].type, "error");
+});
+
+test("each promotion requests the destination metadata channel and completes installation", async () => {
+  for (const [version, next, channel] of [
+    ["0.1.0-alpha.1", "0.1.0-beta.1", "beta"],
+    ["0.1.0-beta.1", "0.1.0-rc.1", "rc"],
+    ["0.1.0-rc.1", "0.1.0", "latest"],
+    ["0.1.0-beta.1", "0.1.0-beta.2", "beta"],
+    ["0.1.0-rc.1", "0.1.0-rc.2", "rc"],
+  ]) {
+    const { check, events, updater } = fixture({ version, next });
+    await check(false);
+    assert.equal(events.find((e) => e[0] === "feed")[1].channel, channel);
+    assert.equal(updater.allowPrerelease, true);
+    assert.equal(events.at(-1)[0], "install");
+  }
 });

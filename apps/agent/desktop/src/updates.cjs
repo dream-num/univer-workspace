@@ -32,7 +32,7 @@ function createUpdateChecker({
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
     autoUpdater.allowDowngrade = false;
-    autoUpdater.allowPrerelease = releaseChannel(app.getVersion()) === "alpha";
+    autoUpdater.allowPrerelease = releaseChannel(app.getVersion()) !== "latest";
     const onError = () => {}; // Report one controlled error below, not raw signed URLs.
     autoUpdater.on("error", onError);
     try {

@@ -1,6 +1,7 @@
 const { validVersion, releaseChannel } = require("./src/policy.cjs");
 const version = process.env.AGENT_DESKTOP_VERSION || "0.1.0";
-if (!validVersion(version)) throw new Error("Desktop version must be X.Y.Z or X.Y.Z-alpha.N");
+if (!validVersion(version))
+  throw new Error("Desktop version must be X.Y.Z or X.Y.Z-{alpha,beta,rc}.N");
 const official = process.env.AGENT_DESKTOP_OFFICIAL === "true";
 module.exports = {
   appId: "org.univer.workspace.agent",

@@ -13,7 +13,7 @@ process.env.NPM_CONFIG_USERCONFIG = userConfig;
 process.env.npm_config_userconfig = userConfig;
 const version = process.env.AGENT_DESKTOP_VERSION ?? "0.1.0";
 if (!policy.validVersion(version))
-  throw new Error("AGENT_DESKTOP_VERSION must be X.Y.Z or X.Y.Z-alpha.N");
+  throw new Error("AGENT_DESKTOP_VERSION must be X.Y.Z or X.Y.Z-{alpha,beta,rc}.N");
 const platform = process.platform,
   arch = process.arch;
 if (!["win32-x64", "darwin-arm64", "linux-x64"].includes(`${platform}-${arch}`))

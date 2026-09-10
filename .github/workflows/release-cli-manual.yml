@@ -1,24 +1,18 @@
 name: Build and release CLI (manual)
-run-name: Release CLI to insider-npm ${{ inputs.version }}${{ !inputs.publish && ' (build only)' || '' }}
+run-name: Release CLI to insider-npm ${{ inputs.version }}${{ inputs.dry_run && ' (build only)' || '' }}
 
 on:
   workflow_dispatch:
     inputs:
-      channel:
-        description: Release channel (latest requires selecting the matching vX.Y.Z tag as workflow ref)
-        type: choice
-        options: [insiders, latest]
-        default: insiders
-        required: true
       version:
         description: Exact version (X.Y.Z for latest; X.Y.Z-insider.<suffix> for insiders)
         required: true
         type: string
-      publish:
-        description: Publish the verified tarball to insider-npm
+      dry_run:
+        description: Build and verify without publishing
         required: true
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
@@ -61,13 +55,19 @@ jobs:
         id: release
         shell: bash
         env:
-          DISPATCH_CHANNEL: ${{ inputs.channel }}
           DISPATCH_VERSION: ${{ inputs.version }}
-          DISPATCH_DRY_RUN: ${{ !inputs.publish }}
+          DISPATCH_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
           VERSION="$DISPATCH_VERSION"
-          CHANNEL="$DISPATCH_CHANNEL"
+          if [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            CHANNEL="latest"
+          elif [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-insider\.[0-9A-Za-z.-]+$ ]]; then
+            CHANNEL="insiders"
+          else
+            echo "Expected X.Y.Z or X.Y.Z-insider.<suffix>." >&2
+            exit 1
+          fi
           DRY_RUN="$DISPATCH_DRY_RUN"
           if [[ "$CHANNEL" == "latest" ]]; then
             if [[ "$GITHUB_REF_TYPE" != "tag" || "$GITHUB_REF_NAME" != "v$VERSION" ]]; then

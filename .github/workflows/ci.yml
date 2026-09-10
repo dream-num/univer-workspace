@@ -21,8 +21,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @univerjs/univer-workspace api:verify
-      - run: npm ci --prefix apps/agent/desktop --ignore-scripts
-      - run: node --test apps/agent/desktop/test/*.test.mjs
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build

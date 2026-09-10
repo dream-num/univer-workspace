@@ -239,7 +239,7 @@ pnpm update:univer-sdk --sdk_version <exact-sdk-version>
 The CLI and Workspace deployment are delivered independently from the same source:
 
 - Manually dispatch the CLI release workflow on a stable `vX.Y.Z` tag contained in
-  `main`, choose `latest`, and explicitly enable `publish` to publish `univer-workspace-cli@X.Y.Z`.
+  `main` and explicitly set `dry_run=false` to publish `univer-workspace-cli@X.Y.Z`.
   Creating or pushing tags never triggers CI or publication.
 - Workspace deployment is a separate manual workflow. It builds either an existing
   stable tag or an exact commit as `sha-<commit>`. Pushing a release tag does not

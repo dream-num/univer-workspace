@@ -32,29 +32,33 @@ function readyUrl(message, origin) {
 function validVersion(version) {
   return (
     typeof version === "string" &&
-    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-alpha\.(0|[1-9]\d*))?$/.test(version) &&
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:alpha|beta|rc)\.(0|[1-9]\d*))?$/.test(
+      version,
+    ) &&
     semver.valid(version) === version
   );
 }
 function releaseChannel(version) {
   if (!validVersion(version)) throw new Error("Invalid Agent version");
-  return semver.prerelease(version) ? "alpha" : "latest";
+  return semver.prerelease(version)?.[0] ?? "latest";
 }
-// Stable installations never enter alpha; alpha installations can graduate to stable.
+// Installations accept the same or a later stage: alpha -> beta -> rc -> stable.
 // Ignore unrelated CLI tags and require GitHub's prerelease flag to match the version.
 function selectRelease(releases, current) {
   if (!Array.isArray(releases)) throw new Error("Invalid release response");
-  const alpha = releaseChannel(current) === "alpha";
+  const stages = ["alpha", "beta", "rc", "latest"];
+  const currentStage = stages.indexOf(releaseChannel(current));
   return releases
     .filter((r) => {
       if (r.draft || typeof r.tag_name !== "string" || !r.tag_name.startsWith(TAG_PREFIX))
         return false;
       const version = r.tag_name.slice(TAG_PREFIX.length);
       if (!validVersion(version)) return false;
-      const prerelease = releaseChannel(version) === "alpha";
+      const channel = releaseChannel(version);
+      const prerelease = channel !== "latest";
       return (
         Boolean(r.prerelease) === prerelease &&
-        (alpha || !prerelease) &&
+        stages.indexOf(channel) >= currentStage &&
         semver.gt(version, current)
       );
     })
