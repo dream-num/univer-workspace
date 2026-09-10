@@ -207,3 +207,10 @@ or an already-populated `node_modules` is insufficient evidence. Do not force a
 single React version, add broad overrides, patch installed SDK files, or weaken
 typechecking to mask the mismatch. Keep any remaining workaround version-scoped
 and document its evidence and removal condition.
+
+## PR 标题与 Commit Message
+
+PR 标题与 commit message 遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)，
+使用英文，格式为 `type(scope): description`，其中 scope 可省略。
+常用 type 包括 `feat`、`fix`、`docs`、`refactor`、`test`、`build`、`ci` 和 `chore`。
+不兼容变更使用 `!` 或正文中的 `BREAKING CHANGE:` 标记；合并时的 squash commit 标题也遵循此格式。
