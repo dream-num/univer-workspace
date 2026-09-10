@@ -61,7 +61,6 @@ jobs:
           node-version: 24.17.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npm ci --prefix apps/agent/desktop
       - name: Install Linux browser libraries
         if: runner.os == 'Linux'
         run: node apps/agent/desktop/node_modules/playwright/cli.js install-deps chromium
@@ -72,7 +71,7 @@ jobs:
       - name: Verify relocated runtime
         run: node apps/agent/desktop/scripts/smoke.mjs
       - name: Build installers without publishing
-        run: npm --prefix apps/agent/desktop run package
+        run: pnpm --dir apps/agent/desktop package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ !inputs.dry_run && matrix.target == 'mac-arm64' && 'true' || 'false' }}
           CSC_LINK: ${{ !inputs.dry_run && matrix.target == 'mac-arm64' && secrets.GO_BUILD_CERTIFICATE_BASE64 || '' }}
@@ -84,7 +83,7 @@ jobs:
         run: node apps/agent/desktop/scripts/smoke.mjs --packaged
       - name: Verify Linux Electron window
         if: runner.os == 'Linux'
-        run: xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --no-sandbox
+        run: xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --packaged --no-sandbox
       - uses: actions/upload-artifact@v4
         with:
           name: agent-desktop-${{ matrix.target }}

@@ -2,8 +2,9 @@
 
 Experimental desktop delivery of the existing Workspace Agent application. This
 is an application-owned Electron shell around the published DSH CLI and the three
-Workspace bundles, not a fork of DSH or a public SDK. Electron is installed here
-with npm, outside the pnpm workspace and its React dependency graph.
+Workspace bundles, not a fork of DSH or a public SDK. Electron packaging tools belong to the root pnpm workspace and share its single
+`pnpm-lock.yaml`. The generated DSH runtime remains isolated from that workspace
+and its React dependency graph.
 
 ## Downloads and updates
 
@@ -42,11 +43,10 @@ From the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
-npm ci --prefix apps/agent/desktop
 node --test apps/agent/desktop/test/*.test.mjs
 pnpm --dir apps/agent/desktop prepare:runtime
 node apps/agent/desktop/scripts/smoke.mjs
-npm --prefix apps/agent/desktop run package
+pnpm --dir apps/agent/desktop package
 node apps/agent/desktop/scripts/smoke.mjs --packaged
 ```
 
@@ -60,7 +60,7 @@ The smoke command relocates the runtime into a temporary directory, starts it
 with fresh data and a dynamically allocated loopback port, and requires an
 authenticated bootstrap page, loads the Office native binding, and renders the
 bootstrap UI in bundled Chromium. It does not use an existing Agent account.
-The Linux Electron window check is `xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs`.
+The Linux packaged Electron window check is `xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --packaged`.
 Its optional `--no-sandbox` flag is for restricted test containers only; the
 production application keeps the renderer sandbox enabled.
 

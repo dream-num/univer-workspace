@@ -16,13 +16,21 @@ try {
   const env = { ...process.env, XDG_CONFIG_HOME: temporary, APPDATA: temporary };
   // This script is for Linux preview validation under Xvfb. Production never
   // adds --no-sandbox; the explicit flag only lets a restricted CI/container run this test.
+  const packaged = process.argv.includes("--packaged");
   const args = [
     "-r",
     join(desktop, "test/electron-diagnostics.cjs"),
-    desktop,
+    ...(packaged ? [] : [desktop]),
     ...(process.getuid?.() === 0 || process.argv.includes("--no-sandbox") ? ["--no-sandbox"] : []),
   ];
-  application = await _electron.launch({ args, env, timeout: 60000 });
+  application = await _electron.launch({
+    args,
+    env,
+    timeout: 60000,
+    ...(packaged
+      ? { executablePath: join(desktop, "artifacts/linux-unpacked/univer-workspace-agent-desktop") }
+      : {}),
+  });
   application.process().stderr.on("data", (bytes) => {
     if (String(bytes).includes("[desktop-smoke]"))
       process.stderr.write(String(bytes).replace(/token=[^\s"']+/g, "token=[redacted]"));
