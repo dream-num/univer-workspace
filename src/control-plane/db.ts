@@ -571,6 +571,124 @@ export class ControlPlaneDb {
     return res.results ?? [];
   }
 
+  async listRecentResourcesWithDetails(userId: string, limit: number = 50): Promise<Array<{
+    resource_id: string;
+    last_opened_at: number;
+    node_id: string;
+    space_id: string;
+    space_type: string;
+    space_name: string;
+  }>> {
+    const res = await this.db
+      .prepare(
+        `SELECT rr.resource_id, rr.last_opened_at, node.id AS node_id, space.id AS space_id, space.type AS space_type, space.name AS space_name
+         FROM recent_resources AS rr
+         JOIN resources AS resource ON rr.resource_id = resource.id
+         JOIN nodes AS node ON node.id = resource.node_id
+         JOIN spaces AS space ON space.id = node.space_id
+         WHERE rr.user_id = ?
+           AND node.trash_batch_id IS NULL
+         ORDER BY rr.last_opened_at DESC, rr.resource_id
+         LIMIT ?`
+      )
+      .bind(userId, limit)
+      .all<{
+        resource_id: string;
+        last_opened_at: number;
+        node_id: string;
+        space_id: string;
+        space_type: string;
+        space_name: string;
+      }>();
+    return res.results ?? [];
+  }
+
+  async listOwnedResources(userId: string, limit: number = 50): Promise<Array<{
+    resource_id: string;
+    node_id: string;
+    space_id: string;
+    space_type: string;
+    space_name: string;
+  }>> {
+    const res = await this.db
+      .prepare(
+        `SELECT resource.id AS resource_id, node.id AS node_id, space.id AS space_id, space.type AS space_type, space.name AS space_name
+         FROM resources AS resource
+         JOIN nodes AS node ON node.id = resource.node_id
+         JOIN spaces AS space ON space.id = node.space_id
+         WHERE space.owner_user_id = ?
+           AND node.trash_batch_id IS NULL
+         ORDER BY node.updated_at DESC, resource.id
+         LIMIT ?`
+      )
+      .bind(userId, limit)
+      .all<{
+        resource_id: string;
+        node_id: string;
+        space_id: string;
+        space_type: string;
+        space_name: string;
+      }>();
+    return res.results ?? [];
+  }
+
+  async listSharedNodes(userId: string, limit: number = 50): Promise<Array<{
+    node_id: string;
+    shared_at: number;
+    shared_by_id: string;
+    shared_by_username: string;
+    shared_by_display_name: string;
+    shared_by_avatar_url: string | null;
+  }>> {
+    const res = await this.db
+      .prepare(
+        `SELECT
+           grant_node.node_id,
+           grant_node.created_at AS shared_at,
+           grantor.id AS shared_by_id,
+           grantor.username AS shared_by_username,
+           grantor.display_name AS shared_by_display_name,
+           grantor.avatar_url AS shared_by_avatar_url
+         FROM node_grants AS grant_node
+         JOIN nodes AS node ON node.id = grant_node.node_id
+         JOIN users AS grantor ON grantor.id = grant_node.granted_by
+         WHERE grant_node.user_id = ?
+           AND node.trash_batch_id IS NULL
+         ORDER BY grant_node.created_at DESC, grant_node.node_id
+         LIMIT ?`
+      )
+      .bind(userId, limit)
+      .all<{
+        node_id: string;
+        shared_at: number;
+        shared_by_id: string;
+        shared_by_username: string;
+        shared_by_display_name: string;
+        shared_by_avatar_url: string | null;
+      }>();
+    return res.results ?? [];
+  }
+
+  async getNodeBreadcrumbs(nodeId: string): Promise<Array<{ id: string; name: string }>> {
+    const res = await this.db
+      .prepare(
+        `WITH RECURSIVE ancestry(id, parent_id, name, depth) AS (
+           SELECT id, parent_id, name, 0
+           FROM nodes
+           WHERE id = ? AND trash_batch_id IS NULL
+           UNION ALL
+           SELECT parent.id, parent.parent_id, parent.name, ancestry.depth + 1
+           FROM nodes AS parent
+           JOIN ancestry ON ancestry.parent_id = parent.id
+           WHERE parent.trash_batch_id IS NULL
+         )
+         SELECT id, name FROM ancestry ORDER BY depth DESC`
+      )
+      .bind(nodeId)
+      .all<{ id: string; name: string }>();
+    return res.results ?? [];
+  }
+
   async touchRecentResource(userId: string, resourceId: string): Promise<void> {
     await this.db
       .prepare(

@@ -122,7 +122,23 @@ export default {
         }
       }
 
-      // 7. Static SPA assets served via Workers Static Assets (dist/public)
+      // 7. API / Backend 404 guard - never fall through to SPA assets for API requests
+      if (
+        pathname.startsWith("/api/") ||
+        pathname.startsWith("/auth/") ||
+        pathname.startsWith("/universer-api/") ||
+        pathname.startsWith("/agents/")
+      ) {
+        return applyCorsHeaders(
+          request,
+          new Response(JSON.stringify({ error: { message: `Not found: ${request.method} ${pathname}` } }), {
+            status: 404,
+            headers: { "Content-Type": "application/json; charset=utf-8" }
+          })
+        );
+      }
+
+      // 8. Static SPA assets served via Workers Static Assets (dist/public)
       if (env.ASSETS) {
         return env.ASSETS.fetch(request);
       }

@@ -162,6 +162,50 @@ describe("Master Cloudflare Worker Edge Gateway", async () => {
     assert.ok(nodesData.nodes.length >= 1);
     assert.equal(nodesData.nodes[0].name, "Financial Forecast 2027");
 
+    // 6a. Test Views: owned-by-me
+    const ownedReq = new Request("https://workspace.edge/api/owned-by-me", {
+      headers: { Cookie: sessionCookie }
+    });
+    const ownedRes = await worker.fetch(ownedReq, env as any, {} as any);
+    assert.equal(ownedRes.status, 200);
+    assert.equal(ownedRes.headers.get("Content-Type")?.includes("application/json"), true);
+    const ownedData = await ownedRes.json();
+    assert.ok(Array.isArray(ownedData.items));
+    assert.equal(ownedData.items.length >= 1, true);
+    assert.equal(ownedData.items[0].node.name, "Financial Forecast 2027");
+    assert.equal(ownedData.items[0].resource.kind, "univer");
+    assert.ok(ownedData.items[0].location.space);
+
+    // 6b. Test Views: recent-resources
+    const recentReq = new Request("https://workspace.edge/api/recent-resources", {
+      headers: { Cookie: sessionCookie }
+    });
+    const recentRes = await worker.fetch(recentReq, env as any, {} as any);
+    assert.equal(recentRes.status, 200);
+    assert.equal(recentRes.headers.get("Content-Type")?.includes("application/json"), true);
+    const recentData = await recentRes.json();
+    assert.ok(Array.isArray(recentData.items));
+
+    // 6c. Test Views: shared-with-me
+    const sharedReq = new Request("https://workspace.edge/api/shared-with-me", {
+      headers: { Cookie: sessionCookie }
+    });
+    const sharedRes = await worker.fetch(sharedReq, env as any, {} as any);
+    assert.equal(sharedRes.status, 200);
+    assert.equal(sharedRes.headers.get("Content-Type")?.includes("application/json"), true);
+    const sharedData = await sharedRes.json();
+    assert.ok(Array.isArray(sharedData.items));
+
+    // 6d. Unknown API route returns JSON 404
+    const unknownReq = new Request("https://workspace.edge/api/non-existent-endpoint", {
+      headers: { Cookie: sessionCookie }
+    });
+    const unknownRes = await worker.fetch(unknownReq, env as any, {} as any);
+    assert.equal(unknownRes.status, 404);
+    assert.equal(unknownRes.headers.get("Content-Type")?.includes("application/json"), true);
+    const unknownData = await unknownRes.json();
+    assert.ok(unknownData.error);
+
     // 7. Logout
     const logoutReq = new Request("https://workspace.edge/api/auth/logout", {
       method: "POST",

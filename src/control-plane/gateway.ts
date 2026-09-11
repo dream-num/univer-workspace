@@ -55,42 +55,52 @@ function formatSpaceView(space: Space, role: SpaceRole = "admin") {
   };
 }
 
+function formatResourceSummary(resource?: any) {
+  if (!resource) return null;
+  if (resource.kind === "univer") {
+    return {
+      id: resource.id,
+      kind: "univer" as const,
+      unitId: resource.univer?.unit_id ?? resource.unit_id,
+      unitType: resource.univer?.unit_type ?? resource.unit_type ?? "sheet",
+      capabilities: {
+        openContent: true,
+        editContent: true,
+        downloadContent: false
+      }
+    };
+  }
+  return {
+    id: resource.id,
+    kind: "blob" as const,
+    mediaType: resource.blob?.media_type ?? resource.media_type ?? "application/octet-stream",
+    byteSize: resource.blob?.byte_size ?? resource.byte_size ?? 0,
+    availability: (resource.blob?.availability ?? resource.availability ?? "ready") as "ready" | "quarantined",
+    capabilities: {
+      openContent: true,
+      editContent: false,
+      downloadContent: true
+    }
+  };
+}
+
 function formatNodeSummary(node: NodeItem, resource?: any) {
   return {
     id: node.id,
     spaceId: node.space_id,
     parentNodeId: node.parent_id,
     name: node.name,
-    resource: resource
-      ? {
-          id: resource.id,
-          kind: resource.kind,
-          ...(resource.kind === "univer"
-            ? {
-                unitId: resource.univer?.unit_id ?? resource.unit_id,
-                unitType: resource.univer?.unit_type ?? resource.unit_type
-              }
-            : {
-                originalFilename: resource.blob?.original_filename,
-                mediaType: resource.blob?.media_type,
-                byteSize: resource.blob?.byte_size
-              }),
-          capabilities: {
-            openContent: true,
-            editContent: true,
-            downloadContent: true
-          }
-        }
-      : null,
+    resource: formatResourceSummary(resource),
     hasChildren: false,
     updatedAt: new Date(node.updated_at).toISOString(),
     accessRole: "admin",
     capabilities: {
+      browseChildren: true,
+      createChildren: true,
       rename: true,
       move: true,
       trash: true,
-      manageGrants: true,
-      manageLinkSharing: true
+      share: true
     }
   };
 }
@@ -515,9 +525,98 @@ export async function handleControlPlaneRoutes(
     return jsonResponse(res);
   }
 
+  // ==========================================
+  // Views (Recent, Owned By Me, Shared With Me)
+  // ==========================================
+
   if (path === "/api/recent-resources" && method === "GET") {
-    const recents = await db.listRecentResources(currentUser.id);
-    return jsonResponse({ resources: recents });
+    const recents = await db.listRecentResourcesWithDetails(currentUser.id);
+    const items = await Promise.all(
+      recents.map(async (row) => {
+        const [node, resource, breadcrumbs] = await Promise.all([
+          db.getNodeById(row.node_id),
+          db.getResourceById(row.resource_id),
+          row.node_id ? db.getNodeBreadcrumbs(row.node_id) : Promise.resolve([])
+        ]);
+        if (!node) return null;
+        const ancestorBreadcrumbs = breadcrumbs.filter((b) => b.id !== node.id);
+        return {
+          lastOpenedAt: new Date(row.last_opened_at).toISOString(),
+          node: formatNodeSummary(node, resource),
+          resource: formatResourceSummary(resource)!,
+          location: {
+            space: {
+              id: row.space_id,
+              type: row.space_type as any,
+              name: row.space_name
+            },
+            breadcrumbs: ancestorBreadcrumbs
+          }
+        };
+      })
+    );
+    return jsonResponse({
+      items: items.filter(Boolean),
+      nextCursor: null
+    });
+  }
+
+  if (path === "/api/owned-by-me" && method === "GET") {
+    const owned = await db.listOwnedResources(currentUser.id);
+    const items = await Promise.all(
+      owned.map(async (row) => {
+        const [node, resource, breadcrumbs] = await Promise.all([
+          db.getNodeById(row.node_id),
+          db.getResourceById(row.resource_id),
+          row.node_id ? db.getNodeBreadcrumbs(row.node_id) : Promise.resolve([])
+        ]);
+        if (!node) return null;
+        const ancestorBreadcrumbs = breadcrumbs.filter((b) => b.id !== node.id);
+        return {
+          node: formatNodeSummary(node, resource),
+          resource: formatResourceSummary(resource)!,
+          location: {
+            space: {
+              id: row.space_id,
+              type: row.space_type as any,
+              name: row.space_name
+            },
+            breadcrumbs: ancestorBreadcrumbs
+          }
+        };
+      })
+    );
+    return jsonResponse({
+      items: items.filter(Boolean),
+      nextCursor: null
+    });
+  }
+
+  if (path === "/api/shared-with-me" && method === "GET") {
+    const shared = await db.listSharedNodes(currentUser.id);
+    const items = await Promise.all(
+      shared.map(async (row) => {
+        const [node, resource] = await Promise.all([
+          db.getNodeById(row.node_id),
+          db.getResourceByNodeId(row.node_id)
+        ]);
+        if (!node) return null;
+        return {
+          node: formatNodeSummary(node, resource),
+          sharedBy: {
+            id: row.shared_by_id,
+            username: row.shared_by_username,
+            displayName: row.shared_by_display_name,
+            avatarUrl: row.shared_by_avatar_url
+          },
+          sharedAt: new Date(row.shared_at).toISOString()
+        };
+      })
+    );
+    return jsonResponse({
+      items: items.filter(Boolean),
+      nextCursor: null
+    });
   }
 
   // ==========================================
@@ -572,6 +671,10 @@ export async function handleControlPlaneRoutes(
   if (worktreeDiscardMatch && method === "POST") {
     await db.discardWorktree(worktreeDiscardMatch[1]);
     return jsonResponse({ success: true });
+  }
+
+  if (path.startsWith("/api/") || path.startsWith("/auth/")) {
+    return jsonResponse({ error: { message: `Route not found: ${method} ${path}` } }, 404);
   }
 
   return null;

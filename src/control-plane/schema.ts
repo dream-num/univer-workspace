@@ -292,4 +292,13 @@ export async function seedControlPlane(db: D1Database): Promise<void> {
     )
     .bind(resourceId, unitId)
     .run();
+
+  // 8. Add to Recent Resources
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO recent_resources (user_id, resource_id, last_opened_at)
+       VALUES (?, ?, ?)`
+    )
+    .bind(userId, resourceId, now)
+    .run();
 }
