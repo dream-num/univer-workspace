@@ -13,6 +13,9 @@ importers:
 
   .:
     devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
@@ -4939,7 +4942,7 @@ packages:
     os: [darwin]
 
   '@univerjs-pro/exchange-node-binding-darwin-arm64@0.1.1':
-    resolution: {integrity: sha512-AjYNE3HBU08snieqmACmKDE0Vybqj1qvXxOUVPYKSrqnDJR7lh098oCeje/PiF7hMkucwkiB6a5jAJlGj1RAfw==}
+    resolution: {integrity: sha512-AjYNE3HBU08snieqmACmKDE0Vybqj1qvXxOUVPYKSrqnDJR7lh098oCeje/PiF7hMkucwkiB6a5jAJlGj1RAfw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-darwin-arm64/-/exchange-node-binding-darwin-arm64-0.1.1.tgz}
     cpu: [arm64]
     os: [darwin]
 
@@ -4950,7 +4953,7 @@ packages:
     libc: [glibc]
 
   '@univerjs-pro/exchange-node-binding-linux-arm64-gnu@0.1.1':
-    resolution: {integrity: sha512-SuMMVPI/ms2rQtzZAA7/0f8R61vtP17nenho6DocekyLVpwRGzDrtZFvcecwCcjy31OwaPzunufr8N/BzCe2WQ==}
+    resolution: {integrity: sha512-SuMMVPI/ms2rQtzZAA7/0f8R61vtP17nenho6DocekyLVpwRGzDrtZFvcecwCcjy31OwaPzunufr8N/BzCe2WQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-arm64-gnu/-/exchange-node-binding-linux-arm64-gnu-0.1.1.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
@@ -4962,7 +4965,7 @@ packages:
     libc: [glibc]
 
   '@univerjs-pro/exchange-node-binding-linux-x64-gnu@0.1.1':
-    resolution: {integrity: sha512-Jxjoo+w2PrvTNCcVoP0klKbFvkjzAOUTQhT2MKxQ1opDx9ROENBF22lEWFel9hSPI1dmpj6DtPBVJAw9zeJTYw==}
+    resolution: {integrity: sha512-Jxjoo+w2PrvTNCcVoP0klKbFvkjzAOUTQhT2MKxQ1opDx9ROENBF22lEWFel9hSPI1dmpj6DtPBVJAw9zeJTYw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-x64-gnu/-/exchange-node-binding-linux-x64-gnu-0.1.1.tgz}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
@@ -4973,7 +4976,7 @@ packages:
     os: [win32]
 
   '@univerjs-pro/exchange-node-binding-win32-x64-msvc@0.1.1':
-    resolution: {integrity: sha512-oSkbOOau/9vOIYAWj6NZ6bfqB1szn3yM1vUQe1qfA6xhdGGn848bBVhpIlq/nPnQcA1O70pzUrDBbORv1LoCDQ==}
+    resolution: {integrity: sha512-oSkbOOau/9vOIYAWj6NZ6bfqB1szn3yM1vUQe1qfA6xhdGGn848bBVhpIlq/nPnQcA1O70pzUrDBbORv1LoCDQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-win32-x64-msvc/-/exchange-node-binding-win32-x64-msvc-0.1.1.tgz}
     cpu: [x64]
     os: [win32]
 
@@ -4981,7 +4984,7 @@ packages:
     resolution: {integrity: sha512-opsPVyI2WFafWzvFSdRvy2Fz5leMS6edwqc4o8GYqzIRSu36DkpWaydvFRGcXLN+CxhB6EkpHDQaFIRextey8w==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding/-/exchange-node-binding-0.1.0.tgz}
 
   '@univerjs-pro/exchange-node-binding@0.1.1':
-    resolution: {integrity: sha512-8P02leiOE8/z4SthVmPYnPGxMb9eLdjc+OqEFn4utl3bo/3T/lhSFWqvwdH9ytaZunhcwif+F54v1cA7ZUg3FQ==}
+    resolution: {integrity: sha512-8P02leiOE8/z4SthVmPYnPGxMb9eLdjc+OqEFn4utl3bo/3T/lhSFWqvwdH9ytaZunhcwif+F54v1cA7ZUg3FQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding/-/exchange-node-binding-0.1.1.tgz}
 
   '@univerjs-pro/exchange-node@1.0.0-insiders.20260907-70fc579':
     resolution: {integrity: sha512-rkoQMA4fAowfVpmByrp5K+L9Yjw5rcdm33VhvxZ0CB7GwYwnNM9PY6h5ZX9Gaeb31uK/ydJlM2AgdGJEoYBPBA==}

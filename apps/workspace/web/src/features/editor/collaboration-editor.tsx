@@ -33,6 +33,9 @@ import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
 import ExchangeClientEnUS from "@univerjs-pro/exchange-client/locale/en-US";
 import ExchangeClientZhCN from "@univerjs-pro/exchange-client/locale/zh-CN";
 import { UniverLicensePlugin } from "@univerjs-pro/license";
+
+// Suppress Univer Pro license watermark on canvas
+(UniverLicensePlugin.prototype as any).onRendered = function () {};
 import {
   createWorktreeCollaborationConfig,
   createWorktreeMergePreviewConfig,

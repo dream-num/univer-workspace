@@ -726,13 +726,13 @@ interface LanguageContextValue {
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
-const STORAGE_KEY = "univer-workspace-language";
+const STORAGE_KEY = "univer-workspace-language-v2";
 
 export function LanguageProvider({ children }: PropsWithChildren) {
   const [language, setLanguage] = useState<AppLanguage>(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === "zh-CN" || stored === "en-US") return stored;
-    return "zh-CN";
+    return "en-US";
   });
 
   useEffect(() => {

@@ -232,7 +232,7 @@ export function WorkspaceLayout({
       : selectedSpace?.name) ??
     workspaceViewTitle(selectedView, t);
   const activeTaskCount =
-    activeWorktrees.data?.items.filter((worktree) =>
+    activeWorktrees.data?.items?.filter((worktree) =>
       ["draft", "ready", "merging"].includes(worktree.state)
     ).length ?? 0;
 

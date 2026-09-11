@@ -1,0 +1,55 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "univer-workspace",
+  "main": "src/server.ts",
+  "compatibility_date": "2026-07-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "limits": {
+    "cpu_ms": 300000
+  },
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./apps/workspace/dist/public",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/agents/*",
+      "/api",
+      "/api/*",
+      "/universer-api/*",
+      "/auth/*",
+      "/healthz",
+      "/spaces/*"
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ChatAgent",
+        "class_name": "ChatAgent"
+      },
+      {
+        "name": "WorkspaceDO",
+        "class_name": "WorkspaceDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ChatAgent", "WorkspaceDO"]
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BLOB_BUCKET",
+      "bucket_name": "univer-workspace-blobs"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "univer-workspace-db",
+      "database_id": "6dafe15b-fb54-4ef1-99ad-6b4c09be3d19"
+    }
+  ]
+}

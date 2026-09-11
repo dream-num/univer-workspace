@@ -11,3 +11,5 @@ coverage/
 .agents/
 .claude/
 skills-lock.json
+vendor/univer-pro/*
+!vendor/univer-pro/README.md

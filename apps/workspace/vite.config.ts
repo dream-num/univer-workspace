@@ -11,7 +11,7 @@ export default defineConfig({
   // browser itself owns React 19, so all source imports must resolve through
   // this composition root instead of bundling a second React dispatcher.
   resolve: {
-    dedupe: ["react", "react-dom"],
+    dedupe: ["react", "react-dom", "@wendellhu/redi"],
   },
   plugins: [
     tanstackRouter({
@@ -40,5 +40,24 @@ export default defineConfig({
   build: {
     outDir: "../dist/public",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("@wendellhu/redi")) return "univer-core";
+          if (
+            !id.includes("/packages/univer/") &&
+            !id.includes("/node_modules/@univerjs/") &&
+            !id.includes("/packages/unit-comparison-viewer/")
+          ) {
+            return;
+          }
+          if (id.includes("engine-formula") || id.includes("sheets-formula")) return "univer-formula";
+          if (id.includes("slides")) return "univer-slides";
+          if (id.includes("docs")) return "univer-docs";
+          if (id.includes("sheets") || id.includes("unit-comparison-viewer")) return "univer-sheets";
+          return "univer-core";
+        },
+      },
+    },
   },
 });

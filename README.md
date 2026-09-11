@@ -4,9 +4,10 @@
 
 **An open-source Office workspace where people and AI agents create, collaborate, and review together.**
 
-[Univer Docs](https://docs.univer.ai/) · [Office SDK](https://office.univer.ai/) · [CLI guide](apps/cli/README.md) · [Workspace Agent](apps/agent/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
+[Univer Docs](https://docs.univer.ai/) · [Office SDK](https://office.univer.ai/) · [Edge Docs](docs/README.md) · [CLI guide](apps/cli/README.md) · [Workspace Agent](apps/agent/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20%7C%20Durable%20Objects-F38020?logo=cloudflare&logoColor=white)](docs/architecture/blueprint.md)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-11-F69220?logo=pnpm&logoColor=white)](package.json)
 
@@ -83,6 +84,43 @@ create Worktree
 
 Intermediate changes remain isolated from shared content until a person accepts
 them. See the [CLI guide](apps/cli/README.md) for the complete product workflow.
+
+## Cloudflare Edge Deployment (Serverless & Zero-Container)
+
+Univer Workspace can be deployed natively to **Cloudflare Workers** with **zero containers**, using **Cloudflare Durable Objects** running the **Cordis Microkernel** and embedded SQLite, backed by **Cloudflare D1**, **Cloudflare R2**, and **Workers Static Assets**.
+
+```mermaid
+flowchart LR
+    Client([Browser Client]) --> EdgeWorker[Cloudflare Edge Worker Gateway]
+    EdgeWorker --> D1[(Cloudflare D1 Control Plane)]
+    EdgeWorker --> R2[(Cloudflare R2 Blob Storage)]
+    EdgeWorker --> ChatDO[ChatAgent DO: Cordis Microkernel + Collab OT + SQLite]
+    EdgeWorker --> SpaceDO[WorkspaceDO: Realtime Tree & Presence]
+    EdgeWorker --> Assets[Workers Static Assets: React 19 SPA]
+```
+
+### Complete Specifications & Blueprints
+- [**Architecture Blueprint**](docs/architecture/blueprint.md): Zero-container edge topology, isolate lifecycle, and security model.
+- [**Cordis Microkernel on Durable Objects**](docs/specifications/cordis-do-microkernel.md): In-memory Cordis v4, dynamic plugin tree, and reversible Universal Action Engine.
+- [**Realtime & Multiplexer Protocols**](docs/specifications/multiplexer-protocol.md): 4-channel WebSocket protocol (`/api/remote.mux`) and space presence.
+- [**Control Plane & Storage Specification**](docs/specifications/control-plane-and-storage.md): D1 schema, pure WebCrypto PBKDF2 authentication, and R2 blob streaming.
+- [**Edge API Reference**](docs/specifications/api-reference.md): Complete HTTP and WebSocket endpoints reference.
+- [**Production Deployment Runbook**](docs/deployment/runbook.md): Step-by-step setup, `wrangler.jsonc`, simulation, and deployment.
+
+### Edge Quick Start
+```bash
+# 1. Run full edge test suite
+pnpm exec tsx --test test/*.test.ts
+
+# 2. Build SPA assets
+pnpm --filter @univerjs/univer-workspace build:web
+
+# 3. Simulate locally on Cloudflare workerd
+pnpm exec wrangler dev --port 8790
+
+# 4. Deploy live to Cloudflare
+pnpm exec wrangler deploy
+```
 
 ## Quick start
 
