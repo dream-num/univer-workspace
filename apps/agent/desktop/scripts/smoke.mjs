@@ -49,7 +49,9 @@ try {
     pty.onData(data => { output += data; });
     pty.onExit(({ exitCode }) => {
       clearTimeout(timer);
-      if (exitCode !== 0 || !output.includes('uwa-pty-ready')) process.exitCode = 1;
+      // ConPTY's output worker can keep this isolated probe alive after exit.
+      // Both the terminal exit and its output must be observed before success.
+      process.exit(exitCode === 0 && output.includes('uwa-pty-ready') ? 0 : 1);
     });
   `], { cwd: join(runtime, "bootstrap"), encoding: "utf8", timeout: 20000 });
   if (terminal.error || terminal.status !== 0)

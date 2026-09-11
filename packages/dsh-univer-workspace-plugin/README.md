@@ -7,8 +7,9 @@ Univer Workspace backend; local paths are used only for task assets and
 import/export, not as document identities.
 
 The distributed host, worker and browser entries bundle their JavaScript SDK
-dependencies without source maps. SDK build inputs belong in devDependencies;
-only external native bindings and `ws` are installed alongside the bundle.
+dependencies without source maps. Desktop packaging stages a reduced installation
+manifest containing external native bindings and `ws`; binding versions come from
+the installed SDK wrappers. The source manifest retains its SDK dependencies.
 DSH peers remain host-provided. Moving a dependency across this boundary requires
 checking the emitted bundle and running the isolated desktop runtime checks.
 
@@ -213,17 +214,23 @@ bundle), and the linked `lib/client.css` stylesheet; bundled skills ship under
 `<link>` to the DSH boot page, so client code does not create runtime style
 tags.
 
-Native/binary addons are deliberately not bundled into either the host or
-worker. Every binary used by this plugin is an explicit production dependency
-and is externalized by the build:
+Native/binary addons are deliberately not bundled into either the host or the
+worker. The plugin depends on the wrapper packages that own them, so each
+binding arrives as a transitive production dependency:
 
-- `@univerjs-pro/engine-formula-rust-binding` for the headless formula engine;
-- `@univerjs-pro/exchange-node-binding` for Office import/export.
+- `@univerjs-pro/engine-formula-rust` owns
+  `@univerjs-pro/engine-formula-rust-binding`, the headless formula engine;
+- `@univerjs-pro/exchange-node` owns `@univerjs-pro/exchange-node-binding` for
+  Office import/export.
 
-The consuming Workspace Agent image installs these packages once while assembling the
-profile. pnpm's `supportedArchitectures: current` policy selects only the
-container's platform binary, so runtime resolution is deterministic and does
-not depend on a transitive hoist or a bundled `.node` file.
+Depending on the wrappers keeps every binding at the version its owner
+publishes instead of pinning a second copy here that drifts from the SDK
+baseline. DSH initializes every profile with pnpm's `nodeLinker: hoisted`, so
+the profile installs those transitive bindings into one flat `node_modules`;
+the bundles load a binding through the wrapper's `createRequire`, which
+resolves from the plugin directory up to that flat profile root.
+`supportedArchitectures: current` keeps the install to the container's platform
+binary.
 
 Account-level Workspace Agent sessions use the connected account's personal Space as
 the default destination. Sessions opened in a selected Space keep that Space

@@ -110,6 +110,7 @@ export function resolveExternalRuntimeDependencies(appRoot, source) {
     "@univer-cli/univer-render-runtime",
   );
   const typst = readPackageManifest(clientCoreRequire, "@univer-cli/doc-typst-facade");
+  const exchangeNode = readPackageManifest(clientCoreRequire, "@univerjs-pro/exchange-node");
   const headless = readPackageManifest(appRequire, "@univer-cli/headless-univer");
   const headlessRequire = createRequire(headless.path);
   const formula = readPackageManifest(headlessRequire, "@univerjs-pro/engine-formula-rust");
@@ -121,13 +122,13 @@ export function resolveExternalRuntimeDependencies(appRoot, source) {
       clientCore.manifest,
       typst.manifest,
     ),
-    "@univerjs-pro/engine-formula-rust-binding": readOwnedDependency(
+    "@univerjs-pro/engine-formula-rust-binding": resolveFormulaBindingVersion(
+      headless.manifest,
       formula.manifest,
-      "@univerjs-pro/engine-formula-rust-binding",
     ),
-    "@univerjs-pro/exchange-node-binding": readOwnedDependency(
-      source,
-      "@univerjs-pro/exchange-node-binding",
+    "@univerjs-pro/exchange-node-binding": resolveExchangeNodeBindingVersion(
+      clientCore.manifest,
+      exchangeNode.manifest,
     ),
   };
 }
@@ -145,14 +146,44 @@ export function resolveRenderRuntimeDependencies(clientCore, renderRuntime) {
   };
 }
 
+export function resolveFormulaBindingVersion(headless, formula) {
+  return resolveOwnedBindingVersion(
+    headless,
+    formula,
+    "@univerjs-pro/engine-formula-rust",
+    "@univerjs-pro/engine-formula-rust-binding",
+  );
+}
+
+export function resolveExchangeNodeBindingVersion(clientCore, exchangeNode) {
+  return resolveOwnedBindingVersion(
+    clientCore,
+    exchangeNode,
+    "@univerjs-pro/exchange-node",
+    "@univerjs-pro/exchange-node-binding",
+  );
+}
+
 export function resolveTypstNativeBindingVersion(clientCore, typst) {
-  const facadeVersion = readOwnedDependency(clientCore, "@univer-cli/doc-typst-facade");
-  if (typst.version !== facadeVersion) {
+  return resolveOwnedBindingVersion(
+    clientCore,
+    typst,
+    "@univer-cli/doc-typst-facade",
+    "@univerjs-pro/doc-typst-native-binding",
+  );
+}
+
+// A binding version is only trustworthy when the wrapper that owns it is the
+// version its consumer declared; otherwise the artifact would install a native
+// binding that does not match the SDK baseline.
+function resolveOwnedBindingVersion(owner, wrapper, wrapperName, bindingName) {
+  const declared = readOwnedDependency(owner, wrapperName);
+  if (wrapper.version !== declared) {
     throw new Error(
-      `Resolved @univer-cli/doc-typst-facade ${String(typst.version)} does not match declared ${facadeVersion}`,
+      `Resolved ${wrapperName} ${String(wrapper.version)} does not match declared ${declared}`,
     );
   }
-  return readOwnedDependency(typst, "@univerjs-pro/doc-typst-native-binding");
+  return readOwnedDependency(wrapper, bindingName);
 }
 
 function copyMetadata(source) {

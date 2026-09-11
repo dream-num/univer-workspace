@@ -19,8 +19,10 @@ Agent and both plugin builds do not generate source maps. Finalization removes
 maps supplied by third-party packages before inventory/signing, and runtime smoke
 checks reject any remaining maps. The Electron ASAR also excludes them.
 
-The capability plugin bundles its JavaScript SDK dependencies; only external
-native bindings and `ws` remain installation dependencies. Desktop builds remove
+The capability plugin bundles its JavaScript SDK dependencies. Desktop packaging
+stages an installation manifest containing only external native bindings and `ws`,
+reading the binding versions from the installed SDK wrapper manifests. Source
+dependencies retain the repository SDK upgrade policy. Desktop builds remove
 unnecessary whitespace without renaming identifiers. Standalone Node includes
 the executable and upstream notices, while npm and development headers remain
 in the build directory. DSH's pnpm and plugin installation sources remain available

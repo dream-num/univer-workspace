@@ -55,11 +55,34 @@ const packs = join(runtime, "home", "internal-packages");
 await mkdir(packs, { recursive: true });
 for (const name of [
   "@univerjs/workspace-agent",
-  "dsh-univer-workspace-plugin",
   "dsh-univer-workspace-skin-plugin",
 ]) {
   run(process.execPath, [pnpm, "--filter", name, "pack", "--pack-destination", packs]);
 }
+
+// Keep source dependencies under the SDK upgrade policy. Only the self-contained
+// desktop installation manifest replaces bundled wrappers with their native deps.
+const pluginSource = join(repo, "packages/dsh-univer-workspace-plugin");
+const pluginStage = join(root, "capability-package");
+await mkdir(pluginStage);
+const pluginManifest = JSON.parse(await readFile(join(pluginSource, "package.json"), "utf8"));
+for (const entry of pluginManifest.files) {
+  await cp(join(pluginSource, entry), join(pluginStage, entry), { recursive: true });
+}
+const nativeDependencies = {};
+for (const wrapper of ["engine-formula-rust", "exchange-node"]) {
+  const manifest = JSON.parse(await readFile(join(pluginSource,
+    "node_modules/@univerjs-pro", wrapper, "package.json"), "utf8"));
+  const name = `@univerjs-pro/${wrapper}-binding`;
+  const version = manifest.dependencies?.[name];
+  if (typeof version !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version))
+    throw new Error(`Missing exact native dependency: ${name}`);
+  nativeDependencies[name] = version;
+}
+pluginManifest.dependencies = { ...nativeDependencies, ws: pluginManifest.dependencies.ws };
+delete pluginManifest.devDependencies;
+await writeFile(join(pluginStage, "package.json"), JSON.stringify(pluginManifest, null, 2));
+run(process.execPath, [pnpm, "pack", "--pack-destination", packs], { cwd: pluginStage });
 
 // Verify the official standalone Node download before extracting any bytes.
 // Node 24.18 fixes the stream regression that hangs Playwright archive extraction (#63834).
