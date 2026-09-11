@@ -1,27 +1,65 @@
 /**
  * ChatAgent Durable Object (DshHost) — Cloudflare Durable Object hosting Cordis Microkernel.
- * Manages Hibernatable WebSockets, 4-Channel Mux Protocol, OT Collaboration, and Reversible Agent Actions.
+ * Manages Hibernatable WebSockets, 4-Channel Mux Protocol, Official Univer OT Collaboration Protocol,
+ * and Reversible Agent Actions.
  */
 import { HostBase } from "./host/host-base.ts";
 import type { UniverCollabService } from "../plugins/univer-collab.ts";
 import type { ActionService } from "../kernel/action.ts";
+import { generateDefaultSnapshot } from "../plugins/univer-default-snapshots.ts";
+
+export interface CollabMemberAttachment {
+  memberID: string;
+  userID: string;
+  name: string;
+  rooms: string[];
+}
 
 export class DshHost extends HostBase<any> {
+  private sessionTickets = new Map<string, { userID: string; name: string; expiresAt: number }>();
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
-    // 1. WebSocket Upgrade handling for /api/remote.mux or /universer-api/websocket
+    // 1. WebSocket Upgrade handling for /universer-api/comb/connect or /api/remote.mux
     if (request.headers.get("Upgrade")?.toLowerCase() === "websocket") {
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
 
+      if (url.pathname === "/universer-api/comb/connect") {
+        const ticketParam = url.searchParams.get("sessionTicket") || "";
+        const ticketData = this.sessionTickets.get(ticketParam);
+        if (ticketParam) {
+          this.sessionTickets.delete(ticketParam);
+        }
+
+        const memberID = crypto.randomUUID();
+        const userID = ticketData?.userID || "user_admin";
+        const name = ticketData?.name || "Administrator";
+
+        const attachment: CollabMemberAttachment = {
+          memberID,
+          userID,
+          name,
+          rooms: []
+        };
+        server.serializeAttachment(attachment);
+
+        this.acceptWebSocket(server, ["comb", `member:${memberID}`]);
+
+        return new Response(null, {
+          status: 101,
+          webSocket: client
+        });
+      }
+
+      // Default Mux WebSocket upgrade
       const tags = ["mux"];
       const unitId = url.searchParams.get("unitId") || url.searchParams.get("docId");
       if (unitId) tags.push(`unit:${unitId}`);
 
       this.acceptWebSocket(server, tags);
 
-      // Notify kernel of connection
       try {
         const kernel = await this.ensureKernel();
         await kernel.emit("client/connect", { ws: server, tags });
@@ -84,6 +122,30 @@ export class DshHost extends HostBase<any> {
         );
       }
 
+      // GET /universer-api/user/session-ticket
+      if (url.pathname === "/universer-api/user/session-ticket" && request.method === "GET") {
+        const ticket = `ticket_${crypto.randomUUID()}`;
+        this.sessionTickets.set(ticket, {
+          userID: "user_admin",
+          name: "Administrator",
+          expiresAt: Date.now() + 300_000
+        });
+
+        // Purge expired tickets
+        const now = Date.now();
+        for (const [k, v] of this.sessionTickets.entries()) {
+          if (v.expiresAt <= now) this.sessionTickets.delete(k);
+        }
+
+        return new Response(
+          JSON.stringify({
+            error: { code: 0, message: "" },
+            ticket
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
       // POST /universer-api/authz/-/object/-/batch_allowed
       if (url.pathname === "/universer-api/authz/-/object/-/batch_allowed" && request.method === "POST") {
         const body = (await request.json().catch(() => ({}))) as any;
@@ -108,7 +170,144 @@ export class DshHost extends HostBase<any> {
         );
       }
 
-      // GET /universer-api/collab/snapshot
+      // GET /universer-api/snapshot/:type/unit/:unitID[/rev/:revision]
+      const snapshotRevMatch = url.pathname.match(
+        /^\/universer-api\/snapshot\/([^/]+)\/unit\/([^/]+)(?:\/rev\/([^/]+))?$/
+      );
+      if (snapshotRevMatch && request.method === "GET") {
+        const typeNum = parseInt(snapshotRevMatch[1], 10) || 2;
+        const unitID = snapshotRevMatch[2];
+        const rev = parseInt(snapshotRevMatch[3] || "0", 10);
+
+        let snapshot = collab?.getLatestSnapshot(unitID);
+        if (!snapshot) {
+          const defaultSnap = generateDefaultSnapshot(unitID, typeNum);
+          collab?.createUnit(unitID, typeNum, (defaultSnap as any).workbook?.name || (defaultSnap as any).doc?.name || "Document", defaultSnap);
+          snapshot = { rev: 1, data: defaultSnap };
+        }
+
+        const changesets = collab?.getChangesetsSince(unitID, rev || snapshot.rev) ?? [];
+
+        return new Response(
+          JSON.stringify({
+            error: { code: 0, message: "" },
+            snapshot: snapshot.data,
+            changesets
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // GET /universer-api/snapshot/:type/unit/:unitID/fetchmissing
+      const fetchMissingMatch = url.pathname.match(/^\/universer-api\/snapshot\/([^/]+)\/unit\/([^/]+)\/fetchmissing$/);
+      if (fetchMissingMatch && request.method === "GET") {
+        const unitID = fetchMissingMatch[2];
+        const from = parseInt(url.searchParams.get("from") || "0", 10);
+        const to = url.searchParams.get("to") ? parseInt(url.searchParams.get("to")!, 10) : undefined;
+        const changesets = collab?.getChangesetsSince(unitID, from, to) ?? [];
+        const unit = collab?.getUnit(unitID);
+
+        return new Response(
+          JSON.stringify({
+            error: { code: 0, message: "" },
+            changesets,
+            latestRevision: unit?.rev ?? 1
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Block endpoints: GET /universer-api/snapshot/:type/unit/:unitID/block/:blockID
+      // and /universer-api/snapshot/block/:type/unit/:unitID/block/:blockID
+      if (url.pathname.includes("/block/") && request.method === "GET") {
+        return new Response(
+          JSON.stringify({
+            error: { code: 4, message: "Sheet block was not found" }
+          }),
+          { status: 404, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /universer-api/comb/:type/unit/:unitID/new_changes
+      const newChangesMatch = url.pathname.match(/^\/universer-api\/comb\/([^/]+)\/unit\/([^/]+)\/new_changes$/);
+      if (newChangesMatch && request.method === "POST") {
+        const body = (await request.json().catch(() => ({}))) as any;
+        const unitID = newChangesMatch[2];
+        const changeset = body.changeset || body;
+
+        if (collab) {
+          collab.applyChangeset(changeset, body.memberID);
+        }
+
+        // 1. Send ACK back to the author
+        if (body.memberID) {
+          this.sendToMember(body.memberID, {
+            cmd: 6,
+            code: 1,
+            reason: "success",
+            routeKey: unitID,
+            collaMsg: {
+              eventID: "changeset_ack",
+              csAckEvent: {
+                cs: changeset
+              }
+            }
+          });
+        }
+
+        // 2. Broadcast new changesets to other peers in room
+        this.broadcastToRoom(
+          unitID,
+          {
+            cmd: 6,
+            code: 1,
+            reason: "success",
+            routeKey: unitID,
+            collaMsg: {
+              eventID: "new_changesets",
+              newCsEvent: {
+                cs: changeset
+              }
+            }
+          },
+          body.memberID
+        );
+
+        return new Response(
+          JSON.stringify({
+            error: { code: 0, message: "" }
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // DELETE /universer-api/snapshot/-/units
+      if (url.pathname === "/universer-api/snapshot/-/units" && request.method === "DELETE") {
+        return new Response(JSON.stringify({ error: { code: 0, message: "" } }), {
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      // POST /universer-api/snapshot/-/units/recover
+      if (url.pathname === "/universer-api/snapshot/-/units/recover" && request.method === "POST") {
+        return new Response(JSON.stringify({ error: { code: 0, message: "" } }), {
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      // File endpoints
+      if (url.pathname.includes("/sign-url") || url.pathname.includes("/upload")) {
+        return new Response(
+          JSON.stringify({
+            error: { code: 0, message: "" },
+            url: "",
+            fileID: "file_default"
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Legacy / fallback Collab Endpoints
       if (request.method === "GET" && url.pathname === "/universer-api/collab/snapshot") {
         if (!collab) return new Response(JSON.stringify({ error: "Collab service unavailable" }), { status: 503 });
         const unitId = url.searchParams.get("unitId") || "default";
@@ -118,7 +317,6 @@ export class DshHost extends HostBase<any> {
         });
       }
 
-      // POST /universer-api/collab/snapshot
       if (request.method === "POST" && url.pathname === "/universer-api/collab/snapshot") {
         if (!collab) return new Response(JSON.stringify({ error: "Collab service unavailable" }), { status: 503 });
         const body = (await request.json()) as any;
@@ -129,7 +327,6 @@ export class DshHost extends HostBase<any> {
         });
       }
 
-      // POST /universer-api/collab/changeset
       if (request.method === "POST" && url.pathname === "/universer-api/collab/changeset") {
         if (!collab) return new Response(JSON.stringify({ error: "Collab service unavailable" }), { status: 503 });
         const body = (await request.json()) as any;
@@ -144,7 +341,6 @@ export class DshHost extends HostBase<any> {
         });
       }
 
-      // GET /universer-api/collab/changesets
       if (request.method === "GET" && url.pathname === "/universer-api/collab/changesets") {
         if (!collab) return new Response(JSON.stringify({ error: "Collab service unavailable" }), { status: 503 });
         const unitId = url.searchParams.get("unitId") || "default";
@@ -186,7 +382,62 @@ export class DshHost extends HostBase<any> {
   }
 
   /**
-   * Hibernation WebSocket message handler with 4-Channel Multiplexing.
+   * Helper to retrieve active room members.
+   */
+  getRoomMembers(roomID: string): Array<{ memberID: string; userID: string; name: string; avatar: string }> {
+    const list: Array<{ memberID: string; userID: string; name: string; avatar: string }> = [];
+    for (const s of this.ctx.getWebSockets()) {
+      try {
+        const att = s.deserializeAttachment() as CollabMemberAttachment | null;
+        if (att && Array.isArray(att.rooms) && att.rooms.includes(roomID)) {
+          list.push({
+            memberID: att.memberID,
+            userID: att.userID,
+            name: att.name,
+            avatar: ""
+          });
+        }
+      } catch {}
+    }
+    return list;
+  }
+
+  /**
+   * Broadcasts a message to all members in a given room.
+   */
+  broadcastToRoom(roomID: string, msg: any, excludeMemberID?: string): void {
+    const str = typeof msg === "string" ? msg : JSON.stringify(msg);
+    for (const s of this.ctx.getWebSockets()) {
+      try {
+        const att = s.deserializeAttachment() as CollabMemberAttachment | null;
+        if (att && Array.isArray(att.rooms) && att.rooms.includes(roomID)) {
+          if (excludeMemberID && att.memberID === excludeMemberID) continue;
+          s.send(str);
+        }
+      } catch {}
+    }
+  }
+
+  /**
+   * Sends a message to a specific member by memberID.
+   */
+  sendToMember(memberID: string, msg: any): boolean {
+    const str = typeof msg === "string" ? msg : JSON.stringify(msg);
+    for (const s of this.ctx.getWebSockets()) {
+      try {
+        const att = s.deserializeAttachment() as CollabMemberAttachment | null;
+        if (att && att.memberID === memberID) {
+          s.send(str);
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  }
+
+  /**
+   * Hibernation WebSocket message handler with Univer Collaboration Protocol
+   * and 4-Channel Multiplexing.
    */
   async webSocketMessage(
     ws: WebSocket,
@@ -200,6 +451,140 @@ export class DshHost extends HostBase<any> {
           parsed = JSON.parse(message);
         } catch {
           parsed = { raw: message };
+        }
+      }
+
+      // 1. Fast-path Univer Collaboration Protocol (CombCmd)
+      if (typeof parsed?.cmd === "number") {
+        const att = ws.deserializeAttachment() as CollabMemberAttachment | null;
+        const memberID = att?.memberID || "unknown";
+        const userID = att?.userID || "user_admin";
+        const userName = att?.name || "Administrator";
+        const routeKey = typeof parsed.routeKey === "string" ? parsed.routeKey : "";
+
+        switch (parsed.cmd) {
+          case 1: // HELLO
+          case 5: // HEARTBEAT
+            ws.send(
+              JSON.stringify({
+                cmd: parsed.cmd,
+                code: 1,
+                reason: "success",
+                routeKey,
+                infoRsp: { memberID }
+              })
+            );
+            return;
+
+          case 2: { // JOIN
+            const rooms: string[] = parsed.joinReq?.rooms
+              ? parsed.joinReq.rooms.map((r: any) => r.roomID)
+              : routeKey
+              ? [routeKey]
+              : [];
+
+            if (att && Array.isArray(att.rooms)) {
+              for (const r of rooms) {
+                if (!att.rooms.includes(r)) {
+                  att.rooms.push(r);
+                }
+              }
+              ws.serializeAttachment(att);
+            }
+
+            const roomInfos: Record<string, any> = {};
+            for (const roomID of rooms) {
+              const membersInRoom = this.getRoomMembers(roomID);
+              roomInfos[roomID] = {
+                roomID,
+                members: membersInRoom
+              };
+
+              this.broadcastToRoom(
+                roomID,
+                {
+                  cmd: 6,
+                  code: 1,
+                  reason: "success",
+                  routeKey: roomID,
+                  collaMsg: {
+                    eventID: "users_enter",
+                    joinEvent: {
+                      memberID,
+                      userID,
+                      name: userName,
+                      avatar: ""
+                    }
+                  }
+                },
+                memberID
+              );
+            }
+
+            ws.send(
+              JSON.stringify({
+                cmd: 2,
+                code: 1,
+                reason: "success",
+                routeKey: routeKey || rooms[0] || "",
+                joinRsp: { roomInfos }
+              })
+            );
+            return;
+          }
+
+          case 3: { // LEAVE
+            const roomID = parsed.leaveReq?.roomID || routeKey;
+            if (roomID && att && Array.isArray(att.rooms)) {
+              att.rooms = att.rooms.filter((r) => r !== roomID);
+              ws.serializeAttachment(att);
+              this.broadcastToRoom(
+                roomID,
+                {
+                  cmd: 6,
+                  code: 1,
+                  reason: "success",
+                  routeKey: roomID,
+                  collaMsg: {
+                    eventID: "users_leave",
+                    leaveEvent: {
+                      memberID,
+                      name: userName
+                    }
+                  }
+                },
+                memberID
+              );
+            }
+            return;
+          }
+
+          case 4: { // INGEST (Cursor / Presence update)
+            if (parsed.collaMsg?.eventID === "update_cursor" && routeKey) {
+              this.broadcastToRoom(
+                routeKey,
+                {
+                  cmd: 6,
+                  code: 1,
+                  reason: "success",
+                  routeKey,
+                  collaMsg: {
+                    eventID: "update_cursor",
+                    updateCursorEvent: {
+                      unitID: routeKey,
+                      memberID,
+                      selection: parsed.collaMsg.updateCursorEvent?.selection
+                    }
+                  }
+                },
+                memberID
+              );
+            }
+            return;
+          }
+
+          default:
+            return;
         }
       }
 
@@ -342,6 +727,29 @@ export class DshHost extends HostBase<any> {
     wasClean?: boolean
   ): Promise<void> {
     try {
+      const att = ws.deserializeAttachment() as CollabMemberAttachment | null;
+      if (att && Array.isArray(att.rooms)) {
+        for (const roomID of att.rooms) {
+          this.broadcastToRoom(
+            roomID,
+            {
+              cmd: 6,
+              code: 1,
+              reason: "success",
+              routeKey: roomID,
+              collaMsg: {
+                eventID: "users_leave",
+                leaveEvent: {
+                  memberID: att.memberID,
+                  name: att.name
+                }
+              }
+            },
+            att.memberID
+          );
+        }
+      }
+
       if (this.kernel) {
         await this.kernel.emit("websocket/close", { ws, code, reason, wasClean });
       }

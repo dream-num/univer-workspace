@@ -22,6 +22,7 @@ export interface Env {
 let dbBooted = false;
 
 function applyCorsHeaders(request: Request, response: Response): Response {
+  if (response.status === 101 || response.webSocket) return response;
   const origin = request.headers.get("Origin") || "*";
   const headers = new Headers(response.headers);
   headers.set("Access-Control-Allow-Origin", origin);
@@ -96,8 +97,7 @@ export default {
         pathname === "/api/status" ||
         pathname.startsWith("/api/actions/")
       ) {
-        const docId = url.searchParams.get("docId") || url.searchParams.get("unitId") || "default";
-        const id = env.ChatAgent.idFromName(docId);
+        const id = env.ChatAgent.idFromName("univer_collab");
         const stub = env.ChatAgent.get(id);
         const res = await stub.fetch(request);
         return applyCorsHeaders(request, res);
