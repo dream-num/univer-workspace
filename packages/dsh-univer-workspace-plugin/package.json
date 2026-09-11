@@ -31,17 +31,8 @@
     "prototype:worktree-card": "node prototypes/worktree-card/run.mjs"
   },
   "dependencies": {
-    "@univer-cli/content-execution": "1.0.0-insiders.20260907-70fc579",
-    "@univer-cli/content-inspection": "1.0.0-insiders.20260907-70fc579",
-    "@univerjs-pro/boards-print": "1.0.0-insiders.20260907-70fc579",
-    "@univerjs-pro/collaboration": "1.0.0-insiders.20260907-70fc579",
-    "@univerjs-pro/collaboration-embed": "1.0.0-insiders.20260907-70fc579",
-    "@univerjs-pro/docs-print": "1.0.0-insiders.20260907-70fc579",
     "@univerjs-pro/engine-formula-rust-binding": "1.0.0-insiders.20260819-8209aa8",
-    "@univerjs-pro/exchange-node": "1.0.0-insiders.20260907-70fc579",
     "@univerjs-pro/exchange-node-binding": "0.1.0",
-    "@univerjs-pro/sheets-print": "1.0.0-insiders.20260907-70fc579",
-    "@univerjs-pro/slides-print": "1.0.0-insiders.20260907-70fc579",
     "ws": "8.21.3"
   },
   "devDependencies": {
@@ -238,7 +229,15 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "@types/react-dom": "18.3.7",
-    "@deepseek-ai/dsh-client-ui-sidebar-right": "0.1.5-rc.1"
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "0.1.5-rc.1",
+    "@univer-cli/content-execution": "1.0.0-insiders.20260907-70fc579",
+    "@univer-cli/content-inspection": "1.0.0-insiders.20260907-70fc579",
+    "@univerjs-pro/boards-print": "1.0.0-insiders.20260907-70fc579",
+    "@univerjs-pro/collaboration-embed": "1.0.0-insiders.20260907-70fc579",
+    "@univerjs-pro/docs-print": "1.0.0-insiders.20260907-70fc579",
+    "@univerjs-pro/exchange-node": "1.0.0-insiders.20260907-70fc579",
+    "@univerjs-pro/sheets-print": "1.0.0-insiders.20260907-70fc579",
+    "@univerjs-pro/slides-print": "1.0.0-insiders.20260907-70fc579"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.2",

@@ -63,6 +63,7 @@ export async function finalizeRuntime({ desktop, runtime, version }) {
     for (const item of await readdir(path, { withFileTypes: true })) {
       const child = join(path, item.name);
       if (
+        item.name.endsWith(".map") ||
         item.name === ".npmrc" ||
         item.name === ".cache" ||
         item.name === ".dsh-module-fallback" ||
@@ -78,6 +79,10 @@ export async function finalizeRuntime({ desktop, runtime, version }) {
     }
   }
   await sanitize(runtime);
+  const { runtimeSizeReport, verifySizeReport } = await import("./size-report.mjs");
+  const report = await runtimeSizeReport(runtime);
+  await writeFile(join(root, "runtime-size.json"), JSON.stringify(report, null, 2));
+  verifySizeReport(report);
   const { writeInventory } = await import("./inventory.cjs");
   await writeInventory(runtime);
   console.log(`Prepared ${version} for ${platform}-${arch}`);

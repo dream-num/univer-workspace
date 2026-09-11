@@ -88,6 +88,13 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - name: Verify packaged runtime after signing
         run: node apps/agent/desktop/scripts/smoke.mjs --packaged
+      - name: Upload runtime size report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-size-${{ matrix.target }}
+          path: apps/agent/desktop/.build/runtime-size.json
+          if-no-files-found: warn
       - name: Verify Linux Electron window
         if: runner.os == 'Linux'
         run: xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --packaged --no-sandbox

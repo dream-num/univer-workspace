@@ -19,7 +19,8 @@ await build({
   format: "esm",
   target: "node22",
   external,
-  sourcemap: true,
+  sourcemap: false,
+  minifyWhitespace: process.env.UWA_DESKTOP_BUILD === "1",
   logLevel: "info",
 });
 
@@ -35,7 +36,8 @@ await build({
   format: "esm",
   target: "node22",
   external: ["node:*", "@deepseek-ai/*"],
-  sourcemap: true,
+  sourcemap: false,
+  minifyWhitespace: process.env.UWA_DESKTOP_BUILD === "1",
   logLevel: "info",
 });
 
@@ -53,7 +55,8 @@ await build({
   jsxFragment: "Fragment",
   loader: { ".css": "text" },
   external: ["react", "react-dom"],
-  sourcemap: true,
+  sourcemap: false,
+  minifyWhitespace: process.env.UWA_DESKTOP_BUILD === "1",
   logLevel: "info",
   banner: {
     js: `var module = { exports: {} }; var exports = module.exports;\nwindow.__ModuleLoader__.load({ id: ${JSON.stringify(packageId)}, factory: (require) => {`,

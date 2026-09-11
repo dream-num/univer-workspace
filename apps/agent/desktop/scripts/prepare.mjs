@@ -50,7 +50,7 @@ run(process.execPath, [
   "--filter",
   "dsh-univer-workspace-skin-plugin...",
   "build",
-]);
+], { env: { ...process.env, UWA_DESKTOP_BUILD: "1" } });
 const packs = join(runtime, "home", "internal-packages");
 await mkdir(packs, { recursive: true });
 for (const name of [
@@ -99,7 +99,12 @@ if (platform === "win32") {
   await cp(join(root, stem, "node.exe"), join(runtime, "node", "bin", "node.exe"));
 } else {
   run("tar", ["-xzf", archivePath, "-C", root]);
-  await cp(join(root, stem), join(runtime, "node"), { recursive: true, verbatimSymlinks: true });
+  await mkdir(join(runtime, "node", "bin"), { recursive: true });
+  await cp(join(root, stem, "bin/node"), join(runtime, "node/bin/node"));
+}
+// Retain upstream license notices, not Node's build headers, npm or man pages.
+for (const name of ["LICENSE", "README.md", "CHANGELOG.md"]) {
+  await cp(join(root, stem, name), join(runtime, "node", name));
 }
 const node = join(runtime, "node", "bin", platform === "win32" ? "node.exe" : "node");
 const bootstrap = join(runtime, "bootstrap");
@@ -122,7 +127,7 @@ await writeFile(
 const npm =
   platform === "win32"
     ? join(root, stem, "node_modules/npm/bin/npm-cli.js")
-    : join(runtime, "node/lib/node_modules/npm/bin/npm-cli.js");
+    : join(root, stem, "lib/node_modules/npm/bin/npm-cli.js");
 run(node, [npm, "install", "--prefix", bootstrap, "--no-audit", "--no-fund"], { cwd: bootstrap });
 const { delimiter } = await import("node:path");
 const env = {

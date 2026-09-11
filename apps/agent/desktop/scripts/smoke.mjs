@@ -22,9 +22,20 @@ try {
     ? join(desktop, "artifacts", packaged[process.platform])
     : join(desktop, ".build/runtime");
   await runtimeTools.installRuntime(source, runtime);
+  const inventory = JSON.parse(await readFile(join(runtime, "integrity.json"), "utf8"));
+  if (Object.keys(inventory).some((path) => path.endsWith(".map")))
+    throw new Error("Desktop runtime must not include source maps");
   const metadata = JSON.parse(await readFile(join(runtime, "release.json"), "utf8"));
   const node = join(runtime, "node/bin", process.platform === "win32" ? "node.exe" : "node");
-  const binding = spawnSync(node, ["-e", "require('@univerjs-pro/exchange-node-binding')"], {
+  const binding = spawnSync(node, ["-e", `
+    require('@univerjs-pro/exchange-node-binding');
+    const { dirname, join } = require('node:path');
+    const { pathToFileURL } = require('node:url');
+    const worker = join(dirname(require.resolve('dsh-univer-workspace-plugin')), 'worker.js');
+    import(pathToFileURL(worker).href).then(module => {
+      if (!module.default) throw new Error('Packaged worker entry is missing');
+    }).catch(error => { console.error(error); process.exitCode = 1; });
+  `], {
     cwd: join(runtime, "home/profiles/univer-workspace-harness"),
     encoding: "utf8",
   });
@@ -141,7 +152,7 @@ try {
     });
     await page.goto(url);
     await page.waitForFunction(() => document.body.innerText.trim().length > 20);
-    await page.getByText(/Reconnecting/).waitFor({ state: "hidden", timeout: 30000 });
+    await page.getByRole("button", { name: /Reconnecting/ }).waitFor({ state: "hidden", timeout: 30000 });
     await page.screenshot({
       path: join(
         desktop,

@@ -21,7 +21,8 @@ await build({
   format: "esm",
   target: "node22",
   external,
-  sourcemap: true,
+  sourcemap: false,
+  minifyWhitespace: process.env.UWA_DESKTOP_BUILD === "1",
   logLevel: "info",
 });
 
@@ -34,7 +35,7 @@ await viteBuild({
   build: {
     outDir: "lib",
     emptyOutDir: false,
-    sourcemap: true,
+    sourcemap: false,
     cssCodeSplit: false,
     lib: {
       entry: resolve("src/client/index.tsx"),

@@ -47,7 +47,7 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   await page.waitForURL((url) => url.origin === "http://127.0.0.1:3101", { timeout: 600000 });
   await page.waitForFunction(() => document.body.innerText.trim().length > 20);
-  await page.getByText(/Reconnecting/).waitFor({ state: "hidden", timeout: 30000 });
+  await page.getByRole("button", { name: /Reconnecting/ }).waitFor({ state: "hidden", timeout: 30000 });
   await page.screenshot({ path: join(desktop, ".build/electron-smoke.png") });
   if (errors.length) throw new Error(`Electron renderer errors: ${errors.join("; ")}`);
   console.log("Electron window loaded the authenticated Agent UI with isolated user data.");

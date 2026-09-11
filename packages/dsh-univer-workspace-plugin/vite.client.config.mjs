@@ -12,7 +12,7 @@ export default defineConfig({
   build: {
     outDir: "lib",
     emptyOutDir: false,
-    sourcemap: true,
+    sourcemap: false,
     cssCodeSplit: false,
     lib: {
       entry: resolve("src/client/index.tsx"),

@@ -13,6 +13,30 @@ directly from Electron's ASAR. The version-scoped osx-sign patch follows DSH's
 avoid exhausting file descriptors. Remove it when an upstream release provides
 both fixes. Raising the descriptor limit alone did not fix the native build.
 
+## Release size policy
+
+Agent and both plugin builds do not generate source maps. Finalization removes
+maps supplied by third-party packages before inventory/signing, and runtime smoke
+checks reject any remaining maps. The Electron ASAR also excludes them.
+
+The capability plugin bundles its JavaScript SDK dependencies; only external
+native bindings and `ws` remain installation dependencies. Desktop builds remove
+unnecessary whitespace without renaming identifiers. Standalone Node includes
+the executable and upstream notices, while npm and development headers remain
+in the build directory. DSH's pnpm and plugin installation sources remain available
+for profile management. Licenses, Skills, the resource catalog and native Office
+bindings are runtime assets, not blanket cleanup targets.
+
+CI uploads `agent-size-<target>` reports containing uncompressed component sizes,
+file counts and the largest files. Reports support review without an arbitrary
+size threshold blocking releases.
+Installer compression is measured separately. Electron displays the app;
+the separate pinned Chromium serves the headless document-rendering worker.
+Sharing these browsers requires an explicit rendering lifecycle change and
+document export validation, rather than deleting the worker browser. This is
+tracked as a non-blocking upstream request in
+[univer-cli-sdk #63](https://github.com/dream-num/univer-cli-sdk/issues/63).
+
 ## Downloads and updates
 
 The initial download entry is [GitHub Releases](https://github.com/dream-num/univer-workspace/releases).

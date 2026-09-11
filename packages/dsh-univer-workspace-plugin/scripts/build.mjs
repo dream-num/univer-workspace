@@ -40,7 +40,8 @@ await build({
   format: "esm",
   target: "node22",
   external,
-  sourcemap: true,
+  sourcemap: false,
+  minifyWhitespace: process.env.UWA_DESKTOP_BUILD === "1",
   logLevel: "info",
 });
 
@@ -65,7 +66,8 @@ await build({
     "@univerjs-pro/engine-formula-rust-binding",
     "@univerjs-pro/exchange-node-binding",
   ],
-  sourcemap: true,
+  sourcemap: false,
+  minifyWhitespace: process.env.UWA_DESKTOP_BUILD === "1",
   logLevel: "info",
 });
 

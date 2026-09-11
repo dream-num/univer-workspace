@@ -6,6 +6,12 @@ authorizing User can access. Documents are Units managed and persisted by the
 Univer Workspace backend; local paths are used only for task assets and
 import/export, not as document identities.
 
+The distributed host, worker and browser entries bundle their JavaScript SDK
+dependencies without source maps. SDK build inputs belong in devDependencies;
+only external native bindings and `ws` are installed alongside the bundle.
+DSH peers remain host-provided. Moving a dependency across this boundary requires
+checking the emitted bundle and running the isolated desktop runtime checks.
+
 ## Why run in a dedicated DSH profile?
 
 This plugin is part of the Workspace Agent application composition. The supported
