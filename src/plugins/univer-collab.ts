@@ -163,6 +163,37 @@ export class UniverCollabService {
     return { success: true, rev };
   }
 
+  listChangesetEntries(unitId: string): Array<{
+    id: string;
+    rev: number;
+    clientId: string;
+    createdAt: number;
+    changeset: Record<string, unknown>;
+  }> {
+    return this.sql
+      .exec<{
+        id: string;
+        rev: number;
+        client_id: string;
+        created_at: number;
+        mutation: string;
+        inverse_mutation: string;
+        changeset_data: string;
+      }>(
+        `SELECT id, rev, client_id, created_at, mutation, inverse_mutation, changeset_data
+         FROM univer_changesets WHERE unit_id = ? ORDER BY rev ASC`,
+        unitId
+      )
+      .toArray()
+      .map((row) => ({
+        id: row.id,
+        rev: row.rev,
+        clientId: row.client_id,
+        createdAt: row.created_at,
+        changeset: this.parseChangesetRow(unitId, row)
+      }));
+  }
+
   getChangesetsSince(unitId: string, sinceRev: number, toRev?: number): any[] {
     let query = `SELECT mutation, inverse_mutation, changeset_data, rev, id, client_id, created_at
                  FROM univer_changesets WHERE unit_id = ? AND rev > ?`;
@@ -184,23 +215,37 @@ export class UniverCollabService {
         created_at: number;
       }>(query, ...params)
       .toArray()
-      .map((row) => {
-        if (row.changeset_data && row.changeset_data !== "{}") {
-          try {
-            return JSON.parse(row.changeset_data);
-          } catch {}
-        }
-        return {
-          id: row.id,
-          unitID: unitId,
-          rev: row.rev,
-          revision: row.rev,
-          clientId: row.client_id,
-          mutation: row.mutation ? JSON.parse(row.mutation) : {},
-          inverseMutation: row.inverse_mutation ? JSON.parse(row.inverse_mutation) : {},
-          createdAt: row.created_at
-        };
-      });
+      .map((row) => this.parseChangesetRow(unitId, row));
+  }
+
+  private parseChangesetRow(
+    unitId: string,
+    row: {
+      id: string;
+      rev: number;
+      client_id: string;
+      created_at: number;
+      mutation: string;
+      inverse_mutation: string;
+      changeset_data: string;
+    }
+  ): Record<string, unknown> {
+    if (row.changeset_data && row.changeset_data !== "{}") {
+      try {
+        const parsed = JSON.parse(row.changeset_data);
+        if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
+      } catch {}
+    }
+    return {
+      id: row.id,
+      unitID: unitId,
+      rev: row.rev,
+      revision: row.rev,
+      clientId: row.client_id,
+      mutation: row.mutation ? JSON.parse(row.mutation) : {},
+      inverseMutation: row.inverse_mutation ? JSON.parse(row.inverse_mutation) : {},
+      createdAt: row.created_at
+    };
   }
 }
 

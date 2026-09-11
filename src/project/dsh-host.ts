@@ -13,6 +13,12 @@ import {
   WORKTREE_CHANGE_NOTIFY_PATH,
   WORKTREES_CHANGED
 } from "../integrations/worktree-change-feed.ts";
+import {
+  buildHistoryChangesetsBody,
+  buildHistoryCreatorsBody,
+  buildHistoryListBody,
+  parsePositiveInt
+} from "../integrations/univer-history.ts";
 
 export interface CollabMemberAttachment {
   kind?: "comb";
@@ -329,6 +335,43 @@ export class DshHost extends HostBase<any> {
           }),
           { headers: { "Content-Type": "application/json" } }
         );
+      }
+
+      // GET /universer-api/history/:unitID/list|creators|cs
+      const historyMatch = url.pathname.match(/^\/universer-api\/history\/([^/]+)\/(list|creators|cs)$/);
+      if (historyMatch && request.method === "GET") {
+        const unitID = historyMatch[1];
+        const action = historyMatch[2];
+        const unit = collab?.getUnit(unitID);
+        const entries = collab?.listChangesetEntries(unitID) ?? [];
+        const unitInfo = unit
+          ? { unitId: unit.unit_id, rev: unit.rev, createdAt: unit.created_at }
+          : null;
+
+        if (action === "list") {
+          const length = parsePositiveInt(url.searchParams.get("length"), 20);
+          if (length === null) {
+            return jsonHistoryError(400, 7, "length must be a positive integer");
+          }
+          const lastLabel = url.searchParams.get("lastLabel") ?? undefined;
+          return jsonHistory(
+            buildHistoryListBody(unitID, unitInfo, entries, {
+              length,
+              lastLabel: lastLabel || undefined
+            })
+          );
+        }
+
+        if (action === "creators") {
+          return jsonHistory(buildHistoryCreatorsBody(unitInfo, entries));
+        }
+
+        const startRevision = parsePositiveInt(url.searchParams.get("startRevision"));
+        const endRevision = parsePositiveInt(url.searchParams.get("endRevision"));
+        if (startRevision === null || endRevision === null) {
+          return jsonHistoryError(400, 7, "startRevision and endRevision must be positive integers");
+        }
+        return jsonHistory(buildHistoryChangesetsBody(unitID, entries, startRevision, endRevision));
       }
 
       // Legacy / fallback Collab Endpoints
@@ -811,6 +854,17 @@ export class DshHost extends HostBase<any> {
       console.error("Error handling webSocketClose:", err);
     }
   }
+}
+
+function jsonHistory(body: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" }
+  });
+}
+
+function jsonHistoryError(status: number, code: number, message: string): Response {
+  return jsonHistory({ error: { code, message } }, status);
 }
 
 export { DshHost as ChatAgent };
