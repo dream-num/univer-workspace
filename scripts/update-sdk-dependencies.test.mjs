@@ -286,6 +286,18 @@ test("accepts dev SDK overrides and rejects release-channel SDK overrides", () =
   }
 });
 
+test("refuses a flow-style overrides mapping instead of silently skipping it", () => {
+  const source = [
+    "packages:",
+    "  - apps/*",
+    "",
+    'overrides: { "@univerjs/core": "1.0.0-insiders.old" }',
+    "",
+  ].join("\n");
+  assert.throws(() => stripSdkOverrides(source), /overrides must use block style/);
+  assert.throws(() => validateWorkspaceSdkOverrides(source), /overrides must use block style/);
+});
+
 test("the workspace configuration carries no release-channel SDK override", () => {
   const source = readFileSync(new URL("../pnpm-workspace.yaml", import.meta.url), "utf8");
   assert.doesNotThrow(() => validateWorkspaceSdkOverrides(source));

@@ -30,6 +30,7 @@ const EXACT_SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const DEV_VERSION_PATTERN = /^\d+\.\d+\.\d+-dev(?:[.-]|$)/u;
 const TOP_LEVEL_KEY_PATTERN = /^([A-Za-z0-9_-]+):(?:\s|$)/u;
+const INLINE_VALUE_PATTERN = /^[A-Za-z0-9_-]+:\s*([^#\s].*)$/u;
 const OVERRIDE_ENTRY_PATTERN =
   /^(\s+)(?:"([^"]+)"|'([^']+)'|([^\s#][^:]*?)):\s*(.*?)\s*$/u;
 
@@ -211,6 +212,14 @@ function findOverridesBlocks(lines) {
   for (let index = 0; index < lines.length; index += 1) {
     const header = TOP_LEVEL_KEY_PATTERN.exec(lines[index]);
     if (header === null || header[1] !== "overrides") continue;
+    // A flow-style mapping would hide every SDK entry from the line scanner, so
+    // refuse it instead of reporting a clean strip we did not perform.
+    const inline = INLINE_VALUE_PATTERN.exec(lines[index]);
+    if (inline !== null) {
+      throw new Error(
+        `pnpm-workspace.yaml overrides must use block style, found: ${inline[1]}`,
+      );
+    }
     const entries = [];
     let cursor = index + 1;
     while (cursor < lines.length) {
@@ -285,6 +294,8 @@ export async function main(argv) {
     ]);
     const updated = await discoverWorkspacePackages();
     validateWorkspaceSdkDependencies(updated, version);
+    // Post-condition on the configuration kept on disk: no release-channel
+    // override may survive the update that just ran.
     validateWorkspaceSdkOverrides(workspaceConfig);
   } catch (error) {
     await Promise.all(packages.map((pkg) => writeFile(pkg.packagePath, pkg.source, "utf8")));

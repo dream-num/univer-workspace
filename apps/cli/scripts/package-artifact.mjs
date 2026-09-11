@@ -147,33 +147,43 @@ export function resolveRenderRuntimeDependencies(clientCore, renderRuntime) {
 }
 
 export function resolveFormulaBindingVersion(headless, formula) {
-  const formulaVersion = readOwnedDependency(headless, "@univerjs-pro/engine-formula-rust");
-  if (formula.version !== formulaVersion) {
-    throw new Error(
-      `Resolved @univerjs-pro/engine-formula-rust ${String(formula.version)} does not match declared ${formulaVersion}`,
-    );
-  }
-  return readOwnedDependency(formula, "@univerjs-pro/engine-formula-rust-binding");
+  return resolveOwnedBindingVersion(
+    headless,
+    formula,
+    "@univerjs-pro/engine-formula-rust",
+    "@univerjs-pro/engine-formula-rust-binding",
+  );
 }
 
 export function resolveExchangeNodeBindingVersion(clientCore, exchangeNode) {
-  const exchangeNodeVersion = readOwnedDependency(clientCore, "@univerjs-pro/exchange-node");
-  if (exchangeNode.version !== exchangeNodeVersion) {
-    throw new Error(
-      `Resolved @univerjs-pro/exchange-node ${String(exchangeNode.version)} does not match declared ${exchangeNodeVersion}`,
-    );
-  }
-  return readOwnedDependency(exchangeNode, "@univerjs-pro/exchange-node-binding");
+  return resolveOwnedBindingVersion(
+    clientCore,
+    exchangeNode,
+    "@univerjs-pro/exchange-node",
+    "@univerjs-pro/exchange-node-binding",
+  );
 }
 
 export function resolveTypstNativeBindingVersion(clientCore, typst) {
-  const facadeVersion = readOwnedDependency(clientCore, "@univer-cli/doc-typst-facade");
-  if (typst.version !== facadeVersion) {
+  return resolveOwnedBindingVersion(
+    clientCore,
+    typst,
+    "@univer-cli/doc-typst-facade",
+    "@univerjs-pro/doc-typst-native-binding",
+  );
+}
+
+// A binding version is only trustworthy when the wrapper that owns it is the
+// version its consumer declared; otherwise the artifact would install a native
+// binding that does not match the SDK baseline.
+function resolveOwnedBindingVersion(owner, wrapper, wrapperName, bindingName) {
+  const declared = readOwnedDependency(owner, wrapperName);
+  if (wrapper.version !== declared) {
     throw new Error(
-      `Resolved @univer-cli/doc-typst-facade ${String(typst.version)} does not match declared ${facadeVersion}`,
+      `Resolved ${wrapperName} ${String(wrapper.version)} does not match declared ${declared}`,
     );
   }
-  return readOwnedDependency(typst, "@univerjs-pro/doc-typst-native-binding");
+  return readOwnedDependency(wrapper, bindingName);
 }
 
 function copyMetadata(source) {
