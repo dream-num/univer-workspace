@@ -67,7 +67,10 @@ test("shutdown stops its owned process without touching another process", async 
     unrelated.kill("SIGKILL");
   });
   await Promise.all([once(owned, "spawn"), once(unrelated, "spawn")]);
+  // OS group termination can precede Node delivery of the child exit event.
+  const exited = once(owned, "exit", { signal: AbortSignal.timeout(10000) });
   await runtime.stopBackend(owned);
+  await exited;
   assert.ok(owned.signalCode || owned.exitCode !== null);
   assert.equal(unrelated.exitCode, null);
   assert.equal(unrelated.signalCode, null);

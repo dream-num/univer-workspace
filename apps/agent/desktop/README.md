@@ -24,7 +24,9 @@ native bindings and `ws` remain installation dependencies. Desktop builds remove
 unnecessary whitespace without renaming identifiers. Standalone Node includes
 the executable and upstream notices, while npm and development headers remain
 in the build directory. DSH's pnpm and plugin installation sources remain available
-for profile management. Licenses, Skills, the resource catalog and native Office
+for profile management. node-pty retains only target-platform prebuilds alongside
+any locally compiled fallback; packaged smoke tests exercise a real terminal.
+Licenses, Skills, the resource catalog and native Office
 bindings are runtime assets, not blanket cleanup targets.
 
 CI uploads `agent-size-<target>` reports containing uncompressed component sizes,

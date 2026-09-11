@@ -41,6 +41,19 @@ try {
   });
   if (binding.status !== 0)
     throw new Error(`Packaged Office native binding failed: ${binding.stderr}`);
+  const terminal = spawnSync(node, ["-e", `
+    const pty = require('node-pty').spawn(process.execPath,
+      ['-e', 'console.log("uwa-pty-ready")'], { cols: 80, rows: 24 });
+    let output = '';
+    const timer = setTimeout(() => { pty.kill(); process.exit(1); }, 15000);
+    pty.onData(data => { output += data; });
+    pty.onExit(({ exitCode }) => {
+      clearTimeout(timer);
+      if (exitCode !== 0 || !output.includes('uwa-pty-ready')) process.exitCode = 1;
+    });
+  `], { cwd: join(runtime, "bootstrap"), encoding: "utf8", timeout: 20000 });
+  if (terminal.error || terminal.status !== 0)
+    throw new Error(`Packaged PTY failed: ${terminal.error ?? terminal.stderr}`);
   const data = join(root, "data");
   const workspace = join(root, "workspace");
   await mkdir(data);
