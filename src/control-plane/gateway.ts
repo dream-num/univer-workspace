@@ -105,6 +105,41 @@ function formatNodeSummary(node: NodeItem, resource?: any) {
   };
 }
 
+async function formatWorktreeSummary(wt: any, db: ControlPlaneDb) {
+  const creator = await db.getUserById(wt.creator_user_id);
+  let teamSpace = null;
+  if (wt.team_space_id) {
+    const s = await db.getSpaceById(wt.team_space_id);
+    if (s) {
+      teamSpace = { id: s.id, type: s.type, name: s.name };
+    }
+  }
+
+  return {
+    id: wt.id,
+    name: wt.name,
+    summary: wt.summary ?? null,
+    kind: wt.kind,
+    teamSpace,
+    visibility: wt.visibility,
+    state: (wt.processed_at ? "merged" : "draft") as "draft" | "ready" | "merging" | "merged" | "discarded",
+    creator: creator
+      ? formatUser(creator)
+      : { id: wt.creator_user_id, username: "unknown", displayName: "Unknown", avatarUrl: null },
+    unitCount: 0,
+    processedAt: wt.processed_at ? new Date(wt.processed_at).toISOString() : null,
+    createdAt: new Date(wt.created_at).toISOString(),
+    updatedAt: new Date(wt.updated_at).toISOString(),
+    capabilities: {
+      open: true,
+      ready: !wt.processed_at,
+      reopen: !!wt.processed_at,
+      merge: !wt.processed_at,
+      discard: !wt.processed_at
+    }
+  };
+}
+
 export async function resolveGatewayContext(request: Request, db: ControlPlaneDb): Promise<GatewayContext> {
   const cookieHeader = request.headers.get("Cookie");
   const authHeader = request.headers.get("Authorization");
@@ -644,7 +679,11 @@ export async function handleControlPlaneRoutes(
   if (path === "/api/worktrees" && method === "GET") {
     const spaceId = url.searchParams.get("spaceId") ?? undefined;
     const worktrees = await db.listWorktrees(currentUser.id, spaceId);
-    return jsonResponse({ worktrees });
+    const items = await Promise.all(worktrees.map((wt) => formatWorktreeSummary(wt, db)));
+    return jsonResponse({
+      items,
+      nextCursor: null
+    });
   }
 
   if (path === "/api/worktrees" && method === "POST") {
@@ -657,14 +696,19 @@ export async function handleControlPlaneRoutes(
       teamSpaceId: body.teamSpaceId,
       visibility: body.visibility ?? "private"
     });
-    return jsonResponse(wt);
+    const summary = await formatWorktreeSummary(wt, db);
+    return jsonResponse(summary, 201);
   }
 
   const worktreeMatch = path.match(/^\/api\/worktrees\/([^/]+)$/);
   if (worktreeMatch && method === "GET") {
     const wt = await db.getWorktree(worktreeMatch[1]);
     if (!wt) return jsonResponse({ error: { message: "Worktree not found" } }, 404);
-    return jsonResponse(wt);
+    const summary = await formatWorktreeSummary(wt, db);
+    return jsonResponse({
+      ...summary,
+      units: []
+    });
   }
 
   const worktreeDiscardMatch = path.match(/^\/api\/worktrees\/([^/]+)\/discard$/);

@@ -206,6 +206,16 @@ describe("Master Cloudflare Worker Edge Gateway", async () => {
     const unknownData = await unknownRes.json();
     assert.ok(unknownData.error);
 
+    // 6e. Test Worktrees: active list
+    const wtReq = new Request("https://workspace.edge/api/worktrees?scope=active", {
+      headers: { Cookie: sessionCookie }
+    });
+    const wtRes = await worker.fetch(wtReq, env as any, {} as any);
+    assert.equal(wtRes.status, 200);
+    assert.equal(wtRes.headers.get("Content-Type")?.includes("application/json"), true);
+    const wtData = await wtRes.json();
+    assert.ok(Array.isArray(wtData.items));
+
     // 7. Logout
     const logoutReq = new Request("https://workspace.edge/api/auth/logout", {
       method: "POST",
