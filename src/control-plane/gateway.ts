@@ -105,6 +105,59 @@ function formatNodeSummary(node: NodeItem, resource?: any) {
   };
 }
 
+function formatSpaceSummary(space: Space) {
+  return {
+    id: space.id,
+    type: space.type,
+    name: space.name,
+    publicRead: space.public_read === 1
+  };
+}
+
+async function formatNodeResponse(db: ControlPlaneDb, node: NodeItem, resource?: any) {
+  const space = await db.getSpaceById(node.space_id);
+  if (!space) return null;
+  const breadcrumbs = await db.getNodeBreadcrumbs(node.id);
+  return {
+    node: formatNodeSummary(node, resource),
+    space: formatSpaceSummary(space),
+    breadcrumbs: breadcrumbs
+      .filter((crumb) => crumb.id !== node.id)
+      .map((crumb) => ({ id: crumb.id, name: crumb.name })),
+    navigationRootNodeId: null
+  };
+}
+
+function formatOpenResource(resource: any, node: NodeItem | null | undefined) {
+  if (resource.kind === "univer") {
+    return {
+      id: resource.id,
+      kind: "univer" as const,
+      nodeId: node?.id ?? resource.node_id,
+      spaceId: node?.space_id ?? "",
+      name: node?.name ?? "",
+      unitId: resource.univer?.unit_id ?? "",
+      unitType: resource.univer?.unit_type ?? "sheet",
+      accessRole: "admin" as const,
+      editorMode: "edit" as const
+    };
+  }
+  return {
+    id: resource.id,
+    kind: "blob" as const,
+    nodeId: node?.id ?? resource.node_id,
+    spaceId: node?.space_id ?? "",
+    name: node?.name ?? "",
+    accessRole: "admin" as const,
+    originalFilename: resource.blob?.original_filename ?? node?.name ?? "",
+    mediaType: resource.blob?.media_type ?? "application/octet-stream",
+    byteSize: resource.blob?.byte_size ?? 0,
+    sha256: resource.blob?.sha256 ?? "",
+    contentUrl: `/api/blobs/${resource.id}/content`,
+    downloadUrl: `/api/blobs/${resource.id}/download`
+  };
+}
+
 async function formatWorktreeSummary(wt: any, db: ControlPlaneDb) {
   const creator = await db.getUserById(wt.creator_user_id);
   let teamSpace = null;
@@ -410,7 +463,9 @@ export async function handleControlPlaneRoutes(
       const node = await db.getNodeById(nodeId);
       if (!node) return jsonResponse({ error: { message: "Node not found" } }, 404);
       const res = await db.getResourceByNodeId(nodeId);
-      return jsonResponse(formatNodeSummary(node, res));
+      const payload = await formatNodeResponse(db, node, res);
+      if (!payload) return jsonResponse({ error: { message: "Space not found" } }, 404);
+      return jsonResponse(payload);
     }
     if (method === "PATCH") {
       const body = (await request.json()) as any;
@@ -548,7 +603,8 @@ export async function handleControlPlaneRoutes(
     const res = await db.getResourceById(resourceId);
     if (!res) return jsonResponse({ error: { message: "Resource not found" } }, 404);
     await db.touchRecentResource(currentUser.id, resourceId);
-    return jsonResponse({ resource: res });
+    const node = res.node ?? (await db.getNodeById(res.node_id));
+    return jsonResponse({ resource: formatOpenResource(res, node) });
   }
 
   // /api/unit-resources/:unitId
@@ -557,7 +613,12 @@ export async function handleControlPlaneRoutes(
     const unitId = unitResourceMatch[1];
     const res = await db.getResourceByUnitId(unitId);
     if (!res) return jsonResponse({ error: { message: "Unit resource not found" } }, 404);
-    return jsonResponse(res);
+    const node = res.node ?? (await db.getNodeById(res.node_id));
+    if (!node) return jsonResponse({ error: { message: "Node not found" } }, 404);
+    return jsonResponse({
+      resource: formatResourceSummary(res),
+      node: formatNodeSummary(node, res)
+    });
   }
 
   // ==========================================

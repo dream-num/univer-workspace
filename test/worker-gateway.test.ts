@@ -152,6 +152,29 @@ describe("Master Cloudflare Worker Edge Gateway", async () => {
     assert.equal(newResource.resource.kind, "univer");
     assert.equal(newResource.resource.univer.unit_type, "sheet");
 
+    const nodeId = newResource.node.id;
+    const nodeReq = new Request(`https://workspace.edge/api/nodes/${nodeId}`, {
+      headers: { Cookie: sessionCookie }
+    });
+    const nodeRes = await worker.fetch(nodeReq, env as any, {} as any);
+    assert.equal(nodeRes.status, 200);
+    const nodeData = await nodeRes.json();
+    assert.equal(nodeData.node.id, nodeId);
+    assert.equal(nodeData.node.resource.kind, "univer");
+    assert.ok(nodeData.space.id);
+    assert.ok(Array.isArray(nodeData.breadcrumbs));
+
+    const openReq = new Request(
+      `https://workspace.edge/api/resources/${newResource.resource.id}/open`,
+      { method: "POST", headers: { Cookie: sessionCookie } }
+    );
+    const openRes = await worker.fetch(openReq, env as any, {} as any);
+    assert.equal(openRes.status, 200);
+    const openData = await openRes.json();
+    assert.equal(openData.resource.kind, "univer");
+    assert.equal(openData.resource.editorMode, "edit");
+    assert.ok(openData.resource.unitId);
+
     // 6. List root nodes of personal space
     const nodesReq = new Request(`https://workspace.edge/api/spaces/${personalSpaceId}/nodes`, {
       headers: { Cookie: sessionCookie }
