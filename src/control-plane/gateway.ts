@@ -13,6 +13,8 @@ import {
 } from "./auth.ts";
 import type { NodeItem, Space, SpaceRole, User } from "./types.ts";
 
+type AccessRole = "owner" | SpaceRole;
+
 export interface GatewayContext {
   db: ControlPlaneDb;
   currentUser: User | null;
@@ -38,21 +40,38 @@ function formatUser(user: User) {
   };
 }
 
-function formatSpaceView(space: Space, role: SpaceRole = "admin") {
+function spaceCapabilities(role: AccessRole) {
+  return {
+    browseRoot: true,
+    createAtRoot: role !== "viewer",
+    renameSpace: role === "owner" || role === "admin",
+    manageMembers: role === "owner" || role === "admin",
+    viewTrash: role === "owner" || role === "admin"
+  };
+}
+
+function formatSpaceView(space: Space, role: AccessRole) {
   return {
     id: space.id,
     type: space.type,
     name: space.name,
     publicRead: space.public_read === 1,
     accessRole: role,
-    capabilities: {
-      browseRoot: true,
-      createAtRoot: true,
-      renameSpace: true,
-      manageMembers: true,
-      viewTrash: true
-    }
+    capabilities: spaceCapabilities(role)
   };
+}
+
+async function resolveSpaceAccessRole(
+  db: ControlPlaneDb,
+  space: Space,
+  userId: string
+): Promise<AccessRole> {
+  if (space.owner_user_id === userId) return "owner";
+  const member = await db.getSpaceMember(space.id, userId);
+  if (member?.role === "admin" || member?.role === "editor" || member?.role === "viewer") {
+    return member.role;
+  }
+  return "viewer";
 }
 
 function formatResourceSummary(resource?: any) {
@@ -360,9 +379,12 @@ export async function handleControlPlaneRoutes(
 
   if (path === "/api/spaces" && method === "GET") {
     const spaces = await db.listUserSpaces(currentUser.id);
-    return jsonResponse({
-      spaces: spaces.map((s) => formatSpaceView(s, "admin"))
-    });
+    const views = await Promise.all(
+      spaces.map(async (s) =>
+        formatSpaceView(s, await resolveSpaceAccessRole(db, s, currentUser.id))
+      )
+    );
+    return jsonResponse({ spaces: views });
   }
 
   if (path === "/api/team-spaces" && method === "POST") {
@@ -376,7 +398,7 @@ export async function handleControlPlaneRoutes(
       ownerUserId: currentUser.id,
       publicRead: body.publicRead ? 1 : 0
     });
-    return jsonResponse(formatSpaceView(space, "admin"));
+    return jsonResponse(formatSpaceView(space, "owner"));
   }
 
   // /api/spaces/:spaceId
@@ -386,7 +408,9 @@ export async function handleControlPlaneRoutes(
     if (method === "GET") {
       const space = await db.getSpaceById(spaceId);
       if (!space) return jsonResponse({ error: { message: "Space not found" } }, 404);
-      return jsonResponse(formatSpaceView(space, "admin"));
+      return jsonResponse(
+        formatSpaceView(space, await resolveSpaceAccessRole(db, space, currentUser.id))
+      );
     }
     if (method === "PATCH") {
       const body = (await request.json()) as any;
@@ -395,7 +419,9 @@ export async function handleControlPlaneRoutes(
         publicRead: body.publicRead !== undefined ? (body.publicRead ? 1 : 0) : undefined
       });
       if (!updated) return jsonResponse({ error: { message: "Space not found" } }, 404);
-      return jsonResponse(formatSpaceView(updated, "admin"));
+      return jsonResponse(
+        formatSpaceView(updated, await resolveSpaceAccessRole(db, updated, currentUser.id))
+      );
     }
   }
 
@@ -554,14 +580,14 @@ export async function handleControlPlaneRoutes(
 
   if (path === "/api/resources" && method === "POST") {
     const body = (await request.json()) as any;
-    const { spaceId, parentId, name, unitType = "sheet", unitId } = body;
+    const { spaceId, parentId, parentNodeId, name, unitType = "sheet", unitId } = body;
     if (!spaceId || !name) {
       return jsonResponse({ error: { message: "spaceId and name are required" } }, 400);
     }
 
     const node = await db.createNode({
       spaceId,
-      parentId: parentId ?? null,
+      parentId: parentNodeId ?? parentId ?? null,
       name,
       createdBy: currentUser.id
     });

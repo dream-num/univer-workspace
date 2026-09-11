@@ -139,6 +139,9 @@ describe("Master Cloudflare Worker Edge Gateway", async () => {
     assert.equal(spacesRes.status, 200);
     const spacesData = await spacesRes.json();
     assert.ok(spacesData.spaces.length >= 1);
+    assert.equal(spacesData.spaces[0].type, "personal");
+    assert.equal(spacesData.spaces[0].accessRole, "owner");
+    assert.equal(spacesData.spaces[0].capabilities.createAtRoot, true);
     const personalSpaceId = spacesData.spaces[0].id;
 
     // 5. Create Sheet Resource in personal space
@@ -159,6 +162,31 @@ describe("Master Cloudflare Worker Edge Gateway", async () => {
     const newResource = await createResRes.json();
     assert.equal(newResource.resource.kind, "univer");
     assert.equal(newResource.resource.univer.unit_type, "sheet");
+    assert.ok(newResource.node?.id);
+
+    const uploadSessionReq = new Request("https://workspace.edge/api/blob-upload-sessions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: sessionCookie
+      },
+      body: JSON.stringify({
+        spaceId: personalSpaceId,
+        parentNodeId: null,
+        name: "brief.pdf",
+        originalFilename: "brief.pdf",
+        byteSize: 12,
+        declaredMediaType: "application/pdf"
+      })
+    });
+    const uploadSessionRes = await worker.fetch(uploadSessionReq, env as any, {} as any);
+    assert.equal(uploadSessionRes.status, 200);
+    const uploadSession = await uploadSessionRes.json();
+    assert.equal(uploadSession.uploadTarget.method, "PUT");
+    assert.equal(
+      uploadSession.uploadTarget.contentUrl,
+      `/api/blob-upload-sessions/${uploadSession.upload.id}/content`
+    );
 
     const nodeId = newResource.node.id;
     const nodeReq = new Request(`https://workspace.edge/api/nodes/${nodeId}`, {

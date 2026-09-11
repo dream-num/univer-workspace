@@ -128,12 +128,15 @@ export async function handleBlobRoutes(
   if (path === "/api/blob-upload-sessions" && method === "POST") {
     if (!currentUserId) return new Response("Unauthorized", { status: 401 });
     const body = (await request.json()) as any;
-    const { spaceId, parentNodeId, name, filename, byteSize, mediaType } = body;
+    const originalFilename =
+      body.originalFilename || body.filename || body.name || "upload.bin";
+    const declaredMediaType = body.declaredMediaType || body.mediaType || null;
+    const { spaceId, parentNodeId, name, byteSize } = body;
 
     const uploadId = `upl_${crypto.randomUUID()}`;
     const nodeId = `node_${crypto.randomUUID()}`;
     const resourceId = `res_${crypto.randomUUID()}`;
-    const objectKey = `blobs/${resourceId}/${filename}`;
+    const objectKey = `blobs/${resourceId}/${originalFilename}`;
     const operationId = `op_${crypto.randomUUID()}`;
 
     const session = await db.createUploadSession({
@@ -145,9 +148,9 @@ export async function handleBlobRoutes(
       node_id: nodeId,
       resource_id: resourceId,
       object_key: objectKey,
-      node_name: name || filename,
-      original_filename: filename,
-      declared_media_type: mediaType ?? null,
+      node_name: name || originalFilename,
+      original_filename: originalFilename,
+      declared_media_type: declaredMediaType,
       detected_media_type: null,
       byte_size: byteSize || 0,
       received_size: null,
@@ -162,7 +165,10 @@ export async function handleBlobRoutes(
     return new Response(
       JSON.stringify({
         upload: session,
-        uploadTarget: { url: `/api/blob-upload-sessions/${uploadId}/content` }
+        uploadTarget: {
+          method: "PUT",
+          contentUrl: `/api/blob-upload-sessions/${uploadId}/content`
+        }
       }),
       { headers: { "Content-Type": "application/json" } }
     );
