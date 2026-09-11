@@ -164,22 +164,22 @@ function buildHistoryRecords(
   unit: HistoryUnitInfo | null,
   entries: readonly HistoryChangesetEntry[]
 ): HistoryRecord[] {
-  const sorted = [...entries].sort((a, b) => b.rev - a.rev || b.createdAt - a.createdAt);
+  const sorted = [...entries]
+    .filter((entry) => entry.rev >= 1)
+    .sort((a, b) => b.rev - a.rev || b.createdAt - a.createdAt);
   const groups: HistoryRecord[] = [];
 
   for (const entry of sorted) {
     const userId = normalizeUserId(entry.clientId);
     const commands = extractCommands(entry.changeset);
     const current = groups[groups.length - 1];
-    const adjacent =
+    const sameRevision = current && current.startRevision === entry.rev;
+    const sequential =
       current &&
-      (current.startRevision === entry.rev + 1 || current.startRevision === entry.rev);
-    if (
-      current &&
-      adjacent &&
       current.userId === userId &&
-      current.endCreatedAt - entry.createdAt <= GROUP_INTERVAL_MS
-    ) {
+      current.startRevision === entry.rev + 1 &&
+      current.endCreatedAt - entry.createdAt <= GROUP_INTERVAL_MS;
+    if (sameRevision || sequential) {
       groups[groups.length - 1] = {
         ...current,
         startRevision: Math.min(current.startRevision, entry.rev),

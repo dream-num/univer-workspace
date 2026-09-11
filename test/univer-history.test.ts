@@ -86,7 +86,7 @@ describe("Univer history protocol helpers", () => {
     const entries = Array.from({ length: 8 }, (_, i) => ({
       id: `cs_${i}`,
       rev: 6,
-      clientId: "user_admin",
+      clientId: i % 2 === 0 ? "user_admin" : `member_${i}`,
       createdAt: 2_000 + i,
       changeset: { mutations: [{ id: "formula.mutation.set-formula-calculation-notification" }] }
     }));
@@ -95,5 +95,25 @@ describe("Univer history protocol helpers", () => {
     assert.equal(body.historyIds.length, 2);
     assert.equal(body.entities.datas[body.historyIds[0]].startRevision, 6);
     assert.equal(body.entities.datas[body.historyIds[0]].endRevision, 6);
+  });
+
+  test("drops revision 0 rows so lastLabel stays a real revision", () => {
+    const unit = { unitId: "unit_sheet", rev: 1, createdAt: 1_000 };
+    const body = buildHistoryListBody(
+      "unit_sheet",
+      unit,
+      [
+        {
+          id: "cs_bad",
+          rev: 0,
+          clientId: "user_admin",
+          createdAt: 1_500,
+          changeset: {}
+        }
+      ],
+      { length: 20 }
+    ) as any;
+    assert.equal(body.lastLabel, "1");
+    assert.equal(body.entities.datas[body.historyIds[0]].startRevision, 1);
   });
 });
