@@ -30,14 +30,22 @@ registerHooks({
 
 function createMockEnv() {
   const d1 = createMockD1();
+  const chatAgentFetches: string[] = [];
 
   const mockChatAgent: any = {
+    fetches: chatAgentFetches,
     idFromName: (name: string) => ({ toString: () => `id_${name}`, name }),
     get: (id: any) => ({
       fetch: async (req: Request) => {
         const url = new URL(req.url);
+        chatAgentFetches.push(`${req.method} ${url.pathname}`);
         if (url.pathname === "/api/health") {
           return new Response(JSON.stringify({ status: "healthy", id: id.toString() }), {
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        if (url.pathname === "/internal/worktrees-changed") {
+          return new Response(JSON.stringify({ ok: true }), {
             headers: { "Content-Type": "application/json" }
           });
         }
@@ -229,7 +237,7 @@ describe("Master Cloudflare Worker Edge Gateway", async () => {
     const unknownData = await unknownRes.json();
     assert.ok(unknownData.error);
 
-    // 6e. Test Worktrees: active list
+    // 6e. Test Worktrees: active list + mutation notifies ChatAgent feed
     const wtReq = new Request("https://workspace.edge/api/worktrees?scope=active", {
       headers: { Cookie: sessionCookie }
     });
@@ -238,6 +246,24 @@ describe("Master Cloudflare Worker Edge Gateway", async () => {
     assert.equal(wtRes.headers.get("Content-Type")?.includes("application/json"), true);
     const wtData = await wtRes.json();
     assert.ok(Array.isArray(wtData.items));
+
+    const waitUntilTasks: Promise<unknown>[] = [];
+    const createWtReq = new Request("https://workspace.edge/api/worktrees", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: sessionCookie
+      },
+      body: JSON.stringify({ name: "Realtime Draft" })
+    });
+    const createWtRes = await worker.fetch(createWtReq, env as any, {
+      waitUntil(task: Promise<unknown>) {
+        waitUntilTasks.push(task);
+      }
+    } as any);
+    assert.equal(createWtRes.status, 201);
+    await Promise.all(waitUntilTasks);
+    assert.ok(env.ChatAgent.fetches.includes("POST /internal/worktrees-changed"));
 
     // 7. Logout
     const logoutReq = new Request("https://workspace.edge/api/auth/logout", {
@@ -272,5 +298,15 @@ describe("Master Cloudflare Worker Edge Gateway", async () => {
     assert.equal(wsRes.status, 200);
     const wsData = await wsRes.json();
     assert.equal(wsData.status, "connected");
+
+    // Worktree change feed must hit ChatAgent (not the control-plane 401/404)
+    const feedReq = new Request(
+      "https://workspace.edge/api/worktree-events?sessionTicket=ticket_abc",
+      { headers: { Upgrade: "websocket" } }
+    );
+    const feedRes = await worker.fetch(feedReq, env as any, {} as any);
+    assert.equal(feedRes.status, 200);
+    assert.equal(await feedRes.text(), "ChatAgent response");
+    assert.ok(env.ChatAgent.fetches.includes("GET /api/worktree-events"));
   });
 });

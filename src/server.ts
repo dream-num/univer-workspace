@@ -5,6 +5,11 @@ import { ControlPlaneDb } from "./control-plane/db.ts";
 import { initControlPlaneSchema, seedControlPlane } from "./control-plane/schema.ts";
 import { handleControlPlaneRoutes, resolveGatewayContext } from "./control-plane/gateway.ts";
 import { handleBlobRoutes, R2BlobStore } from "./integrations/r2-blob-store.ts";
+import {
+  WORKTREE_CHANGE_FEED_PATH,
+  WORKTREE_CHANGE_NOTIFY_PATH,
+  isWorktreeMutation
+} from "./integrations/worktree-change-feed.ts";
 
 // Re-export Durable Objects
 export { DshHost, DshHost as ChatAgent } from "./project/dsh-host.ts";
@@ -20,6 +25,24 @@ export interface Env {
 }
 
 let dbBooted = false;
+
+function collabStub(env: Env) {
+  return env.ChatAgent.get(env.ChatAgent.idFromName("univer_collab"));
+}
+
+async function notifyWorktreeChangeFeed(env: Env, audienceUserIds: string[]): Promise<void> {
+  try {
+    await collabStub(env).fetch(
+      new Request(`https://univer-workspace.internal${WORKTREE_CHANGE_NOTIFY_PATH}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audienceUserIds })
+      })
+    );
+  } catch (err) {
+    console.warn("Worktree change feed notify failed:", err);
+  }
+}
 
 function applyCorsHeaders(request: Request, response: Response): Response {
   if (response.status === 101 || response.webSocket) return response;
@@ -91,6 +114,7 @@ export default {
       // 5. WebSocket Mux & Realtime endpoints routed to ChatAgent Durable Object
       if (
         pathname === "/api/remote.mux" ||
+        pathname === WORKTREE_CHANGE_FEED_PATH ||
         pathname.startsWith("/agents/") ||
         pathname.startsWith("/universer-api/") ||
         pathname === "/api/health" ||
@@ -118,7 +142,14 @@ export default {
         // 6b. Control plane REST routes (sessions, auth, spaces, nodes, resources, trash, worktrees)
         if (pathname.startsWith("/api/") || pathname.startsWith("/auth/")) {
           const cpRes = await handleControlPlaneRoutes(request, gwCtx, url);
-          if (cpRes) return applyCorsHeaders(request, cpRes);
+          if (cpRes) {
+            if (cpRes.ok && isWorktreeMutation(pathname, request.method) && gwCtx.currentUser) {
+              const notify = notifyWorktreeChangeFeed(env, [gwCtx.currentUser.id]);
+              if (typeof ctx.waitUntil === "function") ctx.waitUntil(notify);
+              else await notify;
+            }
+            return applyCorsHeaders(request, cpRes);
+          }
         }
       }
 

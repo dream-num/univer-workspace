@@ -7,12 +7,24 @@ import { HostBase } from "./host/host-base.ts";
 import type { UniverCollabService } from "../plugins/univer-collab.ts";
 import type { ActionService } from "../kernel/action.ts";
 import { generateDefaultSnapshot } from "../plugins/univer-default-snapshots.ts";
+import {
+  WORKTREE_CHANGE_FEED_PATH,
+  WORKTREE_CHANGE_FEED_READY,
+  WORKTREE_CHANGE_NOTIFY_PATH,
+  WORKTREES_CHANGED
+} from "../integrations/worktree-change-feed.ts";
 
 export interface CollabMemberAttachment {
+  kind?: "comb";
   memberID: string;
   userID: string;
   name: string;
   rooms: string[];
+}
+
+export interface WorktreeFeedAttachment {
+  kind: "worktree-feed";
+  userID: string;
 }
 
 export class DshHost extends HostBase<any> {
@@ -27,25 +39,37 @@ export class DshHost extends HostBase<any> {
       const [client, server] = Object.values(pair);
 
       if (url.pathname === "/universer-api/comb/connect") {
-        const ticketParam = url.searchParams.get("sessionTicket") || "";
-        const ticketData = this.sessionTickets.get(ticketParam);
-        if (ticketParam) {
-          this.sessionTickets.delete(ticketParam);
-        }
-
+        const ticket = this.consumeSessionTicket(url.searchParams.get("sessionTicket") || "");
         const memberID = crypto.randomUUID();
-        const userID = ticketData?.userID || "user_admin";
-        const name = ticketData?.name || "Administrator";
 
         const attachment: CollabMemberAttachment = {
+          kind: "comb",
           memberID,
-          userID,
-          name,
+          userID: ticket.userID,
+          name: ticket.name,
           rooms: []
         };
         server.serializeAttachment(attachment);
 
         this.acceptWebSocket(server, ["comb", `member:${memberID}`]);
+
+        return new Response(null, {
+          status: 101,
+          webSocket: client
+        });
+      }
+
+      if (url.pathname === WORKTREE_CHANGE_FEED_PATH) {
+        const ticket = this.consumeSessionTicket(url.searchParams.get("sessionTicket") || "");
+        const attachment: WorktreeFeedAttachment = {
+          kind: "worktree-feed",
+          userID: ticket.userID
+        };
+        server.serializeAttachment(attachment);
+        this.acceptWebSocket(server, ["worktree-feed", `user:${ticket.userID}`]);
+        try {
+          server.send(JSON.stringify(WORKTREE_CHANGE_FEED_READY));
+        } catch {}
 
         return new Response(null, {
           status: 101,
@@ -352,6 +376,14 @@ export class DshHost extends HostBase<any> {
       }
     }
 
+    if (url.pathname === WORKTREE_CHANGE_NOTIFY_PATH && request.method === "POST") {
+      await request.json().catch(() => ({}));
+      this.broadcast(JSON.stringify(WORKTREES_CHANGED), "worktree-feed");
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     // 4. Universal Action Execution Endpoints
     if (url.pathname === "/api/actions/list" && request.method === "GET") {
       const kernel = await this.ensureKernel();
@@ -379,6 +411,18 @@ export class DshHost extends HostBase<any> {
     }
 
     return new Response("Not found", { status: 404 });
+  }
+
+  private consumeSessionTicket(ticketParam: string): { userID: string; name: string } {
+    if (!ticketParam) {
+      return { userID: "user_admin", name: "Administrator" };
+    }
+    const ticketData = this.sessionTickets.get(ticketParam);
+    this.sessionTickets.delete(ticketParam);
+    if (ticketData && ticketData.expiresAt > Date.now()) {
+      return { userID: ticketData.userID, name: ticketData.name };
+    }
+    return { userID: "user_admin", name: "Administrator" };
   }
 
   /**
@@ -444,6 +488,16 @@ export class DshHost extends HostBase<any> {
     message: string | ArrayBuffer | ArrayBufferView
   ): Promise<void> {
     try {
+      let attachment: WorktreeFeedAttachment | CollabMemberAttachment | null = null;
+      try {
+        attachment = ws.deserializeAttachment() as WorktreeFeedAttachment | CollabMemberAttachment | null;
+      } catch {
+        attachment = null;
+      }
+      if (attachment?.kind === "worktree-feed") {
+        return;
+      }
+
       const kernel = await this.ensureKernel();
       let parsed: any;
       if (typeof message === "string") {
@@ -456,7 +510,7 @@ export class DshHost extends HostBase<any> {
 
       // 1. Fast-path Univer Collaboration Protocol (CombCmd)
       if (typeof parsed?.cmd === "number") {
-        const att = ws.deserializeAttachment() as CollabMemberAttachment | null;
+        const att = attachment as CollabMemberAttachment | null;
         const memberID = att?.memberID || "unknown";
         const userID = att?.userID || "user_admin";
         const userName = att?.name || "Administrator";
