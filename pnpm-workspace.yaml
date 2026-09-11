@@ -22,62 +22,49 @@ allowBuilds:
 # published declarations no longer leak an undeclared direct Redi import, and
 # clean installs/typechecks pass in both host React peer graphs.
 packageExtensions:
-  "@univerjs/engine-render@1.0.0-insiders.20260907-70fc579":
+  "@univerjs/engine-render@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-ui@1.0.0-insiders.20260907-70fc579":
+  "@univerjs/sheets-ui@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/thread-comment@1.0.0-insiders.20260907-70fc579":
+  "@univerjs/thread-comment@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/boards-ui@1.0.0-insiders.20260907-70fc579":
+  "@univerjs-pro/boards-ui@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/slides-ui@1.0.0-insiders.20260907-70fc579":
+  "@univerjs-pro/slides-ui@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/collaboration@1.0.0-insiders.20260907-70fc579":
+  "@univerjs-pro/collaboration@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-
-  "@univerjs-pro/bases@1.0.0-insiders.20260907-70fc579":
+  "@univerjs-pro/bases@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/boards@1.0.0-insiders.20260907-70fc579":
+  "@univerjs-pro/boards@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/edit-history-ui@1.0.0-insiders.20260907-70fc579":
+  "@univerjs-pro/slides@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/slides@1.0.0-insiders.20260907-70fc579":
+  "@univerjs/docs-ui@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/docs-ui@1.0.0-insiders.20260907-70fc579":
+  "@univerjs/drawing@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/drawing@1.0.0-insiders.20260907-70fc579":
+  "@univerjs/engine-formula@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/engine-formula@1.0.0-insiders.20260907-70fc579":
+  "@univerjs/sheets@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets@1.0.0-insiders.20260907-70fc579":
+  "@univerjs/sheets-formula@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-conditional-formatting@1.0.0-insiders.20260907-70fc579":
-    dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-filter@1.0.0-insiders.20260907-70fc579":
-    dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-formula@1.0.0-insiders.20260907-70fc579":
-    dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-numfmt@1.0.0-insiders.20260907-70fc579":
-    dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-table@1.0.0-insiders.20260907-70fc579":
+  "@univerjs/sheets-numfmt@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
   # Router declarations import React types but omit the type peer. Bind them to

@@ -5,6 +5,8 @@ import {
   EXTERNAL_RUNTIME_DEPENDENCIES,
   PACKAGE_FILES,
   PUBLISH_REGISTRY,
+  resolveExchangeNodeBindingVersion,
+  resolveFormulaBindingVersion,
   resolveRenderRuntimeDependencies,
   resolveTypstNativeBindingVersion,
 } from "./package-artifact.mjs";
@@ -152,6 +154,90 @@ test("requires the Typst facade to own an npm-versioned native binding", () => {
       /@univerjs-pro\/doc-typst-native-binding must be declared by its owning runtime package/u,
     );
   }
+});
+
+test("resolves the Office native binding from the Client Core-owned Exchange Node package", () => {
+  assert.equal(
+    resolveExchangeNodeBindingVersion(
+      { dependencies: { "@univerjs-pro/exchange-node": "1.0.0-rc.0" } },
+      { version: "1.0.0-rc.0", dependencies: { "@univerjs-pro/exchange-node-binding": "0.1.2" } },
+    ),
+    "0.1.2",
+  );
+});
+
+test("rejects an Exchange Node package not owned by Client Core", () => {
+  for (const dependencies of [{}, { "@univerjs-pro/exchange-node": "workspace:*" }]) {
+    assert.throws(
+      () => resolveExchangeNodeBindingVersion({ dependencies }, {}),
+      /@univerjs-pro\/exchange-node must be declared by its owning runtime package/u,
+    );
+  }
+});
+
+test("rejects a resolved Exchange Node package that differs from the Client Core declaration", () => {
+  assert.throws(
+    () =>
+      resolveExchangeNodeBindingVersion(
+        { dependencies: { "@univerjs-pro/exchange-node": "1.0.0-rc.0" } },
+        { version: "1.0.0-rc.1" },
+      ),
+    /does not match declared 1\.0\.0-rc\.0/u,
+  );
+});
+
+test("requires Exchange Node to own an npm-versioned native binding", () => {
+  for (const dependencies of [
+    {},
+    { "@univerjs-pro/exchange-node-binding": "workspace:*" },
+  ]) {
+    assert.throws(
+      () =>
+        resolveExchangeNodeBindingVersion(
+          { dependencies: { "@univerjs-pro/exchange-node": "1.0.0-rc.0" } },
+          { version: "1.0.0-rc.0", dependencies },
+        ),
+      /@univerjs-pro\/exchange-node-binding must be declared by its owning runtime package/u,
+    );
+  }
+});
+
+test("resolves the formula native binding from the headless-owned Rust engine", () => {
+  assert.equal(
+    resolveFormulaBindingVersion(
+      { dependencies: { "@univerjs-pro/engine-formula-rust": "1.0.0-rc.0" } },
+      {
+        version: "1.0.0-rc.0",
+        dependencies: { "@univerjs-pro/engine-formula-rust-binding": "1.0.0-insiders.native" },
+      },
+    ),
+    "1.0.0-insiders.native",
+  );
+});
+
+test("rejects a Rust formula engine not owned by the headless runtime", () => {
+  for (const dependencies of [{}, { "@univerjs-pro/engine-formula-rust": "workspace:*" }]) {
+    assert.throws(
+      () => resolveFormulaBindingVersion({ dependencies }, {}),
+      /@univerjs-pro\/engine-formula-rust must be declared by its owning runtime package/u,
+    );
+  }
+  assert.throws(
+    () =>
+      resolveFormulaBindingVersion(
+        { dependencies: { "@univerjs-pro/engine-formula-rust": "1.0.0-rc.0" } },
+        { version: "1.0.0-rc.1" },
+      ),
+    /does not match declared 1\.0\.0-rc\.0/u,
+  );
+  assert.throws(
+    () =>
+      resolveFormulaBindingVersion(
+        { dependencies: { "@univerjs-pro/engine-formula-rust": "1.0.0-rc.0" } },
+        { version: "1.0.0-rc.0", dependencies: {} },
+      ),
+    /@univerjs-pro\/engine-formula-rust-binding must be declared by its owning runtime package/u,
+  );
 });
 
 test("resolves browser dependencies from the Client Core-owned render runtime", () => {
