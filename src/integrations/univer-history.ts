@@ -34,6 +34,7 @@ interface HistoryRecord {
   readonly startCreatedAt: number;
   readonly endCreatedAt: number;
   readonly commands: readonly string[];
+  readonly key: string;
 }
 
 export function parsePositiveInt(value: string | null, fallback?: number): number | null {
@@ -170,23 +171,26 @@ function buildHistoryRecords(
     const userId = normalizeUserId(entry.clientId);
     const commands = extractCommands(entry.changeset);
     const current = groups[groups.length - 1];
+    const adjacent =
+      current &&
+      (current.startRevision === entry.rev + 1 || current.startRevision === entry.rev);
     if (
       current &&
+      adjacent &&
       current.userId === userId &&
-      current.startRevision === entry.rev + 1 &&
       current.endCreatedAt - entry.createdAt <= GROUP_INTERVAL_MS
     ) {
       groups[groups.length - 1] = {
         ...current,
-        id: historyId(unitId, entry.rev, current.endRevision),
-        startRevision: entry.rev,
+        startRevision: Math.min(current.startRevision, entry.rev),
         startCreatedAt: entry.createdAt,
         commands: [...commands, ...current.commands]
       };
       continue;
     }
     groups.push({
-      id: historyId(unitId, entry.rev, entry.rev),
+      id: historyId(unitId, entry.rev, entry.rev, entry.id),
+      key: entry.id,
       userId,
       startRevision: entry.rev,
       endRevision: entry.rev,
@@ -200,7 +204,8 @@ function buildHistoryRecords(
   const minChangesetRev = sorted.length > 0 ? Math.min(...sorted.map((entry) => entry.rev)) : Infinity;
   if (unit && minChangesetRev > 1) {
     groups.push({
-      id: historyId(unitId, 1, 1),
+      id: historyId(unitId, 1, 1, "created"),
+      key: "created",
       userId: DEFAULT_USER.userID,
       startRevision: 1,
       endRevision: 1,
@@ -229,8 +234,13 @@ function toProtocolChangeset(unitId: string, entry: HistoryChangesetEntry): Reco
   };
 }
 
-function historyId(unitId: string, startRevision: number, endRevision: number): string {
-  return `history_${unitId}_${startRevision}_${endRevision}`;
+function historyId(
+  unitId: string,
+  startRevision: number,
+  endRevision: number,
+  key: string
+): string {
+  return `history_${unitId}_${startRevision}_${endRevision}_${key}`;
 }
 
 function normalizeUserId(clientId: string): string {

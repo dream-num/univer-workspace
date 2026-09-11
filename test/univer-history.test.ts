@@ -40,6 +40,7 @@ describe("Univer history protocol helpers", () => {
     assert.equal(body.error.code, 1);
     assert.equal(body.hasMore, false);
     assert.equal(body.historyIds.length, 2);
+    assert.equal(new Set(body.historyIds).size, 2);
     assert.equal(body.entities.datas[body.historyIds[0]].endRevision, 3);
     assert.equal(body.entities.datas[body.historyIds[0]].startRevision, 2);
     assert.equal(body.entities.datas[body.historyIds[1]].startRevision, 1);
@@ -49,7 +50,7 @@ describe("Univer history protocol helpers", () => {
   test("paginates with lastLabel and lists creators", () => {
     const unit = { unitId: "unit_sheet", rev: 1, createdAt: 1_000 };
     const body = buildHistoryListBody("unit_sheet", unit, [], { length: 20 }) as any;
-    assert.deepEqual(body.historyIds, ["history_unit_sheet_1_1"]);
+    assert.deepEqual(body.historyIds, ["history_unit_sheet_1_1_created"]);
 
     const page = buildHistoryListBody("unit_sheet", unit, [], {
       length: 20,
@@ -78,5 +79,21 @@ describe("Univer history protocol helpers", () => {
     assert.equal(body.changesets[0].revision, 2);
     assert.equal(body.changesets[0].userID, "member_1");
     assert.deepEqual(extractCommands(entries[0].changeset), ["m1"]);
+  });
+
+  test("collapses duplicate revisions into one unique history id", () => {
+    const unit = { unitId: "unit_sheet", rev: 6, createdAt: 1_000 };
+    const entries = Array.from({ length: 8 }, (_, i) => ({
+      id: `cs_${i}`,
+      rev: 6,
+      clientId: "user_admin",
+      createdAt: 2_000 + i,
+      changeset: { mutations: [{ id: "formula.mutation.set-formula-calculation-notification" }] }
+    }));
+    const body = buildHistoryListBody("unit_sheet", unit, entries, { length: 20 }) as any;
+    assert.equal(new Set(body.historyIds).size, body.historyIds.length);
+    assert.equal(body.historyIds.length, 2);
+    assert.equal(body.entities.datas[body.historyIds[0]].startRevision, 6);
+    assert.equal(body.entities.datas[body.historyIds[0]].endRevision, 6);
   });
 });
