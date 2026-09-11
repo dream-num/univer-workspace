@@ -21,7 +21,8 @@
     "unlink:workspace-cli": "node scripts/unlink-workspace-cli.mjs",
     "workspace:dev:web": "pnpm --filter @univerjs/univer-workspace dev:web",
     "workspace:dev:server": "pnpm --filter @univerjs/univer-workspace dev:server",
-    "workspace:start": "pnpm --filter @univerjs/univer-workspace start"
+    "workspace:start": "pnpm --filter @univerjs/univer-workspace start",
+    "deobfuscate:pro": "node scripts/deobfuscate-univer-pro.mjs"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.2",
