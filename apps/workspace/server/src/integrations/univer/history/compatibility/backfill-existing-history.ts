@@ -94,19 +94,30 @@ async function backfillUnit(
   }
   if (nextRevision > unit.headRevision) return;
 
-  const range = await options.collaborationDatabase.getChangesets(
+  const changesets = await options.collaborationDatabase.getChangesets(
     databaseContext,
     seed.unitId,
     { from: nextRevision - 1, to: unit.headRevision }
   );
-  if (range.latestRevision !== unit.headRevision) {
+  if (changesets === null) {
+    throw new Error(
+      `History compatibility backfill for ${seed.unitId} can no longer read its authoritative changesets.`
+    );
+  }
+  // The adapter no longer reports the Unit head alongside the range, so confirm
+  // the head is unchanged across the read before indexing a bounded window.
+  const currentUnit = await options.collaborationDatabase.getUnit(
+    databaseContext,
+    seed.unitId
+  );
+  if (currentUnit?.headRevision !== unit.headRevision) {
     throw new Error(
       `History compatibility backfill for ${seed.unitId} observed an unstable Unit head.`
     );
   }
 
   let expectedRevision = nextRevision;
-  for (const changeset of range.changesets) {
+  for (const changeset of changesets) {
     if (changeset.revision !== expectedRevision) {
       throw new Error(
         `History compatibility backfill for ${seed.unitId} is missing revision ${expectedRevision}.`

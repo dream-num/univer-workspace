@@ -110,6 +110,7 @@ export function resolveExternalRuntimeDependencies(appRoot, source) {
     "@univer-cli/univer-render-runtime",
   );
   const typst = readPackageManifest(clientCoreRequire, "@univer-cli/doc-typst-facade");
+  const exchangeNode = readPackageManifest(clientCoreRequire, "@univerjs-pro/exchange-node");
   const headless = readPackageManifest(appRequire, "@univer-cli/headless-univer");
   const headlessRequire = createRequire(headless.path);
   const formula = readPackageManifest(headlessRequire, "@univerjs-pro/engine-formula-rust");
@@ -121,13 +122,13 @@ export function resolveExternalRuntimeDependencies(appRoot, source) {
       clientCore.manifest,
       typst.manifest,
     ),
-    "@univerjs-pro/engine-formula-rust-binding": readOwnedDependency(
+    "@univerjs-pro/engine-formula-rust-binding": resolveFormulaBindingVersion(
+      headless.manifest,
       formula.manifest,
-      "@univerjs-pro/engine-formula-rust-binding",
     ),
-    "@univerjs-pro/exchange-node-binding": readOwnedDependency(
-      source,
-      "@univerjs-pro/exchange-node-binding",
+    "@univerjs-pro/exchange-node-binding": resolveExchangeNodeBindingVersion(
+      clientCore.manifest,
+      exchangeNode.manifest,
     ),
   };
 }
@@ -143,6 +144,26 @@ export function resolveRenderRuntimeDependencies(clientCore, renderRuntime) {
     "@puppeteer/browsers": readOwnedDependency(renderRuntime, "@puppeteer/browsers"),
     "puppeteer-core": readOwnedDependency(renderRuntime, "puppeteer-core"),
   };
+}
+
+export function resolveFormulaBindingVersion(headless, formula) {
+  const formulaVersion = readOwnedDependency(headless, "@univerjs-pro/engine-formula-rust");
+  if (formula.version !== formulaVersion) {
+    throw new Error(
+      `Resolved @univerjs-pro/engine-formula-rust ${String(formula.version)} does not match declared ${formulaVersion}`,
+    );
+  }
+  return readOwnedDependency(formula, "@univerjs-pro/engine-formula-rust-binding");
+}
+
+export function resolveExchangeNodeBindingVersion(clientCore, exchangeNode) {
+  const exchangeNodeVersion = readOwnedDependency(clientCore, "@univerjs-pro/exchange-node");
+  if (exchangeNode.version !== exchangeNodeVersion) {
+    throw new Error(
+      `Resolved @univerjs-pro/exchange-node ${String(exchangeNode.version)} does not match declared ${exchangeNodeVersion}`,
+    );
+  }
+  return readOwnedDependency(exchangeNode, "@univerjs-pro/exchange-node-binding");
 }
 
 export function resolveTypstNativeBindingVersion(clientCore, typst) {

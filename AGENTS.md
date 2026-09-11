@@ -68,8 +68,15 @@ checkout、其他仓库的绝对路径或未发布源码目录。
 SDK release。升级时运行：
 
 ```bash
-pnpm update:sdk --sdk_version <exact-sdk-version>
+pnpm update:univer-sdk --sdk_version <exact-sdk-version>
 ```
+
+`@univerjs/icons`、`@univerjs-pro/cli-assets` 和 `@univerjs-pro/doc-typst-native-binding` 按自身
+发布节奏独立发版：声明保持精确版本，不跟随 SDK baseline。原生绑定
+`@univerjs-pro/engine-formula-rust-binding` 和 `@univerjs-pro/exchange-node-binding` 由 wrapper 包
+`@univerjs-pro/engine-formula-rust`、`@univerjs-pro/exchange-node` 声明，manifest 只声明 wrapper；
+CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时依赖。`pnpm-workspace.yaml` 的
+`overrides` 只承载 dev 版本探索，升级时清空其中的全部 SDK 条目。
 
 必须同时提交所有受影响的 manifest 和 `pnpm-lock.yaml`，不得手工只更新其中一部分。
 
