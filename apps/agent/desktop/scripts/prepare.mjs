@@ -50,16 +50,39 @@ run(process.execPath, [
   "--filter",
   "dsh-univer-workspace-skin-plugin...",
   "build",
-]);
+], { env: { ...process.env, UWA_DESKTOP_BUILD: "1" } });
 const packs = join(runtime, "home", "internal-packages");
 await mkdir(packs, { recursive: true });
 for (const name of [
   "@univerjs/workspace-agent",
-  "dsh-univer-workspace-plugin",
   "dsh-univer-workspace-skin-plugin",
 ]) {
   run(process.execPath, [pnpm, "--filter", name, "pack", "--pack-destination", packs]);
 }
+
+// Keep source dependencies under the SDK upgrade policy. Only the self-contained
+// desktop installation manifest replaces bundled wrappers with their native deps.
+const pluginSource = join(repo, "packages/dsh-univer-workspace-plugin");
+const pluginStage = join(root, "capability-package");
+await mkdir(pluginStage);
+const pluginManifest = JSON.parse(await readFile(join(pluginSource, "package.json"), "utf8"));
+for (const entry of pluginManifest.files) {
+  await cp(join(pluginSource, entry), join(pluginStage, entry), { recursive: true });
+}
+const nativeDependencies = {};
+for (const wrapper of ["engine-formula-rust", "exchange-node"]) {
+  const manifest = JSON.parse(await readFile(join(pluginSource,
+    "node_modules/@univerjs-pro", wrapper, "package.json"), "utf8"));
+  const name = `@univerjs-pro/${wrapper}-binding`;
+  const version = manifest.dependencies?.[name];
+  if (typeof version !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version))
+    throw new Error(`Missing exact native dependency: ${name}`);
+  nativeDependencies[name] = version;
+}
+pluginManifest.dependencies = { ...nativeDependencies, ws: pluginManifest.dependencies.ws };
+delete pluginManifest.devDependencies;
+await writeFile(join(pluginStage, "package.json"), JSON.stringify(pluginManifest, null, 2));
+run(process.execPath, [pnpm, "pack", "--pack-destination", packs], { cwd: pluginStage });
 
 // Verify the official standalone Node download before extracting any bytes.
 // Node 24.18 fixes the stream regression that hangs Playwright archive extraction (#63834).
@@ -99,7 +122,12 @@ if (platform === "win32") {
   await cp(join(root, stem, "node.exe"), join(runtime, "node", "bin", "node.exe"));
 } else {
   run("tar", ["-xzf", archivePath, "-C", root]);
-  await cp(join(root, stem), join(runtime, "node"), { recursive: true, verbatimSymlinks: true });
+  await mkdir(join(runtime, "node", "bin"), { recursive: true });
+  await cp(join(root, stem, "bin/node"), join(runtime, "node/bin/node"));
+}
+// Retain upstream license notices, not Node's build headers, npm or man pages.
+for (const name of ["LICENSE", "README.md", "CHANGELOG.md"]) {
+  await cp(join(root, stem, name), join(runtime, "node", name));
 }
 const node = join(runtime, "node", "bin", platform === "win32" ? "node.exe" : "node");
 const bootstrap = join(runtime, "bootstrap");
@@ -122,7 +150,7 @@ await writeFile(
 const npm =
   platform === "win32"
     ? join(root, stem, "node_modules/npm/bin/npm-cli.js")
-    : join(runtime, "node/lib/node_modules/npm/bin/npm-cli.js");
+    : join(root, stem, "lib/node_modules/npm/bin/npm-cli.js");
 run(node, [npm, "install", "--prefix", bootstrap, "--no-audit", "--no-fund"], { cwd: bootstrap });
 const { delimiter } = await import("node:path");
 const env = {

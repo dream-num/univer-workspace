@@ -22,14 +22,40 @@ try {
     ? join(desktop, "artifacts", packaged[process.platform])
     : join(desktop, ".build/runtime");
   await runtimeTools.installRuntime(source, runtime);
+  const inventory = JSON.parse(await readFile(join(runtime, "integrity.json"), "utf8"));
+  if (Object.keys(inventory).some((path) => path.endsWith(".map")))
+    throw new Error("Desktop runtime must not include source maps");
   const metadata = JSON.parse(await readFile(join(runtime, "release.json"), "utf8"));
   const node = join(runtime, "node/bin", process.platform === "win32" ? "node.exe" : "node");
-  const binding = spawnSync(node, ["-e", "require('@univerjs-pro/exchange-node-binding')"], {
+  const binding = spawnSync(node, ["-e", `
+    require('@univerjs-pro/exchange-node-binding');
+    const { dirname, join } = require('node:path');
+    const { pathToFileURL } = require('node:url');
+    const worker = join(dirname(require.resolve('dsh-univer-workspace-plugin')), 'worker.js');
+    import(pathToFileURL(worker).href).then(module => {
+      if (!module.default) throw new Error('Packaged worker entry is missing');
+    }).catch(error => { console.error(error); process.exitCode = 1; });
+  `], {
     cwd: join(runtime, "home/profiles/univer-workspace-harness"),
     encoding: "utf8",
   });
   if (binding.status !== 0)
     throw new Error(`Packaged Office native binding failed: ${binding.stderr}`);
+  const terminal = spawnSync(node, ["-e", `
+    const pty = require('node-pty').spawn(process.execPath,
+      ['-e', 'console.log("uwa-pty-ready")'], { cols: 80, rows: 24 });
+    let output = '';
+    const timer = setTimeout(() => { pty.kill(); process.exit(1); }, 15000);
+    pty.onData(data => { output += data; });
+    pty.onExit(({ exitCode }) => {
+      clearTimeout(timer);
+      // ConPTY's output worker can keep this isolated probe alive after exit.
+      // Both the terminal exit and its output must be observed before success.
+      process.exit(exitCode === 0 && output.includes('uwa-pty-ready') ? 0 : 1);
+    });
+  `], { cwd: join(runtime, "bootstrap"), encoding: "utf8", timeout: 20000 });
+  if (terminal.error || terminal.status !== 0)
+    throw new Error(`Packaged PTY failed: ${terminal.error ?? terminal.stderr}`);
   const data = join(root, "data");
   const workspace = join(root, "workspace");
   await mkdir(data);
@@ -141,7 +167,7 @@ try {
     });
     await page.goto(url);
     await page.waitForFunction(() => document.body.innerText.trim().length > 20);
-    await page.getByText(/Reconnecting/).waitFor({ state: "hidden", timeout: 30000 });
+    await page.getByRole("button", { name: /Reconnecting/ }).waitFor({ state: "hidden", timeout: 30000 });
     await page.screenshot({
       path: join(
         desktop,

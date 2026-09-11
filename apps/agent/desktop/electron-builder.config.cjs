@@ -10,7 +10,7 @@ module.exports = {
   extraMetadata: { version },
   directories: { output: "artifacts" },
   asar: true,
-  files: ["src/**/*.cjs", "package.json"],
+  files: ["src/**/*.cjs", "package.json", "!**/*.map"],
   extraResources: [{ from: ".build/runtime", to: "runtime" }],
   artifactName: "Univer-Workspace-Agent-${version}-${os}-${arch}.${ext}",
   publish: [
