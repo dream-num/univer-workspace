@@ -173,3 +173,17 @@ retain `runtime.previous` for recovery, and leave `data/` intact. Initial setup 
 later launches reuse the verified runtime. Quit stops the
 application-owned service process tree. Back up `data/` independently; uninstall
 and update operations must not be used as account-data cleanup.
+
+## Startup diagnostics
+
+Desktop startup writes `logs/startup.log` under the application user-data directory
+(on Windows: `%APPDATA%\Univer Workspace Agent`). The previous launch is retained
+as `startup.previous.log`. Help → Open startup logs opens this location, including
+during setup. Logs contain phase timings, copy/check counters and failing paths;
+they do not record credentials, session URLs or backend output. Setup displays
+copy and verification progress. Failed staging is retained until the next attempt
+so missing files can be investigated without deleting user data.
+
+Windows CI installs the NSIS artifact and launches the installed Electron app with
+isolated user data. Startup diagnostics are uploaded as Actions artifacts even
+when this check fails. This supplements the unpacked runtime checks.

@@ -95,9 +95,32 @@ jobs:
           name: agent-size-${{ matrix.target }}
           path: apps/agent/desktop/.build/runtime-size.json
           if-no-files-found: warn
+      - name: Install Windows application and verify first launch
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem apps/agent/desktop/artifacts/*.exe | Select-Object -First 1
+          $destination = Join-Path $env:RUNNER_TEMP 'Workspace Agent Installed'
+          $started = Get-Date
+          $process = Start-Process $installer.FullName -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
+          Write-Output "Installation elapsed: $((Get-Date) - $started)"
+          $env:UWA_INSTALLED_RUNTIME = Join-Path $destination 'resources/runtime'
+          node -e "require('./apps/agent/desktop/src/runtime.cjs').verifyRuntime(process.env.UWA_INSTALLED_RUNTIME).then(() => console.log('Installed resource inventory verified')).catch(e => { console.error(e); process.exitCode = 1; })"
+          if ($LASTEXITCODE -ne 0) { throw 'Installed resource inventory failed' }
+          $env:UWA_SMOKE_EXECUTABLE = Join-Path $destination 'Univer Workspace Agent.exe'
+          node apps/agent/desktop/scripts/shell-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Installed application startup failed' }
       - name: Verify Linux Electron window
         if: runner.os == 'Linux'
         run: xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --packaged --no-sandbox
+      - name: Upload startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-startup-${{ matrix.target }}
+          path: apps/agent/desktop/.build/startup-logs
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: agent-desktop-${{ matrix.target }}

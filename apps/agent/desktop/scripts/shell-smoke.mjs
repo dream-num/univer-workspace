@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron } from "playwright";
 
@@ -13,11 +13,13 @@ let application;
 try {
   // Electron's --user-data-dir controls Chromium; use the OS config base as
   // well so app.getPath('userData') cannot read an existing desktop account.
-  const env = { ...process.env, XDG_CONFIG_HOME: temporary, APPDATA: temporary };
+  const env = { ...process.env, XDG_CONFIG_HOME: temporary, APPDATA: temporary, UWA_SMOKE_CONFIG_HOME: temporary };
   // This script is for Linux preview validation under Xvfb. Production never
   // adds --no-sandbox; the explicit flag only lets a restricted CI/container run this test.
-  const packaged = process.argv.includes("--packaged");
+  const installed = process.env.UWA_SMOKE_EXECUTABLE;
+  const packaged = Boolean(installed) || process.argv.includes("--packaged");
   const args = [
+    `--user-data-dir=${join(temporary, "Univer Workspace Agent")}`,
     "-r",
     join(desktop, "test/electron-diagnostics.cjs"),
     ...(packaged ? [] : [desktop]),
@@ -28,7 +30,7 @@ try {
     env,
     timeout: 60000,
     ...(packaged
-      ? { executablePath: join(desktop, "artifacts/linux-unpacked/univer-workspace-agent-desktop") }
+      ? { executablePath: installed ?? join(desktop, "artifacts/linux-unpacked/univer-workspace-agent-desktop") }
       : {}),
   });
   application.process().stderr.on("data", (bytes) => {
@@ -41,7 +43,12 @@ try {
     };
   });
   const dataPath = await application.evaluate(({ app }) => app.getPath("userData"));
-  if (!dataPath.startsWith(temporary)) throw new Error("Electron test data is not isolated");
+  // Windows can expand RUNNER~1 into its long name; compare canonical paths.
+  const canonicalRoot = await realpath(temporary);
+  const canonicalData = await realpath(dataPath);
+  const inside = relative(canonicalRoot, canonicalData);
+  if (inside.startsWith("..") || isAbsolute(inside))
+    throw new Error(`Electron test data is not isolated: ${dataPath}; expected ${temporary}`);
   const page = await application.firstWindow();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -53,5 +60,9 @@ try {
   console.log("Electron window loaded the authenticated Agent UI with isolated user data.");
 } finally {
   await application?.close();
-  await rm(temporary, { recursive: true, force: true });
+  const { cp, mkdir } = await import("node:fs/promises");
+  const diagnostics = join(desktop, ".build/startup-logs");
+  await mkdir(diagnostics, { recursive: true });
+  await cp(join(temporary, "Univer Workspace Agent/logs"), diagnostics, { recursive: true }).catch(() => {});
+  await rm(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }

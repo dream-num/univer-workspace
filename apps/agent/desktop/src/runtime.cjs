@@ -17,7 +17,7 @@ async function exists(path) {
     throw e;
   }
 }
-async function verifyRuntime(root) {
+async function verifyRuntime(root, report = () => {}) {
   const manifest = JSON.parse(await readFile(join(root, "integrity.json"), "utf8"));
   if (
     !manifest ||
@@ -26,7 +26,10 @@ async function verifyRuntime(root) {
     !Object.keys(manifest).length
   )
     throw new Error("Invalid runtime inventory");
-  for (const [relative, expected] of Object.entries(manifest)) {
+  const entries = Object.entries(manifest);
+  let completed = 0;
+  for (const [relative, expected] of entries) {
+    report({ phase: "verify", completed, total: entries.length, file: relative });
     const path = resolve(root, relative);
     if (!path.startsWith(resolve(root) + sep) || !/^[a-f0-9]{64}$/.test(expected))
       throw new Error("Invalid runtime inventory");
@@ -34,9 +37,11 @@ async function verifyRuntime(root) {
       .update(await readFile(path))
       .digest("hex");
     if (hash !== expected) throw new Error(`Runtime integrity check failed: ${relative}`);
+    completed++;
+    report({ phase: "verify", completed, total: entries.length, file: relative });
   }
 }
-async function installRuntime(source, target) {
+async function installRuntime(source, target, report = () => {}) {
   const wanted = await readFile(join(source, "integrity.json"), "utf8");
   const identity = createHash("sha256").update(wanted).digest("hex");
   const backup = `${target}.previous`,
@@ -48,11 +53,16 @@ async function installRuntime(source, target) {
     (await readFile(join(target, ".complete"), "utf8")) === identity
   )
     return;
+  report({ phase: "cleanup" });
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
   try {
-    await cp(source, staging, { recursive: true, verbatimSymlinks: true });
-    await verifyRuntime(staging);
+    let copied = 0;
+    await cp(source, staging, { recursive: true, verbatimSymlinks: true,
+      filter: (file) => { report({ phase: "copy", completed: copied++, file }); return true; },
+    });
+    await verifyRuntime(staging, report);
+    report({ phase: "activate" });
     const { writeFile } = filesystem;
     await writeFile(join(staging, ".complete"), identity);
     await rm(backup, { recursive: true, force: true });
@@ -63,8 +73,9 @@ async function installRuntime(source, target) {
       if (await exists(backup)) await rename(backup, target);
       throw error;
     }
-  } finally {
-    await rm(staging, { recursive: true, force: true });
+  } catch (error) {
+    report({ phase: "failed", error: error.message, code: error.code, path: error.path });
+    throw error;
   }
 }
 async function assertPortAvailable(port) {
