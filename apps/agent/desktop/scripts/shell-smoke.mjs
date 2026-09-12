@@ -19,6 +19,7 @@ try {
   const installed = process.env.UWA_SMOKE_EXECUTABLE;
   const packaged = Boolean(installed) || process.argv.includes("--packaged");
   const args = [
+    `--user-data-dir=${join(temporary, "Univer Workspace Agent")}`,
     "-r",
     join(desktop, "test/electron-diagnostics.cjs"),
     ...(packaged ? [] : [desktop]),
@@ -42,7 +43,7 @@ try {
     };
   });
   const dataPath = await application.evaluate(({ app }) => app.getPath("userData"));
-  if (!dataPath.startsWith(temporary)) throw new Error("Electron test data is not isolated");
+  if (!dataPath.startsWith(temporary)) throw new Error(`Electron test data is not isolated: ${dataPath}; expected ${temporary}`);
   const page = await application.firstWindow();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));

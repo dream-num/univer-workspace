@@ -21,6 +21,10 @@ let window,
   release;
 const origin = localOrigin();
 app.setName("Univer Workspace Agent");
+// Keep Electron profile and application data together when an explicit profile
+// directory is requested (also used by installed-application smoke tests).
+const profileDirectory = app.commandLine.getSwitchValue("user-data-dir");
+if (profileDirectory) app.setPath("userData", require("node:path").resolve(profileDirectory));
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", () => {
