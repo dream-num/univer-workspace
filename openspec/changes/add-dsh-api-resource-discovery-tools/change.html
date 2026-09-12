@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API 与资源发现工具 · Tina Change View</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body { min-width: 320px; min-height: 100vh; padding: 40px 24px; background: var(--paper); color: var(--ink); font-family: var(--sans); }
+    .page { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow { margin-bottom: 8px; color: var(--accent-text); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+    h1 { max-width: 880px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 800px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 820px; height: auto; }
+    .brief { display: grid; grid-template-columns: 1.05fr 1.1fr 0.85fr; gap: 16px; margin-top: 24px; }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.65; }
+    .card ul { padding-left: 20px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) { body { padding: 24px 16px; } .brief { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View · add-dsh-api-resource-discovery-tools</p>
+      <h1>按需发现 API 与 SVG 资源</h1>
+      <p class="thesis">五个 credential-free tools 读取版本匹配的随包数据；只有 SVG export 经过本地文件策略、一次授权与 body 复核后产生原子文件。</p>
+    </header>
+
+    <section class="diagram" aria-label="API 与资源发现工具架构，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="discovery-architecture-title discovery-architecture-desc">
+        <title id="discovery-architecture-title">Credential-free discovery 与受控 SVG export 架构</title>
+        <desc id="discovery-architecture-desc">DSH Agent 通过四个只读工具查询随包 API reference 和资源 manifest；resource export 经过本地策略、授权和复核后，无磁盘缓存地顺序下载并原子发布 SVG。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        </defs>
+        <rect width="1000" height="560" fill="#f5f5f5"/>
+
+        <path d="M 224 280 H 248 V 112 H 288" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 224 280 H 288" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 224 280 H 248 V 448 H 288" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 512 112 H 624" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 512 280 H 624" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 512 448 H 560 V 328 H 624" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 512 448 H 624" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+
+        <rect x="48" y="232" width="176" height="96" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="136" y="274" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="19" font-weight="600" text-anchor="middle">DSH Agent</text>
+        <text x="136" y="300" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">无 Workspace credential</text>
+
+        <rect x="288" y="60" width="224" height="104" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="400" y="101" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">API find / show</text>
+        <text x="400" y="128" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">closed result · ≤ 1 MiB</text>
+
+        <rect x="288" y="228" width="224" height="104" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="400" y="269" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">resource list / find</text>
+        <text x="400" y="296" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">无网络 · ≤ 256 KiB</text>
+
+        <rect x="288" y="384" width="224" height="128" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="400" y="422" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">resource export</text>
+        <text x="400" y="450" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">只锁 handles + directory</text>
+        <text x="400" y="475" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">call-owned library + adapters</text>
+
+        <rect x="624" y="60" width="304" height="104" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="776" y="101" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">随包 API reference</text>
+        <text x="776" y="128" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">@univer-cli/api-reference@1.0.0-beta.2</text>
+
+        <rect x="624" y="228" width="304" height="104" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="776" y="269" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">随包 resource manifest</text>
+        <text x="776" y="296" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">stable handles · HTTPS sources</text>
+
+        <rect x="624" y="384" width="304" height="128" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="776" y="422" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Session-cwd SVG 文件</text>
+        <text x="776" y="450" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">chunk 计费 · 累计耗尽即停 network</text>
+        <text x="776" y="475" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">原子发布 · 无磁盘 cache</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <p>一个 capability、五个 tools。四个查询纯只读；export 仅支持 Host-local Session cwd。不包含 Skills、inline SVG、cache 管理、remote filesystem、Web UI 或 docs server。</p>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>精确复用已发布 API/resource packages。</li>
+          <li>closed schemas 与固定 fan-out/result budgets。</li>
+          <li>每次 export 独立 library/adapters；无 shared current-call。</li>
+          <li>10 MiB 单项失败可继续；32 MiB 累计耗尽终止后续网络。</li>
+          <li>public library 决定 filename；应用内最小 helper 原子发布。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <p>重复 export 会重新下载；测得成本需要复用时再增加 cache 合同。取消后保留已确认文件，调用方先检查目录再重试。影响限于 `apps/dsh-univer-work/**` 与 exact discovery dependencies。</p>
+      </article>
+    </section>
+
+    <footer>
+      Derived from <a href="proposal.md">proposal.md</a> and <a href="design.md">design.md</a>. Markdown sources are authoritative.
+    </footer>
+  </main>
+</body>
+</html>

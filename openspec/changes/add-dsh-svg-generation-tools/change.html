@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH SVG generation tools · 变更决策视图</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      padding: 40px 24px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    .page { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--accent-text);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 { max-width: 900px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 820px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 840px; height: auto; }
+    .brief {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr 0.95fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.65; }
+    .card ul { padding-left: 20px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View · add-dsh-svg-generation-tools</p>
+      <h1>让 DSH Agent 用受约束的本地 SVG 生成 Slide</h1>
+      <p class="thesis">两个稳定工具覆盖编译、代码输出和 Draft apply；apply 可在一次组合授权后先保存并再执行同一 exact program，Client Core 继续独占 SVG 编译和 Slide execution workflow。</p>
+    </header>
+
+    <section class="diagram" aria-label="SVG compile 与 apply 边界图，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1100 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="svg-flow-title svg-flow-desc">
+        <title id="svg-flow-title">DSH SVG generation tools 的 compile 与 apply 架构</title>
+        <desc id="svg-flow-desc">DSH 工具先经过本地路径、预算和授权门，再调用 Workspace Client Core 编译 SVG。同一个已验证程序可先写入本地代码文件，再经共享 content execution 应用到 Draft Worktree Slide Unit；字体测量选择显式估算或已打包浏览器。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1100" height="620" fill="#f5f5f5"/>
+
+        <path d="M 250 286 H 320" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 520 286 H 590" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 790 258 H 840 V 136 H 870" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 790 314 H 840 V 436 H 870" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 690 356 V 488 H 600" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 690 216 V 98 H 600" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="50" y="226" width="200" height="120" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="150" y="270" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">DSH SVG tools</text>
+        <text x="150" y="298" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle">workspace_svg_compile</text>
+        <text x="150" y="320" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle">workspace_svg_apply</text>
+
+        <rect x="320" y="206" width="200" height="160" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="420" y="250" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Client Shell 门</text>
+        <text x="420" y="280" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">closed schema · byte budgets</text>
+        <text x="420" y="304" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Session cwd · local provider</text>
+        <text x="420" y="328" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">conditional approval · cancellation</text>
+
+        <rect x="590" y="216" width="200" height="140" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="690" y="260" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Client Core SVG owner</text>
+        <text x="690" y="290" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">source + contained assets</text>
+        <text x="690" y="314" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">compile · page wrapper</text>
+
+        <rect x="430" y="48" width="170" height="100" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="515" y="90" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">显式估算</text>
+        <text x="515" y="118" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">无 browser · 保留 lint</text>
+
+        <rect x="870" y="86" width="180" height="100" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="960" y="128" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">真实字体测量</text>
+        <text x="960" y="156" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">packaged render runtime</text>
+
+        <rect x="430" y="438" width="170" height="100" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="515" y="480" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">代码文件</text>
+        <text x="515" y="508" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">same exact program · 先确认</text>
+
+        <rect x="870" y="386" width="180" height="100" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="960" y="424" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="17" text-anchor="middle">Draft Worktree</text>
+        <text x="960" y="450" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Slide Unit only</text>
+        <text x="960" y="472" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">shared content execution</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <p>首版仅支持 local Host profile。输入是 Session cwd 内的 SVG 与 relative assets；apply 只写 Draft Worktree Slide Unit。不加入 Typst、Office、screenshot、Skills、daemon、Jobs、Web UI 或 remote filesystem。</p>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>compile 与 apply 使用两个独立工具。</li>
+          <li>代码可 inline 返回；apply 可在一次组合 approval 后先保存同一程序。</li>
+          <li>Core 只增加可选 signal、root 与 byte limits；CLI 省略时不变。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <p>已打开 regular-file identity 的 bounded read 限制路径竞态与内存膨胀。body 观察到的 file-confirmed 失败返回 partial；仅 registry 捕获的 late abort 保持 ABORTED，不伪造 location。</p>
+      </article>
+    </section>
+
+    <footer>
+      Derived from <a href="proposal.md">proposal.md</a> and <a href="design.md">design.md</a>. Markdown sources are authoritative.
+    </footer>
+  </main>
+</body>
+</html>
