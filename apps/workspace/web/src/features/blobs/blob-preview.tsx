@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { buttonVariants } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
+import { isHtmlViewFilename } from "@univerjs/workspace-html-view";
+import { HtmlViewFile } from "../html-views";
 
 interface BlobPreviewResource {
   readonly name: string;
@@ -14,6 +16,7 @@ interface BlobPreviewResource {
 }
 
 export function BlobPreview({ resource }: { readonly resource: BlobPreviewResource }) {
+  if (isHtmlViewFilename(resource.originalFilename)) return <HtmlViewFile resource={resource} />;
   const mediaType = resource.mediaType.toLowerCase();
   if (mediaType.startsWith("image/")) {
     return (

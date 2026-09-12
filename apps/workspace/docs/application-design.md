@@ -137,6 +137,11 @@ Resource 是由 `kind` 判别的联合。现有 `POST /api/resources` 只创建 
 Blob Module 通过 Upload Session 接收字节，只有 Complete 才发布 Node/Resource。BlobStore
 保存字节，产品数据库保存元数据和删除 Outbox；前端根据服务端检测的 MIME 自行选择预览。
 
+`.univer.html` 使用现有 Blob 身份和上传生命周期，不新增数据库表或 Unit 类型。
+Browser 根据模板中的 Unit ID 通过既有 API 检查来源访问，再由独立 Binding 引擎
+加载 headless 协同数据。HTML 文件权限不授予来源表格权限；生成的脚本不执行。
+设计见 [Univer HTML Views](../../../docs/design/html-views/README.md)。
+
 Univer Asset Module 适配原生 File API。它将 Slide、Board、Base 等 Unit 内嵌资源保存到同一
 `BlobStore`，但不创建 Node/Resource。Snapshot 只持有稳定 Asset ID；签名接口返回同域
 `/content` 网关，网关在每次请求时重新解析 Unit/Worktree 权限并禁止缓存。Worktree-local
