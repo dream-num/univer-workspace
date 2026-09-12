@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron } from "playwright";
 
@@ -43,7 +43,12 @@ try {
     };
   });
   const dataPath = await application.evaluate(({ app }) => app.getPath("userData"));
-  if (!dataPath.startsWith(temporary)) throw new Error(`Electron test data is not isolated: ${dataPath}; expected ${temporary}`);
+  // Windows can expand RUNNER~1 into its long name; compare canonical paths.
+  const canonicalRoot = await realpath(temporary);
+  const canonicalData = await realpath(dataPath);
+  const inside = relative(canonicalRoot, canonicalData);
+  if (inside.startsWith("..") || isAbsolute(inside))
+    throw new Error(`Electron test data is not isolated: ${dataPath}; expected ${temporary}`);
   const page = await application.firstWindow();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
