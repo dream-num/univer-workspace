@@ -105,6 +105,9 @@ jobs:
           $process = Start-Process $installer.FullName -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
           Write-Output "Installation elapsed: $((Get-Date) - $started)"
+          $env:UWA_INSTALLED_RUNTIME = Join-Path $destination 'resources/runtime'
+          node -e "require('./apps/agent/desktop/src/runtime.cjs').verifyRuntime(process.env.UWA_INSTALLED_RUNTIME).then(() => console.log('Installed resource inventory verified')).catch(e => { console.error(e); process.exitCode = 1; })"
+          if ($LASTEXITCODE -ne 0) { throw 'Installed resource inventory failed' }
           $env:UWA_SMOKE_EXECUTABLE = Join-Path $destination 'Univer Workspace Agent.exe'
           node apps/agent/desktop/scripts/shell-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Installed application startup failed' }
