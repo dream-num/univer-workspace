@@ -19,6 +19,8 @@ WORKDIR /src
 
 # Copy manifests first so the pnpm store/lockfile layer caches across rebuilds.
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc tsconfig.base.json ./
+# pnpm reads every configured patch before applying workspace filters.
+COPY patches ./patches
 COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
