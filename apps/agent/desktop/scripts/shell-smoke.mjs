@@ -13,7 +13,7 @@ let application;
 try {
   // Electron's --user-data-dir controls Chromium; use the OS config base as
   // well so app.getPath('userData') cannot read an existing desktop account.
-  const env = { ...process.env, XDG_CONFIG_HOME: temporary, APPDATA: temporary };
+  const env = { ...process.env, XDG_CONFIG_HOME: temporary, APPDATA: temporary, UWA_SMOKE_CONFIG_HOME: temporary };
   // This script is for Linux preview validation under Xvfb. Production never
   // adds --no-sandbox; the explicit flag only lets a restricted CI/container run this test.
   const installed = process.env.UWA_SMOKE_EXECUTABLE;
