@@ -22,6 +22,10 @@ const INVOCATION = { modelInvocable: true, userInvocable: true } as const;
 
 const DEFINITIONS = [
   {
+    name: "univer-html-view",
+    description: "Create HTML dashboards and forms bound to live Univer Sheet cells using data-univer-cell-text and data-univer-cell-model. Validate and publish .univer.html files with univer_html_view.",
+  },
+  {
     name: "univer",
     description:
       "Create, inspect, edit, import, export, and hand off remote Univer Workspace documents (Units) through DSH tools and isolated worktrees. Use proactively for any task involving Workspace documents, spreadsheets or .xlsx/.csv/.tsv data, presentations or .pptx slides, .docx documents, Base databases, Board canvases, cross-Unit content, or exact Univer Facade API authoring; load this before the matching Unit skill.",

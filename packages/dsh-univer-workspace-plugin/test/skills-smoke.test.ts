@@ -14,12 +14,13 @@ const EXPECTED_SKILLS = [
   "univer-cross-unit-formula",
   "univer-doc",
   "univer-embed",
+  "univer-html-view",
   "univer-sheet",
   "univer-slide",
 ] as const;
 
 describe("bundled Workspace Skills", () => {
-  it("registers the eight Workspace candidates with static assets", async () => {
+  it("registers the Workspace candidates with static assets", async () => {
     const ctx = new Context();
     new SkillRegistry(ctx);
     apply(ctx);

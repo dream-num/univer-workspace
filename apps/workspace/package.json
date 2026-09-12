@@ -167,7 +167,12 @@
     "rxjs": "^7.8.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^4.3.3",
+    "@univerjs/workspace-html-view": "workspace:*",
+    "@univerjs/binding-engine": "workspace:*",
+    "@univerjs/html-view-renderer": "workspace:*",
+    "@univerjs/sheets": "1.0.0-rc.0",
+    "@univerjs/sheets-formula": "1.0.0-rc.0"
   },
   "devDependencies": {
     "@redocly/cli": "^2.41.0",

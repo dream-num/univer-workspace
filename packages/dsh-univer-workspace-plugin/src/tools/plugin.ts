@@ -13,6 +13,7 @@ import { registerExchangeTools } from "./exchange.ts";
 import { registerUnitTool } from "./unit.ts";
 import { registerApiTool } from "./api.ts";
 import { registerResourcesTool } from "./resources.ts";
+import { registerHtmlViewTool } from "./html-view.ts";
 import { registerRenderTools, registerScreenshotTool } from "./render.ts";
 
 export const name = "univer-workspace-tools";
@@ -30,6 +31,7 @@ export function apply(ctx: Context): void {
     const disposeUnit = registerUnitTool(ctx);
     const disposeApi = registerApiTool(ctx);
     const disposeResources = registerResourcesTool(ctx);
+    const disposeHtmlView = registerHtmlViewTool(ctx);
     // Image results must be durably stored by DSH's attachment service.  Keep
     // the screenshot definition out of the base catalog and let Cordis load
     // it only while `attachments` is provided (the same gate as office).
@@ -44,6 +46,7 @@ export function apply(ctx: Context): void {
     });
     return () => {
       disposeRender();
+      disposeHtmlView();
       disposeResources();
       disposeApi();
       disposeUnit();

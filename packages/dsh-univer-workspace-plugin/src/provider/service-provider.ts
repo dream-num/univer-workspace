@@ -10,6 +10,7 @@
  */
 
 import type { WorktreeListQuery } from "../shared/state.ts";
+import { uploadBlob, type BlobUploadInput } from "./blob-api.ts";
 import { mkdir } from "node:fs/promises";
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
@@ -167,6 +168,10 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   async createDocument(userId: string, input: CreateDocumentInput) {
     const client = this.requireClient(userId);
     return await apiCreateDocument(client, input);
+  }
+
+  async uploadBlob(userId: string, input: BlobUploadInput) {
+    return uploadBlob(this.requireClient(userId), input);
   }
 
   async createWorktree(userId: string, input: { name: string; summary: string | null }) {

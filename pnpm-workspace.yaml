@@ -22,6 +22,9 @@ allowBuilds:
 # published declarations no longer leak an undeclared direct Redi import, and
 # clean installs/typechecks pass in both host React peer graphs.
 packageExtensions:
+  "@univerjs/network@1.0.0-rc.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
   "@univerjs/engine-render@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"

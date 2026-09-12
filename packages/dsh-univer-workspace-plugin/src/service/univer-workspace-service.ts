@@ -6,6 +6,7 @@
  * @module dsh-univer-workspace-plugin/service
  */
 
+import type { BlobUploadInput } from "../provider/blob-api.ts";
 import type { WorktreeListQuery, WorktreeSummaryPage } from "../shared/state.ts";
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
@@ -96,6 +97,12 @@ export abstract class UniverWorkspaceService extends Service {
 
   /** Create a Univer document in a Space. */
   abstract createDocument(userId: string, input: CreateDocumentInput): Promise<CreatedDocument>;
+
+  /** 上传文件字节并发布为独立 Blob 资源。 */
+  abstract uploadBlob(
+    userId: string,
+    input: BlobUploadInput,
+  ): Promise<{ nodeId: string; resourceId: string; workspaceUrl: string }>;
 
   /** Create a User Worktree. */
   abstract createWorktree(
