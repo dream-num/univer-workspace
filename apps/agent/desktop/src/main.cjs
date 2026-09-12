@@ -14,6 +14,7 @@ const {
 } = require("./policy.cjs");
 const { installRuntime, assertPortAvailable, stopBackend } = require("./runtime.cjs");
 
+let startupLog;
 let window,
   backend,
   quitting = false,
@@ -42,12 +43,16 @@ else {
     .whenReady()
     .then(start)
     .catch((error) => {
-      if (!quitting) dialog.showErrorBox("Unable to start Workspace Agent", error.message);
+      startupLog?.write({ phase: "fatal", error: error.message, stack: error.stack });
+      if (!quitting) dialog.showErrorBox("Unable to start Workspace Agent",
+        `${error.message}\n\nStartup log: ${startupLog?.path ?? "unavailable"}`);
       app.quit();
     });
 }
 
 async function start() {
+  startupLog = require("./startup-log.cjs").createStartupLog(join(app.getPath("userData"), "logs"));
+  startupLog.write({ phase: "start", version: app.getVersion(), platform: process.platform, arch: process.arch });
   const resources = app.isPackaged
     ? join(process.resourcesPath, "runtime")
     : join(__dirname, "..", ".build", "runtime");
@@ -95,11 +100,32 @@ async function start() {
   window.webContents.on("will-redirect", (event, url) => {
     if (!isLocalUrl(url, origin)) event.preventDefault();
   });
-  await window.loadURL(
-    'data:text/html,<title>Univer Workspace Agent</title><body style="font:16px system-ui;padding:48px">Setting up Workspace Agent…<p>The first launch or an update can take a few minutes.</p></body>',
-  );
+  const html = `<meta charset="utf-8"><title>Workspace Agent</title>
+    <body style="font:16px system-ui;background:#f8fafc;color:#172033;margin:0;display:grid;place-items:center;height:100vh">
+    <main style="width:480px"><h1 style="font-size:24px">Starting Workspace Agent</h1>
+    <p id="stage">Preparing your workspace</p><progress id="progress" style="width:100%"></progress>
+    <p id="detail" style="color:#64748b">Preparing files for the first launch.</p>
+    <p>You can find startup details in Help → Open startup logs.</p></main></body>`;
+  await window.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   window.show();
-  await installRuntime(resources, runtime);
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: "Help", submenu: [{
+    label: "Open startup logs", click: () => shell.showItemInFolder(startupLog.path),
+  }] }]));
+  let last = 0, lastPhase;
+  const report = (event) => {
+    if (event.phase === lastPhase && Date.now() - last < 500) return;
+    last = Date.now(); lastPhase = event.phase;
+    startupLog.write(event);
+    const labels = { cleanup: "Preparing installation", copy: "Copying application files", verify: "Checking application files", activate: "Finishing setup", failed: "Setup failed", backend: "Starting local service" };
+    const label = labels[event.phase] ?? event.phase;
+    const detail = event.total ? `${event.completed} of ${event.total} files checked` :
+      event.completed ? `${event.completed} entries processed` : "Please wait";
+    void window.webContents.executeJavaScript(`document.getElementById('stage').textContent=${JSON.stringify(label)};
+      document.getElementById('detail').textContent=${JSON.stringify(detail)};
+      ${event.total ? `document.getElementById('progress').max=${event.total};document.getElementById('progress').value=${event.completed};` : "document.getElementById('progress').removeAttribute('value');"}`).catch(() => {});
+  };
+  await installRuntime(resources, runtime, report);
+  report({ phase: "backend" });
   const bin = join(runtime, "node", "bin");
   const node = join(bin, process.platform === "win32" ? "node.exe" : "node");
   const env = {
@@ -184,8 +210,10 @@ async function start() {
     backend.once("exit", onExit);
     backend.once("error", onExit);
   });
+  startupLog.write({ phase: "backend-ready" });
   started = true;
   await window.loadURL(address);
+  startupLog.write({ phase: "ready" });
   const checkUpdates = createUpdateChecker({
     app,
     autoUpdater,
@@ -217,6 +245,7 @@ async function start() {
       {
         label: "Help",
         submenu: [
+          { label: "Open startup logs", click: () => shell.showItemInFolder(startupLog.path) },
           {
             label: "Check for Updates…",
             click: () => {
