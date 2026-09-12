@@ -32,10 +32,11 @@ COPY packages/unit-comparison-viewer ./packages/unit-comparison-viewer
 COPY packages/workspace-file-browser ./packages/workspace-file-browser
 COPY packages/workspace-ui ./packages/workspace-ui
 
+# The production Workspace graph excludes the desktop-only signing package.
 RUN pnpm --filter @univerjs/univer-workspace-reference-provider build \
     && pnpm --filter @univerjs/univer-workspace build \
     && pnpm --filter @univerjs/univer-workspace \
-      deploy --legacy --prod /app/deploy
+      deploy --legacy --prod --config.allow-unused-patches=true /app/deploy
 
 FROM node:24-bookworm-slim AS runtime
 
