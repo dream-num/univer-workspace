@@ -38,17 +38,25 @@ function BoundHtmlView({ parsed }: { parsed: HtmlViewDocument }) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("正在加载…");
   const enginesRef = useRef(new Map<string, BindingEngine>());
+  const mountedRef = useRef<ReturnType<typeof mountHtmlView> | undefined>(undefined);
   useBlocker({
     shouldBlockFn: async () => {
+      const root = document?.documentElement;
+      const wasInert = root?.inert ?? false;
+      if (root) root.inert = true;
       try {
+        mountedRef.current?.flush();
         await Promise.all([...enginesRef.current.values()].map((engine) => engine.flush()));
         return false;
       } catch (error) {
         setError(error instanceof Error ? error.message : String(error));
         return true;
+      } finally {
+        if (root) root.inert = wasInert;
       }
     },
     enableBeforeUnload: () =>
+      !!mountedRef.current?.hasPendingChanges() ||
       [...enginesRef.current.values()].some(
         (engine) => engine.getCollaborationStatus() !== CollaborationStatus.SYNCED,
       ),
@@ -79,6 +87,7 @@ function BoundHtmlView({ parsed }: { parsed: HtmlViewDocument }) {
     const dispose = () => {
       abort.abort();
       mounted?.dispose();
+      if (mountedRef.current === mounted) mountedRef.current = undefined;
       subscriptions.forEach((subscription) => subscription.dispose());
       engines.forEach((engine) => engine.dispose());
       engines.clear();
@@ -99,6 +108,7 @@ function BoundHtmlView({ parsed }: { parsed: HtmlViewDocument }) {
       .then(() => {
         if (abort.signal.aborted) return;
         mounted = mountHtmlView({ document, template: parsed, engines, onError: setError });
+        mountedRef.current = mounted;
         updateStatus();
       })
       .catch((error) => {

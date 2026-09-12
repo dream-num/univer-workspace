@@ -128,9 +128,11 @@ export function mountCellBindings(
       edit.dirty = false;
       clearError(edit);
       render(group, group.engine.getCellState(group.reference));
+      return true;
     } catch (error) {
       showError(edit, error instanceof Error ? error.message : String(error));
       report();
+      return false;
     }
   };
   const submit = (group: Group, edit: Edit, immediate: boolean) => {
@@ -227,5 +229,18 @@ export function mountCellBindings(
     dispose();
     throw error;
   }
-  return dispose;
+  return {
+    dispose,
+    hasPendingChanges: () =>
+      !disposed && groups.some((group) => group.edits.some((edit) => edit.dirty)),
+    // 先把 DOM 草稿同步写入 Engine，宿主随后等待 SDK 协同确认。
+    flush() {
+      if (disposed) throw new Error("HTML bindings are disposed.");
+      for (const group of groups) {
+        for (const edit of group.edits) {
+          if (edit.dirty && !write(group, edit)) throw new Error(edit.message);
+        }
+      }
+    },
+  };
 }

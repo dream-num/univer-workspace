@@ -15,6 +15,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 # pnpm reads every configured patch before applying workspace filters.
 COPY patches ./patches
 COPY apps/workspace/package.json ./apps/workspace/package.json
+COPY packages/binding-engine/package.json ./packages/binding-engine/package.json
+COPY packages/html-view/package.json ./packages/html-view/package.json
+COPY packages/html-view-renderer/package.json ./packages/html-view-renderer/package.json
 COPY packages/reference-provider/package.json ./packages/reference-provider/package.json
 COPY packages/unit-comparison-viewer/package.json ./packages/unit-comparison-viewer/package.json
 COPY packages/workspace-file-browser/package.json ./packages/workspace-file-browser/package.json
@@ -27,6 +30,9 @@ RUN pnpm install \
 
 COPY tsconfig.base.json ./
 COPY apps/workspace ./apps/workspace
+COPY packages/binding-engine ./packages/binding-engine
+COPY packages/html-view ./packages/html-view
+COPY packages/html-view-renderer ./packages/html-view-renderer
 COPY packages/reference-provider ./packages/reference-provider
 COPY packages/unit-comparison-viewer ./packages/unit-comparison-viewer
 COPY packages/workspace-file-browser ./packages/workspace-file-browser

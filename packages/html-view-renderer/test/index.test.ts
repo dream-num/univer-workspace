@@ -55,3 +55,22 @@ it("rejects missing engines before binding any controls", () => {
   expect(() => mountHtmlView({ document, template, engines })).toThrow("Engine is missing");
   expect(engines.get("u")!.subscribeCell).not.toHaveBeenCalled();
 });
+
+it("exposes local flush before the host waits for collaboration", async () => {
+  const { template, engines } = fixture();
+  const engine = engines.get("u")!;
+  let savedValue: unknown;
+  const sync = vi.fn(async () => {
+    savedValue = vi.mocked(engine.setCellValue).mock.calls.at(-1)?.[1];
+  });
+  mounted = mountHtmlView({ document, template, engines });
+  const input = document.querySelector("input")!;
+  input.value = "22";
+  input.dispatchEvent(new Event("input"));
+  expect(mounted.hasPendingChanges()).toBe(true);
+  mounted.flush();
+  await sync();
+  mounted.dispose();
+  expect(savedValue).toBe(22);
+  expect(mounted.hasPendingChanges()).toBe(false);
+});

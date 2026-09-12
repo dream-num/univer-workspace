@@ -2,9 +2,9 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { CellState, CellValue } from "@univerjs/binding-engine";
 import { mountCellBindings, type CellBindingEngine } from "../src/dom.js";
-let dispose: (() => void) | undefined;
+let mounted: ReturnType<typeof mountCellBindings> | undefined;
 afterEach(() => {
-  dispose?.();
+  mounted?.dispose();
   document.body.replaceChildren();
   vi.useRealTimers();
 });
@@ -38,7 +38,7 @@ function setup(type = "range") {
   };
   const input = document.querySelector("input")!;
   const output = document.querySelector("output")!;
-  dispose = mountCellBindings([
+  mounted = mountCellBindings([
     { kind: "model", element: input, engine, reference },
     { kind: "text", element: output, engine, reference },
   ]);
@@ -99,8 +99,8 @@ it("cancels pending writes and subscriptions on disposal without owning the engi
   const { change, engine, output, update } = setup();
   change("21");
   change("22");
-  dispose!();
-  dispose = undefined;
+  mounted!.dispose();
+  mounted = undefined;
   await vi.advanceTimersByTimeAsync(200);
   change("23", "change");
   update(30);
@@ -126,8 +126,8 @@ it("writes checkbox booleans and rejects incompatible cell types", () => {
 });
 it("releases listeners after partial mount failure", () => {
   const { input, output, engine } = setup("number");
-  dispose!();
-  dispose = undefined;
+  mounted!.dispose();
+  mounted = undefined;
   input.disabled = false;
   const release = vi.fn();
   engine.subscribeCell = vi.fn(() => ({ dispose: release }));
@@ -150,13 +150,13 @@ it("releases listeners after partial mount failure", () => {
 it("shares one subscription and throttle across controls for the same cell", async () => {
   vi.useFakeTimers();
   const { input, output, engine } = setup();
-  dispose!();
+  mounted!.dispose();
   input.disabled = false;
   const second = document.createElement("input");
   second.type = "range";
   document.body.append(second);
   const subscribe = vi.spyOn(engine, "subscribeCell");
-  dispose = mountCellBindings([
+  mounted = mountCellBindings([
     { kind: "model", element: input, engine, reference },
     { kind: "model", element: second, engine, reference: { ...reference } },
     { kind: "text", element: output, engine, reference },
@@ -182,4 +182,55 @@ it("Escape cancels a throttled write", async () => {
   await vi.advanceTimersByTimeAsync(200);
   expect(engine.setCellValue).toHaveBeenCalledTimes(1);
   expect(input.value).toBe("21");
+});
+
+it("flushes the last throttled value before disposal without writing it twice", async () => {
+  vi.useFakeTimers();
+  const { change, engine } = setup();
+  change("21");
+  change("22");
+  expect(engine.getCellState(reference).value).toBe(21);
+  expect(mounted!.hasPendingChanges()).toBe(true);
+  mounted!.flush();
+  expect(engine.getCellState(reference).value).toBe(22);
+  expect(mounted!.hasPendingChanges()).toBe(false);
+  mounted!.flush();
+  mounted!.dispose();
+  await vi.advanceTimersByTimeAsync(200);
+  expect(engine.setCellValue).toHaveBeenCalledTimes(2);
+});
+
+it("keeps a failed pending write dirty until another edit or Escape", async () => {
+  vi.useFakeTimers();
+  const { change, engine, input } = setup();
+  change("21");
+  change("22");
+  vi.mocked(engine.setCellValue).mockImplementationOnce(() => {
+    throw new Error("denied");
+  });
+  expect(() => mounted!.flush()).toThrow("denied");
+  expect(mounted!.hasPendingChanges()).toBe(true);
+  expect(input.value).toBe("22");
+  await vi.advanceTimersByTimeAsync(200);
+  expect(engine.setCellValue).toHaveBeenCalledTimes(2);
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  expect(mounted!.hasPendingChanges()).toBe(false);
+  expect(input.value).toBe("21");
+  expect(() => mounted!.flush()).not.toThrow();
+});
+
+it("flushes uncommitted drafts but refuses invalid values", () => {
+  const { change, engine, input } = setup("number");
+  change("22");
+  expect(mounted!.hasPendingChanges()).toBe(true);
+  mounted!.flush();
+  expect(engine.getCellState(reference).value).toBe(22);
+  change("");
+  expect(() => mounted!.flush()).toThrow("有效数字");
+  expect(mounted!.hasPendingChanges()).toBe(true);
+  expect(input.value).toBe("");
+  change("23");
+  mounted!.flush();
+  expect(engine.getCellState(reference).value).toBe(23);
+  expect(mounted!.hasPendingChanges()).toBe(false);
 });

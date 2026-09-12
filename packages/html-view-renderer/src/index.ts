@@ -26,6 +26,5 @@ export function mountHtmlView(options: {
   // 可复用同一 Document；初始 disabled 意图来自模板，不继承上次卸载后的状态。
   for (const target of targets)
     if (target.kind === "model") target.element.toggleAttribute("disabled", target.disabled);
-  const dispose = mountCellBindings(targets, options.onError);
-  return { dispose };
+  return mountCellBindings(targets, options.onError);
 }
