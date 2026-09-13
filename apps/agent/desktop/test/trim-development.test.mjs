@@ -18,3 +18,20 @@ test('trims declarations and known development trees but retains runtime TypeScr
   for (const path of removed) await assert.rejects(access(join(root, path)), { code: 'ENOENT' });
   for (const path of retained) await access(join(root, path));
 });
+
+test('omits parallel bundler builds only when the published Node main remains authoritative', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'uwa-node-builds-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const [name, exports] of [['@opentelemetry/resources', undefined], ['@opentelemetry/api', { '.': './build/esm/index.js' }]]) {
+    const path = join(root, name);
+    for (const variant of ['src', 'esm', 'esnext']) {
+      await mkdir(join(path, 'build', variant), { recursive: true });
+      await writeFile(join(path, 'build', variant, 'index.js'), 'module output');
+    }
+    await writeFile(join(path, 'package.json'), JSON.stringify({ name, main: 'build/src/index.js', module: 'build/esm/index.js', exports }));
+  }
+  await trimDevelopmentFiles(root);
+  await access(join(root, '@opentelemetry/resources/build/src/index.js'));
+  await assert.rejects(access(join(root, '@opentelemetry/resources/build/esm/index.js')), { code: 'ENOENT' });
+  await access(join(root, '@opentelemetry/api/build/esm/index.js'));
+});

@@ -1,5 +1,11 @@
 # dsh-univer-workspace-plugin
 
+The Node host defers loading the document runtime pool, Office conversion and API
+reference until their first operation. The build ships these lazy chunks beside
+the worker bootstrap in `lib/`; closing an unused runtime manager does not load
+document engines. Account switching also joins pending pool initialization before
+closing it. These are internal packaging and lifecycle choices, not new exports.
+
 The Univer capability plugin for DSH. It gives an agent the ability to
 operate **remote Univer Workspace Units** (documents) in the Spaces the
 authorizing User can access. Documents are Units managed and persisted by the

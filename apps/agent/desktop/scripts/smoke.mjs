@@ -45,6 +45,12 @@ try {
   });
   if (binding.status !== 0)
     throw new Error(`Packaged Office native binding failed: ${binding.stderr}`);
+  const capability = spawnSync(node, [
+    join(desktop, 'test/packaged-capability.mjs'),
+    join(runtime, 'home/profiles/univer-workspace-harness/node_modules/dsh-univer-workspace-plugin/lib'),
+  ], { encoding: 'utf8', timeout: 60000 });
+  if (capability.error || capability.status !== 0)
+    throw new Error(`Packaged lazy capability failed: ${capability.error ?? capability.stderr}`);
   const terminal = spawnSync(node, ["-e", `
     const pty = require('node-pty').spawn(process.execPath,
       ['-e', 'console.log("uwa-pty-ready")'], { cols: 80, rows: 24 });

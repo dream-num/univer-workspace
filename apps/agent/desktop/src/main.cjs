@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, shell, net } = require("electron");
+const { app, BrowserWindow, Menu, dialog, shell, net, session } = require("electron");
 const { createUpdateChecker } = require("./updates.cjs");
 const { autoUpdater } = require("electron-updater");
 const { spawn } = require("node:child_process");
@@ -75,6 +75,8 @@ async function start() {
   const workspace = join(userData, "workspace");
   await mkdir(data, { recursive: true });
   await mkdir(workspace, { recursive: true });
+  const browserCache = await require('./browser-cache.cjs').prepareBrowserCache(resources, userData, process.versions.electron);
+  if (browserCache) session.defaultSession.setCodeCachePath(browserCache);
   window = new BrowserWindow({
     width: 1440,
     height: 960,

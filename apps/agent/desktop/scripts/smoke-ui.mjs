@@ -7,8 +7,10 @@ export async function waitForUsableAgent(page, { firstRun = true } = {}) {
   // isolated test data. No API key or remote model request is needed.
   if (firstRun || await notice.isVisible()) {
     await notice.click({ timeout: 30000 });
-    await page.getByRole('button', { name: 'Configure later', exact: true }).click({ timeout: 30000 });
   }
+  // Deferring the API key is session-scoped in this SDK. Fresh empty-account
+  // tests must defer it again after reload or a running-app replacement.
+  await page.getByRole('button', { name: 'Configure later', exact: true }).click({ timeout: 30000 });
   // A visible enabled button behind an overlay does not prove interactivity.
   // Trial click checks visibility, stability and event reception without editing.
   // The composer can remain disabled until a model is configured. Settings

@@ -6,16 +6,14 @@
  * @module dsh-univer-workspace-plugin/runtime/manager
  */
 
-import {
+import type {
   createUniverCollaborationRuntimePool,
-  type UniverCollaborationRuntimePoolEvent,
-  type UniverCollaborationRuntimeLease,
+  UniverCollaborationRuntimePoolEvent,
+  UniverCollaborationRuntimeLease,
 } from "@univer-cli/univer-collaboration-runtime-pool";
-import { prepareContentExecutionProgram } from "@univer-cli/content-execution";
-import {
-  inspectContent,
-  type ContentInspectionQuery,
-  type ContentInspectionResult,
+import type {
+  ContentInspectionQuery,
+  ContentInspectionResult,
 } from "@univer-cli/content-inspection";
 import type {
   CollaborationCommitResult,
@@ -89,33 +87,46 @@ function logRuntimeDiagnostic(payload: Record<string, unknown>): void {
 }
 
 export class RuntimeManager {
-  private readonly pool: ReturnType<
+  private pool: Promise<ReturnType<
     typeof createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>
-  >;
+  >> | undefined;
+  private closed = false;
   private readonly workerUrl: URL;
   /** Last worker-side error code observed before the pool reports a crash. */
   private readonly workerFailures = new Map<string, string>();
 
   public constructor(workerUrl: URL) {
     this.workerUrl = workerUrl;
-    this.pool = createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>({
-      entry: workerUrl,
-      onEvent: (event: UniverCollaborationRuntimePoolEvent) => {
-        if (event.type === "instance-failed") {
-          this.workerFailures.set(event.key, event.errorCode);
-          logRuntimeDiagnostic({
-            event: "worker-instance-failed",
-            key: event.key,
-            errorCode: event.errorCode,
-            at: new Date().toISOString(),
-          });
-        }
-      },
-    });
+  }
+
+  private getPool(): NonNullable<RuntimeManager["pool"]> {
+    if (this.closed) throw new Error("Workspace runtime manager is closed");
+    return this.pool ??= import("@univer-cli/univer-collaboration-runtime-pool").then(
+      ({ createUniverCollaborationRuntimePool }) => createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>({
+        entry: this.workerUrl,
+        onEvent: (event: UniverCollaborationRuntimePoolEvent) => {
+          if (event.type === "instance-failed") {
+            this.workerFailures.set(event.key, event.errorCode);
+            logRuntimeDiagnostic({
+              event: "worker-instance-failed",
+              key: event.key,
+              errorCode: event.errorCode,
+              at: new Date().toISOString(),
+            });
+          }
+        },
+      }),
+    );
   }
 
   public async close(): Promise<void> {
-    await this.pool.close();
+    this.closed = true;
+    // Closing an unused manager must not import the document engines. A pending
+    // creation is joined so account switching cannot leave a worker pool behind.
+    if (this.pool) {
+      const pool = await this.pool.catch(() => undefined);
+      await pool?.close();
+    }
   }
 
   /** Read one Unit's data with the Facade API. */
@@ -128,6 +139,7 @@ export class RuntimeManager {
       let reusable = false;
       try {
         await this.synchronize(lease, target);
+        const { prepareContentExecutionProgram } = await import('@univer-cli/content-execution');
         const result = await lease.execute({
           code: prepareContentExecutionProgram({
             code,
@@ -155,6 +167,7 @@ export class RuntimeManager {
       let reusable = false;
       try {
         await this.synchronize(lease, target);
+        const { inspectContent } = await import('@univer-cli/content-inspection');
         const result = await inspectContent(
           {
             unitId: lease.unitId,
@@ -202,6 +215,7 @@ export class RuntimeManager {
       let reusable = false;
       try {
         await this.synchronize(lease, target);
+        const { prepareContentExecutionProgram } = await import('@univer-cli/content-execution');
         const executed = await lease.execute({
           code: prepareContentExecutionProgram({
             code,
@@ -225,7 +239,9 @@ export class RuntimeManager {
   }
 
   private async acquire(target: WorkspaceRuntimeTarget): Promise<UniverCollaborationRuntimeLease> {
-    return await this.pool.acquire({ init: target, key: workspaceRuntimeKey(target) });
+    const pool = await this.getPool();
+    if (this.closed) throw new Error('Workspace runtime manager is closed');
+    return await pool.acquire({ init: target, key: workspaceRuntimeKey(target) });
   }
 
   /** Preserve the pool's worker-side failure code at the tool boundary. */

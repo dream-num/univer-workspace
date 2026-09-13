@@ -88,11 +88,18 @@ export async function finalizeRuntime({ desktop, runtime, version }) {
   await prepareDesktopClient(runtime);
   // Capture boots the published host once; discard its generated module links.
   await sanitize(runtime);
+  // The source Electron shell reads the sealed static roster during cache warmup.
+  const { writeInventory } = await import('./inventory.cjs');
+  await writeInventory(runtime);
+  run(process.platform === 'linux' && !process.env.DISPLAY ? 'xvfb-run' : process.execPath,
+    process.platform === 'linux' && !process.env.DISPLAY
+      ? ['-a', process.execPath, join(desktop, 'scripts/prepare-browser-cache.mjs')]
+      : [join(desktop, 'scripts/prepare-browser-cache.mjs')],
+    { cwd: desktop, env: process.env, stdio: 'inherit', timeout: 180000 });
   const { runtimeSizeReport, verifySizeReport } = await import("./size-report.mjs");
   const report = await runtimeSizeReport(runtime);
   await writeFile(join(root, "runtime-size.json"), JSON.stringify(report, null, 2));
   verifySizeReport(report);
-  const { writeInventory } = await import("./inventory.cjs");
   await writeInventory(runtime);
   console.log(`Prepared ${version} for ${platform}-${arch}`);
 }

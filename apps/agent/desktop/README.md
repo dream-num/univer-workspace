@@ -53,6 +53,22 @@ or served. At runtime, an application-owned static carrier calls DSH's public
 `bootInjections()` with that graph; it does not instantiate the host client registry
 or build browser combinations/source maps. The DSH package is not patched.
 
+The native build also opens the packaged profile in Electron and warms Chromium's
+HTTP and compiled-script caches. Only these disposable caches are shipped; HTML,
+authentication and API responses are marked `no-store`, and account storage is
+excluded. First launch stages the seed before creating its window. Its identity
+includes the browser graph and Electron version; updates replace caches while
+preserving cookies and account data. Chromium may reject compiled cache entries
+on a different CPU, so this is a performance optimization, not a runtime dependency.
+The seed adds about 86 MB before installer compression in the measured Linux build.
+
+The capability host loads the document runtime pool, API reference and Office
+conversion modules on their first operation. Node chunks and the worker bootstrap
+ship together in the plugin's `lib` directory. Initial application opening avoids
+compiling unused document engines; the first corresponding operation bears that
+initialization cost. Relocated artifact smoke verifies CSV conversion and the real
+worker fork in addition to browser startup.
+
 The Desktop profile sets `patchReload: startup` and disables `hmr` and
 `client-hmr` before capturing the graph. The browser module-system entry stays in
 the captured graph. Desktop uses a fixed packaged plugin roster: profile manifest
@@ -134,9 +150,10 @@ defaults to true; all three native jobs upload Actions artifacts.
 The optional `target=windows` selects only Windows for build-only performance
 investigations; publication requires all targets. Windows CI runs CPU sampling
 separately after acceptance, saving backend and renderer `.cpuprofile` files in
-`startup-logs/profiles`. The backend sample uses the installed runtime relocated
-to fresh data and a fresh compile cache; the renderer sample uses the installed
-Electron executable. These diagnostic timings do not replace acceptance timings.
+`startup-logs/profiles`. Both samples use the unpacked packaged artifact so a
+failed update cannot remove the profiling executable. The backend sample relocates
+that runtime to fresh data and a fresh compile cache. These diagnostic timings do
+not replace the installed-application acceptance timings.
 
 To publish,
 first create an `agent-vX.Y.Z` or `agent-vX.Y.Z-{alpha,beta,rc}.N` tag contained in the default branch, select that
@@ -245,6 +262,9 @@ budgets after running the launch/upgrade checks, so an installation that finishe
 after 30 seconds still yields startup and shutdown evidence and still fails
 acceptance. A failed installation or the 60-second watchdog remains an immediate
 failure. Browser navigation/script timings are included in the startup diagnostics.
+Installer reports retain exit status, watchdog status and file-presence transitions
+on failure. Separate `.phases` files timestamp the app-close check, old-file removal
+entry and completed installation using Windows' monotonic tick counter.
 The Windows test suite also runs the actual PowerShell shutdown helper against
 isolated native processes, checking owned `node.exe` descendants, a same-name app
 at another path, an unrelated `node.exe`, and an uninstaller under the install path.

@@ -1,8 +1,47 @@
 # Desktop startup performance investigation
 
 The acceptance targets are installation within 30 seconds and an interactive
-first window within 5 seconds. Neither target has been validated on Windows for
-this change. The previous successful Windows CI run did not enforce them.
+first window within 5 seconds. Neither target has passed Windows acceptance yet.
+
+## Windows acceptance after static browser delivery
+
+[Run 34754029211](https://github.com/dream-num/univer-workspace/actions/runs/34754029211),
+source `ffe8401`, enforced both targets and failed:
+
+| Measurement | Duration |
+| --- | ---: |
+| Fresh installation | 34.751 s |
+| First interactive opening | 12.904 s |
+| Main-process setup before backend | 2.506 s |
+| Backend launch to readiness | 4.328 s |
+| Backend ready to page load | 5.177 s |
+| Reinstall while app was running | Exceeded 60 s watchdog |
+
+The main script was about 45 MB and its request took 1.07 s. The installed
+executable was absent after the reinstall watchdog fired. This establishes an
+update failure but does not by itself distinguish old-file removal from payload
+extraction or prove that the cannot-close dialog recurred.
+
+## Browser cache and lazy host follow-up
+
+Local CPU sampling attributed about 1.80 s of backend startup to ESM compilation
+and 2.95 s of renderer self time to DSH's `materialize` factory invocation. The
+capability host had eagerly bundled document engines and the API reference into
+approximately 30.9 MB. Dynamic imports and Node code splitting reduce its eager
+code to about 1.16 MB; document-specific modules still ship and load on demand.
+
+Copying only Chromium's compiled-code cache did not improve the local page load.
+Seeding both its HTTP and compiled-code caches reduced page load from 8.07 s to
+1.87 s in an isolated experiment. Native packaging now warms only those caches,
+excluding account storage and non-static HTTP responses. The measured seed is
+85,748,422 bytes; CPU compatibility can affect Chromium's cache reuse.
+
+A clean Linux runtime build with both changes contained 12,847 inventory entries,
+no maps, and about 1.024 GB of runtime files. The packaged first opening took
+**7.566 s**, still failing the 5-second budget: main setup 0.604 s, backend 3.774 s,
+page 1.878 s, with the rest in process launch/automation and interaction checks.
+The package passed a real CSV import/export roundtrip and a fork/bootstrap probe
+without a remote account. This result does not establish Windows acceptance.
 
 ## Measurements
 

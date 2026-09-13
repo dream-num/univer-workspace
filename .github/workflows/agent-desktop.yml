@@ -66,6 +66,8 @@ jobs:
         run: node apps/agent/desktop/node_modules/playwright/cli.js install-deps chromium
       - run: pnpm --filter @univerjs/workspace-agent typecheck
       - run: pnpm --filter @univerjs/workspace-agent test
+      - run: pnpm --filter dsh-univer-workspace-plugin typecheck
+      - run: pnpm --filter dsh-univer-workspace-plugin test
       - run: node --test apps/agent/desktop/test/*.test.mjs
       - run: pnpm --dir apps/agent/desktop prepare:runtime
       - name: Verify relocated runtime
@@ -131,12 +133,14 @@ jobs:
       - name: Verify Linux Electron window
         if: runner.os == 'Linux'
         run: xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --packaged --no-sandbox
-      - name: Profile installed Windows startup separately from acceptance
+      - name: Profile packaged Windows startup separately from acceptance
         if: ${{ always() && runner.os == 'Windows' && steps.windows_acceptance.outcome != 'skipped' }}
         shell: pwsh
         run: |
-          $env:UWA_SMOKE_EXECUTABLE = Join-Path $env:RUNNER_TEMP 'Workspace Agent Installed/Univer Workspace Agent.exe'
-          if (-not (Test-Path -LiteralPath $env:UWA_SMOKE_EXECUTABLE)) { throw 'Installed executable unavailable for profiling' }
+          # A failed update may have removed the installed app. Profile the
+          # identical unpacked artifact so failure never hides the CPU evidence.
+          $env:UWA_SMOKE_EXECUTABLE = "$PWD/apps/agent/desktop/artifacts/win-unpacked/Univer Workspace Agent.exe"
+          if (-not (Test-Path -LiteralPath $env:UWA_SMOKE_EXECUTABLE)) { throw 'Packaged executable unavailable for profiling' }
           $env:UWA_SMOKE_PROFILE_DIR = "$PWD/apps/agent/desktop/.build/startup-logs/profiles"
           node apps/agent/desktop/scripts/shell-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Startup CPU profiling failed' }
@@ -150,9 +154,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: agent-startup-${{ matrix.target }}
-          path: apps/agent/desktop/.build/startup-logs
+          path: |
+            apps/agent/desktop/.build/startup-logs
+            apps/agent/desktop/.build/browser-cache-build-logs
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: agent-desktop-${{ matrix.target }}
           if-no-files-found: error

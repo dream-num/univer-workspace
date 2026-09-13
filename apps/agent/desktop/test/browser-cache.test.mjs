@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { prepareBrowserCache } from '../src/browser-cache.cjs';
+
+test('native browser cache seeds survive relocation and preserve account storage on refresh', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'uwa-browser-cache-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const runtime = join(root, 'installed/runtime');
+  const source = join(runtime, 'browser-cache-seed');
+  const data = join(root, 'user');
+  for (const path of [join(source, 'Cache'), join(source, 'code'), join(data, 'data')]) await mkdir(path, { recursive: true });
+  const identity = graph => JSON.stringify({ format: 1, electron: '44.0.0', graph });
+  await writeFile(join(source, 'manifest.json'), identity('first'));
+  await writeFile(join(source, 'Cache', 'asset'), 'http cache');
+  await writeFile(join(source, 'code', 'script'), 'compiled cache');
+  await writeFile(join(data, 'Cookies'), 'existing login');
+  await writeFile(join(data, 'data', 'account.json'), 'existing account');
+  const code = await prepareBrowserCache(runtime, data, '44.0.0');
+  assert.equal(await readFile(join(data, 'Cache', 'asset'), 'utf8'), 'http cache');
+  await writeFile(join(code, 'script'), 'runtime cache');
+  await prepareBrowserCache(runtime, data, '44.0.0');
+  assert.equal(await readFile(join(code, 'script'), 'utf8'), 'runtime cache');
+  await writeFile(join(source, 'manifest.json'), identity('second'));
+  await prepareBrowserCache(runtime, data, '44.0.0');
+  assert.equal(await readFile(join(code, 'script'), 'utf8'), 'compiled cache');
+  assert.equal(await readFile(join(data, 'Cookies'), 'utf8'), 'existing login');
+  assert.equal(await readFile(join(data, 'data', 'account.json'), 'utf8'), 'existing account');
+  await assert.rejects(prepareBrowserCache(runtime, data, '45.0.0'), /Electron version/);
+});

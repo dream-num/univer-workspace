@@ -1,6 +1,31 @@
 ; Override builder's directory-prefix process matching, which can include the
 ; uninstaller itself. Keep consent/retry behavior, and scope kills to this app.
+!macro agentInstallTrace PHASE
+  Push $R7
+  Push $R8
+  Push $R9
+  ReadEnvStr $R7 UWA_INSTALL_TRACE
+  ${If} $R7 != ""
+    System::Call 'kernel32::GetTickCount() i.R9'
+    FileOpen $R8 "$R7" a
+    FileWrite $R8 "${PHASE}:$R9$\r$\n"
+    FileClose $R8
+  ${EndIf}
+  Pop $R9
+  Pop $R8
+  Pop $R7
+!macroend
+
+!macro customUnInstall
+  !insertmacro agentInstallTrace "uninstall-files-start"
+!macroend
+
+!macro customInstall
+  !insertmacro agentInstallTrace "install-files-complete"
+!macroend
+
 !macro customCheckAppRunning
+  !insertmacro agentInstallTrace "check-app-start"
   InitPluginsDir
   File /oname=$PLUGINSDIR\close-agent.ps1 "${BUILD_RESOURCES_DIR}\close-agent.ps1"
   System::Call 'kernel32::SetEnvironmentVariable(t "UWA_INSTALL_EXECUTABLE", t "$INSTDIR\${APP_EXECUTABLE_FILENAME}")'
@@ -28,4 +53,5 @@
     Quit
   ${EndIf}
   System::Call 'kernel32::SetEnvironmentVariable(t "UWA_INSTALL_EXECUTABLE", t "")'
+  !insertmacro agentInstallTrace "check-app-complete"
 !macroend

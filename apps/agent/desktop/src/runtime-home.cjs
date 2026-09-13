@@ -26,12 +26,13 @@ async function prepareRuntimeHome(source, target) {
   await mkdir(staging, { recursive: true });
   // Link packages individually: DSH must be able to add fallback links to the
   // writable node_modules directory without writing inside the installation.
-  async function linkPackages(from, to) {
+  const links = [];
+  async function collectPackages(from, to) {
     await mkdir(to, { recursive: true });
     for (const item of await readdir(from, { withFileTypes: true })) {
       if (item.name.startsWith('.')) continue;
-      if (item.name.startsWith('@')) await linkPackages(join(from, item.name), join(to, item.name));
-      else await symlink(resolve(from, item.name), join(to, item.name), process.platform === 'win32' ? 'junction' : 'dir');
+      if (item.name.startsWith('@')) await collectPackages(join(from, item.name), join(to, item.name));
+      else links.push([resolve(from, item.name), join(to, item.name)]);
     }
   }
   const profileName = 'univer-workspace-harness';
@@ -41,7 +42,14 @@ async function prepareRuntimeHome(source, target) {
   for (const item of await readdir(shipped, { withFileTypes: true })) {
     if (item.isFile() && !item.name.startsWith('.')) await cp(join(shipped, item.name), join(profile, item.name));
   }
-  await linkPackages(join(shipped, 'node_modules'), join(profile, 'node_modules'));
+  await collectPackages(join(shipped, 'node_modules'), join(profile, 'node_modules'));
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(16, links.length) }, async () => {
+    while (next < links.length) {
+      const [from, to] = links[next++];
+      await symlink(from, to, process.platform === 'win32' ? 'junction' : 'dir');
+    }
+  }));
   await symlink(resolve(source, 'home/internal-packages'), join(staging, 'internal-packages'), process.platform === 'win32' ? 'junction' : 'dir');
   await writeFile(join(staging, '.desktop-complete'), identity);
   // Preserve the previous profile, including edits. Never delete an old full
