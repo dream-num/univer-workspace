@@ -103,9 +103,10 @@ async function stopBackend(child) {
     });
     try {
       await new Promise((done, reject) => {
-        const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+        const killer = spawn(join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe"), ["/PID", String(child.pid), "/T", "/F"], {
           windowsHide: true,
           stdio: "ignore",
+          timeout: 8000,
         });
         killer.once("error", reject);
         killer.once("exit", (code) => {

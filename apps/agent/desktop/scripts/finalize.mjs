@@ -81,6 +81,13 @@ export async function finalizeRuntime({ desktop, runtime, version }) {
   await sanitize(runtime);
   const { trimPtyPrebuilds } = await import("./trim-pty.mjs");
   await trimPtyPrebuilds(join(bootstrap, "node_modules/node-pty"), platform, arch);
+  const { trimDevelopmentFiles } = await import("./trim-development.mjs");
+  await trimDevelopmentFiles(join(bootstrap, "node_modules"));
+  await trimDevelopmentFiles(join(profile, "node_modules"));
+  const { prepareDesktopClient } = await import("./prepare-client.mjs");
+  await prepareDesktopClient(runtime);
+  // Capture boots the published host once; discard its generated module links.
+  await sanitize(runtime);
   const { runtimeSizeReport, verifySizeReport } = await import("./size-report.mjs");
   const report = await runtimeSizeReport(runtime);
   await writeFile(join(root, "runtime-size.json"), JSON.stringify(report, null, 2));

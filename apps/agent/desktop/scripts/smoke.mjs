@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import net from "node:net";
 import runtimeTools from "../src/runtime.cjs";
 import policy from "../src/policy.cjs";
+import { prepareRuntimeHome } from "../src/runtime-home.cjs";
+import { waitForUsableAgent } from './smoke-ui.mjs';
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = await mkdtemp(join(tmpdir(), "uwa-desktop-smoke with spaces-"));
 let child;
@@ -18,7 +20,9 @@ try {
     win32: "win-unpacked/resources/runtime",
     darwin: "mac-arm64/Univer Workspace Agent.app/Contents/Resources/runtime",
   };
-  const source = process.argv.includes("--packaged")
+  const source = process.env.UWA_SMOKE_EXECUTABLE
+    ? join(dirname(process.env.UWA_SMOKE_EXECUTABLE), 'resources/runtime')
+    : process.argv.includes("--packaged")
     ? join(desktop, "artifacts", packaged[process.platform])
     : join(desktop, ".build/runtime");
   await runtimeTools.installRuntime(source, runtime);
@@ -56,6 +60,7 @@ try {
   `], { cwd: join(runtime, "bootstrap"), encoding: "utf8", timeout: 20000 });
   if (terminal.error || terminal.status !== 0)
     throw new Error(`Packaged PTY failed: ${terminal.error ?? terminal.stderr}`);
+  const runtimeHome = await prepareRuntimeHome(runtime, join(root, "writable/home"));
   const data = join(root, "data");
   const workspace = join(root, "workspace");
   await mkdir(data);
@@ -73,8 +78,9 @@ try {
     ...process.env,
     NODE_ENV: "production",
     UWA_DESKTOP: "1",
+    UWA_DESKTOP_CLIENT_ROOT: join(runtime, "desktop-client"),
     UWH_BIND_HOST: "127.0.0.1",
-    DSH_HOME: join(runtime, "home"),
+    DSH_HOME: runtimeHome,
     DSH_BIN: join(runtime, "bootstrap/node_modules/@deepseek-ai/dsh/lib/bin.js"),
     UWH_DSH_DATA_HOME: data,
     UWH_PUBLIC_ORIGIN: origin,
@@ -94,6 +100,10 @@ try {
     "UWH_SHARED_CREDENTIALS_PATH",
   ])
     delete env[key];
+  if (process.env.UWA_SMOKE_PROFILE_DIR) {
+    env.NODE_OPTIONS = '--require ' + JSON.stringify(join(desktop, 'test/backend-profile.cjs'));
+    env.NODE_COMPILE_CACHE = join(root, 'compile-cache');
+  }
   child = spawn(
     node,
     [
@@ -166,8 +176,18 @@ try {
         errors.push(`Browser asset returned HTTP ${response.status()}`);
     });
     await page.goto(url);
-    await page.waitForFunction(() => document.body.innerText.trim().length > 20);
-    await page.getByRole("button", { name: /Reconnecting/ }).waitFor({ state: "hidden", timeout: 30000 });
+    await waitForUsableAgent(page);
+    const boot = await page.evaluate(() => globalThis.__DSH_BOOT__);
+    if (!boot?.batches?.length || boot.entries.some(row => row.id === '@deepseek-ai/dsh-client-hmr'))
+      throw new Error('Desktop must use a fixed client graph without HMR');
+    for (const batch of boot.batches) {
+      if (!batch.url.startsWith('/plugins/workspace-desktop/')) throw new Error('Desktop is using runtime browser composition');
+      const response = await page.request.get(new URL(batch.url, page.url()).href);
+      if (!response.ok() || /(?:^|\n)\/\/# sourceMappingURL=/.test(await response.text()))
+        throw new Error(`Desktop production script failed: HTTP ${response.status()}, URL ${batch.url}`);
+      const map = await page.request.get(new URL(batch.url + '.map', page.url()).href);
+      if (map.status() !== 404) throw new Error('Desktop must not serve source maps');
+    }
     await page.screenshot({
       path: join(
         desktop,
@@ -179,6 +199,7 @@ try {
   } finally {
     await browser.close();
   }
+  await runtimeTools.verifyRuntime(runtime);
   console.log(
     "Relocated runtime passed native Office binding, authenticated HTTP, and Chromium bootstrap checks.",
   );

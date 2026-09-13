@@ -17,7 +17,9 @@ both fixes. Raising the descriptor limit alone did not fix the native build.
 
 Agent and both plugin builds do not generate source maps. Finalization removes
 maps supplied by third-party packages before inventory/signing, and runtime smoke
-checks reject any remaining maps. The Electron ASAR also excludes them.
+checks reject any remaining maps. The Electron ASAR also excludes them. Desktop finalization also removes TypeScript
+declaration files, native debug symbols, and explicitly listed third-party
+test/example/source trees. Runtime TypeScript, Skills and licenses are retained.
 
 The capability plugin bundles its JavaScript SDK dependencies. Desktop packaging
 stages an installation manifest containing only external native bindings and `ws`,
@@ -25,8 +27,8 @@ reading the binding versions from the installed SDK wrapper manifests. Source
 dependencies retain the repository SDK upgrade policy. Desktop builds remove
 unnecessary whitespace without renaming identifiers. Standalone Node includes
 the executable and upstream notices, while npm and development headers remain
-in the build directory. DSH's pnpm and plugin installation sources remain available
-for profile management. node-pty retains only target-platform prebuilds alongside
+in the build directory. DSH's pnpm and plugin installation archives remain in the runtime;
+the production Desktop plugin roster is fixed. node-pty retains only target-platform prebuilds alongside
 any locally compiled fallback; packaged smoke tests exercise a real terminal.
 Licenses, Skills, the resource catalog and native Office
 bindings are runtime assets, not blanket cleanup targets.
@@ -40,6 +42,27 @@ Sharing these browsers requires an explicit rendering lifecycle change and
 document export validation, rather than deleting the worker browser. This is
 tracked as a non-blocking upstream request in
 [univer-cli-sdk #63](https://github.com/dream-num/univer-cli-sdk/issues/63).
+
+## Production browser assets
+
+Desktop packaging boots the published DSH profile once in isolated build data,
+then exports its browser graph and batch responses using `graph()` and
+`fetchBundle()`. It strips source-map trailers, assigns URLs from the final script
+content, and stores each batch once in `runtime/desktop-client`. No map is shipped
+or served. At runtime, an application-owned static carrier calls DSH's public
+`bootInjections()` with that graph; it does not instantiate the host client registry
+or build browser combinations/source maps. The DSH package is not patched.
+
+The Desktop profile sets `patchReload: startup` and disables `hmr` and
+`client-hmr` before capturing the graph. The browser module-system entry stays in
+the captured graph. Desktop uses a fixed packaged plugin roster: profile manifest
+or profile patch edits are rejected on subsequent launches so stale prebuilt UI
+cannot silently accompany a changed profile. Application settings and account
+state stay in the normal writable data directories. The local Web development
+profile keeps its existing live-reload behavior.
+
+See [the upstream investigation](docs/dsh-production-upstream.md) for the exact
+published APIs and why `NODE_ENV=production` alone does not turn maps off.
 
 ## Downloads and updates
 
@@ -63,8 +86,10 @@ The stable metadata channel is named `latest`; prereleases use `alpha`, `beta`, 
 every six hours, or from **Help → Check for Updates**. All channels exclude CLI
 releases and use the selected release's immutable generic update feed,
 not GitHub's repository-wide latest release. The app asks before downloading and
-restarting. Active tasks should finish before accepting. Metadata and blockmaps
-are release assets, not extra installer choices. Linux updates require running
+restarting. Active tasks should finish before accepting. Update metadata and any blockmaps
+are release assets, not extra installer choices. Windows uses a ZIP/Deflate
+installation payload for faster extraction and downloads the full installer for
+updates; differential Windows downloads are disabled. Linux updates require running
 the AppImage itself from a writable location.
 
 ## Build on the target platform
@@ -105,7 +130,15 @@ smoke result does not validate their signing, OAuth, or installer behavior.
 ## Manual CI and publication
 
 Run **Build and release Agent desktop (manual)** in GitHub Actions with an exact version. `dry_run`
-defaults to true; all three native jobs upload Actions artifacts. To publish,
+defaults to true; all three native jobs upload Actions artifacts.
+The optional `target=windows` selects only Windows for build-only performance
+investigations; publication requires all targets. Windows CI runs CPU sampling
+separately after acceptance, saving backend and renderer `.cpuprofile` files in
+`startup-logs/profiles`. The backend sample uses the installed runtime relocated
+to fresh data and a fresh compile cache; the renderer sample uses the installed
+Electron executable. These diagnostic timings do not replace acceptance timings.
+
+To publish,
 first create an `agent-vX.Y.Z` or `agent-vX.Y.Z-{alpha,beta,rc}.N` tag contained in the default branch, select that
 tag as the workflow ref, enter the matching version, and explicitly disable
 `dry_run`. All three jobs must succeed before a draft Release is populated and
@@ -167,23 +200,63 @@ Server or model credentials.
 
 Electron's OS-specific `userData` directory contains `data/` for credentials,
 settings, and account-scoped sessions. `workspace/` is the separate local working
-directory; Agent does not use its credential/runtime tree as the project folder. `runtime/` is a writable installed copy of
-the bundled runtime. Upgrades stage and verify a new runtime before activation,
-retain `runtime.previous` for recovery, and leave `data/` intact. Initial setup and upgrades can take several minutes;
-later launches reuse the verified runtime. Quit stops the
-application-owned service process tree. Back up `data/` independently; uninstall
-and update operations must not be used as account-data cleanup.
+directory; Agent does not use its credential/runtime tree as the project folder.
+Node, DSH, browser binaries and bundled packages run directly from installed
+resources. Startup does not copy or hash the full runtime again. Integrity is
+verified during packaging and by relocated/installed artifact smoke checks.
+
+`runtime/home` contains the small writable DSH profile: configuration files and
+package links (junctions on Windows) to installed resources. DSH's generated
+configuration and fallback links stay writable without modifying the installation.
+A changed resource inventory stages a new profile and activates it at the same
+path, preserving account-owned links to it. Prior profile directories are retained
+as `home.previous-<timestamp>`; an old full runtime from earlier installers is
+also retained, but its binaries are no longer executed. No legacy cleanup runs
+on the startup path. Node's compile cache is stored separately in `compile-cache`.
+Quit stops the application-owned service process tree. Back up `data/`
+independently; uninstall and update operations must not be used as account-data
+cleanup.
 
 ## Startup diagnostics
 
 Desktop startup writes `logs/startup.log` under the application user-data directory
 (on Windows: `%APPDATA%\Univer Workspace Agent`). The previous launch is retained
 as `startup.previous.log`. Help → Open startup logs opens this location, including
-during setup. Logs contain phase timings, copy/check counters and failing paths;
-they do not record credentials, session URLs or backend output. Setup displays
-copy and verification progress. Failed staging is retained until the next attempt
-so missing files can be investigated without deleting user data.
+during setup. Logs contain phase timings and failing paths;
+they do not record credentials, session URLs or backend output. The startup window remains available while the local service starts. The
+previous profile is retained if activation fails.
 
 Windows CI installs the NSIS artifact and launches the installed Electron app with
 isolated user data. Startup diagnostics are uploaded as Actions artifacts even
-when this check fails. This supplements the unpacked runtime checks.
+when this check fails. Acceptance budgets are 30 seconds from launching the
+installer to successful completion and 5 seconds from launching Electron to an
+interactive authenticated local page (including browser automation attachment).
+A fresh-profile check advances the SDK notice, defers model-key setup, and
+requires the Settings button to receive pointer events without an overlay.
+This needs no model credentials or remote model request.
+A successful eventual start does not satisfy the timing checks. CI also reinstalls
+the artifact while the application is running, verifies service-port release,
+keeps an unrelated Node process alive, checks a user-data sentinel, and reopens
+the installed app. This covers the installer shutdown path; the two-release
+updater acceptance above is still required.
+
+Installation and reinstallation write separate timing reports. CI checks their
+budgets after running the launch/upgrade checks, so an installation that finishes
+after 30 seconds still yields startup and shutdown evidence and still fails
+acceptance. A failed installation or the 60-second watchdog remains an immediate
+failure. Browser navigation/script timings are included in the startup diagnostics.
+The Windows test suite also runs the actual PowerShell shutdown helper against
+isolated native processes, checking owned `node.exe` descendants, a same-name app
+at another path, an unrelated `node.exe`, and an uninstaller under the install path.
+
+The baseline Windows run [34673003978](https://github.com/dream-num/univer-workspace/actions/runs/34673003978)
+took 175.36 seconds to install. Its startup log recorded 46.85 seconds copying,
+10.79 seconds verifying, 19.88 seconds starting the backend, and 3.98 seconds
+loading the page (81.80 seconds total after main-process startup). These are
+baseline measurements, not acceptance results for the current changes. Native
+Windows measurements are required before claiming either budget is met.
+
+Baseline DSH composition costs, production static-delivery measurements, the
+stricter first-run interaction result (15.435 s), and remaining timing limits are recorded
+in [the startup performance investigation](docs/startup-performance.md). This is
+not a claim that the five-second target or Windows installation target has passed.

@@ -12,9 +12,15 @@ const {
   isWebUrl,
   readyUrl,
 } = require("./policy.cjs");
-const { installRuntime, assertPortAvailable, stopBackend } = require("./runtime.cjs");
+const { assertPortAvailable, stopBackend } = require("./runtime.cjs");
 
+const { prepareRuntimeHome } = require("./runtime-home.cjs");
 let startupLog;
+let stopping;
+function stopService() {
+  quitting = true;
+  return stopping ??= stopBackend(backend);
+}
 let window,
   backend,
   quitting = false,
@@ -40,8 +46,7 @@ else {
   app.on("before-quit", (event) => {
     if (quitting) return;
     event.preventDefault();
-    quitting = true;
-    void stopBackend(backend).finally(() => app.quit());
+    void stopService().catch((error) => startupLog?.write({ phase: "shutdown-failed", error: error.message })).finally(() => app.exit());
   });
   void app
     .whenReady()
@@ -65,7 +70,7 @@ async function start() {
     throw new Error("This installer does not match this computer.");
   await assertPortAvailable(DEFAULT_PORT);
   const userData = app.getPath("userData");
-  const runtime = join(userData, "runtime");
+  const runtime = resources;
   const data = join(userData, "data");
   const workspace = join(userData, "workspace");
   await mkdir(data, { recursive: true });
@@ -108,7 +113,7 @@ async function start() {
     <body style="font:16px system-ui;background:#f8fafc;color:#172033;margin:0;display:grid;place-items:center;height:100vh">
     <main style="width:480px"><h1 style="font-size:24px">Starting Workspace Agent</h1>
     <p id="stage">Preparing your workspace</p><progress id="progress" style="width:100%"></progress>
-    <p id="detail" style="color:#64748b">Preparing files for the first launch.</p>
+    <p id="detail" style="color:#64748b">Starting your local workspace.</p>
     <p>You can find startup details in Help → Open startup logs.</p></main></body>`;
   await window.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   window.show();
@@ -128,7 +133,8 @@ async function start() {
       document.getElementById('detail').textContent=${JSON.stringify(detail)};
       ${event.total ? `document.getElementById('progress').max=${event.total};document.getElementById('progress').value=${event.completed};` : "document.getElementById('progress').removeAttribute('value');"}`).catch(() => {});
   };
-  await installRuntime(resources, runtime, report);
+  const runtimeHome = await prepareRuntimeHome(resources, join(userData, "runtime/home"));
+  if (quitting) return;
   report({ phase: "backend" });
   const bin = join(runtime, "node", "bin");
   const node = join(bin, process.platform === "win32" ? "node.exe" : "node");
@@ -136,9 +142,11 @@ async function start() {
     ...process.env,
     NODE_ENV: "production",
     UWA_DESKTOP: "1",
+    UWA_DESKTOP_CLIENT_ROOT: join(runtime, "desktop-client"),
     UWH_BIND_HOST: "127.0.0.1",
     UWH_MODEL_SETTINGS_ENABLED: "true",
-    DSH_HOME: join(runtime, "home"),
+    DSH_HOME: runtimeHome,
+    NODE_COMPILE_CACHE: join(userData, "compile-cache"),
     UWH_DSH_DATA_HOME: data,
     DSH_BIN: join(runtime, "bootstrap", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js"),
     UWH_PUBLIC_ORIGIN: origin,
@@ -215,6 +223,7 @@ async function start() {
     backend.once("error", onExit);
   });
   startupLog.write({ phase: "backend-ready" });
+  if (quitting) return;
   started = true;
   await window.loadURL(address);
   startupLog.write({ phase: "ready" });
@@ -226,8 +235,13 @@ async function start() {
     window,
     updatesEnabled: release.updatesEnabled,
     beforeInstall: async () => {
-      await stopBackend(backend);
-      quitting = true;
+      try {
+        await stopService();
+      } catch (error) {
+        quitting = false;
+        stopping = undefined;
+        throw error;
+      }
     },
   });
   Menu.setApplicationMenu(

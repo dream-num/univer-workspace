@@ -33,6 +33,14 @@
     "./desktop-ready": {
       "types": "./src/desktop-ready.ts",
       "default": "./lib/desktop-ready.js"
+    },
+    "./desktop-client": {
+      "types": "./src/desktop-client.ts",
+      "default": "./lib/desktop-client.js"
+    },
+    "./desktop-client-capture": {
+      "types": "./src/desktop-client-capture.ts",
+      "default": "./lib/desktop-client-capture.js"
     }
   },
   "scripts": {

@@ -8,7 +8,7 @@ module.exports = {
   productName: "Univer Workspace Agent",
   icon: ".build/icon.png",
   extraMetadata: { version },
-  directories: { output: "artifacts" },
+  directories: { output: "artifacts", buildResources: "installer" },
   asar: true,
   files: ["src/**/*.cjs", "package.json", "!**/*.map"],
   extraResources: [{ from: ".build/runtime", to: "runtime" }],
@@ -74,6 +74,11 @@ module.exports = {
   },
   win: { target: [{ target: "nsis", arch: ["x64"] }] },
   nsis: {
+    include: "installer/agent.nsh",
+    // Deflate extracts faster than the default LZMA payload. This trades
+    // differential downloads for a full installer download on Windows.
+    useZip: true,
+    differentialPackage: false,
     oneClick: false,
     perMachine: false,
     allowToChangeInstallationDirectory: true,

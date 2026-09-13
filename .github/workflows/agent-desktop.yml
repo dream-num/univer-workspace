@@ -13,6 +13,11 @@ on:
         type: boolean
         default: true
         required: true
+      target:
+        description: Native targets (Windows-only is build-only)
+        type: choice
+        options: [all, windows]
+        default: all
 
 permissions:
   contents: read
@@ -26,13 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-24.04
-            target: linux-x64
-          - os: macos-15
-            target: mac-arm64
-          - os: windows-2025
-            target: win-x64
+        include: ${{ fromJSON(inputs.target == 'windows' && '[{"os":"windows-2025","target":"win-x64"}]' || '[{"os":"ubuntu-24.04","target":"linux-x64"},{"os":"macos-15","target":"mac-arm64"},{"os":"windows-2025","target":"win-x64"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     env:
@@ -52,6 +51,7 @@ jobs:
           set -euo pipefail
           [[ "$AGENT_DESKTOP_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$ ]]
           if [[ "$AGENT_DESKTOP_OFFICIAL" == "true" ]]; then
+            [[ "${{ inputs.target }}" != "windows" ]]
             [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" == "agent-v$AGENT_DESKTOP_VERSION" ]]
             git merge-base --is-ancestor HEAD "origin/$BASE_BRANCH"
           fi
@@ -96,24 +96,55 @@ jobs:
           path: apps/agent/desktop/.build/runtime-size.json
           if-no-files-found: warn
       - name: Install Windows application and verify first launch
+        id: windows_acceptance
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $installer = Get-ChildItem apps/agent/desktop/artifacts/*.exe | Select-Object -First 1
           $destination = Join-Path $env:RUNNER_TEMP 'Workspace Agent Installed'
-          $started = Get-Date
-          $process = Start-Process $installer.FullName -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
-          Write-Output "Installation elapsed: $((Get-Date) - $started)"
+          # Record timing now; enforce it after exercising launch and upgrade.
+          & apps/agent/desktop/scripts/install-windows.ps1 -Installer $installer.FullName -Destination $destination -DeferBudgetFailure -ReportPath "$PWD/apps/agent/desktop/.build/startup-logs/install.json"
+          $env:UWA_SMOKE_INSTALLER = $installer.FullName
+          $env:UWA_SMOKE_STARTUP_BUDGET_MS = '5000'
           $env:UWA_INSTALLED_RUNTIME = Join-Path $destination 'resources/runtime'
           node -e "require('./apps/agent/desktop/src/runtime.cjs').verifyRuntime(process.env.UWA_INSTALLED_RUNTIME).then(() => console.log('Installed resource inventory verified')).catch(e => { console.error(e); process.exitCode = 1; })"
           if ($LASTEXITCODE -ne 0) { throw 'Installed resource inventory failed' }
           $env:UWA_SMOKE_EXECUTABLE = Join-Path $destination 'Univer Workspace Agent.exe'
           node apps/agent/desktop/scripts/shell-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Installed application startup failed' }
+      - name: Enforce Windows installation budgets
+        if: ${{ always() && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          $failures = @()
+          foreach ($name in @('install', 'update')) {
+            $path = "apps/agent/desktop/.build/startup-logs/$name.json"
+            if (-not (Test-Path -LiteralPath $path)) {
+              $failures += "Missing $name acceptance report"
+              continue
+            }
+            $report = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+            Write-Output "$name elapsed: $($report.elapsedMs) ms; budget: $($report.budgetMs) ms"
+            if ($report.elapsedMs -gt $report.budgetMs) { $failures += "$name exceeded 30 seconds" }
+          }
+          if ($failures.Count) { throw ($failures -join '; ') }
       - name: Verify Linux Electron window
         if: runner.os == 'Linux'
         run: xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --packaged --no-sandbox
+      - name: Profile installed Windows startup separately from acceptance
+        if: ${{ always() && runner.os == 'Windows' && steps.windows_acceptance.outcome != 'skipped' }}
+        shell: pwsh
+        run: |
+          $env:UWA_SMOKE_EXECUTABLE = Join-Path $env:RUNNER_TEMP 'Workspace Agent Installed/Univer Workspace Agent.exe'
+          if (-not (Test-Path -LiteralPath $env:UWA_SMOKE_EXECUTABLE)) { throw 'Installed executable unavailable for profiling' }
+          $env:UWA_SMOKE_PROFILE_DIR = "$PWD/apps/agent/desktop/.build/startup-logs/profiles"
+          node apps/agent/desktop/scripts/shell-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Startup CPU profiling failed' }
+          node apps/agent/desktop/scripts/smoke.mjs --packaged
+          if ($LASTEXITCODE -ne 0) { throw 'Backend CPU profiling failed' }
+          foreach ($name in @('backend', 'renderer')) {
+            if (-not (Test-Path "$env:UWA_SMOKE_PROFILE_DIR/$name.cpuprofile")) { throw "Missing $name CPU profile" }
+          }
       - name: Upload startup diagnostics
         if: always()
         uses: actions/upload-artifact@v4
