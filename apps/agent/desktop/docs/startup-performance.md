@@ -3,6 +3,86 @@
 The acceptance targets are installation within 30 seconds and an interactive
 first window within 5 seconds. Neither target has passed Windows acceptance yet.
 
+## Final measured status for this investigation
+
+[Windows run 34756212817](https://github.com/dream-num/univer-workspace/actions/runs/34756212817),
+source `1fd1aa6` (performance implementation `ccd5f47`), completed with **failure**.
+Work stops here under the requested fallback: report inability to deliver the
+targets with the validated implementation. This branch is not release acceptance.
+
+| Native acceptance | Measured | Target | Result |
+| --- | ---: | ---: | --- |
+| First installation | 35.917 s | 30 s | Failed |
+| First interactive opening | 9.785 s | 5 s | Failed |
+| Reinstall while app is running | 60.144 s, watchdog termination | 30 s | Failed |
+
+The installed first-opening log divides its main-process time into 0.790 s of
+preparation, 3.233 s to backend readiness and 4.917 s to page load. Process launch
+and the interaction check account for the remaining 0.845 s. Preparation improved
+from 2.506 s and backend readiness from 4.328 s in run 34754029211, but the page
+phase barely changed from 5.177 s. Installation did not improve from that run's
+34.751 s. Baseline installation/opening were 175.36 s/about 82 s; the substantial
+reduction does not satisfy either requested threshold.
+
+### Remaining causes and evidence limits
+
+- **Windows did not reuse the main browser script from the packaged HTTP cache.**
+  Its 44,987,704-byte body still produced a 44,988,004-byte transfer and a 0.997 s
+  resource request. The small second script reported zero transferred bytes.
+  Windows' seed was only 42,447,015 bytes, including a 38,792,224-byte compiled
+  script entry; it did not reproduce Linux's approximately 86 MB seed or page-load
+  improvement. The sampled renderer spent 1.487 s in DSH's `materialize` factory
+  invocation. Cache generation succeeding is therefore insufficient evidence of
+  effective Windows cache reuse. Cache capacity/large-entry policy and script
+  splitting are follow-up candidates, not validated fixes in this branch.
+- **Backend filesystem initialization remains on first launch.** A separate
+  cold-cache backend CPU profile lasted 4.062 s. About 1.090 s was in
+  `symlinkSync` called by published DSH `ensureSymlink` →
+  `healProfilesModuleFallbackLocked`; module stat calls contributed 0.363 s,
+  `lstat` 0.175 s and `mkdir` 0.120 s. ESM compilation was only 0.258 s after
+  lazy host loading. These samples are diagnostics, not replacement acceptance
+  timings. They point to DSH profile repair/module discovery rather than maps
+  or repeated browser composition as the remaining backend work.
+- **Running-app replacement still fails.** Its report recorded old inventory
+  disappearance at 36.984 s and executable disappearance at 37.236 s. Neither was
+  present before the 60.144 s watchdog terminated installation. The only emitted
+  native phase was `uninstall-files-start`; the new phase instrumentation did not
+  capture all intended hooks, so it cannot fully separate old-file movement,
+  deletion and new extraction. Builder's published template recursively moves
+  old files before replacement, but exact per-stage costs remain unproven. This
+  run did not establish recurrence or resolution of the interactive cannot-close
+  dialog. No update-fix claim is justified.
+
+The Windows runtime has 12,903 inventory entries and 982,098,664 bytes before
+Electron shell files, with zero source maps. First installation observed the
+inventory at 30.533 s and executable at 31.547 s, completing at 35.917 s. Further
+file-layout/installer changes need their own recovery and native acceptance;
+moving cleanup after the measured interval would not resolve the update failure.
+
+Node 24.18.0 does expose portable compile caches, but its
+[documented contract](https://nodejs.org/download/release/v24.18.0/docs/api/module.html#portability-of-the-compile-cache)
+requires the code/cache relative layout to remain stable. The current installed
+resources and writable user-data cache are separate trees. Copying a build cache
+into user data is not an established fix, and the measured compilation fraction
+alone cannot close the remaining first-opening gap.
+
+### Validation and delivery boundary
+
+Agent and capability typechecks/tests, native Desktop tests, runtime preparation,
+relocated Office CSV roundtrip/worker fork/PTY/browser checks, installer building,
+packaged runtime checks and independent CPU sampling passed. The earlier run
+34756001118 stopped before packaging on seven Windows test-fixture failures;
+`1fd1aa6` corrected URL paths, canonical short/long paths, path separators and CRLF
+handling without relaxing behavior assertions. Linux's five affected test files
+also passed all 31 tests.
+
+Raw native evidence is retained in the run's `agent-startup-win-x64` artifact:
+`startup-logs/install.json`, `update.json`, `update.json.phases`, `startup.log`,
+`browser-performance.json` and `profiles/*.cpuprofile`. The size artifact is
+`agent-size-win-x64`. Failed build installers are diagnostic artifacts only.
+No release, deployment or merge was performed; changes remain on
+`fix/agent-desktop-performance-ci`.
+
 ## Windows acceptance after static browser delivery
 
 [Run 34754029211](https://github.com/dream-num/univer-workspace/actions/runs/34754029211),

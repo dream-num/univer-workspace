@@ -6,6 +6,12 @@ Workspace bundles, not a fork of DSH or a public SDK. Electron packaging tools b
 `pnpm-lock.yaml`. The generated DSH runtime remains isolated from that workspace
 and its React dependency graph.
 
+Current Windows acceptance **fails**: [run 34756212817](https://github.com/dream-num/univer-workspace/actions/runs/34756212817)
+measured installation at 35.917 seconds, first interactive opening at 9.785 seconds,
+and running-app replacement exceeding the 60-second watchdog. The 30-second/5-second
+targets and update fix are not delivered. See the
+[measured causes and limitations](docs/startup-performance.md#final-measured-status-for-this-investigation).
+
 Like DSH Desktop, the Electron shell explicitly uses ASAR while the standalone
 Node/DSH runtime stays in `extraResources`; ordinary Node cannot load modules
 directly from Electron's ASAR. The version-scoped osx-sign patch follows DSH's
