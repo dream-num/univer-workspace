@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { prepareContentExecutionProgram } from "@univer-cli/content-execution";
 import { readFile, readdir } from "node:fs/promises";
 import { Context } from "@deepseek-ai/cordis";
@@ -27,10 +27,7 @@ describe("bundled Workspace Skills", () => {
     const listed = await ctx.skills.list();
     expect(listed.map((skill) => skill.name)).toEqual(EXPECTED_SKILLS);
     for (const candidate of listed) {
-      const source = await readFile(
-        new URL(`../skills/${candidate.name}/SKILL.md`, import.meta.url),
-        "utf8",
-      );
+      const source = await readSkill(candidate.name);
       expect(source).toMatch(new RegExp(`^name: ${candidate.name}$`, "m"));
       expect(source.split("\n").find((line) => line.startsWith("description: "))).toBe(
         `description: ${candidate.description}`,
@@ -47,7 +44,7 @@ describe("bundled Workspace Skills", () => {
       for (const match of content.matchAll(/\]\(([^)]+\.md)\)/g)) {
         if (/^[a-z]+:/i.test(match[1]!)) continue;
         const path = resolve(directory, match[1]!);
-        const name = relative(root, path);
+        const name = relative(root, path).split(sep).join("/");
         expect(name.startsWith("..")).toBe(false);
         if (files.has(name)) continue;
         const text = await readFile(path, "utf8");
@@ -100,5 +97,5 @@ describe("bundled Workspace Skills", () => {
 });
 
 async function readSkill(name: string): Promise<string> {
-  return await readFile(new URL(`../skills/${name}/SKILL.md`, import.meta.url), "utf8");
+  return (await readFile(new URL(`../skills/${name}/SKILL.md`, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 }

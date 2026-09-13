@@ -1,5 +1,6 @@
 import { access, readFile, readdir } from "node:fs/promises";
 import { extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const clientRoot = new URL("../src/client/", import.meta.url);
@@ -54,7 +55,7 @@ describe("client style pipeline", () => {
       access(new URL("../src/client/viewer-css.ts", import.meta.url)),
     ).rejects.toMatchObject({ code: "ENOENT" });
 
-    const sources = await collectClientSources(clientRoot.pathname);
+    const sources = await collectClientSources(fileURLToPath(clientRoot));
     for (const path of sources) {
       const source = await readFile(path, "utf8");
       expect(source, path).not.toMatch(/document\.createElement\(\s*["']style["']/);
