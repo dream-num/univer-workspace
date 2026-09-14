@@ -3,6 +3,7 @@ OperationKind:
   enum:
     - createResource
     - createBlobResource
+    - replaceBlobContent
     - createWorktree
     - addWorktreeUnit
     - createWorktreeUnit

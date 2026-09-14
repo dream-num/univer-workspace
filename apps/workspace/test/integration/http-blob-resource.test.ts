@@ -152,6 +152,21 @@ describe("Blob Resource HTTP API", () => {
     expect(download.headers.get("content-disposition")).toContain("attachment");
     expect(Buffer.from(await download.arrayBuffer())).toEqual(content);
 
+    const replacement = await fetch(contentUrl, { method: "PUT", headers: { cookie, "if-match": etag!, "idempotency-key": "http-replace-idempotency-0001" }, body: "changed" });
+    expect(replacement.status).toBe(200);
+    const replaced = await replacement.json() as { etag: string };
+    expect(replaced.etag).not.toBe(etag);
+    expect(replacement.headers.get("etag")).toBe(replaced.etag);
+    const stale = await fetch(contentUrl, { method: "PUT", headers: { cookie, "if-match": etag!, "idempotency-key": "http-replace-idempotency-0002" }, body: "lost" });
+    expect(stale.status).toBe(412);
+    const invalid = await fetch(contentUrl, { method: "PUT", headers: { cookie, "if-match": "*", "idempotency-key": "http-replace-idempotency-0003" }, body: "lost" });
+    expect(invalid.status).toBe(400);
+    const missing = await fetch(contentUrl, { method: "PUT", headers: { cookie, "idempotency-key": "http-replace-idempotency-0004" }, body: "lost" });
+    expect(missing.status).toBe(400);
+    const after = await fetch(contentUrl, { headers: { cookie, "if-none-match": etag! } });
+    expect(after.status).toBe(200);
+    expect(await after.text()).toBe("changed");
+
     expect((await fetch(contentUrl)).status).toBe(401);
     expect(
       (

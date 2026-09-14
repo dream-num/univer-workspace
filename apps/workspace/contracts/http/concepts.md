@@ -145,3 +145,11 @@ Every protocol request authenticates the same Login Session and crosses the
 Collaboration Access Resolver described in
 [application-design.md](../../docs/application-design.md). Client-supplied Unit IDs,
 Roles, or editor modes are never trusted.
+
+Blob replacement uses `PUT /api/blob-resources/{resourceId}/content`, a stable
+Idempotency-Key, and one quoted strong If-Match ETag from the downloaded content.
+It publishes immediately, preserves identity and filename, and generates a fresh
+ETag even for identical bytes. HTTP 412 means the caller must download and
+reconcile current content. The Operation records completion for lost-response
+recovery; interrupted replacements fail and their unpublished bytes are queued
+for deletion. There is no Blob Worktree or version-history surface.

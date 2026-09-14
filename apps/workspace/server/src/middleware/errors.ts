@@ -10,6 +10,7 @@ export type ApplicationErrorCode =
   | "USERNAME_TAKEN"
   | "FORBIDDEN"
   | "CONFLICT"
+  | "PRECONDITION_FAILED"
   | "NOT_FOUND"
   | "RESTORE_PARENT_IN_TRASH"
   | "NESTED_TRASH_BATCH"

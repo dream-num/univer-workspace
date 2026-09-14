@@ -192,7 +192,7 @@ export function resourceCapabilities(
 ): ResourceCapabilities {
   return {
     openContent: true,
-    editContent: kind === "univer" && role !== "viewer",
+    editContent: role !== "viewer",
     downloadContent: kind === "blob",
   };
 }

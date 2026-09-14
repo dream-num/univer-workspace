@@ -10,7 +10,7 @@
 - 提供 storage-neutral 的 password login、browser approval、`whoami` 和 remote logout 协议。
 - 提供 Space/Node 模型、严格响应解析和远程 workflow。
 - 提供 Worktree lifecycle、Worktree Unit membership 与 review URL workflow。
-- 提供 Blob/Asset 协议、bounded recovery，以及同进程 local Node filesystem 的原子文件传输。
+- 提供 Blob/Asset 协议、bounded recovery，以及同进程 local Node filesystem 的原子文件传输，以及保留 Resource 身份、基于强 ETag 并发校验的 Blob 全量替换。
 - 提供 runtime target、Worktree/Trunk source resolution、Snapshot read adapter 与 referenced-Unit policy。
 - 提供 Shell-neutral worker composition、content runtime pool、同步读取、UnitData export、Facade execution、
   embedded-image externalization 与 changeset commit workflow。

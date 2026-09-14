@@ -530,9 +530,9 @@ function validateMigrated(
   const version = database.prepare("PRAGMA user_version").get() as
     | { readonly user_version?: unknown }
     | undefined;
-  if (version?.user_version !== 6) {
+  if (version?.user_version !== 7) {
     throw new Error(
-      `Migrated database has user_version ${String(version?.user_version)} instead of 6.`
+      `Migrated database has user_version ${String(version?.user_version)} instead of 7.`
     );
   }
 }

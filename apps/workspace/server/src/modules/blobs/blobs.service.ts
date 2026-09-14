@@ -11,6 +11,7 @@ import {
   BlobUploadStateConflictError,
   blobOperationView,
   type BlobUploadIntent,
+  type BlobReplacementResult,
   type BlobUploadRow,
   type ReservedBlobUpload,
 } from "./blobs.repository.js";
@@ -21,6 +22,7 @@ import type {
 } from "./blobs.types.js";
 
 export interface BlobsModule {
+  replace(userId: string, resourceId: string, idempotencyKey: unknown, ifMatch: unknown, contentLength: unknown, body: Readable): Promise<BlobReplacementResult>;
   createUpload(
     userId: string,
     idempotencyKey: unknown,
@@ -60,6 +62,7 @@ export function createBlobsModule(options: {
   const now = options.now ?? Date.now;
   const maxBlobBytes = options.maxBlobBytes ?? 512 * 1024 * 1024;
   options.repository.recoverInterruptedUploads(now());
+  options.repository.recoverInterruptedReplacements(now());
 
   function reservation(userId: string, uploadId: string): ReservedBlobUpload {
     const value = options.repository.find(uploadId, userId);
@@ -100,6 +103,68 @@ export function createBlobsModule(options: {
   }
 
   return {
+    async replace(userId, resourceId, key, ifMatch, contentLength, body) {
+      const operationId = validOperationId(key);
+      if (typeof ifMatch !== "string" || !/^"[^"\r\n]+"$/.test(ifMatch) || ifMatch.length > 200) {
+        throw invalidInput("If-Match must contain one quoted strong ETag.", "If-Match");
+      }
+      const byteSize = Number(contentLength);
+      if (contentLength === undefined || !Number.isSafeInteger(byteSize) || byteSize < 0) {
+        throw invalidInput("Content-Length is required.", "Content-Length");
+      }
+      if (byteSize > maxBlobBytes)
+        throw new ApplicationError(
+          "PAYLOAD_TOO_LARGE",
+          413,
+          "Blob exceeds the configured byte limit.",
+        );
+      const requireWritable = () => {
+        const access = requireBlobAccess(options.access, userId, resourceId);
+        if (!access.capabilities.editContent) throw forbidden();
+        if (access.availability !== "ready")
+          throw conflict("Blob content is not currently available.");
+        return access;
+      };
+      requireWritable();
+      const intent = { resourceId, expectedEtag: ifMatch.slice(1, -1), byteSize };
+      const reserved = options.repository.reserveReplacement(operationId, userId, intent, now());
+      if (reserved.result) {
+        body.resume();
+        return reserved.result;
+      }
+      try {
+        if (requireWritable().etag !== intent.expectedEtag) {
+          throw new ApplicationError(
+            "PRECONDITION_FAILED",
+            412,
+            "Blob content has changed; download it again before replacing.",
+          );
+        }
+        const stored = await options.store.put({
+          objectKey: reserved.objectKey,
+          body,
+          expectedByteSize: byteSize,
+        });
+        // Resolve live permissions after the asynchronous upload, immediately before the product transaction.
+        requireWritable();
+        return options.repository.completeReplacement(
+          operationId,
+          intent,
+          reserved.objectKey,
+          stored,
+          now(),
+        );
+      } catch (error) {
+        options.repository.failReplacement(
+          operationId,
+          error instanceof ApplicationError ? error.code : "REPLACEMENT_FAILED",
+          error instanceof Error ? error.message : "Blob replacement failed.",
+          now(),
+        );
+        throw error;
+      }
+    },
+
     createUpload(userId, keyValue, inputValue) {
       const operationId = validOperationId(keyValue);
       const intent = validIntent(inputValue, maxBlobBytes);

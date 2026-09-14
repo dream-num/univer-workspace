@@ -212,6 +212,7 @@ export function createResourcesModule(options: {
             mediaType: access.mediaType,
             byteSize: access.byteSize,
             sha256: access.sha256,
+            etag: `"${access.etag}"`,
             contentUrl: `/api/blob-resources/${encodeURIComponent(access.id)}/content`,
             downloadUrl: `/api/blob-resources/${encodeURIComponent(access.id)}/download`,
           },

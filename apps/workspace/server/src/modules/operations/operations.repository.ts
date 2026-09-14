@@ -4,6 +4,7 @@ import type { OperationState } from "../resources/resources.types.js";
 export type OperationDatabaseKind =
   | "create_resource"
   | "create_blob_resource"
+  | "replace_blob_content"
   | "create_worktree"
   | "add_worktree_unit"
   | "create_worktree_unit"

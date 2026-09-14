@@ -15,6 +15,7 @@ export interface WorkspaceRequestOptions {
   readonly contentLength?: number;
   readonly contentType?: string;
   readonly idempotencyKey?: string;
+  readonly ifMatch?: string;
   readonly method?: string;
   readonly formBody?: FormData;
   readonly signal?: AbortSignal;
@@ -74,6 +75,7 @@ export class WorkspaceHttp {
           ...(options.contentLength === undefined
             ? {}
             : { "content-length": String(options.contentLength) }),
+          ...(options.ifMatch === undefined ? {} : { "if-match": options.ifMatch }),
           ...(options.idempotencyKey === undefined
             ? {}
             : { "idempotency-key": options.idempotencyKey }),

@@ -14,6 +14,7 @@ import {
   createWorkspaceApplication,
   type WorkspaceApplication,
 } from "../../server/src/app.js";
+import { BlobsRepository } from "../../server/src/modules/blobs/blobs.repository.js";
 import { ApplicationError } from "../../server/src/middleware/errors.js";
 
 const applications: WorkspaceApplication[] = [];
@@ -27,6 +28,235 @@ afterEach(async () => {
 });
 
 describe("Blob Resources", () => {
+  it("replaces bytes with stable identity, fresh ETags, idempotent replay and stale-write protection", async () => {
+    const { application, blobDirectory } = createTestApplication();
+    const user = await register(application, "replace-owner");
+    const space = application.spaces.list(user).spaces[0]!;
+    const blob = await uploadedBlob(
+      application,
+      user,
+      space.id,
+      "original.bin",
+      "replacement-create-0001",
+    );
+    await application.blobs.complete(user, blob.uploadId);
+    const opened = application.resources.open(user, blob.resourceId).resource;
+    if (opened.kind !== "blob") throw new Error("Expected Blob");
+    const originalNode = application.nodes.get(user, blob.nodeId);
+    const first = await application.blobs.replace(
+      user,
+      blob.resourceId,
+      "replacement-request-0001",
+      opened.etag,
+      "4",
+      Readable.from(["text"]),
+    );
+    expect(first.etag).not.toBe(opened.etag);
+    expect(application.resources.open(user, blob.resourceId).resource).toMatchObject({
+      name: "original.bin",
+      originalFilename: "original.bin",
+      etag: first.etag,
+      byteSize: 4,
+    });
+    expect(application.nodes.get(user, blob.nodeId)).toMatchObject({
+      node: { id: blob.nodeId, name: "original.bin", parentNodeId: originalNode.node.parentNodeId },
+    });
+    expect(count(application, "resources")).toBe(1);
+    expect(count(application, "blob_upload_sessions")).toBe(1);
+    const bytes = await application.blobs.openContent(user, blob.resourceId, undefined);
+    expect((await readAll(bytes.stream)).toString()).toBe("text");
+    expect(
+      await application.blobs.replace(
+        user,
+        blob.resourceId,
+        "replacement-request-0001",
+        opened.etag,
+        "4",
+        Readable.from(["text"]),
+      ),
+    ).toEqual(first);
+    await expect(
+      application.blobs.replace(
+        user,
+        blob.resourceId,
+        "replacement-request-0002",
+        opened.etag,
+        "4",
+        Readable.from(["lost"]),
+      ),
+    ).rejects.toMatchObject({ status: 412 });
+    const second = await application.blobs.replace(
+      user,
+      blob.resourceId,
+      "replacement-request-0003",
+      first.etag,
+      "4",
+      Readable.from(["text"]),
+    );
+    expect(second.etag).not.toBe(first.etag);
+    await expect(
+      application.blobs.replace(
+        user,
+        blob.resourceId,
+        "replacement-request-0004",
+        first.etag,
+        "4",
+        Readable.from(["lost"]),
+      ),
+    ).rejects.toMatchObject({ status: 412 });
+    await expect(
+      application.blobs.replace(
+        user,
+        blob.resourceId,
+        "replacement-request-0003",
+        first.etag,
+        "3",
+        Readable.from(["bad"]),
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(application.operations.get(user, first.operationId)).toMatchObject({
+      kind: "replaceBlobContent",
+      state: "completed",
+      result: first,
+    });
+    await application.blobs.runMaintenance("replace-cleanup");
+    expect(readdirSync(blobDirectory)).toHaveLength(1);
+  });
+
+  it("keeps old bytes when upload fails, permissions change, or competing replacements finish", async () => {
+    const { application } = createTestApplication();
+    const user = await register(application, "replace-race");
+    const space = application.spaces.list(user).spaces[0]!;
+    const blob = await uploadedBlob(
+      application,
+      user,
+      space.id,
+      "race.bin",
+      "replace-race-create-0001",
+    );
+    await application.blobs.complete(user, blob.uploadId);
+    const opened = application.resources.open(user, blob.resourceId).resource;
+    if (opened.kind !== "blob") throw new Error("Expected Blob");
+    const replace = (key: string, body: Readable) =>
+      application.blobs.replace(user, blob.resourceId, key, opened.etag, "4", body);
+    await expect(replace("replace-short-body-0001", Readable.from(["x"]))).rejects.toThrow();
+    expect(application.operations.get(user, "replace-short-body-0001").state).toBe("failed");
+    let release!: () => void;
+    let started!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const slow = replace(
+      "replace-slow-body-0001",
+      Readable.from(
+        (async function* () {
+          started();
+          await gate;
+          yield Buffer.from("slow");
+        })(),
+      ),
+    );
+    await waiting;
+    const fast = await replace("replace-fast-body-0001", Readable.from(["fast"]));
+    release();
+    await expect(slow).rejects.toMatchObject({ status: 412 });
+    expect(application.resources.open(user, blob.resourceId).resource).toMatchObject({
+      etag: fast.etag,
+    });
+    const outsider = await register(application, "replace-outsider");
+    await expect(
+      application.blobs.replace(
+        outsider,
+        blob.resourceId,
+        "replace-denied-body-0001",
+        fast.etag,
+        "4",
+        Readable.from(["nope"]),
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+    application.permissions.upsertNodeGrant(user, blob.nodeId, outsider, { role: "viewer" });
+    await expect(
+      application.blobs.replace(
+        outsider,
+        blob.resourceId,
+        "replace-viewer-body-0001",
+        fast.etag,
+        "4",
+        Readable.from(["nope"]),
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    let unpause!: () => void;
+    let startedTrash!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      startedTrash = resolve;
+    });
+    const pause = new Promise<void>((resolve) => {
+      unpause = resolve;
+    });
+    const trashed = application.blobs.replace(
+      user,
+      blob.resourceId,
+      "replace-trash-body-0001",
+      fast.etag,
+      "4",
+      Readable.from(
+        (async function* () {
+          startedTrash();
+          await pause;
+          yield Buffer.from("gone");
+        })(),
+      ),
+    );
+    await entered;
+    application.trash.trashNode(user, blob.nodeId);
+    unpause();
+    await expect(trashed).rejects.toMatchObject({ status: 404 });
+    expect(
+      application.database.connection
+        .prepare("SELECT etag FROM blob_resources WHERE resource_id = ?")
+        .get(blob.resourceId),
+    ).toMatchObject({ etag: fast.etag.slice(1, -1) });
+  });
+
+  it("fails interrupted replacements once on restart and cleans only unpublished objects", async () => {
+    const { application, blobDirectory } = createTestApplication();
+    const user = await register(application, "replace-recovery");
+    const space = application.spaces.list(user).spaces[0]!;
+    const blob = await uploadedBlob(
+      application,
+      user,
+      space.id,
+      "old.bin",
+      "replace-recovery-create-0001",
+    );
+    await application.blobs.complete(user, blob.uploadId);
+    const repository = new BlobsRepository(application.database);
+    const operationId = "replace-interrupted-0001";
+    const pending = repository.reserveReplacement(
+      operationId,
+      user,
+      { resourceId: blob.resourceId, expectedEtag: "old", byteSize: 4 },
+      Date.now(),
+    );
+    writeFileSync(join(blobDirectory, pending.objectKey), "lost");
+    await application.close();
+    const restarted = createTestApplication(join(blobDirectory, "..")).application;
+    expect(restarted.operations.get(user, operationId)).toMatchObject({
+      state: "failed",
+      error: { code: "REPLACEMENT_INTERRUPTED" },
+    });
+    await restarted.blobs.runMaintenance("recovery");
+    expect(readdirSync(blobDirectory)).toHaveLength(1);
+    const content = await restarted.blobs.openContent(user, blob.resourceId, undefined);
+    expect(await readAll(content.stream)).toEqual(Buffer.from([0, 1, 2, 3]));
+    await restarted.close();
+    const again = createTestApplication(join(blobDirectory, "..")).application;
+    expect(count(again, "object_deletion_jobs")).toBe(0);
+  });
+
   it("publishes only after verified upload and exposes generic Resource views", async () => {
     const { application } = createTestApplication();
     const userId = await register(application, "blob-owner");
@@ -100,7 +330,7 @@ describe("Blob Resources", () => {
             availability: "ready",
             capabilities: {
               openContent: true,
-              editContent: false,
+              editContent: true,
               downloadContent: true,
             },
           },
@@ -401,11 +631,11 @@ describe("Blob Resources", () => {
   });
 });
 
-function createTestApplication(): {
+function createTestApplication(existingDirectory?: string): {
   readonly application: WorkspaceApplication;
   readonly blobDirectory: string;
 } {
-  const directory = mkdtempSync(join(tmpdir(), "workspace-blobs-"));
+  const directory = existingDirectory ?? mkdtempSync(join(tmpdir(), "workspace-blobs-"));
   directories.push(directory);
   const blobDirectory = join(directory, "objects");
   const application = createWorkspaceApplication(

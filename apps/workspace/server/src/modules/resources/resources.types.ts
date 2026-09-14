@@ -64,6 +64,7 @@ export type ResourceOpenView =
     readonly mediaType: string;
     readonly byteSize: number;
     readonly sha256: string;
+    readonly etag: string;
     readonly contentUrl: string;
     readonly downloadUrl: string;
   } };

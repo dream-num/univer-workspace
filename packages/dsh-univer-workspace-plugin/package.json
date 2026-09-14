@@ -41,7 +41,8 @@
     "@univerjs-pro/exchange-node": "1.0.0-rc.0",
     "@univerjs-pro/sheets-print": "1.0.0-rc.0",
     "@univerjs-pro/slides-print": "1.0.0-rc.0",
-    "ws": "8.21.3"
+    "ws": "8.21.3",
+    "@univerjs/univer-workspace-client-core": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.2",

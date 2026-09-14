@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V6 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V7 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -40,14 +40,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V6；
-- V6：校验 Schema 指纹；
-- V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V6；
-- V0：一致性备份后直接迁移到 V6；
+- Fresh：创建 V7；
+- V7：校验 Schema 指纹；
+- V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V7；
+- V0：一致性备份后直接迁移到 V7；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V6 Query。
+Worktree 等业务模块只编译和运行 V7 Query。
 
 ## Login Session Authenticator
 
@@ -255,3 +255,8 @@ Web 应用的 Tree Row 总是 Node：
 
 OpenAPI 生成类型是 Web 应用与服务端的唯一 HTTP 结构约束。旧 Route 不在 OpenAPI 中，
 Express 的未知 `/api/*` 路由直接返回 404，不落入 Web SPA Fallback。
+
+Blob 内容替换使用单次 PUT 和强 ETag 并发校验，直接发布到原 Resource。
+`replace_blob_content` Operation 记录上传意图；产品事务只在新字节就绪且权限仍有效时切换对象，
+旧对象通过删除 Outbox 回收。失败或启动时发现中断的替换保留旧内容并清理新对象。
+V7 仅扩展 Operation 和 Object Deletion Job 枚举；不扩展 Blob 上传会话或 Worktree 合同。
