@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Preserve the two published dependency graphs: profile packages resolve their
@@ -11,6 +11,7 @@ export async function packDesktopHost(desktop, runtime) {
     await cp(join(runtime, 'bootstrap'), stage, { recursive: true, dereference: true });
     await cp(join(runtime, 'home/profiles/univer-workspace-harness'), join(stage, 'profile'),
       { recursive: true, dereference: true });
+    await writeFile(join(stage, 'desktop.cordis.yml'), '[]\n');
     const require = createRequire(import.meta.url);
     const builderRequire = createRequire(require.resolve('electron-builder/package.json'));
     await builderRequire('@electron/asar').createPackageWithOptions(stage, join(runtime, 'host.asar'),
