@@ -1,7 +1,48 @@
 # Desktop startup performance investigation
 
 The acceptance targets are installation within 30 seconds and an interactive
-first window within 5 seconds. Neither target has passed Windows acceptance yet.
+first window within 5 seconds. Windows installation has passed once; first opening
+and complete replacement have not passed.
+
+## Windows phase measurements after cache and directory fixes
+
+[Run 34803017413, attempt 2](https://github.com/dream-num/univer-workspace/actions/runs/34803017413/attempts/2),
+source `db3b3a3`, completed with failure after producing installed-application data.
+The first attempt stopped during DSH plugin installation with native exit code
+`0xC0000005`; that crash did not recur in the second attempt.
+
+| Measurement | Duration | Result |
+| --- | ---: | --- |
+| First installation | 26.182 s | Passed 30 s |
+| First interactive opening | 7.172 s | Failed 5 s |
+| Running-app replacement, installer process only | 27.975 s | Installer exited successfully |
+| Interactive opening after replacement | 4.924 s | Passed 5 s |
+| Complete replacement including cleanup | Incomplete | Cleanup exceeded 120 s |
+
+| Installer phase | First install | Replacement |
+| --- | ---: | ---: |
+| Process start to installer initialization | 2.891 s | 1.797 s |
+| Parent app check/shutdown | 0.546 s | 4.812 s |
+| Old uninstaller | 0 s | 0.875 s |
+| Whole-directory rename (within old uninstaller) | — | 0.032 s |
+| Extract embedded payload | 21.422 s | 20.125 s |
+| Cache installer executable | 0.969 s | 0.265 s |
+| Registry and shortcuts | 0.234 s | Below tick resolution |
+
+The replacement verified its new runtime in 8.441 s, then entered recursive
+old-directory deletion. No cleanup completion was recorded before the probe's
+timeout. This is not a completed 27.975-second update. The failed probe did not
+save `totalMs`; reporting now preserves the full duration and error even when
+reopening/cleanup fails. Windows cleanup now uses its native directory remover,
+with a sibling ownership marker retained across interruption. Native regression
+tests cover locked-directory retry, junction targets and shell-special path names;
+full-runtime cleanup performance still requires another native CI measurement.
+
+The 44,987,704-byte main browser script now reports zero transferred bytes: its
+packaged HTTP cache was actually reused. Page load fell to 1.272 s. First-opening
+main-process phases were 0.818 s preparation, 3.359 s backend startup and 1.278 s
+page load; process launch and the interaction check account for the remaining
+1.717 s. Cache reuse is verified, but the first-opening target remains unmet.
 
 ## Native macOS replacement measurement
 

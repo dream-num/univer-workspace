@@ -6,11 +6,12 @@ Workspace bundles, not a fork of DSH or a public SDK. Electron packaging tools b
 `pnpm-lock.yaml`. The generated DSH runtime remains isolated from that workspace
 and its React dependency graph.
 
-Current Windows acceptance **fails**: [run 34756212817](https://github.com/dream-num/univer-workspace/actions/runs/34756212817)
-measured installation at 35.917 seconds, first interactive opening at 9.785 seconds,
-and running-app replacement exceeding the 60-second watchdog. The 30-second/5-second
-targets and update fix are not delivered. See the
-[measured causes and limitations](docs/startup-performance.md#final-measured-status-for-this-investigation).
+Current Windows acceptance **fails**: [run 34803017413, attempt 2](https://github.com/dream-num/univer-workspace/actions/runs/34803017413/attempts/2)
+measured installation at 26.182 seconds and first interactive opening at 7.172 seconds.
+The replacement installer completed in 27.975 seconds and reopening took 4.924 seconds,
+but old-directory cleanup exceeded 120 seconds. Installation passed 30 seconds;
+first opening and complete replacement still require fixes. See the
+[measured causes and limitations](docs/startup-performance.md#windows-phase-measurements-after-cache-and-directory-fixes).
 
 Like DSH Desktop, the Electron shell explicitly uses ASAR while the standalone
 Node/DSH runtime stays in `extraResources`; ordinary Node cannot load modules
@@ -313,6 +314,9 @@ new tree as `.uwa-failed`; abrupt termination retains the backup for recovery on
 that path. The new app retires a marked old tree only after its page loads and its
 runtime inventory passes verification. CI waits for this cleanup and reports its
 total replacement duration separately from the installer process duration.
+Windows cleanup invokes the native directory remover; a sibling
+`<installation>.uwa-previous.owner` marker allows interrupted cleanup to resume.
+Its ownership must match the installation before any deletion occurs.
 A native NSIS fixture tests directory activation, a corrupt ZIP through the
 generated builder decompressor, and refusal to overwrite a pre-existing backup.
 ZIP failures use the rollback callback instead of builder's default direct exit.

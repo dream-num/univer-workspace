@@ -125,8 +125,9 @@ try {
     const appProcess = application.process();
     const exited = once(appProcess, 'exit', { signal: AbortSignal.timeout(190000) });
     void exited.catch(() => {});
+    const updateStarted = performance.now();
+    let updateReport;
     try {
-      const updateStarted = performance.now();
       const installer = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
         '-File', join(desktop, 'scripts/install-windows.ps1'),
         '-Installer', process.env.UWA_SMOKE_INSTALLER,
@@ -134,7 +135,7 @@ try {
         '-ReportPath', join(desktop, '.build/startup-logs/update.json')], { stdio: 'inherit', windowsHide: true });
       const [code] = await once(installer, 'exit', { signal: AbortSignal.timeout(190000) });
       if (code !== 0) throw new Error(`Running-app reinstall failed: ${code}`);
-      const updateReport = JSON.parse((await readFile(join(desktop, '.build/startup-logs/update.json'), 'utf8')).replace(/^\uFEFF/, ''));
+      updateReport = JSON.parse((await readFile(join(desktop, '.build/startup-logs/update.json'), 'utf8')).replace(/^\uFEFF/, ''));
       if (updateReport.elapsedMs > updateReport.budgetMs)
         failures.push(`Running-app reinstall ${updateReport.elapsedMs} ms exceeded ${updateReport.budgetMs} ms`);
       await exited;
@@ -154,6 +155,7 @@ try {
       await updatedPage.waitForURL(url => url.origin === 'http://127.0.0.1:3101', { timeout: 60000 });
       await waitForUsableAgent(updatedPage, { firstRun: false });
       const upgradedMs = Math.round(performance.now() - launchedAt);
+      updateReport.reopenMs = upgradedMs;
       console.log(`Usable window after running-app reinstall: ${upgradedMs} ms`);
       const cleanupDeadline = Date.now() + 120000;
       for (;;) {
@@ -162,14 +164,20 @@ try {
         if (Date.now() > cleanupDeadline) throw new Error('Verified old-install cleanup did not finish');
         await new Promise(resolve => setTimeout(resolve, 250));
       }
-      updateReport.reopenMs = upgradedMs;
-      updateReport.totalMs = Math.round(performance.now() - updateStarted);
-      await writeFile(join(desktop, '.build/startup-logs/update.json'), JSON.stringify(updateReport, null, 2));
-      console.log(`Complete replacement including reopened UI and cleanup: ${updateReport.totalMs} ms`);
+      updateReport.cleanupComplete = true;
+      console.log(`Complete replacement including reopened UI and cleanup: ${Math.round(performance.now() - updateStarted)} ms`);
       if (budget && upgradedMs > budget) failures.push(`Post-update startup ${upgradedMs} ms exceeded ${budget} ms`);
+    } catch (error) {
+      if (updateReport) updateReport.error = error.message;
+      throw error;
     } finally {
       unrelated.kill();
-
+      // Preserve the full duration on failure too; installer process time alone
+      // must not pass the update budget when reopening or cleanup times out.
+      if (updateReport) {
+        updateReport.totalMs = Math.round(performance.now() - updateStarted);
+        await writeFile(join(desktop, '.build/startup-logs/update.json'), JSON.stringify(updateReport, null, 2));
+      }
     }
   }
   if (process.env.UWA_SMOKE_MAC_DMG) {
