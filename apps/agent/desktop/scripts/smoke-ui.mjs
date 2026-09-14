@@ -18,10 +18,13 @@ export async function waitForUsableAgent(page, { firstRun = true, timeoutMs = 30
       }
     }
     try {
-      await settings.click({ trial: true, timeout: Math.min(250, Math.max(1, deadline - Date.now())) });
+      // Actionability needs consecutive animation frames. A 250 ms attempt can
+      // repeatedly expire on a throttled macOS runner before stability is checked.
+      // The overall deadline and installed-app performance budgets remain unchanged.
+      await settings.click({ trial: true, timeout: Math.min(2000, Math.max(1, deadline - Date.now())) });
       if (setupHandled && !await page.getByRole('button', { name: /Reconnecting/ }).isVisible()) return;
     } catch (error) { lastError = error; }
     await page.waitForTimeout(50);
   }
-  throw new Error('Agent Settings never became interactive after onboarding', { cause: lastError });
+  throw new Error(`Agent Settings never became interactive after onboarding (model setup deferred: ${setupHandled})`, { cause: lastError });
 }

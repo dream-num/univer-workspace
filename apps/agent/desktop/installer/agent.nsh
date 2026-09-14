@@ -42,7 +42,7 @@
       Abort "Previous installation backup requires recovery before another update."
     ${EndIf}
     ; Process exit can precede release of Windows image/directory handles.
-    ; Retry only this same-volume rename, bounded to four seconds; never delete
+    ; Retry only this same-volume rename, bounded to 40 attempts; never delete
     ; files or invoke the broken legacy uninstaller as a fallback.
     StrCpy $R7 0
     ${Do}
@@ -51,8 +51,8 @@
       ${IfNot} ${Errors}
         ${ExitDo}
       ${EndIf}
-      System::Call 'kernel32::GetLastError() i.R9'
-      !insertmacro agentInstallTrace "rename-old-error-$R9"
+      System::Call 'kernel32::GetLastError() i.R5'
+      !insertmacro agentInstallTrace "rename-old-error-$R5"
       IntOp $R7 $R7 + 1
       ${If} $R7 >= 40
         !insertmacro agentInstallTrace "rename-old-failed"
