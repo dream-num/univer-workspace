@@ -10,13 +10,20 @@ const { pathToFileURL } = require('node:url');
 // their normal resolution. Remove this adapter when the packaged DSH host owns
 // canonical module resolution on Electron without its native Loader helper.
 function createHostResolveHook(archive, configHome) {
+  // Node returns real paths from resolution (notably /private/var on macOS),
+  // while createRequire callers can retain the installation's original alias.
+  const requestedArchive = archive;
+  archive = fs.realpathSync(archive);
   const requireHost = createRequire(path.join(archive, 'package.json'));
   const profileAnchor = pathToFileURL(path.join(archive, 'profile/package.json')).href;
   const requireProfile = createRequire(profileAnchor);
   const configRoot = pathToFileURL(configHome + path.sep).href;
   const loaderEntry = pathToFileURL(requireHost.resolve('@deepseek-ai/cordis-plugin-loader')).href;
   const archiveRoot = pathToFileURL(archive + path.sep).href;
-  const installAnchor = pathToFileURL(path.join(archive, 'package.json')).href;
+  const installParents = new Set([requestedArchive, archive].flatMap(root => [
+    pathToFileURL(path.join(root, 'package.json')).href,
+    pathToFileURL(root + path.sep).href,
+  ]));
   const profilePeers = archiveRoot + 'profile/node_modules/@deepseek-ai/';
   const sharedPeers = new Map();
 
@@ -36,7 +43,7 @@ function createHostResolveHook(archive, configHome) {
           !specifier.startsWith('#') && !specifier.includes(':');
         if (!['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND'].includes(error.code) || !bare ||
             !(context.parentURL?.startsWith(configRoot) || context.parentURL === loaderEntry ||
-              context.parentURL === installAnchor || context.parentURL === archiveRoot)) throw error;
+              installParents.has(context.parentURL))) throw error;
         // CJS nextResolve retains the original require's lookup paths even if
         // parentURL changes. Resolve through an actual profile require first.
         result = context.conditions.includes('require')

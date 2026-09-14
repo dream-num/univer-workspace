@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,6 +11,11 @@ test('host shares equal-version DSH scope identity across profile and installati
   const root = await mkdtemp(join(tmpdir(), 'uwa host resolution '));
   t.after(() => rm(root, { recursive: true, force: true }));
   const archive = join(root, 'host.asar');
+  const installedArchive = join(root, 'installed/host.asar');
+  await mkdir(installedArchive, { recursive: true });
+  // macOS temp paths commonly resolve through /var -> /private/var. Exercise
+  // the same alias on every platform, including Windows directory junctions.
+  await symlink(installedArchive, archive, process.platform === 'win32' ? 'junction' : 'dir');
   async function packageAt(base, name, version, source) {
     const dir = join(base, 'node_modules', name);
     await mkdir(dir, { recursive: true });
