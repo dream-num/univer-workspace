@@ -6,18 +6,19 @@ Workspace bundles, not a fork of DSH or a public SDK. Electron packaging tools b
 `pnpm-lock.yaml`. The generated DSH runtime remains isolated from that workspace
 and its React dependency graph.
 
-Windows performance is not yet accepted on the user's machine: the alpha.4
-recovery installation took 100.539 seconds (93.094 seconds extracting files), and
-page readiness was observed after 12.377 seconds. The latest native CI measured
-28.668 seconds for installation and 6.720 seconds for an interactive first opening,
-but that runner does not represent this machine. The current targets are 40 seconds
-for first installation and 10 seconds for first opening. See the
-[local extraction comparison](docs/startup-performance.md#local-windows-extraction-comparison-2026-09-14).
+The production ASAR build passed [all three native CI targets](https://github.com/dream-num/univer-workspace/actions/runs/34833396896).
+Windows installed in 20.362 seconds, opened to an interactive page in 8.904 seconds,
+and completed replacement plus reopening in 29.064 seconds. macOS DMG installation
+was 20.921 seconds, first opening 7.732 seconds, and replacement plus reopening
+13.989 seconds. These satisfy the current Windows 40/10-second and macOS
+60/10-second budgets. The macOS build-only test is unsigned; official publication
+separately requires signing and notarization. CI does not replace measurements on
+the user's machine or a two-release updater acceptance test.
 
-An [experimental ASAR service host](scripts/asar-probe/README.md) has passed local
-Windows browser, native Office, worker and terminal probes. The production
-launcher now uses Electron Node mode with the same archive layout; release
-acceptance is still being validated.
+The user's earlier alpha.4 recovery took 100.539 seconds to install, including
+93.094 seconds extracting files. [Extraction and prototype measurements](docs/startup-performance.md#local-windows-extraction-comparison-2026-09-14)
+explain why ASAR was introduced. The [utility-process prototype](scripts/asar-probe/README.md)
+is retained as a diagnostic; the production launcher uses Electron Node mode.
 
 The Electron shell uses `app.asar`; the service uses `runtime/host.asar` in
 `extraResources`. Both run through Electron, which provides ASAR filesystem support. The version-scoped osx-sign patch follows DSH's
@@ -295,8 +296,7 @@ Windows measurements are required before claiming either budget is met.
 
 Baseline DSH composition costs, production static-delivery measurements, the
 stricter first-run interaction result (15.435 s), and remaining timing limits are recorded
-in [the startup performance investigation](docs/startup-performance.md). This is
-not a claim that the five-second target or Windows installation target has passed.
+in [the startup performance investigation](docs/startup-performance.md). Those historical measurements are separate from the current ASAR CI acceptance above.
 
 ## Native replacement diagnostics
 

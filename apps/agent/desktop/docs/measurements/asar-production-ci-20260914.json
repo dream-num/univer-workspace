@@ -1,0 +1,282 @@
+{
+  "sourceCommit": "bec51d5fad7e7df5aeb7be85c5a0d84a7699eea9",
+  "workflowRun": "https://github.com/dream-num/univer-workspace/actions/runs/34833396896",
+  "mode": "build-only; macOS unsigned DMG",
+  "targets": {
+    "windows": {
+      "install": {
+        "elapsedMs": 20362,
+        "phases": [
+          {
+            "phase": "installer-init",
+            "elapsedMs": 3516
+          },
+          {
+            "phase": "check-app-start",
+            "elapsedMs": 3516
+          },
+          {
+            "phase": "check-app-result-0",
+            "elapsedMs": 3938
+          },
+          {
+            "phase": "check-app-complete",
+            "elapsedMs": 3938
+          },
+          {
+            "phase": "old-uninstaller-start",
+            "elapsedMs": 3938
+          },
+          {
+            "phase": "old-uninstaller-complete",
+            "elapsedMs": 3938
+          },
+          {
+            "phase": "payload-start",
+            "elapsedMs": 3938
+          },
+          {
+            "phase": "extract-start",
+            "elapsedMs": 3938
+          },
+          {
+            "phase": "extract-complete",
+            "elapsedMs": 16235
+          },
+          {
+            "phase": "cache-installer-start",
+            "elapsedMs": 16235
+          },
+          {
+            "phase": "cache-installer-complete",
+            "elapsedMs": 16719
+          },
+          {
+            "phase": "payload-complete",
+            "elapsedMs": 16719
+          },
+          {
+            "phase": "registry-start",
+            "elapsedMs": 16719
+          },
+          {
+            "phase": "registry-complete",
+            "elapsedMs": 16719
+          },
+          {
+            "phase": "start-menu-start",
+            "elapsedMs": 16719
+          },
+          {
+            "phase": "start-menu-complete",
+            "elapsedMs": 20266
+          },
+          {
+            "phase": "desktop-shortcut-start",
+            "elapsedMs": 20266
+          },
+          {
+            "phase": "desktop-shortcut-complete",
+            "elapsedMs": 20282
+          },
+          {
+            "phase": "install-files-complete",
+            "elapsedMs": 20282
+          }
+        ],
+        "timedOut": false,
+        "exitCode": 0,
+        "budgetMs": 40000
+      },
+      "update": {
+        "exitCode": 0,
+        "elapsedMs": 19017,
+        "timedOut": false,
+        "phases": [
+          {
+            "phase": "installer-init",
+            "elapsedMs": 1563
+          },
+          {
+            "phase": "check-app-start",
+            "elapsedMs": 1563
+          },
+          {
+            "phase": "check-app-result-10",
+            "elapsedMs": 4250
+          },
+          {
+            "phase": "check-app-complete",
+            "elapsedMs": 6547
+          },
+          {
+            "phase": "old-uninstaller-start",
+            "elapsedMs": 6547
+          },
+          {
+            "phase": "check-app-start",
+            "elapsedMs": 6782
+          },
+          {
+            "phase": "check-app-result-0",
+            "elapsedMs": 7204
+          },
+          {
+            "phase": "check-app-complete",
+            "elapsedMs": 7204
+          },
+          {
+            "phase": "uninstaller-init",
+            "elapsedMs": 7219
+          },
+          {
+            "phase": "uninstall-files-start",
+            "elapsedMs": 7219
+          },
+          {
+            "phase": "rename-old-start",
+            "elapsedMs": 7219
+          },
+          {
+            "phase": "rename-old-complete",
+            "elapsedMs": 7235
+          },
+          {
+            "phase": "old-uninstaller-complete",
+            "elapsedMs": 7235
+          },
+          {
+            "phase": "payload-start",
+            "elapsedMs": 7235
+          },
+          {
+            "phase": "extract-start",
+            "elapsedMs": 7235
+          },
+          {
+            "phase": "extract-complete",
+            "elapsedMs": 18704
+          },
+          {
+            "phase": "cache-installer-start",
+            "elapsedMs": 18704
+          },
+          {
+            "phase": "cache-installer-complete",
+            "elapsedMs": 18938
+          },
+          {
+            "phase": "payload-complete",
+            "elapsedMs": 18954
+          },
+          {
+            "phase": "registry-start",
+            "elapsedMs": 18954
+          },
+          {
+            "phase": "registry-complete",
+            "elapsedMs": 18954
+          },
+          {
+            "phase": "start-menu-start",
+            "elapsedMs": 18954
+          },
+          {
+            "phase": "start-menu-complete",
+            "elapsedMs": 18954
+          },
+          {
+            "phase": "desktop-shortcut-start",
+            "elapsedMs": 18954
+          },
+          {
+            "phase": "desktop-shortcut-complete",
+            "elapsedMs": 18954
+          },
+          {
+            "phase": "install-files-complete",
+            "elapsedMs": 18954
+          }
+        ],
+        "budgetMs": 40000,
+        "reopenMs": 5970,
+        "totalMs": 29064
+      },
+      "browser-performance": {
+        "startupMs": 8904
+      }
+    },
+    "macos": {
+      "install": {
+        "budgetMs": 60000,
+        "phases": [
+          {
+            "phase": "mount",
+            "elapsedMs": 7245,
+            "durationMs": 7244
+          },
+          {
+            "phase": "copy",
+            "elapsedMs": 13379,
+            "durationMs": 6134
+          },
+          {
+            "phase": "verify-runtime",
+            "elapsedMs": 14700,
+            "durationMs": 1321
+          },
+          {
+            "phase": "activate",
+            "elapsedMs": 14701,
+            "durationMs": 1
+          },
+          {
+            "phase": "detach",
+            "elapsedMs": 20921,
+            "durationMs": 6220
+          }
+        ],
+        "success": true,
+        "elapsedMs": 20921
+      },
+      "update": {
+        "budgetMs": 60000,
+        "phases": [
+          {
+            "phase": "mount",
+            "elapsedMs": 273,
+            "durationMs": 270
+          },
+          {
+            "phase": "copy",
+            "elapsedMs": 5368,
+            "durationMs": 5094
+          },
+          {
+            "phase": "verify-runtime",
+            "elapsedMs": 7619,
+            "durationMs": 2251
+          },
+          {
+            "phase": "activate",
+            "elapsedMs": 7620,
+            "durationMs": 1
+          },
+          {
+            "phase": "detach",
+            "elapsedMs": 7757,
+            "durationMs": 137
+          }
+        ],
+        "success": true,
+        "elapsedMs": 7757,
+        "reopenMs": 5490,
+        "cleanupMs": 193,
+        "totalMs": 13989
+      },
+      "browser-performance": {
+        "startupMs": 7732
+      }
+    }
+  }
+}

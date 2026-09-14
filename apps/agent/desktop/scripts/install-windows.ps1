@@ -51,5 +51,5 @@ Remove-Item Env:UWA_INSTALL_TRACE -ErrorAction SilentlyContinue
 if ($timedOut) { throw "Installer exceeded $WatchdogMs ms diagnostic watchdog" }
 if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
 if (-not $DeferBudgetFailure -and $watch.ElapsedMilliseconds -gt 40000) {
-    throw 'Installation exceeded the 30 second acceptance budget'
+    throw 'Installation exceeded the 40 second acceptance budget'
 }

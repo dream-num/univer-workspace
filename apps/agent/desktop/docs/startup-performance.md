@@ -505,3 +505,20 @@ and 10 seconds for first usable opening; macOS remains 60/10 seconds.
 Same-content prototype size comparison: 12,443 loose files / 330,137,397 bytes,
 versus 24 archive/native files / 333,392,377 bytes (0.99% larger). The 78,836,599-byte
 compressed host payload is only part of the complete installer.
+
+## Production ASAR CI acceptance (2026-09-14)
+
+[Run 34833396896](https://github.com/dream-num/univer-workspace/actions/runs/34833396896),
+source `bec51d5`, passed all native targets. [Machine-readable results](measurements/asar-production-ci-20260914.json)
+retain installer phases and acceptance timings.
+
+| Target | Install | First usable | Replacement + reopen |
+| --- | ---: | ---: | ---: |
+| Windows x64 | 20.362 s | 8.904 s | 29.064 s |
+| macOS arm64 | 20.921 s | 7.732 s | 13.989 s |
+
+Windows replacement's installer process took 19.017 seconds, and reopening took
+5.970 seconds; the total also includes verification and cleanup. macOS is an
+unsigned DMG replacement test. Linux passed relocated and packaged capabilities
+and the Electron window check. Official signing/notarization and user-machine
+installation remain separate from these build-only results.
