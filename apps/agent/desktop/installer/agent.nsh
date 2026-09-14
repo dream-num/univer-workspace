@@ -20,6 +20,22 @@
   !insertmacro agentInstallTrace "uninstall-files-start"
 !macroend
 
+; Updating used to move every file through electron-builder's rollback walker.
+; The old uninstaller is already copied out of $INSTDIR, so the directory can
+; be moved as one unit. The installer then creates the original path and
+; extracts the new payload. Keep the old tree until this uninstaller exits;
+; Windows updates are full payloads and do not need per-file replacement.
+!macro customRemoveFiles
+  !insertmacro agentInstallTrace "rename-old-start"
+  CreateDirectory "$PLUGINSDIR\old-install-parent"
+  ClearErrors
+  Rename "$INSTDIR" "$PLUGINSDIR\old-install-parent\old-install"
+  IfErrors 0 +3
+    !insertmacro agentInstallTrace "rename-old-failed"
+    Abort
+  !insertmacro agentInstallTrace "rename-old-complete"
+!macroend
+
 !macro customInstall
   !insertmacro agentInstallTrace "install-files-complete"
 !macroend
