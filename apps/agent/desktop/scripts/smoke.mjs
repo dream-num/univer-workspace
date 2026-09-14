@@ -30,29 +30,36 @@ try {
   if (Object.keys(inventory).some((path) => path.endsWith(".map")))
     throw new Error("Desktop runtime must not include source maps");
   const metadata = JSON.parse(await readFile(join(runtime, "release.json"), "utf8"));
-  const node = join(runtime, "node/bin", process.platform === "win32" ? "node.exe" : "node");
+  const { default: electronExecutable } = await import('electron');
+  const node = process.env.UWA_SMOKE_EXECUTABLE ?? (process.argv.includes('--packaged')
+    ? resolve(source, { darwin: '../../MacOS/Univer Workspace Agent', win32: '../../Univer Workspace Agent.exe', linux: '../../univer-workspace-agent-desktop' }[process.platform])
+    : electronExecutable);
+  const nodeEnvironment = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+  const profileModules = join(runtime, 'host.asar/profile/node_modules');
   const binding = spawnSync(node, ["-e", `
-    require('@univerjs-pro/exchange-node-binding');
+    const { createRequire } = require('node:module');
+    const requireHost = createRequire(${JSON.stringify(join(runtime, 'host.asar/profile/package.json'))});
+    requireHost('@univerjs-pro/exchange-node-binding');
     const { dirname, join } = require('node:path');
     const { pathToFileURL } = require('node:url');
-    const worker = join(dirname(require.resolve('dsh-univer-workspace-plugin')), 'worker.js');
+    const worker = join(dirname(requireHost.resolve('dsh-univer-workspace-plugin')), 'worker.js');
     import(pathToFileURL(worker).href).then(module => {
       if (!module.default) throw new Error('Packaged worker entry is missing');
     }).catch(error => { console.error(error); process.exitCode = 1; });
   `], {
     cwd: join(runtime, "home/profiles/univer-workspace-harness"),
-    encoding: "utf8",
+    encoding: "utf8", env: nodeEnvironment,
   });
   if (binding.status !== 0)
     throw new Error(`Packaged Office native binding failed: ${binding.stderr}`);
   const capability = spawnSync(node, [
     join(desktop, 'test/packaged-capability.mjs'),
-    join(runtime, 'home/profiles/univer-workspace-harness/node_modules/dsh-univer-workspace-plugin/lib'),
-  ], { encoding: 'utf8', timeout: 60000 });
+    join(profileModules, 'dsh-univer-workspace-plugin/lib'),
+  ], { encoding: 'utf8', timeout: 60000, env: nodeEnvironment });
   if (capability.error || capability.status !== 0)
     throw new Error(`Packaged lazy capability failed: ${capability.error ?? capability.stderr}`);
   const terminal = spawnSync(node, ["-e", `
-    const pty = require('node-pty').spawn(process.execPath,
+    const pty = require(${JSON.stringify(join(runtime, 'host.asar/node_modules/node-pty'))}).spawn(process.execPath,
       ['-e', 'console.log("uwa-pty-ready")'], { cols: 80, rows: 24 });
     let output = '';
     const timer = setTimeout(() => { pty.kill(); process.exit(1); }, 15000);
@@ -63,7 +70,7 @@ try {
       // Both the terminal exit and its output must be observed before success.
       process.exit(exitCode === 0 && output.includes('uwa-pty-ready') ? 0 : 1);
     });
-  `], { cwd: join(runtime, "bootstrap"), encoding: "utf8", timeout: 20000 });
+  `], { cwd: runtime, encoding: "utf8", timeout: 20000, env: nodeEnvironment });
   if (terminal.error || terminal.status !== 0)
     throw new Error(`Packaged PTY failed: ${terminal.error ?? terminal.stderr}`);
   const runtimeHome = await prepareRuntimeHome(runtime, join(root, "writable/home"));
@@ -87,7 +94,7 @@ try {
     UWA_DESKTOP_CLIENT_ROOT: join(runtime, "desktop-client"),
     UWH_BIND_HOST: "127.0.0.1",
     DSH_HOME: runtimeHome,
-    DSH_BIN: join(runtime, "bootstrap/node_modules/@deepseek-ai/dsh/lib/bin.js"),
+    UWA_DESKTOP_HOST: join(runtime, "dsh-host.cjs"),
     UWH_DSH_DATA_HOME: data,
     UWH_PUBLIC_ORIGIN: origin,
     UWH_PUBLIC_HOST: "127.0.0.1",
@@ -106,6 +113,7 @@ try {
     "UWH_SHARED_CREDENTIALS_PATH",
   ])
     delete env[key];
+  env.ELECTRON_RUN_AS_NODE = "1";
   if (process.env.UWA_SMOKE_PROFILE_DIR) {
     env.NODE_OPTIONS = '--require ' + JSON.stringify(join(desktop, 'test/backend-profile.cjs'));
     env.NODE_COMPILE_CACHE = join(root, 'compile-cache');

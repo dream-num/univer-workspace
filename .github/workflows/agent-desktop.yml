@@ -131,7 +131,7 @@ jobs:
           # Record timing now; enforce it after exercising launch and upgrade.
           & apps/agent/desktop/scripts/install-windows.ps1 -Installer $installer.FullName -Destination $destination -DeferBudgetFailure -ReportPath "$PWD/apps/agent/desktop/.build/startup-logs/install.json"
           $env:UWA_SMOKE_INSTALLER = $installer.FullName
-          $env:UWA_SMOKE_STARTUP_BUDGET_MS = '5000'
+          $env:UWA_SMOKE_STARTUP_BUDGET_MS = '10000'
           $env:UWA_INSTALLED_RUNTIME = Join-Path $destination 'resources/runtime'
           node -e "require('./apps/agent/desktop/src/runtime.cjs').verifyRuntime(process.env.UWA_INSTALLED_RUNTIME).then(() => console.log('Installed resource inventory verified')).catch(e => { console.error(e); process.exitCode = 1; })"
           if ($LASTEXITCODE -ne 0) { throw 'Installed resource inventory failed' }
@@ -168,7 +168,7 @@ jobs:
             }
             $report = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
             Write-Output "$name elapsed: $($report.elapsedMs) ms; budget: $($report.budgetMs) ms"
-            if ([Math]::Max($report.elapsedMs, $report.totalMs) -gt $report.budgetMs) { $failures += "$name exceeded 30 seconds" }
+            if ([Math]::Max($report.elapsedMs, $report.totalMs) -gt $report.budgetMs) { $failures += "$name exceeded 40 seconds" }
           }
           if ($failures.Count) { throw ($failures -join '; ') }
       - name: Verify Linux Electron window

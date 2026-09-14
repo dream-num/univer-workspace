@@ -44,12 +44,12 @@ if ($ReportPath) {
             }
         }
     }
-    @{ elapsedMs = $watch.ElapsedMilliseconds; budgetMs = 30000; update = [bool]$Update; timedOut = $timedOut; exitCode = $process.ExitCode; samples = $samples; phases = $phases } |
+    @{ elapsedMs = $watch.ElapsedMilliseconds; budgetMs = 40000; update = [bool]$Update; timedOut = $timedOut; exitCode = $process.ExitCode; samples = $samples; phases = $phases } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding utf8
 }
 Remove-Item Env:UWA_INSTALL_TRACE -ErrorAction SilentlyContinue
 if ($timedOut) { throw "Installer exceeded $WatchdogMs ms diagnostic watchdog" }
 if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
-if (-not $DeferBudgetFailure -and $watch.ElapsedMilliseconds -gt 30000) {
+if (-not $DeferBudgetFailure -and $watch.ElapsedMilliseconds -gt 40000) {
     throw 'Installation exceeded the 30 second acceptance budget'
 }

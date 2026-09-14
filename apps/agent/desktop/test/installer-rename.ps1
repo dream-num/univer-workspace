@@ -5,11 +5,15 @@ $null = New-Item -ItemType Directory $root
 try {
     $exe = Join-Path $root 'fixture.exe'
     Copy-Item -LiteralPath $Fixture -Destination $exe
-    foreach ($scenario in @('success', 'extraction-failure', 'existing-backup')) {
-        $fails = $scenario -eq 'extraction-failure'
+    foreach ($scenario in @('success', 'extraction-failure', 'existing-backup', 'legacy-alpha3', 'legacy-alpha3-failure')) {
+        $fails = $scenario -in @('extraction-failure', 'legacy-alpha3-failure')
         $destination = Join-Path $root "installed-$scenario"
         $null = New-Item -ItemType Directory $destination
         Set-Content -LiteralPath (Join-Path $destination 'old.txt') -Value 'old'
+        if ($scenario.StartsWith('legacy-alpha3')) {
+            Set-Content -LiteralPath "$destination.legacy" -Value 'legacy'
+            Set-Content -LiteralPath "$destination/Univer Workspace Agent.exe" -Value 'legacy executable'
+        }
         if ($fails) { Set-Content -LiteralPath "$destination.fail" -Value 'fail' }
         if ($scenario -eq 'existing-backup') {
             $null = New-Item -ItemType Directory "$destination.uwa-previous"

@@ -4,7 +4,7 @@ const { Session } = require('node:inspector');
 const { mkdirSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 if (process.env.UWA_SMOKE_PROFILE_DIR &&
-    process.argv[1]?.replaceAll('\\', '/').endsWith('/@deepseek-ai/dsh/lib/bin.js')) {
+    process.env.UWA_DESKTOP_HOST && process.argv[1]?.endsWith('start-local.mjs')) {
   const session = new Session();
   session.connect();
   session.post('Profiler.enable');

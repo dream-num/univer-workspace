@@ -1,6 +1,6 @@
-// DSH rewrites profile configuration and heals module fallbacks at boot. Keep
-// those few writable entries in userData; execute shipped code in resources.
-const { mkdir, readdir, readFile, writeFile, cp, symlink, rename, rm } = require('node:fs/promises');
+// Keep profile metadata writable and account links stable across upgrades.
+// Archived hosts resolve code directly; legacy loose runtimes retain package links.
+const { mkdir, readdir, readFile, writeFile, cp, symlink, rename, rm, stat } = require('node:fs/promises');
 const { join, resolve } = require('node:path');
 const { createHash } = require('node:crypto');
 
@@ -42,7 +42,11 @@ async function prepareRuntimeHome(source, target) {
   for (const item of await readdir(shipped, { withFileTypes: true })) {
     if (item.isFile() && !item.name.startsWith('.')) await cp(join(shipped, item.name), join(profile, item.name));
   }
-  await collectPackages(join(shipped, 'node_modules'), join(profile, 'node_modules'));
+  const archived = await stat(join(source, 'host.asar')).then(() => true, error => {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  });
+  if (!archived) await collectPackages(join(shipped, 'node_modules'), join(profile, 'node_modules'));
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(16, links.length) }, async () => {
     while (next < links.length) {

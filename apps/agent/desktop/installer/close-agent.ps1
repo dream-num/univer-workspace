@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 try {
     # The NSIS host passes the exact executable path as data, never PS source.
     $executable = [IO.Path]::GetFullPath($env:UWA_INSTALL_EXECUTABLE)
+    # Avoid initializing WMI on a fresh installation with no candidate process.
+    if (-not (Get-Process -Name 'Univer Workspace Agent' -ErrorAction SilentlyContinue)) { exit 0 }
     $matches = @(Get-CimInstance Win32_Process -Filter "Name = 'Univer Workspace Agent.exe'" |
         Where-Object { $_.ExecutablePath -and [string]::Equals($_.ExecutablePath, $executable, [StringComparison]::OrdinalIgnoreCase) })
     if (-not $matches.Count) { exit 0 }

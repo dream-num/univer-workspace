@@ -42,6 +42,17 @@ export async function prepareTracedNsis(desktop) {
     // Local includes take precedence over builder's unchanged -I directory.
     if (name.startsWith('include/')) await writeFile(join(output, name.slice(8)), source);
   }
+  // Bypass only the known broken alpha.3 uninstaller when replacing in place.
+  // Keep other versions and installation-location changes on builder's path.
+  const utility = join(output, 'include/installUtil.nsh');
+  let utilitySource = await readFile(utility, 'utf8');
+  const legacyAnchor = '  ${if} $installMode == "CurrentUser"';
+  if (utilitySource.split(legacyAnchor).length !== 2) throw new Error('Re-audit the legacy uninstaller migration anchor');
+  utilitySource = utilitySource.replace(legacyAnchor,
+    '  !insertmacro readReg $R5 "$rootKey" "${UNINSTALL_REGISTRY_KEY}" DisplayVersion\n' +
+    '  !insertmacro agentMigrateAlpha3 "$R5" "$installationDir"\n\n' + legacyAnchor);
+  await writeFile(utility, utilitySource);
+  await writeFile(join(output, 'installUtil.nsh'), utilitySource);
   // The published ZIP failure path uses Quit, which bypasses .onInstFailed.
   // Route an actual extraction error through the same rollback entry as the
   // native failure fixture; silent updates must not wait on an invisible modal.

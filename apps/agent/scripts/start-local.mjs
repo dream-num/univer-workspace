@@ -16,7 +16,8 @@ const sharedCredentialsPath = resolve(
 );
 const sharedSettingsPath = resolve(process.env.UWH_SHARED_SETTINGS_PATH ?? resolve(dataHome, "shared", "settings.yaml"));
 const profileName = process.env.DSH_PROFILE ?? "univer-workspace-harness";
-const dshBin = resolve(requiredEnvironment("DSH_BIN"));
+const desktopHost = process.env.UWA_DESKTOP_HOST;
+const dshBin = desktopHost ? undefined : resolve(requiredEnvironment("DSH_BIN"));
 
 const dshArgs = [dshBin, "--profile", profileName, ...process.argv.slice(2)];
 
@@ -84,7 +85,14 @@ if (stoppingSignal !== undefined) {
   process.kill(process.pid, stoppingSignal);
 }
 
-function runChild(environment) {
+async function runChild(environment) {
+  if (desktopHost) {
+    Object.assign(process.env, environment);
+    if (!environment.UWH_WORKSPACE_ORIGIN) delete process.env.UWH_WORKSPACE_ORIGIN;
+    const { pathToFileURL } = await import('node:url');
+    const { startDesktopHost } = await import(pathToFileURL(desktopHost).href);
+    return startDesktopHost(process.argv.slice(2));
+  }
   return new Promise((resolveResult) => {
     child = spawn(process.execPath, dshArgs, {
       env: environment,

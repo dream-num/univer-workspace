@@ -143,7 +143,7 @@ async function start() {
   if (quitting) return;
   report({ phase: "backend" });
   const bin = join(runtime, "node", "bin");
-  const node = join(bin, process.platform === "win32" ? "node.exe" : "node");
+  const node = process.execPath;
   const env = {
     ...process.env,
     NODE_ENV: "production",
@@ -154,15 +154,15 @@ async function start() {
     DSH_HOME: runtimeHome,
     NODE_COMPILE_CACHE: join(userData, "compile-cache"),
     UWH_DSH_DATA_HOME: data,
-    DSH_BIN: join(runtime, "bootstrap", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js"),
+    UWA_DESKTOP_HOST: join(runtime, "dsh-host.cjs"),
     UWH_PUBLIC_ORIGIN: origin,
     UWH_PUBLIC_HOST: "127.0.0.1",
     UWH_RENDER_PAGE_ROOT: join(runtime, "render-runtime"),
     UWH_RENDER_BROWSER: join(runtime, release.browser),
     AGENT_BROWSER_EXECUTABLE_PATH: join(runtime, release.browser),
-    PATH: `${bin}${delimiter}${join(runtime, "bootstrap", "node_modules", ".bin")}${delimiter}${process.env.PATH || ""}`,
+    PATH: `${bin}${delimiter}${process.env.PATH || ""}`,
   };
-  // Electron switches and inherited Node injection must not alter the standalone host.
+  // Clear inherited runtime injection before enabling our Electron Node host.
   for (const key of [
     "ELECTRON_RUN_AS_NODE",
     "NODE_OPTIONS",
@@ -174,6 +174,7 @@ async function start() {
     "UWH_SHARED_CREDENTIALS_PATH",
   ])
     delete env[key];
+  env.ELECTRON_RUN_AS_NODE = "1";
   backend = spawn(
     node,
     [

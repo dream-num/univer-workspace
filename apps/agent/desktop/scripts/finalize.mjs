@@ -88,6 +88,8 @@ export async function finalizeRuntime({ desktop, runtime, version }) {
   await prepareDesktopClient(runtime);
   // Capture boots the published host once; discard its generated module links.
   await sanitize(runtime);
+  const { packDesktopHost } = await import('./pack-host.mjs');
+  await packDesktopHost(desktop, runtime);
   // The source Electron shell reads the sealed static roster during cache warmup.
   const { writeInventory } = await import('./inventory.cjs');
   await writeInventory(runtime);

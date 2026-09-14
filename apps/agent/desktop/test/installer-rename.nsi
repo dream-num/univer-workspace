@@ -23,9 +23,14 @@ Section
   SetOutPath $INSTDIR
   StrCpy $PowerShellPath "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
   !insertmacro customCheckAppRunning
+  ${If} ${FileExists} "$INSTDIR.legacy"
+    Call MigrateLegacy
+    Goto old_removed
+  ${EndIf}
   ExecWait '"$EXEDIR\fixture-uninstall.exe" /S _?=$INSTDIR' $R0
   IntCmp $R0 0 +2
     Abort "Uninstaller failed"
+  old_removed:
   ${If} ${FileExists} "$INSTDIR.fail"
     ; Exercise the actual generated builder ZIP failure path with corrupt input.
     InitPluginsDir
@@ -43,3 +48,8 @@ SectionEnd
 Section "Uninstall"
   !insertmacro customRemoveFiles
 SectionEnd
+
+Function MigrateLegacy
+  !insertmacro agentMigrateAlpha3 "0.1.0-alpha.3" "$INSTDIR"
+  Abort "Legacy migration was not applied"
+FunctionEnd

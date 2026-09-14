@@ -1,0 +1,64 @@
+{
+  "electron": "44.0.0",
+  "embeddedNode": "24.18.1",
+  "os": "Windows x64",
+  "freshProfile": true,
+  "osCachesFlushed": false,
+  "randomLoopbackOrigin": true,
+  "productionLauncherChanged": false,
+  "browser": {
+    "interactiveMs": 9183,
+    "rendererErrors": [],
+    "host": {
+      "serviceReadyMs": 2026,
+      "pageReadyMs": 6757,
+      "serviceExitCode": 0,
+      "stopMs": 35
+    }
+  },
+  "capabilities": {
+    "nativeOfficeRoundtrip": true,
+    "workerHandshake": true,
+    "terminal": true
+  },
+  "packaging": {
+    "archiveBytes": 257503489,
+    "unpackedFiles": 23,
+    "unpackedBytes": 75888888,
+    "archiveEntries": 15160
+  },
+  "hostPayloadExtraction": {
+    "elapsedMs": 6037,
+    "cpuMs": 5796.875,
+    "userMs": 2953.125,
+    "kernelMs": 2843.75,
+    "exitCode": 0,
+    "zipBytes": 78836599,
+    "files": 24,
+    "allSha256Match": true,
+    "scope": "Host ASAR and its unpacked native files only; excludes the rest of the installer",
+    "compression": "7-Zip 23.01 ZIP Deflate level 7"
+  },
+  "browserRuns": [
+    {
+      "interactiveMs": 9183,
+      "rendererErrors": [],
+      "host": {
+        "serviceReadyMs": 2026,
+        "pageReadyMs": 6757,
+        "serviceExitCode": 0,
+        "stopMs": 35
+      }
+    },
+    {
+      "interactiveMs": 9048,
+      "rendererErrors": [],
+      "host": {
+        "serviceReadyMs": 1964,
+        "pageReadyMs": 6599,
+        "serviceExitCode": 0,
+        "stopMs": 36
+      }
+    }
+  ]
+}

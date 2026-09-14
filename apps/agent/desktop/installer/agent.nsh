@@ -34,9 +34,7 @@
 
 ; Keep the backup on the installation volume, outside the temporary uninstaller
 ; directory. A failed or interrupted installer must leave old binaries recoverable.
-!macro customRemoveFiles
-  SetOutPath $TEMP
-  ${If} ${isUpdated}
+!macro agentRenameInstallation
     !insertmacro agentInstallTrace "rename-old-start"
     ${If} ${FileExists} "$INSTDIR.uwa-previous\*.*"
       !insertmacro agentInstallTrace "backup-already-exists"
@@ -52,6 +50,29 @@
     FileOpen $R8 "$INSTDIR.uwa-previous\.uwa-backup-owner" w
     FileWriteUTF16LE /BOM $R8 "$INSTDIR"
     FileClose $R8
+!macroend
+
+; Alpha.3's uninstaller can reject its own process and report "cannot close".
+; Migrate only that known release at the same installation path. The parent
+; already closed owned processes; retain its registration until commit.
+; Remove after the alpha.3 upgrade support window ends.
+!macro agentMigrateAlpha3 VERSION DIRECTORY
+  ${If} "${VERSION}" == "0.1.0-alpha.3"
+  ${AndIf} "${DIRECTORY}" == "$INSTDIR"
+  ${AndIf} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+    !insertmacro agentInstallTrace "migrate-alpha3-start"
+    !insertmacro agentRenameInstallation
+    !insertmacro agentInstallTrace "migrate-alpha3-complete"
+    ClearErrors
+    StrCpy $R0 0
+    Return
+  ${EndIf}
+!macroend
+
+!macro customRemoveFiles
+  SetOutPath $TEMP
+  ${If} ${isUpdated}
+    !insertmacro agentRenameInstallation
     ; Keep the old registration until the parent installer commits the new one.
     ; In particular do not let the temporary uninstaller delete this backup.
     SetErrorLevel 0
@@ -129,8 +150,9 @@ FunctionEnd
   InitPluginsDir
   File /oname=$PLUGINSDIR\close-agent.ps1 "${BUILD_RESOURCES_DIR}\close-agent.ps1"
   System::Call 'kernel32::SetEnvironmentVariable(t "UWA_INSTALL_EXECUTABLE", t "$INSTDIR\${APP_EXECUTABLE_FILENAME}")'
-  nsExec::ExecToLog /TIMEOUT=15000 '"$PowerShellPath" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\close-agent.ps1"'
+  nsExec::ExecToLog /TIMEOUT=30000 '"$PowerShellPath" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\close-agent.ps1"'
   Pop $R0
+  !insertmacro agentInstallTrace "check-app-result-$R0"
   ${If} $R0 == 10
     ${IfNot} ${isUpdated}
       MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK +3

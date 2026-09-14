@@ -1,8 +1,129 @@
 # Desktop startup performance investigation
 
-The acceptance targets are installation within 30 seconds and an interactive
-first window within 5 seconds. Windows installation has passed once; first opening
-and complete replacement have not passed.
+The current acceptance targets are installation within 40 seconds and an
+interactive first window within 10 seconds. The user's Windows machine has not
+met these targets. Older runs below used 30-second / 5-second gates.
+
+## ASAR service prototype (2026-09-14)
+
+The [isolated prototype](../scripts/asar-probe/README.md) runs published DSH and
+Workspace plugin code directly from ASAR in an Electron 44 utility process. It
+preserves both dependency graphs, keeps native files unpacked, and uses public
+DSH application boot APIs rather than the CLI's writable fallback junctions.
+An application-scoped `module.registerHooks` adapter resolves missing imports at
+configuration/Loader boundaries; published DSH code is unchanged. Node IPC is
+bridged to the utility parent port, and descendant Electron forks use Node mode.
+
+On the same Windows machine, a fresh-profile interaction probe passed in 9.183
+seconds, including service readiness at 2.026 seconds and page readiness at 6.757
+seconds relative to service launch. Renderer errors were empty. Service disposal
+completed normally (exit 0) in 35 milliseconds. A second fresh-profile run measured
+9.048 seconds interactive, 1.964 seconds service readiness, and a normal shutdown
+in 36 milliseconds. Native Office CSV import/export,
+the SDK worker fork/handshake and ConPTY all passed from the archived code layout.
+OS caches were warm, and the random loopback origin differs from the HTTP cache
+seed's fixed origin, so this is not a cold installed-startup guarantee.
+
+The prototype host is one 257,503,489-byte ASAR plus 23 native files totaling
+75,888,888 bytes. A ZIP of these 24 files is 78,836,599 bytes. The exact `nsisunz`
+plugin from the alpha.4 installer extracted that ZIP in **6.037 seconds**:
+2.953 seconds user CPU and 2.844 seconds kernel CPU. All 24 output files matched
+by SHA-256. This measures only the new DSH/Workspace host payload, excluding the
+Electron shell, browser binaries, browser-cache seed, other runtime assets,
+registry work and complete upgrade lifecycle. It is not a 6-second installation.
+
+The shipping launcher remains unchanged. Account migration/active-connection
+setup, the desktop OAuth/update lifecycle, macOS signing, Linux and the complete
+installer still need integration and verification. See the
+[raw measurement](measurements/windows-asar-prototype-20260914.json).
+
+## Latest CI and local recovery
+
+[Run 34805155923](https://github.com/dream-num/univer-workspace/actions/runs/34805155923),
+source `ec2c521`, measured Windows installation at 28.668 seconds, first interactive
+opening at 6.720 seconds, and complete same-package replacement at 44.534 seconds.
+The replacement installer took 27.695 seconds; reopening took 4.721 seconds. Runtime
+verification took 8.098 seconds and backup deletion completed in 2.807 seconds.
+The job still failed the old timing gates and a separate native recovery fixture.
+These results do not validate upgrading an installed alpha.3 uninstaller.
+
+On the user's Windows machine, the new installer's process check passed, but the
+old alpha.3 uninstaller did not complete successfully. Builder's retry loop labels
+repeated old-uninstaller failures as an application that cannot be closed. That
+message alone does not establish that the Agent is still running. Local recovery
+retained the old application directory and registry export, bypassed that old
+uninstaller, and installed alpha.4 without clearing account/document storage.
+
+Recovery installation took 100.539 seconds, including 93.094 seconds extracting
+the payload. Installed runtime integrity verification passed. The application
+window responded and page readiness was observed after 12.377 seconds; this is
+not the CI interaction probe. Main-process phases were preparation 0.627 seconds,
+backend startup 8.878 seconds, and page loading 1.225 seconds.
+
+## Local Windows extraction comparison (2026-09-14)
+
+The native Windows benchmark uses the installed alpha.4 cached installer from
+run 34805155923. It extracts the embedded ZIP and the exact `nsisunz.dll` shipped
+in that installer. A minimal NSIS executable invokes that plugin against an
+external archive into a fresh temporary directory; it does not invoke the actual
+installer, alter registrations, or change application/account directories.
+
+The machine has an AMD Ryzen 9 7945HX (16 cores / 32 logical processors) and about
+153 GiB free on C:. Defender real-time protection remained enabled. These tests
+neither disable protection nor establish which filesystem filter contributes to
+the measured kernel time. All timed executables and destination directories are
+on native Windows C: paths; WSL only orchestrates the tests.
+
+The original ZIP contains 12,977 files, 1,412,546,807 uncompressed bytes, and is
+514,368,874 bytes on disk. Its payload uses Deflate, with some entries already
+stored. The outer NSIS executable stores the embedded ZIP without recompressing
+it. The store-only comparison archive is 1,417,051,663 bytes and has identical file
+paths, sizes and CRCs. Tests run sequentially into fresh directories, without a
+reboot or forced cache flush. These are single-run comparisons with warmed caches,
+not cold-install guarantees.
+All 12,977 extracted files from both NSIS variants and the store-only 7-Zip
+variant matched the Deflate 7-Zip reference by SHA-256. Raw timings and verification
+results are in [the measurement record](measurements/windows-extraction-20260914.json).
+
+Measured elapsed time and per-process user/kernel CPU times are recorded below.
+CPU time is not a separate wall-time phase and must not be added to elapsed time.
+7-Zip 23.01 runs with `-mmt=1`; the no-file test decompresses and checks CRCs without
+creating extracted files. Store-archive generation is excluded from extraction
+results because production would generate the archive at build time.
+
+| Method | Elapsed | User CPU | Kernel CPU |
+| --- | ---: | ---: | ---: |
+| 7-Zip Deflate, no extracted files | 12.962 s | 12.250 s | 0.578 s |
+| 7-Zip Deflate, extract to disk | 75.574 s | 14.344 s | 59.359 s |
+| Shipped NSIS plugin, Deflate | 101.653 s | 17.281 s | 80.062 s |
+| Shipped NSIS plugin, store only | 88.303 s | 9.625 s | 77.109 s |
+| 7-Zip store only, extract to disk | 61.033 s | 2.750 s | 56.109 s |
+
+The bootstrap directory alone contains 10,232 files totaling 128.8 MB; 9,464 of
+those files are smaller than 16 KiB. The runtime home adds 2,213 files totaling
+222.4 MB. The 317 browser files total 416.3 MB. File count and byte count therefore
+identify different optimization targets.
+
+A final sequential split of the store-only archive, using the same native 7-Zip
+with one thread and fresh directories, isolates the bootstrap file set:
+
+| File set | Files | Uncompressed bytes | Elapsed | Kernel CPU |
+| --- | ---: | ---: | ---: | ---: |
+| Bootstrap only | 10,232 | 128.8 MB | 47.872 s | 45.016 s |
+| Everything except bootstrap | 2,745 | 1,283.7 MB | 14.586 s | 12.859 s |
+
+The much smaller bootstrap consumes most of the extraction time despite having
+about one tenth of the bytes. This supports prioritizing bootstrap file count,
+not merely reducing the largest browser binaries or disabling compression.
+
+Cancelling compression saves only about 13% in the same-plugin comparison while
+multiplying archive size by about 2.75. It does not approach the 40-second install
+target. The large measured kernel-time component and the no-file comparison point
+to filesystem work as the main remaining cost, rather than Deflate alone. This
+is not proof of slow physical storage or antivirus responsibility. Next work
+should reduce the runtime's file count at build time, especially bootstrap,
+while retaining published DSH behavior, dynamic imports, native modules, licenses,
+and Skills; changing the decoder alone is also insufficient for the target.
 
 ## Windows phase measurements after cache and directory fixes
 
@@ -364,3 +485,23 @@ presented as the current interaction acceptance result.
 The packaged relocated-runtime smoke also passed with the stricter onboarding
 and interaction check, including native Office/worker/PTY checks, static script
 delivery, missing map endpoints, and an unchanged resource inventory.
+
+## Production ASAR integration (in validation)
+
+The shipping source now selects Electron in Node mode for `start-local.mjs`,
+which preserves account initialization and loads the application-owned DSH host
+in the same process. Build-time archiving preserves both dependency graphs;
+native binaries, versioned shared libraries and terminal helpers remain unpacked.
+The standalone Node executable remains on PATH for external tools. This differs
+from the utility-process prototype above; its timing numbers must not be reused
+as production installer measurements.
+
+Local Linux relocated production smoke passed Office CSV roundtrip, worker
+handshake, PTY, authenticated HTTP and browser onboarding. Windows native fixture
+results and all-platform release CI are required before publication. Acceptance
+uses the user's updated Windows budgets of 40 seconds for installation/replacement
+and 10 seconds for first usable opening; macOS remains 60/10 seconds.
+
+Same-content prototype size comparison: 12,443 loose files / 330,137,397 bytes,
+versus 24 archive/native files / 333,392,377 bytes (0.99% larger). The 78,836,599-byte
+compressed host payload is only part of the complete installer.

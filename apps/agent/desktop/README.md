@@ -6,16 +6,21 @@ Workspace bundles, not a fork of DSH or a public SDK. Electron packaging tools b
 `pnpm-lock.yaml`. The generated DSH runtime remains isolated from that workspace
 and its React dependency graph.
 
-Current Windows acceptance **fails**: [run 34803017413, attempt 2](https://github.com/dream-num/univer-workspace/actions/runs/34803017413/attempts/2)
-measured installation at 26.182 seconds and first interactive opening at 7.172 seconds.
-The replacement installer completed in 27.975 seconds and reopening took 4.924 seconds,
-but old-directory cleanup exceeded 120 seconds. Installation passed 30 seconds;
-first opening and complete replacement still require fixes. See the
-[measured causes and limitations](docs/startup-performance.md#windows-phase-measurements-after-cache-and-directory-fixes).
+Windows performance is not yet accepted on the user's machine: the alpha.4
+recovery installation took 100.539 seconds (93.094 seconds extracting files), and
+page readiness was observed after 12.377 seconds. The latest native CI measured
+28.668 seconds for installation and 6.720 seconds for an interactive first opening,
+but that runner does not represent this machine. The current targets are 40 seconds
+for first installation and 10 seconds for first opening. See the
+[local extraction comparison](docs/startup-performance.md#local-windows-extraction-comparison-2026-09-14).
 
-Like DSH Desktop, the Electron shell explicitly uses ASAR while the standalone
-Node/DSH runtime stays in `extraResources`; ordinary Node cannot load modules
-directly from Electron's ASAR. The version-scoped osx-sign patch follows DSH's
+An [experimental ASAR service host](scripts/asar-probe/README.md) has passed local
+Windows browser, native Office, worker and terminal probes. The production
+launcher now uses Electron Node mode with the same archive layout; release
+acceptance is still being validated.
+
+The Electron shell uses `app.asar`; the service uses `runtime/host.asar` in
+`extraResources`. Both run through Electron, which provides ASAR filesystem support. The version-scoped osx-sign patch follows DSH's
 `lstat` fix for Framework aliases and additionally scans files sequentially to
 avoid exhausting file descriptors. Remove it when an upstream release provides
 both fixes. Raising the descriptor limit alone did not fix the native build.
@@ -212,7 +217,7 @@ these do not substitute for the two-release installation acceptance above.
 
 ## Runtime, login, and data
 
-The shell starts its own Node/DSH process on `127.0.0.1:3101`. An occupied port is
+The shell starts its own Electron Node/DSH process on `127.0.0.1:3101`. An occupied port is
 an error; the app never adopts an unknown process. DSH generates browser
 authentication and passes the URL through a private child-process IPC channel.
 The main renderer has no Node access and remains on the local origin. Login
@@ -229,9 +234,13 @@ Node, DSH, browser binaries and bundled packages run directly from installed
 resources. Startup does not copy or hash the full runtime again. Integrity is
 verified during packaging and by relocated/installed artifact smoke checks.
 
-`runtime/home` contains the small writable DSH profile: configuration files and
-package links (junctions on Windows) to installed resources. DSH's generated
-configuration and fallback links stay writable without modifying the installation.
+`runtime/home` contains writable profile metadata. DSH and both plugin dependency
+graphs execute from `runtime/host.asar`; native libraries and terminal helpers stay
+in `host.asar.unpacked`. Desktop boots published DSH APIs in Electron Node mode,
+while standalone Node remains on PATH for external commands. The shared local
+launcher still initializes account directories, shared credentials and settings.
+A scoped module-resolution adapter handles DSH imports from writable configuration;
+published DSH packages remain unmodified. The packaged plugin roster is fixed.
 A changed resource inventory stages a new profile and activates it at the same
 path, preserving account-owned links to it. Prior profile directories are retained
 as `home.previous-<timestamp>`; an old full runtime from earlier installers is
@@ -252,8 +261,8 @@ previous profile is retained if activation fails.
 
 Windows CI installs the NSIS artifact and launches the installed Electron app with
 isolated user data. Startup diagnostics are uploaded as Actions artifacts even
-when this check fails. Acceptance budgets are 30 seconds from launching the
-installer to successful completion and 5 seconds from launching Electron to an
+when this check fails. Acceptance budgets are 40 seconds from launching the
+installer to successful completion and 10 seconds from launching Electron to an
 interactive authenticated local page (including browser automation attachment).
 A fresh-profile check advances the SDK notice, defers model-key setup, and
 requires the Settings button to receive pointer events without an overlay.
@@ -266,7 +275,7 @@ updater acceptance above is still required.
 
 Installation and reinstallation write separate timing reports. CI checks their
 budgets after running the launch/upgrade checks, so an installation that finishes
-after 30 seconds still yields startup and shutdown evidence and still fails
+after 40 seconds still yields startup and shutdown evidence and still fails
 acceptance. A failed installation or the 180-second diagnostic watchdog remains an immediate
 failure. Browser navigation/script timings are included in the startup diagnostics.
 Installer reports retain exit status, watchdog status and file-presence transitions
@@ -329,3 +338,23 @@ recorded; replacement includes shutdown, reopening and cleanup. macOS thresholds
 are 10 seconds to a usable window and 60 seconds for installation/replacement.
 This probes a DMG replacement, not Squirrel's automatic updater. Build-only jobs
 also do not validate notarization, downloaded-file quarantine or Gatekeeper delay.
+
+## ASAR release validation
+
+ASAR creation happens after production browser graph capture and before Electron
+cache warmup. Packaging verifies native binaries remain accessible outside the
+archive, including versioned Linux shared libraries. Relocated smoke uses the
+actual Electron executable in Node mode, then checks native Office conversion,
+SDK worker startup, PTY execution and the authenticated browser UI. Installed
+shell checks exercise the normal OAuth/menu/update composition.
+
+The Windows installer migrates the known broken alpha.3 uninstaller only for an
+in-place replacement: it closes owned processes and renames the old installation,
+retaining its registration until the new installation commits. Extraction failure
+restores the old directory. Other versions and changed installation locations use
+the normal builder path. The native fixture covers both alpha.3 migration success
+and extraction failure, in addition to ordinary replacement and backup protection.
+
+The earlier [utility-process prototype](scripts/asar-probe/README.md) uses a
+pre-ASAR runtime as input. Its measurements describe that experiment; complete
+release acceptance comes from the production packaging workflow.
