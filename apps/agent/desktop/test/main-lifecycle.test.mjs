@@ -14,7 +14,7 @@ async function fixture({ pauseHome = false } = {}) {
   const homeReady = pauseHome ? new Promise(resolve => { releaseHome = resolve; }) : Promise.resolve('/user/runtime/home');
   const app = Object.assign(new EventEmitter(), {
     setName() {}, requestSingleInstanceLock: () => true,
-    commandLine: { getSwitchValue: () => '' }, getPath: () => '/user',
+    commandLine: { getSwitchValue: () => '', appendSwitch() {} }, getPath: () => '/user',
     getVersion: () => '0.1.0', whenReady: () => Promise.resolve(),
     quit() { quitCount++; }, exit() { quitCount++; },
   });
