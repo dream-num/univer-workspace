@@ -39,12 +39,12 @@ try {
     });
   }, code);
   await page.waitForURL(url => url.origin === 'http://127.0.0.1:3101', { timeout: 60000 });
-  await waitForUsableAgent(page);
+  await waitForUsableAgent(page, { requireSettings: false });
   // Chromium's default cache heat check needs repeat loads to persist the
   // compiled factories. Warm up only during the native build.
   for (let count = 0; count < 2; count++) {
     await page.reload();
-    await waitForUsableAgent(page, { firstRun: false });
+    await waitForUsableAgent(page, { firstRun: false, requireSettings: false });
   }
   const electron = await application.evaluate(() => process.versions.electron);
   await application.close();

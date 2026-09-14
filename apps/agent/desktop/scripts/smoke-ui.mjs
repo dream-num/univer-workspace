@@ -1,5 +1,5 @@
 /** Require usable first-run settings without configuring a model or account. */
-export async function waitForUsableAgent(page, { firstRun = true } = {}) {
+export async function waitForUsableAgent(page, { firstRun = true, requireSettings = true } = {}) {
   await page.waitForFunction(() => document.body.innerText.trim().length > 20);
   await page.getByRole('button', { name: /Reconnecting/ }).waitFor({ state: 'hidden', timeout: 30000 });
   const notice = page.getByRole('button', { name: 'Continue', exact: true });
@@ -18,6 +18,8 @@ export async function waitForUsableAgent(page, { firstRun = true } = {}) {
   // Trial click checks visibility, stability and event reception without editing.
   // The composer can remain disabled until a model is configured. Settings
   // must already accept input so a fresh installation can be configured.
-  await page.getByRole('button', { name: 'Settings', exact: true })
-    .click({ trial: true, timeout: 30000 });
+  if (requireSettings) {
+    await page.getByRole('button', { name: 'Settings', exact: true })
+      .click({ trial: true, timeout: 30000 });
+  }
 }
