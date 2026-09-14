@@ -95,7 +95,7 @@ jobs:
           $compiler = Get-ChildItem "$env:LOCALAPPDATA/electron-builder/Cache/nsis" -Filter makensis.exe -Recurse | Select-Object -First 1
           if (-not $compiler) { throw 'Packaged NSIS compiler not found' }
           $fixture = Join-Path $env:RUNNER_TEMP 'uwa-directory-fixture.exe'
-          & $compiler.FullName /V2 "/DAGENT_INCLUDE=$PWD/apps/agent/desktop/installer/agent.nsh" "/DFIXTURE_EXE=$fixture" "$PWD/apps/agent/desktop/test/installer-rename.nsi"
+          & $compiler.FullName /V2 "/DAGENT_INCLUDE=$PWD/apps/agent/desktop/installer/agent.nsh" "/DBUILD_RESOURCES_DIR=$PWD/apps/agent/desktop/installer" "/DFIXTURE_EXE=$fixture" "$PWD/apps/agent/desktop/test/installer-rename.nsi"
           if ($LASTEXITCODE -ne 0) { throw 'NSIS fixture compilation failed' }
           & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File apps/agent/desktop/test/installer-rename.ps1 -Fixture $fixture
           if ($LASTEXITCODE -ne 0) { throw 'NSIS recovery fixture failed' }

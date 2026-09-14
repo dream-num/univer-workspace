@@ -132,5 +132,8 @@ FunctionEnd
     Quit
   ${EndIf}
   System::Call 'kernel32::SetEnvironmentVariable(t "UWA_INSTALL_EXECUTABLE", t "")'
+  ; The parent installer also held $INSTDIR as its current directory. Moving
+  ; only the child's working directory is insufficient on Windows.
+  SetOutPath $TEMP
   !insertmacro agentInstallTrace "check-app-complete"
 !macroend
