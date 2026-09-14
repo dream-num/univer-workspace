@@ -71,6 +71,9 @@
   !insertmacro agentInstallTrace "uninstaller-init"
 !macroend
 
+; Builder includes this file before LogicLib. Expand the callback only at the
+; supported header hook, after the standard NSIS libraries have been loaded.
+!macro customHeader
 !ifndef BUILD_UNINSTALLER
 Function .onInstFailed
   ${If} ${FileExists} "$INSTDIR.uwa-previous\.uwa-backup-owner"
@@ -98,6 +101,7 @@ Function .onInstFailed
   ${EndIf}
 FunctionEnd
 !endif
+!macroend
 
 !macro customInstall
   !insertmacro agentInstallTrace "install-files-complete"

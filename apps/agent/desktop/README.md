@@ -266,7 +266,7 @@ updater acceptance above is still required.
 Installation and reinstallation write separate timing reports. CI checks their
 budgets after running the launch/upgrade checks, so an installation that finishes
 after 30 seconds still yields startup and shutdown evidence and still fails
-acceptance. A failed installation or the 60-second watchdog remains an immediate
+acceptance. A failed installation or the 180-second diagnostic watchdog remains an immediate
 failure. Browser navigation/script timings are included in the startup diagnostics.
 Installer reports retain exit status, watchdog status and file-presence transitions
 on failure. Separate `.phases` files timestamp the app-close check, old-file removal
@@ -291,9 +291,11 @@ not a claim that the five-second target or Windows installation target has passe
 
 The diagnostic NSIS script is generated from electron-builder 26.15.3 templates.
 A version check and exact-anchor checks fail when its templates change. The copied
-script timestamps old-uninstaller execution, extraction, caching the installer,
+includes timestamp old-uninstaller execution, extraction, caching the installer,
 registry writes and shortcut creation. Logs append to `<installation>.uwa-install.log`
 outside the moved directory; the PowerShell probe copies them into the CI report.
+The default builder entry retains its separate uninstaller generation/signing pass;
+the custom include only redirects template lookup to the instrumented copy.
 The diagnostic watchdog is 180 seconds so a slow update can finish and expose all
 stages; acceptance budgets remain separate and are not extended by this watchdog.
 

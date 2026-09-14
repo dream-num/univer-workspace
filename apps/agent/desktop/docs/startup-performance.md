@@ -3,12 +3,37 @@
 The acceptance targets are installation within 30 seconds and an interactive
 first window within 5 seconds. Neither target has passed Windows acceptance yet.
 
-## Final measured status for this investigation
+## Native macOS replacement measurement
+
+[Run 34799903668](https://github.com/dream-num/univer-workspace/actions/runs/34799903668)
+passed macOS arm64 and Linux validation. Windows failed NSIS compilation before
+installation and therefore produced no new Windows timing result.
+
+| macOS arm64 measurement | Duration | Budget |
+| --- | ---: | ---: |
+| First DMG installation | 12.220 s | 60 s |
+| First interactive opening | 4.532 s | 10 s |
+| Complete DMG replacement, reopening and cleanup | 18.105 s | 60 s |
+
+First installation spent 1.997 s mounting, 8.239 s copying the bundle, 1.773 s
+verifying the runtime and 0.210 s detaching. Replacement spent 0.467 s stopping
+the old app, 0.154 s mounting, 10.313 s copying, 3.390 s verifying, 0.005 s
+activating, 0.074 s detaching, 3.046 s reopening and 0.653 s cleaning up. The
+account-data sentinel survived. These are native DMG replacement probes, not
+Squirrel automatic updates or downloaded-file quarantine/Gatekeeper measurements.
+
+The 44,987,704-byte main browser script reported an HTTP cache hit (zero
+transferred bytes), a 0.185 s resource duration and a 0.703 s page load. This
+establishes cache reuse on this macOS run only. Evidence is retained in
+`agent-startup-mac-arm64/startup-logs`, including `install.json`, `update.json`,
+`browser-performance.json` and the first launch's `startup.previous.log`.
+
+## Earlier Windows measurement and resumed investigation
 
 [Windows run 34756212817](https://github.com/dream-num/univer-workspace/actions/runs/34756212817),
 source `1fd1aa6` (performance implementation `ccd5f47`), completed with **failure**.
-Work stops here under the requested fallback: report inability to deliver the
-targets with the validated implementation. This branch is not release acceptance.
+This result was reported under the requested stop-and-report fallback. Investigation
+has since resumed at the user's request; it is not release acceptance.
 
 | Native acceptance | Measured | Target | Result |
 | --- | ---: | ---: | --- |

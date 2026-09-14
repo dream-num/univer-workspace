@@ -1,9 +1,10 @@
 Unicode true
-!include LogicLib.nsh
-!include FileFunc.nsh
 !define APP_EXECUTABLE_FILENAME "Univer Workspace Agent.exe"
 !define isUpdated '1 = 1'
 !include "${AGENT_INCLUDE}"
+!include LogicLib.nsh
+!include FileFunc.nsh
+!insertmacro customHeader
 Name "Agent directory replacement fixture"
 OutFile "${FIXTURE_EXE}"
 RequestExecutionLevel user

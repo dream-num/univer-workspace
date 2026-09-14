@@ -77,8 +77,7 @@ module.exports = {
   },
   win: { target: [{ target: "nsis", arch: ["x64"] }] },
   nsis: {
-    script: '.build/nsis-trace/installer.nsi',
-    include: "installer/agent.nsh",
+    include: '.build/nsis-trace/agent-trace.nsh',
     // Deflate extracts faster than the default LZMA payload. This trades
     // differential downloads for a full installer download on Windows.
     useZip: true,

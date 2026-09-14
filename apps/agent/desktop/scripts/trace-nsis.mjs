@@ -12,8 +12,11 @@ export async function prepareTracedNsis(desktop) {
   const output = join(desktop, '.build/nsis-trace');
   await mkdir(output, { recursive: true });
   await cp(join(dirname(metadata), 'templates/nsis'), output, { recursive: true });
-  const entry = join(output, 'installer.nsi');
-  await writeFile(entry, `!cd "${output}"\n` + await readFile(entry, 'utf8'));
+  // Keep builder's default script entry: a custom nsis.script bypasses its
+  // separate uninstaller generation/signing pass. Only redirect relative
+  // includes to the generated template copy in both normal builder passes.
+  await writeFile(join(output, 'agent-trace.nsh'),
+    `!cd "${output}"\n!include "${join(desktop, 'installer/agent.nsh')}"\n`);
   const insert = (phase, statement) => `!insertmacro agentInstallTrace "${phase}-start"\n${statement}\n!insertmacro agentInstallTrace "${phase}-complete"`;
   const files = {
     'installSection.nsh': [
