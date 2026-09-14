@@ -7,9 +7,10 @@ import { migrateV1ToV2 } from "./v1-to-v2/migrate.js";
 import { migrateV2ToV3 } from "./v2-to-v3/migrate.js";
 import { migrateV3ToV4 } from "./v3-to-v4/migrate.js";
 import { migrateV4ToV5 } from "./v4-to-v5/migrate.js";
+import { migrateV6ToV7 } from "./v6-to-v7/migrate.js";
 import { migrateV5ToV6 } from "./v5-to-v6/migrate.js";
 
-const TARGET_VERSION = 6;
+const TARGET_VERSION = 7;
 const V1_TABLES = [
   "users",
   "password_credentials",
@@ -107,7 +108,7 @@ type DatabasePreparation =
  * Temporary rollout boundary for the supported legacy schemas.
  *
  * Delete this migrations directory and the call from db/initialize.ts after
- * every deployed database is on V6. Business repositories never import it.
+ * every deployed database is on V7. Business repositories never import it.
  */
 export function prepareCurrentDatabase(filename: string): DatabasePreparation {
   if (
@@ -123,8 +124,23 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     database.exec("PRAGMA busy_timeout = 5000");
     const version = pragmaNumber(database, "user_version");
     if (version === TARGET_VERSION) {
-      assertV6Fingerprint(database);
+      assertV7Fingerprint(database);
       return { status: "current" };
+    }
+    if (version === 6) {
+      assertV6Fingerprint(database);
+      if (objectSql(database, "table", "operations").includes("replace_blob_content")) {
+        throw new Error("Product database V6 fingerprint mismatch (operations already accepts Blob replacement).");
+      }
+      const backupFilename = createBackup(filename, database, 6);
+      try {
+        migrateV6ToV7(database);
+        assertV7Fingerprint(database);
+        database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      } catch (error) {
+        throw new Error(`Workspace V6 to V7 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+      }
+      return { status: "migrated", backupFilename };
     }
     if (version === 5) {
       if (hasColumn(database, "spaces", "public_read")) {
@@ -134,11 +150,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       const backupFilename = createBackup(filename, database, 5);
       try {
         migrateV5ToV6(database);
-        assertV6Fingerprint(database);
+        migrateV6ToV7(database);
+        assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V5 to V6 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V5 to V7 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -162,11 +179,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         }
         migrateV4ToV5(database);
         migrateV5ToV6(database);
-        assertV6Fingerprint(database);
+        migrateV6ToV7(database);
+        assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V4 to V6 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V4 to V7 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -179,11 +197,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         migrateV3ToV4(database);
         migrateV4ToV5(database);
         migrateV5ToV6(database);
-        assertV6Fingerprint(database);
+        migrateV6ToV7(database);
+        assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V3 to V6 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V3 to V7 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -197,11 +216,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         migrateV3ToV4(database);
         migrateV4ToV5(database);
         migrateV5ToV6(database);
-        assertV6Fingerprint(database);
+        migrateV6ToV7(database);
+        assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V2 to V6 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V2 to V7 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -216,11 +236,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         migrateV3ToV4(database);
         migrateV4ToV5(database);
         migrateV5ToV6(database);
-        assertV6Fingerprint(database);
+        migrateV6ToV7(database);
+        assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V1 to V6 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V1 to V7 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -228,7 +249,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     }
     if (version !== 0) {
       throw new Error(
-        `Unsupported product database version ${version}; expected 0, 1, 2, 3, 4, 5, or ${TARGET_VERSION}.`
+        `Unsupported product database version ${version}; expected 0, 1, 2, 3, 4, 5, 6, or ${TARGET_VERSION}.`
       );
     }
     if (!hasTable(database, "catalog_entries") && !hasTable(database, "files")) {
@@ -248,7 +269,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       );
     }
     try {
-      assertV6Fingerprint(database);
+      assertV7Fingerprint(database);
       database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
     } catch (error) {
       throw new Error(
@@ -265,7 +286,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
 function createBackup(
   filename: string,
   database: DatabaseSync,
-  version: 0 | 1 | 2 | 3 | 4 | 5
+  version: 0 | 1 | 2 | 3 | 4 | 5 | 6
 ): string {
   const backupFilename = uniqueBackupFilename(filename, version);
   try {
@@ -280,7 +301,7 @@ function createBackup(
   }
 }
 
-function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5): string {
+function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6): string {
   const timestamp = new Date()
     .toISOString()
     .replaceAll(":", "")
@@ -294,7 +315,7 @@ function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5):
   );
 }
 
-function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5): void {
+function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6): void {
   const backup = new DatabaseSync(filename, { readOnly: true });
   try {
     const integrity = backup.prepare("PRAGMA integrity_check").get() as
@@ -316,6 +337,8 @@ function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5): void {
       assertV2Fingerprint(backup);
     } else if (version === 3) {
       assertV3Fingerprint(backup);
+    } else if (version === 6) {
+      assertV6Fingerprint(backup);
     } else if (version === 5) {
       assertV5Fingerprint(backup);
     } else if (
@@ -573,6 +596,14 @@ function assertV6Fingerprint(database: DatabaseSync): void {
   const spacesSql = objectSql(database, "table", "spaces");
   if (!spacesSql.includes("public_read") || !spacesSql.includes("public_read IN (0, 1)")) {
     throw new Error("Product database V6 fingerprint mismatch (Space public-read policy differs).");
+  }
+}
+
+function assertV7Fingerprint(database: DatabaseSync): void {
+  assertV6Fingerprint(database);
+  if (!objectSql(database, "table", "operations").includes("replace_blob_content") ||
+      !objectSql(database, "table", "object_deletion_jobs").includes("blob_content_replaced")) {
+    throw new Error("Product database V7 fingerprint mismatch (Blob replacement schema differs).");
   }
 }
 

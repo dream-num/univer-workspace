@@ -241,7 +241,6 @@ CREATE TABLE IF NOT EXISTS operations (
     kind IN (
       'create_resource',
       'create_blob_resource',
-      'replace_blob_content',
       'create_worktree',
       'add_worktree_unit',
       'create_worktree_unit',
@@ -373,7 +372,6 @@ CREATE TABLE IF NOT EXISTS object_deletion_jobs (
   reason TEXT NOT NULL CHECK (
     reason IN (
       'blob_resource_deleted',
-      'blob_content_replaced',
       'blob_upload_abandoned',
       'univer_unit_deleted',
       'univer_asset_upload_abandoned',
@@ -545,4 +543,4 @@ BEGIN
   SELECT RAISE(ABORT, 'asset upload scope is immutable');
 END;
 
-PRAGMA user_version = 7;
+PRAGMA user_version = 6;

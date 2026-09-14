@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
+import type { BlobReplacementResult } from "./blobs.types.js";
+import type { StoredBlob } from "../../integrations/blob/blob-store.js";
 import type { WorkspaceDatabase } from "../../db/database.js";
 import type { OperationView } from "../resources/index.js";
+
+export interface BlobReplacementIntent {
+  readonly resourceId: string;
+  readonly expectedEtag: string;
+  readonly byteSize: number;
+}
 
 export interface BlobUploadIntent {
   readonly spaceId: string;
@@ -77,11 +85,142 @@ export interface BlobDeletionJobRow {
   readonly attempt_count: number;
 }
 
+export class BlobReplacementConflictError extends Error {
+  constructor(readonly reason: "intent" | "state" | "etag") {
+    super(`Blob replacement conflict: ${reason}`);
+  }
+}
+
 export class BlobReservationConflictError extends Error {}
 export class BlobUploadStateConflictError extends Error {}
 
 export class BlobsRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
+
+  reserveReplacement(
+    operationId: string,
+    userId: string,
+    intent: BlobReplacementIntent,
+    now: number,
+  ): { readonly objectKey: string; readonly result: BlobReplacementResult | null } {
+    return this._database.transaction((database) => {
+      const existing = database
+        .prepare("SELECT * FROM operations WHERE id = ?")
+        .get(operationId) as
+        | {
+            kind: string;
+            actor_user_id: string;
+            payload_json: string;
+            result_json: string | null;
+            state: string;
+          }
+        | undefined;
+      if (existing) {
+        const payload = JSON.parse(existing.payload_json);
+        if (
+          existing.kind !== "replace_blob_content" ||
+          existing.actor_user_id !== userId ||
+          payload.resourceId !== intent.resourceId ||
+          payload.expectedEtag !== intent.expectedEtag ||
+          payload.byteSize !== intent.byteSize
+        ) {
+          throw new BlobReplacementConflictError("intent");
+        }
+        if (existing.state !== "completed") {
+          throw new BlobReplacementConflictError("state");
+        }
+        return {
+          objectKey: payload.objectKey,
+          result: JSON.parse(existing.result_json!) as BlobReplacementResult,
+        };
+      }
+      const objectKey = randomUUID();
+      database
+        .prepare(`INSERT INTO operations
+        (id, kind, actor_user_id, step, state, payload_json, attempt_count, next_attempt_at, created_at, updated_at)
+        VALUES (?, 'replace_blob_content', ?, 'receiving', 'pending', ?, 0, ?, ?, ?)`)
+        .run(operationId, userId, JSON.stringify({ ...intent, objectKey }), now, now, now);
+      return { objectKey, result: null };
+    });
+  }
+
+  completeReplacement(
+    operationId: string,
+    intent: BlobReplacementIntent,
+    objectKey: string,
+    stored: StoredBlob,
+    now: number,
+  ): BlobReplacementResult {
+    return this._database.transaction((database) => {
+      const current = database
+        .prepare("SELECT object_key, etag FROM blob_resources WHERE resource_id = ?")
+        .get(intent.resourceId) as { object_key: string; etag: string } | undefined;
+      if (!current || current.etag !== intent.expectedEtag) {
+        throw new BlobReplacementConflictError("etag");
+      }
+      const etag = randomUUID();
+      database
+        .prepare(`UPDATE blob_resources SET object_key = ?, media_type = ?, byte_size = ?,
+        sha256 = ?, etag = ?, updated_at = ? WHERE resource_id = ? AND etag = ?`)
+        .run(
+          objectKey,
+          stored.mediaType,
+          stored.byteSize,
+          stored.sha256,
+          etag,
+          now,
+          intent.resourceId,
+          intent.expectedEtag,
+        );
+      database
+        .prepare("UPDATE resources SET updated_at = ? WHERE id = ?")
+        .run(now, intent.resourceId);
+      database
+        .prepare(
+          "UPDATE nodes SET updated_at = ? WHERE id = (SELECT node_id FROM resources WHERE id = ?)",
+        )
+        .run(now, intent.resourceId);
+      database
+        .prepare(`INSERT INTO object_deletion_jobs (id, object_key, reason, next_attempt_at, created_at, updated_at)
+        VALUES (?, ?, 'blob_content_replaced', ?, ?, ?) ON CONFLICT (object_key) DO NOTHING`)
+        .run(randomUUID(), current.object_key, now, now, now);
+      const result = { operationId, resourceId: intent.resourceId, etag: `"${etag}"` };
+      database
+        .prepare(`UPDATE operations SET state = 'completed', step = 'completed', result_json = ?,
+        updated_at = ?, completed_at = ? WHERE id = ? AND state = 'pending'`)
+        .run(JSON.stringify(result), now, now, operationId);
+      return result;
+    });
+  }
+
+  failReplacement(operationId: string, code: string, message: string, now: number): void {
+    this._database.transaction((database) => {
+      const row = database
+        .prepare(
+          "SELECT payload_json FROM operations WHERE id = ? AND kind = 'replace_blob_content' AND state = 'pending'",
+        )
+        .get(operationId) as { payload_json: string } | undefined;
+      if (!row) return;
+      database
+        .prepare(
+          `UPDATE operations SET state = 'failed', last_error_code = ?, last_error_message = ?, updated_at = ? WHERE id = ?`,
+        )
+        .run(code, message, now, operationId);
+      database
+        .prepare(`INSERT INTO object_deletion_jobs (id, object_key, reason, next_attempt_at, created_at, updated_at)
+        VALUES (?, ?, 'blob_upload_abandoned', ?, ?, ?) ON CONFLICT (object_key) DO NOTHING`)
+        .run(randomUUID(), JSON.parse(row.payload_json).objectKey, now, now, now);
+    });
+  }
+
+  pendingReplacementIds(): string[] {
+    const rows = this._database.connection
+      .prepare(
+        "SELECT id FROM operations WHERE kind = 'replace_blob_content' AND state = 'pending'",
+      )
+      .all() as unknown as Array<{ id: string }>;
+    return rows.map((row) => row.id);
+  }
 
   reserve(input: {
     readonly operationId: string;

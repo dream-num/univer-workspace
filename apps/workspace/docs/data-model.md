@@ -1,15 +1,15 @@
 # Univer Workspace 数据模型
 
-状态：V6，已实现
+状态：V7，已实现
 
 权威定义：`server/src/db/schema.sql`
 
 产品数据库使用 SQLite，开启 Foreign Key，Schema 版本为
-`PRAGMA user_version = 6`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+`PRAGMA user_version = 7`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿另存于
-`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V6
+`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V7
 Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
 `__record_id`，并把每条 Record ID 投影到该字段；Row/Column/Cell Map 是可从 Field 与 Record
 重建的派生数据。现有持久化 Base Snapshot 均使用该表示。
@@ -17,14 +17,14 @@ Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一�
 五类 Unit 的 Thread Comment anchor 属于 Unit snapshot/changeset；评论正文、回复、solved
 状态与并发 generation 保存在同一文件的 `collaboration_comments` 表中，并由
 `collaboration_schema_versions` 的 `comment=1` 组件版本管理。Comment Adapter 首次启动时
-幂等创建该附加 Schema，不改变产品数据库 V6，也不要求执行产品迁移命令。评论当前只在
+幂等创建该附加 Schema，不改变产品数据库 V7，也不要求执行产品迁移命令。评论当前只在
 Trunk 编辑器启用；Worktree 和 Merge Preview 不读取或写入 Trunk 评论。
 
 五类 Trunk Unit 的标准版本历史索引保存在同一文件的
 `collaboration_history_revisions` 表中，并由 `collaboration_schema_versions` 的 `history=1`
 组件版本管理。History Adapter 首次启动时幂等创建该附加 Schema；索引可从产品映射的 Unit、
 权威 Trunk revision 与 changeset 重建。为兼容启用 History 前的历史数据，服务启动时执行一次
-内部 backfill；正常请求不执行该逻辑。该索引不属于产品数据库 V6，也不改变其迁移路径。
+内部 backfill；正常请求不执行该逻辑。该索引不属于产品数据库 V7，也不改变其迁移路径。
 History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；Worktree 和 Merge Preview 不读取或
 写入 Trunk History。
 
@@ -259,6 +259,7 @@ User Worktree 必须是 Private 且没有 Team Space；Team Worktree 必须绑�
 ```text
 create_resource
 create_blob_resource
+replace_blob_content
 create_worktree
 add_worktree_unit
 create_worktree_unit
@@ -297,6 +298,18 @@ Node。
 3. `POST .../complete` 校验对象后，在单个 SQLite 事务中发布 Node/Resource；
 4. `content` 与 `download` 都重新解析 Node 权限并支持单段 Byte Range。
 
+### 替换 Blob 内容
+
+`PUT /api/blob-resources/{resourceId}/content` 保留 Resource、Node、原始文件名、目录与 ACL。
+必需 `If-Match`（单个带引号强 ETag）、`Content-Length` 和 `Idempotency-Key`。
+先持久化 `replace_blob_content` Operation（目标、预期 ETag、长度、新 Object Key），再写新对象。
+上传结束后重新校验编辑权限，并在产品事务中比较旧 ETag、切换对象与内容元数据、生成随机新 ETag、
+完成 Operation，同时写入 `blob_content_replaced` 删除任务。内容相同也生成新 ETag；SHA-256
+仍表示字节校验值。版本不匹配返回 412，旧对象与旧内容保留。
+失败请求标记 Failed，并写 `blob_upload_abandoned` 删除任务；启动阶段将中断的 Pending 替换
+按同样方式收敛。Completed Key 只回放记录结果，不重复写入；Pending 不可并发重入，Failed
+必须用新 Key 重试。Operation 查询用于确认未知结果。Blob 不进入 Worktree，也不保存历史版本。
+
 ### 创建与读取 Univer Asset
 
 1. `CollaborationImageIoService` 向 Trunk 或 Worktree File API 提交 `source=3`、`assign=unitID`
@@ -317,11 +330,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V6，不备份；
-2. 完整 V6：校验指纹后正常启动，不重复备份；
-3. 完整 V5：先生成一致性备份，再迁移到 V6，旧 Space 的公开读取默认关闭；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V6；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V6；
+1. 不存在或空文件：创建 V7，不备份；
+2. 完整 V7：校验指纹后正常启动，不重复备份；
+3. 完整 V6/V5：先生成一致性备份，再迁移到 V7；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V7；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V7；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -343,9 +356,12 @@ Operation JSON。迁移前要求没有 Pending/Failed Operation。
 - V2 删除任务完整映射到通用 Outbox；
 - V3 Asset Upload 的内容检测字段被无损移除；声明 MIME 缺失时用旧检测值回填；
 - V4 External Identity 被无损扩展为支持 Discord Provider；
-- 旧表全部删除且 `user_version = 6`。
+- 旧表全部删除且 `user_version = 7`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
 一致性备份始终保留，下一次启动可继续升级或由运维恢复。错误中会给出备份路径。
 迁移实现是唯一兼容边界；线上数据库全部完成升级后，可以删除 `migrations/`、
-`legacy-v0/` 及初始化函数中的一次调用，不影响 V6 Schema 或业务代码。
+`legacy-v0/` 及初始化函数中的一次调用，不影响 V7 Schema 或业务代码。
+
+V6 → V7 只重建 Operation 和删除任务表以扩展 CHECK 枚举，完整保留所有行和恢复字段；
+Blob 及上传会话表不变。升级前自动创建一致性备份；停旧实例后由单个新实例完成迁移。

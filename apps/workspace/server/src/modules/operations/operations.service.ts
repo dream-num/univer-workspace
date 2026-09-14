@@ -10,6 +10,7 @@ import {
 export type OperationKind =
   | "createResource"
   | "createBlobResource"
+  | "replaceBlobContent"
   | "createWorktree"
   | "addWorktreeUnit"
   | "createWorktreeUnit"
@@ -65,11 +66,11 @@ export function createOperationsModule(options: {
           requireOperation(options.repository, userId, operationId)
         );
       }
-      if (row.kind === "create_blob_resource") {
+      if (row.kind === "create_blob_resource" || row.kind === "replace_blob_content") {
         throw new ApplicationError(
           "CONFLICT",
           409,
-          "Blob publication is retried through its Upload Session."
+          "Blob creation uses its Upload Session; failed replacements require a new Idempotency-Key."
         );
       }
       if (row.kind === "activate_worktree_resource") {
@@ -147,6 +148,7 @@ async function retryWorktreeOperation(
       return;
     case "create_resource":
     case "create_blob_resource":
+    case "replace_blob_content":
     case "activate_worktree_resource":
       return;
   }
@@ -200,6 +202,7 @@ function operationKind(kind: OperationDatabaseKind): OperationKind {
   const kinds: Record<OperationDatabaseKind, OperationKind> = {
     create_resource: "createResource",
     create_blob_resource: "createBlobResource",
+    replace_blob_content: "replaceBlobContent",
     create_worktree: "createWorktree",
     add_worktree_unit: "addWorktreeUnit",
     create_worktree_unit: "createWorktreeUnit",

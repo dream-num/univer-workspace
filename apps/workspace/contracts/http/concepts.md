@@ -95,6 +95,14 @@ resolves current Resource Access. Blob content/download endpoints do the same vi
 the owning Node and support one byte range. Recent is updated only by a successful
 normal Resource Open; previews and Worktree scopes never update Recent.
 
+Blob replacement uses `PUT /api/blob-resources/{resourceId}/content`, a stable
+Idempotency-Key, and one quoted strong If-Match ETag from the downloaded content.
+It publishes immediately, preserves identity and filename, and generates a fresh
+ETag even for identical bytes. HTTP 412 means the caller must download and
+reconcile current content. The Operation records completion for lost-response
+recovery; interrupted replacements fail and their unpublished bytes are queued
+for deletion. There is no Blob Worktree or version-history surface.
+
 ## Trash batches
 
 One recursive trash action creates one Trash Batch. Nodes already in Trash

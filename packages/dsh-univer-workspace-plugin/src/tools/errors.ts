@@ -107,6 +107,7 @@ function workspaceCode(error: WorkspaceApiError): string {
   if (error.status === 401 || error.status === 403) return "WORKSPACE_ACCESS_DENIED";
   if (error.status === 404) return "WORKSPACE_NOT_FOUND";
   if (error.status === 409) return "WORKSPACE_CONFLICT";
+  if (error.status === 412) return "WORKSPACE_PRECONDITION_FAILED";
   if (error.status === 429) return "WORKSPACE_RATE_LIMITED";
   if (error.status === 400 || error.status === 422) return "WORKSPACE_INVALID_REQUEST";
   if (error.status === 408) return "WORKSPACE_TIMEOUT";

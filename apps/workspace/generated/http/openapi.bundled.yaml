@@ -1167,9 +1167,10 @@ paths:
   /api/blob-resources/{resourceId}/content:
     parameters:
       - $ref: '#/components/parameters/BlobResourceId'
-      - $ref: '#/components/parameters/Range'
-      - $ref: '#/components/parameters/IfNoneMatch'
     get:
+      parameters:
+        - $ref: '#/components/parameters/Range'
+        - $ref: '#/components/parameters/IfNoneMatch'
       tags:
         - Blobs
       operationId: getBlobContent
@@ -1187,6 +1188,69 @@ paths:
           $ref: '#/components/responses/NotFound'
         '416':
           $ref: '#/components/responses/RangeNotSatisfiable'
+    put:
+      tags:
+        - Blobs
+      operationId: replaceBlobContent
+      summary: Replace all Blob bytes while preserving Resource identity.
+      description: |
+        Publishes immediately without Worktree review. Requires editor access, Content-Length,
+        one quoted strong If-Match ETag from the downloaded bytes, and a stable Idempotency-Key.
+        Preserves the Node, name, original filename, location, ACL and Resource ID.
+        A successful replacement generates a fresh ETag even for identical bytes.
+        Replaying a completed key returns its recorded result without writing again.
+        Inspect GET /api/operations/{id} after an uncertain response. Pending requests cannot
+        be started twice; a failed or interrupted replacement requires a new key.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Exactly one quoted strong ETag; wildcard and weak validators are not accepted.
+        - name: Content-Length
+          in: header
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Content replaced, or the recorded result of this completed request.
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlobReplacementResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          description: Content changed since the supplied ETag. Download and reconcile before retrying.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
   /api/blob-resources/{resourceId}/download:
     parameters:
       - $ref: '#/components/parameters/BlobResourceId'
@@ -2926,6 +2990,7 @@ components:
       enum:
         - createResource
         - createBlobResource
+        - replaceBlobContent
         - createWorktree
         - addWorktreeUnit
         - createWorktreeUnit
@@ -3198,6 +3263,20 @@ components:
           type: string
           const: PUT
         contentUrl:
+          type: string
+    BlobReplacementResult:
+      type: object
+      additionalProperties: false
+      required:
+        - operationId
+        - resourceId
+        - etag
+      properties:
+        operationId:
+          type: string
+        resourceId:
+          type: string
+        etag:
           type: string
     Location:
       type: object

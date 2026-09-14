@@ -8,8 +8,20 @@ export function createBlobsRouter(options: {
   readonly blobs: BlobsModule;
 }): Router {
   const router = Router();
-  const session = (cookie: string | undefined) =>
-    options.identity.requireSession(cookie).user.id;
+  const session = (cookie: string | undefined) => options.identity.requireSession(cookie).user.id;
+
+  router.put("/blob-resources/:resourceId/content", async (request, response) => {
+    const result = await options.blobs.replace(
+      session(request.headers.cookie),
+      required(request.params.resourceId),
+      request.headers["idempotency-key"],
+      request.headers["if-match"],
+      request.headers["content-length"],
+      request,
+    );
+    response.setHeader("ETag", result.etag);
+    response.json(result);
+  });
 
   router.post(
     "/blob-upload-sessions",

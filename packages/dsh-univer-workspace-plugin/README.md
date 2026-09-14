@@ -133,8 +133,16 @@ as a substitute for those explicit storage boundaries.
   trashes nodes, and exposes a capability-gated trash view with restore and
   permanent removal. Univer Resources open in the embedded Viewer; Blob
   Resources use the native DSH Sidecar for read-only image, video, audio, PDF, and
-  text previews, while unsupported media remains download-only. Blob editing
-  is intentionally outside this plugin surface.
+  text previews, while unsupported media remains download-only. The preview is read-only.
+- **Blob tools**: `univer_blob` exposes get/download/upload/replace through the existing Workspace service/provider and authenticated HTTP client.
+  Get reads metadata only. Upload creates a new Blob from a session file in the
+  current Space by default, with optional `spaceId`, `parentNodeId`, and `name`.
+  Download into the session workspace, edit locally, then replace with the exact
+  downloaded ETag. Uploads and replacements publish immediately, without Worktree review.
+  Both writes require an `idempotencyKey`; retry with the same key and unchanged
+  input to resume the same operation instead of creating a duplicate.
+  Stale ETags require downloading and reconciling current content; file paths use
+  the same session containment checks as import/export.
 - **Native Sidecar preview**: file and Worktree opens update one Workspace preview
   tab in the current session's native right sidebar. DSH owns tab closing,
   resizing, splitting and fullscreen; Workspace renders the content inside it.

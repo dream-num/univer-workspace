@@ -219,14 +219,14 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 ## 产品数据库
 
-产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V6 结构，`initialize.ts`
-负责在业务 Module 初始化前识别数据库状态：空数据库应用 V6；V6 校验指纹；V5/V4/V3/V2/V1/V0
+产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V7 结构，`initialize.ts`
+负责在业务 Module 初始化前识别数据库状态：空数据库应用 V7；V7 校验指纹；V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
 
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。
 - 默认数据库文件为 `.data/univer-workspace.sqlite`。
-- 部署和普通重启均保留数据库；V6 不重复备份或迁移。
+- 部署和普通重启均保留数据库；V7 不重复备份或迁移。
 - 普通进程重启不清理数据库。
 - 每个测试使用独立的临时数据库文件或内存数据库。
 

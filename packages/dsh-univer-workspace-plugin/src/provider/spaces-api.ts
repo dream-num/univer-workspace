@@ -66,8 +66,8 @@ export interface WorkspaceNodePage {
   readonly nextCursor: string | null;
 }
 
-/** Narrow one Node from a Workspace node-page payload. */
-function narrowDocument(raw: unknown, spaceId: string): WorkspaceDocument | undefined {
+/** Narrow one Workspace Node summary. */
+export function narrowDocument(raw: unknown, spaceId: string): WorkspaceDocument | undefined {
   if (raw === null || typeof raw !== "object") return undefined;
   const record = raw as Record<string, unknown>;
   const nodeId = stringField(record.id);

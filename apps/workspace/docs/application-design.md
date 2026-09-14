@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V6 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V7 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -40,14 +40,16 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V6；
-- V6：校验 Schema 指纹；
-- V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V6；
-- V0：一致性备份后直接迁移到 V6；
+- Fresh：创建 V7；
+- V7：校验 Schema 指纹；
+- V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V7；
+- V0：一致性备份后直接迁移到 V7；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V6 Query。
+Worktree 等业务模块只编译和运行 V7 Query。
+
+V7 仅扩展 Operation 和 Object Deletion Job 枚举；不扩展 Blob 上传会话或 Worktree 合同。
 
 ## Login Session Authenticator
 
@@ -136,6 +138,10 @@ interface ResourcesModule {
 Resource 是由 `kind` 判别的联合。现有 `POST /api/resources` 只创建 Univer Resource；
 Blob Module 通过 Upload Session 接收字节，只有 Complete 才发布 Node/Resource。BlobStore
 保存字节，产品数据库保存元数据和删除 Outbox；前端根据服务端检测的 MIME 自行选择预览。
+
+Blob 内容替换使用单次 PUT 和强 ETag 并发校验，直接发布到原 Resource。
+`replace_blob_content` Operation 记录上传意图；产品事务只在新字节就绪且权限仍有效时切换对象，
+旧对象通过删除 Outbox 回收。失败或启动时发现中断的替换保留旧内容并清理新对象。
 
 Univer Asset Module 适配原生 File API。它将 Slide、Board、Base 等 Unit 内嵌资源保存到同一
 `BlobStore`，但不创建 Node/Resource。Snapshot 只持有稳定 Asset ID；签名接口返回同域

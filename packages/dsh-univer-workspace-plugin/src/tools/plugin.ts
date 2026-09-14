@@ -5,6 +5,7 @@
  */
 
 import type { Context } from "@deepseek-ai/cordis";
+import { registerBlobTool } from "./blob.ts";
 import { registerDiscoveryTools } from "./discovery.ts";
 import { registerDocumentTools } from "./documents.ts";
 import { registerWorktreeTools } from "./worktree.ts";
@@ -22,6 +23,7 @@ export const inject = ["tools", "univerWorkspace"];
 /** Register every univer_ tool. */
 export function apply(ctx: Context): void {
   ctx.effect(() => {
+    const disposeBlob = registerBlobTool(ctx);
     const disposeDiscovery = registerDiscoveryTools(ctx);
     const disposeDocuments = registerDocumentTools(ctx);
     const disposeWorktree = registerWorktreeTools(ctx);
@@ -43,6 +45,7 @@ export function apply(ctx: Context): void {
       registerScreenshotTool(imageCtx);
     });
     return () => {
+      disposeBlob();
       disposeRender();
       disposeResources();
       disposeApi();

@@ -145,9 +145,10 @@
 BlobContentPath:
   parameters:
     - $ref: "#/BlobResourceId"
-    - $ref: "#/Range"
-    - $ref: "#/IfNoneMatch"
   get:
+    parameters:
+      - $ref: "#/Range"
+      - $ref: "#/IfNoneMatch"
     tags: [Blobs]
     operationId: getBlobContent
     summary: Read Blob bytes for client-selected preview or other use.
@@ -164,6 +165,69 @@ BlobContentPath:
         $ref: ../schemas/common.yaml#/NotFound
       "416":
         $ref: ../schemas/common.yaml#/RangeNotSatisfiable
+
+  put:
+    tags: [Blobs]
+    operationId: replaceBlobContent
+    summary: Replace all Blob bytes while preserving Resource identity.
+    description: |
+      Publishes immediately without Worktree review. Requires editor access, Content-Length,
+      one quoted strong If-Match ETag from the downloaded bytes, and a stable Idempotency-Key.
+      Preserves the Node, name, original filename, location, ACL and Resource ID.
+      A successful replacement generates a fresh ETag even for identical bytes.
+      Replaying a completed key returns its recorded result without writing again.
+      Inspect GET /api/operations/{id} after an uncertain response. Pending requests cannot
+      be started twice; a failed or interrupted replacement requires a new key.
+    parameters:
+      - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
+        description: Exactly one quoted strong ETag; wildcard and weak validators are not accepted.
+      - name: Content-Length
+        in: header
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+    responses:
+      "200":
+        description: Content replaced, or the recorded result of this completed request.
+        headers:
+          ETag:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/blobs.yaml#/BlobReplacementResult
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+      "412":
+        description: Content changed since the supplied ETag. Download and reconcile before retrying.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "413":
+        $ref: ../schemas/common.yaml#/PayloadTooLarge
 
 BlobDownloadPath:
   parameters:

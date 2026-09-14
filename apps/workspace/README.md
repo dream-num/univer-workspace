@@ -239,21 +239,23 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V5 product databases to V6 automatically.
+backs up and migrates supported V0 through V6 product databases to V7 automatically.
 The Collaboration Comment and History Adapters perform additive, idempotent
 initialization of their own `comment=1` and `history=1` component schemas in the
 existing Collaboration SQLite file; they do not require a product database
 migration command. Back up both SQLite files before rollout.
 
 The published Collaboration Worktree adapter upgrades its own component schema
-from V1 to V2; the product database remains V6. Older SDK builds cannot open
+from V1 to V2; the product database remains V7. Older SDK builds cannot open
 Worktree V2. Validate upgrades with separate product, collaboration, and Blob
 storage paths. Never let old and new SDK builds write the same Collaboration
 SQLite file. Rolling back requires the matching pre-upgrade database backup,
 not only switching the application commit.
-For a V6 rollout, stop every old Workspace instance, start one V6 instance and
+V7 extends the Operation kind and object deletion reason for Blob replacement; existing
+Blob rows and upload sessions are preserved.
+For a V7 rollout, stop every old Workspace instance, start one V7 instance and
 wait for migration and health checks to succeed, then restore normal service;
-do not let V5 and V6 processes write the same SQLite file concurrently.
+do not let V6 and V7 processes write the same SQLite file concurrently.
 
 The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
 repository tag. When provided, it checks out that tag and uses it for the container
@@ -291,3 +293,10 @@ Pass `nextCursor` as `cursor` with the same filters and order until it is null.
 Each page reflects current data; refresh the first page after lifecycle changes.
 Summary `unitCount` includes all mapped Units, not only changed documents.
 Fetch `/api/worktrees/<id>` only when Unit details are needed.
+
+### Blob replacement
+
+Blob content can be replaced while preserving its Resource identity and location.
+Replacement requires the downloaded ETag and publishes immediately, without Worktree
+review. See the [HTTP contract](contracts/http/concepts.md#resource-creation-and-opening)
+for preconditions and retry behavior.

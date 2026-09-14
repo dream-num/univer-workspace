@@ -691,12 +691,7 @@ export interface paths {
     "/api/blob-resources/{resourceId}/content": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A single RFC 9110 bytes range. */
-                Range?: components["parameters"]["Range"];
-                /** @description Return 304 when the current content ETag matches. */
-                "If-None-Match"?: components["parameters"]["IfNoneMatch"];
-            };
+            header?: never;
             path: {
                 resourceId: components["parameters"]["BlobResourceId"];
             };
@@ -704,7 +699,17 @@ export interface paths {
         };
         /** Read Blob bytes for client-selected preview or other use. */
         get: operations["getBlobContent"];
-        put?: never;
+        /**
+         * Replace all Blob bytes while preserving Resource identity.
+         * @description Publishes immediately without Worktree review. Requires editor access, Content-Length,
+         *     one quoted strong If-Match ETag from the downloaded bytes, and a stable Idempotency-Key.
+         *     Preserves the Node, name, original filename, location, ACL and Resource ID.
+         *     A successful replacement generates a fresh ETag even for identical bytes.
+         *     Replaying a completed key returns its recorded result without writing again.
+         *     Inspect GET /api/operations/{id} after an uncertain response. Pending requests cannot
+         *     be started twice; a failed or interrupted replacement requires a new key.
+         */
+        put: operations["replaceBlobContent"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1464,7 +1469,7 @@ export interface components {
             parentNodeId?: string | null;
         };
         /** @enum {string} */
-        OperationKind: "createResource" | "createBlobResource" | "createWorktree" | "addWorktreeUnit" | "createWorktreeUnit" | "mergeWorktree" | "discardWorktree" | "activateWorktreeResource";
+        OperationKind: "createResource" | "createBlobResource" | "replaceBlobContent" | "createWorktree" | "addWorktreeUnit" | "createWorktreeUnit" | "mergeWorktree" | "discardWorktree" | "activateWorktreeResource";
         /** @enum {string} */
         OperationState: "pending" | "completed" | "failed";
         OperationError: {
@@ -1562,6 +1567,11 @@ export interface components {
             /** @constant */
             method: "PUT";
             contentUrl: string;
+        };
+        BlobReplacementResult: {
+            operationId: string;
+            resourceId: string;
+            etag: string;
         };
         Location: {
             space: components["schemas"]["SpaceSummary"];
@@ -3111,6 +3121,54 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             416: components["responses"]["RangeNotSatisfiable"];
+        };
+    };
+    replaceBlobContent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Random opaque key representing one user intent. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKeyParameter"];
+                /** @description Exactly one quoted strong ETag; wildcard and weak validators are not accepted. */
+                "If-Match": string;
+                "Content-Length": number;
+            };
+            path: {
+                resourceId: components["parameters"]["BlobResourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Content replaced, or the recorded result of this completed request. */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlobReplacementResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Content changed since the supplied ETag. Download and reconcile before retrying. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
         };
     };
     downloadBlobContent: {
