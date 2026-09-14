@@ -1,11 +1,24 @@
 param([Parameter(Mandatory=$true)][string]$Installer,
       [Parameter(Mandatory=$true)][string]$Destination,
       [switch]$Update,
+      [switch]$SimulateAlpha3,
       [string]$ReportPath,
       [switch]$DeferBudgetFailure,
       [int]$WatchdogMs = 180000)
 $ErrorActionPreference = 'Stop'
 if ($DeferBudgetFailure -and -not $ReportPath) { throw 'Deferred acceptance requires a report path' }
+if ($SimulateAlpha3) {
+    if (-not $Update) { throw 'Legacy simulation is only available for update acceptance' }
+    $testRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
+    $expected = [IO.Path]::GetFullPath($Destination)
+    if (-not $expected.StartsWith([IO.Path]::GetFullPath($testRoot).TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Legacy simulation requires an isolated temporary installation'
+    }
+    $keys = @(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Get-ItemProperty |
+        Where-Object { $_.UninstallString -and $_.UninstallString.StartsWith('"' + $expected + '\', [StringComparison]::OrdinalIgnoreCase) })
+    if ($keys.Count -ne 1) { throw 'Expected one isolated installation registration' }
+    Set-ItemProperty -LiteralPath $keys[0].PSPath -Name DisplayVersion -Value '0.1.0-alpha.3'
+}
 $arguments = @('/S')
 if ($Update) { $arguments += '--updated' }
 # NSIS requires /D to be the last argument, without quotes around its value.
@@ -44,7 +57,7 @@ if ($ReportPath) {
             }
         }
     }
-    @{ elapsedMs = $watch.ElapsedMilliseconds; budgetMs = 40000; update = [bool]$Update; timedOut = $timedOut; exitCode = $process.ExitCode; samples = $samples; phases = $phases } |
+    @{ elapsedMs = $watch.ElapsedMilliseconds; budgetMs = 40000; update = [bool]$Update; simulatedAlpha3 = [bool]$SimulateAlpha3; timedOut = $timedOut; exitCode = $process.ExitCode; samples = $samples; phases = $phases } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ReportPath -Encoding utf8
 }
 Remove-Item Env:UWA_INSTALL_TRACE -ErrorAction SilentlyContinue

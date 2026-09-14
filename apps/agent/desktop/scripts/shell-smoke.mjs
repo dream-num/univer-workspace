@@ -133,12 +133,16 @@ try {
         '-File', join(desktop, 'scripts/install-windows.ps1'),
         '-Installer', process.env.UWA_SMOKE_INSTALLER,
         '-Destination', dirname(installed), '-Update', '-DeferBudgetFailure',
+        ...(process.env.UWA_SMOKE_MIGRATE_ALPHA3 === '1' ? ['-SimulateAlpha3'] : []),
         '-ReportPath', join(desktop, '.build/startup-logs/update.json')], { stdio: 'inherit', windowsHide: true });
       const [code] = await once(installer, 'exit', { signal: AbortSignal.timeout(190000) });
       if (code !== 0) throw new Error(`Running-app reinstall failed: ${code}`);
       updateReport = JSON.parse((await readFile(join(desktop, '.build/startup-logs/update.json'), 'utf8')).replace(/^\uFEFF/, ''));
       if (updateReport.elapsedMs > updateReport.budgetMs)
         failures.push(`Running-app reinstall ${updateReport.elapsedMs} ms exceeded ${updateReport.budgetMs} ms`);
+      if (process.env.UWA_SMOKE_MIGRATE_ALPHA3 === '1' &&
+          !updateReport.phases.some(phase => phase.phase === 'migrate-alpha3-complete'))
+        throw new Error('The full installer did not complete its alpha.3 migration path');
       await exited;
       application = undefined;
       await new Promise((done, reject) => {

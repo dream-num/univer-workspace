@@ -35,17 +35,32 @@
 ; Keep the backup on the installation volume, outside the temporary uninstaller
 ; directory. A failed or interrupted installer must leave old binaries recoverable.
 !macro agentRenameInstallation
+    SetOutPath $TEMP
     !insertmacro agentInstallTrace "rename-old-start"
     ${If} ${FileExists} "$INSTDIR.uwa-previous\*.*"
       !insertmacro agentInstallTrace "backup-already-exists"
       Abort "Previous installation backup requires recovery before another update."
     ${EndIf}
-    ClearErrors
-    Rename "$INSTDIR" "$INSTDIR.uwa-previous"
-    ${If} ${Errors}
-      !insertmacro agentInstallTrace "rename-old-failed"
-      Abort "Cannot move the old installation; its files were left in place."
-    ${EndIf}
+    ; Process exit can precede release of Windows image/directory handles.
+    ; Retry only this same-volume rename, bounded to four seconds; never delete
+    ; files or invoke the broken legacy uninstaller as a fallback.
+    StrCpy $R7 0
+    ${Do}
+      ClearErrors
+      Rename "$INSTDIR" "$INSTDIR.uwa-previous"
+      ${IfNot} ${Errors}
+        ${ExitDo}
+      ${EndIf}
+      System::Call 'kernel32::GetLastError() i.R9'
+      !insertmacro agentInstallTrace "rename-old-error-$R9"
+      IntOp $R7 $R7 + 1
+      ${If} $R7 >= 40
+        !insertmacro agentInstallTrace "rename-old-failed"
+        Abort "Cannot move the old installation; its files were left in place."
+      ${EndIf}
+      !insertmacro agentInstallTrace "rename-old-retry"
+      Sleep 100
+    ${Loop}
     !insertmacro agentInstallTrace "rename-old-complete"
     FileOpen $R8 "$INSTDIR.uwa-previous\.uwa-backup-owner" w
     FileWriteUTF16LE /BOM $R8 "$INSTDIR"
