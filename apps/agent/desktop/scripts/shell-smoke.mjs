@@ -188,7 +188,7 @@ try {
       application = await _electron.launch(launchOptions);
       const updatedPage = await application.firstWindow();
       await updatedPage.waitForURL(url => url.origin === 'http://127.0.0.1:3101', { timeout: 60000 });
-      await waitForUsableAgent(updatedPage);
+      await waitForUsableAgent(updatedPage, { firstRun: false });
       report.reopenMs = Math.round(performance.now() - reopenedAt);
       if (await readFile(marker, 'utf8') !== 'preserve my data') throw new Error('Update changed account data');
       report.shutdownMs = shutdownMs;
