@@ -12,16 +12,17 @@ const scratch = await mkdtemp(join(tmpdir(), 'uwa-browser-build-'));
 const data = join(scratch, 'profile');
 const code = join(scratch, 'code');
 let application;
+let page;
 try {
   await rm(output, { recursive: true, force: true });
   await mkdir(data);
   application = await _electron.launch({
-    args: [desktop, `--user-data-dir=${data}`, ...(process.getuid?.() === 0 ? ['--no-sandbox'] : [])],
+    args: [desktop, `--user-data-dir=${data}`, ...(process.getuid?.() === 0 || (process.platform === 'linux' && process.env.CI === 'true') ? ['--no-sandbox'] : [])],
     env: { ...process.env, XDG_CONFIG_HOME: scratch, APPDATA: scratch },
     timeout: 60000,
   });
   application.process().stderr.on('data', bytes => process.stderr.write(String(bytes).replace(/token=[^\s"']+/g, 'token=[redacted]')));
-  const page = await application.firstWindow();
+  page = await application.firstWindow();
   // Keep only immutable public scripts/assets in the HTTP seed. Authentication,
   // HTML and API responses must never enter an installation's reusable cache.
   await application.evaluate(({ session }, path) => {
@@ -39,12 +40,12 @@ try {
     });
   }, code);
   await page.waitForURL(url => url.origin === 'http://127.0.0.1:3101', { timeout: 60000 });
-  await waitForUsableAgent(page, { requireSettings: false });
+  await waitForUsableAgent(page, {});
   // Chromium's default cache heat check needs repeat loads to persist the
   // compiled factories. Warm up only during the native build.
   for (let count = 0; count < 2; count++) {
     await page.reload();
-    await waitForUsableAgent(page, { firstRun: false, requireSettings: false });
+    await waitForUsableAgent(page, { firstRun: false });
   }
   const electron = await application.evaluate(() => process.versions.electron);
   await application.close();
@@ -55,6 +56,10 @@ try {
   const artifact = JSON.parse(await readFile(join(runtime, 'desktop-client/manifest.json'), 'utf8'));
   await writeFile(join(output, 'manifest.json'), JSON.stringify({ format: 1, electron, graph: artifact.graph.rev }));
   console.log('Prepared native browser HTTP and compiled-code cache without account storage.');
+} catch (error) {
+  await mkdir(join(desktop, '.build/browser-cache-build-logs'), { recursive: true });
+  await page?.screenshot({ path: join(desktop, '.build/browser-cache-build-logs/failure.png') }).catch(() => {});
+  throw error;
 } finally {
   await cp(join(data, 'logs'), join(desktop, '.build/browser-cache-build-logs'), { recursive: true }).catch(() => {});
   await application?.close();

@@ -202,6 +202,11 @@ try {
       ),
     });
     if (errors.length) throw new Error(`Desktop browser bootstrap errors: ${errors.join("; ")}`);
+  } catch (error) {
+    const diagnostics = join(desktop, '.build/startup-logs');
+    await mkdir(diagnostics, { recursive: true });
+    await browser.contexts()[0]?.pages()[0]?.screenshot({ path: join(diagnostics, 'relocated-failure.png') }).catch(() => {});
+    throw error;
   } finally {
     await browser.close();
   }

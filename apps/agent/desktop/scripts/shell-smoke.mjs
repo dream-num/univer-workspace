@@ -1,4 +1,4 @@
-import { cp, mkdtemp, mkdir, rm, realpath, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, rm, realpath, readFile, writeFile, rename, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -123,15 +123,16 @@ try {
     const marker = join(dataPath, 'data', 'upgrade-smoke.txt');
     await writeFile(marker, 'preserve my data');
     const appProcess = application.process();
-    const exited = once(appProcess, 'exit', { signal: AbortSignal.timeout(60000) });
+    const exited = once(appProcess, 'exit', { signal: AbortSignal.timeout(190000) });
     void exited.catch(() => {});
     try {
+      const updateStarted = performance.now();
       const installer = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
         '-File', join(desktop, 'scripts/install-windows.ps1'),
         '-Installer', process.env.UWA_SMOKE_INSTALLER,
         '-Destination', dirname(installed), '-Update', '-DeferBudgetFailure',
         '-ReportPath', join(desktop, '.build/startup-logs/update.json')], { stdio: 'inherit', windowsHide: true });
-      const [code] = await once(installer, 'exit', { signal: AbortSignal.timeout(65000) });
+      const [code] = await once(installer, 'exit', { signal: AbortSignal.timeout(190000) });
       if (code !== 0) throw new Error(`Running-app reinstall failed: ${code}`);
       const updateReport = JSON.parse((await readFile(join(desktop, '.build/startup-logs/update.json'), 'utf8')).replace(/^\uFEFF/, ''));
       if (updateReport.elapsedMs > updateReport.budgetMs)
@@ -145,6 +146,8 @@ try {
       });
       if (unrelated.exitCode !== null || unrelated.signalCode !== null) throw new Error('Installer killed an unrelated Node process');
       if (await readFile(marker, 'utf8') !== 'preserve my data') throw new Error('Update changed application data');
+      const backup = `${dirname(installed)}.uwa-previous`;
+      await stat(backup);
       launchedAt = performance.now();
       application = await _electron.launch(launchOptions);
       const updatedPage = await application.firstWindow();
@@ -152,11 +155,63 @@ try {
       await waitForUsableAgent(updatedPage, { firstRun: false });
       const upgradedMs = Math.round(performance.now() - launchedAt);
       console.log(`Usable window after running-app reinstall: ${upgradedMs} ms`);
+      const cleanupDeadline = Date.now() + 120000;
+      for (;;) {
+        try { await stat(backup); }
+        catch (error) { if (error.code === 'ENOENT') break; throw error; }
+        if (Date.now() > cleanupDeadline) throw new Error('Verified old-install cleanup did not finish');
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+      updateReport.reopenMs = upgradedMs;
+      updateReport.totalMs = Math.round(performance.now() - updateStarted);
+      await writeFile(join(desktop, '.build/startup-logs/update.json'), JSON.stringify(updateReport, null, 2));
+      console.log(`Complete replacement including reopened UI and cleanup: ${updateReport.totalMs} ms`);
       if (budget && upgradedMs > budget) failures.push(`Post-update startup ${upgradedMs} ms exceeded ${budget} ms`);
     } finally {
       unrelated.kill();
 
     }
+  }
+  if (process.env.UWA_SMOKE_MAC_DMG) {
+    const { installMac } = await import('./install-mac.mjs');
+    const bundle = resolve(dirname(installed), '../..');
+    const marker = join(dataPath, 'data/upgrade-smoke.txt');
+    await writeFile(marker, 'preserve my data');
+    const updateStarted = performance.now();
+    await application.close();
+    application = undefined;
+    const shutdownMs = Math.round(performance.now() - updateStarted);
+    const reportPath = join(diagnostics, 'update.json');
+    const report = await installMac(process.env.UWA_SMOKE_MAC_DMG, bundle, reportPath);
+    try {
+      const reopenedAt = performance.now();
+      application = await _electron.launch(launchOptions);
+      const updatedPage = await application.firstWindow();
+      await updatedPage.waitForURL(url => url.origin === 'http://127.0.0.1:3101', { timeout: 60000 });
+      await waitForUsableAgent(updatedPage);
+      report.reopenMs = Math.round(performance.now() - reopenedAt);
+      if (await readFile(marker, 'utf8') !== 'preserve my data') throw new Error('Update changed account data');
+      report.shutdownMs = shutdownMs;
+      if (budget && report.reopenMs > budget) failures.push(`Post-update startup ${report.reopenMs} ms exceeded ${budget} ms`);
+    } catch (error) {
+      report.success = false;
+      report.error = error.message;
+      await writeFile(reportPath, JSON.stringify(report, null, 2));
+      await application?.close(); application = undefined;
+      await rename(bundle, `${bundle}.failed`);
+      await rename(`${bundle}.previous`, bundle);
+      throw error;
+    }
+    // Cleanup failure must never replace a healthy new app with a partially
+    // deleted backup. Its time remains included in replacement acceptance.
+    const cleanupAt = performance.now();
+    try { await rm(`${bundle}.previous`, { recursive: true }); }
+    finally {
+      report.cleanupMs = Math.round(performance.now() - cleanupAt);
+      report.totalMs = Math.round(performance.now() - updateStarted);
+      await writeFile(reportPath, JSON.stringify(report, null, 2));
+    }
+    if (report.totalMs > 60000) failures.push(`macOS replacement ${report.totalMs} ms exceeded 60000 ms`);
   }
   if (failures.length) throw new Error(failures.join('; '));
   console.log("Electron window loaded the authenticated Agent UI with isolated user data.");

@@ -21,6 +21,9 @@ module.exports = {
     },
   ],
   beforePack: async () => {
+    if (process.platform === 'win32') {
+      await (await import('./scripts/trace-nsis.mjs')).prepareTracedNsis(__dirname);
+    }
     const release = JSON.parse(
       await require("node:fs/promises").readFile(
         require("node:path").join(__dirname, ".build/runtime/release.json"),
@@ -74,6 +77,7 @@ module.exports = {
   },
   win: { target: [{ target: "nsis", arch: ["x64"] }] },
   nsis: {
+    script: '.build/nsis-trace/installer.nsi',
     include: "installer/agent.nsh",
     // Deflate extracts faster than the default LZMA payload. This trades
     // differential downloads for a full installer download on Windows.

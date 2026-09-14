@@ -1,25 +1,27 @@
-/** Require usable first-run settings without configuring a model or account. */
-export async function waitForUsableAgent(page, { firstRun = true, requireSettings = true } = {}) {
-  await page.waitForFunction(() => document.body.innerText.trim().length > 20);
-  await page.getByRole('button', { name: /Reconnecting/ }).waitFor({ state: 'hidden', timeout: 30000 });
-  const notice = page.getByRole('button', { name: 'Continue', exact: true });
-  // Wait for asynchronously mounted onboarding, then defer model setup in
-  // isolated test data. No API key or remote model request is needed.
-  if (firstRun || await notice.isVisible()) {
-    await notice.click({ timeout: 30000 });
+/** Dismiss known asynchronous onboarding, then prove settings receive input. */
+export async function waitForUsableAgent(page, { firstRun = true, timeoutMs = 30000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  const settings = page.getByRole('button', { name: 'Settings', exact: true });
+  let lastError;
+  let setupHandled = !firstRun;
+  if (firstRun) await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: timeoutMs });
+  while (Date.now() < deadline) {
+    // These dialogs can mount after the preceding click or a WebSocket update.
+    // A one-time isVisible check can miss them and leave Settings covered.
+    for (const name of ['Continue', 'Configure later']) {
+      const button = page.getByRole('button', { name, exact: true });
+      if (await button.isVisible()) {
+        try {
+          await button.click({ timeout: Math.min(1000, Math.max(1, deadline - Date.now())) });
+          if (name === 'Configure later') setupHandled = true;
+        } catch (error) { lastError = error; }
+      }
+    }
+    try {
+      await settings.click({ trial: true, timeout: Math.min(250, Math.max(1, deadline - Date.now())) });
+      if (setupHandled && !await page.getByRole('button', { name: /Reconnecting/ }).isVisible()) return;
+    } catch (error) { lastError = error; }
+    await page.waitForTimeout(50);
   }
-  // Deferring the API key is session-scoped in this SDK. Fresh empty-account
-  // tests must defer it again after reload or a running-app replacement.
-  const configureLater = page.getByRole('button', { name: 'Configure later', exact: true });
-  if (await configureLater.isVisible().catch(() => false)) {
-    await configureLater.click({ timeout: 30000 });
-  }
-  // A visible enabled button behind an overlay does not prove interactivity.
-  // Trial click checks visibility, stability and event reception without editing.
-  // The composer can remain disabled until a model is configured. Settings
-  // must already accept input so a fresh installation can be configured.
-  if (requireSettings) {
-    await page.getByRole('button', { name: 'Settings', exact: true })
-      .click({ trial: true, timeout: 30000 });
-  }
+  throw new Error('Agent Settings never became interactive after onboarding', { cause: lastError });
 }

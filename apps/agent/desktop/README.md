@@ -286,3 +286,32 @@ Baseline DSH composition costs, production static-delivery measurements, the
 stricter first-run interaction result (15.435 s), and remaining timing limits are recorded
 in [the startup performance investigation](docs/startup-performance.md). This is
 not a claim that the five-second target or Windows installation target has passed.
+
+## Native replacement diagnostics
+
+The diagnostic NSIS script is generated from electron-builder 26.15.3 templates.
+A version check and exact-anchor checks fail when its templates change. The copied
+script timestamps old-uninstaller execution, extraction, caching the installer,
+registry writes and shortcut creation. Logs append to `<installation>.uwa-install.log`
+outside the moved directory; the PowerShell probe copies them into the CI report.
+The diagnostic watchdog is 180 seconds so a slow update can finish and expose all
+stages; acceptance budgets remain separate and are not extended by this watchdog.
+
+Windows replacement renames the old installation to its same-volume sibling
+`<installation>.uwa-previous`, after closing owned processes. Ordinary uninstall
+still removes the selected installation. Existing backup paths cause an explicit
+stop. An extraction failure callback restores the old tree and retains any partial
+new tree as `.uwa-failed`; abrupt termination retains the backup for recovery on
+that path. The new app retires a marked old tree only after its page loads and its
+runtime inventory passes verification. CI waits for this cleanup and reports its
+total replacement duration separately from the installer process duration.
+A native NSIS fixture tests directory activation and injected extraction failure.
+
+macOS CI now mounts the actual DMG, uses `ditto` to stage its app bundle, verifies
+runtime files, activates it and launches the installed Electron executable with
+fresh account data. It also closes that app, repeats DMG replacement, verifies a
+preserved data sentinel, reopens the app and removes the backup. Every phase is
+recorded; replacement includes shutdown, reopening and cleanup. macOS thresholds
+are 10 seconds to a usable window and 60 seconds for installation/replacement.
+This probes a DMG replacement, not Squirrel's automatic updater. Build-only jobs
+also do not validate notarization, downloaded-file quarantine or Gatekeeper delay.

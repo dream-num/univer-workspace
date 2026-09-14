@@ -229,6 +229,11 @@ async function start() {
   started = true;
   await window.loadURL(address);
   startupLog.write({ phase: "ready" });
+  if (app.isPackaged && process.platform === 'win32') {
+    void require('./retire-install.cjs').retirePreviousInstallation(
+      process.execPath, resources, event => startupLog.write(event),
+    ).catch(error => startupLog.write({ phase: 'update-cleanup-failed', error: error.message }));
+  }
   const checkUpdates = createUpdateChecker({
     app,
     autoUpdater,
