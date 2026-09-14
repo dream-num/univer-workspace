@@ -3,6 +3,53 @@ import { describe, expect, it, vi } from "vitest";
 import { apply } from "../src/provider/service-provider.ts";
 
 const root = "/tmp/dsh-blob-provider-tests";
+const uploadInput = {
+  spaceId: "space-1",
+  parentNodeId: null,
+  name: "file.txt",
+  originalFilename: "file.txt",
+  bytes: Buffer.from("edited"),
+  idempotencyKey: "blob-upload-request-0001",
+};
+const blobNode = {
+  id: "node-1",
+  spaceId: "space-1",
+  parentNodeId: null,
+  name: "file.txt",
+  accessRole: "editor",
+  capabilities: { rename: true },
+  resource: {
+    id: "blob-1",
+    kind: "blob",
+    byteSize: 6,
+    mediaType: "text/plain",
+    availability: "ready",
+    capabilities: { downloadContent: true },
+  },
+};
+function uploadSession(state: string) {
+  return Response.json({
+    operation: {
+      id: uploadInput.idempotencyKey,
+      kind: "createBlobResource",
+      state: state === "completed" ? "completed" : "pending",
+    },
+    upload: {
+      id: "upload-1",
+      operationId: uploadInput.idempotencyKey,
+      nodeId: "node-1",
+      resourceId: "blob-1",
+      byteSize: 6,
+      state,
+    },
+  });
+}
+function completedUpload() {
+  return Response.json({
+    operation: { id: uploadInput.idempotencyKey, kind: "createBlobResource", state: "completed" },
+    node: blobNode,
+  });
+}
 
 function setup() {
   const ctx = new Context();
@@ -42,6 +89,116 @@ function setup() {
 }
 
 describe("Blob provider", () => {
+  it("gets Blob metadata and permissions without downloading content", async () => {
+    const { service, request } = setup();
+    request.mockResolvedValueOnce(Response.json({ node: blobNode, resource: blobNode.resource }));
+    await expect(service.getBlob("user-1", "blob-1")).resolves.toMatchObject({
+      nodeId: "node-1",
+      resourceId: "blob-1",
+      name: "file.txt",
+      byteSize: 6,
+      mediaType: "text/plain",
+      nodeCapabilities: { rename: true },
+      resourceCapabilities: { downloadContent: true },
+    });
+    expect(request).toHaveBeenCalledExactlyOnceWith("/api/resources/blob-1", undefined);
+  });
+
+  it("rejects non-Blob metadata", async () => {
+    const { service, request } = setup();
+    request.mockResolvedValueOnce(
+      Response.json({ node: { ...blobNode, resource: { id: "blob-1", kind: "univer" } } }),
+    );
+    await expect(service.getBlob("user-1", "blob-1")).rejects.toMatchObject({
+      code: "INVALID_RESOURCE_KIND",
+    });
+  });
+
+  it("reserves, sends bytes, and completes an upload through the authenticated client", async () => {
+    const { service, request } = setup();
+    request
+      .mockResolvedValueOnce(uploadSession("waitingForUpload"))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(completedUpload());
+    await expect(service.uploadBlob("user-1", uploadInput)).resolves.toEqual({
+      operationId: uploadInput.idempotencyKey,
+      uploadId: "upload-1",
+      nodeId: "node-1",
+      resourceId: "blob-1",
+    });
+    expect(request.mock.calls.map(([path, init]) => [path, init?.method])).toEqual([
+      ["/api/blob-upload-sessions", "POST"],
+      ["/api/blob-upload-sessions/upload-1/content", "PUT"],
+      ["/api/blob-upload-sessions/upload-1/complete", "POST"],
+    ]);
+    const reserve = new Request("https://workspace.test/upload", request.mock.calls[0]![1]);
+    expect(reserve.headers.get("idempotency-key")).toBe(uploadInput.idempotencyKey);
+    expect(reserve.headers.has("cookie")).toBe(false);
+    expect(await reserve.json()).toEqual({
+      spaceId: "space-1",
+      parentNodeId: null,
+      name: "file.txt",
+      originalFilename: "file.txt",
+      byteSize: 6,
+    });
+    const content = new Request("https://workspace.test/content", request.mock.calls[1]![1]);
+    expect(content.headers.get("content-length")).toBe("6");
+    expect(await content.text()).toBe("edited");
+  });
+
+  it("resumes already uploaded bytes without repeating the PUT", async () => {
+    const { service, request } = setup();
+    request
+      .mockResolvedValueOnce(uploadSession("uploaded"))
+      .mockResolvedValueOnce(completedUpload());
+    await service.uploadBlob("user-1", uploadInput);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[0]).toBe("/api/blob-upload-sessions/upload-1/complete");
+  });
+
+  it("replays a completed upload after its completion response was lost", async () => {
+    const { service, request } = setup();
+    request
+      .mockResolvedValueOnce(uploadSession("waitingForUpload"))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockRejectedValueOnce(new Error("response lost"))
+      .mockResolvedValueOnce(uploadSession("completed"));
+    await expect(service.uploadBlob("user-1", uploadInput)).rejects.toMatchObject({
+      code: "WORKSPACE_RESULT_UNKNOWN",
+      message: expect.stringContaining(uploadInput.idempotencyKey),
+    });
+    await expect(service.uploadBlob("user-1", uploadInput)).resolves.toMatchObject({
+      resourceId: "blob-1",
+      uploadId: "upload-1",
+    });
+    expect(request).toHaveBeenCalledTimes(4);
+    expect(request.mock.calls[3]).toEqual(request.mock.calls[0]);
+  });
+
+  it.each(["verifying", "failed", "expired", "aborted"])(
+    "does not publish an upload in state %s",
+    async (state) => {
+      const { service, request } = setup();
+      request.mockResolvedValueOnce(uploadSession(state));
+      await expect(service.uploadBlob("user-1", uploadInput)).rejects.toMatchObject({
+        code: state === "verifying" ? "WORKSPACE_UPLOAD_PENDING" : "WORKSPACE_UPLOAD_FAILED",
+      });
+      expect(request).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("stops an upload when the connection changes after reservation", async () => {
+    const { service, request, connection } = setup();
+    request.mockImplementationOnce(async () => {
+      connection.token = "new-session";
+      return uploadSession("waitingForUpload");
+    });
+    await expect(service.uploadBlob("user-1", uploadInput)).rejects.toMatchObject({
+      code: "WORKSPACE_RESULT_UNKNOWN",
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   it("replaces Blob bytes through the existing authenticated client", async () => {
     const { replace, request } = setup();
     await expect(replace()).resolves.toMatchObject({ etag: '"new"' });

@@ -12,6 +12,13 @@ let tool: ToolDefinition;
 let exec: ToolRunContext;
 const service = {
   resolveSpaceForSession: async () => ({ userId: "user-1", spaceId: "space-1" }),
+  getBlob: vi.fn(async () => ({ resourceId: "blob-1", name: "file.txt", byteSize: 6 })),
+  uploadBlob: vi.fn(async () => ({
+    resourceId: "blob-2",
+    nodeId: "node-2",
+    uploadId: "upload-1",
+    operationId: "upload-request-0001",
+  })),
   replaceBlob: vi.fn(async () => ({ resourceId: "blob-1", etag: '"new"' })),
   downloadBlob: vi.fn(async () => ({
     bytes: Buffer.from("downloaded"),
@@ -48,6 +55,65 @@ afterEach(async () => {
 });
 
 describe("Blob tool", () => {
+  it("gets metadata without a file argument", async () => {
+    await expect(tool.execute({ action: "get", resourceId: "blob-1" }, exec)).resolves.toEqual({
+      resourceId: "blob-1",
+      name: "file.txt",
+      byteSize: 6,
+    });
+    expect(service.getBlob).toHaveBeenCalledWith("user-1", "blob-1");
+    expect(service.downloadBlob).not.toHaveBeenCalled();
+    await expect(tool.execute({ action: "get" }, exec)).rejects.toThrow(/resourceId/);
+  });
+
+  it.each([
+    { options: {}, spaceId: "space-1", parentNodeId: null, name: "edit.txt" },
+    {
+      options: { spaceId: "space-2", parentNodeId: "folder-1", name: "renamed.txt" },
+      spaceId: "space-2",
+      parentNodeId: "folder-1",
+      name: "renamed.txt",
+    },
+  ])(
+    "uploads a session file with destination $spaceId",
+    async ({ options, spaceId, parentNodeId, name }) => {
+      await expect(
+        tool.execute(
+          { action: "upload", file: "edit.txt", idempotencyKey: "upload-request-0001", ...options },
+          exec,
+        ),
+      ).resolves.toMatchObject({ resourceId: "blob-2" });
+      expect(service.uploadBlob).toHaveBeenCalledWith("user-1", {
+        spaceId,
+        parentNodeId,
+        name,
+        originalFilename: "edit.txt",
+        bytes: Buffer.from("edited"),
+        idempotencyKey: "upload-request-0001",
+      });
+    },
+  );
+
+  it("requires an upload key and a contained input before calling the service", async () => {
+    await expect(tool.execute({ action: "upload", file: "edit.txt" }, exec)).rejects.toThrow(
+      /idempotencyKey/,
+    );
+    const outside = await mkdtemp(join(tmpdir(), "dsh-blob-outside-"));
+    try {
+      await writeFile(join(outside, "outside.txt"), "outside");
+      await symlink(outside, join(root, "escape"));
+      await expect(
+        tool.execute(
+          { action: "upload", file: "escape/outside.txt", idempotencyKey: "upload-request-0001" },
+          exec,
+        ),
+      ).rejects.toThrow(/inside the session workspace/);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+    expect(service.uploadBlob).not.toHaveBeenCalled();
+  });
+
   it("passes a session file and downloaded ETag to the Workspace service", async () => {
     await expect(tool.execute(args, exec)).resolves.toMatchObject({ etag: '"new"' });
     expect(service.replaceBlob).toHaveBeenCalledWith("user-1", {

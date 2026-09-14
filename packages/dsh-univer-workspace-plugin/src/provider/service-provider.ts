@@ -11,7 +11,14 @@
 
 import type { WorktreeListQuery } from "../shared/state.ts";
 import { mkdir } from "node:fs/promises";
-import { downloadBlob, replaceBlob, type ReplaceBlobInput } from "./blob-api.ts";
+import {
+  getBlob,
+  uploadBlob,
+  downloadBlob,
+  replaceBlob,
+  type UploadBlobInput,
+  type ReplaceBlobInput,
+} from "./blob-api.ts";
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
@@ -158,6 +165,14 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   async openDocument(userId: string, resourceId: string) {
     const client = this.requireClient(userId);
     return await openResource(client, resourceId);
+  }
+
+  async getBlob(userId: string, resourceId: string) {
+    return getBlob(this.blobClient(userId), resourceId);
+  }
+
+  async uploadBlob(userId: string, input: UploadBlobInput) {
+    return uploadBlob(this.blobClient(userId), input);
   }
 
   async downloadBlob(userId: string, resourceId: string) {

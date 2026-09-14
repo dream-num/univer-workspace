@@ -11,6 +11,8 @@ import type {
   DownloadedBlob,
   ReplaceBlobInput,
   BlobReplacementResult,
+  UploadBlobInput,
+  BlobUploadResult,
 } from "../provider/blob-api.ts";
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
@@ -95,6 +97,12 @@ export abstract class UniverWorkspaceService extends Service {
 
   /** Open one Resource's editor descriptor. */
   abstract openDocument(userId: string, resourceId: string): Promise<WorkspaceDocumentOpen>;
+
+  /** Read Blob metadata without downloading content. */
+  abstract getBlob(userId: string, resourceId: string): Promise<WorkspaceDocument>;
+
+  /** Create and publish a Blob through an Upload Session. */
+  abstract uploadBlob(userId: string, input: UploadBlobInput): Promise<BlobUploadResult>;
 
   /** Download published Blob bytes with their content validator. */
   abstract downloadBlob(userId: string, resourceId: string): Promise<DownloadedBlob>;
