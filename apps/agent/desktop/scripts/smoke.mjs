@@ -34,6 +34,12 @@ try {
     ? resolve(source, { darwin: '../../MacOS/Univer Workspace Agent', win32: '../../Univer Workspace Agent.exe', linux: '../../univer-workspace-agent-desktop' }[process.platform])
     : process.env.UWA_SMOKE_ELECTRON ?? (await import('electron')).default);
   const nodeEnvironment = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+  const sessions = spawnSync(node, [join(desktop, 'test/packaged-session.cjs'), runtime], {
+    cwd: root, encoding: 'utf8', timeout: 120000, env: nodeEnvironment,
+  });
+  if (sessions.error || sessions.status !== 0)
+    throw new Error(`Packaged session creation failed: ${sessions.error ?? sessions.stderr}`);
+  console.log(sessions.stdout.trim());
   const profileModules = join(runtime, 'host.asar/profile/node_modules');
   const binding = spawnSync(node, ["-e", `
     const { createRequire } = require('node:module');

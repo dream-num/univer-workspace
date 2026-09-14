@@ -32,7 +32,20 @@ The Electron shell uses `app.asar`; the service uses `runtime/host.asar` in
 avoid exhausting file descriptors. Remove it when an upstream release provides
 both fixes. Raising the descriptor limit alone did not fix the native build.
 
+The fixed Desktop composition starts from `host.asar/desktop.cordis.yml`, beside
+the installed packages. DSH preset discovery walks the composition's filesystem
+base, so starting it from a writable account directory can incorrectly report
+installed preset plugins as missing. Account data, settings, credentials and
+user-authored presets retain their writable locations. Equal-version DSH peers in
+the profile resolve to the installation's module instance: `dsh-scope` uses a
+module-local Symbol and parent registry, so two copies cannot exchange a scoped
+agent context. Different package versions and third-party dependency graphs stay
+separate. This adapter belongs to Desktop; it does not patch published DSH code.
+
 ## Release size policy
+
+Measured standalone Node and browser sizes, including Windows compressed payload
+savings estimates, are recorded in [runtime deduplication sizes](docs/runtime-deduplication-size.md).
 
 Agent and both plugin builds do not generate source maps. Finalization removes
 maps supplied by third-party packages before inventory/signing, and runtime smoke
@@ -352,7 +365,9 @@ ASAR creation happens after production browser graph capture and before Electron
 cache warmup. Packaging verifies native binaries remain accessible outside the
 archive, including versioned Linux shared libraries. Relocated smoke uses the
 actual Electron executable in Node mode, then checks native Office conversion,
-SDK worker startup, PTY execution and the authenticated browser UI. Installed
+SDK worker startup, PTY execution and the authenticated browser UI. It also creates
+two real DSH sessions with the standard preset and verifies shared scope identity
+and visible preset tools, without a Workspace account or an LLM request. Installed
 shell checks exercise the normal OAuth/menu/update composition.
 
 The Windows installer migrates the known broken alpha.3 uninstaller only for an

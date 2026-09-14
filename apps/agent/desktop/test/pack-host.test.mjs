@@ -31,6 +31,7 @@ test('archive preserves package graphs and unpacks native files under a hidden b
   await writeFile(join(desktop, 'src/dsh-host.cjs'), 'host');
   await packDesktopHost(desktop, runtime);
   const archive = join(runtime, 'host.asar');
+  assert.equal(asar.extractFile(archive, 'desktop.cordis.yml').toString(), '[]\n');
   assert.equal(asar.extractFile(archive, join('node_modules', 'shared', 'index.js')).toString(), 'bootstrap version');
   assert.equal(asar.extractFile(archive, join('profile', 'node_modules', 'shared', 'index.js')).toString(), 'profile version');
   for (const name of ['module.node', 'library.so.8.18.6', 'spawn-helper']) {
