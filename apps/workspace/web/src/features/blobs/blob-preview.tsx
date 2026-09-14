@@ -1,8 +1,10 @@
+import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import { Download, FileQuestion } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { buttonVariants } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
+import { HtmlViewFile } from "../html-views";
 
 interface BlobPreviewResource {
   readonly name: string;
@@ -14,6 +16,7 @@ interface BlobPreviewResource {
 }
 
 export function BlobPreview({ resource }: { readonly resource: BlobPreviewResource }) {
+  if (isHtmlViewFilename(resource.originalFilename)) return <HtmlViewFile resource={resource} />;
   const mediaType = resource.mediaType.toLowerCase();
   if (mediaType.startsWith("image/")) {
     return (
@@ -112,12 +115,8 @@ function UnsupportedPreview({ resource }: { readonly resource: BlobPreviewResour
           <FileQuestion className="size-8" />
         </span>
         <div>
-          <h2 className="m-0 text-base font-semibold text-foreground">
-            {t("previewUnavailable")}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t("previewUnavailableDescription")}
-          </p>
+          <h2 className="m-0 text-base font-semibold text-foreground">{t("previewUnavailable")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("previewUnavailableDescription")}</p>
         </div>
         <a
           className={cn(buttonVariants({ variant: "primary", size: "md" }), "no-underline")}

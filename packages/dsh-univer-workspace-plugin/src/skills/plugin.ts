@@ -1,7 +1,7 @@
 /**
  * Bundled skill provider for the capability plugin.
  *
- * Ships the eight Office-shaped SKILL.md entries that route the model to the
+ * Ships bundled SKILL.md entries that route the model to the
  * remote Univer Workspace tools. The provider reads files from the packed
  * bundle; candidates are statically known and never dynamically imported.
  * @module dsh-univer-workspace-plugin/skills
@@ -60,6 +60,11 @@ const DEFINITIONS = [
     name: "univer-cross-unit-formula",
     description:
       "Author, calculate, update, inspect, and verify cross-Unit formulas through DSH tools and the Lite Interface. Use proactively when a Sheet cell or formula-driven Shape in a Sheet, Doc, Slide, or Board reads a Sheet range or Base table column from another accessible Univer Workspace Unit.",
+  },
+  {
+    name: "univer-html-view",
+    description:
+      "Create or revise .univer.html pages connected to live Workspace Sheet data using HTML binding attributes and JavaScript. Validate and publish them with univer_html_view.",
   },
 ] as const;
 

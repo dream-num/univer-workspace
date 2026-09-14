@@ -22,6 +22,9 @@ allowBuilds:
 # published declarations no longer leak an undeclared direct Redi import, and
 # clean installs/typechecks pass in both host React peer graphs.
 packageExtensions:
+  "@univerjs/network@1.0.0-rc.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.2"
   "@univerjs/engine-render@1.0.0-rc.0":
     dependencies:
       "@wendellhu/redi": "1.1.2"
@@ -86,6 +89,9 @@ minimumReleaseAgeExclude:
   - "@univer-cli/*"
   - "@univerjs/*"
   - "@univerjs-pro/*"
+  - "@univerjs-labs/binding-engine@1.0.0-rc.0"
+  - "@univerjs-labs/html-view@1.0.0-rc.0"
+  - "@univerjs-labs/html-view-renderer@1.0.0-rc.0"
   - "@oxfmt/binding-android-arm-eabi@0.66.0"
   - "@oxfmt/binding-android-arm64@0.66.0"
   - "@oxfmt/binding-darwin-arm64@0.66.0"
