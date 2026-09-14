@@ -72,6 +72,20 @@ jobs:
       - name: Check builder-managed NSIS compilation before runtime preparation
         if: runner.os == 'Windows'
         run: node apps/agent/desktop/scripts/check-nsis.mjs
+      - name: Verify native Windows directory replacement and recovery
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $compiler = Get-ChildItem "$env:LOCALAPPDATA/electron-builder/Cache" -Directory -Filter 'nsis-*' | Get-ChildItem -Filter makensis.exe -Recurse | Select-Object -First 1
+          if (-not $compiler) { throw 'Packaged NSIS compiler not found' }
+          $fixture = Join-Path $env:RUNNER_TEMP 'uwa-directory-fixture.exe'
+          $agentInclude = (Resolve-Path 'apps/agent/desktop/installer/agent.nsh').Path
+          $resources = (Resolve-Path 'apps/agent/desktop/installer').Path
+          $source = (Resolve-Path 'apps/agent/desktop/test/installer-rename.nsi').Path
+          & $compiler.FullName /V2 "/DAGENT_INCLUDE=$agentInclude" "/DBUILD_RESOURCES_DIR=$resources" "/DFIXTURE_EXE=$fixture" $source
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS fixture compilation failed' }
+          & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File apps/agent/desktop/test/installer-rename.ps1 -Fixture $fixture
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS recovery fixture failed' }
       - run: pnpm --dir apps/agent/desktop prepare:runtime
       - name: Verify relocated runtime
         run: node apps/agent/desktop/scripts/smoke.mjs
@@ -91,17 +105,6 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - name: Verify native Windows directory replacement and recovery
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $compiler = Get-ChildItem "$env:LOCALAPPDATA/electron-builder/Cache" -Directory -Filter 'nsis-*' | Get-ChildItem -Filter makensis.exe -Recurse | Select-Object -First 1
-          if (-not $compiler) { throw 'Packaged NSIS compiler not found' }
-          $fixture = Join-Path $env:RUNNER_TEMP 'uwa-directory-fixture.exe'
-          & $compiler.FullName /V2 "/DAGENT_INCLUDE=$PWD/apps/agent/desktop/installer/agent.nsh" "/DBUILD_RESOURCES_DIR=$PWD/apps/agent/desktop/installer" "/DFIXTURE_EXE=$fixture" "$PWD/apps/agent/desktop/test/installer-rename.nsi"
-          if ($LASTEXITCODE -ne 0) { throw 'NSIS fixture compilation failed' }
-          & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File apps/agent/desktop/test/installer-rename.ps1 -Fixture $fixture
-          if ($LASTEXITCODE -ne 0) { throw 'NSIS recovery fixture failed' }
       - name: Verify packaged runtime after signing
         run: node apps/agent/desktop/scripts/smoke.mjs --packaged
       - name: Upload runtime size report

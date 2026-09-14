@@ -27,6 +27,10 @@ let window,
   release;
 const origin = localOrigin();
 app.setName("Univer Workspace Agent");
+// Electron 44's default Windows cache drops our ~45 MB browser entry between
+// launches. A native repeat-launch probe retains it with this capacity. Apply
+// before session creation in both build-time warmup and the installed app.
+if (process.platform === 'win32') app.commandLine.appendSwitch('disk-cache-size', String(512 * 1024 * 1024));
 // Keep Electron profile and application data together when an explicit profile
 // directory is requested (also used by installed-application smoke tests).
 const profileDirectory = app.commandLine.getSwitchValue("user-data-dir");

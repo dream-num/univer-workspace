@@ -289,6 +289,12 @@ not a claim that the five-second target or Windows installation target has passe
 
 ## Native replacement diagnostics
 
+Windows build-time warmup and installed Electron execution use a 512 MiB HTTP
+cache upper limit. An isolated native Electron 44 probe retained the approximately
+45 MB main script across launches at this capacity; its default Windows cache
+did not. Actual Desktop cache reuse is still checked in the installed browser's
+resource timings, separately from successful cache-seed generation.
+
 The diagnostic NSIS script is generated from electron-builder 26.15.3 templates.
 A version check and exact-anchor checks fail when its templates change. The copied
 includes timestamp old-uninstaller execution, extraction, caching the installer,

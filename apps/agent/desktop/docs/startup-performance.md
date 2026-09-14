@@ -30,6 +30,21 @@ establishes cache reuse on this macOS run only. Evidence is retained in
 
 ## Earlier Windows measurement and resumed investigation
 
+A native Windows Electron 44.0.0 isolated HTTP-cache probe reproduced eviction
+of a 44,987,703-byte script between process launches with the default cache:
+the second launch transferred 44,988,003 bytes. With `--disk-cache-size=536870912`,
+the second launch transferred zero bytes and did not request the script from the
+server again. The probe warmed each fresh profile with two reloads and then
+closed/reopened Electron. This establishes the large-entry persistence difference,
+not a Desktop startup timing result. Windows now sets that same cache capacity
+before creating sessions in both build-time warmup and installed execution. It is
+a cache upper limit, not an up-front allocation of 512 MiB.
+
+Run 34801432712 generated the full Windows installer after restoring builder's
+normal uninstaller generation. A later native fixture compile failed on a mixed
+slash include path, so that run did not perform installed-application acceptance.
+The fixture now resolves native paths and runs before the full runtime build.
+
 [Windows run 34756212817](https://github.com/dream-num/univer-workspace/actions/runs/34756212817),
 source `1fd1aa6` (performance implementation `ccd5f47`), completed with **failure**.
 This result was reported under the requested stop-and-report fallback. Investigation
