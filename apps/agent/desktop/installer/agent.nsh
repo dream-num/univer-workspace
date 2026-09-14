@@ -108,6 +108,16 @@ FunctionEnd
 !macroend
 
 !macro customCheckAppRunning
+  !ifndef BUILD_UNINSTALLER
+    ; Refuse a previous interrupted attempt before invoking its uninstaller.
+    ; Quit bypasses .onInstFailed, which must not restore another attempt's tree.
+    ${If} ${FileExists} "$INSTDIR.uwa-previous\*.*"
+      !insertmacro agentInstallTrace "backup-already-exists"
+      MessageBox MB_OK|MB_ICONSTOP "Previous installation backup requires recovery before another update." /SD IDOK
+      SetErrorLevel 1
+      Quit
+    ${EndIf}
+  !endif
   !insertmacro agentInstallTrace "check-app-start"
   InitPluginsDir
   File /oname=$PLUGINSDIR\close-agent.ps1 "${BUILD_RESOURCES_DIR}\close-agent.ps1"

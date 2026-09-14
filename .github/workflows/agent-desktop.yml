@@ -73,7 +73,11 @@ jobs:
         if: runner.os == 'Windows'
         run: node apps/agent/desktop/scripts/check-nsis.mjs
       - name: Verify native Windows directory replacement and recovery
+        id: nsis_recovery
         if: runner.os == 'Windows'
+        # Collect independent full-installer timings even if this fixture fails;
+        # the explicit final gate below still fails the job and prevents release.
+        continue-on-error: true
         shell: pwsh
         run: |
           $compiler = Get-ChildItem "$env:LOCALAPPDATA/electron-builder/Cache" -Directory -Filter 'nsis-*' | Get-ChildItem -Filter makensis.exe -Recurse | Select-Object -First 1
@@ -192,6 +196,9 @@ jobs:
             apps/agent/desktop/.build/startup-logs
             apps/agent/desktop/.build/browser-cache-build-logs
           if-no-files-found: ignore
+      - name: Enforce native directory recovery regression
+        if: ${{ always() && steps.nsis_recovery.outcome == 'failure' }}
+        run: node -e "throw new Error('Native directory recovery regression failed; see its phase log')"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
