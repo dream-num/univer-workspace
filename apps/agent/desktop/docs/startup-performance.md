@@ -1,8 +1,13 @@
 # Desktop startup performance investigation
 
-The current acceptance targets are installation within 40 seconds and an
-interactive first window within 10 seconds. The user's Windows machine has not
-met these targets. Older runs below used 30-second / 5-second gates.
+The current Windows targets are first installation within 40 seconds and an
+interactive first window within 10 seconds. An isolated production-package test
+on the user's machine measured 38.656 seconds and 6.984 seconds respectively.
+The user accepted the measured 45.162-second upgrade installer; reopening and
+cleanup bring the complete replacement to 55.968 seconds. CI retains its stricter
+40-second replacement gate. macOS targets remain 60 seconds for installation or
+replacement and 10 seconds for first interaction. The dated results below record
+the investigation; older runs used 30-second / 5-second gates.
 
 ## ASAR service prototype (2026-09-14)
 
@@ -32,9 +37,9 @@ by SHA-256. This measures only the new DSH/Workspace host payload, excluding the
 Electron shell, browser binaries, browser-cache seed, other runtime assets,
 registry work and complete upgrade lifecycle. It is not a 6-second installation.
 
-The shipping launcher remains unchanged. Account migration/active-connection
-setup, the desktop OAuth/update lifecycle, macOS signing, Linux and the complete
-installer still need integration and verification. See the
+At the prototype stage, the shipping launcher was unchanged; account setup and
+the complete installer had not yet been integrated. The production integration
+and native results are recorded below. See the
 [raw measurement](measurements/windows-asar-prototype-20260914.json).
 
 ## Latest CI and local recovery
@@ -486,7 +491,7 @@ The packaged relocated-runtime smoke also passed with the stricter onboarding
 and interaction check, including native Office/worker/PTY checks, static script
 delivery, missing map endpoints, and an unchanged resource inventory.
 
-## Production ASAR integration (in validation)
+## Production ASAR integration
 
 The shipping source now selects Electron in Node mode for `start-local.mjs`,
 which preserves account initialization and loads the application-owned DSH host
@@ -498,9 +503,10 @@ as production installer measurements.
 
 Local Linux relocated production smoke passed Office CSV roundtrip, worker
 handshake, PTY, authenticated HTTP and browser onboarding. Windows native fixture
-results and all-platform release CI are required before publication. Acceptance
-uses the user's updated Windows budgets of 40 seconds for installation/replacement
-and 10 seconds for first usable opening; macOS remains 60/10 seconds.
+results and all-platform release CI are required before publication. CI enforces
+40 seconds for Windows installation/replacement and 10 seconds for first usable
+opening; the user accepts the approximately 45-second upgrade installer measured
+on their machine. macOS remains 60/10 seconds.
 
 Same-content prototype size comparison: 12,443 loose files / 330,137,397 bytes,
 versus 24 archive/native files / 333,392,377 bytes (0.99% larger). The 78,836,599-byte
@@ -522,3 +528,44 @@ Windows replacement's installer process took 19.017 seconds, and reopening took
 unsigned DMG replacement test. Linux passed relocated and packaged capabilities
 and the Electron window check. Official signing/notarization and user-machine
 installation remain separate from these build-only results.
+
+
+## Windows legacy migration and user-machine acceptance
+
+[Run 34835627688](https://github.com/dream-num/univer-workspace/actions/runs/34835627688),
+source `c398b4a`, passed Windows installation and the full installer legacy-migration
+path: first installation 21.264 seconds, first usable opening 5.416 seconds,
+upgrade installer 16.870 seconds, reopening 3.605 seconds, and complete replacement
+23.338 seconds. The same run passed Linux but failed the macOS browser actionability
+probe, so it is not all-platform release acceptance.
+
+On the user's Windows machine, an isolated complete production installer measured
+38.656 seconds for first installation and 6.984 seconds for first usable opening.
+A running-app upgrade initially failed because directory handles briefly remained
+after process exit. Moving the installer working directory outside the installation
+and retrying the same-volume rename fixed the observed failure. The successful
+retest needed 14 rename retries and measured:
+
+| Phase | Duration |
+| --- | ---: |
+| Installer start to initialization | 4.313 s |
+| App check and shutdown | 8.328 s |
+| Legacy migration, including directory rename retries | 1.906 s |
+| Extract new payload | 29.625 s |
+| Complete installer process | 45.162 s |
+| Usable window after replacement | 5.314 s |
+| Complete replacement, reopening and cleanup | 55.968 s |
+
+The phase rows are selected diagnostics, not an exhaustive sum. The installer
+exited successfully, backup cleanup completed, and the account-data sentinel and
+unrelated Node process survived. The smoke command exited nonzero only because
+its 40-second upgrade budget was exceeded; the user subsequently accepted the
+approximately 45-second installer duration. No functional check was waived.
+
+Both legacy-path tests set the isolated test installation's registry version to
+alpha.3; they do not establish an actual alpha.3-binary-to-new-release upgrade.
+The local package used a separate application ID, updater cache, registration and
+temporary directory. The user's real alpha.4 installation and account data were
+left intact. These are single-run measurements without a reboot or forced cache
+flush. An earlier local package lacked `electron-updater`; its installation timing
+is excluded from acceptance.

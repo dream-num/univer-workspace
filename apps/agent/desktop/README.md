@@ -15,6 +15,12 @@ was 20.921 seconds, first opening 7.732 seconds, and replacement plus reopening
 separately requires signing and notarization. CI does not replace measurements on
 the user's machine or a two-release updater acceptance test.
 
+A later isolated production-package test on the user's Windows machine installed
+in 38.656 seconds and first became usable in 6.984 seconds. Its upgrade installer
+completed in 45.162 seconds, with reopening and cleanup complete in 55.968 seconds;
+the user accepted this upgrade duration. The existing installation and account data
+were untouched. See [the detailed acceptance limits](docs/startup-performance.md#windows-legacy-migration-and-user-machine-acceptance).
+
 The user's earlier alpha.4 recovery took 100.539 seconds to install, including
 93.094 seconds extracting files. [Extraction and prototype measurements](docs/startup-performance.md#local-windows-extraction-comparison-2026-09-14)
 explain why ASAR was introduced. The [utility-process prototype](scripts/asar-probe/README.md)
