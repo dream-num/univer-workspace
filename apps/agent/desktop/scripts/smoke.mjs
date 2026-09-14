@@ -30,10 +30,9 @@ try {
   if (Object.keys(inventory).some((path) => path.endsWith(".map")))
     throw new Error("Desktop runtime must not include source maps");
   const metadata = JSON.parse(await readFile(join(runtime, "release.json"), "utf8"));
-  const { default: electronExecutable } = await import('electron');
   const node = process.env.UWA_SMOKE_EXECUTABLE ?? (process.argv.includes('--packaged')
     ? resolve(source, { darwin: '../../MacOS/Univer Workspace Agent', win32: '../../Univer Workspace Agent.exe', linux: '../../univer-workspace-agent-desktop' }[process.platform])
-    : electronExecutable);
+    : process.env.UWA_SMOKE_ELECTRON ?? (await import('electron')).default);
   const nodeEnvironment = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
   const profileModules = join(runtime, 'host.asar/profile/node_modules');
   const binding = spawnSync(node, ["-e", `
@@ -59,7 +58,7 @@ try {
   if (capability.error || capability.status !== 0)
     throw new Error(`Packaged lazy capability failed: ${capability.error ?? capability.stderr}`);
   const terminal = spawnSync(node, ["-e", `
-    const pty = require(${JSON.stringify(join(runtime, 'host.asar/node_modules/node-pty'))}).spawn(process.execPath,
+    const pty = require(${JSON.stringify(join(runtime, 'host.asar.unpacked/node_modules/node-pty'))}).spawn(${JSON.stringify(join(runtime, 'node/bin', process.platform === 'win32' ? 'node.exe' : 'node'))},
       ['-e', 'console.log("uwa-pty-ready")'], { cols: 80, rows: 24 });
     let output = '';
     const timer = setTimeout(() => { pty.kill(); process.exit(1); }, 15000);
@@ -179,7 +178,7 @@ try {
     headless: true,
   });
   try {
-    const page = await browser.newPage();
+    const page = await browser.newPage({ locale: 'en-US' });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("response", (response) => {

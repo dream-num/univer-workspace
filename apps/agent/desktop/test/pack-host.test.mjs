@@ -14,6 +14,7 @@ test('archive preserves package graphs and unpacks native files under a hidden b
   const runtime = join(desktop, '.build/runtime');
   const files = {
     'bootstrap/package.json': '{}',
+    'bootstrap/node_modules/node-pty/lib/index.js': 'native helper launcher',
     'bootstrap/node_modules/shared/index.js': 'bootstrap version',
     'bootstrap/node_modules/native/module.node': 'native binding',
     'bootstrap/node_modules/native/library.so.8.18.6': 'versioned library',
@@ -30,12 +31,13 @@ test('archive preserves package graphs and unpacks native files under a hidden b
   await writeFile(join(desktop, 'src/dsh-host.cjs'), 'host');
   await packDesktopHost(desktop, runtime);
   const archive = join(runtime, 'host.asar');
-  assert.equal(asar.extractFile(archive, 'node_modules/shared/index.js').toString(), 'bootstrap version');
-  assert.equal(asar.extractFile(archive, 'profile/node_modules/shared/index.js').toString(), 'profile version');
+  assert.equal(asar.extractFile(archive, join('node_modules', 'shared', 'index.js')).toString(), 'bootstrap version');
+  assert.equal(asar.extractFile(archive, join('profile', 'node_modules', 'shared', 'index.js')).toString(), 'profile version');
   for (const name of ['module.node', 'library.so.8.18.6', 'spawn-helper']) {
-    assert.equal(asar.statFile(archive, `node_modules/native/${name}`).unpacked, true);
+    assert.equal(asar.statFile(archive, join('node_modules', 'native', name)).unpacked, true);
     await access(join(runtime, 'host.asar.unpacked/node_modules/native', name));
   }
+  assert.equal(asar.statFile(archive, join('node_modules', 'node-pty', 'lib', 'index.js')).unpacked, true);
   await assert.rejects(access(join(runtime, 'bootstrap')), { code: 'ENOENT' });
   await assert.rejects(access(join(runtime, 'home/profiles/univer-workspace-harness/node_modules')), { code: 'ENOENT' });
   assert.equal(await readFile(join(runtime, 'home/profiles/univer-workspace-harness/package.json'), 'utf8'), '{}');

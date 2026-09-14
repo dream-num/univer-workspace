@@ -235,8 +235,9 @@ resources. Startup does not copy or hash the full runtime again. Integrity is
 verified during packaging and by relocated/installed artifact smoke checks.
 
 `runtime/home` contains writable profile metadata. DSH and both plugin dependency
-graphs execute from `runtime/host.asar`; native libraries and terminal helpers stay
-in `host.asar.unpacked`. Desktop boots published DSH APIs in Electron Node mode,
+graphs execute from `runtime/host.asar`; native libraries and the complete `node-pty` package stay
+in `host.asar.unpacked`. The host resolves `node-pty` from its physical path
+because macOS native process creation cannot traverse an ASAR directory. Desktop boots published DSH APIs in Electron Node mode,
 while standalone Node remains on PATH for external commands. The shared local
 launcher still initializes account directories, shared credentials and settings.
 A scoped module-resolution adapter handles DSH imports from writable configuration;

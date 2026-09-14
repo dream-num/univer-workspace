@@ -19,15 +19,24 @@ async function startDesktopHost(args) {
   // Remove when published DSH supports both paths in an embedded ASAR host.
   const hooks = registerHooks({
     resolve(specifier, context, nextResolve) {
+      let result;
       try {
-        return nextResolve(specifier, context);
+        result = nextResolve(specifier, context);
       } catch (error) {
         const bare = !specifier.startsWith('.') && !specifier.startsWith('/') &&
           !specifier.startsWith('#') && !specifier.includes(':');
         if (!['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND'].includes(error.code) || !bare ||
             !(context.parentURL?.startsWith(configRoot) || context.parentURL === loaderEntry)) throw error;
-        return nextResolve(specifier, { ...context, parentURL: profileAnchor });
+        result = nextResolve(specifier, { ...context, parentURL: profileAnchor });
       }
+      // node-pty passes its helper path directly to native posix_spawn on macOS.
+      // Loading the whole package from its physical unpacked location keeps
+      // __dirname usable by the OS, which cannot traverse a virtual ASAR path.
+      const archiveRoot = pathToFileURL(archive + path.sep).href;
+      if (result.url.startsWith(archiveRoot) && result.url.includes('/node_modules/node-pty/')) {
+        return { ...result, url: result.url.replace(archiveRoot, pathToFileURL(archive + '.unpacked' + path.sep).href) };
+      }
+      return result;
     },
   });
   const load = (name) => import(pathToFileURL(requireHost.resolve(name)).href);

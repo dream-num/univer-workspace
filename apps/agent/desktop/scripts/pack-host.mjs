@@ -14,7 +14,7 @@ export async function packDesktopHost(desktop, runtime) {
     const require = createRequire(import.meta.url);
     const builderRequire = createRequire(require.resolve('electron-builder/package.json'));
     await builderRequire('@electron/asar').createPackageWithOptions(stage, join(runtime, 'host.asar'),
-      { unpack: '{*.node,*.exe,*.dll,*.so,*.so.*,*.dylib,spawn-helper}' });
+      { unpack: '{*.node,*.exe,*.dll,*.so,*.so.*,*.dylib,spawn-helper}', unpackDir: '**/node-pty' });
     await cp(join(desktop, 'src/dsh-host.cjs'), join(runtime, 'dsh-host.cjs'));
     await rm(join(runtime, 'bootstrap'), { recursive: true });
     await rm(join(runtime, 'home/profiles/univer-workspace-harness/node_modules'), { recursive: true });

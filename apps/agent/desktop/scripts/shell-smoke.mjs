@@ -24,6 +24,7 @@ try {
   const installed = process.env.UWA_SMOKE_EXECUTABLE;
   const packaged = Boolean(installed) || process.argv.includes("--packaged");
   const args = [
+    "--lang=en-US",
     `--user-data-dir=${join(temporary, "Univer Workspace Agent")}`,
     "-r",
     join(desktop, "test/electron-diagnostics.cjs"),
