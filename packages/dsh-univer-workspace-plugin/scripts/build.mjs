@@ -34,7 +34,11 @@ await copyFile(
 
 await build({
   entryPoints: ["src/index.ts"],
-  outfile: "lib/index.js",
+  outdir: "lib",
+  splitting: true,
+  // The public pool resolves its worker bootstrap beside import.meta.url.
+  // Keep all Node chunks beside the existing worker-child.mjs entry.
+  chunkNames: "[name]-[hash]",
   bundle: true,
   platform: "node",
   format: "esm",

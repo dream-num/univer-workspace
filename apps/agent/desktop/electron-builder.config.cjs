@@ -8,7 +8,7 @@ module.exports = {
   productName: "Univer Workspace Agent",
   icon: ".build/icon.png",
   extraMetadata: { version },
-  directories: { output: "artifacts" },
+  directories: { output: "artifacts", buildResources: "installer" },
   asar: true,
   files: ["src/**/*.cjs", "package.json", "!**/*.map"],
   extraResources: [{ from: ".build/runtime", to: "runtime" }],
@@ -21,6 +21,9 @@ module.exports = {
     },
   ],
   beforePack: async () => {
+    if (process.platform === 'win32') {
+      await (await import('./scripts/trace-nsis.mjs')).prepareTracedNsis(__dirname);
+    }
     const release = JSON.parse(
       await require("node:fs/promises").readFile(
         require("node:path").join(__dirname, ".build/runtime/release.json"),
@@ -74,6 +77,11 @@ module.exports = {
   },
   win: { target: [{ target: "nsis", arch: ["x64"] }] },
   nsis: {
+    include: '.build/nsis-trace/agent-trace.nsh',
+    // Deflate extracts faster than the default LZMA payload. This trades
+    // differential downloads for a full installer download on Windows.
+    useZip: true,
+    differentialPackage: false,
     oneClick: false,
     perMachine: false,
     allowToChangeInstallationDirectory: true,

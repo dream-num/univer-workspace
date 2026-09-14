@@ -6,9 +6,28 @@ Workspace bundles, not a fork of DSH or a public SDK. Electron packaging tools b
 `pnpm-lock.yaml`. The generated DSH runtime remains isolated from that workspace
 and its React dependency graph.
 
-Like DSH Desktop, the Electron shell explicitly uses ASAR while the standalone
-Node/DSH runtime stays in `extraResources`; ordinary Node cannot load modules
-directly from Electron's ASAR. The version-scoped osx-sign patch follows DSH's
+The production ASAR build passed [all three native CI targets](https://github.com/dream-num/univer-workspace/actions/runs/34833396896).
+Windows installed in 20.362 seconds, opened to an interactive page in 8.904 seconds,
+and completed replacement plus reopening in 29.064 seconds. macOS DMG installation
+was 20.921 seconds, first opening 7.732 seconds, and replacement plus reopening
+13.989 seconds. These satisfy the current Windows 40/10-second and macOS
+60/10-second budgets. The macOS build-only test is unsigned; official publication
+separately requires signing and notarization. CI does not replace measurements on
+the user's machine or a two-release updater acceptance test.
+
+A later isolated production-package test on the user's Windows machine installed
+in 38.656 seconds and first became usable in 6.984 seconds. Its upgrade installer
+completed in 45.162 seconds, with reopening and cleanup complete in 55.968 seconds;
+the user accepted this upgrade duration. The existing installation and account data
+were untouched. See [the detailed acceptance limits](docs/startup-performance.md#windows-legacy-migration-and-user-machine-acceptance).
+
+The user's earlier alpha.4 recovery took 100.539 seconds to install, including
+93.094 seconds extracting files. [Extraction and prototype measurements](docs/startup-performance.md#local-windows-extraction-comparison-2026-09-14)
+explain why ASAR was introduced. The [utility-process prototype](scripts/asar-probe/README.md)
+is retained as a diagnostic; the production launcher uses Electron Node mode.
+
+The Electron shell uses `app.asar`; the service uses `runtime/host.asar` in
+`extraResources`. Both run through Electron, which provides ASAR filesystem support. The version-scoped osx-sign patch follows DSH's
 `lstat` fix for Framework aliases and additionally scans files sequentially to
 avoid exhausting file descriptors. Remove it when an upstream release provides
 both fixes. Raising the descriptor limit alone did not fix the native build.
@@ -17,7 +36,9 @@ both fixes. Raising the descriptor limit alone did not fix the native build.
 
 Agent and both plugin builds do not generate source maps. Finalization removes
 maps supplied by third-party packages before inventory/signing, and runtime smoke
-checks reject any remaining maps. The Electron ASAR also excludes them.
+checks reject any remaining maps. The Electron ASAR also excludes them. Desktop finalization also removes TypeScript
+declaration files, native debug symbols, and explicitly listed third-party
+test/example/source trees. Runtime TypeScript, Skills and licenses are retained.
 
 The capability plugin bundles its JavaScript SDK dependencies. Desktop packaging
 stages an installation manifest containing only external native bindings and `ws`,
@@ -25,8 +46,8 @@ reading the binding versions from the installed SDK wrapper manifests. Source
 dependencies retain the repository SDK upgrade policy. Desktop builds remove
 unnecessary whitespace without renaming identifiers. Standalone Node includes
 the executable and upstream notices, while npm and development headers remain
-in the build directory. DSH's pnpm and plugin installation sources remain available
-for profile management. node-pty retains only target-platform prebuilds alongside
+in the build directory. DSH's pnpm and plugin installation archives remain in the runtime;
+the production Desktop plugin roster is fixed. node-pty retains only target-platform prebuilds alongside
 any locally compiled fallback; packaged smoke tests exercise a real terminal.
 Licenses, Skills, the resource catalog and native Office
 bindings are runtime assets, not blanket cleanup targets.
@@ -40,6 +61,43 @@ Sharing these browsers requires an explicit rendering lifecycle change and
 document export validation, rather than deleting the worker browser. This is
 tracked as a non-blocking upstream request in
 [univer-cli-sdk #63](https://github.com/dream-num/univer-cli-sdk/issues/63).
+
+## Production browser assets
+
+Desktop packaging boots the published DSH profile once in isolated build data,
+then exports its browser graph and batch responses using `graph()` and
+`fetchBundle()`. It strips source-map trailers, assigns URLs from the final script
+content, and stores each batch once in `runtime/desktop-client`. No map is shipped
+or served. At runtime, an application-owned static carrier calls DSH's public
+`bootInjections()` with that graph; it does not instantiate the host client registry
+or build browser combinations/source maps. The DSH package is not patched.
+
+The native build also opens the packaged profile in Electron and warms Chromium's
+HTTP and compiled-script caches. Only these disposable caches are shipped; HTML,
+authentication and API responses are marked `no-store`, and account storage is
+excluded. First launch stages the seed before creating its window. Its identity
+includes the browser graph and Electron version; updates replace caches while
+preserving cookies and account data. Chromium may reject compiled cache entries
+on a different CPU, so this is a performance optimization, not a runtime dependency.
+The seed adds about 86 MB before installer compression in the measured Linux build.
+
+The capability host loads the document runtime pool, API reference and Office
+conversion modules on their first operation. Node chunks and the worker bootstrap
+ship together in the plugin's `lib` directory. Initial application opening avoids
+compiling unused document engines; the first corresponding operation bears that
+initialization cost. Relocated artifact smoke verifies CSV conversion and the real
+worker fork in addition to browser startup.
+
+The Desktop profile sets `patchReload: startup` and disables `hmr` and
+`client-hmr` before capturing the graph. The browser module-system entry stays in
+the captured graph. Desktop uses a fixed packaged plugin roster: profile manifest
+or profile patch edits are rejected on subsequent launches so stale prebuilt UI
+cannot silently accompany a changed profile. Application settings and account
+state stay in the normal writable data directories. The local Web development
+profile keeps its existing live-reload behavior.
+
+See [the upstream investigation](docs/dsh-production-upstream.md) for the exact
+published APIs and why `NODE_ENV=production` alone does not turn maps off.
 
 ## Downloads and updates
 
@@ -63,8 +121,10 @@ The stable metadata channel is named `latest`; prereleases use `alpha`, `beta`, 
 every six hours, or from **Help → Check for Updates**. All channels exclude CLI
 releases and use the selected release's immutable generic update feed,
 not GitHub's repository-wide latest release. The app asks before downloading and
-restarting. Active tasks should finish before accepting. Metadata and blockmaps
-are release assets, not extra installer choices. Linux updates require running
+restarting. Active tasks should finish before accepting. Update metadata and any blockmaps
+are release assets, not extra installer choices. Windows uses a ZIP/Deflate
+installation payload for faster extraction and downloads the full installer for
+updates; differential Windows downloads are disabled. Linux updates require running
 the AppImage itself from a writable location.
 
 ## Build on the target platform
@@ -105,7 +165,16 @@ smoke result does not validate their signing, OAuth, or installer behavior.
 ## Manual CI and publication
 
 Run **Build and release Agent desktop (manual)** in GitHub Actions with an exact version. `dry_run`
-defaults to true; all three native jobs upload Actions artifacts. To publish,
+defaults to true; all three native jobs upload Actions artifacts.
+The optional `target=windows` selects only Windows for build-only performance
+investigations; publication requires all targets. Windows CI runs CPU sampling
+separately after acceptance, saving backend and renderer `.cpuprofile` files in
+`startup-logs/profiles`. Both samples use the unpacked packaged artifact so a
+failed update cannot remove the profiling executable. The backend sample relocates
+that runtime to fresh data and a fresh compile cache. These diagnostic timings do
+not replace the installed-application acceptance timings.
+
+To publish,
 first create an `agent-vX.Y.Z` or `agent-vX.Y.Z-{alpha,beta,rc}.N` tag contained in the default branch, select that
 tag as the workflow ref, enter the matching version, and explicitly disable
 `dry_run`. All three jobs must succeed before a draft Release is populated and
@@ -155,7 +224,7 @@ these do not substitute for the two-release installation acceptance above.
 
 ## Runtime, login, and data
 
-The shell starts its own Node/DSH process on `127.0.0.1:3101`. An occupied port is
+The shell starts its own Electron Node/DSH process on `127.0.0.1:3101`. An occupied port is
 an error; the app never adopts an unknown process. DSH generates browser
 authentication and passes the URL through a private child-process IPC channel.
 The main renderer has no Node access and remains on the local origin. Login
@@ -167,9 +236,132 @@ Server or model credentials.
 
 Electron's OS-specific `userData` directory contains `data/` for credentials,
 settings, and account-scoped sessions. `workspace/` is the separate local working
-directory; Agent does not use its credential/runtime tree as the project folder. `runtime/` is a writable installed copy of
-the bundled runtime. Upgrades stage and verify a new runtime before activation,
-retain `runtime.previous` for recovery, and leave `data/` intact. Initial setup and upgrades can take several minutes;
-later launches reuse the verified runtime. Quit stops the
-application-owned service process tree. Back up `data/` independently; uninstall
-and update operations must not be used as account-data cleanup.
+directory; Agent does not use its credential/runtime tree as the project folder.
+Node, DSH, browser binaries and bundled packages run directly from installed
+resources. Startup does not copy or hash the full runtime again. Integrity is
+verified during packaging and by relocated/installed artifact smoke checks.
+
+`runtime/home` contains writable profile metadata. DSH and both plugin dependency
+graphs execute from `runtime/host.asar`; native libraries and the complete `node-pty` package stay
+in `host.asar.unpacked`. The host resolves `node-pty` from its physical path
+because macOS native process creation cannot traverse an ASAR directory. Desktop boots published DSH APIs in Electron Node mode,
+while standalone Node remains on PATH for external commands. The shared local
+launcher still initializes account directories, shared credentials and settings.
+A scoped module-resolution adapter handles DSH imports from writable configuration;
+published DSH packages remain unmodified. The packaged plugin roster is fixed.
+A changed resource inventory stages a new profile and activates it at the same
+path, preserving account-owned links to it. Prior profile directories are retained
+as `home.previous-<timestamp>`; an old full runtime from earlier installers is
+also retained, but its binaries are no longer executed. No legacy cleanup runs
+on the startup path. Node's compile cache is stored separately in `compile-cache`.
+Quit stops the application-owned service process tree. Back up `data/`
+independently; uninstall and update operations must not be used as account-data
+cleanup.
+
+## Startup diagnostics
+
+Desktop startup writes `logs/startup.log` under the application user-data directory
+(on Windows: `%APPDATA%\Univer Workspace Agent`). The previous launch is retained
+as `startup.previous.log`. Help → Open startup logs opens this location, including
+during setup. Logs contain phase timings and failing paths;
+they do not record credentials, session URLs or backend output. The startup window remains available while the local service starts. The
+previous profile is retained if activation fails.
+
+Windows CI installs the NSIS artifact and launches the installed Electron app with
+isolated user data. Startup diagnostics are uploaded as Actions artifacts even
+when this check fails. Acceptance budgets are 40 seconds from launching the
+installer to successful completion and 10 seconds from launching Electron to an
+interactive authenticated local page (including browser automation attachment).
+A fresh-profile check advances the SDK notice, defers model-key setup, and
+requires the Settings button to receive pointer events without an overlay.
+This needs no model credentials or remote model request.
+A successful eventual start does not satisfy the timing checks. CI also reinstalls
+the artifact while the application is running, verifies service-port release,
+keeps an unrelated Node process alive, checks a user-data sentinel, and reopens
+the installed app. This covers the installer shutdown path; the two-release
+updater acceptance above is still required.
+
+Installation and reinstallation write separate timing reports. CI checks their
+budgets after running the launch/upgrade checks, so an installation that finishes
+after 40 seconds still yields startup and shutdown evidence and still fails
+acceptance. A failed installation or the 180-second diagnostic watchdog remains an immediate
+failure. Browser navigation/script timings are included in the startup diagnostics.
+Installer reports retain exit status, watchdog status and file-presence transitions
+on failure. Separate `.phases` files timestamp the app-close check, old-file removal
+entry and completed installation using Windows' monotonic tick counter.
+The Windows test suite also runs the actual PowerShell shutdown helper against
+isolated native processes, checking owned `node.exe` descendants, a same-name app
+at another path, an unrelated `node.exe`, and an uninstaller under the install path.
+
+The baseline Windows run [34673003978](https://github.com/dream-num/univer-workspace/actions/runs/34673003978)
+took 175.36 seconds to install. Its startup log recorded 46.85 seconds copying,
+10.79 seconds verifying, 19.88 seconds starting the backend, and 3.98 seconds
+loading the page (81.80 seconds total after main-process startup). These are
+baseline measurements, not acceptance results for the current changes. Native
+Windows measurements are required before claiming either budget is met.
+
+Baseline DSH composition costs, production static-delivery measurements, the
+stricter first-run interaction result (15.435 s), and remaining timing limits are recorded
+in [the startup performance investigation](docs/startup-performance.md). Those historical measurements are separate from the current ASAR CI acceptance above.
+
+## Native replacement diagnostics
+
+Windows build-time warmup and installed Electron execution use a 512 MiB HTTP
+cache upper limit. An isolated native Electron 44 probe retained the approximately
+45 MB main script across launches at this capacity; its default Windows cache
+did not. Actual Desktop cache reuse is still checked in the installed browser's
+resource timings, separately from successful cache-seed generation.
+
+The diagnostic NSIS script is generated from electron-builder 26.15.3 templates.
+A version check and exact-anchor checks fail when its templates change. The copied
+includes timestamp old-uninstaller execution, extraction, caching the installer,
+registry writes and shortcut creation. Logs append to `<installation>.uwa-install.log`
+outside the moved directory; the PowerShell probe copies them into the CI report.
+The default builder entry retains its separate uninstaller generation/signing pass;
+the custom include only redirects template lookup to the instrumented copy.
+The diagnostic watchdog is 180 seconds so a slow update can finish and expose all
+stages; acceptance budgets remain separate and are not extended by this watchdog.
+
+Windows replacement renames the old installation to its same-volume sibling
+`<installation>.uwa-previous`, after closing owned processes. Ordinary uninstall
+still removes the selected installation. Existing backup paths cause an explicit
+stop. An extraction failure callback restores the old tree and retains any partial
+new tree as `.uwa-failed`; abrupt termination retains the backup for recovery on
+that path. The new app retires a marked old tree only after its page loads and its
+runtime inventory passes verification. CI waits for this cleanup and reports its
+total replacement duration separately from the installer process duration.
+Windows cleanup invokes the native directory remover; a sibling
+`<installation>.uwa-previous.owner` marker allows interrupted cleanup to resume.
+Its ownership must match the installation before any deletion occurs.
+A native NSIS fixture tests directory activation, a corrupt ZIP through the
+generated builder decompressor, and refusal to overwrite a pre-existing backup.
+ZIP failures use the rollback callback instead of builder's default direct exit.
+
+macOS CI now mounts the actual DMG, uses `ditto` to stage its app bundle, verifies
+runtime files, activates it and launches the installed Electron executable with
+fresh account data. It also closes that app, repeats DMG replacement, verifies a
+preserved data sentinel, reopens the app and removes the backup. Every phase is
+recorded; replacement includes shutdown, reopening and cleanup. macOS thresholds
+are 10 seconds to a usable window and 60 seconds for installation/replacement.
+This probes a DMG replacement, not Squirrel's automatic updater. Build-only jobs
+also do not validate notarization, downloaded-file quarantine or Gatekeeper delay.
+
+## ASAR release validation
+
+ASAR creation happens after production browser graph capture and before Electron
+cache warmup. Packaging verifies native binaries remain accessible outside the
+archive, including versioned Linux shared libraries. Relocated smoke uses the
+actual Electron executable in Node mode, then checks native Office conversion,
+SDK worker startup, PTY execution and the authenticated browser UI. Installed
+shell checks exercise the normal OAuth/menu/update composition.
+
+The Windows installer migrates the known broken alpha.3 uninstaller only for an
+in-place replacement: it closes owned processes and renames the old installation,
+retaining its registration until the new installation commits. Extraction failure
+restores the old directory. Other versions and changed installation locations use
+the normal builder path. The native fixture covers both alpha.3 migration success
+and extraction failure, in addition to ordinary replacement and backup protection.
+
+The earlier [utility-process prototype](scripts/asar-probe/README.md) uses a
+pre-ASAR runtime as input. Its measurements describe that experiment; complete
+release acceptance comes from the production packaging workflow.

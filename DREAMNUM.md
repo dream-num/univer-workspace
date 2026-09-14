@@ -102,8 +102,9 @@ Update this file in the same change when any of these facts change:
 ## Agent desktop delivery
 
 `apps/agent/desktop` owns experimental Electron packaging of the existing Agent
-for Windows x64, macOS Apple Silicon, and Linux x64. It bundles standalone Node,
-the published DSH CLI, local plugins, and Chromium in an isolated runtime. The
+for Windows x64, macOS Apple Silicon, and Linux x64. It boots published DSH packages and local plugins from ASAR through Electron's
+Node runtime, with native libraries unpacked. Standalone Node remains available
+for external commands; pinned Chromium serves document rendering. The
 Electron packaging toolchain shares the repository pnpm workspace and lockfile.
 GitHub Releases (`agent-vX.Y.Z`, `agent-vX.Y.Z-{alpha,beta,rc}.N`) are the download and update channel; CI requires
 explicit manual dispatch and publication opt-in. Account data stays in the OS

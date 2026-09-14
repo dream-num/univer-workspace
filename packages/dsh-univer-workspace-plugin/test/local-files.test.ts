@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, symlink, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, symlink, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,7 +8,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 async function root() {
-  const path = await mkdtemp(join(tmpdir(), "uwh-local-ref-"));
+  const path = await realpath(await mkdtemp(join(tmpdir(), "uwh-local-ref-")));
   roots.push(path);
   return path;
 }

@@ -18,12 +18,7 @@ import type { ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm";
 import type { JsonValue } from "../json-value.ts";
-import {
-  exportUnitData,
-  inferExportFormat,
-  importUnitData,
-  type LocalExchangeUnitType,
-} from "../provider/local-exchange.ts";
+import type { LocalExchangeUnitType } from "../provider/local-exchange.ts";
 import {
   assertWorktreeAccessible,
   resolveTargetSpace,
@@ -137,6 +132,7 @@ export function registerExchangeTools(ctx: Context): () => void {
         const targetSpaceId = resolveTargetSpace(resolved, args.spaceId);
         const source = await existingSessionPath(exec, args.source);
         const explicitType = explicitImportType(args.unitType, args.type);
+        const { importUnitData } = await import('../provider/local-exchange.ts');
         const imported = await importUnitData(
           new Uint8Array(await readFile(source.path)),
           basename(source.path),
@@ -234,6 +230,7 @@ export function registerExchangeTools(ctx: Context): () => void {
           );
         }
         const output = await newSessionPath(exec, outputArg);
+        const { inferExportFormat, exportUnitData } = await import('../provider/local-exchange.ts');
         const inferredFormat = inferExportFormat(output.path);
         if (args.format !== undefined && args.format !== inferredFormat) {
           throw new UniverError(

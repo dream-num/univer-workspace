@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import net from "node:net";
 import runtimeTools from "../src/runtime.cjs";
 import policy from "../src/policy.cjs";
+import { prepareRuntimeHome } from "../src/runtime-home.cjs";
+import { waitForUsableAgent } from './smoke-ui.mjs';
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = await mkdtemp(join(tmpdir(), "uwa-desktop-smoke with spaces-"));
 let child;
@@ -18,7 +20,9 @@ try {
     win32: "win-unpacked/resources/runtime",
     darwin: "mac-arm64/Univer Workspace Agent.app/Contents/Resources/runtime",
   };
-  const source = process.argv.includes("--packaged")
+  const source = process.env.UWA_SMOKE_EXECUTABLE
+    ? join(dirname(process.env.UWA_SMOKE_EXECUTABLE), 'resources/runtime')
+    : process.argv.includes("--packaged")
     ? join(desktop, "artifacts", packaged[process.platform])
     : join(desktop, ".build/runtime");
   await runtimeTools.installRuntime(source, runtime);
@@ -26,23 +30,35 @@ try {
   if (Object.keys(inventory).some((path) => path.endsWith(".map")))
     throw new Error("Desktop runtime must not include source maps");
   const metadata = JSON.parse(await readFile(join(runtime, "release.json"), "utf8"));
-  const node = join(runtime, "node/bin", process.platform === "win32" ? "node.exe" : "node");
+  const node = process.env.UWA_SMOKE_EXECUTABLE ?? (process.argv.includes('--packaged')
+    ? resolve(source, { darwin: '../../MacOS/Univer Workspace Agent', win32: '../../Univer Workspace Agent.exe', linux: '../../univer-workspace-agent-desktop' }[process.platform])
+    : process.env.UWA_SMOKE_ELECTRON ?? (await import('electron')).default);
+  const nodeEnvironment = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+  const profileModules = join(runtime, 'host.asar/profile/node_modules');
   const binding = spawnSync(node, ["-e", `
-    require('@univerjs-pro/exchange-node-binding');
+    const { createRequire } = require('node:module');
+    const requireHost = createRequire(${JSON.stringify(join(runtime, 'host.asar/profile/package.json'))});
+    requireHost('@univerjs-pro/exchange-node-binding');
     const { dirname, join } = require('node:path');
     const { pathToFileURL } = require('node:url');
-    const worker = join(dirname(require.resolve('dsh-univer-workspace-plugin')), 'worker.js');
+    const worker = join(dirname(requireHost.resolve('dsh-univer-workspace-plugin')), 'worker.js');
     import(pathToFileURL(worker).href).then(module => {
       if (!module.default) throw new Error('Packaged worker entry is missing');
     }).catch(error => { console.error(error); process.exitCode = 1; });
   `], {
     cwd: join(runtime, "home/profiles/univer-workspace-harness"),
-    encoding: "utf8",
+    encoding: "utf8", env: nodeEnvironment,
   });
   if (binding.status !== 0)
     throw new Error(`Packaged Office native binding failed: ${binding.stderr}`);
+  const capability = spawnSync(node, [
+    join(desktop, 'test/packaged-capability.mjs'),
+    join(profileModules, 'dsh-univer-workspace-plugin/lib'),
+  ], { encoding: 'utf8', timeout: 60000, env: nodeEnvironment });
+  if (capability.error || capability.status !== 0)
+    throw new Error(`Packaged lazy capability failed: ${capability.error ?? capability.stderr}`);
   const terminal = spawnSync(node, ["-e", `
-    const pty = require('node-pty').spawn(process.execPath,
+    const pty = require(${JSON.stringify(join(runtime, 'host.asar.unpacked/node_modules/node-pty'))}).spawn(${JSON.stringify(join(runtime, 'node/bin', process.platform === 'win32' ? 'node.exe' : 'node'))},
       ['-e', 'console.log("uwa-pty-ready")'], { cols: 80, rows: 24 });
     let output = '';
     const timer = setTimeout(() => { pty.kill(); process.exit(1); }, 15000);
@@ -53,9 +69,10 @@ try {
       // Both the terminal exit and its output must be observed before success.
       process.exit(exitCode === 0 && output.includes('uwa-pty-ready') ? 0 : 1);
     });
-  `], { cwd: join(runtime, "bootstrap"), encoding: "utf8", timeout: 20000 });
+  `], { cwd: runtime, encoding: "utf8", timeout: 20000, env: nodeEnvironment });
   if (terminal.error || terminal.status !== 0)
     throw new Error(`Packaged PTY failed: ${terminal.error ?? terminal.stderr}`);
+  const runtimeHome = await prepareRuntimeHome(runtime, join(root, "writable/home"));
   const data = join(root, "data");
   const workspace = join(root, "workspace");
   await mkdir(data);
@@ -73,9 +90,10 @@ try {
     ...process.env,
     NODE_ENV: "production",
     UWA_DESKTOP: "1",
+    UWA_DESKTOP_CLIENT_ROOT: join(runtime, "desktop-client"),
     UWH_BIND_HOST: "127.0.0.1",
-    DSH_HOME: join(runtime, "home"),
-    DSH_BIN: join(runtime, "bootstrap/node_modules/@deepseek-ai/dsh/lib/bin.js"),
+    DSH_HOME: runtimeHome,
+    UWA_DESKTOP_HOST: join(runtime, "dsh-host.cjs"),
     UWH_DSH_DATA_HOME: data,
     UWH_PUBLIC_ORIGIN: origin,
     UWH_PUBLIC_HOST: "127.0.0.1",
@@ -94,6 +112,11 @@ try {
     "UWH_SHARED_CREDENTIALS_PATH",
   ])
     delete env[key];
+  env.ELECTRON_RUN_AS_NODE = "1";
+  if (process.env.UWA_SMOKE_PROFILE_DIR) {
+    env.NODE_OPTIONS = '--require ' + JSON.stringify(join(desktop, 'test/backend-profile.cjs'));
+    env.NODE_COMPILE_CACHE = join(root, 'compile-cache');
+  }
   child = spawn(
     node,
     [
@@ -155,7 +178,7 @@ try {
     headless: true,
   });
   try {
-    const page = await browser.newPage();
+    const page = await browser.newPage({ locale: 'en-US' });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("response", (response) => {
@@ -166,8 +189,18 @@ try {
         errors.push(`Browser asset returned HTTP ${response.status()}`);
     });
     await page.goto(url);
-    await page.waitForFunction(() => document.body.innerText.trim().length > 20);
-    await page.getByRole("button", { name: /Reconnecting/ }).waitFor({ state: "hidden", timeout: 30000 });
+    await waitForUsableAgent(page);
+    const boot = await page.evaluate(() => globalThis.__DSH_BOOT__);
+    if (!boot?.batches?.length || boot.entries.some(row => row.id === '@deepseek-ai/dsh-client-hmr'))
+      throw new Error('Desktop must use a fixed client graph without HMR');
+    for (const batch of boot.batches) {
+      if (!batch.url.startsWith('/plugins/workspace-desktop/')) throw new Error('Desktop is using runtime browser composition');
+      const response = await page.request.get(new URL(batch.url, page.url()).href);
+      if (!response.ok() || /(?:^|\n)\/\/# sourceMappingURL=/.test(await response.text()))
+        throw new Error(`Desktop production script failed: HTTP ${response.status()}, URL ${batch.url}`);
+      const map = await page.request.get(new URL(batch.url + '.map', page.url()).href);
+      if (map.status() !== 404) throw new Error('Desktop must not serve source maps');
+    }
     await page.screenshot({
       path: join(
         desktop,
@@ -176,9 +209,15 @@ try {
       ),
     });
     if (errors.length) throw new Error(`Desktop browser bootstrap errors: ${errors.join("; ")}`);
+  } catch (error) {
+    const diagnostics = join(desktop, '.build/startup-logs');
+    await mkdir(diagnostics, { recursive: true });
+    await browser.contexts()[0]?.pages()[0]?.screenshot({ path: join(diagnostics, 'relocated-failure.png') }).catch(() => {});
+    throw error;
   } finally {
     await browser.close();
   }
+  await runtimeTools.verifyRuntime(runtime);
   console.log(
     "Relocated runtime passed native Office binding, authenticated HTTP, and Chromium bootstrap checks.",
   );

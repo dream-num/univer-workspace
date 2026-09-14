@@ -1,0 +1,107 @@
+{
+  "environment": {
+    "cpu": "AMD Ryzen 9 7945HX",
+    "platform": "Windows x64",
+    "sevenZip": "23.01",
+    "sevenZipThreads": 1,
+    "defenderRealTimeProtection": true,
+    "cache": "sequential fresh output directories; OS caches not flushed"
+  },
+  "originalArchiveBytes": 514368874,
+  "storeArchiveBytes": 1417051663,
+  "files": 12977,
+  "uncompressedBytes": 1412546807,
+  "sameArchiveFilePathsSizesCrc": true,
+  "results": [
+    {
+      "value": [
+        {
+          "name": "deflate-test-no-files",
+          "elapsedMs": 12962,
+          "cpuMs": 12828.125,
+          "userMs": 12250,
+          "kernelMs": 578.125,
+          "exitCode": 0
+        },
+        {
+          "name": "deflate-7zip-extract",
+          "elapsedMs": 75574,
+          "cpuMs": 73703.125,
+          "userMs": 14343.75,
+          "kernelMs": 59359.375,
+          "exitCode": 0
+        },
+        {
+          "name": "make-store-zip",
+          "elapsedMs": 21054,
+          "cpuMs": 8484.375,
+          "userMs": 1906.25,
+          "kernelMs": 6578.125,
+          "exitCode": 0
+        },
+        {
+          "name": "deflate-nsis-a",
+          "elapsedMs": 101653,
+          "cpuMs": 97343.75,
+          "userMs": 17281.25,
+          "kernelMs": 80062.5,
+          "exitCode": 0
+        },
+        {
+          "name": "store-nsis-a",
+          "elapsedMs": 88303,
+          "cpuMs": 86734.375,
+          "userMs": 9625,
+          "kernelMs": 77109.375,
+          "exitCode": 0
+        },
+        {
+          "name": "store-7zip-extract",
+          "elapsedMs": 61033,
+          "cpuMs": 58859.375,
+          "userMs": 2750,
+          "kernelMs": 56109.375,
+          "exitCode": 0
+        }
+      ],
+      "Count": 6
+    },
+    {
+      "name": "store-bootstrap-only",
+      "elapsedMs": 47872,
+      "cpuMs": 46343.75,
+      "userMs": 1328.125,
+      "kernelMs": 45015.625,
+      "exitCode": 0
+    },
+    {
+      "name": "store-without-bootstrap",
+      "elapsedMs": 14586,
+      "cpuMs": 14171.875,
+      "userMs": 1312.5,
+      "kernelMs": 12859.375,
+      "exitCode": 0
+    }
+  ],
+  "verification": [
+    {
+      "name": "deflate-nsis-a",
+      "files": 12977,
+      "allSha256Match": true
+    },
+    {
+      "name": "store-nsis-a",
+      "files": 12977,
+      "allSha256Match": true
+    },
+    {
+      "name": "store-7zip",
+      "files": 12977,
+      "allSha256Match": true
+    }
+  ],
+  "splitFileCounts": {
+    "store-bootstrap-only": 10232,
+    "store-without-bootstrap": 2745
+  }
+}

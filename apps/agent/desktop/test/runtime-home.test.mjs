@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtemp, mkdir, writeFile, readFile, realpath, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { prepareRuntimeHome } from '../src/runtime-home.cjs';
+
+test('first launch links shipped packages and keeps DSH writes outside installed resources', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'uwa-home with spaces-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const source = join(root, 'installed');
+  const target = join(root, 'user/runtime/home');
+  const profile = 'profiles/univer-workspace-harness';
+  const packagePath = join(source, 'home', profile, 'node_modules/@example/plugin');
+  await mkdir(packagePath, { recursive: true });
+  await mkdir(join(source, 'home/internal-packages'));
+  await writeFile(join(source, 'integrity.json'), '{"generation":1}');
+  await writeFile(join(source, 'home', profile, 'package.json'), '{}');
+  await writeFile(join(source, 'home', profile, 'cordis.patch.yml'), '[]');
+  await writeFile(join(packagePath, 'index.js'), 'export default 1');
+  await prepareRuntimeHome(source, target);
+  assert.equal(await realpath(join(target, profile, 'node_modules/@example/plugin')), await realpath(packagePath));
+  await writeFile(join(target, profile, 'cordis.yml'), 'writable');
+  await mkdir(join(target, profile, 'node_modules/fallback'));
+  assert.deepEqual(await readdir(join(source, 'home', profile)), ['cordis.patch.yml', 'node_modules', 'package.json']);
+  await prepareRuntimeHome(source, target);
+  assert.equal(await readFile(join(target, profile, 'cordis.yml'), 'utf8'), 'writable');
+  await writeFile(join(target, profile, 'package.json'), '{"edited":true}');
+  await assert.rejects(prepareRuntimeHome(source, target), /configuration differs/);
+  await writeFile(join(source, 'integrity.json'), '{"generation":2}');
+  await prepareRuntimeHome(source, target);
+  const previous = (await readdir(join(root, 'user/runtime'))).find(name => name.startsWith('home.previous-'));
+  assert.equal(await readFile(join(root, 'user/runtime', previous, profile, 'cordis.yml'), 'utf8'), 'writable');
+});

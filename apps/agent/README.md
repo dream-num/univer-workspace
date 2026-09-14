@@ -548,3 +548,12 @@ An experimental Electron delivery is available to build for Windows x64, macOS
 Apple Silicon, and Linux x64. See the [desktop guide](desktop/README.md) for native
 builds, manual CI, GitHub Releases, updates, and login prerequisites. No desktop
 Release is published merely by adding a tag.
+
+### Desktop production composition
+
+The [Desktop build](desktop/README.md#production-browser-assets) captures DSH's
+browser graph and script batches during packaging through its published APIs.
+The private `desktop-client-capture` build entry exports these artifacts; the
+`desktop-client` runtime entry serves them with DSH's own bootstrap injections.
+Desktop has a fixed plugin roster, no runtime source-map generation, and no HMR
+or live profile watching. The local Web development profile is unchanged.

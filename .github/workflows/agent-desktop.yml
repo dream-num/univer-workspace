@@ -13,6 +13,11 @@ on:
         type: boolean
         default: true
         required: true
+      target:
+        description: Native targets (Windows-only is build-only)
+        type: choice
+        options: [all, windows, macos]
+        default: all
 
 permissions:
   contents: read
@@ -26,13 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-24.04
-            target: linux-x64
-          - os: macos-15
-            target: mac-arm64
-          - os: windows-2025
-            target: win-x64
+        include: ${{ fromJSON(inputs.target == 'windows' && '[{"os":"windows-2025","target":"win-x64"}]' || inputs.target == 'macos' && '[{"os":"macos-15","target":"mac-arm64"}]' || '[{"os":"ubuntu-24.04","target":"linux-x64"},{"os":"macos-15","target":"mac-arm64"},{"os":"windows-2025","target":"win-x64"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     env:
@@ -52,6 +51,7 @@ jobs:
           set -euo pipefail
           [[ "$AGENT_DESKTOP_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$ ]]
           if [[ "$AGENT_DESKTOP_OFFICIAL" == "true" ]]; then
+            [[ "${{ inputs.target }}" == "all" ]]
             [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" == "agent-v$AGENT_DESKTOP_VERSION" ]]
             git merge-base --is-ancestor HEAD "origin/$BASE_BRANCH"
           fi
@@ -66,7 +66,33 @@ jobs:
         run: node apps/agent/desktop/node_modules/playwright/cli.js install-deps chromium
       - run: pnpm --filter @univerjs/workspace-agent typecheck
       - run: pnpm --filter @univerjs/workspace-agent test
+      - run: pnpm --filter dsh-univer-workspace-plugin typecheck
+      - run: pnpm --filter dsh-univer-workspace-plugin test
       - run: node --test apps/agent/desktop/test/*.test.mjs
+      - name: Check builder-managed NSIS compilation before runtime preparation
+        if: runner.os == 'Windows'
+        run: node apps/agent/desktop/scripts/check-nsis.mjs
+      - name: Verify native Windows directory replacement and recovery
+        id: nsis_recovery
+        if: runner.os == 'Windows'
+        # Collect independent full-installer timings even if this fixture fails;
+        # the explicit final gate below still fails the job and prevents release.
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $compiler = Get-ChildItem "$env:LOCALAPPDATA/electron-builder/Cache" -Directory -Filter 'nsis-*' | Get-ChildItem -Filter makensis.exe -Recurse | Select-Object -First 1
+          if (-not $compiler) { throw 'Packaged NSIS compiler not found' }
+          $fixture = Join-Path $env:RUNNER_TEMP 'uwa-directory-fixture.exe'
+          $agentInclude = (Resolve-Path 'apps/agent/desktop/installer/agent.nsh').Path
+          $resources = (Resolve-Path 'apps/agent/desktop/installer').Path
+          $source = (Resolve-Path 'apps/agent/desktop/test/installer-rename.nsi').Path
+          $extraction = (Resolve-Path 'apps/agent/desktop/.build/nsis-trace/extractAppPackage.nsh').Path
+          $unzip = Get-ChildItem "$env:LOCALAPPDATA/electron-builder/Cache" -Directory -Filter 'nsis-resources-*' | Get-ChildItem -Filter nsisunz.dll -Recurse | Where-Object { $_.FullName -match 'x86-unicode' } | Select-Object -First 1
+          if (-not $unzip) { throw 'Packaged NSIS ZIP plugin not found' }
+          & $compiler.FullName /V2 "/DAGENT_INCLUDE=$agentInclude" "/DBUILD_RESOURCES_DIR=$resources" "/DTRACED_EXTRACTION_INCLUDE=$extraction" "/DNSIS_PLUGINS=$($unzip.DirectoryName)" "/DFIXTURE_EXE=$fixture" $source
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS fixture compilation failed' }
+          & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File apps/agent/desktop/test/installer-rename.ps1 -Fixture $fixture
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS recovery fixture failed' }
       - run: pnpm --dir apps/agent/desktop prepare:runtime
       - name: Verify relocated runtime
         run: node apps/agent/desktop/scripts/smoke.mjs
@@ -95,10 +121,90 @@ jobs:
           name: agent-size-${{ matrix.target }}
           path: apps/agent/desktop/.build/runtime-size.json
           if-no-files-found: warn
+      - name: Install Windows application and verify first launch
+        id: windows_acceptance
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem apps/agent/desktop/artifacts/*.exe | Select-Object -First 1
+          $destination = Join-Path $env:RUNNER_TEMP 'Workspace Agent Installed'
+          # Record timing now; enforce it after exercising launch and upgrade.
+          & apps/agent/desktop/scripts/install-windows.ps1 -Installer $installer.FullName -Destination $destination -DeferBudgetFailure -ReportPath "$PWD/apps/agent/desktop/.build/startup-logs/install.json"
+          $env:UWA_SMOKE_INSTALLER = $installer.FullName
+          $env:UWA_SMOKE_MIGRATE_ALPHA3 = '1'
+          $env:UWA_SMOKE_STARTUP_BUDGET_MS = '10000'
+          $env:UWA_INSTALLED_RUNTIME = Join-Path $destination 'resources/runtime'
+          node -e "require('./apps/agent/desktop/src/runtime.cjs').verifyRuntime(process.env.UWA_INSTALLED_RUNTIME).then(() => console.log('Installed resource inventory verified')).catch(e => { console.error(e); process.exitCode = 1; })"
+          if ($LASTEXITCODE -ne 0) { throw 'Installed resource inventory failed' }
+          $env:UWA_SMOKE_EXECUTABLE = Join-Path $destination 'Univer Workspace Agent.exe'
+          node apps/agent/desktop/scripts/shell-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Installed application startup failed' }
+      - name: Install macOS DMG and measure opening and replacement
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg=(apps/agent/desktop/artifacts/*.dmg)
+          probe_root=$(mktemp -d "${TMPDIR%/}/uwa-shell-mac-XXXXXX")
+          bundle="$probe_root/Applications/Univer Workspace Agent.app"
+          reports="$PWD/apps/agent/desktop/.build/startup-logs"
+          node apps/agent/desktop/scripts/install-mac.mjs "${dmg[0]}" "$bundle" "$reports/install.json"
+          executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$bundle/Contents/Info.plist")
+          export UWA_SMOKE_EXECUTABLE="$bundle/Contents/MacOS/$executable"
+          export UWA_SMOKE_MAC_DMG="$PWD/${dmg[0]}"
+          export UWA_SMOKE_STARTUP_BUDGET_MS=10000
+          node apps/agent/desktop/scripts/shell-smoke.mjs
+          node -e 'const r = require("./apps/agent/desktop/.build/startup-logs/install.json"); if (!r.success || r.elapsedMs > 60000) throw Error("macOS DMG installation exceeded 60 seconds or failed");'
+          rm -rf "$probe_root"
+      - name: Enforce Windows installation budgets
+        if: ${{ always() && runner.os == 'Windows' && steps.windows_acceptance.outcome != 'skipped' }}
+        shell: pwsh
+        run: |
+          $failures = @()
+          foreach ($name in @('install', 'update')) {
+            $path = "apps/agent/desktop/.build/startup-logs/$name.json"
+            if (-not (Test-Path -LiteralPath $path)) {
+              $failures += "Missing $name acceptance report"
+              continue
+            }
+            $report = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+            Write-Output "$name elapsed: $($report.elapsedMs) ms; budget: $($report.budgetMs) ms"
+            if ([Math]::Max($report.elapsedMs, $report.totalMs) -gt $report.budgetMs) { $failures += "$name exceeded 40 seconds" }
+          }
+          if ($failures.Count) { throw ($failures -join '; ') }
       - name: Verify Linux Electron window
         if: runner.os == 'Linux'
         run: xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --packaged --no-sandbox
+      - name: Profile packaged Windows startup separately from acceptance
+        if: ${{ always() && runner.os == 'Windows' && steps.windows_acceptance.outcome != 'skipped' }}
+        shell: pwsh
+        run: |
+          # A failed update may have removed the installed app. Profile the
+          # identical unpacked artifact so failure never hides the CPU evidence.
+          $env:UWA_SMOKE_EXECUTABLE = "$PWD/apps/agent/desktop/artifacts/win-unpacked/Univer Workspace Agent.exe"
+          if (-not (Test-Path -LiteralPath $env:UWA_SMOKE_EXECUTABLE)) { throw 'Packaged executable unavailable for profiling' }
+          $env:UWA_SMOKE_PROFILE_DIR = "$PWD/apps/agent/desktop/.build/startup-logs/profiles"
+          node apps/agent/desktop/scripts/shell-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Startup CPU profiling failed' }
+          node apps/agent/desktop/scripts/smoke.mjs --packaged
+          if ($LASTEXITCODE -ne 0) { throw 'Backend CPU profiling failed' }
+          foreach ($name in @('backend', 'renderer')) {
+            if (-not (Test-Path "$env:UWA_SMOKE_PROFILE_DIR/$name.cpuprofile")) { throw "Missing $name CPU profile" }
+          }
+      - name: Upload startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-startup-${{ matrix.target }}
+          path: |
+            apps/agent/desktop/.build/startup-logs
+            apps/agent/desktop/.build/browser-cache-build-logs
+          if-no-files-found: ignore
+      - name: Enforce native directory recovery regression
+        if: ${{ always() && steps.nsis_recovery.outcome == 'failure' }}
+        run: node -e "throw new Error('Native directory recovery regression failed; see its phase log')"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: agent-desktop-${{ matrix.target }}
           if-no-files-found: error

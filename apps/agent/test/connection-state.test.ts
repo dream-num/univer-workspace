@@ -110,7 +110,7 @@ describe("local Workspace connection state", () => {
     });
   });
 
-  it("starts DSH in bootstrap and identity-specific homes while sharing the profile", async () => {
+  it.each(["cli", "desktop"])("starts %s in bootstrap and identity-specific homes while sharing the profile", async (mode) => {
     const root = await mkdtemp(join(tmpdir(), "uwh-launcher-"));
     const installHome = join(root, "install");
     const dataHome = join(root, "data");
@@ -131,6 +131,11 @@ describe("local Workspace connection state", () => {
       "utf8",
     );
 
+    if (mode === "desktop") {
+      const script = await readFile(fakeDsh, "utf8");
+      await writeFile(fakeDsh, script.replace('writeFileSync(process.env.', 'export async function startDesktopHost(args) { writeFileSync(process.env.')
+        + '\nreturn { code: 0, signal: null }; }');
+    }
     const run = async (): Promise<Record<string, unknown>> => {
       await execFileAsync(
         process.execPath,
@@ -140,6 +145,7 @@ describe("local Workspace connection state", () => {
             ...process.env,
             DSH_HOME: installHome,
             DSH_BIN: fakeDsh,
+            UWA_DESKTOP_HOST: mode === "desktop" ? fakeDsh : undefined,
             DSH_PROFILE: "test-profile",
             UWH_DSH_DATA_HOME: dataHome,
             UWH_WORKSPACE_ORIGIN: "https://stale.example",
@@ -154,7 +160,7 @@ describe("local Workspace connection state", () => {
     expect(bootstrap.home).toBe(join(dataHome, "runtimes", "bootstrap"));
     expect(bootstrap.state).toBe(statePath);
     expect(bootstrap.origin).toBeUndefined();
-    expect(bootstrap.args).toEqual(["--profile", "test-profile"]);
+    expect(bootstrap.args).toEqual(mode === "desktop" ? [] : ["--profile", "test-profile"]);
     expect(bootstrap.sharedCredentials).toBe(join(dataHome, "shared", ".credentials.yaml"));
     expect(await readFile(String(bootstrap.sharedCredentials), "utf8")).toBe(
       "legacy-browser-secret",

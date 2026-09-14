@@ -10,7 +10,7 @@
  * @module dsh-univer-workspace-plugin/tools/api
  */
 
-import { createStandardApiReference, type ApiReferenceUnit } from "@univer-cli/api-reference";
+import type { createStandardApiReference, ApiReferenceUnit } from "@univer-cli/api-reference";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm";
@@ -18,7 +18,7 @@ import type { JsonValue } from "../json-value.ts";
 import { registerUniverTool } from "./presentation.ts";
 import { UniverError } from "./errors.ts";
 
-const reference = createStandardApiReference();
+let reference: Promise<ReturnType<typeof createStandardApiReference>> | undefined;
 
 const apiUnitEnum = {
   type: "string" as const,
@@ -76,10 +76,11 @@ export function registerApiTool(ctx: Context): () => void {
         if (args.limit !== undefined && (!Number.isInteger(args.limit) || args.limit < 1)) {
           throw new UniverError("univer_api limit must be a positive integer.", "INVALID_REQUEST");
         }
+        const api = await (reference ??= import('@univer-cli/api-reference').then(module => module.createStandardApiReference()));
         const result =
           args.action === "show"
-            ? reference.show(args.queries)
-            : reference.find({
+            ? api.show(args.queries)
+            : api.find({
                 terms: args.queries,
                 ...(args.unit === undefined ? {} : { unit: args.unit as ApiReferenceUnit }),
                 ...(args.limit === undefined ? {} : { limit: args.limit }),

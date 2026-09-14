@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 import * as host from "../src/index.js";
 import {
   createDocument,
@@ -99,7 +100,7 @@ describe("dsh-univer-workspace-plugin", () => {
 
   it("derives stable per-user/per-Space paths without importing the harness app", () => {
     expect(spaceDirectoryPath("/workspace", "user-1", "space-1")).toBe(
-      "/workspace/c6c289e49e9c05b2145860387b73bcb18df43fb09a1e4a4a9713c76c88bb541b/475e1f0c14a91b83eb7395c80cfd166d1b0e37b6541583803c5436c2e79ca75b",
+      resolve("/workspace", "c6c289e49e9c05b2145860387b73bcb18df43fb09a1e4a4a9713c76c88bb541b", "475e1f0c14a91b83eb7395c80cfd166d1b0e37b6541583803c5436c2e79ca75b"),
     );
   });
 

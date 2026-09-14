@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolRunContext } from "@deepseek-ai/dsh-tools";
@@ -13,7 +13,7 @@ function execution(cwd: string): ToolRunContext {
 }
 
 async function fixture(): Promise<{ root: string; workspace: string; outside: string }> {
-  const root = await mkdtemp(join(tmpdir(), "uwh-path-"));
+  const root = await realpath(await mkdtemp(join(tmpdir(), "uwh-path-")));
   temporaryRoots.push(root);
   const workspace = join(root, "workspace");
   const outside = join(root, "outside");

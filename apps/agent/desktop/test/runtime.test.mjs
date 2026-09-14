@@ -110,3 +110,14 @@ test(
     assert.equal(await readFile(join(target, "alias"), "utf8"), "first");
   },
 );
+
+test("reports failed file and preserves staging evidence without activating it", async (t) => {
+  const { source, target } = await fixture(t);
+  await writeFile(join(source, "integrity.json"), JSON.stringify({ "missing.dll": "0".repeat(64) }));
+  const events = [];
+  await assert.rejects(runtime.installRuntime(source, target, (event) => events.push(event)), { code: "ENOENT" });
+  assert.equal(events.at(-1).phase, "failed");
+  assert.ok(events.at(-1).path.endsWith("missing.dll"));
+  assert.equal(await readFile(join(`${target}.staging`, "payload"), "utf8"), "first");
+  await assert.rejects(readFile(join(target, ".complete")), { code: "ENOENT" });
+});

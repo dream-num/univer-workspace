@@ -30,6 +30,7 @@ function createUpdateChecker({
     updateBusy = true;
     let acceptedDownload = false;
     autoUpdater.autoDownload = false;
+    if (process.platform === "win32") autoUpdater.disableDifferentialDownload = true;
     autoUpdater.autoInstallOnAppQuit = false;
     autoUpdater.allowDowngrade = false;
     autoUpdater.allowPrerelease = releaseChannel(app.getVersion()) !== "latest";
