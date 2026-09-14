@@ -42,4 +42,21 @@ export async function prepareTracedNsis(desktop) {
     // Local includes take precedence over builder's unchanged -I directory.
     if (name.startsWith('include/')) await writeFile(join(output, name.slice(8)), source);
   }
+  // The published ZIP failure path uses Quit, which bypasses .onInstFailed.
+  // Route an actual extraction error through the same rollback entry as the
+  // native failure fixture; silent updates must not wait on an invisible modal.
+  const extraction = join(output, 'include/extractAppPackage.nsh');
+  const failure = '      MessageBox MB_OK|MB_ICONEXCLAMATION "$(decompressionFailed)$\\n$R0"\n      Quit';
+  let source = await readFile(extraction, 'utf8');
+  if (source.split(failure).length !== 2) throw new Error('Re-audit the NSIS ZIP failure path');
+  source = source.replace(failure,
+    '      MessageBox MB_OK|MB_ICONEXCLAMATION "$(decompressionFailed)$\\n$R0" /SD IDOK\n      !insertmacro agentExtractionFailed');
+  // The success branch skips two NSIS instructions in the original template.
+  // The failure macro expands to more instructions, so use a label instead.
+  const success = '    StrCmp $R0 "success" +3';
+  if (source.split(success).length !== 2) throw new Error('Re-audit the NSIS ZIP success branch');
+  source = source.replace(success, '    StrCmp $R0 "success" uwa_zip_complete')
+    .replace('      !insertmacro agentExtractionFailed', '      !insertmacro agentExtractionFailed\n    uwa_zip_complete:');
+  await writeFile(extraction, source);
+  await writeFile(join(output, 'extractAppPackage.nsh'), source);
 }

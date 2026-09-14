@@ -71,6 +71,13 @@
   !insertmacro agentInstallTrace "uninstaller-init"
 !macroend
 
+!macro agentExtractionFailed
+  !insertmacro agentInstallTrace "extract-failed"
+  SetErrorLevel 2
+  ; Unlike Quit, Abort invokes .onInstFailed and restores this attempt's backup.
+  Abort "Unable to extract the new installation."
+!macroend
+
 ; Builder includes this file before LogicLib. Expand the callback only at the
 ; supported header hook, after the standard NSIS libraries have been loaded.
 !macro customHeader

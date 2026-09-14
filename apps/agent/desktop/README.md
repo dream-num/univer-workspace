@@ -313,7 +313,9 @@ new tree as `.uwa-failed`; abrupt termination retains the backup for recovery on
 that path. The new app retires a marked old tree only after its page loads and its
 runtime inventory passes verification. CI waits for this cleanup and reports its
 total replacement duration separately from the installer process duration.
-A native NSIS fixture tests directory activation and injected extraction failure.
+A native NSIS fixture tests directory activation, a corrupt ZIP through the
+generated builder decompressor, and refusal to overwrite a pre-existing backup.
+ZIP failures use the rollback callback instead of builder's default direct exit.
 
 macOS CI now mounts the actual DMG, uses `ditto` to stage its app bundle, verifies
 runtime files, activates it and launches the installed Electron executable with

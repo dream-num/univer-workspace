@@ -86,7 +86,10 @@ jobs:
           $agentInclude = (Resolve-Path 'apps/agent/desktop/installer/agent.nsh').Path
           $resources = (Resolve-Path 'apps/agent/desktop/installer').Path
           $source = (Resolve-Path 'apps/agent/desktop/test/installer-rename.nsi').Path
-          & $compiler.FullName /V2 "/DAGENT_INCLUDE=$agentInclude" "/DBUILD_RESOURCES_DIR=$resources" "/DFIXTURE_EXE=$fixture" $source
+          $extraction = (Resolve-Path 'apps/agent/desktop/.build/nsis-trace/extractAppPackage.nsh').Path
+          $unzip = Get-ChildItem "$env:LOCALAPPDATA/electron-builder/Cache" -Directory -Filter 'nsis-resources-*' | Get-ChildItem -Filter nsisunz.dll -Recurse | Where-Object { $_.FullName -match 'x86-unicode' } | Select-Object -First 1
+          if (-not $unzip) { throw 'Packaged NSIS ZIP plugin not found' }
+          & $compiler.FullName /V2 "/DAGENT_INCLUDE=$agentInclude" "/DBUILD_RESOURCES_DIR=$resources" "/DTRACED_EXTRACTION_INCLUDE=$extraction" "/DNSIS_PLUGINS=$($unzip.DirectoryName)" "/DFIXTURE_EXE=$fixture" $source
           if ($LASTEXITCODE -ne 0) { throw 'NSIS fixture compilation failed' }
           & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File apps/agent/desktop/test/installer-rename.ps1 -Fixture $fixture
           if ($LASTEXITCODE -ne 0) { throw 'NSIS recovery fixture failed' }
