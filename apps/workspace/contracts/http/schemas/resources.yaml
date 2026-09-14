@@ -97,7 +97,6 @@ OpenBlobResource:
     - mediaType
     - byteSize
     - sha256
-    - etag
     - contentUrl
     - downloadUrl
   properties:
@@ -123,9 +122,6 @@ OpenBlobResource:
       minimum: 0
     sha256:
       type: string
-    etag:
-      type: string
-      description: Quoted strong content validator for If-Match replacement.
     contentUrl:
       type: string
     downloadUrl:

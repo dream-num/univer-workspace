@@ -251,6 +251,8 @@ Worktree V2. Validate upgrades with separate product, collaboration, and Blob
 storage paths. Never let old and new SDK builds write the same Collaboration
 SQLite file. Rolling back requires the matching pre-upgrade database backup,
 not only switching the application commit.
+V7 extends the Operation kind and object deletion reason for Blob replacement; existing
+Blob rows and upload sessions are preserved.
 For a V7 rollout, stop every old Workspace instance, start one V7 instance and
 wait for migration and health checks to succeed, then restore normal service;
 do not let V6 and V7 processes write the same SQLite file concurrently.
@@ -294,13 +296,7 @@ Fetch `/api/worktrees/<id>` only when Unit details are needed.
 
 ### Blob replacement
 
-`PUT /api/blob-resources/{resourceId}/content` accepts complete file bytes with
-`Content-Length`, `Idempotency-Key`, and the quoted `If-Match` ETag from a prior
-content download. It preserves the Resource, filename, Node, location and ACL;
-publication is immediate and does not use Worktree review. Every replacement
-produces a new ETag. HTTP 412 requires downloading and reconciling the latest
-content. After an uncertain response, inspect `/api/operations/{idempotencyKey}`;
-completed keys replay the recorded result, while failed requests need a new key.
-V7 adds only the replacement Operation kind and old-object deletion reason.
-Interrupted replacements fail on startup and enqueue their unpublished objects
-for cleanup; previously published content remains intact.
+Blob content can be replaced while preserving its Resource identity and location.
+Replacement requires the downloaded ETag and publishes immediately, without Worktree
+review. See the [HTTP contract](contracts/http/concepts.md#resource-creation-and-opening)
+for preconditions and retry behavior.

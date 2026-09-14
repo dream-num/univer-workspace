@@ -13,7 +13,7 @@ export function verifyV6Migration(
     for (const seeded of [false, true]) {
       const filename = join(root, `case-${seeded}.sqlite`);
       const original = new DatabaseSync(filename);
-      original.exec(readFileSync(new URL("./schema-v6.sql", import.meta.url), "utf8"));
+      original.exec(readFileSync(new URL("../fixtures/schema-v6.sql", import.meta.url), "utf8"));
       if (seeded)
         original.exec(`
         INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1);
@@ -68,7 +68,7 @@ export function verifyV6Migration(
     }
     const filename = join(root, "rollback.sqlite");
     const broken = new DatabaseSync(filename);
-    broken.exec(readFileSync(new URL("./schema-v6.sql", import.meta.url), "utf8"));
+    broken.exec(readFileSync(new URL("../fixtures/schema-v6.sql", import.meta.url), "utf8"));
     // Force failure after operations has already been rebuilt inside the transaction.
     broken.exec("CREATE TABLE object_deletion_jobs_v7 (collision TEXT)");
     broken.close();

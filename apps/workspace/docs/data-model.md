@@ -298,6 +298,18 @@ Node。
 3. `POST .../complete` 校验对象后，在单个 SQLite 事务中发布 Node/Resource；
 4. `content` 与 `download` 都重新解析 Node 权限并支持单段 Byte Range。
 
+### 替换 Blob 内容
+
+`PUT /api/blob-resources/{resourceId}/content` 保留 Resource、Node、原始文件名、目录与 ACL。
+必需 `If-Match`（单个带引号强 ETag）、`Content-Length` 和 `Idempotency-Key`。
+先持久化 `replace_blob_content` Operation（目标、预期 ETag、长度、新 Object Key），再写新对象。
+上传结束后重新校验编辑权限，并在产品事务中比较旧 ETag、切换对象与内容元数据、生成随机新 ETag、
+完成 Operation，同时写入 `blob_content_replaced` 删除任务。内容相同也生成新 ETag；SHA-256
+仍表示字节校验值。版本不匹配返回 412，旧对象与旧内容保留。
+失败请求标记 Failed，并写 `blob_upload_abandoned` 删除任务；启动阶段将中断的 Pending 替换
+按同样方式收敛。Completed Key 只回放记录结果，不重复写入；Pending 不可并发重入，Failed
+必须用新 Key 重试。Operation 查询用于确认未知结果。Blob 不进入 Worktree，也不保存历史版本。
+
 ### 创建与读取 Univer Asset
 
 1. `CollaborationImageIoService` 向 Trunk 或 Worktree File API 提交 `source=3`、`assign=unitID`
@@ -350,18 +362,6 @@ Operation JSON。迁移前要求没有 Pending/Failed Operation。
 一致性备份始终保留，下一次启动可继续升级或由运维恢复。错误中会给出备份路径。
 迁移实现是唯一兼容边界；线上数据库全部完成升级后，可以删除 `migrations/`、
 `legacy-v0/` 及初始化函数中的一次调用，不影响 V7 Schema 或业务代码。
-
-### 替换 Blob 内容（V7）
-
-`PUT /api/blob-resources/{resourceId}/content` 保留 Resource、Node、原始文件名、目录与 ACL。
-必需 `If-Match`（单个带引号强 ETag）、`Content-Length` 和 `Idempotency-Key`。
-先持久化 `replace_blob_content` Operation（目标、预期 ETag、长度、新 Object Key），再写新对象。
-上传结束后重新校验编辑权限，并在产品事务中比较旧 ETag、切换对象与内容元数据、生成随机新 ETag、
-完成 Operation，同时写入 `blob_content_replaced` 删除任务。内容相同也生成新 ETag；SHA-256
-仍表示字节校验值。版本不匹配返回 412，旧对象与旧内容保留。
-失败请求标记 Failed，并写 `blob_upload_abandoned` 删除任务；启动阶段将中断的 Pending 替换
-按同样方式收敛。Completed Key 只回放记录结果，不重复写入；Pending 不可并发重入，Failed
-必须用新 Key 重试。Operation 查询用于确认未知结果。Blob 不进入 Worktree，也不保存历史版本。
 
 V6 → V7 只重建 Operation 和删除任务表以扩展 CHECK 枚举，完整保留所有行和恢复字段；
 Blob 及上传会话表不变。升级前自动创建一致性备份；停旧实例后由单个新实例完成迁移。

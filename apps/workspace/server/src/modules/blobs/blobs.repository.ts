@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ApplicationError } from "../../middleware/errors.js";
+import type { BlobReplacementResult } from "./blobs.types.js";
 import type { StoredBlob } from "../../integrations/blob/blob-store.js";
 import type { WorkspaceDatabase } from "../../db/database.js";
 import type { OperationView } from "../resources/index.js";
@@ -8,13 +8,6 @@ export interface BlobReplacementIntent {
   readonly resourceId: string;
   readonly expectedEtag: string;
   readonly byteSize: number;
-}
-
-export interface BlobReplacementResult {
-  readonly operationId: string;
-  readonly resourceId: string;
-  /** Quoted strong ETag, suitable for the next If-Match. */
-  readonly etag: string;
 }
 
 export interface BlobUploadIntent {
@@ -92,6 +85,12 @@ export interface BlobDeletionJobRow {
   readonly attempt_count: number;
 }
 
+export class BlobReplacementConflictError extends Error {
+  constructor(readonly reason: "intent" | "state" | "etag") {
+    super(`Blob replacement conflict: ${reason}`);
+  }
+}
+
 export class BlobReservationConflictError extends Error {}
 export class BlobUploadStateConflictError extends Error {}
 
@@ -125,18 +124,10 @@ export class BlobsRepository {
           payload.expectedEtag !== intent.expectedEtag ||
           payload.byteSize !== intent.byteSize
         ) {
-          throw new ApplicationError(
-            "CONFLICT",
-            409,
-            "Idempotency-Key is already associated with another request.",
-          );
+          throw new BlobReplacementConflictError("intent");
         }
         if (existing.state !== "completed") {
-          throw new ApplicationError(
-            "CONFLICT",
-            409,
-            "Replacement is pending or failed. Inspect its Operation; use a new key only after a confirmed failure.",
-          );
+          throw new BlobReplacementConflictError("state");
         }
         return {
           objectKey: payload.objectKey,
@@ -165,11 +156,7 @@ export class BlobsRepository {
         .prepare("SELECT object_key, etag FROM blob_resources WHERE resource_id = ?")
         .get(intent.resourceId) as { object_key: string; etag: string } | undefined;
       if (!current || current.etag !== intent.expectedEtag) {
-        throw new ApplicationError(
-          "PRECONDITION_FAILED",
-          412,
-          "Blob content has changed; download it again before replacing.",
-        );
+        throw new BlobReplacementConflictError("etag");
       }
       const etag = randomUUID();
       database
@@ -226,20 +213,13 @@ export class BlobsRepository {
     });
   }
 
-  /** Single-process startup: incomplete PUT bodies cannot be resumed. Preserve old content and queue abandoned bytes. */
-  recoverInterruptedReplacements(now: number): void {
+  pendingReplacementIds(): string[] {
     const rows = this._database.connection
       .prepare(
         "SELECT id FROM operations WHERE kind = 'replace_blob_content' AND state = 'pending'",
       )
       .all() as unknown as Array<{ id: string }>;
-    for (const row of rows)
-      this.failReplacement(
-        row.id,
-        "REPLACEMENT_INTERRUPTED",
-        "Server restarted during Blob replacement; retry with a new key.",
-        now,
-      );
+    return rows.map((row) => row.id);
   }
 
   reserve(input: {

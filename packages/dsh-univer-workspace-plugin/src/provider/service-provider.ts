@@ -11,6 +11,7 @@
 
 import type { WorktreeListQuery } from "../shared/state.ts";
 import { mkdir } from "node:fs/promises";
+import { downloadBlob, replaceBlob, type ReplaceBlobInput } from "./blob-api.ts";
 import { Service } from "@deepseek-ai/cordis";
 import type { Context } from "@deepseek-ai/cordis";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
@@ -157,6 +158,14 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   async openDocument(userId: string, resourceId: string) {
     const client = this.requireClient(userId);
     return await openResource(client, resourceId);
+  }
+
+  async downloadBlob(userId: string, resourceId: string) {
+    return downloadBlob(this.blobClient(userId), resourceId);
+  }
+
+  async replaceBlob(userId: string, input: ReplaceBlobInput) {
+    return replaceBlob(this.blobClient(userId), input);
   }
 
   async resolveUnitResource(userId: string, unitId: string) {
@@ -320,6 +329,25 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
       license: this.config.license,
     };
     return await this.runtimeManager.writeAndCommit(target, input.code);
+  }
+
+  private blobClient(userId: string): WorkspaceHttpClient {
+    const client = this.requireClient(userId);
+    return {
+      ...client,
+      request: (path, init) => {
+        // Keep every request, including lost-response recovery, on the original connection.
+        const current = this.requireClient(userId);
+        if (
+          this.requireWorkspaceAuth().switching() ||
+          current.origin !== client.origin ||
+          current.sessionToken !== client.sessionToken
+        ) {
+          throw new Error("Workspace connection changed during Blob operation.");
+        }
+        return client.request(path, init);
+      },
+    };
   }
 
   private requireClient(userId: string): WorkspaceHttpClient {

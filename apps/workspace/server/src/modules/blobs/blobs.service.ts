@@ -7,22 +7,30 @@ import { nodeSummary } from "../nodes/nodes.service.js";
 import type { ResourceCreateResponse } from "../resources/index.js";
 import {
   BlobsRepository,
+  BlobReplacementConflictError,
   BlobReservationConflictError,
   BlobUploadStateConflictError,
   blobOperationView,
   type BlobUploadIntent,
-  type BlobReplacementResult,
   type BlobUploadRow,
   type ReservedBlobUpload,
 } from "./blobs.repository.js";
 import type {
+  BlobReplacementResult,
   BlobUploadSessionEnvelope,
   BlobUploadSessionView,
   CompleteBlobUploadResult,
 } from "./blobs.types.js";
 
 export interface BlobsModule {
-  replace(userId: string, resourceId: string, idempotencyKey: unknown, ifMatch: unknown, contentLength: unknown, body: Readable): Promise<BlobReplacementResult>;
+  replace(
+    userId: string,
+    resourceId: string,
+    idempotencyKey: unknown,
+    ifMatch: unknown,
+    contentLength: unknown,
+    body: Readable,
+  ): Promise<BlobReplacementResult>;
   createUpload(
     userId: string,
     idempotencyKey: unknown,
@@ -62,7 +70,15 @@ export function createBlobsModule(options: {
   const now = options.now ?? Date.now;
   const maxBlobBytes = options.maxBlobBytes ?? 512 * 1024 * 1024;
   options.repository.recoverInterruptedUploads(now());
-  options.repository.recoverInterruptedReplacements(now());
+  // A single-process restart cannot resume interrupted PUT bodies.
+  for (const operationId of options.repository.pendingReplacementIds()) {
+    options.repository.failReplacement(
+      operationId,
+      "REPLACEMENT_INTERRUPTED",
+      "Server restarted during Blob replacement; retry with a new key.",
+      now(),
+    );
+  }
 
   function reservation(userId: string, uploadId: string): ReservedBlobUpload {
     const value = options.repository.find(uploadId, userId);
@@ -127,7 +143,12 @@ export function createBlobsModule(options: {
       };
       requireWritable();
       const intent = { resourceId, expectedEtag: ifMatch.slice(1, -1), byteSize };
-      const reserved = options.repository.reserveReplacement(operationId, userId, intent, now());
+      let reserved;
+      try {
+        reserved = options.repository.reserveReplacement(operationId, userId, intent, now());
+      } catch (error) {
+        throw replacementError(error);
+      }
       if (reserved.result) {
         body.resume();
         return reserved.result;
@@ -155,13 +176,14 @@ export function createBlobsModule(options: {
           now(),
         );
       } catch (error) {
+        const failure = replacementError(error);
         options.repository.failReplacement(
           operationId,
-          error instanceof ApplicationError ? error.code : "REPLACEMENT_FAILED",
-          error instanceof Error ? error.message : "Blob replacement failed.",
+          failure instanceof ApplicationError ? failure.code : "REPLACEMENT_FAILED",
+          failure instanceof Error ? failure.message : "Blob replacement failed.",
           now(),
         );
-        throw error;
+        throw failure;
       }
     },
 
@@ -458,4 +480,22 @@ function forbidden(): ApplicationError {
 }
 function conflict(message: string): ApplicationError {
   return new ApplicationError("CONFLICT", 409, message);
+}
+
+function replacementError(error: unknown): unknown {
+  if (!(error instanceof BlobReplacementConflictError)) return error;
+  switch (error.reason) {
+    case "intent":
+      return conflict("Idempotency-Key is already associated with another request.");
+    case "state":
+      return conflict(
+        "Replacement is pending or failed. Inspect its Operation; use a new key only after a confirmed failure.",
+      );
+    case "etag":
+      return new ApplicationError(
+        "PRECONDITION_FAILED",
+        412,
+        "Blob content has changed; download it again before replacing.",
+      );
+  }
 }

@@ -691,12 +691,7 @@ export interface paths {
     "/api/blob-resources/{resourceId}/content": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A single RFC 9110 bytes range. */
-                Range?: components["parameters"]["Range"];
-                /** @description Return 304 when the current content ETag matches. */
-                "If-None-Match"?: components["parameters"]["IfNoneMatch"];
-            };
+            header?: never;
             path: {
                 resourceId: components["parameters"]["BlobResourceId"];
             };
@@ -1536,8 +1531,6 @@ export interface components {
             mediaType: string;
             byteSize: number;
             sha256: string;
-            /** @description Quoted strong content validator for If-Match replacement. */
-            etag: string;
             contentUrl: string;
             downloadUrl: string;
         };
@@ -1574,6 +1567,11 @@ export interface components {
             /** @constant */
             method: "PUT";
             contentUrl: string;
+        };
+        BlobReplacementResult: {
+            operationId: string;
+            resourceId: string;
+            etag: string;
         };
         Location: {
             space: components["schemas"]["SpaceSummary"];
@@ -3129,10 +3127,6 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description A single RFC 9110 bytes range. */
-                Range?: components["parameters"]["Range"];
-                /** @description Return 304 when the current content ETag matches. */
-                "If-None-Match"?: components["parameters"]["IfNoneMatch"];
                 /** @description Random opaque key representing one user intent. */
                 "Idempotency-Key": components["parameters"]["IdempotencyKeyParameter"];
                 /** @description Exactly one quoted strong ETag; wildcard and weak validators are not accepted. */
@@ -3157,11 +3151,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        operationId: string;
-                        resourceId: string;
-                        etag: string;
-                    };
+                    "application/json": components["schemas"]["BlobReplacementResult"];
                 };
             };
             400: components["responses"]["BadRequest"];

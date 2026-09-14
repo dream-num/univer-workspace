@@ -145,9 +145,10 @@
 BlobContentPath:
   parameters:
     - $ref: "#/BlobResourceId"
-    - $ref: "#/Range"
-    - $ref: "#/IfNoneMatch"
   get:
+    parameters:
+      - $ref: "#/Range"
+      - $ref: "#/IfNoneMatch"
     tags: [Blobs]
     operationId: getBlobContent
     summary: Read Blob bytes for client-selected preview or other use.
@@ -208,16 +209,7 @@ BlobContentPath:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: false
-              required: [operationId, resourceId, etag]
-              properties:
-                operationId:
-                  type: string
-                resourceId:
-                  type: string
-                etag:
-                  type: string
+              $ref: ../schemas/blobs.yaml#/BlobReplacementResult
       "400":
         $ref: ../schemas/common.yaml#/BadRequest
       "401":

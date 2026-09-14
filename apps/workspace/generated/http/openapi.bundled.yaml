@@ -1167,9 +1167,10 @@ paths:
   /api/blob-resources/{resourceId}/content:
     parameters:
       - $ref: '#/components/parameters/BlobResourceId'
-      - $ref: '#/components/parameters/Range'
-      - $ref: '#/components/parameters/IfNoneMatch'
     get:
+      parameters:
+        - $ref: '#/components/parameters/Range'
+        - $ref: '#/components/parameters/IfNoneMatch'
       tags:
         - Blobs
       operationId: getBlobContent
@@ -1231,19 +1232,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: false
-                required:
-                  - operationId
-                  - resourceId
-                  - etag
-                properties:
-                  operationId:
-                    type: string
-                  resourceId:
-                    type: string
-                  etag:
-                    type: string
+                $ref: '#/components/schemas/BlobReplacementResult'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -3136,7 +3125,6 @@ components:
         - mediaType
         - byteSize
         - sha256
-        - etag
         - contentUrl
         - downloadUrl
       properties:
@@ -3162,9 +3150,6 @@ components:
           minimum: 0
         sha256:
           type: string
-        etag:
-          type: string
-          description: Quoted strong content validator for If-Match replacement.
         contentUrl:
           type: string
         downloadUrl:
@@ -3278,6 +3263,20 @@ components:
           type: string
           const: PUT
         contentUrl:
+          type: string
+    BlobReplacementResult:
+      type: object
+      additionalProperties: false
+      required:
+        - operationId
+        - resourceId
+        - etag
+      properties:
+        operationId:
+          type: string
+        resourceId:
+          type: string
+        etag:
           type: string
     Location:
       type: object

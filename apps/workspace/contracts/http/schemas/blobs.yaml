@@ -115,3 +115,15 @@ BlobUploadSessionEnvelope:
       oneOf:
         - $ref: "#/BlobUploadTarget"
         - type: "null"
+
+BlobReplacementResult:
+  type: object
+  additionalProperties: false
+  required: [operationId, resourceId, etag]
+  properties:
+    operationId:
+      type: string
+    resourceId:
+      type: string
+    etag:
+      type: string

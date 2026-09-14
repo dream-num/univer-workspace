@@ -39,3 +39,10 @@ export type CompleteBlobUploadResult = {
   readonly status: 200 | 201;
   readonly body: ResourceCreateResponse;
 };
+
+export interface BlobReplacementResult {
+  readonly operationId: string;
+  readonly resourceId: string;
+  /** Quoted strong ETag, suitable for the next If-Match. */
+  readonly etag: string;
+}

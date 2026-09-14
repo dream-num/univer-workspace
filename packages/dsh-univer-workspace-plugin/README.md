@@ -134,9 +134,9 @@ as a substitute for those explicit storage boundaries.
   permanent removal. Univer Resources open in the embedded Viewer; Blob
   Resources use the native DSH Sidecar for read-only image, video, audio, PDF, and
   text previews, while unsupported media remains download-only. The preview is read-only.
-- **Blob tools**: `univer_blob` exposes get/download/upload/replace through Client Core.
+- **Blob tools**: `univer_blob` exposes download/replace through the existing Workspace service/provider and authenticated HTTP client.
   Download into the session workspace, edit locally, then replace with the exact
-  downloaded ETag. Upload and replace publish immediately, without Worktree review.
+  downloaded ETag. Replacements publish immediately, without Worktree review.
   Stale ETags require downloading and reconciling current content; file paths use
   the same session containment checks as import/export.
 - **Native Sidecar preview**: file and Worktree opens update one Workspace preview
