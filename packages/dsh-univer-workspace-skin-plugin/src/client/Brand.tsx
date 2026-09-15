@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 /**
  * Workspace brand occupants for both the sidebar and the empty conversation
  * hero.  The paths are the same Univer CLI mark used by the Workspace app;
@@ -45,4 +46,17 @@ export function WorkspaceBrandName(_props: PropsRuntime<"sidebar.brand.name">) {
       <span className="uwh-skin-brandSubtitle">Agent</span>
     </span>
   );
+}
+
+/** Product text is rendered by React and follows the host's selected language. */
+export function WorkspaceHeroBrand({ size, className, subscribe, getLanguage }: HeroBrandMarkOwnerProps & {
+  subscribe: (listener: () => void) => () => void;
+  getLanguage: () => string;
+}) {
+  const language = useSyncExternalStore(subscribe, getLanguage);
+  return <span className="uwh-skin-heroBrand">
+    <WorkspaceBrandMark size={size} className={className} />
+    <span className="uwh-skin-heroTagline">{language.startsWith("zh")
+      ? "与 AI 一起，完成每一份文档" : "Create and collaborate with AI"}</span>
+  </span>;
 }

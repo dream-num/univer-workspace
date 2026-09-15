@@ -1,3 +1,4 @@
+import { isWorkspaceLoginRequired, WorkspaceSignInButton } from "./workspace-login.tsx";
 import type { PathReference } from "./path-reference.ts";
 import { subscribeWorkspaceInvalidation } from "./api/univer-api.ts";
 import {
@@ -102,6 +103,15 @@ export function FileSidebar({
     ]).then(([spaceResult, meResult]) => {
       if (abort.signal.aborted) return;
 
+      const needsLogin = (meResult.status === "fulfilled" && !meResult.value.connected) ||
+        [spaceResult, meResult].some(result => result.status === "rejected" && isWorkspaceLoginRequired(result.reason));
+      setAuthRequired(needsLogin);
+      if (needsLogin) {
+        setError(undefined);
+        setSpaces([]);
+        setSelectedSpaceId(undefined);
+        return;
+      }
       let hasFailure = false;
       if (spaceResult.status === "fulfilled") {
         const spaceList = spaceResult.value;
@@ -119,7 +129,6 @@ export function FileSidebar({
 
       if (meResult.status === "fulfilled") {
         setWorkspaceOrigin(meResult.value.workspaceOrigin);
-        setAuthRequired(false);
       } else {
         hasFailure = true;
         const message =
@@ -351,6 +360,7 @@ export function FileSidebar({
         <div className={css.authNotice} role="status">
           <strong>{t("file.authTitle")}</strong>
           <span>{t("file.authBody")}</span>
+          <WorkspaceSignInButton t={t} />
         </div>
       ) : null}
       {error !== undefined ? (

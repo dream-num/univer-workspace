@@ -5,8 +5,7 @@ import { waitForUsableAgent } from '../scripts/smoke-ui.mjs';
 
 // Model the observed CI race: the browser receives the click and closes the
 // prompt, but the automation call times out before acknowledging delivery.
-function onboardingPage({ delivered = true, deferred = false } = {}) {
-  let notice = true;
+function onboardingPage({ delivered = true, deferred = false, notice = false } = {}) {
   let prompt = false;
   let checks = 0;
   let clicks = 0;
@@ -60,4 +59,9 @@ test('rejects a timed-out click when onboarding still blocks interaction', async
   await assert.rejects(waitForUsableAgent(fixture.page, { timeoutMs: 100 }),
     /Agent Settings never became interactive/);
   assert.ok(fixture.clicks() > 0);
+});
+
+test('fails if the upstream testing notice reappears', async () => {
+  const fixture = onboardingPage({ notice: true });
+  await assert.rejects(waitForUsableAgent(fixture.page, { timeoutMs: 100 }), /internal-testing welcome notice/);
 });

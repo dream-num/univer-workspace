@@ -26,6 +26,7 @@ export interface DesktopDiagnostics {
 declare global {
   interface Window {
     readonly workspaceDesktop?: {
+      login: () => Promise<void>;
       openUpdates: () => Promise<void>;
       diagnostics: () => Promise<DesktopDiagnostics>;
       openDirectory: (id: string) => Promise<void>;

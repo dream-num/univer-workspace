@@ -139,7 +139,8 @@ Workspace Agent does not copy those databases into its local data directory.
 
 ## Model credentials
 
-On first launch, dismiss the DSH testing notice with **Continue**. The model
+On first launch, Workspace sign-in and model setup guide the user. The DSH
+internal-testing notice is replaced through the public onboarding slot. The model
 setup dialog offers **Configure later** if you only want to browse Workspace
 and review changes; sending agent messages still requires model credentials.
 
@@ -301,6 +302,14 @@ Workspace, then approve the Workspace Agent access request. Workspace redirects 
 local Workspace Agent callback; the Workspace Agent exchanges the one-time code using PKCE and
 stores the resulting Workspace session server-side. No device code or manual
 completion button is needed. If the request expires, start a new login from Settings.
+
+Desktop opens the authorization URL in the default system browser, using its
+existing login and OAuth-provider sessions. The loopback callback hands the
+one-use code back through `univer-workspace://login#state=…&code=…`; only the
+local authenticated Desktop session can redeem it. No access token or PKCE
+verifier appears in the link. Use **Settings → Workspace → Switch account**
+and sign out or choose another account in the browser. File, Worktree, and
+Space-picker views offer direct sign-in guidance when disconnected.
 
 The Workspace deployment must register the public client
 `univer-workspace-harness` with consent enabled, scopes `identity` and `session`,
@@ -559,3 +568,11 @@ The private `desktop-client-capture` build entry exports these artifacts; the
 `desktop-client` runtime entry serves them with DSH's own bootstrap injections.
 Desktop has a fixed plugin roster, no runtime source-map generation, and no HMR
 or live profile watching. The local Web development profile is unchanged.
+
+When the operating system reports that the default browser cannot be opened,
+Desktop falls back to a sandboxed built-in browser with a fresh, non-persistent
+cookie session for each attempt. It intercepts the loopback return inside the
+app, so fallback does not need the OS protocol handler. Closing the window
+clears its cookies. The window title identifies the fallback and notes that
+some OAuth providers reject embedded browsers. A successful browser-launch
+response is not treated as a failure merely because sign-in takes time.

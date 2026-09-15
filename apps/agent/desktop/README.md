@@ -275,8 +275,22 @@ The shell starts its own Electron Node/DSH process on `127.0.0.1:3101`. An occup
 an error; the app never adopts an unknown process. DSH generates browser
 authentication and passes the URL through a private child-process IPC channel.
 The main renderer has no Node access and remains on the local origin. Login
-uses a separate sandboxed window sharing the local cookie session. External OAuth
-providers may restrict embedded browsers; verify your deployment's login flow.
+opens the system default browser directly on Workspace authorization, so the
+browser's existing login and external OAuth-provider sessions are available.
+The existing loopback callback opens `univer-workspace://login#state=…&code=…`.
+Desktop validates the active ten-minute request and redeems the one-use code
+through authenticated local POST endpoints; PKCE and the resulting Workspace
+session remain in the local backend. Old, repeated, or unsolicited callbacks
+cannot change accounts. Restarting the app requires starting a new sign-in.
+
+Windows installers and macOS bundles declare the `univer-workspace` scheme.
+On Linux, packaged launches register a user-local desktop entry pointing at the
+original AppImage (`APPIMAGE`), never its temporary mount. The completion page
+also provides an explicit **Open Univer Workspace** link if automatic opening
+is blocked by the browser. In development, use the browser Agent OAuth flow
+unless you separately register the development application's protocol handler.
+**Settings → Workspace → Switch account** reopens browser authorization; sign
+out or choose another account in that browser to change the Workspace identity.
 Register the callback documented in the [Agent guide](../README.md#connect-to-a-local-workspace)
 for port 3101 before connecting. Desktop packaging does not include a Workspace
 Server or model credentials.
@@ -448,3 +462,30 @@ and extraction failure, in addition to ordinary replacement and backup protectio
 The earlier [utility-process prototype](scripts/asar-probe/README.md) uses a
 pre-ASAR runtime as input. Its measurements describe that experiment; complete
 release acceptance comes from the production packaging workflow.
+
+### Browser-login smoke
+
+After preparing and packaging the native runtime, run:
+
+```bash
+# Linux (use a desktop session instead of Xvfb when available)
+xvfb-run -a node apps/agent/desktop/scripts/login-smoke.mjs
+```
+
+`UWA_SMOKE_EXECUTABLE` can select an installed native executable. The smoke uses
+an isolated Electron profile and a local mock OAuth issuer, with the real local
+DSH cookie boundary, PKCE exchange, callback handlers and account switching.
+It checks disconnected UI guidance, registered OS protocol ownership, embedded
+fallback with fresh cookies, and callback replay rejection. Default-browser
+launch is intercepted and OS callback events are delivered by the test; actual
+OS-to-app dispatch and real third-party OAuth-provider consent still need
+verification on the target operating system. The desktop workflow runs this smoke
+on the installed Windows/macOS apps and the packaged Linux app.
+
+When the operating system reports that the default browser cannot be opened,
+Desktop falls back to a sandboxed built-in browser with a fresh, non-persistent
+cookie session for each attempt. It intercepts the loopback return inside the
+app, so fallback does not need the OS protocol handler. Closing the window
+clears its cookies. The window title identifies the fallback and notes that
+some OAuth providers reject embedded browsers. A successful browser-launch
+response is not treated as a failure merely because sign-in takes time.

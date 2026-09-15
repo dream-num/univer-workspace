@@ -301,3 +301,11 @@ them. The components display environment, update progress, startup timings and
 failure codes, and request directory opening or report export. The Desktop
 application owns all collection, filtering, filesystem access and update behavior;
 this plugin does not read local files or own installation.
+
+## Sign-in guidance
+
+Disconnected Files, Worktree, and Space-picker views offer a direct Workspace
+sign-in button. A successful status request with `connected: false` remains a
+sign-in state, while permission and network failures retain their own errors.
+Desktop delegates sign-in to its default-browser bridge; browser deployments
+keep the local OAuth navigation. Settings also offers **Switch account**.

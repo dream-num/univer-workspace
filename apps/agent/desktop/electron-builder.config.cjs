@@ -5,6 +5,7 @@ if (!validVersion(version))
 const official = process.env.AGENT_DESKTOP_OFFICIAL === "true";
 module.exports = {
   appId: "org.univer.workspace.agent",
+  protocols: [{ name: "Univer Workspace sign-in", schemes: ["univer-workspace"] }],
   productName: "Univer Workspace Agent",
   icon: ".build/icon.png",
   extraMetadata: { version },

@@ -25,6 +25,7 @@ import {
   UWH_OAUTH_CALLBACK_PATH,
 } from "./contract.ts";
 import { createOAuthCallbackHandler, createOAuthStartHandler } from "./oauth-authorization.ts";
+import { createDesktopOAuthHandlers } from "./desktop-oauth.ts";
 import {
   completeDeviceAuthorization,
   startDeviceAuthorization,
@@ -85,7 +86,7 @@ export const Config: z<Config> = z.object({
 });
 
 export const name = "univer-workspace-harness";
-export const inject = ["webServer", "settings"];
+export const inject = ["webServer", "settings", "connection"];
 
 function assertHttpOrigin(value: string, field: "publicOrigin" | "workspaceOrigin"): void {
   let parsed: URL;
@@ -282,9 +283,11 @@ export function createDeviceCompleteHandler(
 
 export function createDeviceLogoutHandler(
   ctx: Context,
+  cancelPending: () => void = () => {},
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res): Promise<void> => {
     if (req.method !== "POST") return jsonResponse(res, 405, { error: "method_not_allowed" });
+    cancelPending();
     await ctx.workspaceAuth.disconnect();
     jsonResponse(res, 200, { loggedOut: true, switching: ctx.workspaceAuth.switching() });
   };
@@ -311,7 +314,7 @@ export function localRouteDefinitions(
     {
       kind: "exact",
       path: UWH_DEVICE_LOGOUT_PATH,
-      handler: createDeviceLogoutHandler(ctx),
+      handler: createDeviceLogoutHandler(ctx, () => { pending.clear(); oauthPending.clear(); }),
     },
     {
       kind: "exact",
@@ -320,6 +323,13 @@ export function localRouteDefinitions(
     },
     { kind: "exact", path: UWH_OAUTH_START_PATH, handler: createOAuthStartHandler(ctx, oauthPending, publicOrigin) },
     { kind: "exact", path: UWH_OAUTH_CALLBACK_PATH, handler: createOAuthCallbackHandler(ctx, oauthPending) },
+    ...(process.env.UWA_DESKTOP === "1" ? (() => {
+      const desktop = createDesktopOAuthHandlers(ctx, oauthPending, publicOrigin);
+      return [
+        { kind: "exact" as const, path: "/auth/oauth/desktop/start", handler: desktop.start },
+        { kind: "exact" as const, path: "/auth/oauth/desktop/complete", handler: desktop.complete },
+      ];
+    })() : []),
   ];
 }
 
@@ -340,6 +350,7 @@ export function apply(ctx: Context, config: Config): void {
     return () => {
       for (const dispose of routes) dispose();
       pending.clear();
+      oauthPending.clear();
     };
   }, "uwh: local Workspace connection routes");
   ctx.on("webserver/index-inject", (rows) => {

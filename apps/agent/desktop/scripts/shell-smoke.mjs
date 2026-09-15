@@ -18,7 +18,7 @@ let application;
 try {
   // Electron's --user-data-dir controls Chromium; use the OS config base as
   // well so app.getPath('userData') cannot read an existing desktop account.
-  const env = { ...process.env, XDG_CONFIG_HOME: temporary, APPDATA: temporary, UWA_SMOKE_CONFIG_HOME: temporary };
+  const env = { ...process.env, XDG_CONFIG_HOME: temporary, XDG_DATA_HOME: join(temporary, "share"), APPDATA: temporary, UWA_SMOKE_CONFIG_HOME: temporary };
   // This script is for Linux preview validation under Xvfb. Production never
   // adds --no-sandbox; the explicit flag only lets a restricted CI/container run this test.
   const installed = process.env.UWA_SMOKE_EXECUTABLE;
@@ -68,6 +68,9 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   await page.waitForURL((url) => url.origin === "http://127.0.0.1:3101", { timeout: 60000 });
   await waitForUsableAgent(page);
+  await page.getByText("Create and collaborate with AI", { exact: true }).waitFor();
+  if (await page.getByText("Into the Unknown", { exact: true }).isVisible())
+    throw new Error("Upstream hero headline remains visible");
   const startupMs = Math.round(performance.now() - launchedAt);
   console.log(`First usable window: ${startupMs} ms`);
   if (profiler) {

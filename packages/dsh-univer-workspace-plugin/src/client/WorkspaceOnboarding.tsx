@@ -1,9 +1,9 @@
+import { startWorkspaceLogin, WorkspaceSignInButton } from "./workspace-login.tsx";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import {
   Button,
   Input,
   OnboardingSurface,
-  IconUserOutline16,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { SettingsOnboardingOwnerProps } from "@deepseek-ai/dsh-client-ui-settings/client";
 import type { PropsLocale } from "@deepseek-ai/dsh-client-ui-slots";
@@ -32,6 +32,7 @@ export function WorkspaceOnboarding({
   const [draft, setDraft] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [waiting, setWaiting] = useState(false);
   const origin = draft ?? snapshot.value?.workspaceOrigin ?? "";
 
   useEffect(() => {
@@ -54,16 +55,17 @@ export function WorkspaceOnboarding({
   const login = async () => {
     setBusy(true);
     setError(undefined);
+    setWaiting(false);
     try {
       if (origin.trim() !== snapshot.value?.workspaceOrigin) {
         await scope.set("workspaceOrigin", origin.trim());
       }
-      window.location.assign("/auth/oauth/start");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      await startWorkspaceLogin();
+      setWaiting(true);
+    } catch {
+      setError(t("settings.workspace.loginFailed"));
     } finally {
-      // Desktop intercepts navigation and opens a separate OAuth window. Keep
-      // this entry usable if the user closes that window without signing in.
+      // Keep retry available if the external browser is closed.
       setBusy(false);
     }
   };
@@ -117,6 +119,7 @@ export function WorkspaceOnboarding({
             </Button>
           </form>
         )}
+        {waiting && <p role="status">{t("settings.workspace.browserContinue")}</p>}
         <p className={css.hint}>{t("onboarding.modelHint")}</p>
         <Button disabled={busy} onClick={complete}>
           {t("onboarding.later")}
@@ -141,16 +144,5 @@ export function WorkspaceLoginAction({ loadMe, wide, t }: ConnectionProps & { wi
     };
   }, [loadMe]);
   if (!disconnected) return null;
-  return (
-    <Button
-      variant="primary"
-      className={wide ? css.footer : undefined}
-      aria-label={t("settings.workspace.login")}
-      title={t("settings.workspace.login")}
-      onClick={() => window.location.assign("/auth/oauth/start")}
-    >
-      <IconUserOutline16 />
-      {wide && t("settings.workspace.login")}
-    </Button>
-  );
+  return <div className={wide ? css.footer : undefined}><WorkspaceSignInButton t={t} compact={!wide} /></div>;
 }

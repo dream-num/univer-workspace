@@ -1,3 +1,4 @@
+import { isWorkspaceLoginRequired, WorkspaceSignInButton } from "./workspace-login.tsx";
 import { worktreeStatusLabel } from "./worktree-presentation.ts";
 import { WorktreeBranchIcon } from "./components/worktree-review/WorktreeBranchIcon.tsx";
 import { refreshWorktreeWindow } from "./api/worktree-pages.ts";
@@ -120,6 +121,17 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
       .then(([worktreeResult, meResult]) => {
         if (abort.signal.aborted) return;
 
+        const needsLogin = (meResult.status === "fulfilled" && !meResult.value.connected) ||
+          [worktreeResult, meResult].some(result => result.status === "rejected" && isWorkspaceLoginRequired(result.reason));
+        setAuthRequired(needsLogin);
+        if (needsLogin) {
+          setError(undefined);
+          setWorktrees([]);
+          setNextCursor(null);
+          setRetrying(false);
+          loadRetryAttempt.current = 0;
+          return;
+        }
         let hasFailure = false;
         if (worktreeResult.status === "fulfilled") {
           const page = worktreeResult.value;
@@ -142,7 +154,6 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
 
         if (meResult.status === "fulfilled") {
           setWorkspaceOrigin(meResult.value.workspaceOrigin);
-          setAuthRequired(false);
         } else {
           hasFailure = true;
           const message =
@@ -284,6 +295,7 @@ export function WorktreeSidebar({ onOpenWorktree, activeWorktreeId, t }: Worktre
         <div className={css.authNotice} role="status">
           <strong>{t("worktree.authTitle")}</strong>
           <span>{t("worktree.authBody")}</span>
+          <WorkspaceSignInButton t={t} />
         </div>
       ) : null}
       {error !== undefined && !retrying ? (

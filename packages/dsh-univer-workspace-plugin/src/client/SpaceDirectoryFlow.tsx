@@ -1,3 +1,4 @@
+import { isWorkspaceLoginRequired, WorkspaceSignInButton } from "./workspace-login.tsx";
 import { useEffect, useState, type ReactElement } from "react";
 import {
   Badge,
@@ -22,7 +23,7 @@ export interface SpaceDirectoryFlowInjected {
   readonly t: (key: UniverLocaleKey) => string;
 }
 
-type Phase = "pending" | "ready" | "error";
+type Phase = "pending" | "ready" | "error" | "login";
 
 /** Product-Space picker replacing DSH's local filesystem directory chooser. */
 export function SpaceDirectoryFlow(
@@ -30,6 +31,7 @@ export function SpaceDirectoryFlow(
 ): ReactElement | null {
   const { open, busy, loadSpaces, onCancel, selectSpace, t } = props;
   const [phase, setPhase] = useState<Phase>("pending");
+  const [attempt, setAttempt] = useState(0);
   const [spaces, setSpaces] = useState<readonly WorkspaceSpace[]>([]);
 
   useEffect(() => {
@@ -42,13 +44,13 @@ export function SpaceDirectoryFlow(
         setSpaces(value);
         setPhase("ready");
       })
-      .catch(() => {
-        if (live) setPhase("error");
+      .catch((error) => {
+        if (live) setPhase(isWorkspaceLoginRequired(error) ? "login" : "error");
       });
     return () => {
       live = false;
     };
-  }, [loadSpaces, open]);
+  }, [loadSpaces, open, attempt]);
 
   if (!open) return null;
   return (
@@ -69,9 +71,11 @@ export function SpaceDirectoryFlow(
               {t("workspace.loadingSpaces")}
             </p>
           )}
+          {phase === "login" && <div><p>{t("file.authBody")}</p><WorkspaceSignInButton t={t} /></div>}
           {phase === "error" && (
             <p className={css.error} role="alert">
               {t("workspace.spacesLoadFailed")}
+              <Button onClick={() => setAttempt(value => value + 1)}>{t("resource.retry")}</Button>
             </p>
           )}
           {phase === "ready" && spaces.length === 0 && (

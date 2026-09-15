@@ -11,6 +11,11 @@ DSH shell with the Univer Workspace brand.
   modes, replaces the sidebar/hero brand mark and name with the Workspace
   logo and the fixed "Univer Workspace" product name, and repairs the browser
   favicon with the same static Workspace mark.
+- The conversation hero reads the host locale and displays “与 AI 一起，完成每一份文档”
+  or “Create and collaborate with AI” through the public hero-brand slot. DSH
+  0.1.5-rc.1 has no headline slot: one isolated structural CSS rule hides the
+  adjacent upstream headline/Preview group. Remove that rule when DSH provides
+  a headline slot; no hashed class names or upstream source patches are used.
 
 The token overrides target only the brand/accent aliases; static neutral and
 semantic state tokens stay with the DSH design system so layout and status
