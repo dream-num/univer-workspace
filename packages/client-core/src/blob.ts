@@ -77,6 +77,18 @@ interface UploadIntent {
   readonly declaredMediaType?: string;
 }
 
+interface ReplacementIntent {
+  readonly resourceId: string;
+  readonly etag: string;
+  readonly idempotencyKey: string;
+}
+
+interface ReplacementResult {
+  readonly operationId: string;
+  readonly resourceId: string;
+  readonly etag: string;
+}
+
 const BLOB_UPLOAD_MAX_ATTEMPTS = 3;
 
 export class WorkspaceBlobFeature {
@@ -156,6 +168,80 @@ export class WorkspaceBlobFeature {
     );
   }
 
+  /** Replacements publish directly and preserve the existing Resource identity. */
+  public async replace(
+    input: ReplacementIntent & {
+      readonly filePath: string;
+    },
+  ): Promise<ReplacementResult> {
+    const intent: ReplacementIntent = {
+      resourceId: requireIdentity(input.resourceId, "Resource ID"),
+      idempotencyKey: requireIdentity(input.idempotencyKey, "Idempotency key"),
+      etag: input.etag,
+    };
+    if (!isStrongEtag(intent.etag)) {
+      throw workspaceError(
+        "workspace-argument-invalid",
+        "ETag must be the exact quoted strong ETag from the downloaded Blob.",
+      );
+    }
+    const source = await inspectSource(input.filePath);
+    const http = await this.authenticatedHttp();
+    const recovery = {
+      ...intent,
+      operationId: intent.idempotencyKey,
+      sourcePath: source.path,
+      byteSize: source.byteSize,
+    };
+    try {
+      return parseReplacementResult(
+        await http.json(`/api/blob-resources/${encodeURIComponent(intent.resourceId)}/content`, {
+          method: "PUT",
+          ifMatch: intent.etag,
+          idempotencyKey: intent.idempotencyKey,
+          contentLength: source.byteSize,
+          contentType: "application/octet-stream",
+          streamBody: openSource(source),
+        }),
+        intent,
+      );
+    } catch (error) {
+      if (!isWorkspaceResultUnknown(error)) throw error;
+    }
+
+    // A lost response may already have published bytes. Inspect the same Operation once;
+    // do not replay the write or replace the caller's ETag with the latest version.
+    const unknownResult = () =>
+      workspaceError(
+        "workspace-result-unknown",
+        "Blob replacement could not be confirmed. Inspect the Operation before retrying the same file, ETag and idempotency key.",
+        recovery,
+      );
+    let body: Record<string, unknown>;
+    try {
+      body = await http.json(`/api/operations/${encodeURIComponent(intent.idempotencyKey)}`);
+    } catch {
+      throw unknownResult();
+    }
+    const operation = parseOperation(body, "replaceBlobContent");
+    if (operation.operationId !== intent.idempotencyKey) {
+      throw workspaceError(
+        "workspace-result-mismatch",
+        "Blob replacement returned a different Operation.",
+        { ...recovery, actualOperationId: operation.operationId },
+      );
+    }
+    if (operation.state === "completed") return parseReplacementResult(operation.result, intent);
+    if (operation.state === "failed") {
+      throw workspaceError(
+        operation.error?.code ?? "workspace-blob-replacement-failed",
+        `${operation.error?.message ?? "Blob replacement failed."} Download and reconcile current content before starting a new write with a new idempotency key.`,
+        recovery,
+      );
+    }
+    throw unknownResult();
+  }
+
   public async download(input: {
     readonly force?: boolean;
     readonly outputPath: string;
@@ -183,10 +269,16 @@ export class WorkspaceBlobFeature {
         await this.authenticatedHttp()
       ).request(`/api/blob-resources/${encodeURIComponent(view.resource.resourceId)}/download`);
       const mediaType = response.headers.get("content-type");
-      if (mediaType === null || mediaType.length === 0 || response.body === null) {
+      const etag = response.headers.get("etag");
+      if (
+        mediaType === null ||
+        mediaType.length === 0 ||
+        response.body === null ||
+        !isStrongEtag(etag)
+      ) {
         throw workspaceError(
           "workspace-invalid-response",
-          "Workspace Blob download response is missing content metadata.",
+          "Workspace Blob download response is missing content metadata or a quoted strong ETag.",
         );
       }
       const responseSize = contentLength(response, "Blob");
@@ -205,14 +297,13 @@ export class WorkspaceBlobFeature {
         responseContent(response),
         view.resource.byteSize,
       );
-      const etag = response.headers.get("etag");
       return {
         resourceId: view.resource.resourceId,
         nodeId: view.node.nodeId,
         outputPath: written.outputPath,
         byteSize: written.byteSize,
         mediaType,
-        ...(etag === null ? {} : { etag }),
+        etag,
       };
     } finally {
       await target.discard();
@@ -330,6 +421,24 @@ export class WorkspaceBlobFeature {
     }
     return buildUploadResult(envelope, intent, envelope.operation, view.node);
   }
+}
+
+function isStrongEtag(value: unknown): value is string {
+  return typeof value === "string" && value.length <= 200 && /^"[^"\r\n]+"$/.test(value);
+}
+
+function parseReplacementResult(value: unknown, intent: ReplacementIntent): ReplacementResult {
+  if (!isWorkspaceRecord(value) || !isStrongEtag(value["etag"])) {
+    throw invalidResponse("Workspace returned an invalid Blob replacement result.");
+  }
+  if (value["operationId"] !== intent.idempotencyKey || value["resourceId"] !== intent.resourceId) {
+    throw workspaceError(
+      "workspace-result-mismatch",
+      "Blob replacement result does not match the requested Operation and Resource.",
+      { expected: intent, actual: value },
+    );
+  }
+  return { operationId: intent.idempotencyKey, resourceId: intent.resourceId, etag: value["etag"] };
 }
 
 async function getBlob(

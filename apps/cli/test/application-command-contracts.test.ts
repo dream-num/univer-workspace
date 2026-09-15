@@ -368,6 +368,50 @@ describe("Workspace application Commander adapters", () => {
     });
   });
 
+  it("maps Blob replacement and returns its recorded identity and ETag", async () => {
+    const result = { operationId: "replace-key", resourceId: "resource-1", etag: '"v2"' };
+    const replace = vi.fn(async () => result);
+    const command = createBlobCommand({ replace } as unknown as WorkspaceBlobFeature);
+    const output = await run(command, [
+      "replace",
+      "--resource",
+      "resource-1",
+      "--file",
+      "edited.bin",
+      "--etag",
+      '"v1"',
+      "--idempotency-key",
+      "replace-key",
+      "--json",
+    ]);
+    expect(replace).toHaveBeenCalledWith({
+      resourceId: "resource-1",
+      filePath: "edited.bin",
+      etag: '"v1"',
+      idempotencyKey: "replace-key",
+    });
+    expect(JSON.parse(output)).toEqual({ replacement: result });
+  });
+
+  it.each(["--resource", "--file", "--etag", "--idempotency-key"])(
+    "requires %s before attempting a Blob replacement",
+    async (missing) => {
+      const replace = vi.fn();
+      const command = createBlobCommand({ replace } as unknown as WorkspaceBlobFeature);
+      for (const child of command.commands) child.exitOverride();
+      const pairs = [
+        ["--resource", "resource-1"],
+        ["--file", "edited.bin"],
+        ["--etag", '"v1"'],
+        ["--idempotency-key", "replace-key"],
+      ];
+      await expect(
+        run(command, ["replace", ...pairs.filter(([flag]) => flag !== missing).flat()]),
+      ).rejects.toMatchObject({ code: "commander.missingMandatoryOptionValue" });
+      expect(replace).not.toHaveBeenCalled();
+    },
+  );
+
   it("maps Asset download and Open review URL options", async () => {
     const download = vi.fn(async () => ({ outputPath: "asset.bin" }));
     const asset = createAssetCommand({ download } as unknown as WorkspaceAssetFeature);

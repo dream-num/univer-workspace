@@ -23,8 +23,8 @@ univer-workspace-cli import --file source.docx --worktree <worktree-id> --space 
 
 Both commands return server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId`
 for every content command; never reuse an imported document's internal id as the Workspace address.
-Use `blob upload` instead of `import` only when the original file bytes must remain unchanged and no
-editable Doc Unit is required; Blob Resources have no `unitId` and cannot use this Skill's commands.
+For original-file preservation without an editable Doc Unit, read the [Blob Skill](../blob/SKILL.md).
+Blob Resources have no `unitId` and cannot use this Skill's commands.
 
 ## Model essentials
 

@@ -8,6 +8,7 @@ import { createSkillsCommand } from "../src/features/skills/command.js";
 const skillRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../skill-data");
 const expectedNames = [
   "base",
+  "blob",
   "board",
   "core",
   "doc",
@@ -35,6 +36,16 @@ describe("Workspace CLI skills command", () => {
       success: true,
       data: { paths: [skillRoot] },
     });
+  });
+
+  it("discovers Blob as a standalone Skill and resolves its installed path", async () => {
+    const located = await runSkills(["skills", "path", "blob", "--json"]);
+    const path = (located.data as { path: string }).path;
+    const source = await readFile(join(path, "SKILL.md"), "utf8");
+    const result = await runSkills(["skills", "get", "blob", "--json"]);
+    expect(result.data).toEqual([{ name: "blob", content: source }]);
+    const all = await runSkills(["skills", "get", "--all", "--json"]);
+    expect(all.data).toContainEqual({ name: "blob", content: source });
   });
 
   it("loads Board references only on demand and resolves their installed paths", async () => {

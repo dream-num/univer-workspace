@@ -34,7 +34,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   collaboration entry points, and background recovery processes. Contract: [Workspace README](apps/workspace/README.md)
   and [OpenAPI source](apps/workspace/contracts/http/openapi.yaml).
 - **Univer Workspace CLI** — the internally packaged `univer-workspace-cli` application for agent-driven remote
-  Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, with browser-approved
+  Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, including Blob
+  download and ETag-guarded content replacement, with browser-approved
   passwordless CLI session handoff for password and external-identity users. Contract:
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli-manual.yml).
 

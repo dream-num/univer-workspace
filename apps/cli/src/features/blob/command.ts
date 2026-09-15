@@ -3,7 +3,7 @@ import type { WorkspaceBlobFeature } from "@univerjs/univer-workspace-client-cor
 import { executeCommand, present, type JsonOption } from "../../command.js";
 
 export function createBlobCommand(feature: WorkspaceBlobFeature): Command {
-  const root = new Command("blob").description("Transfer Workspace Blob Resources");
+  const root = new Command("blob").description("Transfer and replace Workspace Blob Resources");
   const upload = new Command("upload")
     .requiredOption("--file <source>")
     .requiredOption("--space <id>")
@@ -74,5 +74,38 @@ export function createBlobCommand(feature: WorkspaceBlobFeature): Command {
         present(download, options, value);
       },
     );
-  return root.addCommand(upload).addCommand(get).addCommand(download);
+  const replace = new Command("replace")
+    .description(
+      "Replace Blob bytes immediately, preserving identity; requires the downloaded ETag",
+    )
+    .requiredOption("--resource <id>")
+    .requiredOption("--file <source>")
+    .requiredOption("--etag <etag>", "exact quoted strong ETag returned by download")
+    .requiredOption("--idempotency-key <key>", "stable unique key for this replacement")
+    .option("--json")
+    .action(
+      async (
+        options: JsonOption & {
+          readonly resource: string;
+          readonly file: string;
+          readonly etag: string;
+          readonly idempotencyKey: string;
+        },
+      ) => {
+        const value = {
+          replacement: await executeCommand(
+            replace,
+            async () =>
+              await feature.replace({
+                resourceId: options.resource,
+                filePath: options.file,
+                etag: options.etag,
+                idempotencyKey: options.idempotencyKey,
+              }),
+          ),
+        };
+        present(replace, options, value);
+      },
+    );
+  return root.addCommand(upload).addCommand(get).addCommand(download).addCommand(replace);
 }

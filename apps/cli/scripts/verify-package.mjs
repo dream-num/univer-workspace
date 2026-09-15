@@ -39,6 +39,7 @@ for (const path of [
   "dist/runtime/worker.js",
   "dist/render-runtime/index.html",
   "skill-data/core/SKILL.md",
+  "skill-data/blob/SKILL.md",
   "skill-data/sheet/SKILL.md",
   "skill-data/doc/SKILL.md",
   "skill-data/slide/SKILL.md",
