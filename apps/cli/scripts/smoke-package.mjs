@@ -78,6 +78,18 @@ try {
   }
   await run(executable, ["--help"], installRoot, smokeEnv);
   await run(executable, ["skills", "list", "--json"], installRoot, smokeEnv);
+  const blobSkill = JSON.parse(
+    (await run(executable, ["skills", "get", "blob", "--json"], installRoot, smokeEnv)).stdout,
+  ).data[0];
+  const blobSkillRoot = JSON.parse(
+    (await run(executable, ["skills", "path", "blob", "--json"], installRoot, smokeEnv)).stdout,
+  ).data.path;
+  if (
+    blobSkill.name !== "blob" ||
+    blobSkill.content !== (await readFile(join(blobSkillRoot, "SKILL.md"), "utf8"))
+  ) {
+    throw new Error("Packaged Blob Skill is unavailable or differs from its installed file");
+  }
   const boardEntry = JSON.parse(
     (await run(executable, ["skills", "get", "board", "--json"], installRoot, smokeEnv)).stdout,
   ).data[0];

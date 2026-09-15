@@ -11,7 +11,6 @@
 - 提供 Space/Node 模型、严格响应解析和远程 workflow。
 - 提供 Worktree lifecycle、Worktree Unit membership 与 review URL workflow。
 - 提供 Blob/Asset 协议、bounded recovery，以及同进程 local Node filesystem 的原子文件传输。
-- Blob 替换通过下载时的强 ETag 与稳定幂等键直接发布；结果不明时查询同一 Operation，不自动重放写入。
 - 提供 runtime target、Worktree/Trunk source resolution、Snapshot read adapter 与 referenced-Unit policy。
 - 提供 Shell-neutral worker composition、content runtime pool、同步读取、UnitData export、Facade execution、
   embedded-image externalization 与 changeset commit workflow。

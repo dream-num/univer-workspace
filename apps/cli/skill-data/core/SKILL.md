@@ -1,6 +1,6 @@
 ---
 name: core
-description: Operate remote Workspace Univer and Blob Resources with univer-workspace-cli. Use for authentication, Space Node discovery and organization, Blob upload/download, per-task Worktree creation, existing-Univer-Resource staging, Unit authoring, verification, review handoff, rework, and export. Start every new editable-content task in a new Worktree; continue an existing Worktree only for rework on that same task.
+description: Operate remote Workspace Resources with univer-workspace-cli. Use for authentication, Space Node discovery and organization, per-task Worktree creation, existing-Univer-Resource staging, Unit authoring, verification, review handoff, rework, and export. Start every new editable-content task in a new Worktree; continue an existing Worktree only for rework on that same task.
 ---
 
 # Univer Workspace CLI Core
@@ -68,11 +68,8 @@ not recursive reachability; a Blob Resource Node may still have children.
 
 ## Blob files
 
-Use `blob upload/get/download/replace` to preserve or update original files. Blob writes publish
-immediately outside Worktrees. Replacement preserves the existing Resource and URL, and requires
-the downloaded ETag plus a stable idempotency key; reconcile conflicts before retrying.
-
-For Blob commands, file handling and recovery, read [Blob files](references/blobs.md).
+For original-file upload, download and replacement, read the [Blob Skill](../blob/SKILL.md)
+with `univer-workspace-cli skills get blob`.
 
 ## Manage Space Nodes
 

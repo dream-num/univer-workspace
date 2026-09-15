@@ -1,4 +1,11 @@
+---
+name: blob
+description: Upload, inspect, download and replace original files in remote Workspace with univer-workspace-cli, including ETag conflicts and recovery after uncertain writes. Use for Blob Resources rather than editable Univer Units or embedded image Assets.
+---
+
 # Blob files
+
+Use the [Core Skill](../core/SKILL.md) for authentication and Space/Resource discovery.
 
 Use Blob when the exact original bytes must remain a Workspace file instead of becoming an editable
 Univer Unit:
@@ -41,4 +48,3 @@ Do not confuse these workflows:
 - `blob upload --file`: preserve and publish the source bytes as a non-editable Blob Resource.
 - `export`: convert one Worktree Unit head to an Office file.
 - `blob download`: retrieve one Blob Resource without conversion.
-

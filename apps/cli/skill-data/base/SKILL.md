@@ -43,8 +43,8 @@ univer-workspace-cli inspect base \
 ```
 
 Creation returns server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId` for
-every Base content command. Use `blob upload` only when preserving original bytes without an
-editable Base Unit; Blob Resources have no `unitId` and cannot use this Skill's commands.
+every Base content command. For original-file preservation without an editable Base Unit, read the
+[Blob Skill](../blob/SKILL.md). Blob Resources have no `unitId` and cannot use this Skill's commands.
 
 Base authoring uses the shared execute transaction. Workspace execution injects the selected
 `FBase` as `base`, together with `univerAPI` and alias `api`; do not redeclare them:

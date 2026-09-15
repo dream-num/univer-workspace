@@ -4,6 +4,7 @@ import { Command } from "commander";
 
 const RUNTIME_SKILL_NAMES = [
   "base",
+  "blob",
   "board",
   "core",
   "doc",

@@ -18,8 +18,8 @@ univer-workspace-cli import --file source.xlsx --worktree <worktree-id> --space 
 
 Both commands return server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId`
 for every content command; never reuse an imported workbook's internal id as the Workspace address.
-Use `blob upload` instead of `import` only when the original file bytes must remain unchanged and no
-editable Sheet Unit is required; Blob Resources have no `unitId` and cannot use this Skill's commands.
+For original-file preservation without an editable Sheet Unit, read the [Blob Skill](../blob/SKILL.md).
+Blob Resources have no `unitId` and cannot use this Skill's commands.
 
 Use `univer-workspace-cli api find <term>` and `univer-workspace-cli api show <symbol>` instead of guessing Facade signatures.
 
