@@ -34,7 +34,6 @@ import { useI18n } from "../shared/i18n";
 import { Button, EditableText, Tooltip, buttonVariants, toast } from "../shared/ui";
 import { cn } from "../shared/utils/cn";
 import { parseResourceView } from "../features/resource-view/resource-view";
-import { ResourceViewContext } from "../features/resource-view/resource-view-context";
 
 type Node = components["schemas"]["NodeSummary"];
 export const Route = createFileRoute("/nodes/$nodeId")({
@@ -229,7 +228,7 @@ function LoadedResourcePage({
   if (!data || !session.data?.authenticated) return null;
   if (data.resource.kind === "blob") {
     return (
-      <ResourceViewContext.Provider value={{ immersive }}>
+      <>
         <WorkspaceLayout
           immersive={immersive}
           selectedSpaceId={data.resource.spaceId}
@@ -274,13 +273,13 @@ function LoadedResourcePage({
           node={shareOpen ? node : null}
           onClose={() => setShareOpen(false)}
         />
-      </ResourceViewContext.Provider>
+      </>
     );
   }
   const isEditing = data.resource.editorMode === "edit";
   const modeLabel = isEditing ? t("editingMode") : t("readOnlyMode");
   return (
-    <ResourceViewContext.Provider value={{ immersive }}>
+    <>
       <WorkspaceLayout
         immersive={immersive}
         selectedSpaceId={data.resource.spaceId}
@@ -338,6 +337,6 @@ function LoadedResourcePage({
         node={shareOpen ? node : null}
         onClose={() => setShareOpen(false)}
       />
-    </ResourceViewContext.Provider>
+    </>
   );
 }
