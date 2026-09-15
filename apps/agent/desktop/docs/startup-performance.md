@@ -1,13 +1,26 @@
 # Desktop startup performance investigation
 
 The current Windows targets are first installation within 40 seconds and an
-interactive first window within 10 seconds. An isolated production-package test
+interactive first window within 15 seconds. An isolated production-package test
 on the user's machine measured 38.656 seconds and 6.984 seconds respectively.
 The user accepted the measured 45.162-second upgrade installer; reopening and
 cleanup bring the complete replacement to 55.968 seconds. CI retains its stricter
 40-second replacement gate. macOS targets remain 60 seconds for installation or
-replacement and 10 seconds for first interaction. The dated results below record
-the investigation; older runs used 30-second / 5-second gates.
+replacement and 15 seconds for first interaction. All three platforms use a
+20-second CI startup ceiling, allowing 5 seconds of shared-runner variance above
+the 15-second product target. Actual first and post-update startup times remain
+in the reports; profiling runs have no startup gate. The dated results below
+record the investigation; older runs used 30-second / 5-second gates.
+
+For alpha.9, official Windows CI measured a 10.078-second first interaction,
+17.339-second installation, and 32.426-second complete replacement. Its only
+functional-acceptance step failure was the then-configured 10-second startup gate.
+The user accepted a 15-second target and requested CI headroom on 2026-09-15.
+The [release run](https://github.com/dream-num/univer-workspace/actions/runs/34946782320/attempts/2)
+retains that failure and its measurements. Linux passed at 5.716 seconds; signed
+and notarized macOS passed at 8.469 seconds, with 9.231-second installation and
+15.540-second complete replacement. These are CI observations, not user-machine
+guarantees.
 
 ## ASAR service prototype (2026-09-14)
 
@@ -503,10 +516,10 @@ as production installer measurements.
 
 Local Linux relocated production smoke passed Office CSV roundtrip, worker
 handshake, PTY, authenticated HTTP and browser onboarding. Windows native fixture
-results and all-platform release CI are required before publication. CI enforces
+results and all-platform release CI are required before publication. At this stage CI enforced
 40 seconds for Windows installation/replacement and 10 seconds for first usable
 opening; the user accepts the approximately 45-second upgrade installer measured
-on their machine. macOS remains 60/10 seconds.
+on their machine. macOS then used 60/10 seconds.
 
 Same-content prototype size comparison: 12,443 loose files / 330,137,397 bytes,
 versus 24 archive/native files / 333,392,377 bytes (0.99% larger). The 78,836,599-byte

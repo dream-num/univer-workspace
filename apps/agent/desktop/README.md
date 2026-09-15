@@ -10,8 +10,12 @@ The production ASAR build passed [all three native CI targets](https://github.co
 Windows installed in 20.362 seconds, opened to an interactive page in 8.904 seconds,
 and completed replacement plus reopening in 29.064 seconds. macOS DMG installation
 was 20.921 seconds, first opening 7.732 seconds, and replacement plus reopening
-13.989 seconds. These satisfy the current Windows 40/10-second and macOS
-60/10-second budgets. The macOS build-only test is unsigned; official publication
+13.989 seconds. These satisfied the then-current Windows 40/10-second and macOS
+60/10-second budgets. The current first-interaction target is 15 seconds on all
+platforms; CI enforces 20 seconds to allow 5 seconds of shared-runner variance,
+while retaining actual first and post-update startup measurements. Installation
+and replacement limits remain 40 seconds on Windows and 60 seconds on macOS.
+The macOS build-only test is unsigned; official publication
 separately requires signing and notarization. CI does not replace measurements on
 the user's machine or a two-release updater acceptance test.
 
@@ -332,8 +336,9 @@ previous profile is retained if activation fails.
 Windows CI installs the NSIS artifact and launches the installed Electron app with
 isolated user data. Startup diagnostics are uploaded as Actions artifacts even
 when this check fails. Acceptance budgets are 40 seconds from launching the
-installer to successful completion and 10 seconds from launching Electron to an
-interactive authenticated local page (including browser automation attachment).
+installer to successful completion. The startup target is 15 seconds from
+launching Electron to an interactive authenticated local page (including browser
+automation attachment); the CI ceiling is 20 seconds for shared-runner variance.
 A fresh-profile check advances the SDK notice, defers model-key setup, and
 requires the Settings button to receive pointer events without an overlay.
 This needs no model credentials or remote model request.
@@ -404,7 +409,8 @@ runtime files, activates it and launches the installed Electron executable with
 fresh account data. It also closes that app, repeats DMG replacement, verifies a
 preserved data sentinel, reopens the app and removes the backup. Every phase is
 recorded; replacement includes shutdown, reopening and cleanup. macOS thresholds
-are 15 seconds to a usable window and 60 seconds for installation/replacement.
+are a 15-second target to a usable window (20-second CI ceiling) and 60 seconds
+for installation/replacement.
 This probes a DMG replacement, not Squirrel's automatic updater. Build-only jobs
 also do not validate notarization, downloaded-file quarantine or Gatekeeper delay.
 
