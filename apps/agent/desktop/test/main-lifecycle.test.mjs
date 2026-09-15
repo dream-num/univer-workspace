@@ -44,7 +44,9 @@ async function fixture({ pauseHome = false } = {}) {
     './browser-cache.cjs': { prepareBrowserCache: async () => undefined },
     './startup-log.cjs': { createStartupLog: () => ({ write() {} }) },
     './policy.cjs': require('../src/policy.cjs'),
-    './updates.cjs': { createUpdateChecker(options) { update = options; return () => {}; } },
+    './updates.cjs': { createUpdateController(options) { update = options; return { check() {} }; } },
+    './diagnostics.cjs': { createDiagnostics: () => ({}) },
+    './update-window.cjs': { createUpdateWindow: () => ({ show() {}, changed() {}, attach() {} }) },
   };
   vm.runInNewContext(source, {
     require: name => modules[name] ?? require(name), __dirname: '/desktop/src', process,

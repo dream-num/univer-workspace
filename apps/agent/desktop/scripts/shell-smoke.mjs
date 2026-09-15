@@ -114,6 +114,33 @@ try {
     const map = await page.request.get(new URL(batch.url + '.map', page.url()).href);
     if (map.status() !== 404) throw new Error('Desktop must not serve source maps');
   }
+  // About is a Desktop-only settings section, with no updater sidebar action.
+  if (await page.getByRole('button', { name: 'Software update', exact: true }).count())
+    throw new Error('The updater must not occupy the application sidebar');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  if (await page.getByRole('region', { name: 'Software update and diagnostics', exact: true }).count())
+    throw new Error('Desktop diagnostics must not occupy General settings');
+  await page.getByRole('button', { name: 'About', exact: true }).click();
+  const diagnosticPanel = page.getByRole('region', { name: 'Software update and diagnostics', exact: true });
+  await diagnosticPanel.getByRole('heading', { name: 'About Workspace Agent', exact: true }).waitFor();
+  const updateWindowOpened = application.waitForEvent('window');
+  await diagnosticPanel.getByRole('button', { name: 'Check for updates', exact: true }).click();
+  const updatePage = await updateWindowOpened;
+  await updatePage.getByRole('heading', { name: 'Software update', exact: true }).waitFor();
+  await updatePage.getByRole('button', { name: 'Download an installer from GitHub', exact: true }).waitFor();
+  await updatePage.close();
+  await diagnosticPanel.getByText('backend-ready', { exact: true }).waitFor();
+  const reportPath = join(temporary, 'desktop-diagnostics.json');
+  await application.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+  }, reportPath);
+  await diagnosticPanel.getByRole('button', { name: 'Export diagnostics', exact: true }).click();
+  await diagnosticPanel.getByText('Diagnostic report saved', { exact: true }).waitFor();
+  const diagnosticReport = JSON.parse(await readFile(reportPath, 'utf8'));
+  if (diagnosticReport.schemaVersion !== 1 || !diagnosticReport.startup.some(event => event.phase === 'ready') ||
+      diagnosticReport.directories.logs !== join(dataPath, 'logs'))
+    throw new Error('Desktop diagnostic export is missing runtime, timing or directory information');
+  await diagnosticPanel.screenshot({ path: join(diagnostics, 'desktop-diagnostics.png') });
   await page.screenshot({ path: join(desktop, ".build/electron-smoke.png") });
   if (errors.length) throw new Error(`Electron renderer errors: ${errors.join("; ")}`);
   if (process.env.UWA_SMOKE_INSTALLER) {

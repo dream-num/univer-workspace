@@ -32,6 +32,7 @@ import { en, UNIVER_LOCALE_NAMESPACE, zh } from "./locales.ts";
 import { SpaceDirectoryFlow } from "./SpaceDirectoryFlow.tsx";
 import { TemplateForkAction } from "./TemplateForkAction.tsx";
 import { WorkspaceFooterSwitch } from "./WorkspaceSwitchButton.tsx";
+import { DesktopSettings } from "./DesktopSettings.tsx";
 import { WorkspaceOnboarding, WorkspaceLoginAction } from "./WorkspaceOnboarding.tsx";
 import { OriginSetting, type WorkspaceAuthSettings } from "./OriginSetting.tsx";
 import { HarnessDocumentTitle } from "./DocumentTitle.tsx";
@@ -507,6 +508,21 @@ export function apply(ctx: ClientContext): void {
       inject: () => ({ loadMe }),
     }, WorkspaceLoginAction),
   );
+
+  ctx.slots.inject("settings.section", () => {
+    if (!window.workspaceDesktop) return () => {};
+    const register = () => ctx.slots.register({
+      name: "settings.section",
+      id: "univer-workspace-desktop-about",
+      order: 1000,
+      label: translate("desktop.about"),
+      locale: UNIVER_LOCALE_NAMESPACE,
+    }, DesktopSettings);
+    let dispose = register();
+    // Settings navigation projects registrant-localized labels from the ledger.
+    const unsubscribe = ctx.locale.subscribe(() => { dispose(); dispose = register(); });
+    return () => { unsubscribe(); dispose(); };
+  });
 
   ctx.slots.inject("settings.general.item", () =>
     ctx.slots.register(

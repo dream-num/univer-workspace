@@ -283,3 +283,13 @@ new Worktree-local Units. Their merge previews also work when the server evaluat
 confirms a Worktree-created Unit and its returned snapshot matches the exact ready
 revision. Other unsupported historical modes report that the server
 needs updating; they never silently fall back to current trunk or draft.
+
+## Optional Desktop diagnostics
+
+When hosted by Workspace Agent Desktop, the browser registers a dedicated About
+section in DSH settings, containing update controls and diagnostics.
+These use the optional sandbox-preload capability; ordinary web deployments omit
+them. The components display environment, update progress, startup timings and
+failure codes, and request directory opening or report export. The Desktop
+application owns all collection, filtering, filesystem access and update behavior;
+this plugin does not read local files or own installation.
