@@ -32,6 +32,7 @@ import { en, UNIVER_LOCALE_NAMESPACE, zh } from "./locales.ts";
 import { SpaceDirectoryFlow } from "./SpaceDirectoryFlow.tsx";
 import { TemplateForkAction } from "./TemplateForkAction.tsx";
 import { WorkspaceFooterSwitch } from "./WorkspaceSwitchButton.tsx";
+import { WorkspaceOnboarding, WorkspaceLoginAction } from "./WorkspaceOnboarding.tsx";
 import { OriginSetting, type WorkspaceAuthSettings } from "./OriginSetting.tsx";
 import { HarnessDocumentTitle } from "./DocumentTitle.tsx";
 import { WorkspaceSidecar, WorkspaceSidecarTitle, WORKSPACE_SIDECAR_KIND } from "./WorkspaceSidecar.tsx";
@@ -488,6 +489,25 @@ export function apply(ctx: ClientContext): void {
   const originScope = ctx.settingsScope.bind<WorkspaceAuthSettings>({
     namespace: WORKSPACE_SETTINGS_NAMESPACE,
   });
+  ctx.slots.inject("settings.onboarding", () =>
+    ctx.slots.register({
+      name: "settings.onboarding",
+      id: "univer-workspace-login",
+      order: -50,
+      locale: UNIVER_LOCALE_NAMESPACE,
+      inject: () => ({ scope: originScope, loadMe }),
+    }, WorkspaceOnboarding),
+  );
+  ctx.slots.inject("sidebar.footer.action", () =>
+    ctx.slots.register({
+      name: "sidebar.footer.action",
+      id: "univer-workspace-login",
+      order: -100,
+      locale: UNIVER_LOCALE_NAMESPACE,
+      inject: () => ({ loadMe }),
+    }, WorkspaceLoginAction),
+  );
+
   ctx.slots.inject("settings.general.item", () =>
     ctx.slots.register(
       {

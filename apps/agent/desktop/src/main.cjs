@@ -88,6 +88,7 @@ async function start() {
     minHeight: 600,
     title: "Univer Workspace Agent",
     show: false,
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

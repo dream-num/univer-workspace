@@ -47,7 +47,9 @@ model request, but chatting with the agent does.
    the [Workspace deployment guide](../workspace/README.md#docker).
 3. Build and start Agent with the [local installation commands](#local-web-client-quick-start).
    Open the complete token URL printed by the launcher, then connect and authorize
-   your Workspace account in **Settings → Workspace**.
+   your Workspace account from the first-run **Sign in to Workspace** screen.
+   You can edit the service URL there; if you skip it, the sidebar keeps a sign-in
+   button. Connection settings also remain available in **Settings → Workspace**.
 4. Follow [Using Workspace Agent](#using-workspace-agent) to browse documents,
    start a conversation, and review changes. Keep the launcher running while using
    the application.

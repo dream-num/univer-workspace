@@ -19,8 +19,10 @@ test('archive preserves package graphs and unpacks native files under a hidden b
     'bootstrap/node_modules/native/module.node': 'native binding',
     'bootstrap/node_modules/native/library.so.8.18.6': 'versioned library',
     'bootstrap/node_modules/native/spawn-helper': 'terminal helper',
-    'home/profiles/univer-workspace-harness/package.json': '{}',
+    'home/profiles/univer-workspace-harness/package.json': JSON.stringify({ dsh: { profile: { bundles: ['shared', '@workspace/agent', 'workspace-tools'] } } }),
     'home/profiles/univer-workspace-harness/node_modules/shared/index.js': 'profile version',
+    'home/profiles/univer-workspace-harness/node_modules/@workspace/agent/package.json': '{"name":"@workspace/agent","version":"1.0.0"}',
+    'home/profiles/univer-workspace-harness/node_modules/workspace-tools/package.json': '{"name":"workspace-tools","version":"1.0.0"}',
   };
   for (const [name, value] of Object.entries(files)) {
     const path = join(runtime, name);
@@ -41,5 +43,10 @@ test('archive preserves package graphs and unpacks native files under a hidden b
   assert.equal(asar.statFile(archive, join('node_modules', 'node-pty', 'lib', 'index.js')).unpacked, true);
   await assert.rejects(access(join(runtime, 'bootstrap')), { code: 'ENOENT' });
   await assert.rejects(access(join(runtime, 'home/profiles/univer-workspace-harness/node_modules')), { code: 'ENOENT' });
-  assert.equal(await readFile(join(runtime, 'home/profiles/univer-workspace-harness/package.json'), 'utf8'), '{}');
+  for (const name of ['@workspace/agent', 'workspace-tools']) {
+    const link = asar.statFile(archive, join('node_modules', name), false).link;
+    assert.equal(link.replaceAll('\\', '/'), `profile/node_modules/${name}`);
+    assert.equal(JSON.parse(asar.extractFile(archive, join('node_modules', name, 'package.json'))).name, name);
+  }
+  assert.ok(JSON.parse(await readFile(join(runtime, 'home/profiles/univer-workspace-harness/package.json'), 'utf8')).dsh);
 });

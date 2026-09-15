@@ -77,6 +77,11 @@ as a substitute for those explicit storage boundaries.
 
 ## Delivered so far
 
+- **Workspace sign-in onboarding**: a first-run step before model setup offers
+  the Workspace service URL and a primary sign-in action. Connected accounts
+  skip the step; users who defer it retain a sign-in button in the sidebar.
+  Workspace authorization and model credentials remain separate.
+
 - **Space ↔ dsh-workspace reconciliation**: the User's remote Spaces are
   listed from the Workspace product API and each is bound to a mechanical
   dsh workspace directory under the configured root; a durable shadow table
