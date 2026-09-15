@@ -5,6 +5,11 @@ description: Create or revise .univer.html pages connected to live Workspace She
 
 # Univer HTML Views
 
+Read linked references through `univer_skill_resource`, for example
+`{ "skill": "univer-html-view", "path": "references/charts.md" }` for chart guidance.
+The loaded Skill lists the available paths. They are bundled resource identifiers;
+do not resolve them against the session or installation directory or use Shell to read them.
+
 Build pages with HTML, CSS and JavaScript connected to existing Sheet Units. Discover the source
 with Workspace document tools and inspect its sheets, values and formulas. Use the actual Unit ID
 and Sheet ID returned by the tools; Resource ID and worksheet name are different identifiers.

@@ -12,6 +12,11 @@ Workspace Agent 通过能力插件的 `univer_html_view` 工具验证和发布�
 样式使用 CSS。工具和 Skill 随 Agent 插件交付，示例必须匹配插件与 Browser 消费的 SDK 版本。
 SDK 完整语法与接口引用[上游文档](README.md#sdk-文档)。
 
+DSH 原生 `skill` 工具加载主指引，并列出按需读取 reference 的调用参数。例如
+`univer_skill_resource` 接受 `{ "skill": "univer-html-view", "path": "references/charts.md" }`，
+直接返回文档内容。Provider 使用 `opaque` 资源描述指向该工具；模型无需解析插件安装目录。
+读取限定于该 Skill 已枚举的 references/templates，独立于 Workspace 登录与会话文件权限。
+
 ## 工具与 Workspace 的边界
 
 [工具实现](../../../packages/dsh-univer-workspace-plugin/src/tools/html-view.ts)

@@ -5,7 +5,9 @@ import { readFile, readdir } from "node:fs/promises";
 import { Context } from "@deepseek-ai/cordis";
 import SkillRegistry from "@deepseek-ai/dsh-skill";
 import { describe, expect, it } from "vitest";
-import { apply } from "../src/skills/plugin.ts";
+import ToolRuntime from "@deepseek-ai/dsh-tools";
+import SystemPrompt from "@deepseek-ai/dsh-system-prompt";
+import { registerBundledSkills } from "../src/skills/plugin.ts";
 
 const EXPECTED_SKILLS = [
   "univer",
@@ -23,7 +25,9 @@ describe("bundled Workspace Skills", () => {
   it("registers the Workspace candidates with static assets", async () => {
     const ctx = new Context();
     new SkillRegistry(ctx);
-    apply(ctx);
+    new SystemPrompt(ctx, {});
+    new ToolRuntime(ctx);
+    registerBundledSkills(ctx, new URL("../skills/", import.meta.url));
 
     const listed = await ctx.skills.list();
     expect(listed.map((skill) => skill.name)).toEqual(EXPECTED_SKILLS);

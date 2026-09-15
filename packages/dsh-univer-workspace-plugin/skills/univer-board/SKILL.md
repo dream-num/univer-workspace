@@ -17,8 +17,9 @@ emphasis for the actual content; examples are not templates that every Board mus
   before choosing geometry. Translate it through Facade APIs; it is not an SDK input or another persisted model.
 - Direct edits, standalone charts, images, sticky notes, and freehand work can call their dedicated APIs without
   a spec. Do not invent graph relations just to use one.
-- Read only the relevant reference below, relative to the skill directory supplied by DSH when it loads
-  `univer-board`. Use the available file-reading tool for selected files; do not load every reference for ordinary tasks.
+- Read only the relevant reference below through `univer_skill_resource`, with
+  `skill: "univer-board"` and its listed `path` (for example `references/board-spec.md`).
+  These are bundled resource identifiers, not session or installation paths; no Shell/file-reading tool is needed.
 
 | Task                                                            | Read when needed                                     |
 | --------------------------------------------------------------- | ---------------------------------------------------- |
