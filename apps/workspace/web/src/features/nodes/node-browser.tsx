@@ -231,6 +231,7 @@ export function NodeBrowser(props: {
                         />
                         <div className="flex min-w-0 items-center gap-3">
                           <NodeIcon
+                            name={node.name}
                             kind={node.resource ? "resource" : "group"}
                             resourceKind={node.resource?.kind}
                             unitType={

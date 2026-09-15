@@ -1,4 +1,5 @@
 export { WorkspaceFileBrowser } from "./WorkspaceFileBrowser.js";
+export { getWorkspaceBlobIcon } from "./NodeIcon.js";
 export {
   canDropWorkspaceFileNode,
   dragItemOf,

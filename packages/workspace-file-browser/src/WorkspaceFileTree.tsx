@@ -477,7 +477,7 @@ function NavigationNode({
         <span className={css.toggleSpacer} aria-hidden="true" />
       )}
       <button type="button" className={css.itemButton} onClick={() => props.onOpenNode(node)}>
-        <NodeIcon resource={node.resource} />
+        <NodeIcon resource={node.resource} name={node.name} />
         <span title={node.name}>{node.name}</span>
       </button>
       <span className={css.actions}>{actions}</span>

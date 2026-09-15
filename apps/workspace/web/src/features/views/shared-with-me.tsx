@@ -74,6 +74,7 @@ export function SharedWithMe({
                       />
                       <span className="flex min-w-0 items-center gap-3">
                         <NodeIcon
+                          name={item.node.name}
                           kind={item.node.resource ? "resource" : "group"}
                           resourceKind={item.node.resource?.kind}
                           unitType={
