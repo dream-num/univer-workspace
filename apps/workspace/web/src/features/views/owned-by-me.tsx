@@ -79,6 +79,7 @@ export function OwnedByMe({
                         />
                         <span className="flex min-w-0 items-center gap-3">
                           <NodeIcon
+                            name={item.node.name}
                             kind="resource"
                             resourceKind={item.resource.kind}
                             unitType={

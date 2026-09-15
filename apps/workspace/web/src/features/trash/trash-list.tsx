@@ -122,6 +122,7 @@ export function TrashList({
                   >
                   <span className="flex min-w-0 items-center gap-3">
                     <NodeIcon
+                      name={batch.root.name}
                       kind={batch.root.resource ? "resource" : "group"}
                       resourceKind={batch.root.resource?.kind}
                       unitType={

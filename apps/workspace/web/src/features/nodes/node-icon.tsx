@@ -6,14 +6,8 @@ import {
   SheetsMultiIcon,
   SlidesMultiIcon,
 } from "@univerjs/icons";
-import {
-  File,
-  FileArchive,
-  FileAudio,
-  FileImage,
-  FileText,
-  FileVideo,
-} from "lucide-react";
+import { File } from "lucide-react";
+import { getWorkspaceBlobIcon } from "@univerjs/univer-workspace-file-browser";
 import { cn } from "../../shared/utils/cn";
 
 type UnitType = "sheet" | "doc" | "slide" | "board" | "base";
@@ -28,13 +22,14 @@ const unitTypeIcons = {
 
 /**
  * Univer Resources use the official colored product icons. Blob Resources use
- * MIME-aware neutral file glyphs; organizational Nodes use the group glyph.
+ * a dedicated HTML view icon or MIME-aware file glyphs; groups use the folder glyph.
  */
 export function NodeIcon(props: {
   readonly kind: "resource" | "group";
   readonly resourceKind?: "univer" | "blob" | undefined;
   readonly unitType?: UnitType | null;
   readonly mediaType?: string | null;
+  readonly name?: string;
   readonly variant?: "menu" | "list";
   readonly className?: string;
 }) {
@@ -53,7 +48,7 @@ export function NodeIcon(props: {
 
   const Icon =
     props.resourceKind === "blob"
-      ? blobIcon(props.mediaType)
+      ? getWorkspaceBlobIcon(props.mediaType, props.name)
       : props.unitType
         ? unitTypeIcons[props.unitType]
         : null;
@@ -74,15 +69,4 @@ export function NodeIcon(props: {
       )}
     </span>
   );
-}
-
-function blobIcon(mediaType: string | null | undefined) {
-  if (mediaType?.startsWith("image/")) return FileImage;
-  if (mediaType?.startsWith("video/")) return FileVideo;
-  if (mediaType?.startsWith("audio/")) return FileAudio;
-  if (mediaType?.startsWith("text/") || mediaType === "application/pdf") {
-    return FileText;
-  }
-  if (mediaType === "application/zip") return FileArchive;
-  return File;
 }

@@ -1,3 +1,4 @@
+import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import {
   BasesMultiIcon,
   BoardsMultiIcon,
@@ -9,6 +10,7 @@ import {
   FileTextIcon,
   FileVideoIcon,
   FolderIcon,
+  HtmlViewIcon,
   SheetsMultiIcon,
   SlidesMultiIcon,
   type WorkspaceIconComponent,
@@ -26,6 +28,7 @@ const unitIcons: Record<WorkspaceUnitType, WorkspaceIconComponent> = {
 
 export function NodeIcon(props: {
   readonly resource: WorkspaceFileResource | null;
+  readonly name?: string;
   readonly variant?: "menu" | "list";
 }) {
   const sizeClass = props.variant === "list" ? css.list : css.menu;
@@ -38,7 +41,7 @@ export function NodeIcon(props: {
   }
   const Icon =
     props.resource.kind === "blob"
-      ? blobIcon(props.resource.mediaType)
+      ? getWorkspaceBlobIcon(props.resource.mediaType, props.name)
       : props.resource.unitType
         ? unitIcons[props.resource.unitType]
         : FileIcon;
@@ -49,7 +52,11 @@ export function NodeIcon(props: {
   );
 }
 
-function blobIcon(mediaType: string | undefined): WorkspaceIconComponent {
+export function getWorkspaceBlobIcon(
+  mediaType: string | null | undefined,
+  filename?: string,
+): WorkspaceIconComponent {
+  if (filename && isHtmlViewFilename(filename)) return HtmlViewIcon;
   if (mediaType?.startsWith("image/")) return FileImageIcon;
   if (mediaType?.startsWith("video/")) return FileVideoIcon;
   if (mediaType?.startsWith("audio/")) return FileAudioIcon;

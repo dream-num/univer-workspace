@@ -17,6 +17,7 @@ export {
 } from "./dialog.js";
 export { Field } from "./field.js";
 export { Input, type InputProps } from "./input.js";
+export { HtmlViewIcon } from "./html-view-icon.js";
 export {
   BasesMultiIcon,
   BoardsMultiIcon,
