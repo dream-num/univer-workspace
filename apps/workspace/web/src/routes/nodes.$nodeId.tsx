@@ -4,7 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-router";
-import { Cloud, Download, Lock, Maximize, Share2 } from "lucide-react";
+import { Download, Lock, Maximize, Pencil, Share2 } from "lucide-react";
 import { useState } from "react";
 import type { IMember } from "@univerjs/protocol";
 import type { components } from "../../../generated/http/schema.js";
@@ -300,25 +300,20 @@ function LoadedResourcePage({
               members={collaborators}
               currentUserId={session.data.user.id}
             />
-            <Tooltip content={modeLabel}>
-              <span
-                aria-label={modeLabel}
-                className={cn(
-                  "grid size-8 place-items-center rounded-md [&_svg]:size-4",
-                  isEditing
-                    ? "bg-success-soft text-success-soft-foreground"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                {isEditing ? <Cloud /> : <Lock />}
-              </span>
-            </Tooltip>
             {node.capabilities.share ? (
               <Button size="sm" onClick={() => setShareOpen(true)}>
                 <Share2 />
                 {t("shareAction")}
               </Button>
             ) : null}
+            <Tooltip content={modeLabel}>
+              <span
+                aria-label={modeLabel}
+                className="grid size-8 shrink-0 place-items-center text-secondary-foreground [&_svg]:size-4"
+              >
+                {isEditing ? <Pencil aria-hidden="true" /> : <Lock aria-hidden="true" />}
+              </span>
+            </Tooltip>
             {immersiveLink}
           </>
         }
