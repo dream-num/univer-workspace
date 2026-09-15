@@ -6,15 +6,26 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 # Workspace HTML Views
 
 Use HTML, CSS and JavaScript to present or edit existing Sheet data in a Workspace page.
-For binding syntax, JavaScript data access, controls and frontend libraries, read
-[authoring](references/authoring.md). Create a complete local `.univer.html` file; sibling scripts
+For binding syntax, JavaScript data access, controls and frontend libraries, load the bundled
+authoring reference through the CLI:
+
+```bash
+univer-workspace-cli skills read html-view references/authoring.md
+```
+
+This prints [authoring](references/authoring.md). `skills get html-view` lists the other references
+and their read commands; use `skills read html-view references/<name>.md` when one is needed.
+`skills get html-view --full` prints all references at once. If the needed sections are already
+in context, use them directly. No `ls`, `cat`, or installation-directory access is needed.
+
+Create a complete local `.univer.html` file; sibling scripts
 and assets are not uploaded automatically. Opening the local file alone does not provide
 `window.univerBinding`; use the published Workspace URL.
 
 ## Find the sources
 
-Use the [Core Skill](../core/SKILL.md) for authentication and discovery, and the
-[Sheet Skill](../sheet/SKILL.md) to inspect worksheets, values and formulas. Bind to actual Unit
+Use `univer-workspace-cli skills get core` for authentication and discovery, and
+`univer-workspace-cli skills get sheet` to inspect worksheets, values and formulas. Bind to actual Unit
 and worksheet IDs; Resource IDs and worksheet names are different identities.
 
 Sources always resolve on trunk. If the required Unit, worksheet or changes exist only in a
@@ -47,7 +58,7 @@ synchronization; report which checks ran. Unit screenshot commands do not render
 
 ## Revise an existing page
 
-Follow the [Blob Skill](../blob/SKILL.md): download the existing Resource to a local `.univer.html`
+Read `univer-workspace-cli skills get blob`: download the existing Resource to a local `.univer.html`
 file, edit it, run `html-view validate`, then use `blob replace` with its downloaded ETag and a new
 stable write key. Replacement preserves the existing page identity and URL. Reconcile ETag
 conflicts; create another Blob only when a separate page is wanted.

@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Command } from "commander";
 
@@ -25,11 +25,17 @@ interface SkillFile {
   readonly path: string;
 }
 
+interface SkillResource {
+  readonly path: string;
+  readonly readCommand: string;
+}
+
 interface SkillSnapshot {
   readonly content: string;
   readonly directory: string;
   readonly files?: readonly SkillFile[];
   readonly metadata: SkillMetadata;
+  readonly resources: readonly SkillResource[];
 }
 
 interface JsonOption {
@@ -89,11 +95,34 @@ export function createSkillsCommand(skillDataRoot: string): Command {
           data: snapshots.map((snapshot) => ({
             name: snapshot.metadata.name,
             content: snapshot.content,
+            ...(snapshot.resources.length === 0 ? {} : { resources: snapshot.resources }),
             ...(snapshot.files === undefined ? {} : { files: snapshot.files }),
           })),
         },
         snapshots.map(renderSkillSnapshot).join("\n\n---\n\n"),
       );
+    });
+
+  const read = new Command("read")
+    .description("Read one bundled reference or template without accessing installation paths")
+    .argument("<name>", "Skill name")
+    .argument("<resource>", "resource path listed by skills get, e.g. references/authoring.md")
+    .option("--json", "write structured JSON")
+    .action(async (name: string, resource: string, options: JsonOption) => {
+      const result = await run(read, async () => {
+        const snapshot = await readSkillSnapshot(skillDataRoot, name, false);
+        if (!snapshot.resources.some((entry) => entry.path === resource)) {
+          throw new SkillResourceError(
+            `Unknown resource for skill ${name}: ${resource}. Run univer-workspace-cli skills get ${name} to list resources.`,
+          );
+        }
+        return {
+          name,
+          path: resource,
+          content: await readFile(join(snapshot.directory, resource), "utf8"),
+        };
+      });
+      write(read, options, { success: true, data: result }, result.content.trimEnd());
     });
 
   const path = new Command("path")
@@ -117,7 +146,7 @@ export function createSkillsCommand(skillDataRoot: string): Command {
       );
     });
 
-  return skills.addCommand(list).addCommand(get).addCommand(path);
+  return skills.addCommand(list).addCommand(get).addCommand(read).addCommand(path);
 }
 
 async function listSkills(
@@ -165,11 +194,25 @@ async function readSkillSnapshot(
       `Skill metadata name mismatch in ${skillPath}: expected ${name}, received ${metadata.name}`,
     );
   }
+  const resources = (await listSupplementalPaths(directory)).map((path) => ({
+    path,
+    readCommand: `univer-workspace-cli skills read ${name} ${shellArgument(path)}`,
+  }));
   return {
     content,
     directory,
     metadata,
-    ...(full ? { files: await readSupplementalFiles(directory) } : {}),
+    resources,
+    ...(full
+      ? {
+          files: await Promise.all(
+            resources.map(async ({ path }) => ({
+              path,
+              content: await readFile(join(directory, path), "utf8"),
+            })),
+          ),
+        }
+      : {}),
   };
 }
 
@@ -201,8 +244,8 @@ function unquote(value: string): string {
   return value;
 }
 
-async function readSupplementalFiles(directory: string): Promise<readonly SkillFile[]> {
-  const files: SkillFile[] = [];
+async function listSupplementalPaths(directory: string): Promise<readonly string[]> {
+  const files: string[] = [];
   for (const child of ["references", "templates"] as const) {
     const childRoot = join(directory, child);
     let entries;
@@ -214,15 +257,21 @@ async function readSupplementalFiles(directory: string): Promise<readonly SkillF
     }
     for (const entry of entries) {
       if (!entry.isFile()) continue;
-      const absolutePath = join(childRoot, entry.name);
-      if (!(await stat(absolutePath)).isFile()) continue;
-      files.push({ path: `${child}/${entry.name}`, content: await readFile(absolutePath, "utf8") });
+      files.push(`${child}/${entry.name}`);
     }
   }
-  return files.sort((left, right) => left.path.localeCompare(right.path));
+  return files.sort((left, right) => left.localeCompare(right));
 }
 
 function renderSkillSnapshot(snapshot: SkillSnapshot): string {
+  if (snapshot.files === undefined && snapshot.resources.length > 0) {
+    return [
+      snapshot.content.trimEnd(),
+      "\nRead bundled references and templates through the CLI (no installation-directory access needed):\n",
+      ...snapshot.resources.map((resource) => resource.readCommand),
+      `\nRead all: univer-workspace-cli skills get ${snapshot.metadata.name} --full`,
+    ].join("\n");
+  }
   if (snapshot.files === undefined || snapshot.files.length === 0) {
     return snapshot.content.trimEnd();
   }
@@ -230,6 +279,10 @@ function renderSkillSnapshot(snapshot: SkillSnapshot): string {
     snapshot.content.trimEnd(),
     ...snapshot.files.map((file) => `\n--- ${file.path} ---\n\n${file.content.trimEnd()}`),
   ].join("\n");
+}
+
+function shellArgument(value: string): string {
+  return /^[a-zA-Z0-9_./-]+$/u.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 async function run<Result>(command: Command, operation: () => Promise<Result>): Promise<Result> {
