@@ -3,8 +3,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
-import { Cloud, Download, Lock, Share2 } from "lucide-react";
+import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-router";
+import { Cloud, Download, Lock, Maximize, Share2 } from "lucide-react";
 import { useState } from "react";
 import type { IMember } from "@univerjs/protocol";
 import type { components } from "../../../generated/http/schema.js";
@@ -33,10 +33,14 @@ import { apiError } from "../shared/api/errors";
 import { useI18n } from "../shared/i18n";
 import { Button, EditableText, Tooltip, buttonVariants, toast } from "../shared/ui";
 import { cn } from "../shared/utils/cn";
+import { parseResourceView } from "../features/resource-view/resource-view";
 
 type Node = components["schemas"]["NodeSummary"];
 export const Route = createFileRoute("/nodes/$nodeId")({
-  validateSearch: (search: Readonly<Record<string, unknown>>) => ({
+  validateSearch: (
+    search: Readonly<Record<string, unknown>>,
+  ): { unit?: string; view?: "immersive" | undefined } => ({
+    ...(parseResourceView(search.view) ? { view: "immersive" as const } : {}),
     ...(typeof search.unit === "string" && search.unit
       ? { unit: search.unit }
       : {}),
@@ -59,7 +63,9 @@ export const Route = createFileRoute("/nodes/$nodeId")({
         throw redirect({
           to: "/nodes/$nodeId",
           params: { nodeId: data.node.id },
-          search: {},
+          search: {
+            view: parseResourceView(new URLSearchParams(location.searchStr).get("view")),
+          },
           replace: true,
         });
       }
@@ -166,6 +172,26 @@ function LoadedResourcePage({
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const [shareOpen, setShareOpen] = useState(false);
+  const { view } = Route.useSearch();
+  const immersive = view === "immersive";
+  const immersiveLink = (
+    <Tooltip content={t("enterImmersiveView")}>
+      <Link
+        to="/nodes/$nodeId"
+        params={{ nodeId: node.id }}
+        aria-label={t("enterImmersiveView")}
+        hash={true}
+        resetScroll={false}
+        search={(previous) => ({ ...previous, view: "immersive" })}
+        className={cn(
+          buttonVariants({ variant: "ghost", size: "icon-sm" }),
+          "shrink-0 text-muted-foreground no-underline [&_svg]:size-4",
+        )}
+      >
+        <Maximize strokeWidth={1.75} />
+      </Link>
+    </Tooltip>
+  );
   const [collaborators, setCollaborators] = useState<readonly IMember[]>([]);
   const rename = useMutation({
     mutationFn: async (name: string) => {
@@ -204,6 +230,7 @@ function LoadedResourcePage({
     return (
       <>
         <WorkspaceLayout
+          immersive={immersive}
           selectedSpaceId={data.resource.spaceId}
           selectedNodeId={node.id}
           selectedNodePath={selectedNodePath}
@@ -234,6 +261,7 @@ function LoadedResourcePage({
                   {t("shareAction")}
                 </Button>
               ) : null}
+              {immersiveLink}
             </>
           }
         >
@@ -242,7 +270,7 @@ function LoadedResourcePage({
           </section>
         </WorkspaceLayout>
         <ShareDialog
-          node={shareOpen ? { id: node.id, name: node.name } : null}
+          node={shareOpen ? node : null}
           onClose={() => setShareOpen(false)}
         />
       </>
@@ -253,6 +281,7 @@ function LoadedResourcePage({
   return (
     <>
       <WorkspaceLayout
+        immersive={immersive}
         selectedSpaceId={data.resource.spaceId}
         selectedNodeId={node.id}
         selectedNodePath={selectedNodePath}
@@ -290,6 +319,7 @@ function LoadedResourcePage({
                 {t("shareAction")}
               </Button>
             ) : null}
+            {immersiveLink}
           </>
         }
       >
@@ -304,7 +334,7 @@ function LoadedResourcePage({
         </section>
       </WorkspaceLayout>
       <ShareDialog
-        node={shareOpen ? { id: node.id, name: node.name } : null}
+        node={shareOpen ? node : null}
         onClose={() => setShareOpen(false)}
       />
     </>

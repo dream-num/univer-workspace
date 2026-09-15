@@ -300,3 +300,25 @@ Blob content can be replaced while preserving its Resource identity and location
 Replacement requires the downloaded ETag and publishes immediately, without Worktree
 review. See the [HTTP contract](contracts/http/concepts.md#resource-creation-and-opening)
 for preconditions and retry behavior.
+
+## 沉浸视图
+
+所有资源页面支持 `?view=immersive`。点击“进入沉浸视图”在当前页隐藏 Workspace 顶栏和侧栏；
+Ctrl / Command 点击、中键和右键菜单沿用浏览器的链接行为。浏览器后退可返回进入前的页面。
+直接打开分享链接时，返回行为沿用浏览器的历史记录；不额外提供页面内退出控件或快捷键。
+
+视图参数可随链接分享，刷新和登录跳转后保留。分享弹窗在复制链接旁提供“沉浸视图”复选框，
+按当前 `node.name` 判断：Blob 文件名以 `.univer.html` 结尾时默认勾选，其他资源默认不勾选。该选择只影响链接展示，不修改权限。
+沉浸视图不调用浏览器原生全屏，也不移除资源自身的编辑工具。
+
+HTML 不显示独立的加载、保存或同步状态提示，错误仍可见。
+同一资源切换视图不会重建编辑器或触发 HTML 离开保存保护；
+真正离开资源仍执行原有保存流程。
+
+独立预览（实际资源页面，内存示例数据，无需后端）：
+
+```bash
+pnpm --filter @univerjs/univer-workspace exec vite --config test/vite.immersive.config.ts
+```
+
+打开 `http://127.0.0.1:5183/nodes/html` 或 `http://127.0.0.1:5183/nodes/text`。

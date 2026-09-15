@@ -140,6 +140,7 @@ export function WorkspaceLayout({
   selectedSpaceId,
   selectedView,
   contentMode = "default",
+  immersive = false,
   headerTitle,
   headerContent,
   headerActions,
@@ -150,6 +151,7 @@ export function WorkspaceLayout({
   readonly selectedNodeId?: string;
   readonly selectedNodePath?: readonly string[];
   readonly selectedView?: WorkspaceView;
+  readonly immersive?: boolean;
   readonly contentMode?: "default" | "editor";
   readonly headerTitle?: ReactNode;
   readonly headerContent?: ReactNode;
@@ -243,7 +245,7 @@ export function WorkspaceLayout({
         {/* Sidebar                                                    */}
         {/* ---------------------------------------------------------- */}
         <aside
-          style={{ width: navigationCollapsed ? 64 : navigationSidebar.width }}
+          style={{ width: navigationCollapsed ? 64 : navigationSidebar.width, display: immersive ? "none" : undefined }}
           className="flex min-w-0 shrink-0 flex-col overflow-hidden border-r border-border bg-surface transition-[width] duration-150"
         >
           <div
@@ -390,7 +392,7 @@ export function WorkspaceLayout({
           )}
         </aside>
 
-        {!navigationCollapsed ? (
+        {!immersive && !navigationCollapsed ? (
           <SidebarResizeHandle
             value={navigationSidebar.width}
             min={192}
@@ -404,7 +406,7 @@ export function WorkspaceLayout({
         {/* Main                                                       */}
         {/* ---------------------------------------------------------- */}
         <div className="flex min-w-0 flex-1 flex-col bg-background">
-          <header className="flex h-15 shrink-0 items-center justify-between gap-4 border-b border-border pr-4.5 pl-6 max-[720px]:px-3">
+          <header style={{ display: immersive ? "none" : undefined }} className="flex h-15 shrink-0 items-center justify-between gap-4 border-b border-border pr-4.5 pl-6 max-[720px]:px-3">
             <div className="min-w-0 flex-1">
               <h1 className="m-0 truncate text-[18px] font-semibold tracking-tight max-[720px]:hidden">
                 {pageTitle}

@@ -14,6 +14,7 @@
     "web/**/*.tsx",
     "test/fixtures/**/*.tsx",
     "test/vite.header.config.ts",
+    "test/vite.immersive.config.ts",
     "generated/**/*.d.ts",
     "vite.config.ts"
   ]

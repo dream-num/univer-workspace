@@ -28,6 +28,8 @@ import {
   Tooltip,
 } from "../../shared/ui";
 
+import { defaultSharedView, resourceShareUrl } from "../resource-view/resource-view";
+
 type Node = components["schemas"]["NodeSummary"];
 
 export function NodeActionsMenu(props: {
@@ -99,7 +101,7 @@ export function NodeActionsMenu(props: {
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(nodeUrl);
+      await navigator.clipboard.writeText(resourceShareUrl(window.location.origin, props.node.id, defaultSharedView(props.node)));
       toast.success(t("linkCopied"));
     } catch {
       toast.error(t("copyLinkFailed"));
@@ -184,7 +186,7 @@ export function NodeActionsMenu(props: {
       </ContextMenuRoot>
 
       <ShareDialog
-        node={shareOpen ? { id: props.node.id, name: props.node.name } : null}
+        node={shareOpen ? props.node : null}
         onClose={() => setShareOpen(false)}
       />
 

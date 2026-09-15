@@ -7,6 +7,7 @@ import { createBindingHost, createHtmlViewDocument } from "@univerjs-labs/html-v
 import runtime from "virtual:html-view-runtime";
 import { sessionQueryOptions } from "../auth";
 import { createWorkspaceBindingEngine } from "./workspace-binding-engine";
+import { isResourceViewChange } from "../resource-view/resource-view";
 
 const HTML_VIEW_ALLOWED_ORIGINS = ["https://cdn.jsdelivr.net"] as const;
 
@@ -44,11 +45,11 @@ function BoundHtmlView({
   const user = session.data?.authenticated ? session.data.user : null;
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState("");
-  const [status, setStatus] = useState("正在加载…");
   const hostRef = useRef<ReturnType<typeof createBindingHost> | undefined>(undefined);
   const unsyncedRef = useRef(false);
   useBlocker({
-    shouldBlockFn: async () => {
+    shouldBlockFn: async ({ current, next }) => {
+      if (isResourceViewChange(current, next)) return false;
       try {
         await hostRef.current?.flush();
         return false;
@@ -63,9 +64,9 @@ function BoundHtmlView({
     const iframe = iframeRef.current;
     if (!iframe || !user) return;
     setError("");
-    setStatus("正在加载…");
     unsyncedRef.current = false;
     const connectionId = crypto.randomUUID();
+    let disposed = false;
     let host: ReturnType<typeof createBindingHost> | undefined;
     const connect = (event: MessageEvent) => {
       if (
@@ -89,32 +90,28 @@ function BoundHtmlView({
         },
         onStatus(states) {
           unsyncedRef.current = states.some((state) => state !== CollaborationStatus.SYNCED);
-          setStatus(
-            states.every((state) => state === CollaborationStatus.SYNCED)
-              ? "已保存"
-              : states.includes(CollaborationStatus.OFFLINE)
-                ? "连接中断，修改尚未同步"
-                : states.includes(CollaborationStatus.CONFLICT)
-                  ? "同步冲突，修改尚未同步"
-                  : "同步中…",
-          );
         },
       });
       hostRef.current = host;
-      setStatus("已保存");
     };
     window.addEventListener("message", connect);
     try {
-      iframe.srcdoc = createHtmlViewDocument({
+      const document = createHtmlViewDocument({
         template: parsed,
         runtime,
         connectionId,
         ...(allowedOrigins ? { allowedOrigins } : {}),
       });
+      // StrictMode replays effects. Only the surviving effect may navigate the iframe;
+      // competing srcdoc navigations can otherwise deliver the disposed host's token.
+      queueMicrotask(() => {
+        if (!disposed) iframe.srcdoc = document;
+      });
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
     }
     return () => {
+      disposed = true;
       window.removeEventListener("message", connect);
       host?.dispose();
       hostRef.current = undefined;
@@ -122,9 +119,6 @@ function BoundHtmlView({
   }, [parsed, user?.id, allowedOrigins]);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <p role="status" className="m-0 px-4 py-2 text-sm text-muted-foreground">
-        {status}
-      </p>
       {error ? (
         <p role="alert" className="m-0 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}
@@ -167,9 +161,7 @@ export function HtmlViewFile({ resource }: { resource: { contentUrl: string; byt
         {error}
       </p>
     );
-  return source === null ? (
-    <p className="p-6">正在加载 HTML 视图…</p>
-  ) : (
+  return source === null ? null : (
     <HtmlView source={source} allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS} />
   );
 }
