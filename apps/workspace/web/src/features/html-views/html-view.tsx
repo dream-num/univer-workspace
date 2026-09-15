@@ -101,7 +101,12 @@ function BoundHtmlView({
         runtime,
         connectionId,
         ...(allowedOrigins ? { allowedOrigins } : {}),
-      });
+      }).replace(
+        /<head(?:\s[^>]*)?>/i,
+        // Allow submit events inside the sandbox, but never native form navigation.
+        // This additional CSP intersects with the SDK's resource-origin policy.
+        '$&<meta http-equiv="Content-Security-Policy" content="form-action \'none\'">',
+      );
       // StrictMode replays effects. Only the surviving effect may navigate the iframe;
       // competing srcdoc navigations can otherwise deliver the disposed host's token.
       queueMicrotask(() => {
@@ -128,7 +133,7 @@ function BoundHtmlView({
         title="HTML 绑定视图"
         className="min-h-0 w-full flex-1 border-0"
         ref={iframeRef}
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-forms"
         referrerPolicy="no-referrer"
       />
     </div>

@@ -27,7 +27,11 @@ iframe.srcdoc = createHtmlViewDocument({
 });
 ```
 
-iframe 使用 `sandbox="allow-scripts"` 和 `referrerPolicy="no-referrer"`。
+iframe 使用 `sandbox="allow-scripts allow-forms"` 和 `referrerPolicy="no-referrer"`。
+`allow-forms` 使浏览器能够触发页面的 `submit` 事件，由页面处理函数阻止默认行为并通过
+binding API 保存数据。宿主在 SDK 生成文档的 `<head>` 起始位置加入独立的 CSP
+`form-action 'none'`，与 SDK 的资源来源策略共同生效，阻止遗漏 `preventDefault()` 或直接
+调用 `form.submit()` 时的原生表单提交。允许加载的 CDN 不因此成为表单提交目标。
 宿主按 SDK 接入合同验证连接来自该 iframe、origin 为 `null`、token 与本次连接一致，
 并接收其 MessagePort；重复连接关闭多余端口。
 
