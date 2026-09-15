@@ -21,6 +21,11 @@ Use HTML binding attributes for text and standard form controls. For custom live
 ById callbacks for data processing, presentation or interaction. Both approaches can share the same cells.
 Creating a view does not authorize changing source data or formulas while authoring it.
 
+## Host navigation
+
+Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` and blocks native form navigation. Handle form submission with `preventDefault()` and the binding API. Popups and top-level navigation are unavailable; a normal link navigates inside the iframe. Return separate Workspace page links to the user instead of adding cross-page navigation that loads Workspace inside the view.
+
+
 ## Sources in a Worktree
 
 Check whether the required Unit, worksheet and source changes are available on trunk. A draft's

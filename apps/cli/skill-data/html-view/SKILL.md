@@ -37,6 +37,10 @@ Worktree, prepare the template but defer validation and publication until those 
 merged through the existing review workflow. Do not automatically merge a Worktree or substitute
 older trunk data. Creating an HTML View does not authorize changing its source cells or formulas.
 
+## Host navigation
+
+Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` and blocks native form navigation. Handle form submission with `preventDefault()` and the binding API. Popups and top-level navigation are unavailable; a normal link navigates inside the iframe. Return separate Workspace page links to the user instead of adding cross-page navigation that loads Workspace inside the view.
+
 ## Validate and create
 
 ```bash
