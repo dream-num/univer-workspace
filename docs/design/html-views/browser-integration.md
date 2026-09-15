@@ -7,7 +7,10 @@
 [Blob 预览入口](../../../apps/workspace/web/src/features/blobs/blob-preview.tsx) 使用 SDK 的
 `isHtmlViewFilename()` 将 `.univer.html` 交给 `HtmlViewFile`。
 `HtmlViewFile` 携带当前会话读取 `contentUrl`，`HtmlView` 调用 `parseHtmlView(source)`。
-读取或解析失败直接展示错误。
+读取或解析失败直接展示错误。解析器同时识别文本、控件、单元格订阅和范围订阅四种声明。
+页面通过 `data-univer-cell-subscribe` / `data-univer-range-subscribe` 声明自定义组件来源，
+用原生 HTML ID 调用 `subscribeCellById()` / `subscribeRangeById()`。SDK 管理声明的订阅、
+引用切换与释放，Workspace 不提供旧版页面订阅 API 的兼容层。
 
 [Vite 配置](../../../apps/workspace/vite.config.ts) 注册发布包提供的 `htmlViewRuntime()` 插件，
 页面组件从 `virtual:html-view-runtime` 导入运行时代码。Browser 构建负责将运行时交付给页面，

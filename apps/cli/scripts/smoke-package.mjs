@@ -8,7 +8,10 @@ import { basename, join, resolve } from "node:path";
 import { transformWorkbookDataToSnapshot } from "@univerjs-pro/collaboration";
 import { CmdRspCode, CombCmd, ErrorCode } from "@univerjs/protocol";
 
-const htmlViewSource = '<!DOCTYPE html><output data-univer-cell-text="unit-1:sheet-1:A1"></output>';
+const htmlViewSource = `<!DOCTYPE html>
+<output data-univer-cell-text="unit-1:sheet-1:A1"></output>
+<output id="metric" data-univer-cell-subscribe="unit-1:sheet-1:A1"></output>
+<div id="chart" data-univer-range-subscribe="unit-1:sheet-1:A1:C4"></div>`;
 const htmlViewBytes = Buffer.byteLength(htmlViewSource);
 
 const packageRoot = resolve(process.argv[2] ?? "package-dist");
@@ -446,7 +449,7 @@ try {
   const htmlValidation = JSON.parse((await run(executable, [
     "html-view", "validate", "--file", htmlPath, "--json",
   ], installRoot, smokeEnv)).stdout);
-  if (htmlValidation.valid !== true || htmlValidation.bindingCount !== 1 ||
+  if (htmlValidation.valid !== true || htmlValidation.bindingCount !== 3 ||
       JSON.stringify(htmlValidation.unitIds) !== JSON.stringify(["unit-1"])) {
     throw new Error("Installed HTML View validation did not inspect the trunk Sheet binding");
   }

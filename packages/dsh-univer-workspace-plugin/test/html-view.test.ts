@@ -92,6 +92,64 @@ describe("HTML view Agent tool", () => {
     );
   });
 
+  it("validates cell and range declarations and publishes the exact template", async () => {
+    const html = `<output id="metric" data-univer-cell-subscribe="unit:budget:B2"></output>
+      <div id="chart" data-univer-range-subscribe="unit:budget:A1:C10"></div>`;
+    const { run, service } = await setup(html);
+    await expect(run({ action: "validate", source: "view.univer.html" })).resolves.toEqual({
+      valid: true,
+      unitIds: ["unit"],
+      bindingCount: 2,
+    });
+    expect(service.exportUnitData).toHaveBeenCalledTimes(1);
+    await run({
+      action: "create",
+      source: "view.univer.html",
+      name: "Chart",
+      idempotencyKey: "key",
+    });
+    expect(service.uploadBlob).toHaveBeenCalledWith(
+      "user",
+      expect.objectContaining({
+        bytes: new TextEncoder().encode(html),
+      }),
+    );
+  });
+
+  it.each(["A1:C11", "A1:D10", "D11:E12"])(
+    "rejects out-of-bounds subscribed ranges before upload (%s)",
+    async (range) => {
+      const { run, service } = await setup(
+        `<div id="chart" data-univer-range-subscribe="unit:budget:${range}"></div>`,
+      );
+      await expect(
+        run({ action: "create", source: "view.univer.html", name: "Chart", idempotencyKey: "key" }),
+      ).rejects.toThrow("outside the worksheet");
+      expect(service.uploadBlob).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects a missing range worksheet before upload", async () => {
+    const { run, service } = await setup(
+      '<div id="chart" data-univer-range-subscribe="unit:missing:A1:B2"></div>',
+    );
+    await expect(
+      run({ action: "create", source: "view.univer.html", name: "Chart", idempotencyKey: "key" }),
+    ).rejects.toThrow("worksheet not found");
+    expect(service.uploadBlob).not.toHaveBeenCalled();
+  });
+
+  it.each(["A1", "C10:A1", "A0:B2"])(
+    "rejects malformed subscribed ranges before remote access (%s)",
+    async (range) => {
+      const { run, service } = await setup(
+        `<div id="chart" data-univer-range-subscribe="unit:budget:${range}"></div>`,
+      );
+      await expect(run({ action: "validate", source: "view.univer.html" })).rejects.toThrow();
+      expect(service.resolveUnitResource).not.toHaveBeenCalled();
+    },
+  );
+
   it("rejects missing worksheets, out of bounds cells and path escapes before upload", async () => {
     const { run, service } = await setup(fixture("unit", "missing"));
     await expect(run({ action: "create", source: "view.univer.html" })).rejects.toThrow(

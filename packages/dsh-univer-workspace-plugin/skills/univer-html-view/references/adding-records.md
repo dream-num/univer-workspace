@@ -99,7 +99,7 @@ rules across concurrent users.
 
 ## Update lists and check-in pages
 
-Use `subscribeRange` to refresh lists or charts. Updates contain the full current matrix. Inserting
+Declare `data-univer-range-subscribe` on each list or chart and use `subscribeRangeById()` to refresh it. Updates contain the full current matrix. Inserting
 rows does not enlarge a subscribed range or move a cell binding along with its previous record.
 Choose an inspected range suitable for the view, and retain a stable record ID in each displayed
 record. Re-read and locate that ID before writing check-in status; sorting, filtering or newly

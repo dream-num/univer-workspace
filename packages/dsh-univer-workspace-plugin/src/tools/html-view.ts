@@ -61,18 +61,22 @@ export function registerHtmlViewTool(ctx: Context): () => void {
             unitType: "sheet",
           });
           const workbook = data as IWorkbookData;
-          for (const { reference } of parsed.bindings.filter(
+          for (const binding of parsed.bindings.filter(
             (binding) => binding.reference.unitId === unitId,
           )) {
+            const { reference } = binding;
             const sheet = Object.hasOwn(workbook.sheets, reference.sheetId)
               ? workbook.sheets[reference.sheetId]
               : undefined;
             if (!sheet) throw new Error(`Source worksheet not found: ${reference.sheetId}`);
             if (
-              reference.row >= (sheet.rowCount ?? DEFAULT_WORKSHEET_ROW_COUNT) ||
-              reference.col >= (sheet.columnCount ?? DEFAULT_WORKSHEET_COLUMN_COUNT)
+              (binding.kind === "range" ? binding.reference.range.endRow : binding.reference.row) >=
+                (sheet.rowCount ?? DEFAULT_WORKSHEET_ROW_COUNT) ||
+              (binding.kind === "range"
+                ? binding.reference.range.endColumn
+                : binding.reference.col) >= (sheet.columnCount ?? DEFAULT_WORKSHEET_COLUMN_COUNT)
             )
-              throw new Error("Source cell is outside the worksheet.");
+              throw new Error("Source binding is outside the worksheet.");
           }
         }
         if (args.action === "validate")

@@ -81,8 +81,52 @@ describe("HTML View workflow", () => {
     expect(f.upload).not.toHaveBeenCalled();
   });
 
+  it("validates cell and range subscription declarations against distinct trunk sources", async () => {
+    const f = await setup(`
+      <output id="metric" data-univer-cell-subscribe="unit:budget:B2"></output>
+      <div id="chart" data-univer-range-subscribe="other:budget:A1:C10"></div>
+      <div id="list" data-univer-range-subscribe="other:budget:B2:B2"></div>
+    `);
+    await expect(f.feature.validate(f.filePath)).resolves.toEqual({
+      valid: true,
+      unitIds: ["unit", "other"],
+      bindingCount: 3,
+    });
+    expect(f.exportUnitData).toHaveBeenCalledTimes(2);
+    expect(f.upload).not.toHaveBeenCalled();
+  });
+
+  it.each(["A1:C11", "A1:D10", "D11:E12"])(
+    "rejects out-of-bounds subscribed ranges before upload (%s)",
+    async (range) => {
+      const f = await setup(
+        `<div id="chart" data-univer-range-subscribe="unit:budget:${range}"></div>`,
+      );
+      await expect(f.feature.create(f.create)).rejects.toMatchObject({
+        code: "workspace-html-view-source-invalid",
+      });
+      expect(f.upload).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["A1", "C10:A1", "A0:B2"])(
+    "rejects malformed subscribed ranges before remote access (%s)",
+    async (range) => {
+      const f = await setup(
+        `<div id="chart" data-univer-range-subscribe="unit:budget:${range}"></div>`,
+      );
+      await expect(f.feature.validate(f.filePath)).rejects.toMatchObject({
+        code: "workspace-html-view-invalid",
+      });
+      expect(f.resolveTrunkRuntimeTarget).not.toHaveBeenCalled();
+    },
+  );
+
   it("decodes Unit and worksheet IDs from binding attributes", async () => {
-    const f = await setup(binding("unit:2026", "budget/summer"));
+    const f = await setup(
+      binding("unit:2026", "budget/summer") +
+        '<div id="chart" data-univer-range-subscribe="unit%3A2026:budget%2Fsummer:A1:C10"></div>',
+    );
     f.exportUnitData.mockResolvedValue({
       id: "unit:2026",
       sheets: { "budget/summer": { rowCount: 10, columnCount: 3 } },
@@ -157,6 +201,8 @@ describe("HTML View workflow", () => {
     binding("unit", "__proto__"),
     binding("unit", "budget", "D1"),
     binding("unit", "budget", "A11"),
+    '<div id="chart" data-univer-range-subscribe="unit:missing:A1:C10"></div>',
+    '<div id="metric" data-univer-cell-subscribe="unit:budget:D1"></div>',
   ])("rejects missing worksheets and out-of-bounds cells before upload (%#)", async (html) => {
     const f = await setup(html);
     await expect(f.feature.create(f.create)).rejects.toMatchObject({

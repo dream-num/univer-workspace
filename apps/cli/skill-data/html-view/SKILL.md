@@ -6,6 +6,10 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 # Workspace HTML Views
 
 Use HTML, CSS and JavaScript to present or edit existing Sheet data in a Workspace page.
+Declare each live component's source with `data-univer-cell-subscribe` or
+`data-univer-range-subscribe`, then register `subscribeCellById()` / `subscribeRangeById()` callbacks.
+Use fine-grained declarations on the consuming elements so bindings are traceable in HTML;
+plain text and native controls use `data-univer-cell-text` / `data-univer-cell-model`.
 For binding syntax, JavaScript data access, controls and frontend libraries, load the bundled
 authoring reference through the CLI:
 
@@ -42,7 +46,7 @@ univer-workspace-cli html-view create --file ./dashboard.univer.html \
 ```
 
 `validate` parses declarative HTML bindings, reads accessible trunk Sheet data, and checks
-worksheet existence and cell bounds. It returns `{ valid, unitIds, bindingCount }`. It does not
+worksheet existence and cell/range bounds. It returns `{ valid, unitIds, bindingCount }`. It does not
 execute JavaScript or discover references created by scripts. A JavaScript-only page may report
 zero static bindings; runtime requests still require access to each source Unit.
 
