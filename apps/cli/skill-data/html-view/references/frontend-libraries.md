@@ -48,7 +48,8 @@ Lucide replaces icon placeholders with SVG; run its icon initialization after in
 
 ## Connect components to Sheet data
 
-- Use `subscribeRange` for table rows, chart series and searchable records. Each callback contains
+- Put `data-univer-range-subscribe` on the consuming table, chart or search component and use
+  `subscribeRangeById()` for its updates. Each callback contains
   the full current range; replace component data and rebuild the search collection as needed.
   Keep the original Sheet row coordinate in each record so sorting or filtering does not redirect
   an edit to the wrong cell. A component's displayed row index is not a Sheet row index.

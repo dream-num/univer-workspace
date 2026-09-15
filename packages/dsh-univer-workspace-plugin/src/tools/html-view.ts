@@ -1,3 +1,4 @@
+import { requireBlobIdempotencyKey } from "./blob-input.ts";
 import { readFile } from "node:fs/promises";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
@@ -34,7 +35,7 @@ export function registerHtmlViewTool(ctx: Context): () => void {
         idempotencyKey: {
           type: "string",
           description:
-            "Required for create. Reuse the same key only when retrying identical content and destination.",
+            "Required for create: 16–200 ASCII letters, digits, underscores or hyphens (for example a UUID). Reuse only when retrying identical content and destination.",
         },
       },
       output: {
@@ -61,24 +62,28 @@ export function registerHtmlViewTool(ctx: Context): () => void {
             unitType: "sheet",
           });
           const workbook = data as IWorkbookData;
-          for (const { reference } of parsed.bindings.filter(
+          for (const binding of parsed.bindings.filter(
             (binding) => binding.reference.unitId === unitId,
           )) {
+            const { reference } = binding;
             const sheet = Object.hasOwn(workbook.sheets, reference.sheetId)
               ? workbook.sheets[reference.sheetId]
               : undefined;
             if (!sheet) throw new Error(`Source worksheet not found: ${reference.sheetId}`);
             if (
-              reference.row >= (sheet.rowCount ?? DEFAULT_WORKSHEET_ROW_COUNT) ||
-              reference.col >= (sheet.columnCount ?? DEFAULT_WORKSHEET_COLUMN_COUNT)
+              (binding.kind === "range" ? binding.reference.range.endRow : binding.reference.row) >=
+                (sheet.rowCount ?? DEFAULT_WORKSHEET_ROW_COUNT) ||
+              (binding.kind === "range"
+                ? binding.reference.range.endColumn
+                : binding.reference.col) >= (sheet.columnCount ?? DEFAULT_WORKSHEET_COLUMN_COUNT)
             )
-              throw new Error("Source cell is outside the worksheet.");
+              throw new Error("Source binding is outside the worksheet.");
           }
         }
         if (args.action === "validate")
           return { valid: true, unitIds, bindingCount: parsed.bindings.length };
-        if (!args.name?.trim() || !args.idempotencyKey?.trim())
-          throw new Error("create requires name and idempotencyKey.");
+        if (!args.name?.trim()) throw new Error("create requires name.");
+        const idempotencyKey = requireBlobIdempotencyKey(args.idempotencyKey);
         const origin = ctx.get("workspaceAuth")?.effectiveOrigin();
         if (!origin) throw new Error("Workspace origin is unavailable.");
         const name = isHtmlViewFilename(args.name.trim())
@@ -89,7 +94,7 @@ export function registerHtmlViewTool(ctx: Context): () => void {
           bytes: new TextEncoder().encode(html),
           name,
           originalFilename: name,
-          idempotencyKey: args.idempotencyKey,
+          idempotencyKey,
           spaceId: resolveTargetSpace(scope, args.spaceId),
           parentNodeId: args.parentNodeId ?? null,
         });

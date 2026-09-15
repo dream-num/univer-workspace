@@ -30,7 +30,8 @@ category labels in column A and numeric values in column B. Replace the IDs and 
 an inspected source range. Keep numeric data numeric; format it in chart labels or tooltips.
 
 ```html
-<div id="chart" style="width:100%;height:360px"></div>
+<div id="chart" data-univer-range-subscribe="REAL_UNIT_ID:REAL_SHEET_ID:A2:B4"
+  style="width:100%;height:360px"></div>
 <p id="chart-error" role="alert"></p>
 <script type="module">
   const element = document.querySelector('#chart');
@@ -40,11 +41,7 @@ an inspected source range. Keep numeric data numeric; format it in chart labels 
   resize.observe(element);
   let subscription;
   try {
-    subscription = await window.univerBinding.subscribeRange({
-      unitId: 'REAL_UNIT_ID',
-      sheetId: 'REAL_SHEET_ID',
-      range: { startRow: 1, endRow: 3, startColumn: 0, endColumn: 1 },
-    }, ({ value }) => {
+    subscription = await window.univerBinding.subscribeRangeById('chart', ({ value }) => {
       const rows = value.filter(([label]) => label !== null && label !== '');
       chart.setOption({
         tooltip: { trigger: 'axis' },
@@ -69,7 +66,7 @@ an inspected source range. Keep numeric data numeric; format it in chart labels 
 ```
 
 Give the container a nonzero size before initialization. A custom view that removes or replaces the
-chart must also dispose its subscription, observer and chart at that point. Subscription updates
+chart must also remove the binding declaration and dispose its callback, observer and chart at that point. Subscription updates
 supply the full current range; replace chart data rather than appending each notification as new rows.
 
 Check the template for library loading order, container size, source coordinates, chart updates and

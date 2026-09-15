@@ -94,6 +94,20 @@ describe("Blob tool", () => {
     },
   );
 
+  it.each(["salon-join-v1", "a".repeat(201), "invalid key with spaces", "报名-request-0001"])(
+    "rejects invalid write key %s before calling the service",
+    async (idempotencyKey) => {
+      await expect(
+        tool.execute({ action: "upload", file: "edit.txt", idempotencyKey }, exec),
+      ).rejects.toThrow(/idempotencyKey must contain 16–200/);
+      await expect(tool.execute({ ...args, idempotencyKey }, exec)).rejects.toThrow(
+        /idempotencyKey must contain 16–200/,
+      );
+      expect(service.uploadBlob).not.toHaveBeenCalled();
+      expect(service.replaceBlob).not.toHaveBeenCalled();
+    },
+  );
+
   it("requires an upload key and a contained input before calling the service", async () => {
     await expect(tool.execute({ action: "upload", file: "edit.txt" }, exec)).rejects.toThrow(
       /idempotencyKey/,

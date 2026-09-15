@@ -5,6 +5,7 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { resolveTargetSpace, resolveToolScope } from "./tool-scope.ts";
 import { existingSessionPath, newSessionPath } from "./workspace-path.ts";
 import { registerUniverTool, text } from "./presentation.ts";
+import { requireBlobIdempotencyKey } from "./blob-input.ts";
 import { UniverError } from "./errors.ts";
 
 /** Blob bytes are published directly; they do not participate in Unit Worktrees. */
@@ -40,7 +41,8 @@ export function registerBlobTool(ctx: Context): () => void {
         },
         idempotencyKey: {
           type: "string",
-          description: "Required for upload and replace. Use a stable unique key for this write.",
+          description:
+            "Required for upload and replace: 16–200 ASCII letters, digits, underscores or hyphens (for example a UUID). Reuse only for an identical write retry.",
         },
       },
       output: { schema: { type: "json" }, render: (_args, value: unknown) => text(value) },
@@ -58,7 +60,7 @@ export function registerBlobTool(ctx: Context): () => void {
         }
         const file = required(args.file, "file");
         if (args.action === "upload") {
-          const idempotencyKey = required(args.idempotencyKey, "idempotencyKey");
+          const idempotencyKey = requireBlobIdempotencyKey(args.idempotencyKey);
           const spaceId = resolveTargetSpace(scope, args.spaceId);
           const source = await existingSessionPath(exec, file);
           return {
@@ -86,7 +88,7 @@ export function registerBlobTool(ctx: Context): () => void {
             mediaType: result.mediaType,
           };
         }
-        const idempotencyKey = required(args.idempotencyKey, "idempotencyKey");
+        const idempotencyKey = requireBlobIdempotencyKey(args.idempotencyKey);
         const etag = required(args.etag, "etag");
         const source = await existingSessionPath(exec, file);
         const result = await service.replaceBlob(scope.userId, {

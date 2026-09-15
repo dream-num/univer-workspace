@@ -6,6 +6,10 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 # Workspace HTML Views
 
 Use HTML, CSS and JavaScript to present or edit existing Sheet data in a Workspace page.
+Declare each live component's source with `data-univer-cell-subscribe` or
+`data-univer-range-subscribe`, then register `subscribeCellById()` / `subscribeRangeById()` callbacks.
+Use fine-grained declarations on the consuming elements so bindings are traceable in HTML;
+plain text and native controls use `data-univer-cell-text` / `data-univer-cell-model`.
 For binding syntax, JavaScript data access, controls and frontend libraries, load the bundled
 authoring reference through the CLI:
 
@@ -33,6 +37,10 @@ Worktree, prepare the template but defer validation and publication until those 
 merged through the existing review workflow. Do not automatically merge a Worktree or substitute
 older trunk data. Creating an HTML View does not authorize changing its source cells or formulas.
 
+## Host navigation
+
+Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` and blocks native form navigation. Handle form submission with `preventDefault()` and the binding API. Popups and top-level navigation are unavailable; a normal link navigates inside the iframe. Return separate Workspace page links to the user instead of adding cross-page navigation that loads Workspace inside the view.
+
 ## Validate and create
 
 ```bash
@@ -42,9 +50,11 @@ univer-workspace-cli html-view create --file ./dashboard.univer.html \
 ```
 
 `validate` parses declarative HTML bindings, reads accessible trunk Sheet data, and checks
-worksheet existence and cell bounds. It returns `{ valid, unitIds, bindingCount }`. It does not
+worksheet existence and cell/range bounds. It returns `{ valid, unitIds, bindingCount }`. It does not
 execute JavaScript or discover references created by scripts. A JavaScript-only page may report
 zero static bindings; runtime requests still require access to each source Unit.
+
+Blob write keys must be 16–200 ASCII letters, digits, underscores or hyphens; a UUID is a suitable key. This applies to both creation and replacement.
 
 `create` performs the same validation and uploads the validated HTML as a new Blob. It adds
 `.univer.html` to the name if missing and returns Blob identities plus `workspaceUrl`. The Space

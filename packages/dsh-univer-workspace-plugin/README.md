@@ -19,6 +19,11 @@ the installed SDK wrappers. The source manifest retains its SDK dependencies.
 DSH peers remain host-provided. Moving a dependency across this boundary requires
 checking the emitted bundle and running the isolated desktop runtime checks.
 
+Screenshot and layout-lint tools receive the same resolved Univer license as the
+headless document runtime, including the bundled development default. Local
+rendering still requires a built render page and Chrome/Chromium; see the
+[Agent render setup](../../apps/agent/README.md#render-and-screenshot-tools).
+
 ## Why run in a dedicated DSH profile?
 
 This plugin is part of the Workspace Agent application composition. The supported

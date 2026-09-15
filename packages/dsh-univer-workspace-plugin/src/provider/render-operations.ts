@@ -1,5 +1,5 @@
 /**
- * Public beta.2 render adapters used by the host tools.
+ * Published SDK render adapters used by the host tools.
  *
  * The Workspace service owns authenticated UnitData acquisition.  This
  * module owns only the target-neutral CLI SDK calls that consume that data;
@@ -45,6 +45,7 @@ export interface RenderUnitSource {
 }
 
 export interface RenderRuntimeConfig {
+  readonly license: string;
   readonly env?: NodeJS.ProcessEnv;
   readonly signal?: AbortSignal;
 }
@@ -77,7 +78,7 @@ const DEFAULT_MAX_PIXELS = 16_777_216;
 export async function lintUnitLayout(
   source: RenderUnitSource,
   pages: readonly SlideLayoutLintPageSelector[] | undefined,
-  config: RenderRuntimeConfig = {},
+  config: RenderRuntimeConfig,
 ): Promise<UnitLayoutLintReport> {
   if (source.unitType !== "slide") {
     throw new Error(`Unit is ${source.unitType}; layout lint requires a Slide Unit.`);
@@ -107,7 +108,7 @@ export async function screenshotUnit(
   source: RenderUnitSource,
   outputDirectory: string,
   target: UnitScreenshotInput["target"] | undefined,
-  config: RenderRuntimeConfig = {},
+  config: RenderRuntimeConfig,
 ): Promise<ScreenshotOperationResult> {
   const runtime = await openRenderRuntime(config);
   try {
@@ -146,12 +147,11 @@ async function openRenderRuntime(
       "Univer rendering is unavailable: configure UWH_RENDER_PAGE_ROOT (a version-matched built render page) before using univer_lint or univer_screenshot.",
     );
   }
-  const license = env.UWH_UNIVER_LICENSE?.trim() || env.UNIVER_LICENSE?.trim();
   const browserExecutablePath = env.UWH_RENDER_BROWSER?.trim() || env.UNIVER_RENDER_BROWSER?.trim();
   return await createUniverRenderRuntime({
     renderPageRoot,
     env,
-    ...(license === undefined || license === "" ? {} : { license }),
+    license: config.license,
     ...(browserExecutablePath === undefined || browserExecutablePath === ""
       ? {}
       : { browserExecutablePath }),

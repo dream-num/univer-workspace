@@ -9,7 +9,9 @@ Workspace Agent 通过能力插件的 `univer_html_view` 工具验证和发布�
 
 [页面生成 Skill](../../../packages/dsh-univer-workspace-plugin/skills/univer-html-view/SKILL.md)
 提供 Agent 所需的创作指引：普通展示和输入使用 HTML 绑定属性，自定义交互使用 JavaScript，
-样式使用 CSS。工具和 Skill 随 Agent 插件交付，示例必须匹配插件与 Browser 消费的 SDK 版本。
+自定义展示在消费数据的元素上声明 `data-univer-cell-subscribe` 或 `data-univer-range-subscribe`，
+通过 `subscribeCellById()` / `subscribeRangeById()` 注册回调。独立指标分别声明单元格，列表和图表
+各自声明所需范围，使 DOM 可以追踪元素与来源的绑定关系；样式使用 CSS。工具和 Skill 随 Agent 插件交付，示例必须匹配插件与 Browser 消费的 SDK 版本。
 SDK 完整语法与接口引用[上游文档](README.md#sdk-文档)。
 
 ## 工具与 Workspace 的边界
@@ -19,7 +21,7 @@ SDK 完整语法与接口引用[上游文档](README.md#sdk-文档)。
 
 | 操作 | Workspace 集成行为 | 结果 |
 | --- | --- | --- |
-| `validate` | 读取会话内文件，解析声明式引用，以当前用户访问来源 Sheet 的 trunk 数据，检查子表存在和坐标范围 | 验证结果、静态 Unit 列表与绑定数量 |
+| `validate` | 读取会话内文件，解析声明式引用，以当前用户访问来源 Sheet 的 trunk 数据，检查子表存在和单元格或范围末端坐标 | 验证结果、静态 Unit 列表与绑定数量 |
 | `create` | 执行相同验证，解析目标 Space 与目录，通过既有 Blob 上传流程提交原始 HTML | 新 Blob 及其 Workspace 访问地址 |
 
 `create` 要求文件名和 `idempotencyKey`；仅重试相同内容与目标时复用该 key。

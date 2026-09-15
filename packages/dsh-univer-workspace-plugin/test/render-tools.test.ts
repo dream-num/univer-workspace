@@ -24,14 +24,15 @@ function toolContext() {
 describe("render tool surface", () => {
   it("registers all three Office-compatible render names", () => {
     const { ctx, definitions } = toolContext();
-    const dispose = registerRenderTools(ctx);
+    const dispose = registerRenderTools(ctx, { license: "test-license" });
     expect(definitions.map((definition) => definition.name)).toEqual([
       "univer_lint",
       "univer_screenshot",
       "univer_compile_svg",
     ]);
-    expect(definitions.find((definition) => definition.name === "univer_lint")?.parameters)
-      .toMatchObject({ properties: { unitId: { type: "string" }, unitType: { type: "string" } } });
+    expect(
+      definitions.find((definition) => definition.name === "univer_lint")?.parameters,
+    ).toMatchObject({ properties: { unitId: { type: "string" }, unitType: { type: "string" } } });
     dispose();
   });
 
@@ -55,7 +56,14 @@ describe("render tool surface", () => {
       unitType: "slide" as const,
       unitData: { id: "slide-1" } as never,
     };
-    await expect(lintUnitLayout(source, undefined, { env: {} })).rejects.toThrow(/UWH_RENDER_PAGE_ROOT/);
-    await expect(screenshotUnit(source, "/tmp/uwh-render-test", undefined, { env: {} })).rejects.toThrow(/UWH_RENDER_PAGE_ROOT/);
+    await expect(
+      lintUnitLayout(source, undefined, { license: "test-license", env: {} }),
+    ).rejects.toThrow(/UWH_RENDER_PAGE_ROOT/);
+    await expect(
+      screenshotUnit(source, "/tmp/uwh-render-test", undefined, {
+        license: "test-license",
+        env: {},
+      }),
+    ).rejects.toThrow(/UWH_RENDER_PAGE_ROOT/);
   });
 });

@@ -154,9 +154,10 @@ export class WorkspaceHtmlViewFeature {
           { unitId },
         );
       }
-      for (const { reference } of parsed.bindings.filter(
+      for (const binding of parsed.bindings.filter(
         (binding) => binding.reference.unitId === unitId,
       )) {
+        const { reference } = binding;
         const sheet = Object.hasOwn(workbook.sheets, reference.sheetId)
           ? workbook.sheets[reference.sheetId]
           : undefined;
@@ -167,12 +168,14 @@ export class WorkspaceHtmlViewFeature {
             { unitId },
           );
         if (
-          reference.row >= (sheet.rowCount ?? DEFAULT_WORKSHEET_ROW_COUNT) ||
-          reference.col >= (sheet.columnCount ?? DEFAULT_WORKSHEET_COLUMN_COUNT)
+          (binding.kind === "range" ? binding.reference.range.endRow : binding.reference.row) >=
+            (sheet.rowCount ?? DEFAULT_WORKSHEET_ROW_COUNT) ||
+          (binding.kind === "range" ? binding.reference.range.endColumn : binding.reference.col) >=
+            (sheet.columnCount ?? DEFAULT_WORKSHEET_COLUMN_COUNT)
         ) {
           throw workspaceError(
             "workspace-html-view-source-invalid",
-            "Source cell is outside the worksheet.",
+            "Source binding is outside the worksheet.",
             { reference },
           );
         }

@@ -62,7 +62,7 @@ export function apply(ctx: Context, config: Config): void {
   const workerUrl = new URL("./worker.js", import.meta.url);
   const license = resolveLicense(config.license);
   ctx.plugin(serviceProvider, { workspaceRoot: config.workspaceRoot, license, workerUrl });
-  ctx.plugin(tools);
+  ctx.plugin(tools, { license });
   ctx.plugin(webServer, {
     license,
     workspaceRoot: config.workspaceRoot,
