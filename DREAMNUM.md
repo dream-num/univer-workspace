@@ -77,7 +77,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   SQLite file. Thread Comment anchors remain in Unit data while bodies, replies, and solved state use the Comment Adapter.
 - Uploaded Resource bytes and embedded Univer Asset bytes are stored by the configured BlobStore. Database rows
   retain their identities, metadata, and recovery state. Blob content replacement preserves Resource identity
-  and publishes directly; it does not use Worktree review.
+  and publishes directly; it does not use Worktree review. Blob Resource summaries expose the original uploaded
+  filename independently of the editable Node name, including for Browser share-link defaults.
 - Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs, sharing state, and user-authored
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal

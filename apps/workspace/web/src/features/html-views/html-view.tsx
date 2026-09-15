@@ -7,6 +7,8 @@ import { createBindingHost, createHtmlViewDocument } from "@univerjs-labs/html-v
 import runtime from "virtual:html-view-runtime";
 import { sessionQueryOptions } from "../auth";
 import { createWorkspaceBindingEngine } from "./workspace-binding-engine";
+import { useResourceView } from "../resource-view/resource-view-context";
+import { isResourceViewChange } from "../resource-view/resource-view";
 
 const HTML_VIEW_ALLOWED_ORIGINS = ["https://cdn.jsdelivr.net"] as const;
 
@@ -40,6 +42,7 @@ function BoundHtmlView({
   parsed: HtmlViewDocument;
   allowedOrigins: readonly string[] | undefined;
 }) {
+  const { immersive } = useResourceView();
   const session = useQuery(sessionQueryOptions);
   const user = session.data?.authenticated ? session.data.user : null;
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -48,7 +51,8 @@ function BoundHtmlView({
   const hostRef = useRef<ReturnType<typeof createBindingHost> | undefined>(undefined);
   const unsyncedRef = useRef(false);
   useBlocker({
-    shouldBlockFn: async () => {
+    shouldBlockFn: async ({ current, next }) => {
+      if (isResourceViewChange(current, next)) return false;
       try {
         await hostRef.current?.flush();
         return false;
@@ -66,6 +70,7 @@ function BoundHtmlView({
     setStatus("正在加载…");
     unsyncedRef.current = false;
     const connectionId = crypto.randomUUID();
+    let disposed = false;
     let host: ReturnType<typeof createBindingHost> | undefined;
     const connect = (event: MessageEvent) => {
       if (
@@ -105,16 +110,22 @@ function BoundHtmlView({
     };
     window.addEventListener("message", connect);
     try {
-      iframe.srcdoc = createHtmlViewDocument({
+      const document = createHtmlViewDocument({
         template: parsed,
         runtime,
         connectionId,
         ...(allowedOrigins ? { allowedOrigins } : {}),
       });
+      // StrictMode replays effects. Only the surviving effect may navigate the iframe;
+      // competing srcdoc navigations can otherwise deliver the disposed host's token.
+      queueMicrotask(() => {
+        if (!disposed) iframe.srcdoc = document;
+      });
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
     }
     return () => {
+      disposed = true;
       window.removeEventListener("message", connect);
       host?.dispose();
       hostRef.current = undefined;
@@ -122,7 +133,14 @@ function BoundHtmlView({
   }, [parsed, user?.id, allowedOrigins]);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <p role="status" className="m-0 px-4 py-2 text-sm text-muted-foreground">
+      <p
+        role="status"
+        className={
+          immersive && (status === "已保存" || status === "同步中…")
+            ? "sr-only"
+            : "m-0 px-4 py-2 text-sm text-muted-foreground"
+        }
+      >
         {status}
       </p>
       {error ? (

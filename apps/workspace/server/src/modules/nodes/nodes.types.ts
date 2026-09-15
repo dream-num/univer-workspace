@@ -17,6 +17,7 @@ export interface UniverResourceSummary {
 export interface BlobResourceSummary {
   readonly id: string;
   readonly kind: "blob";
+  readonly originalFilename: string;
   readonly mediaType: string;
   readonly byteSize: number;
   readonly availability: import("../access/index.js").BlobAvailability;

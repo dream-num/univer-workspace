@@ -7,3 +7,15 @@ This development entry renders the application Header with inert callbacks and n
 The fixture has its own development configuration and requires no backend. Production
 `build:web` still uses `web/index.html`; it does not include this test HTML entry.
 `pnpm --filter @univerjs/univer-workspace typecheck` also checks the relocated fixture.
+
+## Immersive resource fixture
+
+Run `pnpm --filter @univerjs/univer-workspace exec vite --config test/vite.immersive.config.ts`,
+then open `http://127.0.0.1:5183/nodes/html` (HTML) or `/nodes/text` (plain text).
+The fixture uses the real resource route, Workspace layout, ShareDialog and sandbox renderer with
+in-memory fetch responses. It never connects to the product backend or collaboration data.
+
+Check normal entry, Command/Ctrl click, browser Back and direct `?view=immersive` reload.
+The HTML instance identifier and typed notes should survive presentation changes. The immersive feature
+must not react to Escape. Share view selection must change only the generated link;
+HTML defaults to immersive and text to standard. Actual live Sheet writes require a configured backend.

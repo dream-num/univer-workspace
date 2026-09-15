@@ -220,6 +220,7 @@ export function resourceSummary(access: NodeAccess): ResourceSummary | null {
   if (
     access.resourceId &&
     access.resourceKind === "blob" &&
+    access.blobOriginalFilename &&
     access.blobMediaType &&
     access.blobByteSize !== null &&
     access.blobAvailability
@@ -227,6 +228,7 @@ export function resourceSummary(access: NodeAccess): ResourceSummary | null {
     return {
       id: access.resourceId,
       kind: "blob",
+      originalFilename: access.blobOriginalFilename,
       mediaType: access.blobMediaType,
       byteSize: access.blobByteSize,
       availability: access.blobAvailability,

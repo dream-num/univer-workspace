@@ -1,6 +1,6 @@
 import { Copy, Globe2, LockKeyhole, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { useI18n } from "../../shared/i18n";
@@ -21,14 +21,19 @@ import {
 } from "./permissions.queries";
 import { RoleBadge } from "./role-badge";
 
+import { defaultSharedView, resourceShareUrl, type ResourceView } from "../resource-view/resource-view";
+
 type ShareRole = "editor" | "viewer";
 type UserSummary = { readonly id: string; readonly displayName: string; readonly username: string; readonly avatarUrl?: string | null };
 
 export function ShareDialog(props: {
-  readonly node: { readonly id: string; readonly name: string } | null;
+  readonly node: { readonly id: string; readonly name: string; readonly resource?: { kind: string; originalFilename?: string } | null } | null;
   readonly onClose: () => void;
 }) {
   const nodeId = props.node?.id ?? "";
+  const defaultView = defaultSharedView(props.node?.resource);
+  const [view, setView] = useState<ResourceView>(defaultView);
+  useEffect(() => setView(defaultView), [nodeId, defaultView]);
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserSummary | null>(null);
   const [role, setRole] = useState<ShareRole>("viewer");
@@ -130,10 +135,7 @@ export function ShareDialog(props: {
   const grantList = grants.data?.grants ?? [];
   const linkSharingEnabled = linkSharing.data?.enabled ?? false;
   const linkSharingRole = linkSharing.data?.role ?? "viewer";
-  const shareUrl = new URL(
-    `/nodes/${encodeURIComponent(nodeId)}`,
-    window.location.origin
-  ).toString();
+  const shareUrl = resourceShareUrl(window.location.origin, nodeId, view);
 
   const copyLink = async () => {
     try {
@@ -359,6 +361,17 @@ export function ShareDialog(props: {
           <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-subtle-foreground">
             {shareUrl}
           </span>
+          {props.node?.resource ? (
+            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                className="size-3.5 accent-primary"
+                checked={view === "immersive"}
+                onChange={(event) => setView(event.target.checked ? "immersive" : "standard")}
+              />
+              {t("immersiveView")}
+            </label>
+          ) : null}
           <Button
             size="sm"
             disabled={!linkSharingEnabled || updateLinkSharing.isPending}

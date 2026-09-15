@@ -60,13 +60,16 @@ BlobAvailability:
 BlobResourceSummary:
   type: object
   additionalProperties: false
-  required: [id, kind, mediaType, byteSize, availability, capabilities]
+  required: [id, kind, originalFilename, mediaType, byteSize, availability, capabilities]
   properties:
     id:
       type: string
     kind:
       type: string
       const: blob
+    originalFilename:
+      type: string
+      description: Original uploaded filename, independent of the editable Node name.
     mediaType:
       type: string
     byteSize:
