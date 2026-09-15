@@ -1853,9 +1853,6 @@ importers:
 
   packages/workspace-file-browser:
     dependencies:
-      '@univerjs-labs/html-view':
-        specifier: 1.0.0-dev.05c502f
-        version: 1.0.0-dev.05c502f
       '@univerjs/univer-workspace-ui':
         specifier: workspace:*
         version: link:../workspace-ui

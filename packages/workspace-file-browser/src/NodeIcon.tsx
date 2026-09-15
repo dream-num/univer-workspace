@@ -1,4 +1,3 @@
-import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import {
   BasesMultiIcon,
   BoardsMultiIcon,
@@ -56,7 +55,7 @@ export function getWorkspaceBlobIcon(
   mediaType: string | null | undefined,
   filename?: string,
 ): WorkspaceIconComponent {
-  if (filename && isHtmlViewFilename(filename)) return HtmlViewIcon;
+  if (filename?.toLowerCase().endsWith(".univer.html")) return HtmlViewIcon;
   if (mediaType?.startsWith("image/")) return FileImageIcon;
   if (mediaType?.startsWith("video/")) return FileVideoIcon;
   if (mediaType?.startsWith("audio/")) return FileAudioIcon;

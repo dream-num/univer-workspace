@@ -15,7 +15,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@univerjs-labs/html-view": "1.0.0-dev.05c502f",
     "@univerjs/univer-workspace-ui": "workspace:*"
   },
   "devDependencies": {
