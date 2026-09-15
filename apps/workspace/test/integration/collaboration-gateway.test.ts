@@ -3,6 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { Readable } from "node:stream";
+import { randomUUID } from "node:crypto";
+import {
+  getSheetsEmptySnapshot,
+  LocaleType,
+  mergeWorksheetSnapshotWithDefault,
+} from "@univerjs/core";
+import { SetRangeValuesMutation } from "@univerjs/sheets";
 import {
   deserializeToCombResponse,
   serializeCombRequest,
@@ -59,6 +67,307 @@ afterEach(async () => {
 });
 
 describe("collaboration gateway", () => {
+  it("lets HTML viewers edit bound data and editors replace templates with inherited source authority", async () => {
+    let { application, origin, collaborationDatabaseFilename, directory, server } = await startApplication();
+    const owner = await application.identity.registerWithPassword({
+      username: "html-owner",
+      displayName: "Owner",
+      password: "correct horse battery staple",
+    });
+    const editor = await application.identity.registerWithPassword({
+      username: "html-editor",
+      displayName: "Editor",
+      password: "correct horse battery staple",
+    });
+    const ownerId = owner.view.user.id;
+    const editorId = editor.view.user.id;
+    const cookie = `${application.identity.cookieName}=${editor.cookieValue}`;
+    const ownerCookie = `${application.identity.cookieName}=${owner.cookieValue}`;
+    const spaceId = application.spaces.list(ownerId).spaces[0]!.id;
+    const initialData = getSheetsEmptySnapshot("placeholder", LocaleType.EN_US, "Private source");
+    initialData.sheetOrder = ["sheet"];
+    initialData.sheets = {
+      sheet: mergeWorksheetSnapshotWithDefault({ id: "sheet", name: "Sheet 1" }),
+    };
+    const created = await application.resources.create(ownerId, randomUUID(), {
+      kind: "univer",
+      spaceId,
+      parentNodeId: null,
+      name: "Private source",
+      unitType: "sheet",
+      initialData,
+    });
+    if (created.status === 202) throw new Error("Pending resource");
+    const unitId = created.body.node.resource!.unitId!;
+    const unrelated = await application.resources.create(ownerId, randomUUID(), {
+      kind: "univer",
+      spaceId,
+      parentNodeId: null,
+      name: "Unrelated",
+      unitType: "sheet",
+    });
+    if (unrelated.status === 202) throw new Error("Pending resource");
+    const source = `<html><head></head><body><input data-univer-cell-model="${unitId}:sheet:A1"></body></html>`;
+    const upload = application.blobs.createUpload(ownerId, randomUUID(), {
+      spaceId,
+      parentNodeId: null,
+      name: "view.univer.html",
+      originalFilename: "view.univer.html",
+      byteSize: Buffer.byteLength(source),
+    });
+    await application.blobs.upload(
+      ownerId,
+      upload.body.upload.id,
+      String(Buffer.byteLength(source)),
+      Readable.from([source]),
+    );
+    await application.blobs.complete(ownerId, upload.body.upload.id);
+    const resourceId = upload.body.upload.resourceId;
+    const nodeId = upload.body.upload.nodeId;
+    const base = `/universer-api/html-views/${resourceId}`;
+    const snapshotPath = `/snapshot/${UniverType.UNIVER_SHEET}/unit/${unitId}/rev/0`;
+    const resolve = () =>
+      fetch(`${origin}${base}${snapshotPath}`, { headers: { cookie } });
+    expect((await resolve()).status).toBe(403);
+    application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "viewer" });
+    expect(
+      (await fetch(`${origin}/api/unit-resources/${unitId}`, { headers: { cookie } })).status,
+    ).toBe(404);
+    expect(
+      (await fetch(`${origin}/universer-api${snapshotPath}`, { headers: { cookie } })).status,
+    ).toBe(403);
+    const snapshot = await fetch(`${origin}${base}${snapshotPath}`, { headers: { cookie } });
+    expect(snapshot.status).toBe(200);
+    await expect(snapshot.json()).resolves.toMatchObject({ snapshot: { unitID: unitId } });
+    expect(
+      (
+        await fetch(
+          `${origin}${base}/snapshot/2/unit/${unrelated.body.node.resource!.unitId}/rev/0`,
+          { headers: { cookie } },
+        )
+      ).status,
+    ).toBe(403);
+    const authz = await fetch(`${origin}${base}/authz/-/object/-/batch_allowed`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({
+        requests: [
+          {
+            unitID: unitId,
+            objectID: unitId,
+            actions: [UnitAction.Edit, UnitAction.Share, UnitAction.ManageCollaborator],
+          },
+        ],
+      }),
+    });
+    await expect(authz.json()).resolves.toMatchObject({
+      objectActions: [
+        {
+          actions: [
+            { action: UnitAction.Edit, allowed: true },
+            { action: UnitAction.Share, allowed: false },
+            { action: UnitAction.ManageCollaborator, allowed: false },
+          ],
+        },
+      ],
+    });
+    const content = application.access.resolveResource(ownerId, resourceId)!;
+    if (content.kind !== "blob") throw new Error("Expected Blob");
+    await expect(
+      application.blobs.replace(
+        editorId,
+        resourceId,
+        randomUUID(),
+        `"${content.etag}"`,
+        String(Buffer.byteLength(source)),
+        Readable.from([source]),
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const direct = await joinUnit(origin, ownerCookie, unitId);
+    const delegated = await joinUnit(origin, cookie, unitId, base);
+    const broadcast = nextCombResponse(direct.socket, (value) =>
+      JSON.stringify(value).includes("html-write"),
+    );
+    const submit = await fetch(`${origin}${base}/comb/2/unit/${unitId}/new_changes`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({
+        unitID: unitId,
+        type: 2,
+        memberID: delegated.memberId,
+        changeset: {
+          unitID: unitId,
+          type: 2,
+          memberID: delegated.memberId,
+          userID: "forged",
+          baseRev: 1,
+          revision: 2,
+          sid: "html-write",
+          reqId: 1,
+          mutations: [
+            {
+              id: SetRangeValuesMutation.id,
+              data: JSON.stringify({
+                unitId,
+                subUnitId: "sheet",
+                cellValue: { 0: { 0: { v: "HTML edit", t: 1 } } },
+              }),
+            },
+          ],
+        },
+      }),
+    });
+    expect(submit.status).toBe(200);
+    await expect(submit.json()).resolves.toMatchObject({ error: { code: ErrorCode.OK } });
+    expect(JSON.stringify(await broadcast)).toContain("html-write");
+    const stored = new DatabaseSync(collaborationDatabaseFilename);
+    try {
+      const row = stored
+        .prepare(
+          "SELECT payload_json FROM collaboration_changesets WHERE unit_id = ? AND revision = 2",
+        )
+        .get(unitId)!;
+      expect(JSON.parse(String(row.payload_json))).toMatchObject({
+        userID: editorId,
+        mutations: [{ id: SetRangeValuesMutation.id }],
+      });
+    } finally {
+      stored.close();
+    }
+    const sourceUpdate = nextCombResponse(delegated.socket, (value) =>
+      JSON.stringify(value).includes("source-write"),
+    );
+    const sourceSubmit = await fetch(`${origin}/universer-api/comb/2/unit/${unitId}/new_changes`, {
+      method: "POST",
+      headers: { cookie: ownerCookie, "content-type": "application/json" },
+      body: JSON.stringify({
+        unitID: unitId,
+        type: 2,
+        memberID: direct.memberId,
+        changeset: {
+          unitID: unitId,
+          type: 2,
+          memberID: direct.memberId,
+          baseRev: 2,
+          revision: 3,
+          sid: "source-write",
+          reqId: 1,
+          mutations: [{
+            id: SetRangeValuesMutation.id,
+            data: JSON.stringify({
+              unitId,
+              subUnitId: "sheet",
+              cellValue: { 0: { 0: { v: "Source edit", t: 1 } } },
+            }),
+          }],
+        },
+      }),
+    });
+    expect(sourceSubmit.status).toBe(200);
+    await expect(sourceSubmit.json()).resolves.toMatchObject({ error: { code: ErrorCode.OK } });
+    expect(JSON.stringify(await sourceUpdate)).toContain("Source edit");
+    const closed = new Promise<void>((resolve) =>
+      delegated.socket.addEventListener("close", () => resolve(), { once: true }),
+    );
+    application.permissions.removeNodeGrant(ownerId, nodeId, editorId);
+    expect((await resolve()).status).toBe(403);
+    await closed;
+    expect(delegated.socket.readyState).toBe(WebSocket.CLOSED);
+    application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "editor" });
+    const reconnected = await joinUnit(origin, cookie, unitId, base);
+    const replaced = new Promise<void>((resolve) =>
+      reconnected.socket.addEventListener("close", () => resolve(), { once: true }),
+    );
+    // Template editors need no direct source grant to keep existing bindings.
+    const revised = source.replace("<body>", "<body><h1>Updated template</h1>");
+    await application.blobs.replace(
+      editorId,
+      resourceId,
+      randomUUID(),
+      `"${content.etag}"`,
+      String(Buffer.byteLength(revised)),
+      Readable.from([revised]),
+    );
+    expect((await resolve()).status).toBe(200);
+    await replaced;
+    const replaceTemplate = async (actorId: string, html: string) => {
+      const current = application.access.resolveResource(actorId, resourceId)!;
+      if (current.kind !== "blob") throw new Error("Expected Blob");
+      return application.blobs.replace(
+        actorId, resourceId, randomUUID(), `"${current.etag}"`,
+        String(Buffer.byteLength(html)), Readable.from([html]),
+      );
+    };
+    const withSource = (id: string) => source.replace(
+      "</body>", `<span data-univer-cell-text="${id}:sheet:A1"></span></body>`,
+    );
+    await expect(replaceTemplate(editorId, withSource(unrelated.body.node.resource!.unitId!)))
+      .rejects.toMatchObject({ status: 403 });
+    expect((await resolve()).status).toBe(200);
+    const ownSheet = await application.resources.create(editorId, randomUUID(), {
+      kind: "univer",
+      spaceId: application.spaces.list(editorId).spaces[0]!.id,
+      parentNodeId: null,
+      name: "Editor source",
+      unitType: "sheet",
+    });
+    if (ownSheet.status === 202) throw new Error("Pending resource");
+    const ownUnitId = ownSheet.body.node.resource!.unitId!;
+    await replaceTemplate(editorId, withSource(ownUnitId));
+    // A later author with no direct access to the new source can retain both grants.
+    await replaceTemplate(ownerId, withSource(ownUnitId).replace("<body>", "<body><h1>Owner edit</h1>"));
+    // Provenance survives old Blob cleanup and a fresh server process lifetime.
+    await application.blobs.runMaintenance("html-test-cleanup");
+    const directClosed = new Promise<void>((resolve) =>
+      direct.socket.addEventListener("close", () => resolve(), { once: true }),
+    );
+    direct.socket.close();
+    await directClosed;
+    await stopApplication(application, server);
+    ({ application, origin } = await startApplication(directory));
+    application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "viewer" });
+    expect((await resolve()).status).toBe(200);
+    expect((await fetch(`${origin}${base}/snapshot/2/unit/${ownUnitId}/rev/0`, {
+      headers: { cookie },
+    })).status).toBe(200);
+    await expect(replaceTemplate(editorId, source)).rejects.toMatchObject({ status: 403 });
+    // Removing a source drops its inherited authority; re-adding it requires a new grant.
+    application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "editor" });
+    await replaceTemplate(editorId, "<html><head></head><body>No sources</body></html>");
+    expect((await resolve()).status).toBe(403);
+    await expect(replaceTemplate(editorId, source)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("rejects HTML publication that delegates inaccessible sources", async () => {
+    const { application, origin } = await startApplication();
+    const owner = await application.identity.registerWithPassword({
+      username: "html-publisher",
+      displayName: "Publisher",
+      password: "correct horse battery staple",
+    });
+    const userId = owner.view.user.id;
+    const spaceId = application.spaces.list(userId).spaces[0]!.id;
+    const source =
+      '<html><head></head><body><span data-univer-cell-text="inaccessible:sheet:A1"></span></body></html>';
+    const upload = application.blobs.createUpload(userId, randomUUID(), {
+      spaceId,
+      parentNodeId: null,
+      name: "view.univer.html",
+      originalFilename: "view.univer.html",
+      byteSize: Buffer.byteLength(source),
+    });
+    await application.blobs.upload(
+      userId,
+      upload.body.upload.id,
+      String(Buffer.byteLength(source)),
+      Readable.from([source]),
+    );
+    await expect(application.blobs.complete(userId, upload.body.upload.id)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(application.access.resolveResource(userId, upload.body.upload.resourceId)).toBeNull();
+  });
   it("serves complete Thread Comment workflows for all five Trunk Unit types", async () => {
     const { application, origin } = await startApplication();
     const owner = await application.identity.registerWithPassword({
@@ -1194,15 +1503,16 @@ function commentWrite(
 async function joinUnit(
   origin: string,
   cookie: string,
-  unitId: string
+  unitId: string,
+  prefix = "/universer-api"
 ) {
   const ticketResponse = await fetch(
-    `${origin}/universer-api/user/session-ticket`,
+    `${origin}${prefix}/user/session-ticket`,
     { headers: { cookie } }
   );
   const ticket = (await ticketResponse.json()) as { readonly ticket: string };
   const socket = new WebSocket(
-    `${origin.replace(/^http/, "ws")}/universer-api/comb/connect?sessionTicket=${encodeURIComponent(ticket.ticket)}`
+    `${origin.replace(/^http/, "ws")}${prefix}/comb/connect?sessionTicket=${encodeURIComponent(ticket.ticket)}`
   );
   sockets.push(socket);
   await new Promise<void>((resolve, reject) => {
@@ -1242,20 +1552,24 @@ async function joinUnit(
   };
 }
 
-function nextCombResponse(socket: WebSocket) {
+function nextCombResponse(
+  socket: WebSocket,
+  accept: (value: ReturnType<typeof deserializeToCombResponse>) => boolean = () => true,
+) {
   return new Promise<ReturnType<typeof deserializeToCombResponse>>(
     (resolve, reject) => {
-      socket.addEventListener(
-        "message",
-        (event) => {
-          try {
-            resolve(deserializeToCombResponse(event));
-          } catch (error) {
-            reject(error);
-          }
-        },
-        { once: true }
-      );
+      const listener = (event: MessageEvent) => {
+        try {
+          const value = deserializeToCombResponse(event);
+          if (!accept(value)) return;
+          socket.removeEventListener("message", listener);
+          resolve(value);
+        } catch (error) {
+          socket.removeEventListener("message", listener);
+          reject(error);
+        }
+      };
+      socket.addEventListener("message", listener);
     }
   );
 }
@@ -1293,6 +1607,7 @@ async function startApplication(existingDirectory?: string): Promise<{
     port: 3020,
     databaseFilename: join(directory, "product.sqlite"),
     collaborationDatabaseFilename,
+    blobDirectory: join(directory, "blobs"),
     secureCookies: false,
     sessionTtlMs: 60_000,
   });

@@ -24,9 +24,22 @@ Workspace 拥有 Blob 的产品入口、Space 与资源目录、用户身份、�
 页面文件和来源 Sheet 是独立资源。HTML、CSS、JavaScript 保存在 Blob 中；单元格数据仍由
 来源 Unit 的协同服务保存。修改页面中的绑定值会写入来源 Sheet，不会改写 HTML 文件。
 
-打开 HTML 文件的权限不授予来源 Sheet 权限。Browser 为当前登录用户逐个解析来源资源，
-服务端校验实际读写权限。当前集成访问 Sheet 的 trunk；HTML Blob 不进入 Unit Worktree。
-Agent 发布页面也不修改来源 Sheet。
+HTML 角色控制文件本身：viewer 可以完整运行页面（包括表单提交和数据写入），editor 还可
+修改模板，owner/admin 管理权限。所有可查看 HTML 的用户均可通过页面读写声明引用的完整
+Sheet，无需另外获得来源权限。授权仅用于 `/universer-api/html-views/{resourceId}` 下的
+Snapshot、协同和权限查询；直接打开来源 Resource 仍使用原有 ACL。本阶段不提供单元格或
+范围隔离，页面界面本身不能限制用户可写的 Sheet 范围。
+
+上传完成或替换模板时，服务端使用公开 HTML parser 读取声明。新引用要求本次发布者可编辑
+对应 Sheet；保留的引用沿用上一版授权，即使本次编辑者没有直接来源权限。每版已完成的 Blob
+Operation 保存 `htmlSourcePublishers`（Unit ID → 授权发布者），与模板切换在同一产品事务提交。
+移除的引用不保留授权，重新添加时重新验证。运行时检查当前 HTML 查看权限及每个授权发布者
+的来源编辑权限。客户端不能通过改 Unit ID 扩大授权，脚本使用的 Unit 必须在绑定属性中声明。
+撤权、退出登录、来源不可访问或模板替换会关闭旧 HTML 协同连接（最长约一秒）；后续 HTTP
+请求立即按当前权限检查。发布元数据复用现有 Operation，不新增数据库 schema 或持久化票据。
+
+当前集成访问 Sheet 的 trunk；HTML Blob 不进入 Unit Worktree。Agent 发布页面本身不修改
+来源 Sheet，页面中的数据写入仍通过现有协同服务完成。
 
 ## 集成流程
 

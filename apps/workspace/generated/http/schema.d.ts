@@ -701,7 +701,10 @@ export interface paths {
         get: operations["getBlobContent"];
         /**
          * Replace all Blob bytes while preserving Resource identity.
-         * @description Publishes immediately without Worktree review. Requires editor access, Content-Length,
+         * @description Replacing a .univer.html template uses ordinary editor access. Existing source
+         *     authorizations are retained; adding a source requires the publisher's direct
+         *     edit permission on that Sheet. Removed sources lose their inherited authorization.
+         *     Publishes immediately without Worktree review. Requires editor access, Content-Length,
          *     one quoted strong If-Match ETag from the downloaded bytes, and a stable Idempotency-Key.
          *     Preserves the Node, name, original filename, location, ACL and Resource ID.
          *     A successful replacement generates a fresh ETag even for identical bytes.

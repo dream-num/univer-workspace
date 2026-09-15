@@ -66,6 +66,12 @@ export function createBlobsModule(options: {
   readonly store: BlobStore;
   readonly maxBlobBytes?: number;
   readonly now?: () => number;
+  readonly validateHtmlPublication?: (
+    userId: string,
+    objectKey: string,
+    filename: string,
+    previous?: { readonly resourceId: string; readonly objectKey: string },
+  ) => Promise<Readonly<Record<string, string>> | undefined>;
 }): BlobsModule {
   const now = options.now ?? Date.now;
   const maxBlobBytes = options.maxBlobBytes ?? 512 * 1024 * 1024;
@@ -166,6 +172,13 @@ export function createBlobsModule(options: {
           body,
           expectedByteSize: byteSize,
         });
+        const previous = requireWritable();
+        const htmlSourcePublishers = await options.validateHtmlPublication?.(
+          userId,
+          reserved.objectKey,
+          previous.originalFilename,
+          { resourceId, objectKey: previous.objectKey },
+        );
         // Resolve live permissions after the asynchronous upload, immediately before the product transaction.
         requireWritable();
         return options.repository.completeReplacement(
@@ -174,6 +187,7 @@ export function createBlobsModule(options: {
           reserved.objectKey,
           stored,
           now(),
+          htmlSourcePublishers,
         );
       } catch (error) {
         const failure = replacementError(error);
@@ -274,7 +288,13 @@ export function createBlobsModule(options: {
       if (!object || object.byteSize !== value.upload.byte_size) {
         throw conflict("Stored Blob does not match the Upload Session.");
       }
-      const result = options.repository.complete(uploadId, now());
+      const htmlSourcePublishers = await options.validateHtmlPublication?.(
+        userId,
+        value.upload.object_key,
+        value.upload.original_filename,
+      );
+      validateTarget(userId, value.payload, options.access);
+      const result = options.repository.complete(uploadId, now(), htmlSourcePublishers);
       return completed(result, 201);
     },
 

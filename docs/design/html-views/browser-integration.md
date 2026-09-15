@@ -42,7 +42,7 @@ binding API 保存数据。宿主在 SDK 生成文档的 `<head>` 起始位置�
 
 ```ts
 host = createBindingHost(event.ports[0], {
-  loadEngine: (unitId, signal) => createWorkspaceBindingEngine(unitId, user, signal),
+  loadEngine: (unitId, signal) => createWorkspaceBindingEngine(unitId, user, signal, htmlResourceId),
   onError: setError,
   onClose() {
     if (hostRef.current === host) hostRef.current = undefined;
@@ -63,15 +63,19 @@ host = createBindingHost(event.ports[0], {
 [`createWorkspaceBindingEngine`](../../../apps/workspace/web/src/features/html-views/workspace-binding-engine.ts)
 承担应用适配，按以下顺序执行：
 
-1. 通过 `GET /api/unit-resources/{unitId}` 解析来源资源。
-2. 通过 `POST /api/resources/{resourceId}/open` 获取当前用户的打开结果。
-3. 确认来源为 Sheet、返回的 Unit ID 与请求一致，读取 `editorMode`。
-4. 创建 Engine，传入 `unitId`、`collaborationClientConfig` 和 Workspace 的 `createUniver` 工厂。
-5. 等待 `engine.load()`；只读来源调用 Workbook 的 `setEditable(false)`，再返回 Engine。
+1. 打开已发布 HTML 时，将 Snapshot、Changeset、WebSocket、Session Ticket 和 Authz
+   指向 `/universer-api/html-views/{resourceId}`；snapshot override 同样使用这个前缀。
+   服务端在这些既有请求中校验 HTML 和来源权限，无需单独的来源预检接口。
+2. 没有已发布 HTML Resource 上下文的独立预览保留普通来源检查：`GET /api/unit-resources/{unitId}` 与
+   `POST /api/resources/{resourceId}/open`，不获得 HTML 委托权限。
+3. 创建 Engine，传入 `unitId`、`collaborationClientConfig` 和 Workspace 的 `createUniver` 工厂。
+4. 等待 `engine.load()` 完成服务端授权和数据加载；失败时释放 Engine，不回退到直接来源访问。
+   独立预览的只读来源调用 Workbook 的 `setEditable(false)`，再返回 Engine。
 
-`collaborationClientConfig` 接入 Workspace 同源的 `/universer-api` snapshot、changeset、
-WebSocket、session ticket 和授权入口。Workspace 的 snapshot override 与 referenced-Unit
-provider 均使用 trunk 上下文。
+`collaborationClientConfig` 接入 Workspace 同源的普通或 HTML scoped 协同入口。
+两个入口使用独立的 ticket store 与已加入会话映射，防止 HTML 身份被复用到普通 Unit 请求。
+它们通过同一 Collaboration Service 的事件保持实时同步。Workspace 的 snapshot override
+与 referenced-Unit provider 均使用 trunk 上下文。
 
 Workspace 使用自定义 `createUniver(config)`，以装配当前用户、license、公式与协同插件、
 snapshot override 和 referenced-Unit provider。工厂返回 `{ univer, univerAPI }`，Engine

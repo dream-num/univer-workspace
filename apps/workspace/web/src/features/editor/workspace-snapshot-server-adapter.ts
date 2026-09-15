@@ -55,6 +55,7 @@ export type WorkspaceHostSnapshotScope =
     };
 
 export interface WorkspaceSnapshotServerOverrideOptions {
+  readonly trunkSnapshotServerUrl?: string;
   readonly hostScope: WorkspaceHostSnapshotScope;
   readonly origin: string;
   readonly resolveMergePreview: (
@@ -85,6 +86,7 @@ export function withWorkspaceSnapshotServerOverride(
             configService,
             httpService,
             options.origin,
+            options.trunkSnapshotServerUrl,
           );
           return new WorkspaceSnapshotServerAdapter(
             createService(options.hostScope),
@@ -297,6 +299,7 @@ function createSnapshotServiceFactory(
   configService: IConfigService,
   httpService: HTTPService,
   origin: string,
+  trunkSnapshotServerUrl = "/universer-api/snapshot",
 ): (
   scope: WorkspaceHostSnapshotScope,
 ) => ISnapshotServerServiceContract {
@@ -309,7 +312,7 @@ function createSnapshotServiceFactory(
 
     const collaborationConfig: Partial<IUniverCollaborationClientConfig> =
       scope.kind === "trunk"
-        ? { snapshotServerUrl: "/universer-api/snapshot" }
+        ? { snapshotServerUrl: trunkSnapshotServerUrl }
         : createWorktreeCollaborationConfig({
             origin,
             worktreeID: scope.worktreeId,

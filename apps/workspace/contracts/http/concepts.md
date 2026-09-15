@@ -6,6 +6,13 @@ explains behavior that spans multiple operations.
 
 ## Conventions
 
+HTML viewers use the existing collaboration protocol under
+`/universer-api/html-views/{resourceId}` to access declared source Sheets. Authorization
+runs within those requests and grants complete Sheet content editing, without a direct source ACL
+grant. HTML template replacement uses ordinary editor access. Publication retains
+authority for existing sources and verifies the author's edit access for new sources.
+Running the page, including data writes, requires only HTML viewer access.
+
 - JSON fields use `camelCase`; timestamps are UTC ISO 8601 strings.
 - IDs and cursors are opaque strings.
 - Authentication uses an opaque `HttpOnly` cookie. React never reads a session

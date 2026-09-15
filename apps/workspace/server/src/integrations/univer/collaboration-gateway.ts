@@ -47,6 +47,10 @@ import { protocolUser } from "./protocol-user.js";
 import { setFinalMutationSize } from "./changeset-observation.js";
 import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.js";
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
+import type {
+  HtmlViewsModule,
+  HtmlViewScope,
+} from "../../modules/html-views/html-views.service.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
 const MILLISECONDS_PER_SECOND = 1_000;
@@ -67,6 +71,7 @@ export function createCollaborationGateway(options: {
   readonly worktreeService: UniverCollabWorktreeService;
   readonly worktrees: WorktreesModule;
   readonly worktreeChangeFeed: WorktreeChangeFeed;
+  readonly htmlViews: HtmlViewsModule;
 }): CollaborationGateway {
   const {
     service,
@@ -80,6 +85,42 @@ export function createCollaborationGateway(options: {
   } = options;
   const ticketStore = new MemorySessionTicketStore();
   const endpoint = new UniverCollabEndpoint(service, { ticketStore });
+  // Separate tickets and joined-session maps prevent delegation leaking into ordinary Unit APIs.
+  const htmlEndpoint = new UniverCollabEndpoint(service, {
+    protocolBasePath: "/universer-api/html-views/:htmlResourceId",
+  });
+  const htmlConnections = new Map<
+    NodeTransportConnection,
+    {
+      userId: string;
+      scope: HtmlViewScope;
+      cookie: string | undefined;
+    }
+  >();
+  async function scopedAccess(
+    userId: string,
+    unitId: string,
+    customData: Record<string, unknown>,
+    write = false,
+  ) {
+    const scope = customData.htmlViewScope as HtmlViewScope | undefined;
+    if (scope) {
+      if (!identity.getSession(customData.htmlViewCookie as string | undefined).authenticated) {
+        throw new CollabError("PERMISSION_DENIED", "HTML session expired.");
+      }
+      try {
+        return (await options.htmlViews.authorize(userId, scope, unitId))!;
+      } catch {
+        throw new CollabError(
+          "PERMISSION_DENIED",
+          "Cannot access this Sheet through the HTML view.",
+        );
+      }
+    }
+    return write
+      ? requireUnitEdit(access, userId, unitId)
+      : requireUnitAccess(access, userId, unitId);
+  }
   const commentEndpoint = new UniverCommentEndpoint({
     service: commentService,
     roomHost: endpoint,
@@ -106,30 +147,47 @@ export function createCollaborationGateway(options: {
       await next();
       return;
     }
-    requireUnitAccess(access, context.userID, context.request.unitID);
+    await scopedAccess(context.userID, context.request.unitID, context.customData);
     await next();
   });
   service.use("submitChangeset", async (context, next) => {
-    requireUnitEdit(
-      access,
-      context.userID,
-      context.request.changeset.unitID
-    );
+    await scopedAccess(context.userID, context.request.changeset.unitID, context.customData, true);
     setServerChangesetCreateTime(context.request.changeset);
     await next();
   });
   service.use("applyChangeset", async (context, next) => {
-    requireUnitEdit(
-      access,
-      context.userID,
-      context.request.changeset.unitID
-    );
+    await scopedAccess(context.userID, context.request.changeset.unitID, context.customData, true);
     await next();
   });
   service.use("commitChangeset", async (context, next) => {
+    if (context.customData.htmlViewScope) {
+      await scopedAccess(
+        context.userID,
+        context.request.changeset.unitID,
+        context.customData,
+        true,
+      );
+    }
     setFinalMutationSize(context.changeset);
     await next();
   });
+  for (const action of ["deleteUnits", "recoverUnits"] as const) {
+    service.use(
+      action,
+      async (
+        context: { readonly customData: Record<string, unknown> },
+        next: () => Promise<void>,
+      ) => {
+        if (context.customData.htmlViewScope) {
+          throw new CollabError(
+            "PERMISSION_DENIED",
+            "HTML delegation only grants content editing.",
+          );
+        }
+        await next();
+      },
+    );
+  }
 
   commentService.use("listComments", async (context, next) => {
     requireCommentAccess(access, context.userID, context.request.unitID, false);
@@ -168,36 +226,48 @@ export function createCollaborationGateway(options: {
   historyService.use("listHistoryCreators", authorizeHistoryRead);
   historyService.use("getHistoryChangesets", authorizeHistoryRead);
 
-  endpoint.use("connect", async (context, next) => {
-    const user = context.session.customData.user as
-      | ReturnType<typeof protocolUser>
-      | undefined;
-    context.member.name = user?.name ?? context.session.userID;
-    context.member.avatar = user?.avatar ?? "";
-    await next();
-  });
-  endpoint.use("joinUnit", async (context, next) => {
-    const resource = requireUnitAccess(
-      access,
-      context.session.userID,
-      context.unitID
-    );
-    if (resource.kind !== "univer") {
-      throw new CollabError("INVALID_REQUEST", "Unknown Unit Resource.");
-    }
-    await service.getUnitLoadData(
-      {
-        unitID: context.unitID,
-        type: protocolUnitType(resource.unitType),
-        revision: 0,
-      },
-      {
-        userID: context.session.userID,
-        customData: context.session.customData,
+  for (const currentEndpoint of [endpoint, htmlEndpoint]) {
+    currentEndpoint.use("connect", async (context, next) => {
+      const scope = context.session.customData.htmlViewScope as HtmlViewScope | undefined;
+      if (currentEndpoint === htmlEndpoint) {
+        if (!scope) throw new CollabError("PERMISSION_DENIED", "HTML context is required.");
+        await options.htmlViews.authorize(context.session.userID, scope);
+        htmlConnections.set(context.connection, {
+          userId: context.session.userID,
+          scope,
+          cookie: context.session.customData.htmlViewCookie as string | undefined,
+        });
       }
-    );
-    await next();
-  });
+      const user = context.session.customData.user as
+        | ReturnType<typeof protocolUser>
+        | undefined;
+      context.member.name = user?.name ?? context.session.userID;
+      context.member.avatar = user?.avatar ?? "";
+      await next();
+    });
+    currentEndpoint.use("joinUnit", async (context, next) => {
+      const resource = await scopedAccess(
+        context.session.userID,
+        context.unitID,
+        context.session.customData,
+      );
+      if (resource.kind !== "univer") {
+        throw new CollabError("INVALID_REQUEST", "Unknown Unit Resource.");
+      }
+      await service.getUnitLoadData(
+        {
+          unitID: context.unitID,
+          type: protocolUnitType(resource.unitType),
+          revision: 0,
+        },
+        {
+          userID: context.session.userID,
+          customData: context.session.customData,
+        }
+      );
+      await next();
+    });
+  }
 
   for (const action of [
     "createWorktree",
@@ -294,11 +364,27 @@ export function createCollaborationGateway(options: {
   transport.use(async (context, next) => {
     const session = identity.getSession(cookieHeader(context));
     if (!session.authenticated) {
-      unauthenticated(context);
+      rejectTransportRequest(context, 401, ErrorCode.UNAUTHENTICATED, "Authentication required.");
       return;
     }
     context.userID = session.user.id;
     context.customData.user = protocolUser(session.user);
+    // Transport middleware runs before route parameters are populated.
+    const htmlPath = new URL(context.incomingMessage.url ?? "/", "http://localhost").pathname.match(
+      /^\/universer-api\/html-views\/([^/]+)\//,
+    );
+    if (htmlPath) {
+      try {
+        context.customData.htmlViewScope = options.htmlViews.open(
+          session.user.id,
+          decodeURIComponent(htmlPath[1]!),
+        );
+      } catch {
+        rejectTransportRequest(context, 403, ErrorCode.PERMISSION_DENIED, "Cannot access this HTML view.");
+        return;
+      }
+      context.customData.htmlViewCookie = cookieHeader(context);
+    }
     await next();
   });
   transport.register(historyEndpoint);
@@ -306,6 +392,11 @@ export function createCollaborationGateway(options: {
   transport.register(worktreeEndpoint);
   transport.register(worktreeChangeFeed.endpoint(ticketStore));
   transport.register(trackConnections(endpoint, nodeAccessConnections));
+  transport.register(
+    trackConnections(htmlEndpoint, nodeAccessConnections, (connection) =>
+      htmlConnections.delete(connection),
+    ),
+  );
 
   const router = Router();
   router.use((request, response, next) => {
@@ -323,34 +414,63 @@ export function createCollaborationGateway(options: {
     });
   });
   router.post(
-    "/authz/-/object/-/batch_allowed",
+    [
+      "/authz/-/object/-/batch_allowed",
+      "/html-views/:htmlResourceId/authz/-/object/-/batch_allowed",
+    ],
     json({ limit: "1mb" }),
-    (request, response) => {
+    async (request, response) => {
       const requests = request.body?.requests as unknown;
       if (!Array.isArray(requests)) {
         throw new CollabError("INVALID_REQUEST", "requests must be an array");
       }
       const userId = response.locals.session.user.id as string;
+      const scope =
+        typeof request.params.htmlResourceId === "string"
+          ? await options.htmlViews.open(userId, request.params.htmlResourceId)
+          : undefined;
       response.json({
         error: OK_ERROR,
-        objectActions: requests.map((value: unknown) =>
-          allowedObjectActions(value, userId, access)
+        objectActions: await Promise.all(
+          requests.map(async (value: unknown) => {
+            if (!scope) return allowedObjectActions(value, userId, access);
+            const candidate = value as { unitID?: string; objectID?: string; actions?: unknown };
+            const resource = await options.htmlViews.authorize(
+              userId,
+              scope,
+              candidate.unitID ?? "",
+            );
+            return {
+              unitID: candidate.unitID,
+              objectID: candidate.objectID ?? "",
+              actions: allowedActions(candidate.actions, resource ?? null),
+            };
+          }),
         ),
       });
-    }
+    },
   );
   router.post(
-    "/authz/:objectType/object/:objectId/allowed",
+    [
+      "/authz/:objectType/object/:objectId/allowed",
+      "/html-views/:htmlResourceId/authz/:objectType/object/:objectId/allowed",
+    ],
     json({ limit: "1mb" }),
-    (request, response) => {
+    async (request, response) => {
       const unitId =
         typeof request.body?.unitID === "string" ? request.body.unitID : "";
       const userId = response.locals.session.user.id as string;
+      const scope =
+        typeof request.params.htmlResourceId === "string"
+          ? await options.htmlViews.open(userId, request.params.htmlResourceId)
+          : undefined;
       response.json({
         error: OK_ERROR,
         actions: allowedActions(
           request.body?.actions,
-          access.resolveUnit(userId, unitId)
+          scope
+            ? ((await options.htmlViews.authorize(userId, scope, unitId)) ?? null)
+            : access.resolveUnit(userId, unitId),
         ),
       });
     }
@@ -406,6 +526,7 @@ export function createCollaborationGateway(options: {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (
       url.pathname !== "/universer-api/comb/connect" &&
+      !url.pathname.startsWith("/universer-api/html-views/") &&
       !url.pathname.startsWith("/universer-api/worktrees/") &&
       url.pathname !== WORKTREE_CHANGE_FEED_PATH
     ) {
@@ -413,6 +534,30 @@ export function createCollaborationGateway(options: {
     }
     transport.handleUpgrade(request, socket, head);
   };
+
+  // Recheck idle subscriptions as well as requests, closing revoked sessions on the next tick.
+  let checkingHtmlConnections = false;
+  const htmlAccessTimer = setInterval(async () => {
+    if (checkingHtmlConnections || disposed) return;
+    checkingHtmlConnections = true;
+    try {
+      await Promise.all(
+        [...htmlConnections].map(async ([connection, binding]) => {
+          try {
+            if (!identity.getSession(binding.cookie).authenticated)
+              throw new Error("Session expired");
+            await options.htmlViews.authorize(binding.userId, binding.scope);
+          } catch {
+            connection.close(1008, "HTML access changed");
+            htmlConnections.delete(connection);
+          }
+        }),
+      );
+    } finally {
+      checkingHtmlConnections = false;
+    }
+  }, 1_000);
+  htmlAccessTimer.unref();
 
   return {
     router,
@@ -432,6 +577,8 @@ export function createCollaborationGateway(options: {
     async dispose() {
       if (disposed) return;
       disposed = true;
+      clearInterval(htmlAccessTimer);
+      htmlConnections.clear();
       attachedServer?.off("upgrade", handleUpgrade);
       attachedServer = undefined;
       await transport.dispose();
@@ -448,6 +595,7 @@ function setServerChangesetCreateTime(changeset: {
 function trackConnections(
   endpoint: NodeTransportEndpoint,
   connections: Set<NodeTransportConnection>,
+  onClose?: (connection: NodeTransportConnection) => void,
 ): NodeTransportEndpoint {
   return {
     register(router) {
@@ -460,7 +608,7 @@ function trackConnections(
             handler({
               ...context,
               accept(socketHandler) {
-                context.accept(trackConnectionLifecycle(socketHandler, connections));
+                context.accept(trackConnectionLifecycle(socketHandler, connections, onClose));
               },
             }),
           );
@@ -475,7 +623,8 @@ function trackConnections(
 
 function trackConnectionLifecycle(
   handler: NodeWebSocketHandler,
-  connections: Set<NodeTransportConnection>
+  connections: Set<NodeTransportConnection>,
+  onClose?: (connection: NodeTransportConnection) => void,
 ): NodeWebSocketHandler {
   return {
     async open(context) {
@@ -487,6 +636,7 @@ function trackConnectionLifecycle(
     },
     async close(context) {
       connections.delete(context.connection);
+      onClose?.(context.connection);
       await handler.close?.(context);
     },
   };
@@ -672,18 +822,13 @@ function cookieHeader(context: NodeHttpTransportContext) {
   return Array.isArray(value) ? value.join("; ") : value;
 }
 
-function unauthenticated(context: NodeHttpTransportContext): void {
-  context.response.statusCode = 401;
-  context.response.setHeader(
-    "content-type",
-    "application/json; charset=utf-8"
-  );
-  context.response.end(
-    JSON.stringify({
-      error: {
-        code: ErrorCode.UNAUTHENTICATED,
-        message: "Authentication required.",
-      },
-    })
-  );
+function rejectTransportRequest(
+  context: NodeHttpTransportContext,
+  status: number,
+  code: ErrorCode,
+  message: string,
+): void {
+  context.response.statusCode = status;
+  context.response.setHeader("content-type", "application/json; charset=utf-8");
+  context.response.end(JSON.stringify({ error: { code, message } }));
 }

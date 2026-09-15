@@ -191,6 +191,16 @@ Trigger 限制它只用于 Personal Space。
 3. Node 或祖先的 Direct Grant；
 4. Node 或祖先启用的 Link Sharing。
 
+HTML viewer 即可通过 HTML scoped 协同入口读写模板声明的完整 Sheet；editor 还可修改
+模板，owner/admin 管理权限。该授权不写入来源 Node Grant，也不改变普通 Resource/Unit 访问。
+当前模板来自 BlobStore 的不可变 object key，授权来源保存在匹配的已完成 Blob 创建/替换
+Operation 中：`payload_json.htmlSourcePublishers` 为 Unit ID → 授权发布者 User ID 的映射，
+仅由服务端生成，与 Blob 发布在同一产品事务提交。保留的引用复制上一版映射，新引用验证
+本次发布者的来源编辑权限，移除的引用从新映射中删除。运行时检查 HTML 查看权限和每个
+授权发布者的当前来源编辑权限。未包含映射的旧 Operation 在单一读取入口按 `actor_user_id`
+解释，并仅针对当前模板声明的来源验证；下一次发布写入完整映射，不依赖已回收的旧 Blob。
+模板替换或权限失效使旧上下文失效。该可选 Operation JSON 元数据不改变 V7 schema。
+
 已在 Trash 中的 Node/Resource 不可通过普通浏览或内容接口发现。Repository 不自行拼接
 权限；产品 HTTP 与 Collaboration Endpoint 共用同一 Access Resolver。
 
