@@ -367,8 +367,21 @@ archive, including versioned Linux shared libraries. Relocated smoke uses the
 actual Electron executable in Node mode, then checks native Office conversion,
 SDK worker startup, PTY execution and the authenticated browser UI. It also creates
 two real DSH sessions with the standard preset and verifies shared scope identity
-and visible preset tools, without a Workspace account or an LLM request. Installed
-shell checks exercise the normal OAuth/menu/update composition.
+and visible preset tools. Each session prepares the real DeepSeek request
+extensions, checking the active private plugin identities. The published model
+adapter then sends a request to a local mock SSE endpoint and decodes its reply,
+without a Workspace account, real model credential or external model API call.
+Fresh-browser smoke also checks the Workspace sign-in step and the sidebar login
+action after deferring setup. Installed shell checks exercise the normal
+OAuth/menu/update composition. Windows/Linux hide the menu bar by default; Alt
+reveals it for Help, updates and logs. macOS retains its native application menu.
+
+Profile-only bundles have ASAR links at the composition root, pointing to their
+original package directories. This lets DSH's filesystem package-inventory
+extension discover the same plugins as its Loader without duplicating payloads
+or overriding installation-owned DSH versions. The host resolves ASAR-linked
+bundle entries to their owning profile directories before importing, because
+Electron can retain a link alias when resolving a descendant file.
 
 The Windows installer migrates the known broken alpha.3 uninstaller only for an
 in-place replacement: it closes owned processes and renames the old installation,

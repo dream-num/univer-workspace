@@ -1,0 +1,55 @@
+.card {
+  box-sizing: border-box;
+  align-self: center;
+  width: min(520px, calc(100vw - 40px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  text-align: center;
+  box-shadow: 0 16px 64px rgb(0 0 0 / 8%);
+}
+
+.brand {
+  color: var(--color-secondary-foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+.card h1 {
+  margin: 20px 0 12px;
+  font-size: 30px;
+  line-height: 1.25;
+}
+.description {
+  margin: 0 0 28px;
+  line-height: 1.7;
+}
+.field {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  font-size: 13px;
+}
+.login {
+  width: 100%;
+  margin-top: 20px;
+  min-height: 44px;
+}
+.hint {
+  color: var(--color-subtle-foreground);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 18px 0;
+}
+.error {
+  color: var(--color-destructive);
+  font-size: 13px;
+}
+.footer {
+  width: 100%;
+  justify-content: center;
+  gap: 8px;
+}

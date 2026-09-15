@@ -1,5 +1,5 @@
 /** Dismiss known asynchronous onboarding, then prove settings receive input. */
-export async function waitForUsableAgent(page, { firstRun = true, timeoutMs = 30000 } = {}) {
+export async function waitForUsableAgent(page, { firstRun = true, timeoutMs = 30000, onWorkspaceOnboarding } = {}) {
   const deadline = Date.now() + timeoutMs;
   const settings = page.getByRole('button', { name: 'Settings', exact: true });
   const modelSetup = page.getByRole('button', { name: 'Configure later', exact: true });
@@ -10,10 +10,11 @@ export async function waitForUsableAgent(page, { firstRun = true, timeoutMs = 30
   while (Date.now() < deadline) {
     // These dialogs can mount after the preceding click or a WebSocket update.
     // A one-time isVisible check can miss them and leave Settings covered.
-    for (const name of ['Continue', 'Configure later']) {
+    for (const name of ['Continue', 'Sign in later', 'Configure later']) {
       const button = page.getByRole('button', { name, exact: true });
       if (await button.isVisible()) {
         if (name === 'Configure later') setupObserved = true;
+        if (name === 'Sign in later') await onWorkspaceOnboarding?.();
         try {
           await button.click({ timeout: Math.min(1000, Math.max(1, deadline - Date.now())) });
         } catch (error) { lastError = error; }

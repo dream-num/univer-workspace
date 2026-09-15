@@ -17,6 +17,7 @@ function onboardingPage({ delivered = true, deferred = false } = {}) {
       return {
         async isVisible() {
           if (name === 'Continue') return notice;
+          if (name === 'Sign in later') return false;
           if (name === 'Configure later') {
             if (!notice && !dismissed && (!deferred || ++checks > 2)) prompt = true;
             return prompt;

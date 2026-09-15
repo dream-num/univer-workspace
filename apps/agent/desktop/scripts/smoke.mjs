@@ -38,7 +38,7 @@ try {
     cwd: root, encoding: 'utf8', timeout: 120000, env: nodeEnvironment,
   });
   if (sessions.error || sessions.status !== 0)
-    throw new Error(`Packaged session creation failed: ${sessions.error ?? sessions.stderr}`);
+    throw new Error(`Packaged session/request validation failed: ${sessions.error ?? sessions.stderr}`);
   console.log(sessions.stdout.trim());
   const profileModules = join(runtime, 'host.asar/profile/node_modules');
   const binding = spawnSync(node, ["-e", `
@@ -195,7 +195,17 @@ try {
         errors.push(`Browser asset returned HTTP ${response.status()}`);
     });
     await page.goto(url);
-    await waitForUsableAgent(page);
+    let workspaceOnboardingSeen = false;
+    await waitForUsableAgent(page, { onWorkspaceOnboarding: async () => {
+      await page.getByRole('heading', { name: 'Connect your Workspace' }).waitFor();
+      const login = page.getByRole('dialog').getByRole('button', { name: 'Sign in to Workspace', exact: true });
+      await login.click({ trial: true });
+      await mkdir(join(desktop, '.build/startup-logs'), { recursive: true });
+      await page.screenshot({ path: join(desktop, '.build/startup-logs/workspace-onboarding.png') });
+      workspaceOnboardingSeen = true;
+    } });
+    if (!workspaceOnboardingSeen) throw new Error('Fresh installation must offer Workspace sign-in before model setup');
+    await page.getByRole('button', { name: 'Sign in to Workspace', exact: true }).click({ trial: true });
     const boot = await page.evaluate(() => globalThis.__DSH_BOOT__);
     if (!boot?.batches?.length || boot.entries.some(row => row.id === '@deepseek-ai/dsh-client-hmr'))
       throw new Error('Desktop must use a fixed client graph without HMR');
@@ -214,6 +224,21 @@ try {
         process.argv.includes("--packaged") ? "smoke-packaged.png" : "smoke-runtime.png",
       ),
     });
+    // Exercise the first-run form itself: persist a different service URL, then
+    // reach the existing OAuth entry. Intercept navigation before any external
+    // authorization so this remains an isolated, credential-free smoke.
+    await page.reload();
+    await page.getByRole('heading', { name: 'Connect your Workspace' }).waitFor();
+    const testOrigin = 'http://127.0.0.1:3020';
+    await page.getByRole('textbox', { name: 'Workspace service URL' }).fill(testOrigin);
+    await page.route('**/auth/oauth/start', route => route.fulfill({ status: 200, contentType: 'text/plain', body: 'OAuth entry reached' }));
+    await page.getByRole('dialog').getByRole('button', { name: 'Sign in to Workspace', exact: true }).click();
+    await page.waitForURL(current => current.pathname === '/auth/oauth/start');
+    // The active Workspace origin intentionally stays unchanged until login
+    // completes. Verify the authoritative login target via the real OAuth
+    // redirect, without following it to the external service.
+    const authorization = await page.request.get(`${origin}/auth/oauth/start`, { maxRedirects: 0 });
+    if (authorization.status() !== 302 || new URL(authorization.headers().location).origin !== testOrigin) throw new Error('Onboarding must save the selected service URL before starting OAuth');
     if (errors.length) throw new Error(`Desktop browser bootstrap errors: ${errors.join("; ")}`);
   } catch (error) {
     const diagnostics = join(desktop, '.build/startup-logs');
