@@ -125,14 +125,9 @@ as a substitute for those explicit storage boundaries.
   latter is a static visual-asset catalog, not the Workspace product's
   Resource/ACL model.
 - **Skill references**: the native DSH `skill` loader returns the main instructions
-  and a list of bundled references/templates. Read one with `univer_skill_resource`,
-  for example `{ "skill": "univer-html-view", "path": "references/charts.md" }`.
-  It returns `{ skill, path, content }` without requiring Workspace login or access
-  to the session directory. Only listed regular files inside the selected bundled
-  Skill are readable; absolute paths, traversal and symlinks are rejected.
-  The provider uses DSH's `opaque` resource description to point to this tool,
-  rather than advertising an installation directory. This capability belongs to
-  the Workspace plugin and uses published DSH extension APIs.
+  and lists reference-reading calls. Use `univer_skill_resource` with the listed
+  `skill` and `path` to read one document. Reading is limited to references and
+  templates bundled with the selected Skill.
 - **Worktree parity**: `univer_worktree` exposes the review lifecycle used by
   the browser (`create` → `ready` → `merge`/`discard`). The underlying
   transition adapter may retain compatibility with older server actions, but
@@ -242,6 +237,10 @@ bundle), and the linked `lib/client.css` stylesheet; bundled skills ship under
 `<link>` to the DSH boot page, so client code does not create runtime style
 tags.
 
+After changing bundled Skills or their reader, run `pnpm build` followed by
+`pnpm test:skills-package`. This checks reference discovery and reading through
+DSH tools using the extracted package artifact.
+
 Native/binary addons are deliberately not bundled into either the host or the
 worker. The plugin depends on the wrapper packages that own them, so each
 binding arrives as a transitive production dependency:
@@ -302,12 +301,3 @@ them. The components display environment, update progress, startup timings and
 failure codes, and request directory opening or report export. The Desktop
 application owns all collection, filtering, filesystem access and update behavior;
 this plugin does not read local files or own installation.
-
-### Verify bundled Skill reading
-
-After changing bundled Skills or their reader, run `pnpm build` and
-`pnpm test:skills-package` in this package. The smoke test packs and extracts the
-actual plugin into a temporary directory, supplies its published DSH host peers,
-and invokes the native `skill` and `univer_skill_resource` tools from an empty
-session directory. It checks every shipped reference without registering Shell
-or filesystem tools and verifies that model output contains no installation paths.
