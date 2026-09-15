@@ -42,6 +42,8 @@ import { createBlobCommand } from "./features/blob/command.js";
 import { createContentExecuteCommand } from "./features/content/command.js";
 import { createWorkspaceDaemonRuntimeOperations } from "./features/content/execution.js";
 import { createWorkspaceUnitExchangeCommands } from "./features/exchange/command.js";
+import { createHtmlViewCommand } from "./features/html-view/command.js";
+import { WorkspaceHtmlViewFeature } from "./features/html-view/html-view.js";
 import { createWorkspaceUnitLayoutLintCommand } from "./features/lint/command.js";
 import { createOpenCommand } from "./features/open/command.js";
 import { createWorkspacePrintPdfCommand } from "./features/print-pdf/command.js";
@@ -128,6 +130,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     runtimeOperations,
   );
   const units = new WorkspaceUnitFeature(authenticatedHttp);
+  const blobs = new WorkspaceBlobFeature(authenticatedHttp);
   const compileTypst = new WorkspaceCompileTypstFeature({
     materializer: new HeadlessWorkspaceTypstMaterializer(),
     units,
@@ -194,8 +197,15 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createWorktreeCommand(worktrees),
     createUnitCommand(units),
     ...createWorkspaceUnitExchangeCommands(exchange),
-    createBlobCommand(
-      new WorkspaceBlobFeature(async () => await auth.authenticatedHttp("client")),
+    createBlobCommand(blobs),
+    createHtmlViewCommand(
+      new WorkspaceHtmlViewFeature({
+        blobs,
+        runtime: runtimeOperations,
+        configuredOrigin: async () => await auth.configuredOrigin(),
+        resolveTrunkRuntimeTarget: async (input) =>
+          await new WorkspaceContentSource(await authenticatedHttp()).resolveTrunkRuntimeTarget(input),
+      }),
     ),
     createAssetCommand(
       new WorkspaceAssetFeature(async () => await auth.authenticatedHttp("client")),

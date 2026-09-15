@@ -11,7 +11,7 @@ HTML Views 在 Workspace 中以 `.univer.html` Blob 保存，页面使用 HTML�
 
 | 依赖 | Workspace 中的用途 | Consumer |
 | --- | --- | --- |
-| `@univerjs-labs/html-view` | 识别文件、解析 HTML、提取声明式引用 | Browser、Agent 能力插件 |
+| `@univerjs-labs/html-view` | 识别文件、解析 HTML、提取声明式引用 | Browser、Agent 能力插件、CLI |
 | `@univerjs-labs/html-view-renderer` | 生成运行页面、连接页面与宿主、提供保存和释放入口 | Browser |
 | `@univerjs-labs/binding-engine` | 加载 Sheet Unit，提供数据读写、订阅和协同 | Browser |
 

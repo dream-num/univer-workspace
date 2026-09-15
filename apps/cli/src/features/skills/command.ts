@@ -10,6 +10,7 @@ const RUNTIME_SKILL_NAMES = [
   "doc",
   "embed",
   "cross-unit-formula",
+  "html-view",
   "sheet",
   "slide",
 ] as const;

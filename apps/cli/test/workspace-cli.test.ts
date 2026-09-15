@@ -180,6 +180,7 @@ describe("Workspace CLI", () => {
         "worktree",
         "unit",
         "blob",
+        "html-view",
         "asset",
         "daemon",
         "open",

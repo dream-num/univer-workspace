@@ -71,6 +71,11 @@ not recursive reachability; a Blob Resource Node may still have children.
 For original-file upload, download and replacement, read the [Blob Skill](../blob/SKILL.md)
 with `univer-workspace-cli skills get blob`.
 
+## HTML Views
+
+For live HTML pages backed by Sheet data, read the [HTML View Skill](../html-view/SKILL.md)
+with `univer-workspace-cli skills get html-view`.
+
 ## Manage Space Nodes
 
 Create a root organizational Node by naming the target Space:
