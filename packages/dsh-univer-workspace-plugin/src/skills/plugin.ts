@@ -7,8 +7,6 @@
  * @module dsh-univer-workspace-plugin/skills
  */
 
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import type { Context } from "@deepseek-ai/cordis";
 import {
   BUNDLED_SKILL_RANK,
@@ -16,6 +14,9 @@ import {
   type SkillDefinition,
   type SkillProvider,
 } from "@deepseek-ai/dsh-skill";
+
+import { BundledSkillResources } from "./resources.ts";
+import { registerSkillResourceTool } from "./resource-tool.ts";
 
 const PROVIDER_NAME = "univer-workspace";
 const INVOCATION = { modelInvocable: true, userInvocable: true } as const;
@@ -68,47 +69,68 @@ const DEFINITIONS = [
   },
 ] as const;
 
-const CANDIDATES: readonly SkillCandidate[] = DEFINITIONS.map((definition) => {
-  const url = new URL(`../skills/${definition.name}/SKILL.md`, import.meta.url);
-  return {
+/** Register the provider and reader together so resource hints always have a matching tool. */
+export function registerBundledSkills(ctx: Context, root: URL): () => void {
+  const resources = new BundledSkillResources(
+    root,
+    DEFINITIONS.map(({ name }) => name),
+  );
+  const candidates: readonly SkillCandidate[] = DEFINITIONS.map((definition) => ({
     ...definition,
     invocation: INVOCATION,
     provider: PROVIDER_NAME,
     source: "bundled",
     resourceBase: {
-      kind: "directory",
-      path: fileURLToPath(new URL(`../skills/${definition.name}/`, import.meta.url)),
+      kind: "opaque",
+      description: `Read references/templates with univer_skill_resource using skill="${definition.name}" and a path listed in the instructions. Resource paths are identifiers, not local file paths.`,
     },
     rank: BUNDLED_SKILL_RANK,
-    locator: url,
+    locator: definition.name,
+  }));
+  const provider: SkillProvider = {
+    name: PROVIDER_NAME,
+    list: () => Promise.resolve(candidates),
+    async get(candidate, options): Promise<SkillDefinition> {
+      const content = stripFrontmatter(await resources.entry(candidate.name, options.signal));
+      const paths = await resources.list(candidate.name, options.signal);
+      const hints =
+        paths.length === 0
+          ? ""
+          : [
+              "\n\n## Read bundled references and templates",
+              "Use univer_skill_resource for the documents below. Do not resolve these identifiers against the session or installation directory.",
+              ...paths.map(
+                (path) =>
+                  `- univer_skill_resource ${JSON.stringify({ skill: candidate.name, path })}`,
+              ),
+            ].join("\n");
+      return {
+        name: candidate.name,
+        description: candidate.description,
+        invocation: candidate.invocation,
+        provider: candidate.provider,
+        source: candidate.source,
+        ...(candidate.resourceBase === undefined ? {} : { resourceBase: candidate.resourceBase }),
+        content: content + hints,
+      };
+    },
   };
-});
-
-const provider: SkillProvider = {
-  name: PROVIDER_NAME,
-  list: () => Promise.resolve(CANDIDATES),
-  async get(candidate): Promise<SkillDefinition> {
-    if (!(candidate.locator instanceof URL))
-      throw new Error("univer-workspace skill locator must be a URL");
-    return {
-      name: candidate.name,
-      description: candidate.description,
-      invocation: candidate.invocation,
-      provider: candidate.provider,
-      source: candidate.source,
-      ...(candidate.resourceBase === undefined ? {} : { resourceBase: candidate.resourceBase }),
-      content: stripFrontmatter(await readFile(candidate.locator, "utf8")),
-    };
-  },
-};
+  const disposeTool = registerSkillResourceTool(ctx, resources);
+  const disposeProvider = ctx.skills.registerProvider(() => provider);
+  return () => {
+    disposeProvider();
+    disposeTool();
+  };
+}
 
 export const name = "univer-workspace-skills";
+export const inject = ["skills", "tools"];
 
-export const inject = ["skills"];
-
-/** Register the bundled skill provider. */
 export function apply(ctx: Context): void {
-  ctx.skills.registerProvider(() => provider);
+  ctx.effect(
+    () => registerBundledSkills(ctx, new URL("../skills/", import.meta.url)),
+    "univer-workspace: skills",
+  );
 }
 
 function stripFrontmatter(value: string): string {

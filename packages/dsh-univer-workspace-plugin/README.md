@@ -124,6 +124,10 @@ as a substitute for those explicit storage boundaries.
   library and a build-time copied `@univerjs-pro/cli-assets` manifest. The
   latter is a static visual-asset catalog, not the Workspace product's
   Resource/ACL model.
+- **Skill references**: the native DSH `skill` loader returns the main instructions
+  and lists reference-reading calls. Use `univer_skill_resource` with the listed
+  `skill` and `path` to read one document. Reading is limited to references and
+  templates bundled with the selected Skill.
 - **Worktree parity**: `univer_worktree` exposes the review lifecycle used by
   the browser (`create` → `ready` → `merge`/`discard`). The underlying
   transition adapter may retain compatibility with older server actions, but
@@ -232,6 +236,10 @@ bundle), and the linked `lib/client.css` stylesheet; bundled skills ship under
 `skills/`. The WebServer plugin serves the stylesheet and contributes its
 `<link>` to the DSH boot page, so client code does not create runtime style
 tags.
+
+After changing bundled Skills or their reader, run `pnpm build` followed by
+`pnpm test:skills-package`. This checks reference discovery and reading through
+DSH tools using the extracted package artifact.
 
 Native/binary addons are deliberately not bundled into either the host or the
 worker. The plugin depends on the wrapper packages that own them, so each

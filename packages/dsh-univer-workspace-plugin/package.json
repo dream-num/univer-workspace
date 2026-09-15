@@ -28,6 +28,7 @@
     "clean": "rm -rf lib",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --config vitest.config.ts",
+    "test:skills-package": "node scripts/smoke-skills.mjs",
     "prototype:worktree-card": "node prototypes/worktree-card/run.mjs"
   },
   "dependencies": {
@@ -68,6 +69,8 @@
     "@deepseek-ai/dsh-session-persistence": "0.1.5-rc.1",
     "@deepseek-ai/dsh-skill": "0.1.5-rc.1",
     "@deepseek-ai/dsh-storage-domain": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-system-prompt": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-tool-skill": "0.1.5-rc.1",
     "@deepseek-ai/dsh-tools": "0.1.5-rc.1",
     "@deepseek-ai/dsh-workspace": "0.1.5-rc.1",
     "@deepseek-ai/schemastery": "3.18.2",
