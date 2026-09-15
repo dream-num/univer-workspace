@@ -76,16 +76,6 @@ univer-workspace-cli print-pdf ./reports/review.pdf --worktree <worktree-id> --u
 Together, these capabilities show the range of products and workflows that can be built with the
 Univer SDK.
 
-## Blob files
-
-For original-file upload, download and replacement, read the [Blob Skill](skill-data/blob/SKILL.md)
-or run `univer-workspace-cli skills get blob`.
-
-## HTML Views
-
-For live `.univer.html` pages backed by Sheet data, read the [HTML View Skill](skill-data/html-view/SKILL.md)
-or run `univer-workspace-cli skills get html-view`.
-
 ## Install
 
 Install the CLI in the environment used by the agent:
