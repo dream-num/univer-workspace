@@ -21,8 +21,12 @@ export const name = "univer-workspace-tools";
 
 export const inject = ["tools", "univerWorkspace"];
 
+export interface Config {
+  readonly license: string;
+}
+
 /** Register every univer_ tool. */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => {
     const disposeBlob = registerBlobTool(ctx);
     const disposeDiscovery = registerDiscoveryTools(ctx);
@@ -37,14 +41,17 @@ export function apply(ctx: Context): void {
     // Image results must be durably stored by DSH's attachment service.  Keep
     // the screenshot definition out of the base catalog and let Cordis load
     // it only while `attachments` is provided (the same gate as office).
-    const disposeRender = registerRenderTools(ctx, { includeScreenshot: false });
+    const disposeRender = registerRenderTools(ctx, {
+      license: config.license,
+      includeScreenshot: false,
+    });
     const inject = (
       ctx as unknown as {
         inject(deps: readonly string[], callback: (ctx: Context) => void): unknown;
       }
     ).inject.bind(ctx);
     inject(["attachments"], (imageCtx) => {
-      registerScreenshotTool(imageCtx);
+      registerScreenshotTool(imageCtx, config);
     });
     return () => {
       disposeBlob();

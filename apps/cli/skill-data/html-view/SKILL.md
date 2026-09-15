@@ -50,6 +50,8 @@ worksheet existence and cell/range bounds. It returns `{ valid, unitIds, binding
 execute JavaScript or discover references created by scripts. A JavaScript-only page may report
 zero static bindings; runtime requests still require access to each source Unit.
 
+Blob write keys must be 16–200 ASCII letters, digits, underscores or hyphens; a UUID is a suitable key. This applies to both creation and replacement.
+
 `create` performs the same validation and uploads the validated HTML as a new Blob. It adds
 `.univer.html` to the name if missing and returns Blob identities plus `workspaceUrl`. The Space
 is explicit; the parent defaults to its root. Reuse an idempotency key only when retrying identical

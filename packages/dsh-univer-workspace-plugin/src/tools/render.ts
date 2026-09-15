@@ -121,7 +121,7 @@ interface LlmServiceLike {
  */
 export function registerRenderTools(
   ctx: Context,
-  options: { readonly includeScreenshot?: boolean } = {},
+  options: { readonly license: string; readonly includeScreenshot?: boolean },
 ): () => void {
   const disposeLint = registerUniverTool(
     ctx,
@@ -160,6 +160,7 @@ export function registerRenderTools(
           source,
           args.pages as readonly SlideLayoutLintPageSelector[] | undefined,
           {
+            license: options.license,
             env: process.env,
             signal: exec.signal,
           },
@@ -177,7 +178,7 @@ export function registerRenderTools(
   );
 
   const disposeScreenshot =
-    options.includeScreenshot === false ? () => undefined : registerScreenshotTool(ctx);
+    options.includeScreenshot === false ? () => undefined : registerScreenshotTool(ctx, options);
 
   const disposeCompile = registerUniverTool(
     ctx,
@@ -248,7 +249,10 @@ export function registerRenderTools(
  * service.  Keep this separate from the other render tools so Cordis can
  * unload it whenever the service disappears.
  */
-export function registerScreenshotTool(ctx: Context): () => void {
+export function registerScreenshotTool(
+  ctx: Context,
+  options: { readonly license: string },
+): () => void {
   return registerUniverTool(
     ctx,
     defineTool({
@@ -352,7 +356,7 @@ export function registerScreenshotTool(ctx: Context): () => void {
           { unitId: args.unitId, unitType: args.unitType, unitData },
           output.path,
           screenshotTarget(args),
-          { env: process.env, signal: exec.signal },
+          { license: options.license, env: process.env, signal: exec.signal },
         );
         const decoded = captured.images.map((image) => ({
           image,

@@ -1,3 +1,4 @@
+import { requireBlobIdempotencyKey } from "./blob-input.ts";
 import { readFile } from "node:fs/promises";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
@@ -34,7 +35,7 @@ export function registerHtmlViewTool(ctx: Context): () => void {
         idempotencyKey: {
           type: "string",
           description:
-            "Required for create. Reuse the same key only when retrying identical content and destination.",
+            "Required for create: 16–200 ASCII letters, digits, underscores or hyphens (for example a UUID). Reuse only when retrying identical content and destination.",
         },
       },
       output: {
@@ -81,8 +82,8 @@ export function registerHtmlViewTool(ctx: Context): () => void {
         }
         if (args.action === "validate")
           return { valid: true, unitIds, bindingCount: parsed.bindings.length };
-        if (!args.name?.trim() || !args.idempotencyKey?.trim())
-          throw new Error("create requires name and idempotencyKey.");
+        if (!args.name?.trim()) throw new Error("create requires name.");
+        const idempotencyKey = requireBlobIdempotencyKey(args.idempotencyKey);
         const origin = ctx.get("workspaceAuth")?.effectiveOrigin();
         if (!origin) throw new Error("Workspace origin is unavailable.");
         const name = isHtmlViewFilename(args.name.trim())
@@ -93,7 +94,7 @@ export function registerHtmlViewTool(ctx: Context): () => void {
           bytes: new TextEncoder().encode(html),
           name,
           originalFilename: name,
-          idempotencyKey: args.idempotencyKey,
+          idempotencyKey,
           spaceId: resolveTargetSpace(scope, args.spaceId),
           parentNodeId: args.parentNodeId ?? null,
         });

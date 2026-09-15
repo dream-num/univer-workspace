@@ -243,6 +243,8 @@ source access and worksheet bounds. Validation does not execute JavaScript or di
 created by scripts; those are checked when the page accesses data at runtime. A page using only
 JavaScript data access can have no declarative bindings.
 
+Blob write keys must be 16–200 ASCII letters, digits, underscores or hyphens; a UUID is a suitable key. This applies to both creation and replacement.
+
 Fix validation errors before calling `action=create` with a name, destination and stable
 `idempotencyKey`. Creation publishes a separate Blob file; it does not use Unit Worktrees or edit
 source cells. Reuse the key only when retrying identical content and destination. Return the
