@@ -234,8 +234,11 @@ try {
     await page.route('**/auth/oauth/start', route => route.fulfill({ status: 200, contentType: 'text/plain', body: 'OAuth entry reached' }));
     await page.getByRole('dialog').getByRole('button', { name: 'Sign in to Workspace', exact: true }).click();
     await page.waitForURL(current => current.pathname === '/auth/oauth/start');
-    const connection = await (await page.request.get(`${origin}/api/uwh/me`)).json();
-    if (connection.workspaceOrigin !== testOrigin) throw new Error('Onboarding must save the selected service URL before starting OAuth');
+    // The active Workspace origin intentionally stays unchanged until login
+    // completes. Verify the authoritative login target via the real OAuth
+    // redirect, without following it to the external service.
+    const authorization = await page.request.get(`${origin}/auth/oauth/start`, { maxRedirects: 0 });
+    if (authorization.status() !== 302 || new URL(authorization.headers().location).origin !== testOrigin) throw new Error('Onboarding must save the selected service URL before starting OAuth');
     if (errors.length) throw new Error(`Desktop browser bootstrap errors: ${errors.join("; ")}`);
   } catch (error) {
     const diagnostics = join(desktop, '.build/startup-logs');
