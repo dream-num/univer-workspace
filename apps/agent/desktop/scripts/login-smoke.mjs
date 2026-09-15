@@ -95,6 +95,14 @@ try {
     assert.equal(await application.evaluate(({ app }) => app.isDefaultProtocolClient('univer-workspace')), true,
       'Installed application did not register its sign-in protocol');
   }
+  // Both layouts must retain the settings owner's deferred onboarding state.
+  const expand = page.getByRole('button', { name: 'Expand sidebar', exact: true });
+  if (await expand.isVisible()) await expand.click();
+  await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+  await expand.click();
+  await page.getByRole('tab', { name: 'Files', exact: true }).waitFor();
+  assert.equal(await page.getByRole('dialog', { name: 'Connect your Workspace' }).count(), 0,
+    'Sidebar toggling must not restart deferred onboarding');
   // Small native runner displays collapse the sidebar into accessible buttons.
   const selectNavigation = name => page.getByRole('tab', { name, exact: true })
     .or(page.getByRole('button', { name, exact: true })).click();

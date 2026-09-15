@@ -80,6 +80,8 @@ as a substitute for those explicit storage boundaries.
 - **Workspace sign-in onboarding**: a first-run step before model setup offers
   the Workspace service URL and a primary sign-in action. Connected accounts
   skip the step; users who defer it retain a sign-in button in the sidebar.
+  Expanding or collapsing the sidebar preserves the settings owner and its
+  deferred onboarding state.
   Workspace authorization and model credentials remain separate.
 
 - **Space ↔ dsh-workspace reconciliation**: the User's remote Spaces are

@@ -124,52 +124,57 @@ export function WorkspaceSidebarRoot(props: WorkspaceSidebarRootProps) {
     name: Parameters<typeof props.renderSlot>[0],
     params: Record<string, unknown>,
   ): ReactNode => props.renderSlot(name, params as never) as unknown as ReactNode;
+  // Preserve the root and keyed footer across rail/wide layouts. The settings
+  // slot owns onboarding state and must not remount when the sidebar toggles.
   if (props.collapsed && settled) {
     return (
-      <aside
-        className={css.rail}
-        style={style}
-        data-plugin="dsh-univer-workspace"
-        data-surface="sidebar"
-      >
-        <div className={css.railTop}>
-          <IconButton label={props.t("toggle.open")} onClick={props.toggleSidebar}>
-            {
-              slot("sidebar.brand.mark", {
-                size: 24,
-              }) as ReactElement
-            }
-          </IconButton>
-          <IconButton label={props.t("session.new.label")} onClick={() => props.startSession()}>
-            <IconNewChatOutline16 />
-          </IconButton>
-          <IconButton
-            label={props.translate("navigation.sessions")}
-            selected={tab === "sessions"}
-            onClick={() => selectNavigation("sessions")}
-          >
-            <IconNewChatOutline16 />
-          </IconButton>
-          <IconButton
-            label={props.translate("navigation.files")}
-            selected={tab === "files"}
-            onClick={() => selectNavigation("files")}
-          >
-            <IconBrowseOutline16 />
-          </IconButton>
-          <IconButton
-            label={props.translate("navigation.worktrees")}
-            selected={tab === "worktrees"}
-            onClick={() => selectNavigation("worktrees")}
-          >
-            <IconBranchOutline16 />
-          </IconButton>
-        </div>
-        <div className={css.railFooter}>
-          {slot("sidebar.footer.action", { wide: false })}
-          {slot("sidebar.settings", { wide: false })}
-        </div>
-      </aside>
+      <>
+        <aside
+          className={css.rail}
+          style={style}
+          data-plugin="dsh-univer-workspace"
+          data-surface="sidebar"
+        >
+          <div className={css.railTop}>
+            <IconButton label={props.t("toggle.open")} onClick={props.toggleSidebar}>
+              {
+                slot("sidebar.brand.mark", {
+                  size: 24,
+                }) as ReactElement
+              }
+            </IconButton>
+            <IconButton label={props.t("session.new.label")} onClick={() => props.startSession()}>
+              <IconNewChatOutline16 />
+            </IconButton>
+            <IconButton
+              label={props.translate("navigation.sessions")}
+              selected={tab === "sessions"}
+              onClick={() => selectNavigation("sessions")}
+            >
+              <IconNewChatOutline16 />
+            </IconButton>
+            <IconButton
+              label={props.translate("navigation.files")}
+              selected={tab === "files"}
+              onClick={() => selectNavigation("files")}
+            >
+              <IconBrowseOutline16 />
+            </IconButton>
+            <IconButton
+              label={props.translate("navigation.worktrees")}
+              selected={tab === "worktrees"}
+              onClick={() => selectNavigation("worktrees")}
+            >
+              <IconBranchOutline16 />
+            </IconButton>
+          </div>
+          <div key="footer" className={css.railFooter}>
+            {slot("sidebar.footer.action", { wide: false })}
+            {slot("sidebar.settings", { wide: false })}
+          </div>
+        </aside>
+        <WorkspaceToaster />
+      </>
     );
   }
   return (
@@ -283,7 +288,7 @@ export function WorkspaceSidebarRoot(props: WorkspaceSidebarRootProps) {
             </div>
           )}
         </div>
-        <div className={css.footer}>
+        <div key="footer" className={css.footer}>
           {slot("sidebar.footer.action", { wide: true })}
           {slot("sidebar.settings", { wide: true })}
         </div>
