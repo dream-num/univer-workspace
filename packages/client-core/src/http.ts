@@ -15,6 +15,7 @@ export interface WorkspaceRequestOptions {
   readonly contentLength?: number;
   readonly contentType?: string;
   readonly idempotencyKey?: string;
+  readonly ifMatch?: string;
   readonly method?: string;
   readonly formBody?: FormData;
   readonly signal?: AbortSignal;
@@ -77,6 +78,7 @@ export class WorkspaceHttp {
           ...(options.idempotencyKey === undefined
             ? {}
             : { "idempotency-key": options.idempotencyKey }),
+          ...(options.ifMatch === undefined ? {} : { "if-match": options.ifMatch }),
           ...(method === "GET" || method === "HEAD" ? {} : { origin: this.origin }),
           "x-univer-cli-sdk-role": this.role,
           ...(this.role === "worker" ? { "x-univer-cli-sdk-worker-pid": String(process.pid) } : {}),

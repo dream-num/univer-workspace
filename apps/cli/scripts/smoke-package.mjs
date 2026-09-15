@@ -331,6 +331,25 @@ try {
     installRoot,
     smokeEnv,
   );
+  const downloadedEtag = JSON.parse(downloadedBlob.stdout).download?.etag;
+  if (downloadedEtag !== '"blob-v1"') throw new Error("Installed Blob download lost its quoted ETag");
+  const replacedBlob = await run(
+    executable,
+    [
+      "blob", "replace", "--resource", "resource-blob", "--file", blobOutputPath,
+      "--etag", downloadedEtag, "--idempotency-key", "smoke-replace", "--json",
+    ],
+    installRoot,
+    smokeEnv,
+  );
+  const replacement = JSON.parse(replacedBlob.stdout).replacement;
+  if (
+    replacement?.operationId !== "smoke-replace" ||
+    replacement?.resourceId !== "resource-blob" ||
+    replacement?.etag !== '"blob-v2"'
+  ) {
+    throw new Error("Installed Blob replacement returned an invalid result");
+  }
   const downloadedAsset = await run(
     executable,
     [
@@ -428,7 +447,7 @@ try {
     throw new Error("Installed file-transfer fixture returned invalid bytes or modes");
   }
   if (
-    [...outcomes, inspected, typstCompilation, svgCompilation].some((result) =>
+    [...outcomes, replacedBlob, inspected, typstCompilation, svgCompilation].some((result) =>
       `${result.stdout}${result.stderr}`.includes(workspaceFixture.deviceCode) ||
       `${result.stdout}${result.stderr}`.includes(workspaceFixture.cookie)
     )
@@ -454,6 +473,7 @@ try {
     blobComplete: 1,
     blobResource: 2,
     blobDownload: 1,
+    blobReplace: 1,
     assetSign: 1,
     assetContent: 1,
     logout: 1,
@@ -555,6 +575,7 @@ async function startWorkspaceFixture() {
     blobComplete: 0,
     blobResource: 0,
     blobDownload: 0,
+    blobReplace: 0,
     assetSign: 0,
     assetContent: 0,
     logout: 0,
@@ -806,6 +827,26 @@ async function handleWorkspaceRequest(request, response, fixture) {
     const node = blobNode();
     return writeJson(response, 200, { node, resource: node.resource });
   }
+  if (request.method === "PUT" && request.url === "/api/blob-resources/resource-blob/content") {
+    fixture.requests.blobReplace += 1;
+    const body = await readBody(request);
+    if (
+      body !== "blob-bytes" ||
+      request.headers["if-match"] !== '"blob-v1"' ||
+      request.headers["idempotency-key"] !== "smoke-replace" ||
+      request.headers["content-length"] !== "10" ||
+      request.headers["content-type"] !== "application/octet-stream"
+    ) {
+      return writeJson(response, 400, {
+        error: { code: "INVALID_REQUEST", message: "Invalid replacement" },
+      });
+    }
+    return writeJson(response, 200, {
+      operationId: "smoke-replace",
+      resourceId: "resource-blob",
+      etag: '"blob-v2"',
+    });
+  }
   if (
     request.method === "GET" &&
     request.url === "/api/blob-resources/resource-blob/download"
@@ -814,7 +855,7 @@ async function handleWorkspaceRequest(request, response, fixture) {
     response.writeHead(200, {
       "content-length": "10",
       "content-type": "application/octet-stream",
-      etag: "blob-v1",
+      etag: '"blob-v1"',
     });
     return response.end("blob-bytes");
   }

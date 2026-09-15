@@ -366,7 +366,7 @@ describe("Workspace application feature parity", () => {
           headers: {
             "content-length": "3",
             "content-type": "application/octet-stream",
-            etag: "v1",
+            etag: '"v1"',
           },
         });
       }),
@@ -375,7 +375,7 @@ describe("Workspace application feature parity", () => {
     await expect(feature.download({ outputPath, resourceId: "resource-1" })).resolves.toMatchObject(
       {
         byteSize: 3,
-        etag: "v1",
+        etag: '"v1"',
         mediaType: "application/octet-stream",
         nodeId: "node-1",
         outputPath,
@@ -401,6 +401,35 @@ describe("Workspace application feature parity", () => {
       }),
     ).rejects.toMatchObject({ code: "workspace-invalid-response" });
   });
+
+  it.each([null, "v1", 'W/"v1"', "*", '"v1", "v2"'])(
+    "rejects an invalid download ETag %s without replacing an existing output",
+    async (etag) => {
+      const directory = await temporaryDirectory();
+      const outputPath = join(directory, "keep.bin");
+      await writeFile(outputPath, "keep");
+      const feature = new WorkspaceBlobFeature(
+        authFor(async (input) => {
+          const url = new URL(input instanceof Request ? input.url : input.toString());
+          if (url.pathname === "/api/resources/resource-1") {
+            const owningNode = node({ resource: blobResource() });
+            return jsonResponse({ node: owningNode, resource: owningNode.resource });
+          }
+          return new Response("abc", {
+            headers: {
+              "content-type": "application/octet-stream",
+              ...(etag === null ? {} : { etag }),
+            },
+          });
+        }),
+      );
+      await expect(
+        feature.download({ outputPath, resourceId: "resource-1", force: true }),
+      ).rejects.toMatchObject({ code: "workspace-invalid-response" });
+      expect(await readFile(outputPath, "utf8")).toBe("keep");
+      expect(await readdir(directory)).toEqual(["keep.bin"]);
+    },
+  );
 
   it("rejects unavailable and mismatched Blob metadata before content download", async () => {
     const directory = await temporaryDirectory();

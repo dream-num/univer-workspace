@@ -77,6 +77,8 @@ univer-workspace-cli blob upload \
   [--name <node-name>] [--media-type <mime>] [--idempotency-key <key>] --json
 univer-workspace-cli blob get <resource-id> --json
 univer-workspace-cli blob download <output> --resource <resource-id> [--force] --json
+univer-workspace-cli blob replace --resource <resource-id> --file <edited-source> \
+  --etag '"<downloaded-etag>"' --idempotency-key <key> --json
 ```
 
 `blob upload` publishes directly to the Space; no Worktree is involved and Worktree discard cannot
@@ -88,6 +90,18 @@ never change the intent while reusing the key.
 `blob download` requires an explicit output path and refuses to overwrite by default. Use `--force`
 only when replacing that path is intended; replacement occurs only after the complete byte stream
 has been written. Blob commands never print binary bytes to stdout.
+
+To revise an existing Blob, download it, edit the local file, then use `blob replace` with the
+exact quoted ETag from `download.etag` and a new stable idempotency key. Replacement publishes
+immediately and preserves the Node, Resource, name, location, ACL and original URL; it is not a
+Worktree edit. The JSON result is `replacement: { operationId, resourceId, etag }`.
+
+On `PRECONDITION_FAILED`, download to a fresh path and reconcile the latest bytes before starting
+a new replacement with a new key. Never apply a new ETag to an unreconciled older file. After a lost
+response, the CLI checks the same Operation once; `workspace-result-unknown` includes its identity
+and source path. Inspect that Operation before retrying the exact same file, ETag and key. A pending
+Operation must not be started again; a failed Operation needs reconciliation and a new key.
+Blob downloads require a quoted strong ETag and reject malformed responses before replacing local files.
 
 Do not confuse these workflows:
 
@@ -375,7 +389,7 @@ Use `univer-workspace-cli <command> --help` as the syntax authority.
 | ------------------------- | --------------------------------------------------------------------------- |
 | Connect                   | `config set workspace.origin`, `login`, `whoami`, `logout`                  |
 | Discover/organize Spaces  | `space list`, `space browse`, `space find`, `space node create/rename/move` |
-| Preserve original files   | `blob upload`, `blob get`, `blob download`                                  |
+| Preserve original files   | `blob upload`, `blob get`, `blob download`, `blob replace`                  |
 | Start a task              | `worktree create`, `unit create`, `unit add`                                |
 | Inspect a known Worktree  | `worktree get`, `unit list`                                                 |
 | Continue same-task rework | `worktree reopen`                                                           |

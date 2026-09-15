@@ -76,6 +76,26 @@ univer-workspace-cli print-pdf ./reports/review.pdf --worktree <worktree-id> --u
 Together, these capabilities show the range of products and workflows that can be built with the
 Univer SDK.
 
+## Blob files
+
+Use `blob upload`, `blob get`, and `blob download` to preserve and retrieve original files.
+To update an existing file while retaining its Node, Resource, permissions and URL:
+
+```bash
+univer-workspace-cli blob download ./report.html --resource <resource-id> --json
+# Edit report.html, then pass the exact quoted ETag returned in download.etag:
+univer-workspace-cli blob replace --resource <resource-id> --file ./report.html \
+  --etag '"<downloaded-etag>"' --idempotency-key <unique-write-key> --json
+```
+
+Replacement publishes immediately, outside Unit Worktrees, and returns
+`replacement: { operationId, resourceId, etag }`. A stale ETag fails with
+`PRECONDITION_FAILED`: download to a fresh path, reconcile, then start a new write with a new key.
+After an uncertain response, the CLI queries the same Operation once without replaying the write.
+If the result remains unknown, inspect the returned Operation ID before retrying the identical
+file, ETag and key. Pending Operations must finish first; failed Operations require a new key.
+Downloads validate a quoted strong ETag and preserve any existing output on failure.
+
 ## Install
 
 Install the CLI in the environment used by the agent:
