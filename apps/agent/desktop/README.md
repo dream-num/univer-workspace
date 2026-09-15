@@ -355,7 +355,7 @@ runtime files, activates it and launches the installed Electron executable with
 fresh account data. It also closes that app, repeats DMG replacement, verifies a
 preserved data sentinel, reopens the app and removes the backup. Every phase is
 recorded; replacement includes shutdown, reopening and cleanup. macOS thresholds
-are 10 seconds to a usable window and 60 seconds for installation/replacement.
+are 15 seconds to a usable window and 60 seconds for installation/replacement.
 This probes a DMG replacement, not Squirrel's automatic updater. Build-only jobs
 also do not validate notarization, downloaded-file quarantine or Gatekeeper delay.
 

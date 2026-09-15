@@ -2,7 +2,9 @@
 export async function waitForUsableAgent(page, { firstRun = true, timeoutMs = 30000 } = {}) {
   const deadline = Date.now() + timeoutMs;
   const settings = page.getByRole('button', { name: 'Settings', exact: true });
+  const modelSetup = page.getByRole('button', { name: 'Configure later', exact: true });
   let lastError;
+  let setupObserved = false;
   let setupHandled = !firstRun;
   if (firstRun) await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: timeoutMs });
   while (Date.now() < deadline) {
@@ -11,12 +13,16 @@ export async function waitForUsableAgent(page, { firstRun = true, timeoutMs = 30
     for (const name of ['Continue', 'Configure later']) {
       const button = page.getByRole('button', { name, exact: true });
       if (await button.isVisible()) {
+        if (name === 'Configure later') setupObserved = true;
         try {
           await button.click({ timeout: Math.min(1000, Math.max(1, deadline - Date.now())) });
-          if (name === 'Configure later') setupHandled = true;
         } catch (error) { lastError = error; }
       }
     }
+    // A click can reach the page but time out before Playwright acknowledges it.
+    // Observe the dismissed prompt instead of requiring click() to resolve.
+    // On first run, an as-yet-unmounted prompt is not a completed setup.
+    setupHandled = (!firstRun || setupObserved) && !await modelSetup.isVisible();
     try {
       // Actionability needs consecutive animation frames. A 250 ms attempt can
       // repeatedly expire on a throttled macOS runner before stability is checked.
