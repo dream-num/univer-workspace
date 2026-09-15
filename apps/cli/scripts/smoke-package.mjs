@@ -8,6 +8,9 @@ import { basename, join, resolve } from "node:path";
 import { transformWorkbookDataToSnapshot } from "@univerjs-pro/collaboration";
 import { CmdRspCode, CombCmd, ErrorCode } from "@univerjs/protocol";
 
+const htmlViewSource = '<!DOCTYPE html><output data-univer-cell-text="unit-1:sheet-1:A1"></output>';
+const htmlViewBytes = Buffer.byteLength(htmlViewSource);
+
 const packageRoot = resolve(process.argv[2] ?? "package-dist");
 const packageManifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 const registry = packageManifest.publishConfig?.registry;
@@ -89,6 +92,20 @@ try {
     blobSkill.content !== (await readFile(join(blobSkillRoot, "SKILL.md"), "utf8"))
   ) {
     throw new Error("Packaged Blob Skill is unavailable or differs from its installed file");
+  }
+  const htmlSkill = JSON.parse(
+    (await run(executable, ["skills", "get", "html-view", "--full", "--json"], installRoot, smokeEnv)).stdout,
+  ).data[0];
+  const htmlSkillRoot = JSON.parse(
+    (await run(executable, ["skills", "path", "html-view", "--json"], installRoot, smokeEnv)).stdout,
+  ).data.path;
+  if (htmlSkill.name !== "html-view" || htmlSkill.files.length !== 4) {
+    throw new Error("Packaged HTML View Skill or references are missing");
+  }
+  for (const file of htmlSkill.files) {
+    if (file.content !== await readFile(join(htmlSkillRoot, file.path), "utf8")) {
+      throw new Error(`Packaged HTML View reference differs: ${file.path}`);
+    }
   }
   const boardEntry = JSON.parse(
     (await run(executable, ["skills", "get", "board", "--json"], installRoot, smokeEnv)).stdout,
@@ -395,6 +412,31 @@ try {
     installRoot,
     smokeEnv,
   );
+  const htmlPath = join(temporaryRoot, "view.univer.html");
+  await writeFile(htmlPath, htmlViewSource);
+  const htmlRuntimeStart = workspaceFixture.runtimeRequests.length;
+  const htmlValidation = JSON.parse((await run(executable, [
+    "html-view", "validate", "--file", htmlPath, "--json",
+  ], installRoot, smokeEnv)).stdout);
+  if (htmlValidation.valid !== true || htmlValidation.bindingCount !== 1 ||
+      JSON.stringify(htmlValidation.unitIds) !== JSON.stringify(["unit-1"])) {
+    throw new Error("Installed HTML View validation did not inspect the trunk Sheet binding");
+  }
+  const htmlCreated = JSON.parse((await run(executable, [
+    "html-view", "create", "--file", htmlPath, "--space", "space-1", "--name", "Dashboard",
+    "--idempotency-key", "html-view-key", "--json",
+  ], installRoot, smokeEnv)).stdout);
+  if (htmlCreated.resourceId !== "resource-html" ||
+      htmlCreated.workspaceUrl !== `${workspaceFixture.origin}/nodes/node-html`) {
+    throw new Error("Installed HTML View creation did not return the published Blob URL");
+  }
+  const htmlRuntimeRequests = workspaceFixture.runtimeRequests.splice(htmlRuntimeStart);
+  if (!htmlRuntimeRequests.some(request => request.path === "/universer-api/snapshot/2/unit/unit-1/rev/0") ||
+      htmlRuntimeRequests.some(request => request.method !== "GET" ||
+        (request.path !== "/universer-api/user/session-ticket" &&
+         !request.path.startsWith("/universer-api/snapshot/2/unit/unit-1/")))) {
+    throw new Error(`HTML View must only read trunk sources: ${JSON.stringify(htmlRuntimeRequests)}`);
+  }
   const loggedOut = await run(executable, ["logout", "--json"], installRoot, smokeEnv);
   const outcomes = [
     authorization,
@@ -683,6 +725,7 @@ async function handleWorkspaceRequest(request, response, fixture) {
   if (request.headers["x-univer-cli-sdk-role"] === "worker") {
     fixture.runtimeRequests.push({
       path: request.url,
+      method: request.method,
       role: request.headers["x-univer-cli-sdk-role"],
       workerPid: request.headers["x-univer-cli-sdk-worker-pid"],
     });
@@ -738,9 +781,12 @@ async function handleWorkspaceRequest(request, response, fixture) {
   if (request.method === "GET" && request.url === "/universer-api/user/session-ticket") {
     return writeJson(response, 200, { ticket: "package-smoke-ticket" });
   }
+  const snapshotPath = request.url?.replace(
+    "/universer-api/snapshot/", "/universer-api/worktrees/wt-1/snapshot/",
+  );
   if (
     request.method === "GET" &&
-    request.url === "/universer-api/worktrees/wt-1/snapshot/2/unit/unit-1/rev/0"
+    snapshotPath === "/universer-api/worktrees/wt-1/snapshot/2/unit/unit-1/rev/0"
   ) {
     return writeJson(response, 200, {
       changesets: [],
@@ -750,14 +796,14 @@ async function handleWorkspaceRequest(request, response, fixture) {
   }
   if (
     request.method === "GET" &&
-    request.url ===
+    snapshotPath ===
       "/universer-api/worktrees/wt-1/snapshot/2/unit/unit-1/fetchmissing?from=1&to=0"
   ) {
     return writeJson(response, 200, { changesets: [], error: null, latestRevision: 1 });
   }
   const blockPrefix = "/universer-api/worktrees/wt-1/snapshot/2/unit/unit-1/block/";
-  if (request.method === "GET" && request.url?.startsWith(blockPrefix)) {
-    const blockId = decodeURIComponent(request.url.slice(blockPrefix.length));
+  if (request.method === "GET" && snapshotPath?.startsWith(blockPrefix)) {
+    const blockId = decodeURIComponent(snapshotPath.slice(blockPrefix.length));
     const block = fixture.runtimeFixture.blocks.find((candidate) => candidate.id === blockId);
     return writeJson(
       response,
@@ -786,6 +832,35 @@ async function handleWorkspaceRequest(request, response, fixture) {
       return writeJson(response, 200, { unit: localUnit() });
     }
     return writeJson(response, 400, {});
+  }
+  if (request.method === "POST" && request.url === "/api/blob-upload-sessions" &&
+      request.headers["idempotency-key"] === "html-view-key") {
+    const body = await readJsonBody(request);
+    if (body.spaceId !== "space-1" || body.parentNodeId !== null ||
+        body.name !== "Dashboard.univer.html" || body.originalFilename !== "view.univer.html" ||
+        body.byteSize !== htmlViewBytes) return writeJson(response, 400, {});
+    return writeJson(response, 200, htmlViewUploadEnvelope("waitingForUpload"));
+  }
+  if (request.method === "PUT" && request.url === "/api/blob-upload-sessions/upload-html/content") {
+    const body = await readBody(request);
+    if (body !== htmlViewSource || request.headers["content-length"] !== String(htmlViewBytes)) {
+      return writeJson(response, 400, {});
+    }
+    fixture.runtimeFixture.htmlUploaded = true;
+    return writeJson(response, 200, {});
+  }
+  if (request.method === "GET" && request.url === "/api/blob-upload-sessions/upload-html") {
+    return writeJson(response, 200, htmlViewUploadEnvelope(fixture.runtimeFixture.htmlUploaded ? "uploaded" : "waitingForUpload"));
+  }
+  if (request.method === "POST" && request.url === "/api/blob-upload-sessions/upload-html/complete") {
+    if (!fixture.runtimeFixture.htmlUploaded) return writeJson(response, 409, {});
+    return writeJson(response, 200, {
+      operation: htmlViewUploadEnvelope("completed").operation,
+      node: {
+        ...blobNode(), id: "node-html", name: "Dashboard.univer.html",
+        resource: { ...blobNode().resource, id: "resource-html", byteSize: htmlViewBytes, mediaType: "text/html" },
+      },
+    });
   }
   if (request.method === "POST" && request.url === "/api/blob-upload-sessions") {
     fixture.requests.blobReserve.push(request.headers["idempotency-key"] ?? null);
@@ -962,6 +1037,22 @@ function unit(overrides) {
     unitId: "unit-1",
     unitType: "sheet",
     ...overrides,
+  };
+}
+
+function htmlViewUploadEnvelope(state) {
+  const envelope = blobUploadEnvelope(state);
+  return {
+    operation: { ...envelope.operation, id: "html-view-key", result: state === "completed" ? { resourceId: "resource-html" } : null },
+    upload: {
+      ...envelope.upload, id: "upload-html", operationId: "html-view-key",
+      nodeId: "node-html", resourceId: "resource-html", name: "Dashboard.univer.html",
+      originalFilename: "view.univer.html", byteSize: htmlViewBytes,
+      receivedSize: state === "waitingForUpload" ? null : htmlViewBytes,
+    },
+    uploadTarget: state === "waitingForUpload" ? {
+      method: "PUT", contentUrl: "/api/blob-upload-sessions/upload-html/content",
+    } : null,
   };
 }
 

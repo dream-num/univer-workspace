@@ -14,6 +14,7 @@ const expectedNames = [
   "doc",
   "embed",
   "cross-unit-formula",
+  "html-view",
   "sheet",
   "slide",
 ] as const;
@@ -46,6 +47,26 @@ describe("Workspace CLI skills command", () => {
     expect(result.data).toEqual([{ name: "blob", content: source }]);
     const all = await runSkills(["skills", "get", "--all", "--json"]);
     expect(all.data).toContainEqual({ name: "blob", content: source });
+  });
+
+  it("loads HTML View authoring references on demand and resolves every local link", async () => {
+    const entry = await runSkills(["skills", "get", "html-view", "--json"]);
+    const data = (entry.data as Array<{ content: string; files?: unknown }>)[0]!;
+    expect(data.files).toBeUndefined();
+    const full = await runSkills(["skills", "get", "html-view", "--full", "--json"]);
+    const files = (full.data as Array<{ files: Array<{ path: string; content: string }> }>)[0]!.files;
+    expect(files.map(file => file.path)).toEqual([
+      "references/adding-records.md", "references/authoring.md", "references/charts.md", "references/frontend-libraries.md",
+    ]);
+    const located = await runSkills(["skills", "path", "html-view", "--json"]);
+    const root = (located.data as { path: string }).path;
+    for (const file of [{ path: "SKILL.md", content: data.content }, ...files]) {
+      expect(await readFile(join(root, file.path), "utf8")).toBe(file.content);
+      for (const link of file.content.matchAll(/\]\(([^)]+\.md)\)/g)) {
+        if (/^[a-z]+:/i.test(link[1]!)) continue;
+        expect(await readFile(resolve(root, dirname(file.path), link[1]!), "utf8")).not.toBe("");
+      }
+    }
   });
 
   it("loads Board references only on demand and resolves their installed paths", async () => {

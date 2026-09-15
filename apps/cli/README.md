@@ -31,7 +31,7 @@ review handoff.
 
 The installed package supplies the operational contract an agent needs:
 
-- Version-matched Skills for Core, Sheet, Doc, Slide, Base, Board, Blob, embeds, and cross-Unit formulas
+- Version-matched Skills for Core, Sheet, Doc, Slide, Base, Board, Blob, HTML Views, embeds, and cross-Unit formulas
 - Structured JSON output for planning, execution, and verification
 - Offline Facade API and SVG resource discovery
 - CLI help aligned with the installed SDK and command surface
@@ -75,11 +75,6 @@ univer-workspace-cli print-pdf ./reports/review.pdf --worktree <worktree-id> --u
 
 Together, these capabilities show the range of products and workflows that can be built with the
 Univer SDK.
-
-## Blob files
-
-For original-file upload, download and replacement, read the [Blob Skill](skill-data/blob/SKILL.md)
-or run `univer-workspace-cli skills get blob`.
 
 ## Install
 

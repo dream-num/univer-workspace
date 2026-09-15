@@ -210,6 +210,9 @@ importers:
       '@univer-cli/univer-render-runtime':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-labs/html-view':
+        specifier: 1.0.0-dev.05c502f
+        version: 1.0.0-dev.05c502f
       '@univerjs-pro/bases':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)

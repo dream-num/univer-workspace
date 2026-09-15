@@ -35,7 +35,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   and [OpenAPI source](apps/workspace/contracts/http/openapi.yaml).
 - **Univer Workspace CLI** — the internally packaged `univer-workspace-cli` application for agent-driven remote
   Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, including Blob
-  download and ETag-guarded content replacement, with browser-approved
+  download, ETag-guarded content replacement, and HTML View validation/publication, with browser-approved
   passwordless CLI session handoff for password and external-identity users. Contract:
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli-manual.yml).
 
@@ -54,6 +54,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - [`dream-num/univer-cli-sdk`](https://github.com/dream-num/univer-cli-sdk) — owns the target-neutral headless,
   execution, inspection, rendering, daemon, and Commander capabilities composed by Workspace CLI.
   Contract: [repository boundary](AGENTS.md).
+- [`dream-num/univer-data-binding-sdk`](https://github.com/dream-num/univer-data-binding-sdk) — owns HTML
+  binding syntax and runtime APIs. CLI consumes the published HTML parser; Browser owns page execution.
+  Contract: [HTML Views integration](docs/design/html-views/README.md).
 - [`dream-num/univer-protocol`](https://github.com/dream-num/univer-protocol) — owns the protocol types consumed by
   collaboration and content workflows. Contract: [repository boundary](AGENTS.md).
 - [`dream-num/helm-chart-private`](https://github.com/dream-num/helm-chart-private) — receives deployment handoff

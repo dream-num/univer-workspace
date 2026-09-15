@@ -36,6 +36,16 @@ HTML Blob 不使用 Unit Worktree。`create` 发布独立文件，不写入来�
 `idempotencyKey`。替换立即发布，保留 Node、Resource、权限与原链接；只有需要独立页面时才
 再次创建 Blob。ETag 冲突时重新下载并协调内容，不能直接套用新 ETag 覆盖较新的页面。
 
+## CLI 集成
+
+Workspace CLI 通过 `html-view validate/create` 组合相同版本的解析包、Client Core trunk runtime
+与 Blob 上传。文件使用本机路径，创建必须显式指定 Space、名称和幂等键。CLI 上传已验证字节的
+临时副本，避免验证期间源文件变化导致发布未验证内容；完成或失败后清理副本，恢复信息指向原文件。
+来源只读取 trunk；创建不写来源单元格。修改现有页面使用 `blob download → html-view validate → blob replace`。
+
+详细操作与创作指引随独立 [HTML View Skill](../../../apps/cli/skill-data/html-view/SKILL.md) 交付。
+CLI 不装配 Browser Renderer 或 Binding Engine；页面仍通过 Workspace Browser 运行。
+
 ## 集成交付检查
 
 升级发布包或修改 Agent 生成指引时，检查实际打包的插件及其 Skill，并在真实 Workspace

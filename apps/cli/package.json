@@ -53,6 +53,7 @@
     "@univer-cli/univer-collaboration-runtime-pool": "1.0.0-rc.0",
     "@univer-cli/univer-render-runtime": "1.0.0-rc.0",
     "@univerjs/univer-workspace-client-core": "workspace:*",
+    "@univerjs-labs/html-view": "1.0.0-dev.05c502f",
     "@univerjs-pro/bases": "1.0.0-rc.0",
     "@univerjs-pro/bases-ui": "1.0.0-rc.0",
     "@univerjs-pro/boards": "1.0.0-rc.0",
