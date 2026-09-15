@@ -24,6 +24,7 @@ export interface BlobUploadPayload extends BlobUploadIntent {
   readonly nodeId: string;
   readonly resourceId: string;
   readonly objectKey: string;
+  readonly htmlSourcePublishers?: Readonly<Record<string, string>>;
 }
 
 export interface BlobUploadRow {
@@ -97,15 +98,21 @@ export class BlobUploadStateConflictError extends Error {}
 export class BlobsRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
 
-  /** Identify the actual publisher of the current immutable Blob version. */
-  publicationActor(resourceId: string, objectKey: string): string | undefined {
+  /** Source authority belongs to the immutable publication, not the latest template editor. */
+  htmlPublication(resourceId: string, objectKey: string): {
+    readonly actorId: string;
+    readonly sourcePublishers: Readonly<Record<string, string>> | undefined;
+  } | undefined {
     const row = this._database.connection
-      .prepare(`SELECT actor_user_id FROM operations
+      .prepare(`SELECT actor_user_id, payload_json FROM operations
         WHERE kind IN ('create_blob_resource', 'replace_blob_content') AND state = 'completed'
           AND json_extract(payload_json, '$.resourceId') = ?
           AND json_extract(payload_json, '$.objectKey') = ? LIMIT 1`)
-      .get(resourceId, objectKey) as { actor_user_id: string } | undefined;
-    return row?.actor_user_id;
+      .get(resourceId, objectKey) as { actor_user_id: string; payload_json: string } | undefined;
+    return row ? {
+      actorId: row.actor_user_id,
+      sourcePublishers: JSON.parse(row.payload_json).htmlSourcePublishers,
+    } : undefined;
   }
 
   reserveReplacement(
@@ -161,6 +168,7 @@ export class BlobsRepository {
     objectKey: string,
     stored: StoredBlob,
     now: number,
+    htmlSourcePublishers?: Readonly<Record<string, string>>,
   ): BlobReplacementResult {
     return this._database.transaction((database) => {
       const current = database
@@ -198,8 +206,8 @@ export class BlobsRepository {
       const result = { operationId, resourceId: intent.resourceId, etag: `"${etag}"` };
       database
         .prepare(`UPDATE operations SET state = 'completed', step = 'completed', result_json = ?,
-        updated_at = ?, completed_at = ? WHERE id = ? AND state = 'pending'`)
-        .run(JSON.stringify(result), now, now, operationId);
+        payload_json = json_patch(payload_json, ?), updated_at = ?, completed_at = ? WHERE id = ? AND state = 'pending'`)
+        .run(JSON.stringify(result), JSON.stringify({ htmlSourcePublishers }), now, now, operationId);
       return result;
     });
   }
@@ -386,7 +394,11 @@ export class BlobsRepository {
     ).run(updatedAt, message, uploadId);
   }
 
-  complete(uploadId: string, completedAt: number): ReservedBlobUpload {
+  complete(
+    uploadId: string,
+    completedAt: number,
+    htmlSourcePublishers?: Readonly<Record<string, string>>,
+  ): ReservedBlobUpload {
     return this._database.transaction((database) => {
       const upload = this.requireUpload(uploadId);
       if (upload.state === "completed") {
@@ -448,9 +460,9 @@ export class BlobsRepository {
       database.prepare(
         `UPDATE operations
          SET step = 'completed', state = 'completed', result_json = ?,
-             updated_at = ?, completed_at = ?
+             payload_json = json_patch(payload_json, ?), updated_at = ?, completed_at = ?
          WHERE id = ?`
-      ).run(result, completedAt, completedAt, upload.operation_id);
+      ).run(result, JSON.stringify({ htmlSourcePublishers }), completedAt, completedAt, upload.operation_id);
       return this.requireByOperation(upload.operation_id);
     });
   }

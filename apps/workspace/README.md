@@ -303,17 +303,19 @@ for preconditions and retry behavior.
 
 ### HTML view sharing
 
-An HTML editor (including owner/admin) can read and edit the complete Sheets declared
-by a `.univer.html` template through its scoped collaboration connection, without a
-separate source Sheet grant. Direct Sheet access retains its original ACL. This first
-version does not isolate individual cells or ranges; HTML viewers without editor
-access still need their own source permissions.
+HTML roles govern the file: viewers can fully run the page, including form submissions
+and bound data writes; editors can also replace its template; owner/admin retain normal
+permission management. Any HTML viewer can read and edit the complete declared Sheets
+through the scoped collaboration connection without a separate source Sheet grant.
+Direct Sheet access retains its original ACL. Individual cells or ranges are not isolated.
 
-Replacing the HTML template requires owner/admin. Publishing a template validates the
-publisher's edit access to all declared sources; live access also rechecks that authority.
-Revocation, session expiry, source access loss, and template replacement invalidate
-existing HTML connections within approximately one second. This uses the existing V7
-Blob publication Operations and requires no database migration.
+Publishing a new source requires the author's direct Sheet edit permission. Template
+replacement retains authority for existing sources, even when the new editor lacks direct
+source access. Each publication records a server-owned Unit-to-publisher map in its Blob
+Operation. Removed sources lose this inherited authority. Live access rechecks the HTML
+viewer's access and each source publisher's edit permission. Revocation, session expiry,
+source access loss, and template replacement invalidate existing HTML connections within
+approximately one second. The V7 database schema is unchanged; no migration is required.
 
 ## 沉浸视图
 

@@ -57,8 +57,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   Contract: [repository boundary](AGENTS.md).
 - [`dream-num/univer-data-binding-sdk`](https://github.com/dream-num/univer-data-binding-sdk) — owns HTML
   binding syntax and runtime APIs. CLI and Server consume the published HTML parser; Browser owns page execution.
-  Workspace owns HTML editor delegation to declared source Sheets through a separate collaboration endpoint;
-  direct source ACLs remain unchanged, and template replacement requires owner/admin.
+  Workspace lets HTML viewers run pages with declared Sheet read/write access through a scoped collaboration
+  endpoint; editors may replace templates, retaining existing source authority and validating new sources.
+  Direct source ACLs remain unchanged. Source provenance is stored in Blob publication Operations.
   Contract: [HTML Views integration](docs/design/html-views/README.md).
 - [`dream-num/univer-protocol`](https://github.com/dream-num/univer-protocol) — owns the protocol types consumed by
   collaboration and content workflows. Contract: [repository boundary](AGENTS.md).

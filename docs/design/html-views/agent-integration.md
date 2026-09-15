@@ -29,12 +29,15 @@ SDK 完整语法与接口引用[上游文档](README.md#sdk-文档)。
 工具在上传前再次检查取消状态；上传过程复用通用 Blob 服务。
 
 验证只覆盖声明式引用；`validate` 不执行脚本，也不证明页面交互已经正常运行。
-HTML editor 可通过页面读写声明引用的完整 Sheet，脚本使用的 Unit 必须在绑定属性中声明。
-服务端发布阶段验证发布者可编辑所有声明来源；替换模板要求 HTML owner/admin。
-Viewer 不获得来源委托权限，仍需要自身的来源访问权限。
+HTML viewer 即可运行页面并读写声明引用的完整 Sheet；editor 还可替换 HTML 模板。
+脚本使用的 Unit 必须在绑定属性中声明。新引用要求发布者拥有对应 Sheet 的编辑权限；模板
+替换保留已有引用的授权来源，不要求新编辑者另外取得这些 Sheet 的直接权限。
+
+独立 `validate` 按调用者的直接来源权限读取 Sheet，可能无法验证仅通过 HTML 获得授权的
+已有绑定；它不是模板替换的前置条件。`blob replace` 由服务端验证并保留已有来源授权。
 
 HTML Blob 不使用 Unit Worktree。`create` 发布独立文件，不写入来源单元格。修改已有页面时，
-先用 `univer_blob download` 取得 HTML 和对应 ETag，修改模板并通过 `univer_html_view validate`，
+先用 `univer_blob download` 取得 HTML 和对应 ETag，修改模板，
 再用 `univer_blob replace` 提交原 Resource ID、新 HTML、下载时的 ETag 和本次更新的
 `idempotencyKey`。替换立即发布，保留 Node、Resource、权限与原链接；只有需要独立页面时才
 再次创建 Blob。ETag 冲突时重新下载并协调内容，不能直接套用新 ETag 覆盖较新的页面。
@@ -44,7 +47,7 @@ HTML Blob 不使用 Unit Worktree。`create` 发布独立文件，不写入来�
 Workspace CLI 通过 `html-view validate/create` 组合相同版本的解析包、Client Core trunk runtime
 与 Blob 上传。文件使用本机路径，创建必须显式指定 Space、名称和幂等键。CLI 上传已验证字节的
 临时副本，避免验证期间源文件变化导致发布未验证内容；完成或失败后清理副本，恢复信息指向原文件。
-来源只读取 trunk；创建不写来源单元格。修改现有页面使用 `blob download → html-view validate → blob replace`。
+来源只读取 trunk；创建不写来源单元格。修改现有页面使用 `blob download → blob replace`。
 
 详细操作与创作指引随独立 [HTML View Skill](../../../apps/cli/skill-data/html-view/SKILL.md) 交付。
 CLI 不装配 Browser Renderer 或 Binding Engine；页面仍通过 Workspace Browser 运行。
@@ -56,7 +59,7 @@ CLI 不装配 Browser Renderer 或 Binding Engine；页面仍通过 Workspace Br
 
 - Agent 检查来源、生成文件、调用 `validate` 和 `create`，返回可打开的页面地址。
 - Browser 打开生成页面，HTML 绑定和 JavaScript 交互能读取、写入并保存来源数据。
-- 原生 Sheet 或另一个 HTML 页面能接收协同更新；只读访问者的写入得到明确错误。
+- 原生 Sheet 或另一个 HTML 页面能接收协同更新；HTML viewer 可以写入绑定数据，但不能替换模板。
 - 离开页面时的草稿提交、失败提示和重新打开后的数据符合保存结果。
 
 工具验证、Browser 运行和服务端保存分别检查；只有解析成功不能代表整条集成链路通过。

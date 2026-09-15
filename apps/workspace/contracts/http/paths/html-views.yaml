@@ -2,13 +2,14 @@
   get:
     tags: [Resources]
     operationId: resolveHtmlViewSource
-    summary: Authorize a referenced Sheet through an editable HTML view.
+    summary: Authorize a referenced Sheet through a viewable HTML page.
     description: |
-      Requires HTML editor (or owner/admin) access. The server reads the published
-      template and checks its publisher's source edit authority. Grants complete
-      Sheet content access only through the HTML-scoped collaboration endpoints;
-      does not grant direct access to the source Resource or permission to replace
-      the HTML template. Viewer access continues to require normal Sheet access.
+      Requires HTML viewer access or higher. Running the page includes complete
+      read/write access to declared Sheets through HTML-scoped collaboration endpoints.
+      The server checks the published template and each source's authorizing publisher.
+      Direct source Resource access retains its normal ACL. Template replacement requires
+      editor access; existing source authority is retained and new sources require the
+      author's direct edit permission. No cell or range isolation is provided.
     parameters:
       - name: resourceId
         in: path

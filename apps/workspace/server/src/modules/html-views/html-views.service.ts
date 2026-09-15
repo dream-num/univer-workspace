@@ -50,7 +50,7 @@ export function createHtmlViewsModule(options: {
     return resource;
   }
 
-  function requireEditor(userId: string, resourceId: string) {
+  function requireView(userId: string, resourceId: string) {
     const html = options.access.resolveResource(userId, resourceId);
     if (
       html?.kind !== "blob" ||
@@ -59,47 +59,78 @@ export function createHtmlViewsModule(options: {
     ) {
       throw new ApplicationError("NOT_FOUND", 404, "HTML view not found.");
     }
-    if (!html.capabilities.editContent) {
-      throw new ApplicationError("FORBIDDEN", 403, "HTML editor permission is required.");
-    }
     return html;
   }
 
-  async function authorize(userId: string, scope: HtmlViewScope, unitId?: string) {
-    const html = requireEditor(userId, scope.resourceId);
+  async function publishedSources(userId: string, scope: HtmlViewScope) {
+    const html = requireView(userId, scope.resourceId);
     if (html.objectKey !== scope.objectKey) {
       throw new ApplicationError("CONFLICT", 409, "HTML template changed; reload the page.");
     }
     const ids = await unitIds(html.objectKey);
     // Reading Blob bytes is asynchronous; recheck before returning authority.
-    if (requireEditor(userId, scope.resourceId).objectKey !== scope.objectKey) {
+    if (requireView(userId, scope.resourceId).objectKey !== scope.objectKey) {
       throw new ApplicationError("CONFLICT", 409, "HTML template changed; reload the page.");
     }
-    const publisherId = options.blobs.publicationActor(html.id, html.objectKey);
-    if (!publisherId || (unitId !== undefined && !ids.includes(unitId))) {
+    const publication = options.blobs.htmlPublication(html.id, html.objectKey);
+    if (!publication) {
+      throw new ApplicationError("FORBIDDEN", 403, "HTML publication not found.");
+    }
+    // Templates published before source provenance was recorded use their actual publisher.
+    const publishers =
+      publication.sourcePublishers === undefined
+        ? new Map(ids.map((id) => [id, publication.actorId]))
+        : new Map(Object.entries(publication.sourcePublishers));
+    return new Map(ids.map((id) => [id, publishers.get(id)]));
+  }
+
+  async function authorize(userId: string, scope: HtmlViewScope, unitId?: string) {
+    const publishers = await publishedSources(userId, scope);
+    if (unitId !== undefined && !publishers.has(unitId)) {
       throw new ApplicationError("FORBIDDEN", 403, "Sheet is not authorized by this HTML view.");
     }
-    for (const id of ids) source(publisherId, id);
-    if (unitId === undefined) return undefined;
-    const resource = source(publisherId, unitId);
+    let requested: UniverResourceAccess | undefined;
+    for (const [id, publisherId] of publishers) {
+      if (!publisherId) {
+        throw new ApplicationError("FORBIDDEN", 403, "Sheet publication authority is missing.");
+      }
+      const resource = source(publisherId, id);
+      if (id === unitId) requested = resource;
+    }
+    if (!requested) return undefined;
     return {
-      ...resource,
-      // This delegation grants content editing, never source administration.
-      node: { ...resource.node, role: "editor" as const },
+      ...requested,
+      // Page execution grants content editing, never source administration.
+      node: { ...requested.node, role: "editor" as const },
     };
   }
 
   return {
     async open(userId: string, resourceId: string): Promise<HtmlViewScope> {
-      const html = requireEditor(userId, resourceId);
+      const html = requireView(userId, resourceId);
       const scope = { resourceId, objectKey: html.objectKey };
       await authorize(userId, scope);
       return scope;
     },
     authorize,
-    async validatePublication(userId: string, objectKey: string, filename: string) {
+    async validatePublication(
+      userId: string,
+      objectKey: string,
+      filename: string,
+      previous?: HtmlViewScope,
+    ): Promise<Readonly<Record<string, string>> | undefined> {
       if (!isHtmlViewFilename(filename)) return;
-      for (const unitId of await unitIds(objectKey)) source(userId, unitId);
+      const ids = await unitIds(objectKey);
+      const inherited = previous
+        ? await publishedSources(userId, previous)
+        : new Map<string, string | undefined>();
+      return Object.fromEntries(
+        ids.map((id) => {
+          const publisherId = inherited.get(id) ?? userId;
+          source(publisherId, id);
+          return [id, publisherId];
+        }),
+      );
     },
   };
 }

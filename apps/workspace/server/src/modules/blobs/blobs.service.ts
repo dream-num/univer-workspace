@@ -1,5 +1,4 @@
 import type { Readable } from "node:stream";
-import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { parseByteRange } from "../../integrations/blob/blob-http.js";
 import { ApplicationError } from "../../middleware/errors.js";
@@ -71,7 +70,8 @@ export function createBlobsModule(options: {
     userId: string,
     objectKey: string,
     filename: string,
-  ) => Promise<void>;
+    previous?: { readonly resourceId: string; readonly objectKey: string },
+  ) => Promise<Readonly<Record<string, string>> | undefined>;
 }): BlobsModule {
   const now = options.now ?? Date.now;
   const maxBlobBytes = options.maxBlobBytes ?? 512 * 1024 * 1024;
@@ -143,10 +143,6 @@ export function createBlobsModule(options: {
       const requireWritable = () => {
         const access = requireBlobAccess(options.access, userId, resourceId);
         if (!access.capabilities.editContent) throw forbidden();
-        if (
-          isHtmlViewFilename(access.originalFilename) &&
-          access.node.role !== "owner" && access.node.role !== "admin"
-        ) throw forbidden();
         if (access.availability !== "ready")
           throw conflict("Blob content is not currently available.");
         return access;
@@ -176,10 +172,12 @@ export function createBlobsModule(options: {
           body,
           expectedByteSize: byteSize,
         });
-        await options.validateHtmlPublication?.(
+        const previous = requireWritable();
+        const htmlSourcePublishers = await options.validateHtmlPublication?.(
           userId,
           reserved.objectKey,
-          requireWritable().originalFilename,
+          previous.originalFilename,
+          { resourceId, objectKey: previous.objectKey },
         );
         // Resolve live permissions after the asynchronous upload, immediately before the product transaction.
         requireWritable();
@@ -189,6 +187,7 @@ export function createBlobsModule(options: {
           reserved.objectKey,
           stored,
           now(),
+          htmlSourcePublishers,
         );
       } catch (error) {
         const failure = replacementError(error);
@@ -289,13 +288,13 @@ export function createBlobsModule(options: {
       if (!object || object.byteSize !== value.upload.byte_size) {
         throw conflict("Stored Blob does not match the Upload Session.");
       }
-      await options.validateHtmlPublication?.(
+      const htmlSourcePublishers = await options.validateHtmlPublication?.(
         userId,
         value.upload.object_key,
         value.upload.original_filename,
       );
       validateTarget(userId, value.payload, options.access);
-      const result = options.repository.complete(uploadId, now());
+      const result = options.repository.complete(uploadId, now(), htmlSourcePublishers);
       return completed(result, 201);
     },
 

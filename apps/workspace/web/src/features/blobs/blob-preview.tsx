@@ -8,7 +8,6 @@ import { HtmlViewFile } from "../html-views";
 
 interface BlobPreviewResource {
   readonly id: string;
-  readonly accessRole: string;
   readonly name: string;
   readonly originalFilename: string;
   readonly mediaType: string;

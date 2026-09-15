@@ -67,8 +67,8 @@ afterEach(async () => {
 });
 
 describe("collaboration gateway", () => {
-  it("delegates Sheet collaboration to HTML editors without granting direct source or template access", async () => {
-    const { application, origin, collaborationDatabaseFilename } = await startApplication();
+  it("lets HTML viewers edit bound data and editors replace templates with inherited source authority", async () => {
+    let { application, origin, collaborationDatabaseFilename, directory, server } = await startApplication();
     const owner = await application.identity.registerWithPassword({
       username: "html-owner",
       displayName: "Owner",
@@ -130,8 +130,6 @@ describe("collaboration gateway", () => {
       fetch(`${origin}/api/html-views/${resourceId}/sources/${unitId}`, { headers: { cookie } });
     expect((await resolve()).status).toBe(404);
     application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "viewer" });
-    expect((await resolve()).status).toBe(403);
-    application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "editor" });
     await expect((await resolve()).json()).resolves.toEqual({ unitId, editorMode: "edit" });
     expect(
       (await fetch(`${origin}/api/unit-resources/${unitId}`, { headers: { cookie } })).status,
@@ -290,17 +288,65 @@ describe("collaboration gateway", () => {
     const replaced = new Promise<void>((resolve) =>
       reconnected.socket.addEventListener("close", () => resolve(), { once: true }),
     );
-    const replacement = "<html><head></head><body>No sources</body></html>";
+    // Template editors need no direct source grant to keep existing bindings.
+    const revised = source.replace("<body>", "<body><h1>Updated template</h1>");
     await application.blobs.replace(
-      ownerId,
+      editorId,
       resourceId,
       randomUUID(),
       `"${content.etag}"`,
-      String(Buffer.byteLength(replacement)),
-      Readable.from([replacement]),
+      String(Buffer.byteLength(revised)),
+      Readable.from([revised]),
     );
-    expect((await resolve()).status).toBe(403);
+    expect((await resolve()).status).toBe(200);
     await replaced;
+    const replaceTemplate = async (actorId: string, html: string) => {
+      const current = application.access.resolveResource(actorId, resourceId)!;
+      if (current.kind !== "blob") throw new Error("Expected Blob");
+      return application.blobs.replace(
+        actorId, resourceId, randomUUID(), `"${current.etag}"`,
+        String(Buffer.byteLength(html)), Readable.from([html]),
+      );
+    };
+    const withSource = (id: string) => source.replace(
+      "</body>", `<span data-univer-cell-text="${id}:sheet:A1"></span></body>`,
+    );
+    await expect(replaceTemplate(editorId, withSource(unrelated.body.node.resource!.unitId!)))
+      .rejects.toMatchObject({ status: 403 });
+    expect((await resolve()).status).toBe(200);
+    const ownSheet = await application.resources.create(editorId, randomUUID(), {
+      kind: "univer",
+      spaceId: application.spaces.list(editorId).spaces[0]!.id,
+      parentNodeId: null,
+      name: "Editor source",
+      unitType: "sheet",
+    });
+    if (ownSheet.status === 202) throw new Error("Pending resource");
+    const ownUnitId = ownSheet.body.node.resource!.unitId!;
+    await replaceTemplate(editorId, withSource(ownUnitId));
+    // A later author with no direct access to the new source can retain both grants.
+    await replaceTemplate(ownerId, withSource(ownUnitId).replace("<body>", "<body><h1>Owner edit</h1>"));
+    // Provenance survives old Blob cleanup and a fresh server process lifetime.
+    await application.blobs.runMaintenance("html-test-cleanup");
+    const directClosed = new Promise<void>((resolve) =>
+      direct.socket.addEventListener("close", () => resolve(), { once: true }),
+    );
+    direct.socket.close();
+    await directClosed;
+    await stopApplication(application, server);
+    ({ application, origin } = await startApplication(directory));
+    application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "viewer" });
+    expect((await resolve()).status).toBe(200);
+    expect((await fetch(`${origin}/api/html-views/${resourceId}/sources/${ownUnitId}`, {
+      headers: { cookie },
+    })).status).toBe(200);
+    await expect(replaceTemplate(editorId, source)).rejects.toMatchObject({ status: 403 });
+    // Removing a source drops its inherited authority; re-adding it requires a new grant.
+    application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "editor" });
+    await replaceTemplate(editorId, "<html><head></head><body>No sources</body></html>");
+    expect((await resolve()).status).toBe(403);
+    await expect(replaceTemplate(editorId, source)).rejects.toMatchObject({ status: 403 });
+
   });
 
   it("rejects HTML publication that delegates inaccessible sources", async () => {

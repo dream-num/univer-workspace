@@ -63,11 +63,11 @@ host = createBindingHost(event.ports[0], {
 [`createWorkspaceBindingEngine`](../../../apps/workspace/web/src/features/html-views/workspace-binding-engine.ts)
 承担应用适配，按以下顺序执行：
 
-1. HTML editor/owner/admin 通过 `GET /api/html-views/{resourceId}/sources/{unitId}`
+1. 所有 HTML 查看者（包括 viewer）通过 `GET /api/html-views/{resourceId}/sources/{unitId}`
    校验当前已发布模板的来源授权，返回 `editorMode: edit`。
 2. 将 Snapshot、Changeset、WebSocket、Session Ticket 和 Authz 一起指向
    `/universer-api/html-views/{resourceId}`；snapshot override 同样使用这个前缀。
-3. Viewer 和独立预览保留普通来源检查：`GET /api/unit-resources/{unitId}` 与
+3. 没有已发布 HTML Resource 上下文的独立预览保留普通来源检查：`GET /api/unit-resources/{unitId}` 与
    `POST /api/resources/{resourceId}/open`，不获得 HTML 委托权限。
 4. 创建 Engine，传入 `unitId`、`collaborationClientConfig` 和 Workspace 的 `createUniver` 工厂。
 5. 等待 `engine.load()`；只读来源调用 Workbook 的 `setEditable(false)`，再返回 Engine。

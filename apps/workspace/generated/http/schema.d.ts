@@ -12,12 +12,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Authorize a referenced Sheet through an editable HTML view.
-         * @description Requires HTML editor (or owner/admin) access. The server reads the published
-         *     template and checks its publisher's source edit authority. Grants complete
-         *     Sheet content access only through the HTML-scoped collaboration endpoints;
-         *     does not grant direct access to the source Resource or permission to replace
-         *     the HTML template. Viewer access continues to require normal Sheet access.
+         * Authorize a referenced Sheet through a viewable HTML page.
+         * @description Requires HTML viewer access or higher. Running the page includes complete
+         *     read/write access to declared Sheets through HTML-scoped collaboration endpoints.
+         *     The server checks the published template and each source's authorizing publisher.
+         *     Direct source Resource access retains its normal ACL. Template replacement requires
+         *     editor access; existing source authority is retained and new sources require the
+         *     author's direct edit permission. No cell or range isolation is provided.
          */
         get: operations["resolveHtmlViewSource"];
         put?: never;
@@ -725,9 +726,9 @@ export interface paths {
         get: operations["getBlobContent"];
         /**
          * Replace all Blob bytes while preserving Resource identity.
-         * @description Replacing a .univer.html template requires owner/admin, and the publisher must
-         *     be able to edit every declared source Sheet. HTML editor access only delegates
-         *     source data editing, not template replacement.
+         * @description Replacing a .univer.html template uses ordinary editor access. Existing source
+         *     authorizations are retained; adding a source requires the publisher's direct
+         *     edit permission on that Sheet. Removed sources lose their inherited authorization.
          *     Publishes immediately without Worktree review. Requires editor access, Content-Length,
          *     one quoted strong If-Match ETag from the downloaded bytes, and a stable Idempotency-Key.
          *     Preserves the Node, name, original filename, location, ACL and Resource ID.

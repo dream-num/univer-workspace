@@ -155,7 +155,7 @@ function BoundHtmlView({
 export function HtmlViewFile({
   resource,
 }: {
-  resource: { id: string; accessRole: string; contentUrl: string; byteSize: number };
+  resource: { id: string; contentUrl: string; byteSize: number };
 }) {
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -186,7 +186,7 @@ export function HtmlViewFile({
     <HtmlView
       source={source}
       allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS}
-      {...(resource.accessRole !== "viewer" ? { htmlResourceId: resource.id } : {})}
+      htmlResourceId={resource.id}
     />
   );
 }

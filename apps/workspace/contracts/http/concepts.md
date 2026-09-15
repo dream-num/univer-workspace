@@ -6,11 +6,12 @@ explains behavior that spans multiple operations.
 
 ## Conventions
 
-HTML editors may resolve declared source Sheets through
+HTML viewers may resolve declared source Sheets through
 `GET /api/html-views/{resourceId}/sources/{unitId}` and use the HTML-scoped collaboration
 endpoints. This grants complete Sheet content editing, without a direct source ACL
-grant. HTML template replacement requires owner/admin; publication verifies the
-publisher's source edit access. Ordinary Blob replacement retains its existing rules.
+grant. HTML template replacement uses ordinary editor access. Publication retains
+authority for existing sources and verifies the author's edit access for new sources.
+Running the page, including data writes, requires only HTML viewer access.
 
 - JSON fields use `camelCase`; timestamps are UTC ISO 8601 strings.
 - IDs and cursors are opaque strings.

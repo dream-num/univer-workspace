@@ -98,7 +98,7 @@ describe("HTML view Workspace write permissions", () => {
 
   it("does not fall back to direct Sheet permissions when HTML authorization fails", async () => {
     writes.get.mockResolvedValueOnce({
-      error: { error: { code: "FORBIDDEN", message: "HTML editor permission is required." } },
+      error: { error: { code: "FORBIDDEN", message: "HTML view access denied." } },
     });
     await expect(
       createWorkspaceBindingEngine(
@@ -107,7 +107,7 @@ describe("HTML view Workspace write permissions", () => {
         new AbortController().signal,
         "html",
       ),
-    ).rejects.toThrow("HTML editor permission");
+    ).rejects.toThrow("HTML view access denied");
     expect(writes.options).not.toHaveBeenCalled();
     expect(writes.post).not.toHaveBeenCalled();
   });
