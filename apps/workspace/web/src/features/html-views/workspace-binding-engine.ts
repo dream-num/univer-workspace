@@ -3,6 +3,7 @@ import {
   type BindingEngineOptions,
   type CellReference,
   type CellValue,
+  type InsertRowsWithValuesParams,
 } from "@univerjs-labs/binding-engine";
 import { FUniver } from "@univerjs/core/facade";
 import { UniverProFormulaEnginePlugin } from "@univerjs-pro/engine-formula";
@@ -30,7 +31,7 @@ import { UniverLicensePlugin } from "@univerjs-pro/license";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 
-class WorkspaceBindingEngine extends BindingEngine {
+export class WorkspaceBindingEngine extends BindingEngine {
   constructor(
     options: BindingEngineOptions,
     private readonly canEdit: boolean,
@@ -42,6 +43,11 @@ class WorkspaceBindingEngine extends BindingEngine {
     // Workspace grants are product policy. Reject before a Facade write can silently do nothing.
     if (!this.canEdit) throw new Error("来源 Sheet 为只读，无法写入。");
     super.setCellValue(reference, value);
+  }
+
+  override insertRowsWithValues(params: InsertRowsWithValuesParams): void {
+    if (!this.canEdit) throw new Error("来源 Sheet 为只读，无法写入。");
+    super.insertRowsWithValues(params);
   }
 }
 

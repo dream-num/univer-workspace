@@ -97,7 +97,7 @@
     "@univer-cli/univer-render-page": "1.0.0-rc.0",
     "@univer-cli/univer-render-runtime": "1.0.0-rc.0",
     "@univer/unit-comparison-viewer": "file:../unit-comparison-viewer",
-    "@univerjs-labs/html-view": "1.0.0-rc.0",
+    "@univerjs-labs/html-view": "1.0.0-dev.05c502f",
     "@univerjs-pro/bases": "1.0.0-rc.0",
     "@univerjs-pro/bases-exchange-client": "1.0.0-rc.0",
     "@univerjs-pro/bases-ui": "1.0.0-rc.0",

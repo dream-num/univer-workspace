@@ -53,8 +53,9 @@ Lucide replaces icon placeholders with SVG; run its icon initialization after in
   Keep the original Sheet row coordinate in each record so sorting or filtering does not redirect
   an edit to the wrong cell. A component's displayed row index is not a Sheet row index.
 - Table editors, Alpine form state and Sortable drag events are local UI operations. Persist intended
-  scalar edits through `setCellValue` and `flush`; these libraries do not add row insertion,
-  atomic append or multi-cell transactions. Do not write data merely because a subscription refreshes UI.
+  scalar edits through `setCellValue` and `flush`. Add new records through the binding client's
+  `insertRowsWithValues` and `flush`; see [adding records](adding-records.md). These libraries do not
+  provide persistence or multi-cell transactions. Do not write data merely because a subscription refreshes UI.
 - Papa Parse converts data locally. Parsing CSV does not import or save it into Workspace. Show a
   preview and use the appropriate existing import workflow when the user wants a document import.
 - Keep dates in the source's expected representation; display formatting does not authorize changing

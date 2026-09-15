@@ -118,6 +118,7 @@ All data methods return Promises:
 | `getRangeState(reference)` | `{ value: [[...], ...] }`, rows then columns |
 | `subscribeRange(reference, listener)` | Current range state, then updates; resolves to a subscription with `dispose()` |
 | `setCellValue(reference, value)` | Completes the local write; accepts a string, finite number or boolean |
+| `insertRowsWithValues(params)` | Inserts whole rows and fills their values in one local operation; call `flush()` for save confirmation |
 | `getCollaborationStatus(unitId)` | Current SDK collaboration status |
 | `subscribeCollaborationStatus(unitId, listener)` | Current status, then updates; resolves to a subscription with `dispose()` |
 | `flush()` | Submits HTML control drafts and waits for issued writes and collaboration confirmation |
@@ -147,17 +148,28 @@ Empty or missing cells return `value: null`. Handle failed writes through Promis
 Strings are written literally: `"2-2"` remains text, and `"=A1"` is not parsed as a formula.
 In an intended edit handler, use `await binding.setCellValue(reference, value)` and
 `await binding.flush()` before reporting that the edit is saved. JavaScript-managed drafts enter
-the save flow only after `setCellValue()` is called. Display rejected calls as errors and retain
+the save flow only after `setCellValue()` or `insertRowsWithValues()` is called. Display rejected calls as errors and retain
 user input for correction. Writing a cell replaces its previous formula or rich text.
 
-The page client exposes scalar writes, not `setRangeValues`, row insertion, atomic append, or
-multi-cell transactions. A form can write existing cells, but several writes can partially succeed;
-`flush()` confirms saving and does not make them atomic. Finding an empty row and writing into it
-is not a concurrent row-allocation guarantee. If a task requires that guarantee, identify the missing
-application capability instead of claiming a page-only implementation provides it.
+Use `setCellValue` to edit existing cells and `insertRowsWithValues` to add records. Insertion shifts
+existing rows down and fills the new rows in the same SDK command; do not implement registration by
+finding an empty row and issuing separate cell writes. For insertion parameters, a registration-form
+example and save retry behavior, read [adding records](references/adding-records.md).
+
+The page client still does not expose `setRangeValues` or general multi-cell transactions. Several
+scalar writes can partially succeed; `flush()` confirms saving and does not make them atomic.
+Insertion does not provide business-key uniqueness, idempotency or an atomic append-to-latest-end
+API. References remain fixed coordinates after insertion: locate a record again by its stable ID
+before editing it, and do not assume a captured row still identifies the same person.
 
 Subscriptions deliver their initial state before the returned Promise resolves. Call the returned
 `dispose()` when a custom view no longer needs updates; page teardown cancels remaining subscriptions.
+
+Collaboration status is a string, not an object: `synced` means synchronized; `pending`, `awaiting`,
+`awaiting_with_pending` and `fetch_missing` indicate synchronization in progress; `offline` means
+disconnected, `conflict` means conflict, and `not_collab` means collaboration is not active. Use these
+for a sync indicator with a fallback for unknown values. A status does not include unsent form drafts
+and does not replace calling the write method and awaiting `flush()` before reporting a saved edit.
 
 ## Frontend libraries
 

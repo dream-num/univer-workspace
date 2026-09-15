@@ -6,8 +6,8 @@ HTML Views 在 Workspace 中以 `.univer.html` Blob 保存，页面使用 HTML�
 ## 集成边界
 
 数据绑定 SDK 由 [univer-data-binding-sdk](https://github.com/dream-num/univer-data-binding-sdk)
-维护。Workspace 从内部 npm 使用其公开 exports，当前三个包均锁定为 `1.0.0-rc.0`；
-registry 配置在[根 `.npmrc`](../../../.npmrc)，版本由 consumer manifest 与 lockfile 管理。
+维护。Workspace 从内部 npm 使用其公开 exports；registry 配置在[根 `.npmrc`](../../../.npmrc)，
+版本以 consumer manifest 与 lockfile 为准。
 
 | 依赖 | Workspace 中的用途 | Consumer |
 | --- | --- | --- |
