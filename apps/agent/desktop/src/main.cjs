@@ -1,5 +1,5 @@
-const { app, BrowserWindow, Menu, dialog, shell, net, session } = require("electron");
-const { createUpdateChecker } = require("./updates.cjs");
+const { app, BrowserWindow, Menu, dialog, shell, net, session, ipcMain } = require("electron");
+const { createUpdateController } = require("./updates.cjs");
 const { autoUpdater } = require("electron-updater");
 const { spawn } = require("node:child_process");
 const { readFile, mkdir } = require("node:fs/promises");
@@ -90,6 +90,7 @@ async function start() {
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
+      preload: join(__dirname, "desktop-preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -240,12 +241,16 @@ async function start() {
       process.execPath, resources, event => startupLog.write(event),
     ).catch(error => startupLog.write({ phase: 'update-cleanup-failed', error: error.message }));
   }
-  const checkUpdates = createUpdateChecker({
+  const updateWindow = require("./update-window.cjs").createUpdateWindow({
+    BrowserWindow, ipcMain, shell, dialog, mainWindow: window, origin,
+  });
+  let diagnostics;
+  const updateController = createUpdateController({
     app,
     autoUpdater,
-    dialog,
     net,
-    window,
+    show: updateWindow.show,
+    changed: state => { updateWindow.changed(state); diagnostics?.recordUpdate(state); },
     updatesEnabled: release.updatesEnabled,
     beforeInstall: async () => {
       try {
@@ -257,6 +262,11 @@ async function start() {
       }
     },
   });
+  diagnostics = require("./diagnostics.cjs").createDiagnostics({
+    app, resources, updatesEnabled: release.updatesEnabled, getUpdateState: updateController.getState,
+  });
+  updateWindow.attach(updateController, diagnostics);
+  const checkUpdates = updateController.check;
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       ...(process.platform === "darwin"

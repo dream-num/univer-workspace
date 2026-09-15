@@ -131,10 +131,33 @@ accepts newer versions in its current or a later stage, never an earlier stage
 The channel is derived automatically from the version, with no separate selection.
 The stable metadata channel is named `latest`; prereleases use `alpha`, `beta`, and
 `rc` respectively. For example: `0.1.0-alpha.1`, `0.1.0-beta.1`, `0.1.0-rc.1`, `0.1.0`. Checks run after startup,
-every six hours, or from **Help → Check for Updates**. All channels exclude CLI
+every six hours, or from **Settings → About → Check for updates**.
+**Help → Check for Updates** remains available as a secondary entry. All channels exclude CLI
 releases and use the selected release's immutable generic update feed,
-not GitHub's repository-wide latest release. The app asks before downloading and
-restarting. Active tasks should finish before accepting. Update metadata and any blockmaps
+not GitHub's repository-wide latest release. The update window shows the current/new versions and release notes. The user
+chooses **Download update**; it shows percentage, bytes, speed, and retry status.
+Closing the window keeps the download running; the About page reopens its progress.
+After download and verification, **Restart and install** is a separate explicit
+action. Finish active tasks before restarting; merely downloading or quitting the
+app does not install an update.
+
+Downloads request byte ranges from the immutable GitHub release asset URL, retain
+partial files under `userData/update-downloads`, and retry interruptions up to
+three times (after 1, 3 and 8 seconds) with a 30-second idle timeout per request.
+**Pause**, **Resume download**, and **Retry download** reuse valid partial data,
+including after restarting the app and checking the same release. Each retry
+resolves GitHub's redirect again. Servers that ignore ranges trigger a full
+replacement download; checksum failures discard the corrupt partial. Cache identity
+includes the release URL and SHA-512, and choosing a different artifact removes
+older partials. A complete saved download remains available for retry until the
+next artifact replaces it.
+
+A SHA-512-verified file is handed to electron-updater through its public generic
+provider on a temporary, token-protected loopback URL. The updater independently
+checks the checksum and owns platform signature validation, staging and installation.
+This retains a download-cache copy in addition to the updater's staged installer;
+no installed updater internals or cache manifests are patched. All desktop platforms
+use full downloads for this handoff, with differential downloading disabled. Update metadata and any blockmaps
 are release assets, not extra installer choices. Windows uses a ZIP/Deflate
 installation payload for faster extraction and downloads the full installer for
 updates; differential Windows downloads are disabled. Linux updates require running
@@ -225,14 +248,21 @@ alone does not build or publish anything.
 For release acceptance, install alpha.1 on each supported platform, sign in and
 retain a conversation, then manually publish alpha.2 from its matching tag.
 Check that alpha.1 shows the update prompt (or use Help → Check for Updates),
-that Later keeps the current app running, and that accepting downloads, stops
-the local service, installs and restarts into alpha.2 with account data intact.
+that Later keeps the current app running, and that downloading shows progress without stopping the service, and that
+**Restart and install** stops the local service, installs and restarts into alpha.2
+with account data intact.
 On Linux run the AppImage itself, not the unpacked executable. Verify that a
 failed download leaves the current app running and can be retried. Repeat the
 alpha-to-beta, beta-to-rc, and rc-to-stable transitions before graduating each stage. Windows remains unsigned.
 
 The automated tests cover selection, metadata channel/version matching, consent,
-retry, and shutdown/install order. Native CI smoke tests cover packaged startup;
+interrupted HTTP transfers, persistent resume, malformed ranges, checksum failure,
+retry, IPC sender validation, and shutdown/install order. On Linux, run
+`xvfb-run -a node apps/agent/desktop/scripts/update-smoke.mjs` for a real Electron
+network/resume and electron-updater generic-provider staging probe, plus update
+window progress/pause/reopen/retry checks. Restricted Linux test hosts use the
+explicit `--no-sandbox` test flag, as with the shell smoke; production keeps the
+renderer sandbox enabled. Native CI smoke tests cover packaged startup;
 these do not substitute for the two-release installation acceptance above.
 
 ## Runtime, login, and data
@@ -270,6 +300,25 @@ on the startup path. Node's compile cache is stored separately in `compile-cache
 Quit stops the application-owned service process tree. Back up `data/`
 independently; uninstall and update operations must not be used as account-data
 cleanup.
+
+## In-app diagnostics
+
+Desktop contributes an optional **Settings → About** section through DSH's public settings slot. The web-only application
+omits this panel. Developers can inspect the application/DSH/Electron/Node
+versions, OS and architecture, update state and progress, startup event timings,
+recent failure codes, and important directories directly in the UI. It refreshes
+once per second while mounted. Timing columns show elapsed time and time since
+the previous event, rather than inferring overlapping phase durations.
+
+The panel opens the fixed logs, application data, workspace, download cache or
+runtime directories. **Export diagnostics** uses the native save dialog to write
+a JSON report containing the same environment and selected current/previous
+startup and update events. Reports include local directory paths, but exclude
+credentials, model keys, conversation content, raw error messages/stacks, and
+signed URLs. Only whitelisted scalar diagnostic fields are exported. Update
+history is bounded and survives restart. All filesystem, save-dialog and updater
+operations remain in the Desktop main process; IPC accepts only the trusted main
+frame and fixed directory identifiers. No arbitrary path or URL is accepted.
 
 ## Startup diagnostics
 
@@ -374,7 +423,7 @@ without a Workspace account, real model credential or external model API call.
 Fresh-browser smoke also checks the Workspace sign-in step and the sidebar login
 action after deferring setup. Installed shell checks exercise the normal
 OAuth/menu/update composition. Windows/Linux hide the menu bar by default; Alt
-reveals it for Help, updates and logs. macOS retains its native application menu.
+reveals it for Help and logs; updates are available from Settings → About. macOS retains its native application menu.
 
 Profile-only bundles have ASAR links at the composition root, pointing to their
 original package directories. This lets DSH's filesystem package-inventory

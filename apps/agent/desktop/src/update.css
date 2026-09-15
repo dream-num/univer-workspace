@@ -1,0 +1,23 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; color: #1e293b; background: #fafbfe; }
+body { margin: 0; }
+main { padding: 32px; }
+.brand { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: #5564d8; }
+h1 { font-size: 26px; margin: 14px 0 8px; }
+h2 { font-size: 18px; margin: 28px 0 8px; }
+p { line-height: 1.55; font-size: 14px; }
+.muted { color: #64748b; font-size: 13px; }
+progress { width: 100%; height: 14px; accent-color: #5263df; }
+.actions { display: flex; gap: 12px; margin-top: 24px; }
+button { cursor: pointer; border: 0; border-radius: 8px; padding: 11px 18px; font: inherit; font-size: 14px; background: #5263df; color: white; }
+button:disabled { cursor: default; opacity: .55; }
+.secondary { background: #e7eaf6; color: #334155; }
+.link { padding-left: 0; background: transparent; color: #5263df; }
+details { margin-top: 20px; font-size: 14px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.5; }
+[hidden] { display: none !important; }
+@media (prefers-color-scheme: dark) {
+  :root { color: #e2e8f0; background: #141821; }
+  .muted { color: #a0aec0; }
+  .brand, .link { color: #a5b4fc; }
+  .secondary { background: #30394b; color: #e2e8f0; }
+}

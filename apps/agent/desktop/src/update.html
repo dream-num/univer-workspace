@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'">
+  <title>Workspace Agent — Software update</title>
+  <link rel="stylesheet" href="update.css">
+  <script defer src="update.js"></script>
+</head>
+<body><main>
+  <div class="brand">UNIVER WORKSPACE AGENT</div>
+  <h1 id="title"></h1>
+  <p id="version" class="muted"></p>
+  <section aria-live="polite"><h2 id="status"></h2><p id="description"></p></section>
+  <progress id="progress" max="100" hidden aria-label="Download progress"></progress>
+  <p id="transfer" class="muted"></p>
+  <div class="actions"><button id="action"></button><button id="pause" class="secondary" hidden></button></div>
+  <p id="hint" class="muted"></p>
+  <details id="notes-panel" hidden><summary id="notes-title"></summary><pre id="notes"></pre></details>
+  <button id="releases" class="link"></button>
+</main></body></html>
