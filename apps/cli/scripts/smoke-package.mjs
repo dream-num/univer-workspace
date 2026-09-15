@@ -102,6 +102,34 @@ try {
   if (htmlSkill.name !== "html-view" || htmlSkill.files.length !== 4) {
     throw new Error("Packaged HTML View Skill or references are missing");
   }
+  const htmlEntry = JSON.parse(
+    (await run(executable, ["skills", "get", "html-view", "--json"], installRoot, smokeEnv)).stdout,
+  ).data[0];
+  if (htmlEntry.files !== undefined || htmlEntry.resources.length !== htmlSkill.files.length) {
+    throw new Error(
+      "HTML reference discovery must list resources without eagerly loading their contents",
+    );
+  }
+  const htmlEntryText = (
+    await run(executable, ["skills", "get", "html-view"], installRoot, smokeEnv)
+  ).stdout;
+  for (const resource of htmlEntry.resources) {
+    if (!htmlEntryText.includes(resource.readCommand))
+      throw new Error("Missing reference read command");
+    const args = resource.readCommand.split(" ");
+    if (args.shift() !== "univer-workspace-cli") throw new Error("Invalid reference read command");
+    const loaded = JSON.parse(
+      (await run(executable, [...args, "--json"], installRoot, smokeEnv)).stdout,
+    ).data;
+    const expected = htmlSkill.files.find((file) => file.path === resource.path);
+    if (
+      loaded.name !== "html-view" ||
+      loaded.path !== resource.path ||
+      loaded.content !== expected?.content
+    ) {
+      throw new Error(`Packaged reference read mismatch: ${resource.path}`);
+    }
+  }
   for (const file of htmlSkill.files) {
     if (file.content !== await readFile(join(htmlSkillRoot, file.path), "utf8")) {
       throw new Error(`Packaged HTML View reference differs: ${file.path}`);

@@ -54,9 +54,13 @@ describe("Workspace CLI skills command", () => {
     const data = (entry.data as Array<{ content: string; files?: unknown }>)[0]!;
     expect(data.files).toBeUndefined();
     const full = await runSkills(["skills", "get", "html-view", "--full", "--json"]);
-    const files = (full.data as Array<{ files: Array<{ path: string; content: string }> }>)[0]!.files;
-    expect(files.map(file => file.path)).toEqual([
-      "references/adding-records.md", "references/authoring.md", "references/charts.md", "references/frontend-libraries.md",
+    const files = (full.data as Array<{ files: Array<{ path: string; content: string }> }>)[0]!
+      .files;
+    expect(files.map((file) => file.path)).toEqual([
+      "references/adding-records.md",
+      "references/authoring.md",
+      "references/charts.md",
+      "references/frontend-libraries.md",
     ]);
     const located = await runSkills(["skills", "path", "html-view", "--json"]);
     const root = (located.data as { path: string }).path;
@@ -67,6 +71,47 @@ describe("Workspace CLI skills command", () => {
         expect(await readFile(resolve(root, dirname(file.path), link[1]!), "utf8")).not.toBe("");
       }
     }
+  });
+
+  it("discovers and reads each HTML reference entirely through CLI commands", async () => {
+    const entry = await runSkills(["skills", "get", "html-view", "--json"]);
+    const data = (
+      entry.data as Array<{
+        resources: Array<{ path: string; readCommand: string }>;
+        files?: unknown;
+      }>
+    )[0]!;
+    expect(data.files).toBeUndefined();
+    expect(data.resources).toHaveLength(4);
+    const text = await runSkillsText(["skills", "get", "html-view"]);
+    expect(text).not.toContain(skillRoot);
+    for (const resource of data.resources) {
+      expect(text).toContain(resource.readCommand);
+      const args = resource.readCommand.split(" ").slice(1);
+      const content = await readFile(join(skillRoot, "html-view", resource.path), "utf8");
+      expect(await runSkills([...args, "--json"])).toEqual({
+        success: true,
+        data: { name: "html-view", path: resource.path, content },
+      });
+      expect(await runSkillsText(args)).toBe(`${content.trimEnd()}\n`);
+    }
+  });
+
+  it("rejects unlisted and traversal paths instead of reading arbitrary files", async () => {
+    for (const path of [
+      "../core/SKILL.md",
+      "references/../../core/SKILL.md",
+      "SKILL.md",
+      join(skillRoot, "core/SKILL.md"),
+      "references/missing.md",
+    ]) {
+      await expect(runSkillsText(["skills", "read", "html-view", path])).rejects.toMatchObject({
+        code: "skill-resource-error",
+      });
+    }
+    await expect(
+      runSkillsText(["skills", "read", "unknown", "references/a.md"]),
+    ).rejects.toMatchObject({ code: "skill-resource-error" });
   });
 
   it("loads Board references only on demand and resolves their installed paths", async () => {
@@ -225,8 +270,13 @@ function firstContent(result: Record<string, unknown>): string {
 }
 
 async function runSkills(args: readonly string[]): Promise<Record<string, unknown>> {
+  return JSON.parse(await runSkillsText(args)) as Record<string, unknown>;
+}
+
+async function runSkillsText(args: readonly string[]): Promise<string> {
   let output = "";
   const outputConfiguration: OutputConfiguration = {
+    writeErr: () => undefined,
     writeOut: (text) => {
       output += text;
     },
@@ -236,10 +286,11 @@ async function runSkills(args: readonly string[]): Promise<Record<string, unknow
   configureOutput(command, outputConfiguration);
   program.addCommand(command);
   await program.parseAsync(args, { from: "user" });
-  return JSON.parse(output) as Record<string, unknown>;
+  return output;
 }
 
 function configureOutput(command: Command, output: OutputConfiguration): void {
   command.configureOutput(output);
+  command.exitOverride();
   for (const child of command.commands) configureOutput(child, output);
 }

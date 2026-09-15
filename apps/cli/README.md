@@ -36,6 +36,14 @@ The installed package supplies the operational contract an agent needs:
 - Offline Facade API and SVG resource discovery
 - CLI help aligned with the installed SDK and command surface
 
+Read a Skill with `univer-workspace-cli skills get <name>`. When it links to bundled
+references, the output lists their paths and read commands; JSON exposes them as
+`data[].resources` entries with `path` and `readCommand`. Use, for example,
+`univer-workspace-cli skills read html-view references/authoring.md` to read one
+document without browsing the installation directory. `skills read --json` returns
+`data: { name, path, content }`. Only listed reference/template paths are accepted.
+`skills get <name> --full` prints all bundled references and templates at once.
+
 The repository composes storage-neutral authentication protocols, Space/Node access, local
 Node-hosted Blob/Asset transfer, runtime target and Snapshot reads, and referenced-Unit policy from the private
 `@univerjs/univer-workspace-client-core` package. Packaging builds and bundles that code into the

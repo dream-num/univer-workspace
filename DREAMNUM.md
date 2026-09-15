@@ -16,7 +16,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   Collaboration Endpoint integration, local persistence layout, and deployment lifecycle. See the
   [Workspace README](apps/workspace/README.md).
 - The Workspace-specific CLI composition and agent workflow over remote Workspace Resources and Worktrees,
-  including version-matched operational Skills and review handoff. See the [CLI README](apps/cli/README.md).
+  including version-matched operational Skills, CLI-based reference reading and review handoff.
+  See the [CLI README](apps/cli/README.md).
 - The private Node-hosted Workspace Client Core under `packages/client-core`, including shared Workspace HTTP,
   error, storage-neutral authentication protocol, Space/Node model, remote workflow behavior, and worker-backed
   content runtime lifecycle, including Office, Typst, rendering, and SVG workflows. It is bundled into repository
