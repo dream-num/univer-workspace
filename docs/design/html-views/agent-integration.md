@@ -28,9 +28,10 @@ SDK 完整语法与接口引用[上游文档](README.md#sdk-文档)。
 文件路径由会话路径规则解析，目标 Space 默认使用当前关联 Space。模板读取支持取消，
 工具在上传前再次检查取消状态；上传过程复用通用 Blob 服务。
 
-验证只覆盖声明式引用。JavaScript 可以在运行时请求其他 Unit，这些请求由 Browser 按访问者
-身份授权；`validate` 不执行脚本，也不证明页面交互已经正常运行。作者有权访问来源不代表
-所有页面访问者都有权访问。
+验证只覆盖声明式引用；`validate` 不执行脚本，也不证明页面交互已经正常运行。
+HTML editor 可通过页面读写声明引用的完整 Sheet，脚本使用的 Unit 必须在绑定属性中声明。
+服务端发布阶段验证发布者可编辑所有声明来源；替换模板要求 HTML owner/admin。
+Viewer 不获得来源委托权限，仍需要自身的来源访问权限。
 
 HTML Blob 不使用 Unit Worktree。`create` 发布独立文件，不写入来源单元格。修改已有页面时，
 先用 `univer_blob download` 取得 HTML 和对应 ETag，修改模板并通过 `univer_html_view validate`，

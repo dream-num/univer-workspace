@@ -40,6 +40,8 @@ tags:
 security:
   - sessionCookie: []
 paths:
+  /api/html-views/{resourceId}/sources/{unitId}:
+    $ref: ./paths/html-views.yaml#/~1api~1html-views~1{resourceId}~1sources~1{unitId}
   /api/session:
     $ref: ./paths/auth.yaml#/~1api~1session
   /api/auth/authorize:

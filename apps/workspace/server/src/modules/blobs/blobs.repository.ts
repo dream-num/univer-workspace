@@ -97,6 +97,17 @@ export class BlobUploadStateConflictError extends Error {}
 export class BlobsRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
 
+  /** Identify the actual publisher of the current immutable Blob version. */
+  publicationActor(resourceId: string, objectKey: string): string | undefined {
+    const row = this._database.connection
+      .prepare(`SELECT actor_user_id FROM operations
+        WHERE kind IN ('create_blob_resource', 'replace_blob_content') AND state = 'completed'
+          AND json_extract(payload_json, '$.resourceId') = ?
+          AND json_extract(payload_json, '$.objectKey') = ? LIMIT 1`)
+      .get(resourceId, objectKey) as { actor_user_id: string } | undefined;
+    return row?.actor_user_id;
+  }
+
   reserveReplacement(
     operationId: string,
     userId: string,

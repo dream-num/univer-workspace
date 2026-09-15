@@ -13,6 +13,8 @@ import {
   type UnitStore,
 } from "./integrations/univer/unit-store.js";
 import { protocolUser } from "./integrations/univer/protocol-user.js";
+import { createHtmlViewsModule } from "./modules/html-views/html-views.service.js";
+import { createHtmlViewsRouter } from "./modules/html-views/html-views.router.js";
 import { createWorktreeBackend } from "./integrations/univer/worktree-store.js";
 import { LocalBlobStore, type BlobStore } from "./integrations/blob/blob-store.js";
 import {
@@ -210,10 +212,13 @@ export function createWorkspaceApplication(
     new LocalBlobStore(
       config.blobDirectory ?? resolve(".data/univer-workspace-blobs")
     );
+  const blobsRepository = new BlobsRepository(database);
+  const htmlViews = createHtmlViewsModule({ access, store: blobStore, blobs: blobsRepository });
   const blobs = createBlobsModule({
-    repository: new BlobsRepository(database),
+    repository: blobsRepository,
     access,
     store: blobStore,
+    validateHtmlPublication: htmlViews.validatePublication,
     ...(config.maxBlobBytes === undefined
       ? {}
       : { maxBlobBytes: config.maxBlobBytes }),
@@ -275,6 +280,7 @@ export function createWorkspaceApplication(
         worktreeService: collaboration.worktreeService,
         worktrees,
         worktreeChangeFeed,
+        htmlViews,
       })
     : null;
   invalidateRealtimeNodeAccess = () =>
@@ -335,6 +341,7 @@ export function createWorkspaceApplication(
   app.use("/api", createNodesRouter({ identity, nodes }));
   app.use("/api", createResourcesRouter({ identity, resources }));
   app.use("/api", createBlobsRouter({ identity, blobs }));
+  app.use("/api", createHtmlViewsRouter({ identity, htmlViews }));
   app.use("/api", createViewsRouter({ identity, views }));
   app.use(
     "/api",

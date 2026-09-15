@@ -56,21 +56,36 @@ export async function createWorkspaceBindingEngine(
   unitId: string,
   user: { id: string; displayName: string; avatarUrl?: string | null },
   signal: AbortSignal,
+  htmlResourceId?: string,
 ): Promise<BindingEngine> {
   signal.throwIfAborted();
-  const resolved = await api.GET("/api/unit-resources/{unitId}", {
-    params: { path: { unitId } },
-    signal,
-  });
-  if (resolved.error) throw apiError(resolved.error);
-  const opened = await api.POST("/api/resources/{resourceId}/open", {
-    params: { path: { resourceId: resolved.data.resource.id } },
-    signal,
-  });
-  if (opened.error) throw apiError(opened.error);
-  const source = opened.data.resource;
-  if (source.kind !== "univer" || source.unitType !== "sheet" || source.unitId !== unitId)
-    throw new Error("来源必须是可访问的 Sheet。");
+  let canEdit: boolean;
+  if (htmlResourceId) {
+    const source = await api.GET("/api/html-views/{resourceId}/sources/{unitId}", {
+      params: { path: { resourceId: htmlResourceId, unitId } },
+      signal,
+    });
+    if (source.error) throw apiError(source.error);
+    canEdit = source.data.editorMode === "edit";
+  } else {
+    const resolved = await api.GET("/api/unit-resources/{unitId}", {
+      params: { path: { unitId } },
+      signal,
+    });
+    if (resolved.error) throw apiError(resolved.error);
+    const opened = await api.POST("/api/resources/{resourceId}/open", {
+      params: { path: { resourceId: resolved.data.resource.id } },
+      signal,
+    });
+    if (opened.error) throw apiError(opened.error);
+    const source = opened.data.resource;
+    if (source.kind !== "univer" || source.unitType !== "sheet" || source.unitId !== unitId)
+      throw new Error("来源必须是可访问的 Sheet。");
+    canEdit = source.editorMode === "edit";
+  }
+  const prefix = htmlResourceId
+    ? `/universer-api/html-views/${encodeURIComponent(htmlResourceId)}`
+    : "/universer-api";
   signal.throwIfAborted();
   let univerAPI!: FUniver;
   const engine = new WorkspaceBindingEngine(
@@ -80,16 +95,17 @@ export async function createWorkspaceBindingEngine(
         socketService: BrowserCollaborationSocketService,
         enableAuthServer: true,
         enableSingleActiveInstanceLock: false,
-        snapshotServerUrl: "/universer-api/snapshot",
-        collabSubmitChangesetUrl: "/universer-api/comb",
-        collabWebSocketUrl: `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/universer-api/comb/connect`,
-        wsSessionTicketUrl: "/universer-api/user/session-ticket",
-        authzUrl: "/universer-api/authz",
+        snapshotServerUrl: `${prefix}/snapshot`,
+        collabSubmitChangesetUrl: `${prefix}/comb`,
+        collabWebSocketUrl: `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}${prefix}/comb/connect`,
+        wsSessionTicketUrl: `${prefix}/user/session-ticket`,
+        authzUrl: `${prefix}/authz`,
         loginUrlKey: "/login",
         sendChangesetTimeout: 200,
         override: withWorkspaceSnapshotServerOverride(undefined, {
           hostScope: { kind: "trunk" },
           origin: location.origin,
+          trunkSnapshotServerUrl: `${prefix}/snapshot`,
           resolveMergePreview: async () => {
             throw new Error("HTML view sources only support trunk.");
           },
@@ -142,14 +158,14 @@ export async function createWorkspaceBindingEngine(
         }
       },
     },
-    source.editorMode === "edit",
+    canEdit,
   );
   const dispose = () => engine.dispose();
   signal.addEventListener("abort", dispose, { once: true });
   try {
     await engine.load();
     signal.throwIfAborted();
-    if (source.editorMode !== "edit") univerAPI.getWorkbook(unitId)!.setEditable(false);
+    if (!canEdit) univerAPI.getWorkbook(unitId)!.setEditable(false);
     return engine;
   } catch (error) {
     engine.dispose();

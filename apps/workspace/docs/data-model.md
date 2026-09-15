@@ -191,6 +191,12 @@ Trigger 限制它只用于 Personal Space。
 3. Node 或祖先的 Direct Grant；
 4. Node 或祖先启用的 Link Sharing。
 
+HTML editor/owner/admin 可以通过 HTML scoped 协同入口读写模板声明的完整 Sheet；该授权
+不写入来源 Node Grant，也不改变普通 Resource/Unit 访问。HTML 模板替换要求 owner/admin。
+当前模板及发布者分别来自 BlobStore 的不可变 object key 和匹配的已完成 Blob 创建/替换
+Operation（`payload_json.resourceId/objectKey` 与 `actor_user_id`）。运行时重新检查发布者的
+来源编辑权限；模板替换或权限失效使旧上下文失效。V7 schema 不变。
+
 已在 Trash 中的 Node/Resource 不可通过普通浏览或内容接口发现。Repository 不自行拼接
 权限；产品 HTTP 与 Collaboration Endpoint 共用同一 Access Resolver。
 

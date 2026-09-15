@@ -144,8 +144,11 @@ Blob 内容替换使用单次 PUT 和强 ETag 并发校验，直接发布到原 
 旧对象通过删除 Outbox 回收。失败或启动时发现中断的替换保留旧内容并清理新对象。
 
 `.univer.html` 使用现有 Blob 身份和上传生命周期，不新增数据库表或 Unit 类型。
-Browser 根据模板中的 Unit ID 通过既有 API 检查来源访问，再由独立 Binding 引擎
-加载 headless 协同数据。HTML 文件权限不授予来源表格权限；页面脚本在隔离 iframe 中执行，来源数据访问由宿主授权。
+Browser 的独立 Binding 引擎加载 headless 协同数据。HTML editor/owner/admin 可通过
+HTML scoped 协同入口编辑服务端模板声明的完整 Sheet；普通来源 ACL 不变，本阶段不做范围隔离。
+Viewer 仍需普通来源权限。模板替换只允许 owner/admin；发布和运行时检查实际发布者的来源
+编辑权限。发布者由当前 Blob object key 对应的已完成 Operation 确定，不信任客户端声明。
+页面脚本在隔离 iframe 中执行，来源数据访问由宿主和服务端共同检查。
 设计见 [Univer HTML Views](../../../docs/design/html-views/README.md)。
 
 Univer Asset Module 适配原生 File API。它将 Slide、Board、Base 等 Unit 内嵌资源保存到同一

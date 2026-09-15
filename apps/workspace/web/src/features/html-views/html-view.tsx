@@ -14,9 +14,11 @@ const HTML_VIEW_ALLOWED_ORIGINS = ["https://cdn.jsdelivr.net"] as const;
 export function HtmlView({
   source,
   allowedOrigins,
+  htmlResourceId,
 }: {
   source: string;
   allowedOrigins?: readonly string[];
+  htmlResourceId?: string;
 }) {
   const parsed = useMemo(() => {
     try {
@@ -31,15 +33,24 @@ export function HtmlView({
         {parsed.error}
       </p>
     );
-  return <BoundHtmlView key={source} parsed={parsed.data} allowedOrigins={allowedOrigins} />;
+  return (
+    <BoundHtmlView
+      key={source}
+      parsed={parsed.data}
+      allowedOrigins={allowedOrigins}
+      htmlResourceId={htmlResourceId}
+    />
+  );
 }
 
 function BoundHtmlView({
   parsed,
   allowedOrigins,
+  htmlResourceId,
 }: {
   parsed: HtmlViewDocument;
   allowedOrigins: readonly string[] | undefined;
+  htmlResourceId: string | undefined;
 }) {
   const session = useQuery(sessionQueryOptions);
   const user = session.data?.authenticated ? session.data.user : null;
@@ -82,7 +93,8 @@ function BoundHtmlView({
         return;
       }
       host = createBindingHost(event.ports[0], {
-        loadEngine: (unitId, signal) => createWorkspaceBindingEngine(unitId, user, signal),
+        loadEngine: (unitId, signal) =>
+          createWorkspaceBindingEngine(unitId, user, signal, htmlResourceId),
         onError: setError,
         onClose() {
           if (hostRef.current === host) hostRef.current = undefined;
@@ -121,7 +133,7 @@ function BoundHtmlView({
       host?.dispose();
       hostRef.current = undefined;
     };
-  }, [parsed, user?.id, allowedOrigins]);
+  }, [parsed, user?.id, allowedOrigins, htmlResourceId]);
   return (
     <div className="flex h-full min-h-0 flex-col">
       {error ? (
@@ -140,7 +152,11 @@ function BoundHtmlView({
   );
 }
 
-export function HtmlViewFile({ resource }: { resource: { contentUrl: string; byteSize: number } }) {
+export function HtmlViewFile({
+  resource,
+}: {
+  resource: { id: string; accessRole: string; contentUrl: string; byteSize: number };
+}) {
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -167,6 +183,10 @@ export function HtmlViewFile({ resource }: { resource: { contentUrl: string; byt
       </p>
     );
   return source === null ? null : (
-    <HtmlView source={source} allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS} />
+    <HtmlView
+      source={source}
+      allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS}
+      {...(resource.accessRole !== "viewer" ? { htmlResourceId: resource.id } : {})}
+    />
   );
 }

@@ -1,0 +1,47 @@
+/api/html-views/{resourceId}/sources/{unitId}:
+  get:
+    tags: [Resources]
+    operationId: resolveHtmlViewSource
+    summary: Authorize a referenced Sheet through an editable HTML view.
+    description: |
+      Requires HTML editor (or owner/admin) access. The server reads the published
+      template and checks its publisher's source edit authority. Grants complete
+      Sheet content access only through the HTML-scoped collaboration endpoints;
+      does not grant direct access to the source Resource or permission to replace
+      the HTML template. Viewer access continues to require normal Sheet access.
+    parameters:
+      - name: resourceId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: unitId
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      "200":
+        description: Referenced Sheet authorized for HTML data editing.
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [unitId, editorMode]
+              properties:
+                unitId:
+                  type: string
+                editorMode:
+                  type: string
+                  const: edit
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict

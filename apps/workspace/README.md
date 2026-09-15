@@ -301,6 +301,20 @@ Replacement requires the downloaded ETag and publishes immediately, without Work
 review. See the [HTTP contract](contracts/http/concepts.md#resource-creation-and-opening)
 for preconditions and retry behavior.
 
+### HTML view sharing
+
+An HTML editor (including owner/admin) can read and edit the complete Sheets declared
+by a `.univer.html` template through its scoped collaboration connection, without a
+separate source Sheet grant. Direct Sheet access retains its original ACL. This first
+version does not isolate individual cells or ranges; HTML viewers without editor
+access still need their own source permissions.
+
+Replacing the HTML template requires owner/admin. Publishing a template validates the
+publisher's edit access to all declared sources; live access also rechecks that authority.
+Revocation, session expiry, source access loss, and template replacement invalidate
+existing HTML connections within approximately one second. This uses the existing V7
+Blob publication Operations and requires no database migration.
+
 ## 沉浸视图
 
 所有资源页面支持 `?view=immersive`。点击“进入沉浸视图”在当前页隐藏 Workspace 顶栏和侧栏；

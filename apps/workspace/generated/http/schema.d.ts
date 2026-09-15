@@ -4,6 +4,30 @@
  */
 
 export interface paths {
+    "/api/html-views/{resourceId}/sources/{unitId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Authorize a referenced Sheet through an editable HTML view.
+         * @description Requires HTML editor (or owner/admin) access. The server reads the published
+         *     template and checks its publisher's source edit authority. Grants complete
+         *     Sheet content access only through the HTML-scoped collaboration endpoints;
+         *     does not grant direct access to the source Resource or permission to replace
+         *     the HTML template. Viewer access continues to require normal Sheet access.
+         */
+        get: operations["resolveHtmlViewSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -701,7 +725,10 @@ export interface paths {
         get: operations["getBlobContent"];
         /**
          * Replace all Blob bytes while preserving Resource identity.
-         * @description Publishes immediately without Worktree review. Requires editor access, Content-Length,
+         * @description Replacing a .univer.html template requires owner/admin, and the publisher must
+         *     be able to edit every declared source Sheet. HTML editor access only delegates
+         *     source data editing, not template replacement.
+         *     Publishes immediately without Worktree review. Requires editor access, Content-Length,
          *     one quoted strong If-Match ETag from the downloaded bytes, and a stable Idempotency-Key.
          *     Preserves the Node, name, original filename, location, ACL and Resource ID.
          *     A successful replacement generates a fresh ETag even for identical bytes.
@@ -1926,6 +1953,38 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    resolveHtmlViewSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resourceId: string;
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Referenced Sheet authorized for HTML data editing. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        unitId: string;
+                        /** @constant */
+                        editorMode: "edit";
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     getSession: {
         parameters: {
             query?: never;
