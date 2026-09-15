@@ -177,7 +177,7 @@ jobs:
         run: xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --packaged --no-sandbox
       - name: Verify resumable downloads and update window in Electron
         if: runner.os == 'Linux'
-        run: xvfb-run -a node apps/agent/desktop/scripts/update-smoke.mjs
+        run: xvfb-run -a node apps/agent/desktop/scripts/update-smoke.mjs --no-sandbox
       - name: Profile packaged Windows startup separately from acceptance
         if: ${{ always() && runner.os == 'Windows' && steps.windows_acceptance.outcome != 'skipped' }}
         shell: pwsh

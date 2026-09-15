@@ -260,7 +260,9 @@ interrupted HTTP transfers, persistent resume, malformed ranges, checksum failur
 retry, IPC sender validation, and shutdown/install order. On Linux, run
 `xvfb-run -a node apps/agent/desktop/scripts/update-smoke.mjs` for a real Electron
 network/resume and electron-updater generic-provider staging probe, plus update
-window progress/pause/reopen/retry checks. Native CI smoke tests cover packaged startup;
+window progress/pause/reopen/retry checks. Restricted Linux test hosts use the
+explicit `--no-sandbox` test flag, as with the shell smoke; production keeps the
+renderer sandbox enabled. Native CI smoke tests cover packaged startup;
 these do not substitute for the two-release installation acceptance above.
 
 ## Runtime, login, and data

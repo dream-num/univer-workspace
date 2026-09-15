@@ -13,7 +13,7 @@ try {
   application = await _electron.launch({ args: [
     fileURLToPath(new URL('../test/update-smoke.cjs', import.meta.url)),
     '--lang=en-US', `--user-data-dir=${profile}`,
-    ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []),
+    ...(process.getuid?.() === 0 || process.argv.includes('--no-sandbox') ? ['--no-sandbox'] : []),
   ], timeout: 60000 });
   application.process().stdout.pipe(process.stdout);
   application.process().stderr.on('data', data => {
