@@ -181,7 +181,7 @@ jobs:
         run: xvfb-run -a node apps/agent/desktop/scripts/shell-smoke.mjs --packaged --no-sandbox
       - name: Verify packaged browser login and embedded fallback
         if: runner.os == 'Linux'
-        run: xvfb-run -a node apps/agent/desktop/scripts/login-smoke.mjs
+        run: xvfb-run -a node apps/agent/desktop/scripts/login-smoke.mjs --no-sandbox
       - name: Verify resumable downloads and update window in Electron
         if: runner.os == 'Linux'
         run: xvfb-run -a node apps/agent/desktop/scripts/update-smoke.mjs --no-sandbox

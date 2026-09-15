@@ -46,7 +46,8 @@ const remote = `http://127.0.0.1:${server.address().port}`;
 try {
   application = await _electron.launch({
     executablePath: process.env.UWA_SMOKE_EXECUTABLE ?? join(desktop, 'artifacts/linux-unpacked/univer-workspace-agent-desktop'),
-    args: ['--lang=en-US', `--user-data-dir=${join(temporary, 'profile')}`, ...(process.getuid?.() === 0 ? ['--no-sandbox'] : [])],
+    args: ['--lang=en-US', `--user-data-dir=${join(temporary, 'profile')}`,
+      ...(process.getuid?.() === 0 || process.argv.includes('--no-sandbox') ? ['--no-sandbox'] : [])],
     env: { ...process.env, XDG_CONFIG_HOME: temporary, XDG_DATA_HOME: join(temporary, 'share'), APPDATA: temporary },
   });
   await application.evaluate(({ shell, dialog }) => {
@@ -94,13 +95,16 @@ try {
     assert.equal(await application.evaluate(({ app }) => app.isDefaultProtocolClient('univer-workspace')), true,
       'Installed application did not register its sign-in protocol');
   }
+  // Small native runner displays collapse the sidebar into accessible buttons.
+  const selectNavigation = name => page.getByRole('tab', { name, exact: true })
+    .or(page.getByRole('button', { name, exact: true })).click();
   for (const [tab, title] of [['Files', 'Connect Workspace to manage files'], ['Worktree', 'Connect Workspace to view Worktrees']]) {
-    await page.getByRole('tab', { name: tab, exact: true }).click();
+    await selectNavigation(tab);
     await page.getByText(title, { exact: true }).waitFor();
     assert.ok(await page.getByRole('button', { name: 'Sign in to Workspace', exact: true }).first().isVisible());
     assert.equal(await page.getByText('workspace_connection_required', { exact: true }).isVisible(), false);
   }
-  await page.getByRole('tab', { name: 'Sessions', exact: true }).click();
+  await selectNavigation('Sessions');
   await page.getByRole('button', { name: 'Choose workspace', exact: true }).click();
   const spacePicker = page.getByRole('dialog', { name: 'Choose Workspace Space' });
   await spacePicker.getByRole('button', { name: 'Sign in to Workspace', exact: true }).waitFor();

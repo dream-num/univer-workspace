@@ -201,6 +201,9 @@ production application keeps the renderer sandbox enabled.
 
 Windows and macOS installers must also be tested on their native hosts; a Linux
 smoke result does not validate their signing, OAuth, or installer behavior.
+The macOS installation probe registers its copied bundle with Launch Services:
+copying into an isolated temporary directory and launching the executable directly
+bypasses the discovery normally performed by Finder.
 
 ## Manual CI and publication
 
