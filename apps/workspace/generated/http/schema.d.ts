@@ -1433,8 +1433,6 @@ export interface components {
              * @enum {string}
              */
             kind: "blob";
-            /** @description Original uploaded filename, independent of the editable Node name. */
-            originalFilename: string;
             mediaType: string;
             byteSize: number;
             availability: components["schemas"]["BlobAvailability"];

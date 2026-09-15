@@ -23,11 +23,11 @@ document.getElementById('open').onclick=()=>document.querySelector('dialog').sho
 document.getElementById('close').onclick=()=>document.querySelector('dialog').close();
 </script></body></html>`;
 const node = (id: string) => ({
-  id, name: id === "text" ? "阅读说明" : "业务概览", spaceId: space.id, parentNodeId: null,
+  id, name: id === "text" ? "阅读说明" : "业务概览.univer.html", spaceId: space.id, parentNodeId: null,
   accessRole: "owner", hasChildren: false, updatedAt: "2026-09-15T00:00:00Z",
   capabilities: { browseChildren: false, createChildren: false, rename: false, move: false, trash: false, share: true },
   resource: {
-    id, kind: "blob", originalFilename: id === "text" ? "notes.txt" : "dashboard.univer.html",
+    id, kind: "blob",
     mediaType: id === "text" ? "text/plain" : "text/html", byteSize: new TextEncoder().encode(html).length,
     availability: "ready", capabilities: { openContent: true, editContent: false, downloadContent: true },
   },
@@ -51,7 +51,7 @@ window.fetch = async (input, init) => {
     const id = url.pathname.split("/")[3] ?? "html";
     const item = node(id);
     result = { node: item, resource: {
-      ...item.resource, name: item.name, spaceId: space.id, accessRole: "owner",
+      ...item.resource, originalFilename: id === "text" ? "notes.txt" : "dashboard.univer.html", name: item.name, spaceId: space.id, accessRole: "owner",
       contentUrl: `/api/blob-resources/${id}/content`, downloadUrl: `/api/blob-resources/${id}/download`,
     } };
   } else if (url.pathname.startsWith("/api/nodes/")) result = { node: node(url.pathname.split("/")[3] ?? "html"), space, breadcrumbs: [] };

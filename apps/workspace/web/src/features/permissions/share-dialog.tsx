@@ -27,11 +27,11 @@ type ShareRole = "editor" | "viewer";
 type UserSummary = { readonly id: string; readonly displayName: string; readonly username: string; readonly avatarUrl?: string | null };
 
 export function ShareDialog(props: {
-  readonly node: { readonly id: string; readonly name: string; readonly resource?: { kind: string; originalFilename?: string } | null } | null;
+  readonly node: { readonly id: string; readonly name: string; readonly resource?: { kind: string } | null } | null;
   readonly onClose: () => void;
 }) {
   const nodeId = props.node?.id ?? "";
-  const defaultView = defaultSharedView(props.node?.resource);
+  const defaultView = defaultSharedView(props.node);
   const [view, setView] = useState<ResourceView>(defaultView);
   useEffect(() => setView(defaultView), [nodeId, defaultView]);
   const [search, setSearch] = useState("");

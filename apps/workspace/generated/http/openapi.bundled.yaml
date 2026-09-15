@@ -2864,7 +2864,6 @@ components:
       required:
         - id
         - kind
-        - originalFilename
         - mediaType
         - byteSize
         - availability
@@ -2875,9 +2874,6 @@ components:
         kind:
           type: string
           const: blob
-        originalFilename:
-          type: string
-          description: Original uploaded filename, independent of the editable Node name.
         mediaType:
           type: string
         byteSize:

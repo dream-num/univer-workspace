@@ -101,7 +101,7 @@ export function NodeActionsMenu(props: {
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(resourceShareUrl(window.location.origin, props.node.id, defaultSharedView(props.node.resource)));
+      await navigator.clipboard.writeText(resourceShareUrl(window.location.origin, props.node.id, defaultSharedView(props.node)));
       toast.success(t("linkCopied"));
     } catch {
       toast.error(t("copyLinkFailed"));

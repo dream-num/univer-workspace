@@ -86,7 +86,6 @@ describe("Blob Resources", () => {
           resource: {
             id: reserved.body.upload.resourceId,
             kind: "blob",
-            originalFilename: "client-name.pdf",
             mediaType: "text/plain; charset=utf-8",
             byteSize: 11,
             availability: "ready",
@@ -118,11 +117,6 @@ describe("Blob Resources", () => {
     });
     expect(application.nodes.listSpaceRoot(userId, space.id, {})).toMatchObject({
       nodes: [{ resource: { kind: "blob" } }],
-    });
-
-    application.nodes.update(userId, reserved.body.upload.nodeId, { name: "Renamed without extension" });
-    expect(application.nodes.listSpaceRoot(userId, space.id, {})).toMatchObject({
-      nodes: [{ name: "Renamed without extension", resource: { originalFilename: "client-name.pdf" } }],
     });
 
     const viewerId = await register(application, "blob-viewer");

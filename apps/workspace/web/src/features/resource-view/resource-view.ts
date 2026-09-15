@@ -25,8 +25,8 @@ export function isResourceViewChange(
   );
 }
 
-export function defaultSharedView(resource?: { kind: string; originalFilename?: string } | null): ResourceView {
-  return resource?.kind === "blob" && resource.originalFilename && isHtmlViewFilename(resource.originalFilename)
+export function defaultSharedView(node?: { name: string; resource?: { kind: string } | null } | null): ResourceView {
+  return node?.resource?.kind === "blob" && isHtmlViewFilename(node.name)
     ? "immersive" : "standard";
 }
 

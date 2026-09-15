@@ -20,10 +20,12 @@ describe("resource presentation", () => {
     expect(isResourceViewChange(standard, { ...immersive, search: { view: "hidden" } })).toBe(false);
     expect(isResourceViewChange(standard, { ...immersive, search: { ...immersive.search, other: 1 } })).toBe(false);
   });
-  it("defaults HTML shares using the uploaded filename, independent of the node name", () => {
-    expect(defaultSharedView({ kind: "blob", originalFilename: "Dashboard.UNIVER.HTML" })).toBe("immersive");
-    expect(defaultSharedView({ kind: "blob", originalFilename: "page.html" })).toBe("standard");
-    expect(defaultSharedView({ kind: "univer" })).toBe("standard");
+  it("defaults HTML shares using the current node name", () => {
+    expect(defaultSharedView({ name: "Dashboard.UNIVER.HTML", resource: { kind: "blob" } })).toBe("immersive");
+    expect(defaultSharedView({ name: "page.html", resource: { kind: "blob" } })).toBe("standard");
+    expect(defaultSharedView({ name: "Dashboard.univer.html", resource: { kind: "univer" } })).toBe("standard");
+    expect(defaultSharedView({ name: "Dashboard.univer.html", resource: null })).toBe("standard");
+    expect(defaultSharedView({ name: "Renamed dashboard", resource: { kind: "blob" } })).toBe("standard");
     expect(defaultSharedView(null)).toBe("standard");
     expect(resourceShareUrl("https://workspace.example", "a/b", "immersive")).toBe("https://workspace.example/nodes/a%2Fb?view=immersive");
     expect(resourceShareUrl("https://workspace.example", "a", "standard")).toBe("https://workspace.example/nodes/a");
