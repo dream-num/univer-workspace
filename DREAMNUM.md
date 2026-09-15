@@ -41,9 +41,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli-manual.yml).
 
 - **Univer Workspace Agent** — the local browser application for conversations, document references,
-  and agent Worktree review, composed from published DSH packages. Its capability plugin supplies
-  bundled Skill reference reading through `univer_skill_resource`, using DSH's public provider/tool APIs.
-  Contract: [Agent README](apps/agent/README.md).
+  and agent Worktree review, composed from published DSH packages. Contract: [Agent README](apps/agent/README.md).
 
 ## Depends on
 
