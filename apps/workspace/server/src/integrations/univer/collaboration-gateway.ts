@@ -364,7 +364,7 @@ export function createCollaborationGateway(options: {
   transport.use(async (context, next) => {
     const session = identity.getSession(cookieHeader(context));
     if (!session.authenticated) {
-      unauthenticated(context);
+      rejectTransportRequest(context, 401, ErrorCode.UNAUTHENTICATED, "Authentication required.");
       return;
     }
     context.userID = session.user.id;
@@ -374,10 +374,15 @@ export function createCollaborationGateway(options: {
       /^\/universer-api\/html-views\/([^/]+)\//,
     );
     if (htmlPath) {
-      context.customData.htmlViewScope = await options.htmlViews.open(
-        session.user.id,
-        decodeURIComponent(htmlPath[1]!),
-      );
+      try {
+        context.customData.htmlViewScope = options.htmlViews.open(
+          session.user.id,
+          decodeURIComponent(htmlPath[1]!),
+        );
+      } catch {
+        rejectTransportRequest(context, 403, ErrorCode.PERMISSION_DENIED, "Cannot access this HTML view.");
+        return;
+      }
       context.customData.htmlViewCookie = cookieHeader(context);
     }
     await next();
@@ -817,18 +822,13 @@ function cookieHeader(context: NodeHttpTransportContext) {
   return Array.isArray(value) ? value.join("; ") : value;
 }
 
-function unauthenticated(context: NodeHttpTransportContext): void {
-  context.response.statusCode = 401;
-  context.response.setHeader(
-    "content-type",
-    "application/json; charset=utf-8"
-  );
-  context.response.end(
-    JSON.stringify({
-      error: {
-        code: ErrorCode.UNAUTHENTICATED,
-        message: "Authentication required.",
-      },
-    })
-  );
+function rejectTransportRequest(
+  context: NodeHttpTransportContext,
+  status: number,
+  code: ErrorCode,
+  message: string,
+): void {
+  context.response.statusCode = status;
+  context.response.setHeader("content-type", "application/json; charset=utf-8");
+  context.response.end(JSON.stringify({ error: { code, message } }));
 }

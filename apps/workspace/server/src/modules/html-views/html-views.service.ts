@@ -106,11 +106,10 @@ export function createHtmlViewsModule(options: {
   }
 
   return {
-    async open(userId: string, resourceId: string): Promise<HtmlViewScope> {
+    open(userId: string, resourceId: string): HtmlViewScope {
       const html = requireView(userId, resourceId);
-      const scope = { resourceId, objectKey: html.objectKey };
-      await authorize(userId, scope);
-      return scope;
+      // Capture the current version; each data request and connection checks its source authority.
+      return { resourceId, objectKey: html.objectKey };
     },
     authorize,
     async validatePublication(

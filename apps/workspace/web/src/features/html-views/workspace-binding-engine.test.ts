@@ -5,6 +5,8 @@ const writes = vi.hoisted(() => ({
   cell: vi.fn(),
   rows: vi.fn(),
   options: vi.fn(),
+  load: vi.fn(),
+  dispose: vi.fn(),
   get: vi.fn(),
   post: vi.fn(),
 }));
@@ -14,8 +16,8 @@ vi.mock("@univerjs-labs/binding-engine", () => ({
     constructor(options: unknown) {
       writes.options(options);
     }
-    async load() {}
-    dispose() {}
+    load() { return writes.load(); }
+    dispose() { writes.dispose(); }
     setCellValue(...args: unknown[]) {
       return writes.cell(...args);
     }
@@ -54,7 +56,6 @@ describe("HTML view Workspace write permissions", () => {
       host: "workspace.test",
       origin: "https://workspace.test",
     });
-    writes.get.mockResolvedValueOnce({ data: { unitId: "unit", editorMode: "edit" } });
     const signal = new AbortController().signal;
     try {
       const engine = await createWorkspaceBindingEngine(
@@ -63,13 +64,7 @@ describe("HTML view Workspace write permissions", () => {
         signal,
         "html",
       );
-      expect(writes.get).toHaveBeenCalledExactlyOnceWith(
-        "/api/html-views/{resourceId}/sources/{unitId}",
-        {
-          params: { path: { resourceId: "html", unitId: "unit" } },
-          signal,
-        },
-      );
+      expect(writes.get).not.toHaveBeenCalled();
       expect(writes.post).not.toHaveBeenCalled();
       expect(writes.options).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -97,19 +92,20 @@ describe("HTML view Workspace write permissions", () => {
   });
 
   it("does not fall back to direct Sheet permissions when HTML authorization fails", async () => {
-    writes.get.mockResolvedValueOnce({
-      error: { error: { code: "FORBIDDEN", message: "HTML view access denied." } },
+    vi.stubGlobal("location", {
+      protocol: "https:", host: "workspace.test", origin: "https://workspace.test",
     });
-    await expect(
-      createWorkspaceBindingEngine(
-        "unit",
-        { id: "viewer", displayName: "Viewer" },
-        new AbortController().signal,
-        "html",
-      ),
-    ).rejects.toThrow("HTML view access denied");
-    expect(writes.options).not.toHaveBeenCalled();
-    expect(writes.post).not.toHaveBeenCalled();
+    writes.load.mockRejectedValueOnce(new Error("HTML view access denied"));
+    try {
+      await expect(createWorkspaceBindingEngine(
+        "unit", { id: "viewer", displayName: "Viewer" }, new AbortController().signal, "html",
+      )).rejects.toThrow("HTML view access denied");
+      expect(writes.get).not.toHaveBeenCalled();
+      expect(writes.post).not.toHaveBeenCalled();
+      expect(writes.dispose).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
   it("rejects scalar writes and row insertion for a read-only source before SDK mutation", () => {
     const engine = new WorkspaceBindingEngine(options, false);

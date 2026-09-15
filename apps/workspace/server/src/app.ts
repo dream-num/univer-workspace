@@ -14,7 +14,6 @@ import {
 } from "./integrations/univer/unit-store.js";
 import { protocolUser } from "./integrations/univer/protocol-user.js";
 import { createHtmlViewsModule } from "./modules/html-views/html-views.service.js";
-import { createHtmlViewsRouter } from "./modules/html-views/html-views.router.js";
 import { createWorktreeBackend } from "./integrations/univer/worktree-store.js";
 import { LocalBlobStore, type BlobStore } from "./integrations/blob/blob-store.js";
 import {
@@ -341,7 +340,6 @@ export function createWorkspaceApplication(
   app.use("/api", createNodesRouter({ identity, nodes }));
   app.use("/api", createResourcesRouter({ identity, resources }));
   app.use("/api", createBlobsRouter({ identity, blobs }));
-  app.use("/api", createHtmlViewsRouter({ identity, htmlViews }));
   app.use("/api", createViewsRouter({ identity, views }));
   app.use(
     "/api",

@@ -6,9 +6,9 @@ explains behavior that spans multiple operations.
 
 ## Conventions
 
-HTML viewers may resolve declared source Sheets through
-`GET /api/html-views/{resourceId}/sources/{unitId}` and use the HTML-scoped collaboration
-endpoints. This grants complete Sheet content editing, without a direct source ACL
+HTML viewers use the existing collaboration protocol under
+`/universer-api/html-views/{resourceId}` to access declared source Sheets. Authorization
+runs within those requests and grants complete Sheet content editing, without a direct source ACL
 grant. HTML template replacement uses ordinary editor access. Publication retains
 authority for existing sources and verifies the author's edit access for new sources.
 Running the page, including data writes, requires only HTML viewer access.

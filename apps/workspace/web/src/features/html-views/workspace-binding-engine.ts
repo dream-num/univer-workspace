@@ -59,15 +59,9 @@ export async function createWorkspaceBindingEngine(
   htmlResourceId?: string,
 ): Promise<BindingEngine> {
   signal.throwIfAborted();
-  let canEdit: boolean;
-  if (htmlResourceId) {
-    const source = await api.GET("/api/html-views/{resourceId}/sources/{unitId}", {
-      params: { path: { resourceId: htmlResourceId, unitId } },
-      signal,
-    });
-    if (source.error) throw apiError(source.error);
-    canEdit = source.data.editorMode === "edit";
-  } else {
+  // HTML execution permits writes; the existing snapshot/collaboration requests enforce authority.
+  let canEdit = true;
+  if (!htmlResourceId) {
     const resolved = await api.GET("/api/unit-resources/{unitId}", {
       params: { path: { unitId } },
       signal,

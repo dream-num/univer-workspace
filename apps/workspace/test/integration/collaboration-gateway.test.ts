@@ -127,10 +127,9 @@ describe("collaboration gateway", () => {
     const base = `/universer-api/html-views/${resourceId}`;
     const snapshotPath = `/snapshot/${UniverType.UNIVER_SHEET}/unit/${unitId}/rev/0`;
     const resolve = () =>
-      fetch(`${origin}/api/html-views/${resourceId}/sources/${unitId}`, { headers: { cookie } });
-    expect((await resolve()).status).toBe(404);
+      fetch(`${origin}${base}${snapshotPath}`, { headers: { cookie } });
+    expect((await resolve()).status).toBe(403);
     application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "viewer" });
-    await expect((await resolve()).json()).resolves.toEqual({ unitId, editorMode: "edit" });
     expect(
       (await fetch(`${origin}/api/unit-resources/${unitId}`, { headers: { cookie } })).status,
     ).toBe(404);
@@ -140,14 +139,6 @@ describe("collaboration gateway", () => {
     const snapshot = await fetch(`${origin}${base}${snapshotPath}`, { headers: { cookie } });
     expect(snapshot.status).toBe(200);
     await expect(snapshot.json()).resolves.toMatchObject({ snapshot: { unitID: unitId } });
-    expect(
-      (
-        await fetch(
-          `${origin}/api/html-views/${resourceId}/sources/${unrelated.body.node.resource!.unitId}`,
-          { headers: { cookie } },
-        )
-      ).status,
-    ).toBe(403);
     expect(
       (
         await fetch(
@@ -280,7 +271,7 @@ describe("collaboration gateway", () => {
       delegated.socket.addEventListener("close", () => resolve(), { once: true }),
     );
     application.permissions.removeNodeGrant(ownerId, nodeId, editorId);
-    expect((await resolve()).status).toBe(404);
+    expect((await resolve()).status).toBe(403);
     await closed;
     expect(delegated.socket.readyState).toBe(WebSocket.CLOSED);
     application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "editor" });
@@ -337,7 +328,7 @@ describe("collaboration gateway", () => {
     ({ application, origin } = await startApplication(directory));
     application.permissions.upsertNodeGrant(ownerId, nodeId, editorId, { role: "viewer" });
     expect((await resolve()).status).toBe(200);
-    expect((await fetch(`${origin}/api/html-views/${resourceId}/sources/${ownUnitId}`, {
+    expect((await fetch(`${origin}${base}/snapshot/2/unit/${ownUnitId}/rev/0`, {
       headers: { cookie },
     })).status).toBe(200);
     await expect(replaceTemplate(editorId, source)).rejects.toMatchObject({ status: 403 });
@@ -346,7 +337,6 @@ describe("collaboration gateway", () => {
     await replaceTemplate(editorId, "<html><head></head><body>No sources</body></html>");
     expect((await resolve()).status).toBe(403);
     await expect(replaceTemplate(editorId, source)).rejects.toMatchObject({ status: 403 });
-
   });
 
   it("rejects HTML publication that delegates inaccessible sources", async () => {

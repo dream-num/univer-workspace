@@ -4,31 +4,6 @@
  */
 
 export interface paths {
-    "/api/html-views/{resourceId}/sources/{unitId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Authorize a referenced Sheet through a viewable HTML page.
-         * @description Requires HTML viewer access or higher. Running the page includes complete
-         *     read/write access to declared Sheets through HTML-scoped collaboration endpoints.
-         *     The server checks the published template and each source's authorizing publisher.
-         *     Direct source Resource access retains its normal ACL. Template replacement requires
-         *     editor access; existing source authority is retained and new sources require the
-         *     author's direct edit permission. No cell or range isolation is provided.
-         */
-        get: operations["resolveHtmlViewSource"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -1954,38 +1929,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    resolveHtmlViewSource: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                resourceId: string;
-                unitId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Referenced Sheet authorized for HTML data editing. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        unitId: string;
-                        /** @constant */
-                        editorMode: "edit";
-                    };
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-        };
-    };
     getSession: {
         parameters: {
             query?: never;

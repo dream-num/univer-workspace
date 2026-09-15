@@ -40,57 +40,6 @@ tags:
   - name: Worktrees
     description: Isolated collaborative draft and merge workflows.
 paths:
-  /api/html-views/{resourceId}/sources/{unitId}:
-    get:
-      tags:
-        - Resources
-      operationId: resolveHtmlViewSource
-      summary: Authorize a referenced Sheet through a viewable HTML page.
-      description: |
-        Requires HTML viewer access or higher. Running the page includes complete
-        read/write access to declared Sheets through HTML-scoped collaboration endpoints.
-        The server checks the published template and each source's authorizing publisher.
-        Direct source Resource access retains its normal ACL. Template replacement requires
-        editor access; existing source authority is retained and new sources require the
-        author's direct edit permission. No cell or range isolation is provided.
-      parameters:
-        - name: resourceId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: unitId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Referenced Sheet authorized for HTML data editing.
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: false
-                required:
-                  - unitId
-                  - editorMode
-                properties:
-                  unitId:
-                    type: string
-                  editorMode:
-                    type: string
-                    const: edit
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
   /api/session:
     get:
       tags:
