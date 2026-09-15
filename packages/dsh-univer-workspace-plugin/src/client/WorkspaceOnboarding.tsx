@@ -61,6 +61,9 @@ export function WorkspaceOnboarding({
       window.location.assign("/auth/oauth/start");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      // Desktop intercepts navigation and opens a separate OAuth window. Keep
+      // this entry usable if the user closes that window without signing in.
       setBusy(false);
     }
   };

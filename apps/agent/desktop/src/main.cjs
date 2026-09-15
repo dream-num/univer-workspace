@@ -311,6 +311,7 @@ async function login() {
     parent: window,
     width: 1000,
     height: 760,
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
