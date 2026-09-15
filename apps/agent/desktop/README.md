@@ -379,7 +379,9 @@ reveals it for Help, updates and logs. macOS retains its native application menu
 Profile-only bundles have ASAR links at the composition root, pointing to their
 original package directories. This lets DSH's filesystem package-inventory
 extension discover the same plugins as its Loader without duplicating payloads
-or overriding installation-owned DSH versions.
+or overriding installation-owned DSH versions. The host resolves ASAR-linked
+bundle entries to their owning profile directories before importing, because
+Electron can retain a link alias when resolving a descendant file.
 
 The Windows installer migrates the known broken alpha.3 uninstaller only for an
 in-place replacement: it closes owned processes and renames the old installation,

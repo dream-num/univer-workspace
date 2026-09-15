@@ -26,6 +26,21 @@ function createHostResolveHook(archive, configHome) {
   ]));
   const profilePeers = archiveRoot + 'profile/node_modules/@deepseek-ai/';
   const sharedPeers = new Map();
+  // Electron resolves an ASAR link directory, but realpath of a descendant can
+  // retain the alias. Canonicalize linked bundle entries before importing so
+  // their dependencies still resolve from the owning profile package graph.
+  const profile = JSON.parse(fs.readFileSync(path.join(archive, 'profile/package.json'), 'utf8'));
+  const bundleLinks = [];
+  for (const name of profile.dsh?.profile?.bundles ?? []) {
+    const alias = path.join(archive, 'node_modules', name);
+    if (fs.existsSync(alias) && fs.lstatSync(alias).isSymbolicLink()) {
+      bundleLinks.push([
+        pathToFileURL(alias + path.sep).href,
+        pathToFileURL(fs.realpathSync(alias) + path.sep).href,
+      ]);
+    }
+  }
+
 
   // DSH's native internal-loader helper does not support Electron 44. Its
   // fallback imports from the Loader package; dynamic rows also import from
@@ -49,6 +64,12 @@ function createHostResolveHook(archive, configHome) {
         result = context.conditions.includes('require')
           ? nextResolve(requireProfile.resolve(specifier), context)
           : nextResolve(specifier, { ...context, parentURL: profileAnchor });
+      }
+      for (const [alias, target] of bundleLinks) {
+        if (result.url.startsWith(alias)) {
+          result = { ...result, url: target + result.url.slice(alias.length) };
+          break;
+        }
       }
       if (result.url.startsWith(profilePeers)) {
         const relative = result.url.slice(profilePeers.length);
