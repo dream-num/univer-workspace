@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire, registerHooks } from 'node:module';
+import { realpathSync } from 'node:fs';
 import host from '../src/dsh-host.cjs';
 
 test('host shares equal-version DSH scope identity across profile and installation', async (t) => {
@@ -43,8 +44,8 @@ test('host shares equal-version DSH scope identity across profile and installati
   const adapter = host.createHostResolveHook(archive, join(root, 'data'));
   // Electron may return an unresolved descendant even though the package
   // directory itself is an ASAR link. Model that result explicitly.
-  assert.equal(adapter.resolve('workspace-bundle', {}, () => ({ url: entry(installedArchive, 'workspace-bundle') })).url,
-    entry(join(installedArchive, 'profile'), 'workspace-bundle'));
+  assert.equal(adapter.resolve('workspace-bundle', {}, () => ({ url: entry(realpathSync(installedArchive), 'workspace-bundle') })).url,
+    entry(join(realpathSync(installedArchive), 'profile'), 'workspace-bundle'));
   const hook = registerHooks(adapter);
   try {
     const profile = await import(entry(join(archive, 'profile'), '@deepseek-ai/test-scope'));
