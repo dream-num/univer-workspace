@@ -41,7 +41,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli-manual.yml).
 
 - **Univer Workspace Agent** — the local browser application for conversations, document references,
-  and agent Worktree review, composed from published DSH packages. Contract: [Agent README](apps/agent/README.md).
+  and agent Worktree review, composed from published DSH packages. Its Desktop shell uses
+  default-browser OAuth with a one-use `univer-workspace://login` return link and
+  backend-owned PKCE/session storage, with an isolated embedded-browser fallback when the
+  operating system cannot open the default browser. Contract: [Agent README](apps/agent/README.md).
 
 ## Depends on
 

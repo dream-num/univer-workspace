@@ -1,5 +1,3 @@
-@import "./locales.css";
-
 /* Workspace skin: the DSH shell uses these aliases for every surface. */
 body {
   --color-background: #ffffff;
@@ -73,37 +71,26 @@ body[data-ds-dark-theme] {
   line-height: 14px;
 }
 
-/* DSH exposes a brand-mark seat for the hero, but not a headline-text seat.
- * Keep the product's Workspace tagline in that stable rendered node while
- * preserving the shell's responsive layout and locale. */
-.pXSMma_headlineText {
-  min-width: 0;
-  color: transparent;
-  font-size: 0;
-  line-height: 1.25;
+/* DSH 0.1.5-rc.1 has a public hero mark slot but no headline slot. This
+ * structural fallback hides only its adjacent title/Preview group. Remove
+ * when upstream offers a headline slot; do not depend on hashed CSS names. */
+span:has(> [data-slot="conversation.hero.brand.mark"]) + span {
+  display: none;
 }
-
-.pXSMma_headlineText::after {
-  color: var(--dsw-alias-label-primary);
-  display: block;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 26px;
+.uwh-skin-heroBrand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   max-width: 100%;
-  overflow-wrap: anywhere;
+}
+.uwh-skin-heroBrand svg { flex-shrink: 0; }
+.uwh-skin-heroTagline {
+  color: var(--dsw-alias-label-primary);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.4;
   white-space: normal;
 }
-
 @media (max-width: 720px) {
-  .pXSMma_headlineText::after {
-    font-size: 16px;
-    line-height: 24px;
-    white-space: normal;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pXSMma_headlineText::after {
-    transition: none;
-  }
+  .uwh-skin-heroTagline { font-size: 18px; }
 }

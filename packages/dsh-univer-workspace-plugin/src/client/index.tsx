@@ -1,3 +1,4 @@
+import { isWorkspaceLoginRequired, startWorkspaceLogin } from "./workspace-login.tsx";
 import { createLocalPathInputSource, pathReferenceInsert, type PathReference } from "./path-reference.ts";
 import { bindContentRoute, regionQuery } from "./navigation/region-route.ts";
 import { invalidateWorkspaceState } from "./api/univer-api.ts";
@@ -407,11 +408,27 @@ export function apply(ctx: ClientContext): void {
     return mePromise;
   };
 
+  const reportViewerError = (error: unknown): void => {
+    if (isWorkspaceLoginRequired(error)) {
+      toast.error(translate("settings.workspace.login"), {
+        description: translate("file.authBody"),
+        action: { label: translate("settings.workspace.login"), onClick: () => {
+          void startWorkspaceLogin().catch(() => toast.error(translate("settings.workspace.loginFailed")));
+        } },
+      });
+      return;
+    }
+    toast.error(translate("window.loadFailed"), {
+      description: error instanceof Error ? error.message : String(error),
+    });
+  };
+
   ctx.effect(() =>
     bindContentRoute(
       navigation,
       async (route, signal) => {
         const me = await loadMe();
+        if (!me.connected) throw new Error("workspace_connection_required");
         if (route.kind === "worktree")
           return {
             kind: "worktree",
@@ -439,10 +456,7 @@ export function apply(ctx: ClientContext): void {
           unitType: resource.unitType,
         };
       },
-      (error) =>
-        toast.error(translate("window.loadFailed"), {
-          description: error instanceof Error ? error.message : String(error),
-        }),
+      reportViewerError,
     ),
   );
 
@@ -639,9 +653,7 @@ export function apply(ctx: ClientContext): void {
           }
         }
       } catch (error) {
-        if (!disposed && request === generation) toast.error(translate("window.loadFailed"), {
-          description: error instanceof Error ? error.message : String(error),
-        });
+        if (!disposed && request === generation) reportViewerError(error);
       }
     };
     const unsubscribe = navigation.subscribe(() => {

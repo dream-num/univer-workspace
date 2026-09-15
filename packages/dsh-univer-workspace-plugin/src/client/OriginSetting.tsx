@@ -1,3 +1,4 @@
+import { startWorkspaceLogin } from "./workspace-login.tsx";
 import { useEffect, useState } from "react";
 import { Button, Input } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { PropsLocale } from "@deepseek-ai/dsh-client-ui-slots";
@@ -108,7 +109,8 @@ export function OriginSetting({ scope, t }: OriginSettingProps) {
   const startLogin = (): void => {
     setBusy(true);
     setError(undefined);
-    window.location.assign("/auth/oauth/start");
+    void startWorkspaceLogin().catch(() => setError(t("settings.workspace.loginFailed")))
+      .finally(() => setBusy(false));
   };
 
   const logout = (): void => {
@@ -153,7 +155,7 @@ export function OriginSetting({ scope, t }: OriginSettingProps) {
             </Button>
           )}
           <Button size="sm" variant="ghost" disabled={busy} onClick={startLogin}>
-            {t("settings.workspace.login")}
+            {t(account ? "settings.workspace.switchAccount" : "settings.workspace.login")}
           </Button>
           {account !== undefined && (
             <span className={css.account}>{t("settings.workspace.connected", { account })}</span>
@@ -164,6 +166,7 @@ export function OriginSetting({ scope, t }: OriginSettingProps) {
             </Button>
           )}
         </div>
+        <p className={css.hint}>{t("settings.workspace.browserContinue")}</p>
         {switching && (
           <div className={css.restartNotice} role="status">
             <strong>{t("settings.workspace.switching")}</strong>

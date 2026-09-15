@@ -26,6 +26,25 @@ let window,
   quitting = false,
   release;
 const origin = localOrigin();
+const { SCHEME, createLoginController } = require("./login.cjs");
+let loginController;
+let pendingLoginUrl = process.argv.find(value => value.startsWith(`${SCHEME}://`));
+const focus = () => { window?.restore(); window?.show(); window?.focus(); };
+function reportLoginError(error) {
+  const zh = app.getLocale().startsWith("zh");
+  const message = error.message === "workspace_login_cancelled"
+    ? zh ? "授权已取消。可以重新登录，并在浏览器里切换账号。" : "Authorization was cancelled. Sign in again or switch accounts in your browser."
+    : error.message === "workspace_login_expired" || error.message === "workspace_login_invalid"
+      ? zh ? "登录请求已过期或无效，请在应用中重新点击登录。" : "This sign-in request has expired or is invalid. Start sign-in again in the app."
+      : zh ? "未能完成登录，请检查网络后重试。你可以在默认浏览器里退出或切换账号。" : "Unable to finish signing in. Check your connection and try again. You can sign out or switch accounts in your default browser.";
+  dialog.showErrorBox(zh ? "Workspace 登录" : "Workspace sign-in", message);
+}
+function acceptLoginUrl(url) {
+  if (!loginController) { pendingLoginUrl = url; return; }
+  focus();
+  void loginController.accept(url).catch(reportLoginError);
+}
+app.on("open-url", (event, url) => { event.preventDefault(); acceptLoginUrl(url); });
 app.setName("Univer Workspace Agent");
 // Electron 44's default Windows cache drops our ~45 MB browser entry between
 // launches. A native repeat-launch probe retains it with this capacity. Apply
@@ -37,7 +56,9 @@ const profileDirectory = app.commandLine.getSwitchValue("user-data-dir");
 if (profileDirectory) app.setPath("userData", require("node:path").resolve(profileDirectory));
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, argv) => {
+    const callback = argv.find(value => value.startsWith(`${SCHEME}://`));
+    if (callback) acceptLoginUrl(callback);
     window?.restore();
     window?.show();
     window?.focus();
@@ -108,7 +129,7 @@ async function start() {
   window.webContents.on("will-navigate", (event, url) => {
     if (isLocalUrl(url, origin) && new URL(url).pathname === "/auth/oauth/start") {
       event.preventDefault();
-      void login();
+      void loginController?.start().catch(reportLoginError);
     } else if (!isLocalUrl(url, origin)) {
       event.preventDefault();
       if (isWebUrl(url)) void shell.openExternal(url);
@@ -234,8 +255,24 @@ async function start() {
   startupLog.write({ phase: "backend-ready" });
   if (quitting) return;
   started = true;
+  const loginBrowser = require("./login-browser.cjs").createLoginBrowser({
+    BrowserWindow, shell, mainWindow: window, origin, accept: acceptLoginUrl,
+    failed: reportLoginError, zh: app.getLocale().startsWith("zh"),
+  });
+  loginController = createLoginController({ origin, fetch: optionsFetch,
+    openExternal: loginBrowser.open, connected: async () => { loginBrowser.close(); focus(); await window.loadURL(origin); } });
+  ipcMain.handle("uwa:login", event => {
+    if (!require("./update-window.cjs").trustedFrame(event, window.webContents, url => isLocalUrl(url, origin)))
+      throw new Error("Untrusted login caller");
+    return loginController.start();
+  });
   await window.loadURL(address);
   startupLog.write({ phase: "ready" });
+  if (app.isPackaged) {
+    try { await require("./protocol.cjs").registerLoginProtocol(app); }
+    catch { startupLog.write({ phase: "login-protocol-registration-failed" }); }
+  }
+  if (pendingLoginUrl) { const url = pendingLoginUrl; pendingLoginUrl = undefined; acceptLoginUrl(url); }
   if (app.isPackaged && process.platform === 'win32') {
     void require('./retire-install.cjs').retirePreviousInstallation(
       process.execPath, resources, event => startupLog.write(event),
@@ -314,35 +351,4 @@ async function start() {
   ).unref();
 }
 
-// Keep the main renderer on its local origin. The isolated login window shares
-// the local cookie jar and can navigate through Workspace's OAuth providers.
-async function login() {
-  const popup = new BrowserWindow({
-    parent: window,
-    width: 1000,
-    height: 760,
-    autoHideMenuBar: true,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      webSecurity: true,
-    },
-  });
-  popup.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  popup.webContents.on("will-attach-webview", (e) => e.preventDefault());
-  const restrict = (event, url) => {
-    if (!isWebUrl(url)) event.preventDefault();
-  };
-  popup.webContents.on("will-navigate", restrict);
-  popup.webContents.on("will-redirect", restrict);
-  popup.webContents.on("did-navigate", (_event, url) => {
-    if (isLocalUrl(url, origin) && new URL(url).pathname === "/") {
-      popup.close();
-      void window.loadURL(origin);
-    }
-  });
-  await popup.loadURL(`${origin}/auth/oauth/start`).catch(() => {
-    if (!popup.isDestroyed()) popup.close();
-  });
-}
+function optionsFetch(url, options) { return session.defaultSession.fetch(url, options); }

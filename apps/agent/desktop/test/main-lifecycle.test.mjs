@@ -15,7 +15,7 @@ async function fixture({ pauseHome = false } = {}) {
   const app = Object.assign(new EventEmitter(), {
     setName() {}, requestSingleInstanceLock: () => true,
     commandLine: { getSwitchValue: () => '', appendSwitch() {} }, getPath: () => '/user',
-    getVersion: () => '0.1.0', whenReady: () => Promise.resolve(),
+    getLocale: () => 'en-US', getVersion: () => '0.1.0', whenReady: () => Promise.resolve(),
     quit() { quitCount++; }, exit() { quitCount++; },
   });
   const webContents = Object.assign(new EventEmitter(), {
@@ -28,7 +28,7 @@ async function fixture({ pauseHome = false } = {}) {
     show() {}
   }
   const modules = {
-    electron: { app, BrowserWindow, Menu: { setApplicationMenu() {}, buildFromTemplate: x => x },
+    electron: { app, BrowserWindow, ipcMain: { handle() {} }, Menu: { setApplicationMenu() {}, buildFromTemplate: x => x },
       dialog: { showErrorBox: (...args) => errors.push(args) }, shell: {}, net: {} },
     'electron-updater': { autoUpdater: {} },
     'node:fs/promises': { mkdir: async () => {}, readFile: async () => JSON.stringify({ platform: process.platform, arch: process.arch, browser: "browser/chrome" }) },
@@ -44,6 +44,8 @@ async function fixture({ pauseHome = false } = {}) {
     './browser-cache.cjs': { prepareBrowserCache: async () => undefined },
     './startup-log.cjs': { createStartupLog: () => ({ write() {} }) },
     './policy.cjs': require('../src/policy.cjs'),
+    './login.cjs': require('../src/login.cjs'),
+    './login-browser.cjs': require('../src/login-browser.cjs'),
     './updates.cjs': { createUpdateController(options) { update = options; return { check() {} }; } },
     './diagnostics.cjs': { createDiagnostics: () => ({}) },
     './update-window.cjs': { createUpdateWindow: () => ({ show() {}, changed() {}, attach() {} }) },

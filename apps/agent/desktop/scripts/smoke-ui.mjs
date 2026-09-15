@@ -6,11 +6,13 @@ export async function waitForUsableAgent(page, { firstRun = true, timeoutMs = 30
   let lastError;
   let setupObserved = false;
   let setupHandled = !firstRun;
-  if (firstRun) await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: timeoutMs });
+
   while (Date.now() < deadline) {
+    if (await page.getByRole("button", { name: "Continue", exact: true }).isVisible())
+      throw new Error("Unexpected DSH internal-testing welcome notice");
     // These dialogs can mount after the preceding click or a WebSocket update.
     // A one-time isVisible check can miss them and leave Settings covered.
-    for (const name of ['Continue', 'Sign in later', 'Configure later']) {
+    for (const name of ['Sign in later', 'Configure later']) {
       const button = page.getByRole('button', { name, exact: true });
       if (await button.isVisible()) {
         if (name === 'Configure later') setupObserved = true;

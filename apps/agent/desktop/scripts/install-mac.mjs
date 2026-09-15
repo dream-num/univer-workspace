@@ -40,6 +40,13 @@ export async function installMac(dmg, destination, reportPath) {
       try { await rename(staged, destination); activated = true; }
       catch (error) { if (moved) { await rename(backup, destination); moved = false; } throw error; }
     });
+    // ditto into a temporary Applications directory bypasses Finder/Launch
+    // Services discovery. Register the copied bundle before launching its Mach-O
+    // executable directly, so the probe models a normal Finder installation.
+    await phase('register-bundle', () => exec(
+      '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister',
+      ['-f', destination], { timeout: 10000 },
+    ));
     report.success = true;
   } catch (error) {
     report.error = error.message;

@@ -1,33 +1,64 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Context } from "@deepseek-ai/cordis";
-import type { WorkspaceAuthService } from "./workspace-auth.ts";
+import { sendDesktopCallbackPage } from "./desktop-oauth-page.ts";
 
 const CLIENT_ID = "univer-workspace-harness";
 const TTL = 10 * 60_000;
-interface Pending { readonly state: string; readonly verifier: string; readonly origin: string; readonly redirectUri: string; readonly expiresAt: number }
+export interface PendingOAuth { readonly state: string; readonly verifier: string; readonly origin: string; readonly redirectUri: string; readonly expiresAt: number; readonly connectionVersion: string; readonly desktop?: boolean; completing?: boolean }
 
-export function createOAuthStartHandler(ctx: Context, pending: Map<string, Pending>, publicOrigin: string) {
+export function beginOAuth(ctx: Context, pending: Map<string, PendingOAuth>, publicOrigin: string, desktop = false) {
+  for (const [key, value] of pending) {
+    if (value.expiresAt <= Date.now() || (desktop && value.desktop)) pending.delete(key);
+  }
+  if (pending.size >= 32) throw new Error("too_many_pending_authorizations");
+  const state = randomBytes(32).toString("base64url");
+  const verifier = randomBytes(48).toString("base64url");
+  const origin = ctx.workspaceAuth.loginOrigin();
+  const redirectUri = new URL("/auth/oauth/callback", publicOrigin).href;
+  const expiresAt = Date.now() + TTL;
+  pending.set(state, { state, verifier, origin, redirectUri, expiresAt, connectionVersion: ctx.workspaceAuth.connectionVersion(), desktop });
+  const url = new URL("/api/auth/authorize", origin);
+  url.search = new URLSearchParams({ client_id: CLIENT_ID, redirect_uri: redirectUri, state,
+    code_challenge: createHash("sha256").update(verifier).digest("base64url"), scope: "identity session" }).toString();
+  return { authorizationUrl: url.href, state, expiresAt };
+}
+
+export async function exchangeOAuth(ctx: Context, entry: PendingOAuth, code: string, stillCurrent: () => boolean = () => true) {
+  const version = entry.connectionVersion;
+  if (entry.origin !== ctx.workspaceAuth.loginOrigin() || version !== ctx.workspaceAuth.connectionVersion()) throw new Error("workspace_authorization_origin_changed");
+  const response = await fetch(new URL("/api/auth/token", entry.origin), {
+    method: "POST", headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ grant_type: "authorization_code", client_id: CLIENT_ID,
+      redirect_uri: entry.redirectUri, code, code_verifier: entry.verifier }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error("workspace_token_exchange_failed");
+  const body = await response.json() as { access_token?: unknown; user?: { id?: unknown; username?: unknown; displayName?: unknown } };
+  if (typeof body.access_token !== "string" || typeof body.user?.id !== "string" || typeof body.user.username !== "string")
+    throw new Error("workspace_token_response_invalid");
+  // Settings can change while the remote exchange is in flight.
+  if (entry.origin !== ctx.workspaceAuth.loginOrigin() || version !== ctx.workspaceAuth.connectionVersion() || !stillCurrent())
+    throw new Error("workspace_authorization_origin_changed");
+  await ctx.workspaceAuth.connect({ userId: body.user.id, username: body.user.username,
+    ...(typeof body.user.displayName === "string" ? { displayName: body.user.displayName } : {}) }, body.access_token, entry.origin);
+  return { userId: body.user.id, origin: entry.origin, version: ctx.workspaceAuth.connectionVersion() };
+}
+
+export function createOAuthStartHandler(ctx: Context, pending: Map<string, PendingOAuth>, publicOrigin: string) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "GET") {
       res.writeHead(405, { "allow": "GET", "cache-control": "no-store" }); res.end(); return;
     }
-    const origin = ctx.workspaceAuth.loginOrigin();
-    for (const [key, value] of pending) if (value.expiresAt <= Date.now()) pending.delete(key);
-    if (pending.size >= 32) { res.writeHead(429, { "cache-control": "no-store" }); res.end("Too many pending authorizations."); return; }
-    const state = randomBytes(32).toString("base64url");
-    const verifier = randomBytes(48).toString("base64url");
-    const redirectUri = new URL("/auth/oauth/callback", publicOrigin).href;
-    pending.set(state, { state, verifier, origin, redirectUri, expiresAt: Date.now() + TTL });
-    const challenge = createHash("sha256").update(verifier).digest("base64url");
-    const url = new URL("/api/auth/authorize", origin);
-    url.search = new URLSearchParams({ client_id: CLIENT_ID, redirect_uri: redirectUri, state, code_challenge: challenge, scope: "identity session" }).toString();
-    res.writeHead(302, { location: url.href });
+    let authorization;
+    try { authorization = beginOAuth(ctx, pending, publicOrigin); }
+    catch { res.writeHead(429, { "cache-control": "no-store" }); res.end("Too many pending authorizations."); return; }
+    res.writeHead(302, { location: authorization.authorizationUrl, "cache-control": "no-store" });
     res.end();
   };
 }
 
-export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pending>) {
+export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, PendingOAuth>) {
   const completed = new Map<string, { expiresAt: number; userId: string; origin: string; version: string }>();
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "GET") {
@@ -51,6 +82,22 @@ export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pe
       return;
     }
     const entry = pending.get(state);
+    if (!entry && process.env.UWA_DESKTOP === "1") {
+      sendDesktopCallbackPage(res, undefined, req.headers?.["accept-language"]?.startsWith("zh") === true);
+      return;
+    }
+    if (entry?.desktop) {
+      const error = url.searchParams.get("error");
+      const code = url.searchParams.get("code");
+      const valid = entry.expiresAt > Date.now() && entry.origin === ctx.workspaceAuth.loginOrigin() &&
+        entry.connectionVersion === ctx.workspaceAuth.connectionVersion();
+      if (!valid || error || !code || code.length > 2048) pending.delete(state);
+      // The external browser has no DSH cookie. Return an authorization code;
+      // only the authenticated Desktop client may exchange it using local PKCE.
+      sendDesktopCallbackPage(res, valid ? { state, ...(error ? { error: "access_denied" } : code && code.length <= 2048 ? { code } : { error: "invalid_callback" }) } : undefined,
+        req.headers?.["accept-language"]?.startsWith("zh") === true);
+      return;
+    }
     if (!entry || entry.expiresAt <= Date.now() || url.searchParams.get("error")) {
       pending.delete(state);
       sendCallbackPage(res, false, url.searchParams.get("error") === "access_denied");
@@ -59,20 +106,14 @@ export function createOAuthCallbackHandler(ctx: Context, pending: Map<string, Pe
     const code = url.searchParams.get("code");
     if (!code) { sendCallbackPage(res, false); return; }
     pending.delete(state);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
-    let response: Response;
+    let connected;
     try {
-      response = await fetch(new URL("/api/auth/token", entry.origin), { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ grant_type: "authorization_code", client_id: CLIENT_ID, redirect_uri: entry.redirectUri, code, code_verifier: entry.verifier }), signal: controller.signal });
+      connected = await exchangeOAuth(ctx, entry, code);
     } catch {
       res.writeHead(502, { "cache-control": "no-store" }); res.end("Workspace token exchange failed."); return;
-    } finally { clearTimeout(timeout); }
-    if (!response.ok) { res.writeHead(502, { "content-type": "text/plain; charset=utf-8" }); res.end("Workspace token exchange failed."); return; }
-    const body = await response.json() as { access_token?: unknown; user?: { id?: unknown; username?: unknown; displayName?: unknown } };
-    if (typeof body.access_token !== "string" || typeof body.user?.id !== "string" || typeof body.user.username !== "string") { res.writeHead(502, { "content-type": "text/plain; charset=utf-8" }); res.end("Workspace token response was invalid."); return; }
-    await ctx.workspaceAuth.connect({ userId: body.user.id, username: body.user.username, ...(typeof body.user.displayName === "string" ? { displayName: body.user.displayName } : {}) }, body.access_token, entry.origin);
+    }
     if (completed.size >= 32) completed.delete(completed.keys().next().value!);
-    const connection = { expiresAt: Date.now() + TTL, userId: body.user.id, origin: entry.origin, version: ctx.workspaceAuth.connectionVersion() };
+    const connection = { expiresAt: Date.now() + TTL, ...connected };
     completed.set(state, connection);
     sendCallbackPage(res, connection);
   };

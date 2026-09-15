@@ -85,6 +85,8 @@ as a substitute for those explicit storage boundaries.
 - **Workspace sign-in onboarding**: a first-run step before model setup offers
   the Workspace service URL and a primary sign-in action. Connected accounts
   skip the step; users who defer it retain a sign-in button in the sidebar.
+  Expanding or collapsing the sidebar preserves the settings owner and its
+  deferred onboarding state.
   Workspace authorization and model credentials remain separate.
 
 - **Space ↔ dsh-workspace reconciliation**: the User's remote Spaces are
@@ -306,3 +308,11 @@ them. The components display environment, update progress, startup timings and
 failure codes, and request directory opening or report export. The Desktop
 application owns all collection, filtering, filesystem access and update behavior;
 this plugin does not read local files or own installation.
+
+## Sign-in guidance
+
+Disconnected Files, Worktree, and Space-picker views offer a direct Workspace
+sign-in button. A successful status request with `connected: false` remains a
+sign-in state, while permission and network failures retain their own errors.
+Desktop delegates sign-in to its default-browser bridge; browser deployments
+keep the local OAuth navigation. Settings also offers **Switch account**.
