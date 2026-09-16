@@ -153,6 +153,7 @@
     "@univerjs/thread-comment-ui": "1.0.0-rc.0",
     "@univerjs/ui": "1.0.0-rc.0",
     "@univerjs/univer-workspace-file-browser": "workspace:*",
+    "@univerjs/univer-workspace-html-viewer": "workspace:*",
     "@univerjs/univer-workspace-reference-provider": "workspace:*",
     "@univerjs/univer-workspace-ui": "workspace:*",
     "busboy": "^1.6.0",

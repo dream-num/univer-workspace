@@ -19,6 +19,7 @@ COPY packages/reference-provider/package.json ./packages/reference-provider/pack
 COPY packages/unit-comparison-viewer/package.json ./packages/unit-comparison-viewer/package.json
 COPY packages/workspace-file-browser/package.json ./packages/workspace-file-browser/package.json
 COPY packages/workspace-ui/package.json ./packages/workspace-ui/package.json
+COPY packages/workspace-html-viewer/package.json ./packages/workspace-html-viewer/package.json
 
 RUN pnpm install \
     --frozen-lockfile \
@@ -31,6 +32,7 @@ COPY packages/reference-provider ./packages/reference-provider
 COPY packages/unit-comparison-viewer ./packages/unit-comparison-viewer
 COPY packages/workspace-file-browser ./packages/workspace-file-browser
 COPY packages/workspace-ui ./packages/workspace-ui
+COPY packages/workspace-html-viewer ./packages/workspace-html-viewer
 
 # The production Workspace graph excludes the desktop-only signing package.
 RUN pnpm --filter @univerjs/univer-workspace-reference-provider build \

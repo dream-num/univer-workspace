@@ -1,9 +1,10 @@
 /**
- * Read-only middle surface for a Workspace Blob Resource. Blob content is not
- * a Univer Unit, so it deliberately does not mount the Univer collaboration
- * runtime; it uses the Workspace content/download proxy and the same parent-sized
- * shell as a Resource Viewer.
+ * Blob content uses the authenticated content/download proxy. HTML Views have
+ * their own binding runtime for independently authorized source Sheets; other
+ * Blob formats remain read-only media/text previews.
  */
+import { isHtmlViewFilename } from "@univerjs-labs/html-view";
+import { WorkspaceHtmlFile } from "../html-views/WorkspaceHtmlFile.tsx";
 import { useEffect, useState, type ReactElement } from "react";
 import { CloseIcon, ExternalLinkIcon, FileIcon, FileTextIcon } from "@univerjs/univer-workspace-ui";
 import type { WorkspaceBlobSurface } from "../navigation/workspace-navigation.ts";
@@ -121,6 +122,9 @@ function BlobPreview(props: {
   const resource = props.resource;
   const mediaType = resource.mediaType.toLowerCase();
   const contentUrl = proxyAssetUrl(resource.contentUrl);
+  if (isHtmlViewFilename(resource.originalFilename)) {
+    return <WorkspaceHtmlFile contentUrl={contentUrl} name={resource.name} t={props.t} />;
+  }
   if (mediaType.startsWith("image/")) {
     return (
       <div className={css.mediaStage}>

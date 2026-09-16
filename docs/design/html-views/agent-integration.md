@@ -28,7 +28,7 @@ SDK 完整语法与接口引用[上游文档](README.md#sdk-文档)。
 文件路径由会话路径规则解析，目标 Space 默认使用当前关联 Space。模板读取支持取消，
 工具在上传前再次检查取消状态；上传过程复用通用 Blob 服务。
 
-验证只覆盖声明式引用。JavaScript 可以在运行时请求其他 Unit，这些请求由 Browser 按访问者
+验证只覆盖声明式引用。JavaScript 可以在运行时请求其他 Unit，这些请求由 Browser 或 Agent 页面宿主按访问者
 身份授权；`validate` 不执行脚本，也不证明页面交互已经正常运行。作者有权访问来源不代表
 所有页面访问者都有权访问。
 
@@ -46,7 +46,7 @@ Workspace CLI 通过 `html-view validate/create` 组合相同版本的解析包�
 来源只读取 trunk；创建不写来源单元格。修改现有页面使用 `blob download → html-view validate → blob replace`。
 
 详细操作与创作指引随独立 [HTML View Skill](../../../apps/cli/skill-data/html-view/SKILL.md) 交付。
-CLI 不装配 Browser Renderer 或 Binding Engine；页面仍通过 Workspace Browser 运行。
+CLI 不装配 Browser Renderer 或 Binding Engine；页面通过 Workspace Browser 或 Agent Sidecar 运行。
 
 ## 集成交付检查
 
@@ -59,3 +59,27 @@ CLI 不装配 Browser Renderer 或 Binding Engine；页面仍通过 Workspace Br
 - 离开页面时的草稿提交、失败提示和重新打开后的数据符合保存结果。
 
 工具验证、Browser 运行和服务端保存分别检查；只有解析成功不能代表整条集成链路通过。
+
+## Agent Sidecar 页面运行
+
+Agent 文件预览先按 `originalFilename` 识别 `.univer.html`，再走普通文本预览。
+专用适配读取完整 Blob，并通过共享 `workspace-html-viewer` 渲染；构建注入同版本
+renderer runtime。普通 `.html` 仍显示文本源码。
+
+Agent 适配调用共享 `createWorkspaceHtmlEngine`，复用基础插件装配、只读保护与加载/取消/释放生命周期。
+Agent 通过同源 `/univer-workspace/api/unit-resources/{unitId}`
+解析来源，再调用 Resource open 获取权威 `editorMode`。每个来源独立授权，仅支持
+Sheet trunk；只读来源的单元格写入和追加行均明确报错。协同使用现有
+`/univer-workspace/collab` 代理、当前用户、license 和 SDK collaboration-embed
+引用 provider；连接版本沿用 Agent 的 fetch/WebSocket fence，不向 iframe 传递凭据。
+
+当前发布的 DSH Sidecar API 无异步关闭保护，且切换会话会卸载内容。Agent 将
+HTML iframe 保留在稳定的 DOM 容器内，位置跟随 Sidecar；关闭、切换文件或会话时
+等待 `flush()`，成功后释放。失败时保留页面和“保存并关闭”重试入口，也允许用户确认后放弃尚未同步的更改
+（不会撤销已保存的更改）。保存过程中
+禁止继续交互，浏览器退出时检查未保存内容和未同步状态。账号切换仍受原有连接隔离
+及页面重载机制约束，浏览器/进程强制退出无法保证保存。未来 DSH 提供公开异步
+leave guard 后可移除此保留适配，不修改共享组件或 SDK 协议。
+
+用户在页面中交互按来源权限直接写入 trunk；Agent 校验、上传 HTML 不修改来源
+Sheet，HTML Blob 仍不进入 Unit Worktree。
