@@ -95,9 +95,6 @@ interface AccessResolver {
   resolveNode(userId: string, nodeId: string): NodeAccess | null;
   resolveResource(userId: string, resourceId: string): ResourceAccess | null;
   resolveUnit(userId: string, unitId: string): ResourceAccess | null;
-  resolveResourceContent(userId: string, resourceId: string): ResourceContentAccess | null;
-  resolveUnitContent(userId: string, unitId: string): ResourceContentAccess | null;
-  resolveOwnedResources(userId: string, resourceIds: readonly string[]): ReadonlyMap<string, ResourceAccess>;
 }
 ```
 
@@ -109,12 +106,6 @@ interface AccessResolver {
 - Trash 状态；
 - Node/Resource 以及对应 Univer/Blob 扩展映射；
 - Resource Node 是否有子 Node（与内容访问彼此独立）。
-
-内容授权投影与完整 Node 投影共享可见性 SQL 和角色规则，但不计算 `hasChildren`、
-目录展示字段或导航根。Collaboration 鉴权与 Worktree 内容能力检查使用内容投影；
-Owned 批量投影在查询中重新验证 Space owner，省去不影响 owner 权限的祖先分享计算。
-Worktree 列表先完成 SDK 读取，再在无 `await` 的同步阶段复用同页相同 Resource 的授权结果；
-结果不跨异步阶段或请求缓存。目录投影的子节点查询同时约束 Space 与 Parent，使用现有索引。
 
 调用者不直接查询授权表或从客户端字段推断权限。Move 同时验证 Source、Target、同
 Space 与后代链。
