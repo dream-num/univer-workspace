@@ -32,9 +32,12 @@ Consumers supply resolved permissions, collaboration endpoints, network configur
 and `registerEmbed(univer)` for their referenced-Unit policy. SDK dependencies remain
 peers, using each consumer’s runtime.
 
-All binding writes first reject an anonymous identity (`user.anonymous`) with
-“当前为访客模式，请登录后再操作”, then check source edit permission. Consumers pass identity and permissions,
-not error messages; signed-in read-only users retain the source read-only error.
+All binding writes first reject an anonymous identity (`user.anonymous`), then
+check source edit permission. `HtmlViewWriteError.code` identifies the reason;
+`translateError(code)` uses the host's current UI language to produce its message
+before the SDK serializes it for the iframe. Web and Agent own their Chinese and
+English dictionary entries. Translation callbacks read the current language without
+recreating the engine or losing pending edits when the UI language changes.
 
 No HTTP requests, credential storage, DSH services or routes belong here. The SDK owns binding syntax, subscriptions and the communication
 protocol. `workspace-ui` remains the owner of generic controls and icons.

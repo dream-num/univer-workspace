@@ -11,6 +11,9 @@ export type AppLanguage = "zh-CN" | "en-US";
 
 const messages = {
   "zh-CN": {
+    htmlViewTitle: "HTML 绑定视图",
+    htmlViewSignInRequired: "当前为访客模式，请登录后再操作",
+    htmlViewEditPermissionRequired: "你没有此表格的编辑权限，请联系所有者申请权限。",
     home: "首页",
     homeViews: "首页文档视图",
     recent: "最近访问",
@@ -353,6 +356,9 @@ const messages = {
     loadingType: "正在加载{type}…",
   },
   "en-US": {
+    htmlViewTitle: "HTML binding view",
+    htmlViewSignInRequired: "You are browsing as a guest. Please sign in to continue.",
+    htmlViewEditPermissionRequired: "You don’t have permission to edit this spreadsheet. Contact the owner to request access.",
     home: "Home",
     homeViews: "Home document views",
     recent: "Recent",

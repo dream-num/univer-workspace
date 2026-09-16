@@ -1,4 +1,7 @@
-import { createWorkspaceHtmlEngine } from "@univerjs/univer-workspace-html-viewer/engine";
+import {
+  createWorkspaceHtmlEngine,
+  type TranslateHtmlViewWriteError,
+} from "@univerjs/univer-workspace-html-viewer/engine";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverCollaborationEmbedPlugin } from "@univerjs-pro/collaboration-embed";
 import { buildViewerUrls } from "../viewer/proxy.ts";
@@ -9,11 +12,13 @@ export async function createAgentBindingEngine(
   unitId: string,
   bootstrap: ViewerBootstrap,
   signal: AbortSignal,
+  translateError: TranslateHtmlViewWriteError,
 ) {
   const source = await resolveHtmlViewSource(unitId, signal);
   return createWorkspaceHtmlEngine(
     {
       unitId,
+      translateError,
       canEdit: source.editorMode === "edit",
       user: bootstrap.user,
       license: bootstrap.license,

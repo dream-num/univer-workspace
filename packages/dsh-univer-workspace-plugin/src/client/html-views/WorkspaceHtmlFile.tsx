@@ -9,6 +9,8 @@ export function WorkspaceHtmlFile(props: {
   name: string;
   t: (key: UniverLocaleKey) => string;
 }) {
+  const translation = useRef(props.t);
+  translation.current = props.t;
   const anchor = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -30,8 +32,13 @@ export function WorkspaceHtmlFile(props: {
           anchor: anchor.current,
           source,
           name: props.name,
-          t: props.t,
-          loadEngine: (unitId, signal) => createAgentBindingEngine(unitId, bootstrap, signal),
+          t: (key) => translation.current(key),
+          loadEngine: (unitId, signal) =>
+            createAgentBindingEngine(unitId, bootstrap, signal, (code) =>
+              translation.current(
+                code === "signInRequired" ? "html.signInRequired" : "html.editPermissionRequired",
+              ),
+            ),
         });
       })
       .catch((reason: unknown) => {
@@ -42,7 +49,7 @@ export function WorkspaceHtmlFile(props: {
       abort.abort();
       release?.();
     };
-  }, [props.contentUrl, props.name, props.t]);
+  }, [props.contentUrl, props.name]);
   return (
     <div ref={anchor} style={{ width: "100%", height: "100%", minHeight: 0 }}>
       {error ? <p role="alert">{error}</p> : null}

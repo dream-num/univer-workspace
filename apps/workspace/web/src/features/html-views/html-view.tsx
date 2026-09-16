@@ -6,6 +6,7 @@ import {
   WorkspaceHtmlViewer,
   type WorkspaceHtmlViewerHandle,
 } from "@univerjs/univer-workspace-html-viewer";
+import { useI18n } from "../../shared/i18n";
 import runtime from "virtual:html-view-runtime";
 import { anonymousUser, sessionQueryOptions } from "../auth";
 import { createWorkspaceBindingEngine } from "./workspace-binding-engine";
@@ -20,6 +21,9 @@ export function HtmlView({
   source: string;
   allowedOrigins?: readonly string[];
 }) {
+  const { t } = useI18n();
+  const translation = useRef(t);
+  translation.current = t;
   const session = useQuery(sessionQueryOptions);
   const user = session.data?.authenticated
     ? session.data.user
@@ -32,7 +36,11 @@ export function HtmlView({
   const loadEngine = useCallback(
     (unitId: string, signal: AbortSignal) => {
       if (!user) throw new Error("Session is not ready.");
-      return createWorkspaceBindingEngine(unitId, user, signal);
+      return createWorkspaceBindingEngine(unitId, user, signal, (code) =>
+        translation.current(
+          code === "signInRequired" ? "htmlViewSignInRequired" : "htmlViewEditPermissionRequired",
+        ),
+      );
     },
     [user?.id, user?.displayName, user?.avatarUrl],
   );
@@ -61,7 +69,7 @@ export function HtmlView({
           ref={viewer}
           source={source}
           runtime={runtime}
-          title="HTML 绑定视图"
+          title={t("htmlViewTitle")}
           className="min-h-0 w-full flex-1 border-0"
           {...(allowedOrigins ? { allowedOrigins } : {})}
           loadEngine={loadEngine}

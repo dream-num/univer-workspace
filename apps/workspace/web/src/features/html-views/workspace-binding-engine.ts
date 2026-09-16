@@ -1,4 +1,7 @@
-import { createWorkspaceHtmlEngine } from "@univerjs/univer-workspace-html-viewer/engine";
+import {
+  createWorkspaceHtmlEngine,
+  type TranslateHtmlViewWriteError,
+} from "@univerjs/univer-workspace-html-viewer/engine";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { SnapshotService } from "@univerjs-pro/collaboration";
 import { createWorkspaceReferencedUnitProviderRegistration } from "@univerjs/univer-workspace-reference-provider";
@@ -10,6 +13,7 @@ export async function createWorkspaceBindingEngine(
   unitId: string,
   user: { id: string; displayName: string; avatarUrl?: string | null; anonymous?: boolean },
   signal: AbortSignal,
+  translateError: TranslateHtmlViewWriteError,
 ) {
   signal.throwIfAborted();
   const resolved = await api.GET("/api/unit-resources/{unitId}", {
@@ -29,6 +33,7 @@ export async function createWorkspaceBindingEngine(
   return createWorkspaceHtmlEngine(
     {
       unitId,
+      translateError,
       canEdit: source.editorMode === "edit",
       user,
       license: resolveUniverLicense(),

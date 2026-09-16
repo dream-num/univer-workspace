@@ -33,6 +33,7 @@ const options = {
   unitId: "unit",
   collaborationClientConfig: {},
 } as BindingEngineOptions;
+const translateError = (code: string) => `translated:${code}`;
 const cell = { sheetId: "sheet", row: 1, col: 0 };
 const rows = {
   sheetId: "sheet",
@@ -46,23 +47,41 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("HTML view Workspace write permissions", () => {
   it.each([false, true])("asks guests to sign in regardless of canEdit=%s", (canEdit) => {
-    const engine = new WorkspaceBindingEngine(options, canEdit, true);
-    expect(() => engine.setCellValue(cell, "Alice")).toThrow("当前为访客模式，请登录后再操作");
-    expect(() => engine.insertRowsWithValues(rows)).toThrow("当前为访客模式，请登录后再操作");
+    const engine = new WorkspaceBindingEngine(options, canEdit, true, translateError);
+    expect(() => engine.setCellValue(cell, "Alice")).toThrow("translated:signInRequired");
+    expect(() => engine.insertRowsWithValues(rows)).toThrow("translated:signInRequired");
     expect(writes.cell).not.toHaveBeenCalled();
     expect(writes.rows).not.toHaveBeenCalled();
   });
 
   it("rejects scalar writes and row insertion for a read-only source before SDK mutation", () => {
-    const engine = new WorkspaceBindingEngine(options, false);
-    expect(() => engine.setCellValue(cell, "Alice")).toThrow("你没有此表格的编辑权限，请联系所有者申请权限。");
-    expect(() => engine.insertRowsWithValues(rows)).toThrow("你没有此表格的编辑权限，请联系所有者申请权限。");
+    const engine = new WorkspaceBindingEngine(options, false, false, translateError);
+    expect(() => engine.setCellValue(cell, "Alice")).toThrow("translated:editPermissionRequired");
+    expect(() => engine.insertRowsWithValues(rows)).toThrow("translated:editPermissionRequired");
     expect(writes.cell).not.toHaveBeenCalled();
     expect(writes.rows).not.toHaveBeenCalled();
   });
 
+  it("uses the current language on every write without recreating the engine", () => {
+    let language = "en";
+    const engine = new WorkspaceBindingEngine(
+      options,
+      false,
+      false,
+      (code) => `${language}:${code}`,
+    );
+    expect(() => engine.setCellValue(cell, "Alice")).toThrow("en:editPermissionRequired");
+    language = "zh";
+    expect(() => engine.insertRowsWithValues(rows)).toThrow("zh:editPermissionRequired");
+    try {
+      engine.setCellValue(cell, "Alice");
+    } catch (error) {
+      expect(error).toMatchObject({ name: "HtmlViewWriteError", code: "editPermissionRequired" });
+    }
+  });
+
   it("passes permitted scalar writes and row insertion to the SDK", () => {
-    const engine = new WorkspaceBindingEngine(options, true);
+    const engine = new WorkspaceBindingEngine(options, true, false, translateError);
     engine.setCellValue(cell, "Alice");
     engine.insertRowsWithValues(rows);
     expect(writes.cell).toHaveBeenCalledExactlyOnceWith(cell, "Alice");
@@ -70,7 +89,7 @@ describe("HTML view Workspace write permissions", () => {
   });
 
   it("preserves an SDK insertion rejection", () => {
-    const engine = new WorkspaceBindingEngine(options, true);
+    const engine = new WorkspaceBindingEngine(options, true, false, translateError);
     writes.rows.mockImplementationOnce(() => {
       throw new Error("Insertion rejected");
     });
@@ -82,6 +101,7 @@ describe("HTML source runtime ownership", () => {
   const config = {
     unitId: "unit",
     canEdit: true,
+    translateError,
     user: { id: "user", displayName: "User" },
     license: "",
     collaborationClientConfig: {} as BindingEngineOptions["collaborationClientConfig"],

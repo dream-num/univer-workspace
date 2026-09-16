@@ -26,11 +26,25 @@ import { UniverCollaborationClientPlugin } from "@univerjs-pro/collaboration-cli
 import { BrowserCollaborationSocketService } from "@univerjs-pro/collaboration-client-ui";
 import { UniverLicensePlugin } from "@univerjs-pro/license";
 
+export type HtmlViewWriteErrorCode = "signInRequired" | "editPermissionRequired";
+export type TranslateHtmlViewWriteError = (code: HtmlViewWriteErrorCode) => string;
+
+export class HtmlViewWriteError extends Error {
+  constructor(
+    readonly code: HtmlViewWriteErrorCode,
+    translate: TranslateHtmlViewWriteError,
+  ) {
+    super(translate(code));
+    this.name = "HtmlViewWriteError";
+  }
+}
+
 export class WorkspaceBindingEngine extends BindingEngine {
   constructor(
     options: BindingEngineOptions,
     private readonly canEdit: boolean,
-    private readonly anonymous = false,
+    private readonly anonymous: boolean,
+    private readonly translateError: TranslateHtmlViewWriteError,
   ) {
     super(options);
   }
@@ -48,14 +62,16 @@ export class WorkspaceBindingEngine extends BindingEngine {
   private assertCanWrite(): void {
     // Authentication takes precedence over resource permissions for every write.
     // Reject before a Facade write can silently do nothing.
-    if (this.anonymous) throw new Error("当前为访客模式，请登录后再操作");
-    if (!this.canEdit) throw new Error("你没有此表格的编辑权限，请联系所有者申请权限。");
+    if (this.anonymous) throw new HtmlViewWriteError("signInRequired", this.translateError);
+    if (!this.canEdit) throw new HtmlViewWriteError("editPermissionRequired", this.translateError);
   }
 }
 
 export interface WorkspaceHtmlEngineOptions {
   unitId: string;
   canEdit: boolean;
+  /** Translate at write time, before SDK serialization sends the message into the iframe. */
+  translateError: TranslateHtmlViewWriteError;
   user: { id: string; displayName: string; avatarUrl?: string | null; anonymous?: boolean };
   license: string;
   collaborationClientConfig: Omit<
@@ -126,7 +142,8 @@ export async function createWorkspaceHtmlEngine(
       },
     },
     options.canEdit,
-    options.user.anonymous,
+    options.user.anonymous ?? false,
+    options.translateError,
   );
   let disposed = false;
   const dispose = () => {
@@ -139,7 +156,8 @@ export async function createWorkspaceHtmlEngine(
   try {
     await engine.load();
     signal.throwIfAborted();
-    if (options.user.anonymous || !options.canEdit) univerAPI.getWorkbook(unitId)!.setEditable(false);
+    if (options.user.anonymous || !options.canEdit)
+      univerAPI.getWorkbook(unitId)!.setEditable(false);
     return engine;
   } catch (error) {
     dispose();
