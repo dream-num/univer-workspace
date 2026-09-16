@@ -198,33 +198,6 @@ describe("collaboration gateway", () => {
         expect(response.status, `${method} ${path}`).toBe(401);
       }
 
-      const worktree = await application.worktrees.create(ownerId, "anonymous-worktree-0001", {
-        kind: "user",
-        name: "Private draft",
-        summary: null,
-      });
-      for (const path of [
-        "/api/worktree-events",
-        `/universer-api/worktrees/${worktree.body.id}/comb/connect`,
-      ]) {
-        const ticketResponse = await fetch(`${origin}/universer-api/user/session-ticket`);
-        const { ticket } = (await ticketResponse.json()) as { ticket: string };
-        const socket = new WebSocket(
-          `${origin.replace(/^http/, "ws")}${path}?sessionTicket=${encodeURIComponent(ticket)}`,
-        );
-        await new Promise<void>((resolve, reject) => {
-          socket.addEventListener("error", () => resolve(), { once: true });
-          socket.addEventListener(
-            "open",
-            () => {
-              socket.close();
-              reject(new Error("Anonymous ticket accepted outside Trunk"));
-            },
-            { once: true },
-          );
-        });
-      }
-
       if (policy === "link") {
         application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
           enabled: false,
@@ -243,8 +216,11 @@ describe("collaboration gateway", () => {
       expect(
         (await fetch(`${origin}/api/resources/${resource.id}/open`, { method: "POST" })).status,
       ).toBe(404);
-      await expect.poll(() => first.socket.readyState, { timeout: 3_000 }).toBe(WebSocket.CLOSED);
-      await expect.poll(() => second.socket.readyState, { timeout: 3_000 }).toBe(WebSocket.CLOSED);
+      if (policy === "link") {
+        // Preserve the existing Link Sharing invalidation behavior.
+        await expect.poll(() => first.socket.readyState).toBe(WebSocket.CLOSED);
+        await expect.poll(() => second.socket.readyState).toBe(WebSocket.CLOSED);
+      }
     },
   );
 

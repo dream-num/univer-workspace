@@ -44,7 +44,6 @@ export function createNodesModule(options: {
   readonly repository: NodesRepository;
   readonly access: AccessResolver;
   readonly now?: () => number;
-  readonly onAccessChanged?: () => void;
 }): NodesModule {
   const now = options.now ?? Date.now;
 
@@ -182,12 +181,6 @@ export function createNodesModule(options: {
             : patch.parentNodeId,
         updatedAt: now(),
       });
-      if (
-        patch.parentNodeId !== undefined &&
-        patch.parentNodeId !== source.parentNodeId
-      ) {
-        options.onAccessChanged?.();
-      }
       const updated = options.access.resolveNode(userId, nodeId);
       if (!updated) throw new Error("Updated Node is not discoverable.");
       return nodeSummary(updated);

@@ -17,7 +17,6 @@ export function createTrashModule(options: {
   readonly repository: TrashRepository;
   readonly access: AccessResolver;
   readonly now?: () => number;
-  readonly onAccessChanged?: () => void;
 }): TrashModule {
   const now = options.now ?? Date.now;
 
@@ -34,7 +33,6 @@ export function createTrashModule(options: {
         createdBy: userId,
         createdAt: now(),
       });
-      options.onAccessChanged?.();
       const batch = options.repository.findBatch(batchId);
       if (!batch) throw new Error("Created Trash Batch is missing");
       return batchView(batch, options.repository);
@@ -63,7 +61,6 @@ export function createTrashModule(options: {
         createdBy: userId,
         createdAt: now(),
       });
-      options.onAccessChanged?.();
     },
 
     list(userId, spaceId, page) {

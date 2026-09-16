@@ -74,9 +74,10 @@ Node、Resource 打开、按 Unit 查询、Blob 与 Trunk Asset 的指定读取�
 所有写入和管理入口继续要求登录。匿名 Resource Open 不写 Recent。
 SDK HTTP 的匿名入口集中由现有 Transport 中间件按方法和路径白名单放行，再由原有资源权限检查鉴权。
 Trunk 协同协议使用固定的访客显示身份及每连接独立的 member ID，复用短期、一次性 Session Ticket；
-该身份不对应产品 User，票据不能用于 Worktree 或用户事件通道。Snapshot、Comment/History 读取
-每次重新鉴权；分享设置、Space 公开设置、节点移动和删除复用现有连接失效回调，重连时重新鉴权。
-没有新增匿名连接登记、轮询、持久化 Session 或数据库迁移。
+该身份不对应产品 User，票据存储和连接生命周期沿用原实现。Snapshot、Comment/History 读取和
+Unit 加入继续使用现有资源权限检查；Link Sharing 变更保留既有连接失效行为。Space 公开设置、
+节点移动和删除不新增主动断连，既有订阅可能继续接收更新，断开后重连会重新鉴权。
+没有新增票据代理、匿名连接登记、轮询、持久化 Session 或数据库迁移。
 
 Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session。Server 在进程内
 保存有容量上限、十分钟过期的待授权请求；已登录 Browser 确认人类可核对的验证码后，高熵

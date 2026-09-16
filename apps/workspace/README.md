@@ -335,6 +335,7 @@ HTML files and their source Sheets are authorized independently, as for signed-i
 These rules apply to existing enabled settings after upgrade. No anonymous accounts,
 login sessions, Recent entries, schema changes or database migration are introduced.
 The public link uses the existing Node URL, including immersive-view parameters.
-Sharing changes, Space public-read changes, Node moves and deletion reuse the
-existing realtime connection invalidation. Reconnecting readers are authorized again.
-Already-delivered content cannot be recalled.
+Each read request and Unit join checks current permissions. Link Sharing changes
+retain the existing realtime connection invalidation. Space public-read changes,
+Node moves and deletion do not add active-connection eviction; existing subscriptions
+may continue receiving updates until disconnected. Reconnecting readers are authorized again.

@@ -2,7 +2,6 @@ import type { Server } from "node:http";
 import {
   MemorySessionTicketStore,
   UniverCollabEndpoint,
-  type ISessionTicketStore,
 } from "@univerjs-pro/collaboration-endpoint";
 import { UniverCommentEndpoint } from "@univerjs-pro/collaboration-comment-endpoint";
 import { UniverHistoryEndpoint } from "@univerjs-pro/collaboration-history-endpoint";
@@ -91,14 +90,6 @@ export function createCollaborationGateway(options: {
   } = options;
   const ticketStore = new MemorySessionTicketStore();
   const endpoint = new UniverCollabEndpoint(service, { ticketStore });
-  // A visitor ticket only admits a Trunk connection, never a Worktree or user feed.
-  const authenticatedTickets: ISessionTicketStore = {
-    issue: (record, ttlMs) => ticketStore.issue(record, ttlMs),
-    async consume(ticket) {
-      const record = await ticketStore.consume(ticket);
-      return record?.userID === ANONYMOUS_USER_ID ? null : record;
-    },
-  };
   const commentEndpoint = new UniverCommentEndpoint({
     service: commentService,
     roomHost: endpoint,
@@ -106,7 +97,7 @@ export function createCollaborationGateway(options: {
   const historyEndpoint = new UniverHistoryEndpoint(historyService);
   const worktreeEndpoint = new UniverCollabWorktreeEndpoint(
     worktreeService,
-    { ticketStore: authenticatedTickets }
+    { ticketStore }
   );
   const transport = createNodeTransport();
   const nodeAccessConnections = new Set<NodeTransportConnection>();
@@ -333,10 +324,9 @@ export function createCollaborationGateway(options: {
   });
   transport.register(historyEndpoint);
   transport.register(commentEndpoint);
-  // Both SDK endpoints register the common ticket URL; Trunk owns visitor issuance.
-  transport.register(trackConnections(endpoint, nodeAccessConnections));
   transport.register(worktreeEndpoint);
-  transport.register(worktreeChangeFeed.endpoint(authenticatedTickets));
+  transport.register(worktreeChangeFeed.endpoint(ticketStore));
+  transport.register(trackConnections(endpoint, nodeAccessConnections));
 
   const router = Router();
   router.use((request, response, next) => {

@@ -192,16 +192,13 @@ export function createWorkspaceApplication(
     collaboration?.unitSnapshotStore ??
     unavailableUnitSnapshotStore();
   const access = createAccessResolver(new AccessRepository(database));
-  let invalidateRealtimeNodeAccess: () => void = () => undefined;
   const spaces = createSpacesModule({
     repository: new SpacesRepository(database),
     access,
-    onAccessChanged: () => invalidateRealtimeNodeAccess(),
   });
   const nodes = createNodesModule({
     repository: new NodesRepository(database),
     access,
-    onAccessChanged: () => invalidateRealtimeNodeAccess(),
   });
   const resources = createResourcesModule({
     repository: resourcesRepository,
@@ -225,6 +222,7 @@ export function createWorkspaceApplication(
     repository: new ViewsRepository(database),
     access,
   });
+  let invalidateRealtimeNodeAccess: () => void = () => undefined;
   const permissions = createPermissionsModule({
     repository: new PermissionsRepository(database),
     access,
@@ -233,7 +231,6 @@ export function createWorkspaceApplication(
   const trash = createTrashModule({
     repository: new TrashRepository(database),
     access,
-    onAccessChanged: () => invalidateRealtimeNodeAccess(),
   });
   const univerAssetsRepository = new UniverAssetsRepository(database);
   const worktreeChangeFeed = createWorktreeChangeFeed();
