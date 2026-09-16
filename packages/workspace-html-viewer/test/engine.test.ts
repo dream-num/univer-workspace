@@ -55,8 +55,8 @@ describe("HTML view Workspace write permissions", () => {
 
   it("rejects scalar writes and row insertion for a read-only source before SDK mutation", () => {
     const engine = new WorkspaceBindingEngine(options, false);
-    expect(() => engine.setCellValue(cell, "Alice")).toThrow("来源 Sheet 为只读");
-    expect(() => engine.insertRowsWithValues(rows)).toThrow("来源 Sheet 为只读");
+    expect(() => engine.setCellValue(cell, "Alice")).toThrow("你没有此表格的编辑权限，请联系所有者申请权限。");
+    expect(() => engine.insertRowsWithValues(rows)).toThrow("你没有此表格的编辑权限，请联系所有者申请权限。");
     expect(writes.cell).not.toHaveBeenCalled();
     expect(writes.rows).not.toHaveBeenCalled();
   });

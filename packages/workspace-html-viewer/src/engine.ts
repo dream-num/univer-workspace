@@ -49,7 +49,7 @@ export class WorkspaceBindingEngine extends BindingEngine {
     // Authentication takes precedence over resource permissions for every write.
     // Reject before a Facade write can silently do nothing.
     if (this.anonymous) throw new Error("当前为访客模式，请登录后再操作");
-    if (!this.canEdit) throw new Error("来源 Sheet 为只读，无法写入。");
+    if (!this.canEdit) throw new Error("你没有此表格的编辑权限，请联系所有者申请权限。");
   }
 }
 
