@@ -143,6 +143,10 @@ describe("collaboration gateway", () => {
       ).toBe(1);
       expect((await fetch(`${origin}/api/session`)).headers.get("set-cookie")).toBeNull();
       expect((await fetch(snapshotUrl)).status).toBe(200);
+      expect((await fetch(`${snapshotUrl}?readOnly=true`)).status).toBe(200);
+      expect(
+        (await fetch(`${origin}/universer-api/comment/unit/${resource.unitId}/list`)).status,
+      ).toBe(200);
 
       const authz = await fetch(`${origin}/universer-api/authz/-/object/-/batch_allowed`, {
         method: "POST",
@@ -186,6 +190,9 @@ describe("collaboration gateway", () => {
         ["/universer-api/snapshot/-/units", "DELETE"],
         ["/universer-api/snapshot/-/units/recover", "POST"],
         ["/universer-api/worktrees/unknown", "GET"],
+        ["/universer-api/snapshot/unknown", "GET"],
+        [`/universer-api/history/${resource.unitId}/list/unknown`, "GET"],
+        ["/universer-api/user/session-ticket", "POST"],
       ]) {
         const response = await fetch(`${origin}${path}`, { method });
         expect(response.status, `${method} ${path}`).toBe(401);

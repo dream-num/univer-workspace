@@ -17,7 +17,6 @@ import {
 } from "@univerjs-pro/collaboration-service";
 import {
   createNodeTransport,
-  type NodeHttpHandler,
   type NodeHttpTransportContext,
   type NodeTransportConnection,
   type NodeTransportEndpoint,
@@ -55,6 +54,13 @@ import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
 const MILLISECONDS_PER_SECOND = 1_000;
+// Transport middleware runs before route matching. Allow only these SDK read paths.
+const ANONYMOUS_READ_PATHS = [
+  /^\/universer-api\/user\/session-ticket$/,
+  /^\/universer-api\/snapshot\/(?:block\/)?[^/]+\/unit\/[^/]+\/(?:rev\/[^/]+|block\/[^/]+|fetchmissing)$/,
+  /^\/universer-api\/comment\/unit\/[^/]+\/list$/,
+  /^\/universer-api\/history\/[^/]+\/(?:list|creators|cs)$/,
+];
 
 export interface CollaborationGateway {
   readonly router: Router;
@@ -306,6 +312,16 @@ export function createCollaborationGateway(options: {
   transport.use(createCollaborationMetricsMiddleware());
   transport.use(async (context, next) => {
     const session = identity.getSession(cookieHeader(context));
+    if (!session.authenticated) {
+      const { pathname } = new URL(context.incomingMessage.url ?? "/", "http://localhost");
+      if (
+        context.incomingMessage.method !== "GET" ||
+        !ANONYMOUS_READ_PATHS.some((path) => path.test(pathname))
+      ) {
+        unauthenticated(context);
+        return;
+      }
+    }
     context.userID = session.authenticated
       ? session.user.id
       : ANONYMOUS_USER_ID;
@@ -315,13 +331,11 @@ export function createCollaborationGateway(options: {
     context.response.setHeader("Cache-Control", "private, no-store");
     await next();
   });
-  transport.register(authorizeAnonymousReads(historyEndpoint, true));
-  transport.register(authorizeAnonymousReads(commentEndpoint, true));
+  transport.register(historyEndpoint);
+  transport.register(commentEndpoint);
   // Both SDK endpoints register the common ticket URL; Trunk owns visitor issuance.
-  transport.register(
-    authorizeAnonymousReads(trackConnections(endpoint, nodeAccessConnections), true)
-  );
-  transport.register(authorizeAnonymousReads(worktreeEndpoint, false));
+  transport.register(trackConnections(endpoint, nodeAccessConnections));
+  transport.register(worktreeEndpoint);
   transport.register(worktreeChangeFeed.endpoint(authenticatedTickets));
 
   const router = Router();
@@ -710,31 +724,4 @@ function unauthenticated(context: NodeHttpTransportContext): void {
       },
     })
   );
-}
-
-/** Apply policy to the SDK's registered routes, without duplicating its URL contract. */
-function authorizeAnonymousReads(
-  endpoint: NodeTransportEndpoint,
-  allowReads: boolean,
-): NodeTransportEndpoint {
-  return {
-    register(router) {
-      const authenticated =
-        (handler: NodeHttpHandler) => async (context: NodeHttpTransportContext) => {
-          if (context.userID === ANONYMOUS_USER_ID) {
-            unauthenticated(context);
-            return;
-          }
-          await handler(context);
-        };
-      endpoint.register({
-        get: (path, handler) =>
-          router.get(path, allowReads ? handler : authenticated(handler)),
-        post: (path, handler) => router.post(path, authenticated(handler)),
-        delete: (path, handler) => router.delete(path, authenticated(handler)),
-        upgrade: (path, handler) => router.upgrade(path, handler),
-      });
-    },
-    dispose: () => endpoint.dispose?.(),
-  };
 }
