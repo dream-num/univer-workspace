@@ -84,11 +84,12 @@ export function createViewsModule(options: {
       }> = [];
       while (visible.length < limit + 1) {
         const rows = options.repository.listOwned(userId, scanCursor, 100);
+        const resources = options.access.resolveOwnedResources(
+          userId,
+          rows.map((row) => row.resource_id)
+        );
         for (const row of rows) {
-          const resource = options.access.resolveResource(
-            userId,
-            row.resource_id
-          );
+          const resource = resources.get(row.resource_id);
           if (resource) visible.push({ row, resource });
           scanCursor = ownedRowCursor(row);
           if (visible.length === limit + 1) break;

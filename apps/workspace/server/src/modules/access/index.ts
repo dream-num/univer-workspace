@@ -13,6 +13,7 @@ export type {
   NodeAccess,
   NodeCapabilities,
   ResourceAccess,
+  ResourceContentAccess,
   ResourceKind,
   ResourceCapabilities,
   SpaceAccess,

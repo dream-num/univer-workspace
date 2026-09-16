@@ -82,3 +82,13 @@ export interface BlobResourceAccess extends ResourceAccessBase {
 }
 
 export type ResourceAccess = UniverResourceAccess | BlobResourceAccess;
+
+// Content authorization deliberately carries no directory/navigation metadata.
+export interface ResourceContentAccess {
+  readonly id: string;
+  readonly kind: ResourceKind;
+  readonly role: AccessRole;
+  readonly unitId: string | null;
+  readonly unitType: UnitType | null;
+  readonly capabilities: ResourceCapabilities;
+}
