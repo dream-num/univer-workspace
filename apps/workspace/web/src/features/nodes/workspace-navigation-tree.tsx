@@ -8,7 +8,7 @@ import {
   type WorkspaceFileUser,
 } from "@univerjs/univer-workspace-file-browser";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
@@ -17,6 +17,7 @@ import { createIdempotencyKey } from "../../shared/idempotency-key";
 import { useI18n } from "../../shared/i18n";
 import { spacesQueryKey } from "../spaces";
 import { trashQueryKey } from "../trash";
+import { waitForCreatedResource } from "./wait-for-created-resource";
 import { createDocumentInitialData } from "./create-document-initial-data";
 import { nodeChildrenQueryOptions, spaceNodesQueryOptions } from "./nodes.queries";
 
@@ -31,8 +32,9 @@ export function WorkspaceNavigationTree(props: {
   readonly selectedNodePath?: readonly string[] | undefined;
   readonly storageScope: string;
 }) {
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const spaces = useMemo(
     () =>
@@ -76,6 +78,7 @@ export function WorkspaceNavigationTree(props: {
         return toWorkspaceFileSpace(data);
       },
       async createNode(input) {
+        let createdNodeId: string | undefined;
         if (input.kind === "folder") {
           const { error } = await api.POST("/api/nodes", {
             body: {
@@ -94,7 +97,7 @@ export function WorkspaceNavigationTree(props: {
                   title: input.name,
                 })
               : undefined;
-          const { error } = await api.POST("/api/resources", {
+          const { data, error } = await api.POST("/api/resources", {
             params: { header: { "Idempotency-Key": createIdempotencyKey() } },
             body: {
               kind: "univer",
@@ -106,8 +109,15 @@ export function WorkspaceNavigationTree(props: {
             },
           });
           if (error) throw apiError(error);
+          createdNodeId = await waitForCreatedResource(data, {
+            failed: t("resourceCreationFailed"),
+            continuing: t("resourceCreationContinuing"),
+          });
         }
         await refreshProductLists();
+        if (createdNodeId) {
+          await navigate({ to: "/nodes/$nodeId", params: { nodeId: createdNodeId } });
+        }
       },
       async uploadFile(input) {
         if (IMPORTABLE_DOCUMENT_EXTENSION.test(input.file.name)) {
@@ -138,6 +148,12 @@ export function WorkspaceNavigationTree(props: {
           params: { path: { nodeId: node.id } },
         });
         if (error) throw apiError(error);
+        if (router.matchRoute(
+          { to: "/nodes/$nodeId", params: { nodeId: node.id } },
+          { includeSearch: false },
+        )) {
+          await navigate({ to: "/home", replace: true });
+        }
         await refreshProductLists(node.spaceId);
       },
       nodeUrl(node) {
@@ -187,7 +203,7 @@ export function WorkspaceNavigationTree(props: {
         },
       },
     }),
-    [language, queryClient, refreshProductLists],
+    [language, navigate, queryClient, refreshProductLists, router, t],
   );
 
   return (

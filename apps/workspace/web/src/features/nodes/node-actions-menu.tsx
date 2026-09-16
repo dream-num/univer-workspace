@@ -1,3 +1,4 @@
+import { useRouter } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ellipsis, ExternalLink, Link2, Pencil, Share2, Trash2 } from "lucide-react";
 import { useState, type ReactElement, type ReactNode } from "react";
@@ -40,6 +41,7 @@ export function NodeActionsMenu(props: {
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [shareOpen, setShareOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [editName, setEditName] = useState(props.node.name);
@@ -81,6 +83,12 @@ export function NodeActionsMenu(props: {
       if (error) throw apiError(error);
     },
     onSuccess: async () => {
+      if (router.matchRoute(
+        { to: "/nodes/$nodeId", params: { nodeId: props.node.id } },
+        { includeSearch: false },
+      )) {
+        await router.navigate({ to: "/home", replace: true });
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["nodes"] }),
         queryClient.invalidateQueries({ queryKey: ["recent-resources"] }),
