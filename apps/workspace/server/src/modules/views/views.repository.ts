@@ -53,6 +53,12 @@ export class ViewsRepository {
         `SELECT resource_id, last_opened_at
          FROM recent_resources
          WHERE user_id = ?
+           AND EXISTS (
+             SELECT 1 FROM resources AS resource
+             JOIN nodes AS node ON node.id = resource.node_id
+             WHERE resource.id = recent_resources.resource_id
+               AND node.trash_batch_id IS NULL
+           )
            ${cursorClause}
          ORDER BY last_opened_at DESC, resource_id
          LIMIT ?`

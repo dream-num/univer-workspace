@@ -38,8 +38,15 @@ describe("Worktrees", () => {
     await application.worktrees.addUnit(editor.id, created.body.id, "summary-permissions-add", {
       source: "trunk", resourceId: resource.id,
     });
-    const resolve = vi.spyOn(application.access, "resolveResource");
+    const another = await application.worktrees.create(editor.id, "summary-permissions-second", {
+      kind: "team", teamSpaceId: team.id, visibility: "private", name: "More changes", summary: null,
+    });
+    await application.worktrees.addUnit(editor.id, another.body.id, "summary-permissions-second-add", {
+      source: "trunk", resourceId: resource.id,
+    });
+    const resolve = vi.spyOn(application.access, "resolveResourceContent");
     const first = await application.worktrees.list(editor.id, {});
+    expect(first.items).toHaveLength(2);
     expect(resolve).toHaveBeenCalledExactlyOnceWith(editor.id, resource.id);
     expect(first.items[0]).toMatchObject({ unitCount: 1, capabilities: { review: true, editDraft: true } });
     expect((await application.worktrees.list(owner.id, {})).items[0])

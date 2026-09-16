@@ -5,6 +5,7 @@ import type { TrashModule } from "../trash/index.js";
 import type {
   AccessResolver,
   ResourceAccess,
+  ResourceContentAccess,
   UniverResourceAccess,
   UnitType,
 } from "../access/index.js";
@@ -175,18 +176,25 @@ export function createWorktreesModule(options: {
         readonly row: WorktreeRow;
         readonly summary: WorktreeSummary;
       }> = [];
+      const loaded = [];
       for (const row of rows.slice(0, limit)) {
         if (!isDiscoverable(userId, row)) continue;
         const data = await backendCall(() =>
           options.backend.getWorktree(row.id, userId)
         );
+        loaded.push({ row, data });
+      }
+      // Share current permissions only across the following synchronous pass.
+      // Never retain authorization results over an await or between requests.
+      const pageAccess = cacheResourceContent(options.access, userId);
+      for (const { row, data } of loaded) {
         const unitRows = options.repository.units(row.id);
         const access = worktreeCapabilities(
           userId,
           row,
           data.status,
           unitRows,
-          options.access,
+          pageAccess,
           data.units,
         );
         visible.push({
@@ -812,17 +820,7 @@ function worktreeCapabilities(
   const removed = new Set(states.filter((unit) => unit.removed).map((unit) => unit.unitID));
   // Read and edit checks run synchronously for one actor. Reuse their resource
   // resolution only within this calculation, never across awaits or requests.
-  const resources = new Map<string, ResourceAccess | null>();
-  const capabilityAccess: AccessResolver = {
-    ...access,
-    resolveResource(actorId, resourceId) {
-      if (actorId !== userId) return access.resolveResource(actorId, resourceId);
-      if (!resources.has(resourceId)) {
-        resources.set(resourceId, access.resolveResource(actorId, resourceId));
-      }
-      return resources.get(resourceId)!;
-    },
-  };
+  const capabilityAccess = cacheResourceContent(access, userId);
   const unitRead = units.every(
     (unit) => removed.has(unit.unit_id) || canReadUnit(userId, row, unit, capabilityAccess),
   );
@@ -878,7 +876,7 @@ function canReadUnit(
 ): boolean {
   if (unit.source === "trunk" || unit.activated_at !== null) {
     return Boolean(
-      access.resolveResource(userId, unit.resource_id)?.capabilities
+      access.resolveResourceContent(userId, unit.resource_id)?.capabilities
         .openContent
     );
   }
@@ -898,7 +896,7 @@ function canEditUnit(
 ): boolean {
   if (unit.source === "trunk" || unit.activated_at !== null) {
     return Boolean(
-      access.resolveResource(userId, unit.resource_id)?.capabilities
+      access.resolveResourceContent(userId, unit.resource_id)?.capabilities
         .editContent
     );
   }
@@ -1752,4 +1750,18 @@ function idempotencyConflict(): ApplicationError {
   return conflict(
     "Idempotency-Key is already associated with another request."
   );
+}
+
+function cacheResourceContent(access: AccessResolver, userId: string): AccessResolver {
+  const resources = new Map<string, ResourceContentAccess | null>();
+  return {
+    ...access,
+    resolveResourceContent(actorId, resourceId) {
+      if (actorId !== userId) return access.resolveResourceContent(actorId, resourceId);
+      if (!resources.has(resourceId)) {
+        resources.set(resourceId, access.resolveResourceContent(actorId, resourceId));
+      }
+      return resources.get(resourceId)!;
+    },
+  };
 }

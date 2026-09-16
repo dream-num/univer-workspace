@@ -36,7 +36,7 @@ import type {
   WorktreeMiddlewareNext,
 } from "@univerjs-pro/collaboration-worktree-service";
 import { json, Router, type RequestHandler } from "express";
-import type { AccessResolver, ResourceAccess, UnitType } from "../../modules/access/index.js";
+import type { AccessResolver, ResourceContentAccess, UnitType } from "../../modules/access/index.js";
 import { ANONYMOUS_USER_ID, type IdentityModule } from "../../modules/identity/index.js";
 import type { WorktreesModule } from "../../modules/worktrees/index.js";
 import {
@@ -378,7 +378,7 @@ export function createCollaborationGateway(options: {
         error: OK_ERROR,
         actions: allowedActions(
           request.body?.actions,
-          access.resolveUnit(userId, unitId)
+          access.resolveUnitContent(userId, unitId)
         ),
       });
     }
@@ -562,7 +562,7 @@ function allowedObjectActions(
   };
   const unitId =
     typeof candidate.unitID === "string" ? candidate.unitID : "";
-  const resource = access.resolveUnit(userId, unitId);
+  const resource = access.resolveUnitContent(userId, unitId);
   return {
     unitID: unitId,
     objectID:
@@ -573,7 +573,7 @@ function allowedObjectActions(
 
 function allowedActions(
   value: unknown,
-  resource: ResourceAccess | null
+  resource: ResourceContentAccess | null
 ): Array<{ readonly action: unknown; readonly allowed: boolean }> {
   return Array.isArray(value)
     ? value.map((action) => ({
@@ -584,12 +584,12 @@ function allowedActions(
 }
 
 function isActionAllowed(
-  resource: ResourceAccess | null,
+  resource: ResourceContentAccess | null,
   action: unknown
 ): boolean {
   if (!resource || typeof action !== "number") return false;
   if (action === UnitAction.Share) return false;
-  if (resource.node.role === "owner" || resource.node.role === "admin") return true;
+  if (resource.role === "owner" || resource.role === "admin") return true;
   if (resource.capabilities.editContent) {
     return ![
       UnitAction.ManageCollaborator,
@@ -618,8 +618,8 @@ function requireUnitAccess(
   access: AccessResolver,
   userId: string,
   unitId: string
-): ResourceAccess {
-  const resource = access.resolveUnit(userId, unitId);
+): ResourceContentAccess {
+  const resource = access.resolveUnitContent(userId, unitId);
   if (!resource?.capabilities.openContent) {
     throw new CollabError("PERMISSION_DENIED", "Cannot read this unit.");
   }
@@ -630,7 +630,7 @@ function requireUnitEdit(
   access: AccessResolver,
   userId: string,
   unitId: string
-): ResourceAccess {
+): ResourceContentAccess {
   const resource = requireUnitAccess(access, userId, unitId);
   if (!resource.capabilities.editContent) {
     throw new CollabError("PERMISSION_DENIED", "Unit is read-only.");
@@ -660,7 +660,7 @@ function requireCommentAccess(
   userId: string,
   unitId: string,
   write: boolean
-): ResourceAccess {
+): ResourceContentAccess {
   const resource = write
     ? requireUnitEdit(access, userId, unitId)
     : requireUnitAccess(access, userId, unitId);
@@ -685,8 +685,8 @@ function authorizeCommentDelete(
   );
   if (
     context.target.authorUserID !== context.userID &&
-    resource.node.role !== "owner" &&
-    resource.node.role !== "admin"
+    resource.role !== "owner" &&
+    resource.role !== "admin"
   ) {
     throw new CollabError(
       "PERMISSION_DENIED",

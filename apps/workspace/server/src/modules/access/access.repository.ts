@@ -57,10 +57,23 @@ export interface ResourceMappingRow {
   readonly availability: BlobAvailability | null;
 }
 
+export type NodeAuthorizationRow = Pick<
+  ResolvedNodeRow,
+  | "owner_user_id"
+  | "space_type"
+  | "public_read"
+  | "member_role"
+  | "grant_role"
+  | "link_sharing_role"
+>;
+
+export type OwnedResourceRow = ResolvedNodeRow & ResourceMappingRow;
+
 export class AccessRepository {
   // Reuse SQL compilation, not authorization results. Every execution binds
   // the current actor and reads current data on this repository's connection.
   private _resolveNodeStatement: StatementSync | undefined;
+  private _resolveAuthorizationStatement: StatementSync | undefined;
 
   constructor(private readonly _database: WorkspaceDatabase) {}
 
@@ -83,7 +96,7 @@ export class AccessRepository {
              NULL AS availability
            FROM univer_resources AS univer
            JOIN resources AS resource ON resource.id = univer.resource_id
-           WHERE univer.unit_id = ?`
+           WHERE univer.unit_id = ?`,
         )
         .get(unitId) as ResourceMappingRow | undefined) ?? null
     );
@@ -111,7 +124,7 @@ export class AccessRepository {
              ON univer.resource_id = resource.id
            LEFT JOIN blob_resources AS blob
              ON blob.resource_id = resource.id
-           WHERE resource.id = ?`
+           WHERE resource.id = ?`,
         )
         .get(resourceId) as ResourceMappingRow | undefined) ?? null
     );
@@ -137,7 +150,7 @@ export class AccessRepository {
                spaces.owner_user_id = ?
                OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL)
                OR spaces.public_read = 1
-             )`
+             )`,
         )
         .get(userId, spaceId, userId) as SpaceAccessRow | undefined) ?? null
     );
@@ -145,20 +158,43 @@ export class AccessRepository {
 
   resolveNode(userId: string, nodeId: string): ResolvedNodeRow | null {
     return (
-      ((this._resolveNodeStatement ??= this._database.connection
-        .prepare(
-          `WITH RECURSIVE ancestry(id, parent_id, depth) AS (
-             SELECT id, parent_id, 0
-             FROM nodes
-             WHERE id = ? AND trash_batch_id IS NULL
-             UNION ALL
-             SELECT parent.id, parent.parent_id, ancestry.depth + 1
-             FROM nodes AS parent
-             JOIN ancestry ON ancestry.parent_id = parent.id
-             WHERE parent.trash_batch_id IS NULL
-           )
-           SELECT
-             node.id,
+      ((this._resolveNodeStatement ??= this._database.connection.prepare(
+        nodeAccessQuery(false),
+      )).get({ nodeId, userId }) as ResolvedNodeRow | undefined) ?? null
+    );
+  }
+
+  resolveNodeAuthorization(userId: string, nodeId: string): NodeAuthorizationRow | null {
+    return (
+      ((this._resolveAuthorizationStatement ??= this._database.connection.prepare(
+        nodeAccessQuery(true),
+      )).get({ nodeId, userId }) as NodeAuthorizationRow | undefined) ?? null
+    );
+  }
+
+  resolveOwnedResources(userId: string, resourceIds: readonly string[]): OwnedResourceRow[] {
+    if (resourceIds.length === 0) return [];
+    return this._database.connection
+      .prepare(`
+      SELECT ${nodeDisplayColumns()}
+        space.type AS space_type, space.name AS space_name,
+        space.owner_user_id, space.public_read,
+        NULL AS member_role, NULL AS grant_role,
+        NULL AS grant_navigation_root_id, NULL AS link_sharing_role,
+        NULL AS navigation_root_id
+      FROM nodes AS node
+      JOIN spaces AS space ON space.id = node.space_id
+      ${resourceJoins()}
+      WHERE resource.id IN (${resourceIds.map(() => "?").join(", ")})
+        AND space.owner_user_id = ?
+        AND node.trash_batch_id IS NULL
+    `)
+      .all(...resourceIds, userId) as unknown as OwnedResourceRow[];
+  }
+}
+
+function nodeDisplayColumns(): string {
+  return `             node.id,
              node.space_id,
              node.parent_id,
              node.name,
@@ -171,12 +207,48 @@ export class AccessRepository {
              blob.availability AS blob_availability,
              EXISTS (
                SELECT 1 FROM nodes AS child
-               WHERE child.parent_id = node.id
+               WHERE child.space_id = node.space_id
+                 AND child.parent_id = node.id
                  AND child.trash_batch_id IS NULL
              ) AS has_children,
              node.updated_at,
+             resource.node_id,
+             blob.object_key,
+             blob.original_filename,
+             blob.media_type,
+             blob.byte_size,
+             blob.sha256,
+             blob.etag,
+             blob.availability,
+`;
+}
+
+function resourceJoins(): string {
+  return `           LEFT JOIN resources AS resource ON resource.node_id = node.id
+           LEFT JOIN univer_resources AS univer
+             ON univer.resource_id = resource.id
+           LEFT JOIN blob_resources AS blob
+             ON blob.resource_id = resource.id
+`;
+}
+
+// Both projections use the same visibility and inherited-role rules. Content
+// authorization omits directory fields and navigation-root traversals.
+function nodeAccessQuery(contentOnly: boolean): string {
+  return `WITH RECURSIVE ancestry(id, parent_id, depth) AS (
+             SELECT id, parent_id, 0
+             FROM nodes
+             WHERE id = $nodeId AND trash_batch_id IS NULL
+             UNION ALL
+             SELECT parent.id, parent.parent_id, ancestry.depth + 1
+             FROM nodes AS parent
+             JOIN ancestry ON ancestry.parent_id = parent.id
+             WHERE parent.trash_batch_id IS NULL
+           )
+           SELECT
+             ${contentOnly ? "" : nodeDisplayColumns()}
              space.type AS space_type,
-             space.name AS space_name,
+             ${contentOnly ? "" : "space.name AS space_name,"}
              space.owner_user_id,
              space.public_read,
              member.role AS member_role,
@@ -185,21 +257,25 @@ export class AccessRepository {
                FROM ancestry
                JOIN node_grants AS grant_node
                  ON grant_node.node_id = ancestry.id
-                AND grant_node.user_id = ?
+                AND grant_node.user_id = $userId
                ORDER BY
                  CASE grant_node.role WHEN 'editor' THEN 0 ELSE 1 END,
                  ancestry.depth DESC
                LIMIT 1
              ) AS grant_role,
-             (
+             ${
+               contentOnly
+                 ? "NULL"
+                 : `(
                SELECT ancestry.id
                FROM ancestry
                JOIN node_grants AS navigation_grant
                  ON navigation_grant.node_id = ancestry.id
-                AND navigation_grant.user_id = ?
+                AND navigation_grant.user_id = $userId
                ORDER BY ancestry.depth DESC
                LIMIT 1
-             ) AS grant_navigation_root_id,
+             )`
+             } AS grant_navigation_root_id,
              (
                SELECT link_sharing.role
                FROM ancestry
@@ -211,14 +287,17 @@ export class AccessRepository {
                  ancestry.depth DESC
                LIMIT 1
              ) AS link_sharing_role,
-             (
+             ${
+               contentOnly
+                 ? "NULL"
+                 : `(
                SELECT visible_root.id
                FROM (
                  SELECT ancestry.id, ancestry.depth
                  FROM ancestry
                  JOIN node_grants AS navigation_grant
                    ON navigation_grant.node_id = ancestry.id
-                  AND navigation_grant.user_id = ?
+                  AND navigation_grant.user_id = $userId
                  UNION ALL
                  SELECT ancestry.id, ancestry.depth
                  FROM ancestry
@@ -228,21 +307,18 @@ export class AccessRepository {
                ) AS visible_root
                ORDER BY visible_root.depth DESC
                LIMIT 1
-             ) AS navigation_root_id
+             )`
+             } AS navigation_root_id
            FROM nodes AS node
            JOIN spaces AS space ON space.id = node.space_id
-           LEFT JOIN resources AS resource ON resource.node_id = node.id
-           LEFT JOIN univer_resources AS univer
-             ON univer.resource_id = resource.id
-           LEFT JOIN blob_resources AS blob
-             ON blob.resource_id = resource.id
+           ${contentOnly ? "" : resourceJoins()}
            LEFT JOIN space_members AS member
              ON member.space_id = space.id
-            AND member.user_id = ?
-           WHERE node.id = ?
+            AND member.user_id = $userId
+           WHERE node.id = $nodeId
              AND node.trash_batch_id IS NULL
              AND (
-               space.owner_user_id = ?
+               space.owner_user_id = $userId
                OR (space.type = 'team' AND member.user_id IS NOT NULL)
                OR space.public_read = 1
                OR (
@@ -253,7 +329,7 @@ export class AccessRepository {
                      FROM ancestry
                      JOIN node_grants AS visible_grant
                        ON visible_grant.node_id = ancestry.id
-                      AND visible_grant.user_id = ?
+                      AND visible_grant.user_id = $userId
                    )
                    OR EXISTS (
                      SELECT 1
@@ -264,18 +340,5 @@ export class AccessRepository {
                    )
                  )
                )
-             )`
-        ))
-        .get(
-          nodeId,
-          userId,
-          userId,
-          userId,
-          userId,
-          nodeId,
-          userId,
-          userId
-        ) as ResolvedNodeRow | undefined) ?? null
-    );
-  }
+             )`;
 }
