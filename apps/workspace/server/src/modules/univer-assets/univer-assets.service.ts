@@ -1,3 +1,4 @@
+import { ANONYMOUS_USER_ID } from "../identity/index.js";
 import type { Readable } from "node:stream";
 import { FileSource } from "@univerjs/protocol";
 import { parseByteRange } from "../../integrations/blob/blob-http.js";
@@ -30,12 +31,12 @@ export interface UniverAssetsModule {
     }
   ): Promise<{ readonly FileId: string }>;
   resolveContentUrl(
-    userId: string | null,
+    userId: string,
     scope: UniverAssetScope,
     assetId: string
   ): Promise<string>;
   openContent(
-    userId: string | null,
+    userId: string,
     scope: UniverAssetScope,
     assetId: string,
     rangeHeader: string | undefined
@@ -188,7 +189,7 @@ async function requireAuthorizedAsset(
     readonly access: AccessResolver;
     readonly worktrees: WorktreesModule;
   },
-  userId: string | null,
+  userId: string,
   scope: UniverAssetScope,
   assetId: string
 ): Promise<UniverAssetRow> {
@@ -211,13 +212,13 @@ async function authorizeUnit(
     readonly access: AccessResolver;
     readonly worktrees: WorktreesModule;
   },
-  userId: string | null,
+  userId: string,
   scope: UniverAssetScope,
   unitId: string,
   write: boolean
 ): Promise<void> {
   if (scope.kind === "worktree") {
-    if (userId === null) throw notFound();
+    if (userId === ANONYMOUS_USER_ID) throw notFound();
     const allowed = await options.worktrees.authorizeProtocol({
       userId,
       worktreeId: scope.worktreeId,

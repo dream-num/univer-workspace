@@ -39,16 +39,14 @@ import type {
 } from "@univerjs-pro/collaboration-worktree-service";
 import { json, Router, type RequestHandler } from "express";
 import type { AccessResolver, ResourceAccess, UnitType } from "../../modules/access/index.js";
-import type { IdentityModule } from "../../modules/identity/index.js";
+import { ANONYMOUS_USER_ID, type IdentityModule } from "../../modules/identity/index.js";
 import type { WorktreesModule } from "../../modules/worktrees/index.js";
 import {
   WORKTREE_CHANGE_FEED_PATH,
   type WorktreeChangeFeed,
 } from "../realtime/worktree-change-feed.js";
 import {
-  ANONYMOUS_PROTOCOL_USER_ID,
   anonymousProtocolUser,
-  productUserId,
   protocolUser,
 } from "./protocol-user.js";
 import { setFinalMutationSize } from "./changeset-observation.js";
@@ -93,7 +91,7 @@ export function createCollaborationGateway(options: {
     issue: (record, ttlMs) => ticketStore.issue(record, ttlMs),
     async consume(ticket) {
       const record = await ticketStore.consume(ticket);
-      return record?.userID === ANONYMOUS_PROTOCOL_USER_ID ? null : record;
+      return record?.userID === ANONYMOUS_USER_ID ? null : record;
     },
   };
   const anonymousUnits = new Map<string, Set<string>>();
@@ -214,7 +212,7 @@ export function createCollaborationGateway(options: {
       }
     );
     await next();
-    if (context.session.userID === ANONYMOUS_PROTOCOL_USER_ID) {
+    if (context.session.userID === ANONYMOUS_USER_ID) {
       const members = anonymousUnits.get(context.unitID) ?? new Set<string>();
       members.add(context.session.memberID);
       anonymousUnits.set(context.unitID, members);
@@ -322,7 +320,7 @@ export function createCollaborationGateway(options: {
     const session = identity.getSession(cookieHeader(context));
     context.userID = session.authenticated
       ? session.user.id
-      : ANONYMOUS_PROTOCOL_USER_ID;
+      : ANONYMOUS_USER_ID;
     context.customData.user = session.authenticated
       ? protocolUser(session.user)
       : anonymousProtocolUser;
@@ -366,7 +364,7 @@ export function createCollaborationGateway(options: {
       }
       const userId = response.locals.session.authenticated
         ? response.locals.session.user.id as string
-        : ANONYMOUS_PROTOCOL_USER_ID;
+        : ANONYMOUS_USER_ID;
       response.json({
         error: OK_ERROR,
         objectActions: requests.map((value: unknown) =>
@@ -383,12 +381,12 @@ export function createCollaborationGateway(options: {
         typeof request.body?.unitID === "string" ? request.body.unitID : "";
       const userId = response.locals.session.authenticated
         ? response.locals.session.user.id as string
-        : ANONYMOUS_PROTOCOL_USER_ID;
+        : ANONYMOUS_USER_ID;
       response.json({
         error: OK_ERROR,
         actions: allowedActions(
           request.body?.actions,
-          access.resolveUnit(productUserId(userId), unitId)
+          access.resolveUnit(userId, unitId)
         ),
       });
     }
@@ -460,10 +458,10 @@ export function createCollaborationGateway(options: {
     checkingAnonymousAccess = true;
     try {
       for (const unitID of anonymousUnits.keys()) {
-        if (!access.resolveUnit(null, unitID)) {
+        if (!access.resolveUnit(ANONYMOUS_USER_ID, unitID)) {
           await endpoint.invalidateUnitSessions({
             unitID,
-            userID: ANONYMOUS_PROTOCOL_USER_ID,
+            userID: ANONYMOUS_USER_ID,
           });
         }
       }
@@ -582,7 +580,7 @@ async function requireWorktreeProtocolAccess(
   }
 ): Promise<void> {
   if (
-    input.userId === ANONYMOUS_PROTOCOL_USER_ID ||
+    input.userId === ANONYMOUS_USER_ID ||
     !(await worktrees.authorizeProtocol(input))
   ) {
     throw new CollabError(
@@ -604,7 +602,7 @@ function allowedObjectActions(
   };
   const unitId =
     typeof candidate.unitID === "string" ? candidate.unitID : "";
-  const resource = access.resolveUnit(productUserId(userId), unitId);
+  const resource = access.resolveUnit(userId, unitId);
   return {
     unitID: unitId,
     objectID:
@@ -661,7 +659,7 @@ function requireUnitAccess(
   userId: string,
   unitId: string
 ): ResourceAccess {
-  const resource = access.resolveUnit(productUserId(userId), unitId);
+  const resource = access.resolveUnit(userId, unitId);
   if (!resource?.capabilities.openContent) {
     throw new CollabError("PERMISSION_DENIED", "Cannot read this unit.");
   }
@@ -767,7 +765,7 @@ function authorizeAnonymousReads(
     register(router) {
       const authenticated =
         (handler: NodeHttpHandler) => async (context: NodeHttpTransportContext) => {
-          if (context.userID === ANONYMOUS_PROTOCOL_USER_ID) {
+          if (context.userID === ANONYMOUS_USER_ID) {
             unauthenticated(context);
             return;
           }

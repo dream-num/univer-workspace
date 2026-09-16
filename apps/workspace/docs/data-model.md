@@ -185,7 +185,7 @@ Node 的链接分享策略，登录用户角色为 `editor | viewer`；匿名访
 策略同样按 Node 祖先链继承。
 Trigger 限制它只用于 Personal Space。
 
-匿名读取以空 User ID 进入 Access Resolver，只使用 Space 公开可读与 Link Sharing；
+匿名读取以保留 ID `workspace:anonymous` 进入 Access Resolver，只使用 Space 公开可读与 Link Sharing；
 不创建 User、Login Session 或 Recent。产品数据库仍为 V7，不新增字段或迁移。
 
 登录用户的有效 Role 由 Access Resolver 每次按以下来源计算最高权限：

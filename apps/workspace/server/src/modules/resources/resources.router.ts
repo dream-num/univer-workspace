@@ -1,5 +1,5 @@
 import { json, Router } from "express";
-import type { IdentityModule } from "../identity/index.js";
+import { ANONYMOUS_USER_ID, type IdentityModule } from "../identity/index.js";
 import type { ResourcesModule } from "./resources.service.js";
 
 export function createResourcesRouter(options: {
@@ -33,7 +33,7 @@ export function createResourcesRouter(options: {
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.resources.get(
-        session.authenticated ? session.user.id : null,
+        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.resourceId)
       )
     );
@@ -44,7 +44,7 @@ export function createResourcesRouter(options: {
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.resources.getByUnit(
-        session.authenticated ? session.user.id : null,
+        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.unitId)
       )
     );
@@ -55,7 +55,7 @@ export function createResourcesRouter(options: {
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.resources.open(
-        session.authenticated ? session.user.id : null,
+        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.resourceId)
       )
     );

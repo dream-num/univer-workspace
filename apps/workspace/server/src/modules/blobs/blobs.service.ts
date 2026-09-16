@@ -46,7 +46,7 @@ export interface BlobsModule {
   complete(userId: string, uploadId: string): Promise<CompleteBlobUploadResult>;
   abort(userId: string, uploadId: string): void;
   openContent(
-    userId: string | null,
+    userId: string,
     resourceId: string,
     range: string | undefined
   ): Promise<{
@@ -444,7 +444,7 @@ function assertSameIntent(
 
 function requireBlobAccess(
   resolver: AccessResolver,
-  userId: string | null,
+  userId: string,
   resourceId: string
 ): BlobResourceAccess {
   const value = resolver.resolveResource(userId, resourceId);

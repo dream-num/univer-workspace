@@ -1,3 +1,4 @@
+import { ANONYMOUS_USER_ID } from "../identity/index.js";
 import { AccessRepository } from "./access.repository.js";
 import type {
   AccessRole,
@@ -9,18 +10,17 @@ import type {
   SpaceCapabilities,
 } from "./access.types.js";
 
-/** A null user ID represents an anonymous reader, never a persisted User. */
 export interface AccessResolver {
-  resolveSpace(userId: string | null, spaceId: string): SpaceAccess | null;
-  resolveNode(userId: string | null, nodeId: string): NodeAccess | null;
-  resolveResource(userId: string | null, resourceId: string): ResourceAccess | null;
-  resolveUnit(userId: string | null, unitId: string): ResourceAccess | null;
+  resolveSpace(userId: string, spaceId: string): SpaceAccess | null;
+  resolveNode(userId: string, nodeId: string): NodeAccess | null;
+  resolveResource(userId: string, resourceId: string): ResourceAccess | null;
+  resolveUnit(userId: string, unitId: string): ResourceAccess | null;
 }
 
 export function createAccessResolver(
   repository: AccessRepository
 ): AccessResolver {
-  function resolveNode(userId: string | null, nodeId: string): NodeAccess | null {
+  function resolveNode(userId: string, nodeId: string): NodeAccess | null {
     const row = repository.resolveNode(userId, nodeId);
     if (!row) return null;
     const assignedRole =
@@ -30,10 +30,10 @@ export function createAccessResolver(
           ? row.member_role
           : row.grant_role;
     const regularRole = highestRole(
-      assignedRole,
+      userId === ANONYMOUS_USER_ID ? null : assignedRole,
       row.public_read ? "viewer" : null
     );
-    const linkRole = userId === null && row.link_sharing_role
+    const linkRole = userId === ANONYMOUS_USER_ID && row.link_sharing_role
       ? "viewer"
       : row.link_sharing_role;
     const role = highestRole(regularRole, linkRole);
@@ -80,7 +80,7 @@ export function createAccessResolver(
   }
 
   function resourceAccess(
-    userId: string | null,
+    userId: string,
     mapping: {
       readonly resource_id: string;
       readonly node_id: string;
@@ -139,8 +139,9 @@ export function createAccessResolver(
     resolveSpace(userId, spaceId) {
       const row = repository.resolveSpace(userId, spaceId);
       if (!row) return null;
+      const assignedRole = row.owner_user_id === userId ? "owner" : row.member_role;
       const role = highestRole(
-        row.owner_user_id === userId ? "owner" : row.member_role,
+        userId === ANONYMOUS_USER_ID ? null : assignedRole,
         row.public_read ? "viewer" : null
       );
       if (!role) return null;

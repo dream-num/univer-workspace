@@ -70,7 +70,7 @@ interface LoginSessionAuthenticator {
 它只证明身份，不携带或缓存 Space、Node、Resource、Worktree Role。
 
 Node、Space、Resource、Blob 与 Trunk Asset 的指定读取接口也接受匿名访问者。
-匿名身份以 `null` 进入 Access Resolver，仅由 Link Sharing 或 Space 公开可读提供 viewer 权限；
+匿名身份以保留的 `ANONYMOUS_USER_ID`（`workspace:anonymous`）进入 Access Resolver，仅由 Link Sharing 或 Space 公开可读提供 viewer 权限；
 所有写入和管理入口继续要求登录。匿名 Resource Open 不写 Recent。
 Trunk 协同协议使用固定的访客显示身份及每连接独立的 member ID，复用短期、一次性 Session Ticket；
 该身份不对应产品 User，票据不能用于 Worktree 或用户事件通道。Snapshot、Comment/History 读取
@@ -88,10 +88,10 @@ Token 和 Discord Token 都不会经过 Agent。
 
 ```ts
 interface AccessResolver {
-  resolveSpace(userId: string | null, spaceId: string): SpaceAccess | null;
-  resolveNode(userId: string | null, nodeId: string): NodeAccess | null;
-  resolveResource(userId: string | null, resourceId: string): ResourceAccess | null;
-  resolveUnit(userId: string | null, unitId: string): ResourceAccess | null;
+  resolveSpace(userId: string, spaceId: string): SpaceAccess | null;
+  resolveNode(userId: string, nodeId: string): NodeAccess | null;
+  resolveResource(userId: string, resourceId: string): ResourceAccess | null;
+  resolveUnit(userId: string, unitId: string): ResourceAccess | null;
 }
 ```
 

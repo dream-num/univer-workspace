@@ -1,5 +1,5 @@
 import { json, Router } from "express";
-import type { IdentityModule } from "../identity/index.js";
+import { ANONYMOUS_USER_ID, type IdentityModule } from "../identity/index.js";
 import type { SpacesModule } from "./spaces.service.js";
 
 export function createSpacesRouter(options: {
@@ -31,7 +31,7 @@ export function createSpacesRouter(options: {
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.spaces.get(
-        session.authenticated ? session.user.id : null,
+        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.spaceId)
       )
     );

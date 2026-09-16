@@ -2,7 +2,7 @@ import { ErrorCode } from "@univerjs/protocol";
 import { Router, type Request, type Response } from "express";
 import { contentDisposition } from "../../integrations/blob/blob-http.js";
 import { receiveSingleMultipartFile } from "../../integrations/blob/multipart.js";
-import type { IdentityModule } from "../identity/index.js";
+import { ANONYMOUS_USER_ID, type IdentityModule } from "../identity/index.js";
 import {
   MAX_UNIVER_ASSET_BYTES,
   type UniverAssetsModule,
@@ -47,7 +47,7 @@ export function createUniverAssetsRouter(options: {
   router.get("/file/:fileId/sign-url", async (request, response) => {
     const session = options.identity.getSession(request.headers.cookie);
     const url = await options.assets.resolveContentUrl(
-      session.authenticated ? session.user.id : null,
+      session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
       { kind: "trunk" },
       required(request.params.fileId)
     );
@@ -76,7 +76,7 @@ export function createUniverAssetsRouter(options: {
       request,
       response,
       options.assets,
-      session.authenticated ? session.user.id : null,
+      session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
       { kind: "trunk" },
       required(request.params.fileId)
     );
@@ -126,7 +126,7 @@ async function sendContent(
   request: Request,
   response: Response,
   assets: UniverAssetsModule,
-  userId: string | null,
+  userId: string,
   scope: UniverAssetScope,
   assetId: string
 ): Promise<void> {

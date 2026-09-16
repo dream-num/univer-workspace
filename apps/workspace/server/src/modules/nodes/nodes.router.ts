@@ -1,5 +1,5 @@
 import { json, Router } from "express";
-import type { IdentityModule } from "../identity/index.js";
+import { ANONYMOUS_USER_ID, type IdentityModule } from "../identity/index.js";
 import type { NodesModule } from "./nodes.service.js";
 
 export function createNodesRouter(options: {
@@ -14,7 +14,7 @@ export function createNodesRouter(options: {
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.nodes.listSpaceRoot(
-        session.authenticated ? session.user.id : null,
+        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.spaceId),
         { cursor: request.query.cursor, limit: request.query.limit }
       )
@@ -33,7 +33,7 @@ export function createNodesRouter(options: {
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.nodes.get(
-        session.authenticated ? session.user.id : null,
+        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.nodeId)
       )
     );
@@ -44,7 +44,7 @@ export function createNodesRouter(options: {
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.nodes.listChildren(
-        session.authenticated ? session.user.id : null,
+        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.nodeId),
         { cursor: request.query.cursor, limit: request.query.limit }
       )
