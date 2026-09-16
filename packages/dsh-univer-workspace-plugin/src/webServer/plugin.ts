@@ -456,6 +456,7 @@ function upstreamStatus(error: unknown): number {
 }
 
 const PRODUCT_PROXY_ROUTES = [
+  { method: "GET", pattern: /^\/unit-resources\/[^/]+$/ },
   { method: "POST", pattern: /^\/team-spaces$/ },
   { method: "GET", pattern: /^\/users\/search$/ },
   { method: "GET", pattern: /^\/nodes\/[^/]+$/ },

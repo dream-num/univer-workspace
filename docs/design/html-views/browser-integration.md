@@ -6,7 +6,8 @@
 
 [Blob 预览入口](../../../apps/workspace/web/src/features/blobs/blob-preview.tsx) 使用 SDK 的
 `isHtmlViewFilename()` 将 `.univer.html` 交给 `HtmlViewFile`。
-`HtmlViewFile` 携带当前会话读取 `contentUrl`，`HtmlView` 调用 `parseHtmlView(source)`。
+`HtmlViewFile` 携带当前会话读取 `contentUrl`，`HtmlView` 组合私有共享组件
+`@univerjs/univer-workspace-html-viewer`，由共享组件调用 `parseHtmlView(source)`。
 读取或解析失败直接展示错误。解析器同时识别文本、控件、单元格订阅和范围订阅四种声明。
 页面通过 `data-univer-cell-subscribe` / `data-univer-range-subscribe` 声明自定义组件来源，
 用原生 HTML ID 调用 `subscribeCellById()` / `subscribeRangeById()`。SDK 管理声明的订阅、
@@ -18,7 +19,8 @@ HTML 文件无需携带 SDK 或协同凭据。
 
 ## 页面与宿主连接
 
-[页面组件](../../../apps/workspace/web/src/features/html-views/html-view.tsx) 在取得登录用户后，
+[Web 适配组件](../../../apps/workspace/web/src/features/html-views/html-view.tsx) 在取得登录用户后，
+挂载[共享页面组件](../../../packages/workspace-html-viewer/src/viewer.tsx)。共享组件
 为本次加载生成 `connectionId`，先安装连接监听，再生成 iframe 内容：
 
 ```ts
@@ -86,10 +88,10 @@ snapshot override 和 referenced-Unit provider。工厂返回 `{ univer, univerA
 
 ## 保存与离开
 
-Workspace 通过 `onStatus` 展示已保存、同步中、连接中断或冲突。
+Workspace 通过 `onStatus` 跟踪同步状态，供离开提醒使用；正常页面不显示独立保存或同步提示。
 路由的 `useBlocker` 在离开前执行 `await host.flush()`：成功才允许导航，失败则展示错误并
 保留页面。草稿提交和协同确认由 SDK 完成。
 
 关闭或刷新浏览器时，`host.hasPendingChanges()` 或任一 Unit 尚未同步会触发离开提醒；
-浏览器强制结束不能保证保存完成。组件卸载时移除连接监听并调用 `host.dispose()`。
+浏览器强制结束不能保证保存完成。共享组件卸载时移除连接监听并调用 `host.dispose()`。
 文件读取同样在组件清理时取消。

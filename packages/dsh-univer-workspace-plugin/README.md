@@ -149,7 +149,12 @@ as a substitute for those explicit storage boundaries.
   trashes nodes, and exposes a capability-gated trash view with restore and
   permanent removal. Univer Resources open in the embedded Viewer; Blob
   Resources use the native DSH Sidecar for read-only image, video, audio, PDF, and
-  text previews, while unsupported media remains download-only. The preview is read-only.
+  text previews, while unsupported media remains download-only. `.univer.html` files
+  use the private shared HTML viewer with live Sheet subscriptions and permission-checked
+  trunk writes. Other Blob previews are read-only. HTML source access is independently
+  authorized through the current account; publishing its template does not edit Sheets.
+  Native tab close retains the HTML runtime until save confirms; failed saves keep a
+  recovery surface with a save-and-close action. See the [HTML integration guide](../../docs/design/html-views/agent-integration.md).
 - **Blob tools**: `univer_blob` exposes get/download/upload/replace through the existing Workspace service/provider and authenticated HTTP client.
   Get reads metadata only. Upload creates a new Blob from a session file in the
   current Space by default, with optional `spaceId`, `parentNodeId`, and `name`.

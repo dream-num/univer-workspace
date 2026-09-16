@@ -1,0 +1,39 @@
+.layer {
+  position: fixed;
+  z-index: 30;
+  background: var(--color-background, #fff);
+  color: var(--color-foreground, #222);
+}
+.surface {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.iframe {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+}
+.error {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--color-destructive, #b42318);
+  overflow-wrap: anywhere;
+}
+.recovery {
+  inset: 10vh 5vw;
+  z-index: 1000;
+  border: 1px solid var(--color-border, #ddd);
+  box-shadow: 0 8px 32px #0003;
+}
+.recoveryHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--color-border, #ddd);
+}

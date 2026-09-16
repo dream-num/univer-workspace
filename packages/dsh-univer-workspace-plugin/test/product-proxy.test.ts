@@ -32,6 +32,7 @@ describe("Workspace product proxy allowlist", () => {
     expect(request).not.toHaveBeenCalled();
   });
   it.each([
+    ["GET", "/unit-resources/unit-1", "/api/unit-resources/unit-1"],
     ["POST", "/team-spaces", "/api/team-spaces"],
     ["GET", "/users/search", "/api/users/search"],
     ["GET", "/nodes/node-1", "/api/nodes/node-1"],
@@ -61,6 +62,8 @@ describe("Workspace product proxy allowlist", () => {
   });
 
   it.each([
+    ["POST", "/unit-resources/unit-1"],
+    ["GET", "/unit-resources/unit-1/extra"],
     ["GET", "/team-spaces"],
     ["POST", "/users/search"],
     ["PATCH", "/nodes/node-1/grants/user-1"],

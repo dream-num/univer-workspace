@@ -486,6 +486,10 @@ and a non-secret account identifier instead.
 ## Region navigation
 
 Workspace file and Worktree previews share one native Sidecar tab per session.
+`.univer.html` files render as live pages with independently authorized Sheet sources,
+including writes when the current user can edit. Closing or switching away retains
+the HTML runtime until saving confirms; a failed save keeps a visible retry surface.
+Account changes retain the existing connection fence and reload behavior.
 DSH owns its resize, split, fullscreen and close controls. Opening another file
 updates that preview; clicking the same file reveals or reopens it. With no
 selected session, opening a file uses the native blank-session flow in a

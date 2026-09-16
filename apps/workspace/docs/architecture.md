@@ -113,10 +113,12 @@ apps/workspace/
 
 ## Web 应用
 
-`features/html-views` 打开 `.univer.html` Blob，组合三个独立 package：
+`features/html-views` 打开 `.univer.html` Blob，通过私有 `workspace-html-viewer`
+与 Agent 共享沙箱页面和 Binding Host 生命周期。应用各自拥有来源授权、Univer 工厂
+以及路由或 Sidecar 退出保存适配，底层组合三个独立 SDK package：
 `binding-engine` 以一个 Engine 管理一个主 Sheet Unit 的加载、坐标读写和同步确认，`html-view` 解析模板，
 `html-view-renderer` 管理 DOM 与交互。应用传入 `collaborationClientConfig` 和自定义 `createUniver`，负责来源访问检查、身份与引用策略、
-Engine 加载和释放；Renderer 只消费已加载 Engine。Agent 共用模板解析器。
+Engine 加载和释放；Renderer 只消费已加载 Engine。
 设计与当前状态见 [Univer HTML Views](../../../docs/design/html-views/README.md)。
 
 `routes` 对应 URL 和页面组合，`features` 按用户能力组织，`shared` 保存无业务归属的

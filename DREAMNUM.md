@@ -29,6 +29,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   the same repository source in separate React/Univer peer contexts; Agent bundles its copy into its browser artifact. Until an application-level shared component home is
   available, changes remain synchronized with the copies in `dream-num/univer-cli` and the DSH plugin.
 
+- The private shared HTML View host under `packages/workspace-html-viewer`, consumed by Browser and Agent.
+  It owns sandbox rendering and Binding Host lifecycle; applications own source authorization,
+  runtime assembly, and leave/save behavior.
+
 ## Provides
 
 - **Univer Workspace** — the deployable Browser and Server application, product HTTP API, authenticated and anonymous read-only
@@ -59,7 +63,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   execution, inspection, rendering, daemon, and Commander capabilities composed by Workspace CLI.
   Contract: [repository boundary](AGENTS.md).
 - [`dream-num/univer-data-binding-sdk`](https://github.com/dream-num/univer-data-binding-sdk) — owns HTML
-  binding syntax and runtime APIs. CLI consumes the published HTML parser; Browser owns page execution.
+  binding syntax and runtime APIs. CLI and Agent consume the published HTML parser; Browser and Agent compose page execution
+  through their shared private viewer and application-specific Binding Engine factories.
   Contract: [HTML Views integration](docs/design/html-views/README.md).
 - [`dream-num/univer-protocol`](https://github.com/dream-num/univer-protocol) — owns the protocol types consumed by
   collaboration and content workflows. Contract: [repository boundary](AGENTS.md).
