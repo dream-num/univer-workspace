@@ -1,4 +1,5 @@
 import { ChevronDown, Plus, Upload } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { api } from "../../shared/api/client";
@@ -26,6 +27,7 @@ import {
   createDocumentInitialData,
   type NewDocumentMode,
 } from "./create-document-initial-data";
+import { waitForCreatedResource } from "./wait-for-created-resource";
 import { NodeIcon } from "./node-icon";
 
 type UnitType = "sheet" | "doc" | "slide" | "board" | "base";
@@ -48,6 +50,7 @@ export function CreateNodeDropdown(props: {
   const [name, setName] = useState("");
   const [error, setError] = useState<string>();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { language, t } = useI18n();
   const nameInputId = useId();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -123,15 +126,19 @@ export function CreateNodeDropdown(props: {
         },
       });
       if (apiErr) throw apiError(apiErr);
-      return data;
+      return waitForCreatedResource(data, {
+        failed: t("resourceCreationFailed"),
+        continuing: t("resourceCreationContinuing"),
+      });
     },
-    onSuccess: async () => {
+    onSuccess: async (nodeId) => {
       await refreshCreatedNodes();
       await props.onCreated?.();
       setResourceDialogOpen(false);
       setSelectedDocumentMode("modern");
       setName("");
       toast.success(t("resourceCreated"));
+      await navigate({ to: "/nodes/$nodeId", params: { nodeId } });
     },
     onError: (mutationError) => {
       toast.error(
