@@ -37,19 +37,29 @@ import type {
 } from "@univerjs-pro/collaboration-worktree-service";
 import { json, Router, type RequestHandler } from "express";
 import type { AccessResolver, ResourceAccess, UnitType } from "../../modules/access/index.js";
-import type { IdentityModule } from "../../modules/identity/index.js";
+import { ANONYMOUS_USER_ID, type IdentityModule } from "../../modules/identity/index.js";
 import type { WorktreesModule } from "../../modules/worktrees/index.js";
 import {
   WORKTREE_CHANGE_FEED_PATH,
   type WorktreeChangeFeed,
 } from "../realtime/worktree-change-feed.js";
-import { protocolUser } from "./protocol-user.js";
+import {
+  anonymousProtocolUser,
+  protocolUser,
+} from "./protocol-user.js";
 import { setFinalMutationSize } from "./changeset-observation.js";
 import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.js";
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
 const MILLISECONDS_PER_SECOND = 1_000;
+// Transport middleware runs before route matching. Allow only these SDK read paths.
+const ANONYMOUS_READ_PATHS = [
+  /^\/universer-api\/user\/session-ticket$/,
+  /^\/universer-api\/snapshot\/(?:block\/)?[^/]+\/unit\/[^/]+\/(?:rev\/[^/]+|block\/[^/]+|fetchmissing)$/,
+  /^\/universer-api\/comment\/unit\/[^/]+\/list$/,
+  /^\/universer-api\/history\/[^/]+\/(?:list|creators|cs)$/,
+];
 
 export interface CollaborationGateway {
   readonly router: Router;
@@ -294,11 +304,22 @@ export function createCollaborationGateway(options: {
   transport.use(async (context, next) => {
     const session = identity.getSession(cookieHeader(context));
     if (!session.authenticated) {
-      unauthenticated(context);
-      return;
+      const { pathname } = new URL(context.incomingMessage.url ?? "/", "http://localhost");
+      if (
+        context.incomingMessage.method !== "GET" ||
+        !ANONYMOUS_READ_PATHS.some((path) => path.test(pathname))
+      ) {
+        unauthenticated(context);
+        return;
+      }
     }
-    context.userID = session.user.id;
-    context.customData.user = protocolUser(session.user);
+    context.userID = session.authenticated
+      ? session.user.id
+      : ANONYMOUS_USER_ID;
+    context.customData.user = session.authenticated
+      ? protocolUser(session.user)
+      : anonymousProtocolUser;
+    context.response.setHeader("Cache-Control", "private, no-store");
     await next();
   });
   transport.register(historyEndpoint);
@@ -310,7 +331,8 @@ export function createCollaborationGateway(options: {
   const router = Router();
   router.use((request, response, next) => {
     try {
-      response.locals.session = identity.requireSession(request.headers.cookie);
+      response.locals.session = identity.getSession(request.headers.cookie);
+      response.setHeader("Cache-Control", "private, no-store");
       next();
     } catch (error) {
       next(error);
@@ -319,7 +341,9 @@ export function createCollaborationGateway(options: {
   router.get("/user", (_request, response) => {
     response.json({
       error: OK_ERROR,
-      user: protocolUser(response.locals.session.user),
+      user: response.locals.session.authenticated
+        ? protocolUser(response.locals.session.user)
+        : anonymousProtocolUser,
     });
   });
   router.post(
@@ -330,7 +354,9 @@ export function createCollaborationGateway(options: {
       if (!Array.isArray(requests)) {
         throw new CollabError("INVALID_REQUEST", "requests must be an array");
       }
-      const userId = response.locals.session.user.id as string;
+      const userId = response.locals.session.authenticated
+        ? response.locals.session.user.id as string
+        : ANONYMOUS_USER_ID;
       response.json({
         error: OK_ERROR,
         objectActions: requests.map((value: unknown) =>
@@ -345,7 +371,9 @@ export function createCollaborationGateway(options: {
     (request, response) => {
       const unitId =
         typeof request.body?.unitID === "string" ? request.body.unitID : "";
-      const userId = response.locals.session.user.id as string;
+      const userId = response.locals.session.authenticated
+        ? response.locals.session.user.id as string
+        : ANONYMOUS_USER_ID;
       response.json({
         error: OK_ERROR,
         actions: allowedActions(
@@ -365,7 +393,7 @@ export function createCollaborationGateway(options: {
         response.status(400).json({ message: "Invalid comparison mode." });
         return;
       }
-      const userId = response.locals.session.user.id as string;
+      const userId = identity.requireSession(request.headers.cookie).user.id;
       const detail = await worktrees.get(userId, request.params.worktreeId);
       const unit = detail.worktree.units.find(
         (candidate) => candidate.unitId === request.params.unitId

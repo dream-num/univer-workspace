@@ -12,7 +12,8 @@ explains behavior that spans multiple operations.
   secret or stores a bearer token.
 - Unsafe requests accept JSON and require a same-origin `Origin`.
 - Unauthorized discovery of a Space, Node, Resource, or Worktree returns
-  `404 NOT_FOUND`; an absent login session returns `401 UNAUTHENTICATED`.
+  `404 NOT_FOUND`; an absent login session returns `401 UNAUTHENTICATED` on
+  operations requiring authentication.
 - Error branching uses `error.code`, never the diagnostic `message`.
 
 ## Authentication
@@ -48,10 +49,20 @@ a Resource. Team Spaces use Membership and do not create Node Grants.
 
 Link Sharing also applies only to Personal Space Nodes. It changes the access
 policy of the Node's canonical URL rather than creating a separate bearer link.
-It requires an authenticated User, does not create a Direct Grant, and is
-inherited by current and future descendants. Link Sharing Editor access permits
+It admits anonymous viewers, does not create a Direct Grant, and is inherited
+by current and future descendants. The configured role applies to signed-in users;
+anonymous readers remain viewers even for an editor link. Link Sharing Editor access permits
 content editing but not Node structure
 changes, Trash, or further sharing.
+
+Space public read also admits anonymous viewers, including in Team Spaces. It
+permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.
+Anonymous clients can read Node metadata, resolve Resources by Unit ID, browse accessible children,
+open Resources, and read Blob and Trunk Asset bytes. All writes and administration,
+Recent, global discovery, and Worktrees continue to require a login session.
+Both policies use existing settings: already-enabled sharing/public read becomes
+anonymous-readable on upgrade. No additional switch or database migration is needed.
+HTML and referenced Units retain independent source permission checks.
 
 ## Node discovery
 
@@ -90,10 +101,10 @@ a discriminated union: Univer returns Unit/editor metadata, while Blob returns
 server-detected MIME plus content and download URLs. React chooses the preview
 component from MIME; the server does not return a preview kind.
 
-The Collaboration Snapshot endpoint independently authenticates the session and
+The Collaboration Snapshot endpoint independently resolves the reader and
 resolves current Resource Access. Blob content/download endpoints do the same via
 the owning Node and support one byte range. Recent is updated only by a successful
-normal Resource Open; previews and Worktree scopes never update Recent.
+authenticated Resource Open; anonymous reads, previews and Worktree scopes never update Recent.
 
 Blob replacement uses `PUT /api/blob-resources/{resourceId}/content`, a stable
 Idempotency-Key, and one quoted strong If-Match ETag from the downloaded content.

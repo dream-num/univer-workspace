@@ -77,18 +77,20 @@
       schema:
         type: string
   get:
+    security:
+      - {}
+      - sessionCookie: []
+    description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
     tags: [Resources]
     operationId: getResourceByUnit
     summary: Resolve Resource and owning Node metadata from a Univer Unit.
     responses:
       "200":
-        description: Current Resource and Node accessible to the signed-in User.
+        description: Current Resource and Node accessible to the current reader.
         content:
           application/json:
             schema:
               $ref: ../schemas/resources.yaml#/ResourceResponse
-      "401":
-        $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound
 
@@ -100,6 +102,10 @@
       schema:
         type: string
   post:
+    security:
+      - {}
+      - sessionCookie: []
+    description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
     tags: [Resources]
     operationId: openResource
     summary: Resolve the Unit and editor mode for a Resource.
@@ -110,7 +116,5 @@
           application/json:
             schema:
               $ref: ../schemas/resources.yaml#/ResourceOpenView
-      "401":
-        $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound

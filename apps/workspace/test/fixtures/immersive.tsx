@@ -23,12 +23,12 @@ document.getElementById('open').onclick=()=>document.querySelector('dialog').sho
 document.getElementById('close').onclick=()=>document.querySelector('dialog').close();
 </script></body></html>`;
 const node = (id: string) => ({
-  id, name: id === "text" ? "阅读说明" : "业务概览.univer.html", spaceId: space.id, parentNodeId: null,
-  accessRole: "owner", hasChildren: false, updatedAt: "2026-09-15T00:00:00Z",
-  capabilities: { browseChildren: false, createChildren: false, rename: false, move: false, trash: false, share: true },
-  resource: {
+  id, name: id === "folder" ? "示例文件夹" : id === "text" ? "阅读说明" : id === "text-2" ? "第二份说明" : "业务概览.univer.html", spaceId: space.id, parentNodeId: id === "text-2" ? "folder" : null,
+  accessRole: "owner", hasChildren: id === "folder", updatedAt: "2026-09-15T00:00:00Z",
+  capabilities: { browseChildren: id === "folder", createChildren: false, rename: false, move: false, trash: false, share: true },
+  resource: id === "folder" ? null : {
     id, kind: "blob",
-    mediaType: id === "text" ? "text/plain" : "text/html", byteSize: new TextEncoder().encode(html).length,
+    mediaType: id.startsWith("text") ? "text/plain" : "text/html", byteSize: new TextEncoder().encode(html).length,
     availability: "ready", capabilities: { openContent: true, editContent: false, downloadContent: true },
   },
 });
@@ -46,16 +46,23 @@ window.fetch = async (input, init) => {
   else if (url.pathname.endsWith("/link-sharing")) result = { enabled: true, role: "viewer" };
   else if (url.pathname.endsWith("/grants")) result = { grants: [] };
   else if (url.pathname.includes("/users")) result = { users: [] };
-  else if (url.pathname.endsWith("/content")) return new Response(url.pathname.includes("/text/") ? "这是普通文本资源，同样支持沉浸视图。" : html);
+  else if (url.pathname.endsWith("/content")) return new Response(url.pathname.includes("/text-2/") ? "这是第二份文本资源。" : url.pathname.includes("/text/") ? "这是普通文本资源，同样支持沉浸视图。" : html);
   else if (url.pathname.startsWith("/api/resources/")) {
     const id = url.pathname.split("/")[3] ?? "html";
     const item = node(id);
     result = { node: item, resource: {
-      ...item.resource, originalFilename: id === "text" ? "notes.txt" : "dashboard.univer.html", name: item.name, spaceId: space.id, accessRole: "owner",
+      ...item.resource, originalFilename: id.startsWith("text") ? "notes.txt" : "dashboard.univer.html", name: item.name, spaceId: space.id, accessRole: "owner",
       contentUrl: `/api/blob-resources/${id}/content`, downloadUrl: `/api/blob-resources/${id}/download`,
     } };
-  } else if (url.pathname.startsWith("/api/nodes/")) result = { node: node(url.pathname.split("/")[3] ?? "html"), space, breadcrumbs: [] };
-  else if (url.pathname === "/api/spaces/preview/nodes") result = { nodes: [node("html"), node("text")], space, breadcrumbs: [], nextCursor: null };
+  } else if (url.pathname === "/api/nodes/folder/children") result = {
+    nodes: [node("text-2")], parentNode: node("folder"), space,
+    breadcrumbs: [node("folder")], navigationRootNodeId: null, nextCursor: null,
+  };
+  else if (url.pathname.startsWith("/api/nodes/")) {
+    const id = url.pathname.split("/")[3] ?? "html";
+    result = { node: node(id), space, breadcrumbs: id === "text-2" ? [node("folder")] : [] };
+  }
+  else if (url.pathname === "/api/spaces/preview/nodes") result = { nodes: [node("html"), node("text"), node("folder")], space, breadcrumbs: [], parentNode: null, navigationRootNodeId: null, nextCursor: null };
   else return Response.json({ message: "Not available in the isolated preview" }, { status: 404 });
   return Response.json(result);
 };

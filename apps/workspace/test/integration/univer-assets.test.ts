@@ -50,7 +50,7 @@ describe("Univer embedded assets", () => {
     expect(count(application, "resources")).toBe(1);
 
     const signUrl = `${origin}/universer-api/file/${uploaded.body.FileId}/sign-url`;
-    expect((await fetch(signUrl)).status).toBe(401);
+    expect((await fetch(signUrl)).status).toBe(404);
     expect(
       (await fetch(signUrl, { headers: { cookie: viewer.cookie } })).status
     ).toBe(404);
@@ -126,6 +126,15 @@ describe("Univer embedded assets", () => {
         })
       ).status
     ).toBe(404);
+
+    application.permissions.updateNodeLinkSharing(owner.userId, created.nodeId, { enabled: true, role: "editor" });
+    expect((await fetch(signUrl)).status).toBe(200);
+    const anonymousContent = await fetch(contentUrl);
+    expect(anonymousContent.status).toBe(200);
+    expect(Buffer.from(await anonymousContent.arrayBuffer())).toEqual(PIXEL_PNG);
+    application.permissions.updateNodeLinkSharing(owner.userId, created.nodeId, { enabled: false, role: "editor" });
+    expect((await fetch(signUrl)).status).toBe(404);
+    expect((await fetch(contentUrl)).status).toBe(404);
 
     const batch = application.trash.trashNode(owner.userId, created.nodeId);
     application.trash.removePermanently(owner.userId, batch.id);

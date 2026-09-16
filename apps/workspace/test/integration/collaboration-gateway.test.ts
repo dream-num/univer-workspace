@@ -59,6 +59,171 @@ afterEach(async () => {
 });
 
 describe("collaboration gateway", () => {
+  it.each(["link", "space", "move", "trash", "trash-once"] as const)(
+    "allows anonymous %s readers without granting writes or Worktree access",
+    async (policy) => {
+      const { application, origin } = await startApplication();
+      const issued = await application.identity.registerWithPassword({
+        username: "anonymous-owner",
+        displayName: "Owner",
+        password: "correct horse battery staple",
+      });
+      const ownerId = issued.view.user.id;
+      const space = application.spaces.list(ownerId).spaces[0]!;
+      const parent = application.nodes.create(ownerId, {
+        spaceId: space.id,
+        parentNodeId: null,
+        name: "Private parent",
+      });
+      const shared = application.nodes.create(ownerId, {
+        spaceId: space.id,
+        parentNodeId: parent.id,
+        name: "Shared folder",
+      });
+      const created = await application.resources.create(ownerId, "anonymous-sheet-create-0001", {
+        kind: "univer",
+        spaceId: space.id,
+        parentNodeId: shared.id,
+        name: "Public sheet",
+        unitType: "sheet",
+      });
+      if (created.status === 202 || created.body.node.resource?.kind !== "univer")
+        throw new Error("Missing Unit");
+      const node = created.body.node;
+      const resource = created.body.node.resource;
+      const snapshotUrl = `${origin}/universer-api/snapshot/2/unit/${resource.unitId}/rev/0`;
+      expect((await fetch(`${origin}/api/nodes/${node.id}`)).status).toBe(404);
+      expect((await fetch(snapshotUrl)).status).toBe(403);
+      if (policy !== "space") {
+        application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
+          enabled: true,
+          role: "editor",
+        });
+      } else {
+        application.spaces.update(ownerId, space.id, { publicRead: true });
+      }
+
+      const metadata = await fetch(`${origin}/api/nodes/${node.id}`);
+      expect(metadata.status).toBe(200);
+      expect(metadata.headers.get("cache-control")).toBe("private, no-store");
+      await expect(metadata.json()).resolves.toMatchObject({
+        node: {
+          accessRole: "viewer",
+          capabilities: { rename: false, createChildren: false, share: false, trash: false },
+        },
+        navigationRootNodeId: policy !== "space" ? shared.id : null,
+      });
+      const children = await fetch(`${origin}/api/nodes/${shared.id}/children`);
+      await expect(children.json()).resolves.toMatchObject({ nodes: [{ id: node.id }] });
+      expect((await fetch(`${origin}/api/nodes/${parent.id}`)).status).toBe(
+        policy !== "space" ? 404 : 200,
+      );
+      expect((await fetch(`${origin}/api/spaces/${space.id}/nodes`)).status).toBe(
+        policy !== "space" ? 404 : 200,
+      );
+      expect((await fetch(`${origin}/api/spaces/${space.id}`)).status).toBe(401);
+      expect((await fetch(`${origin}/api/resources/${resource.id}`)).status).toBe(401);
+      expect((await fetch(`${origin}/api/unit-resources/${resource.unitId}`)).status).toBe(200);
+      const opened = await fetch(`${origin}/api/resources/${resource.id}/open`, { method: "POST" });
+      await expect(opened.json()).resolves.toMatchObject({
+        resource: { editorMode: "readOnly", accessRole: "viewer" },
+      });
+      expect(
+        application.database.connection
+          .prepare("SELECT COUNT(*) AS count FROM recent_resources")
+          .get()?.count,
+      ).toBe(0);
+      expect(
+        application.database.connection.prepare("SELECT COUNT(*) AS count FROM users").get()?.count,
+      ).toBe(1);
+      expect(
+        application.database.connection
+          .prepare("SELECT COUNT(*) AS count FROM login_sessions")
+          .get()?.count,
+      ).toBe(1);
+      expect((await fetch(`${origin}/api/session`)).headers.get("set-cookie")).toBeNull();
+      expect((await fetch(snapshotUrl)).status).toBe(200);
+      expect((await fetch(`${snapshotUrl}?readOnly=true`)).status).toBe(200);
+      expect(
+        (await fetch(`${origin}/universer-api/comment/unit/${resource.unitId}/list`)).status,
+      ).toBe(200);
+
+      const authz = await fetch(`${origin}/universer-api/authz/-/object/-/batch_allowed`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          requests: [
+            {
+              unitID: resource.unitId,
+              actions: [UnitAction.View, UnitAction.Edit, UnitAction.Share],
+            },
+          ],
+        }),
+      });
+      await expect(authz.json()).resolves.toMatchObject({
+        objectActions: [
+          {
+            actions: [
+              { action: UnitAction.View, allowed: true },
+              { action: UnitAction.Edit, allowed: false },
+              { action: UnitAction.Share, allowed: false },
+            ],
+          },
+        ],
+      });
+
+      const first = await joinUnit(origin, "", resource.unitId);
+      const second = await joinUnit(origin, "", resource.unitId);
+      expect(second.memberId).not.toBe(first.memberId);
+      expect(second.members).toHaveLength(2);
+      for (const [path, method] of [
+        ["/api/spaces", "GET"],
+        ["/api/recent-resources", "GET"],
+        ["/api/worktrees", "GET"],
+        [`/api/nodes/${node.id}`, "PATCH"],
+        [`/api/nodes/${node.id}/link-sharing`, "PUT"],
+        ["/api/resources", "POST"],
+        ["/api/blob-upload-sessions", "POST"],
+        ["/universer-api/stream/file/upload", "POST"],
+        [`/universer-api/comment/unit/${resource.unitId}/add`, "POST"],
+        [`/universer-api/comb/2/unit/${resource.unitId}/new_changes`, "POST"],
+        ["/universer-api/snapshot/-/units", "DELETE"],
+        ["/universer-api/snapshot/-/units/recover", "POST"],
+        ["/universer-api/worktrees/unknown", "GET"],
+        ["/universer-api/snapshot/unknown", "GET"],
+        [`/universer-api/history/${resource.unitId}/list/unknown`, "GET"],
+        ["/universer-api/user/session-ticket", "POST"],
+      ]) {
+        const response = await fetch(`${origin}${path}`, { method });
+        expect(response.status, `${method} ${path}`).toBe(401);
+      }
+
+      if (policy === "link") {
+        application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
+          enabled: false,
+          role: "editor",
+        });
+      } else if (policy === "space") {
+        application.spaces.update(ownerId, space.id, { publicRead: false });
+      } else if (policy === "move") {
+        application.nodes.update(ownerId, node.id, { parentNodeId: parent.id });
+      } else if (policy === "trash") {
+        application.trash.trashNode(ownerId, shared.id);
+      } else {
+        application.trash.trashNodeOnce(ownerId, shared.id, "anonymous-trash-once");
+      }
+      expect((await fetch(snapshotUrl)).status).toBe(403);
+      expect(
+        (await fetch(`${origin}/api/resources/${resource.id}/open`, { method: "POST" })).status,
+      ).toBe(404);
+      if (policy === "link") {
+        // Preserve the existing Link Sharing invalidation behavior.
+        await expect.poll(() => first.socket.readyState).toBe(WebSocket.CLOSED);
+        await expect.poll(() => second.socket.readyState).toBe(WebSocket.CLOSED);
+      }
+    },
+  );
+
   it("serves complete Thread Comment workflows for all five Trunk Unit types", async () => {
     const { application, origin } = await startApplication();
     const owner = await application.identity.registerWithPassword({
@@ -430,7 +595,7 @@ describe("collaboration gateway", () => {
 
     await expect(
       fetch(`${origin}/universer-api/history/${first.unitId}/list?length=20`)
-    ).resolves.toMatchObject({ status: 401 });
+    ).resolves.toMatchObject({ status: 200 });
   });
 
   it("stores an authoritative server createTime for Trunk changesets", async () => {
@@ -679,7 +844,7 @@ describe("collaboration gateway", () => {
 
     await expect(
       fetch(`${origin}/universer-api/user`)
-    ).resolves.toMatchObject({ status: 401 });
+    ).resolves.toMatchObject({ status: 200 });
 
     const userResponse = await fetch(`${origin}/universer-api/user`, {
       headers: { cookie },
@@ -769,7 +934,7 @@ describe("collaboration gateway", () => {
       fetch(
         `${origin}/universer-api/comment/unit/${opened.resource.unitId}/list`
       )
-    ).resolves.toMatchObject({ status: 401 });
+    ).resolves.toMatchObject({ status: 403 });
     const ownerConnection = await joinUnit(
       origin,
       cookie,

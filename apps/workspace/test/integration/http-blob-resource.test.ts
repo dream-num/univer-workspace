@@ -20,7 +20,7 @@ afterEach(async () => {
 
 describe("Blob Resource HTTP API", () => {
   it("uploads, publishes, ranges, caches, and downloads authenticated bytes", async () => {
-    const { cookie, space, origin } = await createHttpContext();
+    const { application, userId, cookie, space, origin } = await createHttpContext();
     const content = Buffer.from("hello blob");
 
     const reserve = await fetch(`${origin}/api/blob-upload-sessions`, {
@@ -41,7 +41,7 @@ describe("Blob Resource HTTP API", () => {
     });
     expect(reserve.status).toBe(201);
     const reservation = (await reserve.json()) as {
-      readonly upload: { readonly id: string; readonly resourceId: string };
+      readonly upload: { readonly id: string; readonly resourceId: string; readonly nodeId: string };
       readonly uploadTarget: { readonly contentUrl: string };
     };
     const replay = await fetch(`${origin}/api/blob-upload-sessions`, {
@@ -115,7 +115,14 @@ describe("Blob Resource HTTP API", () => {
     expect(download.headers.get("content-disposition")).toContain("attachment");
     expect(Buffer.from(await download.arrayBuffer())).toEqual(content);
 
-    expect((await fetch(contentUrl)).status).toBe(401);
+    expect((await fetch(contentUrl)).status).toBe(404);
+    application.permissions.updateNodeLinkSharing(userId, reservation.upload.nodeId, { enabled: true, role: "editor" });
+    const anonymousContent = await fetch(contentUrl);
+    expect(anonymousContent.headers.get("cache-control")).toBe("private, no-store");
+    expect(Buffer.from(await anonymousContent.arrayBuffer())).toEqual(content);
+    expect((await fetch(contentUrl, { method: "PUT", body: "denied" })).status).toBe(401);
+    application.permissions.updateNodeLinkSharing(userId, reservation.upload.nodeId, { enabled: false, role: "editor" });
+    expect((await fetch(contentUrl, { headers: { "if-none-match": etag! } })).status).toBe(404);
     expect(
       (
         await fetch(contentUrl, {

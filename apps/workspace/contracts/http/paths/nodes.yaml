@@ -6,6 +6,10 @@
       schema:
         type: string
   get:
+    security:
+      - {}
+      - sessionCookie: []
+    description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
     tags: [Nodes]
     operationId: listSpaceRootNodes
     summary: List the root Nodes of a Space.
@@ -19,8 +23,6 @@
           application/json:
             schema:
               $ref: ../schemas/nodes.yaml#/NodePage
-      "401":
-        $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound
 
@@ -59,6 +61,10 @@
       schema:
         type: string
   get:
+    security:
+      - {}
+      - sessionCookie: []
+    description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
     tags: [Nodes]
     operationId: getNode
     summary: Get Node metadata without loading children or content.
@@ -69,8 +75,6 @@
           application/json:
             schema:
               $ref: ../schemas/nodes.yaml#/NodeResponse
-      "401":
-        $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound
   patch:
@@ -109,6 +113,10 @@
       schema:
         type: string
   get:
+    security:
+      - {}
+      - sessionCookie: []
+    description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
     tags: [Nodes]
     operationId: listNodeChildren
     summary: List the direct children of any Node.
@@ -122,7 +130,5 @@
           application/json:
             schema:
               $ref: ../schemas/nodes.yaml#/NodePage
-      "401":
-        $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound

@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-router";
 import { Download, Lock, Maximize, Pencil, Share2 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { IMember } from "@univerjs/protocol";
 import type { components } from "../../../generated/http/schema.js";
 import {
@@ -16,7 +16,7 @@ import {
   nodeQueryOptions,
 } from "../features/nodes";
 import {
-  requireAuthenticatedSession,
+  anonymousUser,
   sessionQueryOptions,
 } from "../features/auth";
 import { resourceOpenQueryOptions } from "../features/resources";
@@ -47,7 +47,7 @@ export const Route = createFileRoute("/nodes/$nodeId")({
   }),
   loaderDeps: ({ search }) => ({ unit: search.unit }),
   loader: async ({ context, deps, params, location }) => {
-    await requireAuthenticatedSession(context.queryClient, location.href);
+    const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
     if (deps.unit) {
       const { data } = await api.GET("/api/unit-resources/{unitId}", {
         params: { path: { unitId: deps.unit } },
@@ -72,7 +72,9 @@ export const Route = createFileRoute("/nodes/$nodeId")({
     }
     try {
       const [, result] = await Promise.all([
-        context.queryClient.ensureQueryData(spacesQueryOptions),
+        session.authenticated
+          ? context.queryClient.ensureQueryData(spacesQueryOptions)
+          : undefined,
         context.queryClient.ensureQueryData(nodeQueryOptions(params.nodeId)),
       ]);
       if (result.node.resource) {
@@ -95,113 +97,127 @@ export const Route = createFileRoute("/nodes/$nodeId")({
 
 function NodePage() {
   const { nodeId } = Route.useParams();
+  const { view } = Route.useSearch();
   const query = useQuery(nodeQueryOptions(nodeId));
   const children = useQuery({
     ...nodeChildrenQueryOptions(nodeId),
-    enabled:
-      query.data?.node.resource === null &&
-      query.data.node.capabilities.browseChildren,
+    enabled: query.data?.node.resource === null && query.data.node.capabilities.browseChildren,
   });
+  const resourceId = query.data?.node.resource?.id;
+  const resourceQuery = useQuery({
+    ...resourceOpenQueryOptions(resourceId ?? ""),
+    enabled: resourceId !== undefined,
+  });
+  const session = useQuery(sessionQueryOptions);
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
-  if (!query.data) return null;
-  const selectedNodePath = [
-    ...query.data.breadcrumbs.map((item) => item.id),
-    query.data.node.id,
-  ];
-  if (query.data.node.resource) {
-    return (
-      <OpenResourcePage
-        node={query.data.node}
-        selectedNodePath={selectedNodePath}
-      />
-    );
+  const [collaboration, setCollaboration] = useState<{
+    nodeId: string;
+    members: readonly IMember[];
+  }>({ nodeId, members: [] });
+  // The shell survives navigation; presence belongs only to the current Node.
+  if (collaboration.nodeId !== nodeId) {
+    setCollaboration({ nodeId, members: [] });
   }
-  if (!children.data) return null;
+  const onCollaboratorsChange = useCallback(
+    (members: readonly IMember[]) => {
+      setCollaboration((current) => (current.nodeId === nodeId ? { nodeId, members } : current));
+    },
+    [nodeId],
+  );
+
+  if (!query.data || !session.data) return null;
+  const node = query.data.node;
+  const resource = resourceQuery.data?.resource;
+  const user = session.data.authenticated ? session.data.user : anonymousUser;
+  const selectedNodePath = [...query.data.breadcrumbs.map((item) => item.id), node.id];
+  const isEditing =
+    session.data.authenticated && resource?.kind === "univer" && resource.editorMode === "edit";
+
+  // Keep one layout for folders, Blobs and Univer documents. Only the resource
+  // content and its header controls reset when their identity changes.
   return (
     <WorkspaceLayout
+      immersive={node.resource !== null && view === "immersive"}
       selectedSpaceId={query.data.space.id}
-      selectedNodeId={query.data.node.id}
+      selectedNodeId={node.id}
       selectedNodePath={selectedNodePath}
+      contentMode={node.resource ? "editor" : "default"}
+      headerTitle={
+        node.resource ? (
+          <ResourceTitle
+            key={node.id}
+            node={node}
+            resourceId={node.resource.id}
+            authenticated={session.data.authenticated}
+          />
+        ) : undefined
+      }
       headerContent={
-        <WorkspaceHeaderSearch
-          placeholder={t("searchNodes")}
-          value={searchQuery}
-          onChange={setSearchQuery}
-        />
+        node.resource ? undefined : (
+          <WorkspaceHeaderSearch
+            placeholder={t("searchNodes")}
+            value={searchQuery}
+            onChange={setSearchQuery}
+          />
+        )
+      }
+      headerActions={
+        node.resource && resource ? (
+          <ResourceActions
+            key={node.id}
+            node={node}
+            resource={resource}
+            authenticated={session.data.authenticated}
+            currentUserId={user.id}
+            collaborators={collaboration.members}
+          />
+        ) : undefined
       }
     >
-      <NodeBrowser
-        page={children.data}
-        searchQuery={searchQuery}
-      />
+      {node.resource ? (
+        resource ? (
+          <section
+            key={resource.id}
+            className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background"
+          >
+            {resource.kind === "blob" ? (
+              <BlobPreview resource={resource} />
+            ) : (
+              <ResourceEditor
+                unitId={resource.unitId}
+                unitType={resource.unitType}
+                user={user}
+                readOnly={!isEditing}
+                onCollaboratorsChange={onCollaboratorsChange}
+              />
+            )}
+          </section>
+        ) : null
+      ) : children.data ? (
+        <NodeBrowser page={children.data} searchQuery={searchQuery} />
+      ) : null}
     </WorkspaceLayout>
   );
 }
 
-function OpenResourcePage({
-  node,
-  selectedNodePath,
-}: {
-  readonly node: Node;
-  readonly selectedNodePath: readonly string[];
-}) {
-  const resource = node.resource;
-  if (!resource) return null;
-  return (
-    <LoadedResourcePage
-      key={resource.id}
-      node={node}
-      resourceId={resource.id}
-      selectedNodePath={selectedNodePath}
-    />
-  );
-}
-
-function LoadedResourcePage({
+function ResourceTitle({
   node,
   resourceId,
-  selectedNodePath,
+  authenticated,
 }: {
   readonly node: Node;
   readonly resourceId: string;
-  readonly selectedNodePath: readonly string[];
+  readonly authenticated: boolean;
 }) {
-  const { data } = useQuery(resourceOpenQueryOptions(resourceId));
-  const session = useQuery(sessionQueryOptions);
   const queryClient = useQueryClient();
   const { t } = useI18n();
-  const [shareOpen, setShareOpen] = useState(false);
-  const { view } = Route.useSearch();
-  const immersive = view === "immersive";
-  const immersiveLink = (
-    <Tooltip content={t("enterImmersiveView")}>
-      <Link
-        to="/nodes/$nodeId"
-        params={{ nodeId: node.id }}
-        aria-label={t("enterImmersiveView")}
-        hash={true}
-        resetScroll={false}
-        search={(previous) => ({ ...previous, view: "immersive" })}
-        className={cn(
-          buttonVariants({ variant: "ghost", size: "icon-sm" }),
-          "shrink-0 text-muted-foreground no-underline [&_svg]:size-4",
-        )}
-      >
-        <Maximize strokeWidth={1.75} />
-      </Link>
-    </Tooltip>
-  );
-  const [collaborators, setCollaborators] = useState<readonly IMember[]>([]);
   const rename = useMutation({
     mutationFn: async (name: string) => {
-      const { data: updated, error } = await api.PATCH(
-        "/api/nodes/{nodeId}",
-        {
-          params: { path: { nodeId: node.id } },
-          body: { name },
-        }
-      );
+      const { data: updated, error } = await api.PATCH("/api/nodes/{nodeId}", {
+        params: { path: { nodeId: node.id } },
+        body: { name },
+      });
       if (error) throw apiError(error);
       return updated;
     },
@@ -221,117 +237,81 @@ function LoadedResourcePage({
       toast.success(t("resourceRenamed", { name: updated.name }));
     },
     onError: (error) =>
-      toast.error(
-        error instanceof Error ? error.message : t("resourceRenameFailed")
-      ),
+      toast.error(error instanceof Error ? error.message : t("resourceRenameFailed")),
   });
-  if (!data || !session.data?.authenticated) return null;
-  if (data.resource.kind === "blob") {
-    return (
-      <>
-        <WorkspaceLayout
-          immersive={immersive}
-          selectedSpaceId={data.resource.spaceId}
-          selectedNodeId={node.id}
-          selectedNodePath={selectedNodePath}
-          contentMode="editor"
-          headerTitle={
-            <EditableText
-              value={node.name}
-              canEdit={node.capabilities.rename}
-              editLabel={t("renameResource")}
-              onCommit={(name) => rename.mutate(name)}
-            />
-          }
-          headerActions={
-            <>
-              <a
-                className={cn(
-                  buttonVariants({ variant: "secondary", size: "sm" }),
-                  "no-underline"
-                )}
-                href={data.resource.downloadUrl}
-              >
-                <Download />
-                {t("download")}
-              </a>
-              {node.capabilities.share ? (
-                <Button size="sm" onClick={() => setShareOpen(true)}>
-                  <Share2 />
-                  {t("shareAction")}
-                </Button>
-              ) : null}
-              {immersiveLink}
-            </>
-          }
-        >
-          <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
-            <BlobPreview resource={data.resource} />
-          </section>
-        </WorkspaceLayout>
-        <ShareDialog
-          node={shareOpen ? node : null}
-          onClose={() => setShareOpen(false)}
-        />
-      </>
-    );
-  }
-  const isEditing = data.resource.editorMode === "edit";
+  return (
+    <EditableText
+      value={node.name}
+      canEdit={authenticated && node.capabilities.rename}
+      editLabel={t("renameResource")}
+      onCommit={(name) => rename.mutate(name)}
+    />
+  );
+}
+
+function ResourceActions({
+  node,
+  resource,
+  authenticated,
+  currentUserId,
+  collaborators,
+}: {
+  readonly node: Node;
+  readonly resource: components["schemas"]["ResourceOpenView"]["resource"];
+  readonly authenticated: boolean;
+  readonly currentUserId: string;
+  readonly collaborators: readonly IMember[];
+}) {
+  const { t } = useI18n();
+  const [shareOpen, setShareOpen] = useState(false);
+  const isEditing = authenticated && resource.kind === "univer" && resource.editorMode === "edit";
   const modeLabel = isEditing ? t("editingMode") : t("readOnlyMode");
   return (
     <>
-      <WorkspaceLayout
-        immersive={immersive}
-        selectedSpaceId={data.resource.spaceId}
-        selectedNodeId={node.id}
-        selectedNodePath={selectedNodePath}
-        contentMode="editor"
-        headerTitle={
-          <EditableText
-            value={node.name}
-            canEdit={node.capabilities.rename}
-            editLabel={t("renameResource")}
-            onCommit={(name) => rename.mutate(name)}
-          />
-        }
-        headerActions={
-          <>
-            <CollaboratorAvatars
-              members={collaborators}
-              currentUserId={session.data.user.id}
-            />
-            {node.capabilities.share ? (
-              <Button size="sm" onClick={() => setShareOpen(true)}>
-                <Share2 />
-                {t("shareAction")}
-              </Button>
-            ) : null}
-            <Tooltip content={modeLabel}>
-              <span
-                aria-label={modeLabel}
-                className="grid size-8 shrink-0 place-items-center text-secondary-foreground [&_svg]:size-4"
-              >
-                {isEditing ? <Pencil aria-hidden="true" /> : <Lock aria-hidden="true" />}
-              </span>
-            </Tooltip>
-            {immersiveLink}
-          </>
-        }
-      >
-        <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
-          <ResourceEditor
-            unitId={data.resource.unitId}
-            unitType={data.resource.unitType}
-            user={session.data.user}
-            readOnly={!isEditing}
-            onCollaboratorsChange={setCollaborators}
-          />
-        </section>
-      </WorkspaceLayout>
-      <ShareDialog
-        node={shareOpen ? node : null}
-        onClose={() => setShareOpen(false)}
-      />
+      {resource.kind === "blob" ? (
+        <a
+          className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "no-underline")}
+          href={resource.downloadUrl}
+        >
+          <Download />
+          {t("download")}
+        </a>
+      ) : (
+        <CollaboratorAvatars members={collaborators} currentUserId={currentUserId} />
+      )}
+      {authenticated && node.capabilities.share ? (
+        <Button size="sm" onClick={() => setShareOpen(true)}>
+          <Share2 />
+          {t("shareAction")}
+        </Button>
+      ) : null}
+      {authenticated && resource.kind === "univer" ? (
+        <Tooltip content={modeLabel}>
+          <span
+            aria-label={modeLabel}
+            className="grid size-8 shrink-0 place-items-center text-secondary-foreground [&_svg]:size-4"
+          >
+            {isEditing ? <Pencil aria-hidden="true" /> : <Lock aria-hidden="true" />}
+          </span>
+        </Tooltip>
+      ) : null}
+      <Tooltip content={t("enterImmersiveView")}>
+        <Link
+          to="/nodes/$nodeId"
+          params={{ nodeId: node.id }}
+          aria-label={t("enterImmersiveView")}
+          hash={true}
+          resetScroll={false}
+          search={(previous) => ({ ...previous, view: "immersive" })}
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "icon-sm" }),
+            "shrink-0 text-muted-foreground no-underline [&_svg]:size-4",
+          )}
+        >
+          <Maximize strokeWidth={1.75} />
+        </Link>
+      </Tooltip>
+      <ShareDialog node={shareOpen ? node : null} onClose={() => setShareOpen(false)} />
     </>
   );
 }

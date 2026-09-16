@@ -122,7 +122,7 @@ export function NodeBrowser(props: {
             {parentNodeId ? (
               <Breadcrumb
                 items={[
-                  {
+                  ...(props.page.navigationRootNodeId === null ? [{
                     label: props.page.space.name,
                     link: (
                       <Link
@@ -132,7 +132,7 @@ export function NodeBrowser(props: {
                         {props.page.space.name}
                       </Link>
                     ),
-                  },
+                  }] : []),
                   ...props.page.breadcrumbs.map((item, index) => ({
                     label: item.name,
                     link:

@@ -435,7 +435,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List the root Nodes of a Space. */
+        /**
+         * List the root Nodes of a Space.
+         * @description Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
+         */
         get: operations["listSpaceRootNodes"];
         put?: never;
         post?: never;
@@ -471,7 +474,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Get Node metadata without loading children or content. */
+        /**
+         * Get Node metadata without loading children or content.
+         * @description Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
+         */
         get: operations["getNode"];
         put?: never;
         post?: never;
@@ -491,7 +497,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List the direct children of any Node. */
+        /**
+         * List the direct children of any Node.
+         * @description Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
+         */
         get: operations["listNodeChildren"];
         put?: never;
         post?: never;
@@ -584,7 +593,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Resolve Resource and owning Node metadata from a Univer Unit. */
+        /**
+         * Resolve Resource and owning Node metadata from a Univer Unit.
+         * @description Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
+         */
         get: operations["getResourceByUnit"];
         put?: never;
         post?: never;
@@ -605,7 +617,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resolve the Unit and editor mode for a Resource. */
+        /**
+         * Resolve the Unit and editor mode for a Resource.
+         * @description Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
+         */
         post: operations["openResource"];
         delete?: never;
         options?: never;
@@ -697,7 +712,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Read Blob bytes for client-selected preview or other use. */
+        /**
+         * Read Blob bytes for client-selected preview or other use.
+         * @description Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
+         */
         get: operations["getBlobContent"];
         /**
          * Replace all Blob bytes while preserving Resource identity.
@@ -731,7 +749,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Download Blob bytes as an attachment. */
+        /**
+         * Download Blob bytes as an attachment.
+         * @description Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
+         */
         get: operations["downloadBlobContent"];
         put?: never;
         post?: never;
@@ -1382,7 +1403,7 @@ export interface components {
             id: string;
             type: components["schemas"]["SpaceType"];
             name: string;
-            /** @description Whether every authenticated User can browse and open this Space read-only. */
+            /** @description Whether anyone with a link can browse and open this Space read-only. */
             publicRead: boolean;
         };
         /** @enum {string} */
@@ -1399,7 +1420,7 @@ export interface components {
         };
         CreateTeamSpace: {
             name: string;
-            /** @description Whether signed-in users can read the Space without membership. Omit to keep it private. */
+            /** @description Whether anyone with a link can read the Space without signing in. Omit to keep it private. */
             publicRead?: boolean;
         };
         PatchSpace: {
@@ -1656,7 +1677,10 @@ export interface components {
         GrantRemovalResult: {
             effectiveRole: components["schemas"]["GrantRole"] | null;
         };
-        /** @enum {string} */
+        /**
+         * @description Access for signed-in users. Anonymous visitors always receive viewer access.
+         * @enum {string}
+         */
         LinkSharingRole: "editor" | "viewer";
         UpdateNodeLinkSharing: {
             enabled: boolean;
@@ -2652,7 +2676,6 @@ export interface operations {
                     "application/json": components["schemas"]["NodePage"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -2704,7 +2727,6 @@ export interface operations {
                     "application/json": components["schemas"]["NodeResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -2763,7 +2785,6 @@ export interface operations {
                     "application/json": components["schemas"]["NodePage"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -2904,7 +2925,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Current Resource and Node accessible to the signed-in User. */
+            /** @description Current Resource and Node accessible to the current reader. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2913,7 +2934,6 @@ export interface operations {
                     "application/json": components["schemas"]["ResourceResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -2937,7 +2957,6 @@ export interface operations {
                     "application/json": components["schemas"]["ResourceOpenView"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -3118,7 +3137,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             416: components["responses"]["RangeNotSatisfiable"];
         };
@@ -3196,7 +3214,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             416: components["responses"]["RangeNotSatisfiable"];
         };

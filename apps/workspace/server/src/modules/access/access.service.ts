@@ -1,3 +1,4 @@
+import { ANONYMOUS_USER_ID } from "../identity/index.js";
 import { AccessRepository } from "./access.repository.js";
 import type {
   AccessRole,
@@ -29,10 +30,13 @@ export function createAccessResolver(
           ? row.member_role
           : row.grant_role;
     const regularRole = highestRole(
-      assignedRole,
+      userId === ANONYMOUS_USER_ID ? null : assignedRole,
       row.public_read ? "viewer" : null
     );
-    const role = highestRole(regularRole, row.link_sharing_role);
+    const linkRole = userId === ANONYMOUS_USER_ID && row.link_sharing_role
+      ? "viewer"
+      : row.link_sharing_role;
+    const role = highestRole(regularRole, linkRole);
     if (!role) return null;
     const navigationRootNodeId =
       role === "owner" || row.space_type === "team" || Boolean(row.public_read)
@@ -135,8 +139,9 @@ export function createAccessResolver(
     resolveSpace(userId, spaceId) {
       const row = repository.resolveSpace(userId, spaceId);
       if (!row) return null;
+      const assignedRole = row.owner_user_id === userId ? "owner" : row.member_role;
       const role = highestRole(
-        row.owner_user_id === userId ? "owner" : row.member_role,
+        userId === ANONYMOUS_USER_ID ? null : assignedRole,
         row.public_read ? "viewer" : null
       );
       if (!role) return null;

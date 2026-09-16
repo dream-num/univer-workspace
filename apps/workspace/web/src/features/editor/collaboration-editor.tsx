@@ -88,6 +88,7 @@ export interface CollaborationEditorProps {
     readonly id: string;
     readonly displayName: string;
     readonly avatarUrl: string | null;
+    readonly anonymous?: boolean;
   };
   readonly collaborationScope?:
     | { readonly kind: "trunk" }
@@ -201,9 +202,13 @@ export function createCollaborationEditor(
         if (disposed) return;
         const exchangeEnabled =
           collaborationScope.kind === "trunk" &&
-          definition.exchangeEnabled !== false;
+          definition.exchangeEnabled !== false &&
+          !user.anonymous;
         const collaborationConfig = {
           ...resolvedCollaboration.pluginConfig,
+          ...(user.anonymous
+            ? { enableOfflineEditing: false, enableSingleActiveInstanceLock: false }
+            : {}),
           override: withWorkspaceSnapshotServerOverride(
             resolvedCollaboration.pluginConfig.override,
             {
@@ -416,7 +421,7 @@ export function createCollaborationEditor(
           userID: user.id,
           name: user.displayName,
           avatar: user.avatarUrl ?? "",
-          anonymous: false,
+          anonymous: user.anonymous === true,
           canBindAnonymous: false,
           phone: "",
           email: "",
@@ -502,6 +507,7 @@ export function createCollaborationEditor(
       mappedUnitIdsKey,
       language,
       unitId,
+      user.anonymous,
       user.avatarUrl,
       user.displayName,
       user.id,

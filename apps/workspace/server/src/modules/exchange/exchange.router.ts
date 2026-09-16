@@ -86,8 +86,14 @@ export function createExchangeRouter(options: {
   });
 
   router.get("/file/:fileId/sign-url", async (request, response, next) => {
+    // Embedded assets share these paths and may be anonymously readable.
+    const session = options.identity.getSession(request.headers.cookie);
+    if (!session.authenticated) {
+      next();
+      return;
+    }
     const result = await options.exchange.signUrl(
-      userId(request),
+      session.user.id,
       required(request.params.fileId)
     );
     if (!result) {
@@ -98,8 +104,14 @@ export function createExchangeRouter(options: {
     response.json(result);
   });
   router.get("/file/:fileId/content", async (request, response, next) => {
+    // Embedded assets share these paths and may be anonymously readable.
+    const session = options.identity.getSession(request.headers.cookie);
+    if (!session.authenticated) {
+      next();
+      return;
+    }
     const opened = await options.exchange.openFile(
-      userId(request),
+      session.user.id,
       required(request.params.fileId)
     );
     if (!opened) {

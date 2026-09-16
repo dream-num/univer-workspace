@@ -1,4 +1,5 @@
 import type { IUser } from "@univerjs/protocol";
+import { ANONYMOUS_USER_ID } from "../../modules/identity/index.js";
 
 export function protocolUser(user: {
   readonly id: string;
@@ -16,3 +17,12 @@ export function protocolUser(user: {
     createTimestamp: 0,
   };
 }
+
+export const anonymousProtocolUser: IUser = {
+  ...protocolUser({
+    id: ANONYMOUS_USER_ID,
+    displayName: "Anonymous",
+    avatarUrl: null,
+  }),
+  anonymous: true,
+};

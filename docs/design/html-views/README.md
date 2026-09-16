@@ -24,7 +24,7 @@ Workspace 拥有 Blob 的产品入口、Space 与资源目录、用户身份、�
 页面文件和来源 Sheet 是独立资源。HTML、CSS、JavaScript 保存在 Blob 中；单元格数据仍由
 来源 Unit 的协同服务保存。修改页面中的绑定值会写入来源 Sheet，不会改写 HTML 文件。
 
-打开 HTML 文件的权限不授予来源 Sheet 权限。Browser 为当前登录用户逐个解析来源资源，
+打开 HTML 文件的权限不授予来源 Sheet 权限。Browser 为当前访问者逐个解析来源资源，
 服务端校验实际读写权限。当前集成访问 Sheet 的 trunk；HTML Blob 不进入 Unit Worktree。
 Agent 发布页面也不修改来源 Sheet。
 
