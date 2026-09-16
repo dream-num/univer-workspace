@@ -66,7 +66,8 @@ Agent 文件预览先按 `originalFilename` 识别 `.univer.html`，再走普通
 专用适配读取完整 Blob，并通过共享 `workspace-html-viewer` 渲染；构建注入同版本
 renderer runtime。普通 `.html` 仍显示文本源码。
 
-Agent 的 Binding Engine 通过同源 `/univer-workspace/api/unit-resources/{unitId}`
+Agent 适配调用共享 `createWorkspaceHtmlEngine`，复用基础插件装配、只读保护与加载/取消/释放生命周期。
+Agent 通过同源 `/univer-workspace/api/unit-resources/{unitId}`
 解析来源，再调用 Resource open 获取权威 `editorMode`。每个来源独立授权，仅支持
 Sheet trunk；只读来源的单元格写入和追加行均明确报错。协同使用现有
 `/univer-workspace/collab` 代理、当前用户、license 和 SDK collaboration-embed

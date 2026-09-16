@@ -68,18 +68,18 @@ host = createBindingHost(event.ports[0], {
 1. 通过 `GET /api/unit-resources/{unitId}` 解析来源资源。
 2. 通过 `POST /api/resources/{resourceId}/open` 获取当前用户的打开结果。
 3. 确认来源为 Sheet、返回的 Unit ID 与请求一致，读取 `editorMode`。
-4. 创建 Engine，传入 `unitId`、`collaborationClientConfig` 和 Workspace 的 `createUniver` 工厂。
-5. 等待 `engine.load()`；只读来源调用 Workbook 的 `setEditable(false)`，再返回 Engine。
+4. 调用共享 `createWorkspaceHtmlEngine`，传入来源权限、用户、license、协同配置和引用 Provider 装配。
+5. 共享工厂等待 `engine.load()`，为只读来源设置 Workbook 只读，再返回 Engine。
 
 `collaborationClientConfig` 接入 Workspace 同源的 `/universer-api` snapshot、changeset、
 WebSocket、session ticket 和授权入口。Workspace 的 snapshot override 与 referenced-Unit
 provider 均使用 trunk 上下文。
 
-Workspace 使用自定义 `createUniver(config)`，以装配当前用户、license、公式与协同插件、
-snapshot override 和 referenced-Unit provider。工厂返回 `{ univer, univerAPI }`，Engine
-接管独立 Univer 的加载与释放。完整装配代码以该函数为准。
+共享包拥有基础 Univer 插件装配、用户与 license 注入以及 Engine 生命周期。
+Web 适配保留 snapshot override 和 referenced-Unit provider，并通过 `registerEmbed` 注入；
+SDK Engine 接管独立 Univer 的加载与释放。
 
-应用内的 `WorkspaceBindingEngine` 在写入前检查来源的 `editorMode`，只读时直接报错。
+共享 `WorkspaceBindingEngine` 在写入前先检查访客身份并提示登录，再检查宿主传入的来源权限；已登录只读用户收到明确权限错误。
 这是产品权限适配：仅将 Workbook 设为只读时，底层 Facade 可能不写入但也不抛错，不能据此
 向页面报告写入成功。服务端仍负责实际请求的权限校验。
 

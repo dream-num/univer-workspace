@@ -12,7 +12,26 @@ export default defineConfig({
   // browser itself owns React 19, so all source imports must resolve through
   // this composition root instead of bundling a second React dispatcher.
   resolve: {
-    dedupe: ["react", "react-dom"],
+    // The shared engine also imports SDK peers; resolve them in this application
+    // so its services and plugins use the same React 19 / Redi context.
+    dedupe: [
+      "react",
+      "react-dom",
+      "@univerjs-labs/html-view",
+      "@univerjs-labs/html-view-renderer",
+      "@univerjs-labs/binding-engine",
+      "@univerjs/core",
+      "@univerjs-pro/engine-formula",
+      "@univerjs/docs",
+      "@univerjs/sheets",
+      "@univerjs/sheets-formula",
+      "@univerjs/engine-render",
+      "@univerjs/network",
+      "@univerjs-pro/collaboration",
+      "@univerjs-pro/collaboration-client",
+      "@univerjs-pro/collaboration-client-ui",
+      "@univerjs-pro/license",
+    ],
   },
   plugins: [
     tanstackRouter({

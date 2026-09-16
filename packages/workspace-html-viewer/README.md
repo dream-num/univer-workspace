@@ -19,15 +19,24 @@ stable `loadEngine(unitId, signal)` callback. Each build registers the renderer'
 ## Host responsibilities
 
 - Fetch Blob contents and resolve source Unit identities and permissions.
-- Construct the Binding Engine with the application's identity, license,
-  collaboration endpoints, reference policy and read-only enforcement.
+- Resolve identity, license, permissions and collaboration endpoints, and inject
+  the reference policy into `createWorkspaceHtmlEngine`.
 - Present errors and interpret collaboration status for leave protection.
 - Keep the component mounted while awaiting `flush()` before leaving; changing
   source/loader or unmounting disposes the old Host and is not an async save guard.
 - Implement route/tab/account lifecycle and browser unload protection.
 
-No HTTP requests, credentials, DSH services, routes or Univer runtime factory
-belong here. The SDK owns binding syntax, subscriptions and the communication
+The `/engine` export owns the shared Univer runtime factory: base plugins, identity and
+license installation, read-only write enforcement, and abort/load/disposal lifecycle.
+Consumers supply resolved permissions, collaboration endpoints, network configuration
+and `registerEmbed(univer)` for their referenced-Unit policy. SDK dependencies remain
+peers, using each consumer’s runtime.
+
+All binding writes first reject an anonymous identity (`user.anonymous`) with
+“当前为访客模式，请登录后再操作”, then check source edit permission. Consumers pass identity and permissions,
+not error messages; signed-in read-only users retain the source read-only error.
+
+No HTTP requests, credential storage, DSH services or routes belong here. The SDK owns binding syntax, subscriptions and the communication
 protocol. `workspace-ui` remains the owner of generic controls and icons.
 
 Web uses its route blocker. Agent's current Sidecar has no asynchronous close
@@ -39,7 +48,10 @@ or account reload cannot guarantee saving; existing account fences remain active
 
 The component uses React 18-compatible APIs and the consumer's React runtime
 (Web 19, Agent 18). SDK packages are peers so each application's dependency graph
-supplies its own versions. Do not import an application's internal modules here.
+supplies its own versions. Web also deduplicates these SDK peers at its Vite
+composition root, preventing this package’s React 18 development graph from
+introducing another SDK/DI instance into the React 19 application.
+Do not import an application's internal modules here.
 
 Run `pnpm --filter @univerjs/univer-workspace-html-viewer test` and `typecheck`,
 then both consumers' typechecks and builds for shared changes. The Agent browser

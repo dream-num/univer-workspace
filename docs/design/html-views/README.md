@@ -15,8 +15,8 @@ HTML Views 在 Workspace 中以 `.univer.html` Blob 保存，页面使用 HTML�
 | `@univerjs-labs/html-view-renderer` | 生成运行页面、连接页面与宿主、提供保存和释放入口 | Browser、Agent |
 | `@univerjs-labs/binding-engine` | 加载 Sheet Unit，提供数据读写、订阅和协同 | Browser、Agent |
 
-`packages/workspace-html-viewer` 共享沙箱页面与 Binding Host 生命周期；Browser 与 Agent
-各自提供 Binding Engine 工厂、身份、来源授权与退出保存适配。
+`packages/workspace-html-viewer` 共享沙箱页面、Binding Host 生命周期与 Binding Engine 工厂；
+Browser 与 Agent 提供身份、来源授权、协同配置、引用 Provider 与退出保存适配。
 
 Workspace 拥有 Blob 的产品入口、Space 与资源目录、用户身份、来源权限、Univer 配置、
 页面生命周期和 Agent 发布流程。SDK 拥有 HTML 绑定属性、JavaScript 数据接口、页面运行时、

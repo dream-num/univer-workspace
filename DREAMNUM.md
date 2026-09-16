@@ -64,7 +64,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   Contract: [repository boundary](AGENTS.md).
 - [`dream-num/univer-data-binding-sdk`](https://github.com/dream-num/univer-data-binding-sdk) — owns HTML
   binding syntax and runtime APIs. CLI and Agent consume the published HTML parser; Browser and Agent compose page execution
-  through their shared private viewer and application-specific Binding Engine factories.
+  through their shared private viewer and Binding Engine factory, with application-specific
+  source authorization, collaboration endpoints and referenced-Unit providers.
   Contract: [HTML Views integration](docs/design/html-views/README.md).
 - [`dream-num/univer-protocol`](https://github.com/dream-num/univer-protocol) — owns the protocol types consumed by
   collaboration and content workflows. Contract: [repository boundary](AGENTS.md).
