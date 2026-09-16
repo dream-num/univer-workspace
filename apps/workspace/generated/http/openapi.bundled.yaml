@@ -686,10 +686,6 @@ paths:
         schema:
           type: string
     get:
-      security:
-        - {}
-        - sessionCookie: []
-      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Spaces
       operationId: getSpace
@@ -701,6 +697,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SpaceView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
@@ -972,10 +970,6 @@ paths:
         schema:
           type: string
     get:
-      security:
-        - {}
-        - sessionCookie: []
-      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Resources
       operationId: getResource
@@ -987,6 +981,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResourceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /api/unit-resources/{unitId}:

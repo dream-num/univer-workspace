@@ -29,11 +29,10 @@ export function createResourcesRouter(options: {
   });
 
   router.get("/resources/:resourceId", (request, response) => {
-    const session = options.identity.getSession(request.headers.cookie);
-    response.setHeader("Cache-Control", "private, no-store");
+    const session = options.identity.requireSession(request.headers.cookie);
     response.json(
       options.resources.get(
-        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
+        session.user.id,
         requiredParameter(request.params.resourceId)
       )
     );

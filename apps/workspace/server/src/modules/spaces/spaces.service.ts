@@ -26,6 +26,7 @@ export function createSpacesModule(options: {
   readonly repository: SpacesRepository;
   readonly access: AccessResolver;
   readonly now?: () => number;
+  readonly onAccessChanged?: () => void;
 }): SpacesModule {
   const now = options.now ?? Date.now;
 
@@ -103,6 +104,7 @@ export function createSpacesModule(options: {
       }
       if (input.publicRead !== undefined) {
         options.repository.updatePublicRead(spaceId, publicRead, updatedAt);
+        if (publicRead !== access.publicRead) options.onAccessChanged?.();
       }
       return {
         id: access.id,

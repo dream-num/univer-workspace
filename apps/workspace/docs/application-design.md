@@ -69,12 +69,13 @@ interface LoginSessionAuthenticator {
 
 它只证明身份，不携带或缓存 Space、Node、Resource、Worktree Role。
 
-Node、Space、Resource、Blob 与 Trunk Asset 的指定读取接口也接受匿名访问者。
+Node、Resource 打开、按 Unit 查询、Blob 与 Trunk Asset 的指定读取接口也接受匿名访问者。
 匿名身份以保留的 `ANONYMOUS_USER_ID`（`workspace:anonymous`）进入 Access Resolver，仅由 Link Sharing 或 Space 公开可读提供 viewer 权限；
 所有写入和管理入口继续要求登录。匿名 Resource Open 不写 Recent。
 Trunk 协同协议使用固定的访客显示身份及每连接独立的 member ID，复用短期、一次性 Session Ticket；
 该身份不对应产品 User，票据不能用于 Worktree 或用户事件通道。Snapshot、Comment/History 读取
-每次重新鉴权，匿名订阅每秒检查权限，失去全部公开授权后驱逐。没有新增持久化 Session 或数据库迁移。
+每次重新鉴权；分享设置、Space 公开设置、节点移动和删除复用现有连接失效回调，重连时重新鉴权。
+没有新增匿名连接登记、轮询、持久化 Session 或数据库迁移。
 
 Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session。Server 在进程内
 保存有容量上限、十分钟过期的待授权请求；已登录 Browser 确认人类可核对的验证码后，高熵

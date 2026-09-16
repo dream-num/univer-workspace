@@ -415,10 +415,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /**
-         * Get a Space the current User may discover.
-         * @description Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
-         */
+        /** Get a Space the current User may discover. */
         get: operations["getSpace"];
         put?: never;
         post?: never;
@@ -577,10 +574,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /**
-         * Get Resource and owning Node metadata.
-         * @description Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
-         */
+        /** Get Resource and owning Node metadata. */
         get: operations["getResource"];
         put?: never;
         post?: never;
@@ -2625,6 +2619,7 @@ export interface operations {
                     "application/json": components["schemas"]["SpaceView"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -2915,6 +2910,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResourceResponse"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };

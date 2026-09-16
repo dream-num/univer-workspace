@@ -1,4 +1,3 @@
-import { ANONYMOUS_USER_ID } from "../identity/index.js";
 import type { Readable } from "node:stream";
 import { FileSource } from "@univerjs/protocol";
 import { parseByteRange } from "../../integrations/blob/blob-http.js";
@@ -218,7 +217,6 @@ async function authorizeUnit(
   write: boolean
 ): Promise<void> {
   if (scope.kind === "worktree") {
-    if (userId === ANONYMOUS_USER_ID) throw notFound();
     const allowed = await options.worktrees.authorizeProtocol({
       userId,
       worktreeId: scope.worktreeId,

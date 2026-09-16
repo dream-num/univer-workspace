@@ -57,7 +57,7 @@ changes, Trash, or further sharing.
 
 Space public read also admits anonymous viewers, including in Team Spaces. It
 permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.
-Anonymous clients can read Node and Resource metadata, browse accessible children,
+Anonymous clients can read Node metadata, resolve Resources by Unit ID, browse accessible children,
 open Resources, and read Blob and Trunk Asset bytes. All writes and administration,
 Recent, global discovery, and Worktrees continue to require a login session.
 Both policies use existing settings: already-enabled sharing/public read becomes

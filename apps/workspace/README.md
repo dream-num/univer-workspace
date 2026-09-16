@@ -335,5 +335,6 @@ HTML files and their source Sheets are authorized independently, as for signed-i
 These rules apply to existing enabled settings after upgrade. No anonymous accounts,
 login sessions, Recent entries, schema changes or database migration are introduced.
 The public link uses the existing Node URL, including immersive-view parameters.
-Anonymous realtime subscriptions are rechecked every second and evicted when no
-public policy still grants access. Already-delivered content cannot be recalled.
+Sharing changes, Space public-read changes, Node moves and deletion reuse the
+existing realtime connection invalidation. Reconnecting readers are authorized again.
+Already-delivered content cannot be recalled.

@@ -1,5 +1,5 @@
-import { ANONYMOUS_USER_ID } from "../identity/index.js";
 import { randomUUID } from "node:crypto";
+import { ANONYMOUS_USER_ID } from "../identity/index.js";
 import {
   UnitStoreError,
   type UnitStore,
@@ -200,7 +200,9 @@ export function createResourcesModule(options: {
             "Blob content is not currently available."
           );
         }
-        if (userId !== ANONYMOUS_USER_ID) options.repository.recordRecent(userId, resourceId, now());
+        if (userId !== ANONYMOUS_USER_ID) {
+          options.repository.recordRecent(userId, resourceId, now());
+        }
         return {
           resource: {
             id: access.id,
@@ -218,7 +220,9 @@ export function createResourcesModule(options: {
           },
         };
       }
-      if (userId !== ANONYMOUS_USER_ID) options.repository.recordRecent(userId, resourceId, now());
+      if (userId !== ANONYMOUS_USER_ID) {
+        options.repository.recordRecent(userId, resourceId, now());
+      }
       return {
         resource: {
           id: access.id,

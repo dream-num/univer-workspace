@@ -51,7 +51,6 @@ import {
 } from "./protocol-user.js";
 import { setFinalMutationSize } from "./changeset-observation.js";
 import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.js";
-import { logger } from "../../middleware/logging.js";
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
@@ -94,7 +93,6 @@ export function createCollaborationGateway(options: {
       return record?.userID === ANONYMOUS_USER_ID ? null : record;
     },
   };
-  const anonymousUnits = new Map<string, Set<string>>();
   const commentEndpoint = new UniverCommentEndpoint({
     service: commentService,
     roomHost: endpoint,
@@ -212,16 +210,6 @@ export function createCollaborationGateway(options: {
       }
     );
     await next();
-    if (context.session.userID === ANONYMOUS_USER_ID) {
-      const members = anonymousUnits.get(context.unitID) ?? new Set<string>();
-      members.add(context.session.memberID);
-      anonymousUnits.set(context.unitID, members);
-    }
-  });
-  endpoint.on("memberLeftUnit", ({ session, unitID }) => {
-    const members = anonymousUnits.get(unitID);
-    members?.delete(session.memberID);
-    if (members?.size === 0) anonymousUnits.delete(unitID);
   });
 
   for (const action of [
@@ -450,38 +438,6 @@ export function createCollaborationGateway(options: {
     transport.handleUpgrade(request, socket, head);
   };
 
-  // Link sharing, Space settings, moves and Trash can all revoke anonymous access.
-  // Recheck idle rooms as well as individual requests; authorization is never cached.
-  let checkingAnonymousAccess = false;
-  const anonymousAccessTimer = setInterval(async () => {
-    if (disposed || checkingAnonymousAccess) return;
-    checkingAnonymousAccess = true;
-    try {
-      for (const unitID of anonymousUnits.keys()) {
-        if (!access.resolveUnit(ANONYMOUS_USER_ID, unitID)) {
-          await endpoint.invalidateUnitSessions({
-            unitID,
-            userID: ANONYMOUS_USER_ID,
-          });
-        }
-      }
-    } catch (error) {
-      logger.error({ err: error }, "Failed to recheck anonymous collaboration access");
-      // Close connections if authorization cannot be established; reconnects reauthorize.
-      invalidateNodeAccess();
-    } finally {
-      checkingAnonymousAccess = false;
-    }
-  }, MILLISECONDS_PER_SECOND);
-  anonymousAccessTimer.unref();
-
-  function invalidateNodeAccess(): void {
-    for (const connection of nodeAccessConnections) {
-      connection.close(1008, "Node access policy changed");
-    }
-    nodeAccessConnections.clear();
-  }
-
   return {
     router,
     attachWebSocket(server) {
@@ -491,12 +447,15 @@ export function createCollaborationGateway(options: {
       attachedServer = server;
       server.on("upgrade", handleUpgrade);
     },
-    invalidateNodeAccess,
+    invalidateNodeAccess() {
+      for (const connection of nodeAccessConnections) {
+        connection.close(1008, "Node access policy changed");
+      }
+      nodeAccessConnections.clear();
+    },
     async dispose() {
       if (disposed) return;
       disposed = true;
-      clearInterval(anonymousAccessTimer);
-      anonymousUnits.clear();
       attachedServer?.off("upgrade", handleUpgrade);
       attachedServer = undefined;
       await transport.dispose();
@@ -579,10 +538,7 @@ async function requireWorktreeProtocolAccess(
     readonly write: boolean;
   }
 ): Promise<void> {
-  if (
-    input.userId === ANONYMOUS_USER_ID ||
-    !(await worktrees.authorizeProtocol(input))
-  ) {
+  if (!(await worktrees.authorizeProtocol(input))) {
     throw new CollabError(
       "PERMISSION_DENIED",
       "Cannot access this Worktree Unit."

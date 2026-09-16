@@ -54,10 +54,6 @@
       schema:
         type: string
   get:
-    security:
-      - {}
-      - sessionCookie: []
-    description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
     tags: [Resources]
     operationId: getResource
     summary: Get Resource and owning Node metadata.
@@ -68,6 +64,8 @@
           application/json:
             schema:
               $ref: ../schemas/resources.yaml#/ResourceResponse
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound
 

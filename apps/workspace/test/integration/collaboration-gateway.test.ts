@@ -59,7 +59,7 @@ afterEach(async () => {
 });
 
 describe("collaboration gateway", () => {
-  it.each(["link", "space"] as const)(
+  it.each(["link", "space", "move", "trash", "trash-once"] as const)(
     "allows anonymous %s readers without granting writes or Worktree access",
     async (policy) => {
       const { application, origin } = await startApplication();
@@ -94,7 +94,7 @@ describe("collaboration gateway", () => {
       const snapshotUrl = `${origin}/universer-api/snapshot/2/unit/${resource.unitId}/rev/0`;
       expect((await fetch(`${origin}/api/nodes/${node.id}`)).status).toBe(404);
       expect((await fetch(snapshotUrl)).status).toBe(403);
-      if (policy === "link") {
+      if (policy !== "space") {
         application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
           enabled: true,
           role: "editor",
@@ -111,19 +111,18 @@ describe("collaboration gateway", () => {
           accessRole: "viewer",
           capabilities: { rename: false, createChildren: false, share: false, trash: false },
         },
-        navigationRootNodeId: policy === "link" ? shared.id : null,
+        navigationRootNodeId: policy !== "space" ? shared.id : null,
       });
       const children = await fetch(`${origin}/api/nodes/${shared.id}/children`);
       await expect(children.json()).resolves.toMatchObject({ nodes: [{ id: node.id }] });
       expect((await fetch(`${origin}/api/nodes/${parent.id}`)).status).toBe(
-        policy === "link" ? 404 : 200,
+        policy !== "space" ? 404 : 200,
       );
       expect((await fetch(`${origin}/api/spaces/${space.id}/nodes`)).status).toBe(
-        policy === "link" ? 404 : 200,
+        policy !== "space" ? 404 : 200,
       );
-      expect((await fetch(`${origin}/api/spaces/${space.id}`)).status).toBe(
-        policy === "link" ? 404 : 200,
-      );
+      expect((await fetch(`${origin}/api/spaces/${space.id}`)).status).toBe(401);
+      expect((await fetch(`${origin}/api/resources/${resource.id}`)).status).toBe(401);
       expect((await fetch(`${origin}/api/unit-resources/${resource.unitId}`)).status).toBe(200);
       const opened = await fetch(`${origin}/api/resources/${resource.id}/open`, { method: "POST" });
       await expect(opened.json()).resolves.toMatchObject({
@@ -224,8 +223,14 @@ describe("collaboration gateway", () => {
           enabled: false,
           role: "editor",
         });
-      } else {
+      } else if (policy === "space") {
         application.spaces.update(ownerId, space.id, { publicRead: false });
+      } else if (policy === "move") {
+        application.nodes.update(ownerId, node.id, { parentNodeId: parent.id });
+      } else if (policy === "trash") {
+        application.trash.trashNode(ownerId, shared.id);
+      } else {
+        application.trash.trashNodeOnce(ownerId, shared.id, "anonymous-trash-once");
       }
       expect((await fetch(snapshotUrl)).status).toBe(403);
       expect(
