@@ -53,8 +53,7 @@ V7 仅扩展 Operation 和 Object Deletion Job 枚举；不扩展 Blob 上传会
 
 ## Login Session Authenticator
 
-所有产品 HTTP、Snapshot、Changeset、Session Ticket 和 WebSocket Upgrade 使用同一
-Login Session：
+需要登录的产品 HTTP、Changeset 与 Worktree 入口使用同一 Login Session：
 
 ```ts
 interface LoginSessionAuthenticator {
@@ -70,6 +69,13 @@ interface LoginSessionAuthenticator {
 
 它只证明身份，不携带或缓存 Space、Node、Resource、Worktree Role。
 
+Node、Space、Resource、Blob 与 Trunk Asset 的指定读取接口也接受匿名访问者。
+匿名身份以 `null` 进入 Access Resolver，仅由 Link Sharing 或 Space 公开可读提供 viewer 权限；
+所有写入和管理入口继续要求登录。匿名 Resource Open 不写 Recent。
+Trunk 协同协议使用固定的访客显示身份及每连接独立的 member ID，复用短期、一次性 Session Ticket；
+该身份不对应产品 User，票据不能用于 Worktree 或用户事件通道。Snapshot、Comment/History 读取
+每次重新鉴权，匿名订阅每秒检查权限，失去全部公开授权后驱逐。没有新增持久化 Session 或数据库迁移。
+
 Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session。Server 在进程内
 保存有容量上限、十分钟过期的待授权请求；已登录 Browser 确认人类可核对的验证码后，高熵
 Device Code 只能兑换一次，并为 CLI 创建独立、持久化的 `login_sessions` 行。Server 重启可以
@@ -82,10 +88,10 @@ Token 和 Discord Token 都不会经过 Agent。
 
 ```ts
 interface AccessResolver {
-  resolveSpace(userId: string, spaceId: string): SpaceAccess | null;
-  resolveNode(userId: string, nodeId: string): NodeAccess | null;
-  resolveResource(userId: string, resourceId: string): ResourceAccess | null;
-  resolveUnit(userId: string, unitId: string): ResourceAccess | null;
+  resolveSpace(userId: string | null, spaceId: string): SpaceAccess | null;
+  resolveNode(userId: string | null, nodeId: string): NodeAccess | null;
+  resolveResource(userId: string | null, resourceId: string): ResourceAccess | null;
+  resolveUnit(userId: string | null, unitId: string): ResourceAccess | null;
 }
 ```
 

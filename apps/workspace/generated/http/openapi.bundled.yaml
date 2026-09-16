@@ -686,6 +686,10 @@ paths:
         schema:
           type: string
     get:
+      security:
+        - {}
+        - sessionCookie: []
+      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Spaces
       operationId: getSpace
@@ -697,8 +701,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SpaceView'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
@@ -733,6 +735,10 @@ paths:
         schema:
           type: string
     get:
+      security:
+        - {}
+        - sessionCookie: []
+      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Nodes
       operationId: listSpaceRootNodes
@@ -747,8 +753,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NodePage'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /api/nodes:
@@ -786,6 +790,10 @@ paths:
         schema:
           type: string
     get:
+      security:
+        - {}
+        - sessionCookie: []
+      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Nodes
       operationId: getNode
@@ -797,8 +805,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NodeResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
@@ -837,6 +843,10 @@ paths:
         schema:
           type: string
     get:
+      security:
+        - {}
+        - sessionCookie: []
+      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Nodes
       operationId: listNodeChildren
@@ -851,8 +861,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NodePage'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /api/operations/{operationId}:
@@ -964,6 +972,10 @@ paths:
         schema:
           type: string
     get:
+      security:
+        - {}
+        - sessionCookie: []
+      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Resources
       operationId: getResource
@@ -975,8 +987,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResourceResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /api/unit-resources/{unitId}:
@@ -987,19 +997,21 @@ paths:
         schema:
           type: string
     get:
+      security:
+        - {}
+        - sessionCookie: []
+      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Resources
       operationId: getResourceByUnit
       summary: Resolve Resource and owning Node metadata from a Univer Unit.
       responses:
         '200':
-          description: Current Resource and Node accessible to the signed-in User.
+          description: Current Resource and Node accessible to the current reader.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResourceResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /api/resources/{resourceId}/open:
@@ -1010,6 +1022,10 @@ paths:
         schema:
           type: string
     post:
+      security:
+        - {}
+        - sessionCookie: []
+      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Resources
       operationId: openResource
@@ -1021,8 +1037,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResourceOpenView'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /api/blob-upload-sessions:
@@ -1171,6 +1185,10 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Range'
         - $ref: '#/components/parameters/IfNoneMatch'
+      security:
+        - {}
+        - sessionCookie: []
+      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Blobs
       operationId: getBlobContent
@@ -1182,8 +1200,6 @@ paths:
           $ref: '#/components/responses/BlobBytes'
         '304':
           description: The current ETag matches If-None-Match.
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '416':
@@ -1257,6 +1273,10 @@ paths:
       - $ref: '#/components/parameters/Range'
       - $ref: '#/components/parameters/IfNoneMatch'
     get:
+      security:
+        - {}
+        - sessionCookie: []
+      description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
       tags:
         - Blobs
       operationId: downloadBlobContent
@@ -1268,8 +1288,6 @@ paths:
           $ref: '#/components/responses/BlobBytes'
         '304':
           description: The current ETag matches If-None-Match.
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '416':
@@ -2748,7 +2766,7 @@ components:
           type: string
         publicRead:
           type: boolean
-          description: Whether every authenticated User can browse and open this Space read-only.
+          description: Whether anyone with a link can browse and open this Space read-only.
     SpaceRole:
       type: string
       enum:
@@ -2798,7 +2816,7 @@ components:
           maxLength: 100
         publicRead:
           type: boolean
-          description: Whether signed-in users can read the Space without membership. Omit to keep it private.
+          description: Whether anyone with a link can read the Space without signing in. Omit to keep it private.
     PatchSpace:
       type: object
       additionalProperties: false
@@ -3531,6 +3549,7 @@ components:
             - $ref: '#/components/schemas/GrantRole'
             - type: 'null'
     LinkSharingRole:
+      description: Access for signed-in users. Anonymous visitors always receive viewer access.
       type: string
       enum:
         - editor

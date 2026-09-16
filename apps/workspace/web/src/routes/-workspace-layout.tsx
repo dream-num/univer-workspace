@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useNavigate } from "@tanstack/react-router";
+import { Link, Navigate, useLocation, useNavigate } from "@tanstack/react-router";
 import { UniverCliIcon } from "@univerjs/icons";
 import {
   Bot,
@@ -49,6 +49,7 @@ import {
 import {
   Avatar,
   Button,
+  buttonVariants,
   Dialog,
   DialogClose,
   DiscordIcon,
@@ -135,7 +136,67 @@ export function WorkspaceHeaderSearch({
   );
 }
 
-export function WorkspaceLayout({
+type WorkspaceLayoutProps = PropsWithChildren<{
+  readonly selectedSpaceId?: string;
+  readonly selectedNodeId?: string;
+  readonly selectedNodePath?: readonly string[];
+  readonly selectedView?: WorkspaceView;
+  readonly immersive?: boolean;
+  readonly contentMode?: "default" | "editor";
+  readonly headerTitle?: ReactNode;
+  readonly headerContent?: ReactNode;
+  readonly headerActions?: ReactNode;
+}>;
+
+export function WorkspaceLayout(props: WorkspaceLayoutProps) {
+  const session = useQuery(sessionQueryOptions);
+  if (session.isPending) return <LoadingScreen />;
+  if (session.error) throw session.error;
+  return session.data?.authenticated ? (
+    <AuthenticatedWorkspaceLayout {...props} />
+  ) : (
+    <VisitorLayout {...props} />
+  );
+}
+
+function VisitorLayout({
+  children,
+  headerTitle,
+  headerContent,
+  headerActions,
+  immersive,
+}: WorkspaceLayoutProps) {
+  const { t } = useI18n();
+  const location = useLocation();
+  return (
+    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+      <header
+        style={{ display: immersive ? "none" : undefined }}
+        className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-border px-4 py-2"
+      >
+        <span className="min-w-0 flex-1 truncate font-medium">
+          {headerTitle ?? "Univer Workspace"}
+        </span>
+        {headerContent}
+        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Lock className="size-4" aria-hidden="true" />
+          {t("readOnlyMode")}
+        </span>
+        {headerActions}
+        <Link
+          to="/login"
+          search={{ oauthError: undefined, returnTo: location.href }}
+          className={cn(buttonVariants({ size: "sm" }), "no-underline")}
+        >
+          {t("signIn")}
+        </Link>
+      </header>
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
+    </div>
+  );
+}
+
+function AuthenticatedWorkspaceLayout({
   children,
   selectedSpaceId,
   selectedView,
@@ -146,17 +207,7 @@ export function WorkspaceLayout({
   headerActions,
   selectedNodeId,
   selectedNodePath,
-}: PropsWithChildren<{
-  readonly selectedSpaceId?: string;
-  readonly selectedNodeId?: string;
-  readonly selectedNodePath?: readonly string[];
-  readonly selectedView?: WorkspaceView;
-  readonly immersive?: boolean;
-  readonly contentMode?: "default" | "editor";
-  readonly headerTitle?: ReactNode;
-  readonly headerContent?: ReactNode;
-  readonly headerActions?: ReactNode;
-}>) {
+}: WorkspaceLayoutProps) {
   const session = useQuery(sessionQueryOptions);
   const spaces = useQuery(spacesQueryOptions);
   const activeWorktrees = useQuery({
@@ -187,12 +238,13 @@ export function WorkspaceLayout({
       if (error) throw apiError(error);
     },
     onSuccess: async () => {
+      // Permissions and content cached for this User must not become visitor data.
+      queryClient.clear();
       queryClient.setQueryData(sessionQueryKey, {
         authenticated: false,
         githubOAuthEnabled: currentSession.githubOAuthEnabled,
         discordOAuthEnabled: currentSession.discordOAuthEnabled,
       });
-      queryClient.removeQueries({ queryKey: spacesQueryKey });
       await navigate({
         to: "/login",
         search: { oauthError: undefined, returnTo: undefined },

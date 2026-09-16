@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { parseHtmlView, type HtmlViewDocument } from "@univerjs-labs/html-view";
 import { createBindingHost, createHtmlViewDocument } from "@univerjs-labs/html-view-renderer";
 import runtime from "virtual:html-view-runtime";
-import { sessionQueryOptions } from "../auth";
+import { anonymousUser, sessionQueryOptions } from "../auth";
 import { createWorkspaceBindingEngine } from "./workspace-binding-engine";
 import { isResourceViewChange } from "../resource-view/resource-view";
 
@@ -42,7 +42,9 @@ function BoundHtmlView({
   allowedOrigins: readonly string[] | undefined;
 }) {
   const session = useQuery(sessionQueryOptions);
-  const user = session.data?.authenticated ? session.data.user : null;
+  const user = session.data?.authenticated
+    ? session.data.user
+    : session.data ? anonymousUser : null;
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState("");
   const hostRef = useRef<ReturnType<typeof createBindingHost> | undefined>(undefined);

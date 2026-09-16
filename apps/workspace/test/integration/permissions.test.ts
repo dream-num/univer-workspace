@@ -14,6 +14,81 @@ afterEach(async () => {
 });
 
 describe("permissions", () => {
+  it("combines anonymous public-read policies without inheriting edit grants", async () => {
+    const application = createTestApplication();
+    const owner = await register(application, "anonymous-policy-owner");
+    const space = application.spaces.list(owner).spaces[0]!;
+    const root = application.nodes.create(owner, {
+      spaceId: space.id,
+      parentNodeId: null,
+      name: "Shared root",
+    });
+    const child = application.nodes.create(owner, {
+      spaceId: space.id,
+      parentNodeId: root.id,
+      name: "Child",
+    });
+    const sibling = application.nodes.create(owner, {
+      spaceId: space.id,
+      parentNodeId: null,
+      name: "Private sibling",
+    });
+    application.permissions.updateNodeLinkSharing(owner, root.id, {
+      enabled: true,
+      role: "editor",
+    });
+    expect(application.access.resolveNode(null, child.id)).toMatchObject({
+      role: "viewer",
+      navigationRootNodeId: root.id,
+      capabilities: {
+        createChildren: false,
+        rename: false,
+        move: false,
+        trash: false,
+        share: false,
+      },
+    });
+    expect(application.access.resolveNode(null, sibling.id)).toBeNull();
+    application.spaces.update(owner, space.id, { publicRead: true });
+    application.permissions.updateNodeLinkSharing(owner, root.id, {
+      enabled: false,
+      role: "editor",
+    });
+    expect(application.access.resolveNode(null, child.id)).toMatchObject({
+      role: "viewer",
+      navigationRootNodeId: null,
+    });
+    expect(application.access.resolveNode(null, sibling.id)?.role).toBe("viewer");
+    application.spaces.update(owner, space.id, { publicRead: false });
+    expect(application.access.resolveNode(null, child.id)).toBeNull();
+
+    application.permissions.updateNodeLinkSharing(owner, root.id, {
+      enabled: true,
+      role: "editor",
+    });
+    application.nodes.update(owner, child.id, { parentNodeId: null });
+    expect(application.access.resolveNode(null, child.id)).toBeNull();
+    const trash = application.trash.trashNode(owner, root.id);
+    expect(application.access.resolveNode(null, root.id)).toBeNull();
+    application.trash.restore(owner, trash.id);
+    expect(application.access.resolveNode(null, root.id)?.role).toBe("viewer");
+
+    const team = application.spaces.createTeamSpace(owner, {
+      name: "Public team",
+      publicRead: true,
+    });
+    const teamNode = application.nodes.create(owner, {
+      spaceId: team.id,
+      parentNodeId: null,
+      name: "Team document",
+    });
+    expect(application.access.resolveSpace(null, team.id)?.role).toBe("viewer");
+    expect(application.access.resolveNode(null, teamNode.id)?.role).toBe("viewer");
+    application.spaces.update(owner, team.id, { publicRead: false });
+    expect(application.access.resolveSpace(null, team.id)).toBeNull();
+    expect(application.access.resolveNode(null, teamNode.id)).toBeNull();
+  });
+
   it("can enable public read while creating a Team Space", async () => {
     const application = createTestApplication();
     const owner = await register(application, "public-team-owner");

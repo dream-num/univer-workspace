@@ -26,13 +26,13 @@ interface PageRequest {
 
 export interface NodesModule {
   listSpaceRoot(
-    userId: string,
+    userId: string | null,
     spaceId: string,
     page: PageRequest
   ): NodePage;
-  get(userId: string, nodeId: string): NodeResponse;
+  get(userId: string | null, nodeId: string): NodeResponse;
   listChildren(
-    userId: string,
+    userId: string | null,
     nodeId: string,
     page: PageRequest
   ): NodePage;
@@ -48,7 +48,7 @@ export function createNodesModule(options: {
   const now = options.now ?? Date.now;
 
   function listPage(
-    userId: string,
+    userId: string | null,
     space: SpaceAccess,
     parentNode: NodeAccess | null,
     pageRequest: PageRequest

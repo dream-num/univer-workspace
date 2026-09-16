@@ -37,9 +37,9 @@ export interface ResourcesModule {
     operationId: unknown,
     input: unknown
   ): Promise<CreateResourceResult>;
-  get(userId: string, resourceId: string): ResourceResponse;
-  getByUnit(userId: string, unitId: string): ResourceResponse;
-  open(userId: string, resourceId: string): ResourceOpenView;
+  get(userId: string | null, resourceId: string): ResourceResponse;
+  getByUnit(userId: string | null, unitId: string): ResourceResponse;
+  open(userId: string | null, resourceId: string): ResourceOpenView;
   getOperation(userId: string, operationId: string): OperationView;
   retry(userId: string, operationId: string): Promise<OperationView>;
   resumeDue(workerId: string, limit?: number): Promise<number>;
@@ -199,7 +199,7 @@ export function createResourcesModule(options: {
             "Blob content is not currently available."
           );
         }
-        options.repository.recordRecent(userId, resourceId, now());
+        if (userId !== null) options.repository.recordRecent(userId, resourceId, now());
         return {
           resource: {
             id: access.id,
@@ -217,7 +217,7 @@ export function createResourcesModule(options: {
           },
         };
       }
-      options.repository.recordRecent(userId, resourceId, now());
+      if (userId !== null) options.repository.recordRecent(userId, resourceId, now());
       return {
         resource: {
           id: access.id,
@@ -404,7 +404,7 @@ function assertSameIntent(
 
 function requireResourceAccess(
   resolver: AccessResolver,
-  userId: string,
+  userId: string | null,
   resourceId: string
 ): ResourceAccess {
   const access = resolver.resolveResource(userId, resourceId);

@@ -83,7 +83,7 @@ Server 进程内存，不进入产品数据库，进程重启后由用户重新�
 ### `spaces`
 
 `type` 为 `personal | team`。一个 User 最多拥有一个 Personal Space。
-`public_read` 默认关闭；开启后，任意已登录 User 无需 Membership 或 Node Grant 即可按
+`public_read` 默认关闭；开启后，任意访问者（含匿名访客）无需 Membership 或 Node Grant 即可按
 `viewer` 浏览 Space 树并打开其中内容。已有更高权限优先，公开策略不授予任何写能力。
 
 ### `space_members`
@@ -181,10 +181,14 @@ Grant。
 
 ### `node_link_sharing`
 
-Node 的登录用户链接分享策略，角色为 `editor | viewer`。策略同样按 Node 祖先链继承。
+Node 的链接分享策略，登录用户角色为 `editor | viewer`；匿名访客固定为 `viewer`。
+策略同样按 Node 祖先链继承。
 Trigger 限制它只用于 Personal Space。
 
-有效 Role 由 Access Resolver 每次按以下来源计算最高权限：
+匿名读取以空 User ID 进入 Access Resolver，只使用 Space 公开可读与 Link Sharing；
+不创建 User、Login Session 或 Recent。产品数据库仍为 V7，不新增字段或迁移。
+
+登录用户的有效 Role 由 Access Resolver 每次按以下来源计算最高权限：
 
 1. Space Owner；
 2. Team Space Membership；

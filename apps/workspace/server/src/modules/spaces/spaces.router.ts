@@ -27,9 +27,13 @@ export function createSpacesRouter(options: {
   });
 
   router.get("/spaces/:spaceId", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+    const session = options.identity.getSession(request.headers.cookie);
+    response.setHeader("Cache-Control", "private, no-store");
     response.json(
-      options.spaces.get(session.user.id, requiredParameter(request.params.spaceId))
+      options.spaces.get(
+        session.authenticated ? session.user.id : null,
+        requiredParameter(request.params.spaceId)
+      )
     );
   });
 

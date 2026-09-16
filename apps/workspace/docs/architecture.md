@@ -284,3 +284,11 @@ contracts/http/openapi.yaml + paths + schemas
 - 不建立 BaseRepository、BaseService、依赖注入容器或 Event Bus。
 - 不生成服务端业务代码。
 - 目录随真实代码创建，不预先建立空层。
+
+## 匿名查看
+
+Node 与 Space 页面复用现有查询、目录与只读编辑器，未登录时使用轻量访客布局，不加载工作台
+导航、Space 列表或 Worktree 事件连接。登录入口保留当前 URL（含沉浸视图参数）。
+身份仍由 Session API 判断；SDK 的访客显示身份不赋予任何权限。服务端在明确开放的读取入口
+传入匿名身份，统一由 Access Resolver 根据链接分享和 Space 公开可读判定 viewer 权限。
+HTML 与引用来源继续分别鉴权，无专用匿名授权规则。

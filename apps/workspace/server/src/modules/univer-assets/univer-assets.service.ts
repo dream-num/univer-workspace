@@ -30,12 +30,12 @@ export interface UniverAssetsModule {
     }
   ): Promise<{ readonly FileId: string }>;
   resolveContentUrl(
-    userId: string,
+    userId: string | null,
     scope: UniverAssetScope,
     assetId: string
   ): Promise<string>;
   openContent(
-    userId: string,
+    userId: string | null,
     scope: UniverAssetScope,
     assetId: string,
     rangeHeader: string | undefined
@@ -188,7 +188,7 @@ async function requireAuthorizedAsset(
     readonly access: AccessResolver;
     readonly worktrees: WorktreesModule;
   },
-  userId: string,
+  userId: string | null,
   scope: UniverAssetScope,
   assetId: string
 ): Promise<UniverAssetRow> {
@@ -211,12 +211,13 @@ async function authorizeUnit(
     readonly access: AccessResolver;
     readonly worktrees: WorktreesModule;
   },
-  userId: string,
+  userId: string | null,
   scope: UniverAssetScope,
   unitId: string,
   write: boolean
 ): Promise<void> {
   if (scope.kind === "worktree") {
+    if (userId === null) throw notFound();
     const allowed = await options.worktrees.authorizeProtocol({
       userId,
       worktreeId: scope.worktreeId,

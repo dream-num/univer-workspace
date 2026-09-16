@@ -12,7 +12,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - The Workspace product model for identity, Spaces, Nodes, Resources, access, sharing, Trash, recent activity,
   Blobs, Univer Assets, product-level Worktrees, and recoverable cross-system operations. See the
   [application design](apps/workspace/docs/application-design.md).
-- The deployable Workspace Browser and Server composition, including the product HTTP contract, authenticated
+- The deployable Workspace Browser and Server composition, including the product HTTP contract, authenticated and anonymous read-only
   Collaboration Endpoint integration, local persistence layout, and deployment lifecycle. See the
   [Workspace README](apps/workspace/README.md).
 - The Workspace-specific CLI composition and agent workflow over remote Workspace Resources and Worktrees,
@@ -31,7 +31,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 
 ## Provides
 
-- **Univer Workspace** — the deployable Browser and Server application, product HTTP API, authenticated
+- **Univer Workspace** — the deployable Browser and Server application, product HTTP API, authenticated and anonymous read-only
   collaboration entry points, and background recovery processes. Contract: [Workspace README](apps/workspace/README.md)
   and [OpenAPI source](apps/workspace/contracts/http/openapi.yaml).
 - **Univer Workspace CLI** — the internally packaged `univer-workspace-cli` application for agent-driven remote
@@ -86,6 +86,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - Uploaded Resource bytes and embedded Univer Asset bytes are stored by the configured BlobStore. Database rows
   retain their identities, metadata, and recovery state. Blob content replacement preserves Resource identity
   and publishes directly; it does not use Worktree review.
+- Link Sharing and Space public read admit anonymous viewers without creating Users or Login Sessions.
+  Product writes and Worktree access still require authentication; HTML source permissions remain independent.
 - Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs, sharing state, and user-authored
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal

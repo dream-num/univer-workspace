@@ -1,6 +1,6 @@
 # Univer Workspace
 
-A deployable React workspace providing authenticated Univer
+A deployable React workspace providing Univer
 collaboration, Node hierarchy management, permissions, Trash, recent Resources,
 and Worktrees.
 
@@ -322,3 +322,18 @@ pnpm --filter @univerjs/univer-workspace exec vite --config test/vite.immersive.
 ```
 
 打开 `http://127.0.0.1:5183/nodes/html` 或 `http://127.0.0.1:5183/nodes/text`。
+
+## Anonymous viewing
+
+Anyone with a Node link can view its content when Link Sharing is enabled or its
+Space has public read enabled. Folder sharing includes current and future children;
+Space public read allows browsing that Space by URL. Anonymous visitors always have
+viewer access, even when a link grants editors access after sign-in. They cannot
+modify content, write comments, upload, manage permissions, or access Worktrees.
+HTML files and their source Sheets are authorized independently, as for signed-in users.
+
+These rules apply to existing enabled settings after upgrade. No anonymous accounts,
+login sessions, Recent entries, schema changes or database migration are introduced.
+The public link uses the existing Node URL, including immersive-view parameters.
+Anonymous realtime subscriptions are rechecked every second and evicted when no
+public policy still grants access. Already-delivered content cannot be recalled.

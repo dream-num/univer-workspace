@@ -104,6 +104,7 @@ GrantRemovalResult:
         - type: "null"
 
 LinkSharingRole:
+  description: Access for signed-in users. Anonymous visitors always receive viewer access.
   type: string
   enum: [editor, viewer]
 

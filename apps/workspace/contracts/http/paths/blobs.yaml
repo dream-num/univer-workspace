@@ -149,6 +149,10 @@ BlobContentPath:
     parameters:
       - $ref: "#/Range"
       - $ref: "#/IfNoneMatch"
+    security:
+      - {}
+      - sessionCookie: []
+    description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
     tags: [Blobs]
     operationId: getBlobContent
     summary: Read Blob bytes for client-selected preview or other use.
@@ -159,8 +163,6 @@ BlobContentPath:
         $ref: "#/BlobBytes"
       "304":
         description: The current ETag matches If-None-Match.
-      "401":
-        $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound
       "416":
@@ -235,6 +237,10 @@ BlobDownloadPath:
     - $ref: "#/Range"
     - $ref: "#/IfNoneMatch"
   get:
+    security:
+      - {}
+      - sessionCookie: []
+    description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
     tags: [Blobs]
     operationId: downloadBlobContent
     summary: Download Blob bytes as an attachment.
@@ -245,8 +251,6 @@ BlobDownloadPath:
         $ref: "#/BlobBytes"
       "304":
         description: The current ETag matches If-None-Match.
-      "401":
-        $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound
       "416":

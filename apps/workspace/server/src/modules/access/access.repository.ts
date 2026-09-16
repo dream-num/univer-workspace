@@ -117,7 +117,7 @@ export class AccessRepository {
     );
   }
 
-  resolveSpace(userId: string, spaceId: string): SpaceAccessRow | null {
+  resolveSpace(userId: string | null, spaceId: string): SpaceAccessRow | null {
     return (
       (this._database.connection
         .prepare(
@@ -143,7 +143,7 @@ export class AccessRepository {
     );
   }
 
-  resolveNode(userId: string, nodeId: string): ResolvedNodeRow | null {
+  resolveNode(userId: string | null, nodeId: string): ResolvedNodeRow | null {
     return (
       ((this._resolveNodeStatement ??= this._database.connection
         .prepare(

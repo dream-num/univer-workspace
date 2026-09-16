@@ -16,7 +16,7 @@ import {
   nodeQueryOptions,
 } from "../features/nodes";
 import {
-  requireAuthenticatedSession,
+  anonymousUser,
   sessionQueryOptions,
 } from "../features/auth";
 import { resourceOpenQueryOptions } from "../features/resources";
@@ -47,7 +47,7 @@ export const Route = createFileRoute("/nodes/$nodeId")({
   }),
   loaderDeps: ({ search }) => ({ unit: search.unit }),
   loader: async ({ context, deps, params, location }) => {
-    await requireAuthenticatedSession(context.queryClient, location.href);
+    const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
     if (deps.unit) {
       const { data } = await api.GET("/api/unit-resources/{unitId}", {
         params: { path: { unitId: deps.unit } },
@@ -72,7 +72,9 @@ export const Route = createFileRoute("/nodes/$nodeId")({
     }
     try {
       const [, result] = await Promise.all([
-        context.queryClient.ensureQueryData(spacesQueryOptions),
+        session.authenticated
+          ? context.queryClient.ensureQueryData(spacesQueryOptions)
+          : undefined,
         context.queryClient.ensureQueryData(nodeQueryOptions(params.nodeId)),
       ]);
       if (result.node.resource) {
@@ -225,7 +227,8 @@ function LoadedResourcePage({
         error instanceof Error ? error.message : t("resourceRenameFailed")
       ),
   });
-  if (!data || !session.data?.authenticated) return null;
+  if (!data || !session.data) return null;
+  const user = session.data.authenticated ? session.data.user : anonymousUser;
   if (data.resource.kind === "blob") {
     return (
       <>
@@ -238,7 +241,7 @@ function LoadedResourcePage({
           headerTitle={
             <EditableText
               value={node.name}
-              canEdit={node.capabilities.rename}
+              canEdit={session.data.authenticated && node.capabilities.rename}
               editLabel={t("renameResource")}
               onCommit={(name) => rename.mutate(name)}
             />
@@ -255,7 +258,7 @@ function LoadedResourcePage({
                 <Download />
                 {t("download")}
               </a>
-              {node.capabilities.share ? (
+              {session.data.authenticated && node.capabilities.share ? (
                 <Button size="sm" onClick={() => setShareOpen(true)}>
                   <Share2 />
                   {t("shareAction")}
@@ -276,7 +279,7 @@ function LoadedResourcePage({
       </>
     );
   }
-  const isEditing = data.resource.editorMode === "edit";
+  const isEditing = session.data.authenticated && data.resource.editorMode === "edit";
   const modeLabel = isEditing ? t("editingMode") : t("readOnlyMode");
   return (
     <>
@@ -289,7 +292,7 @@ function LoadedResourcePage({
         headerTitle={
           <EditableText
             value={node.name}
-            canEdit={node.capabilities.rename}
+            canEdit={session.data.authenticated && node.capabilities.rename}
             editLabel={t("renameResource")}
             onCommit={(name) => rename.mutate(name)}
           />
@@ -298,22 +301,24 @@ function LoadedResourcePage({
           <>
             <CollaboratorAvatars
               members={collaborators}
-              currentUserId={session.data.user.id}
+              currentUserId={user.id}
             />
-            {node.capabilities.share ? (
+            {session.data.authenticated && node.capabilities.share ? (
               <Button size="sm" onClick={() => setShareOpen(true)}>
                 <Share2 />
                 {t("shareAction")}
               </Button>
             ) : null}
-            <Tooltip content={modeLabel}>
-              <span
-                aria-label={modeLabel}
-                className="grid size-8 shrink-0 place-items-center text-secondary-foreground [&_svg]:size-4"
-              >
-                {isEditing ? <Pencil aria-hidden="true" /> : <Lock aria-hidden="true" />}
-              </span>
-            </Tooltip>
+            {session.data.authenticated ? (
+              <Tooltip content={modeLabel}>
+                <span
+                  aria-label={modeLabel}
+                  className="grid size-8 shrink-0 place-items-center text-secondary-foreground [&_svg]:size-4"
+                >
+                  {isEditing ? <Pencil aria-hidden="true" /> : <Lock aria-hidden="true" />}
+                </span>
+              </Tooltip>
+            ) : null}
             {immersiveLink}
           </>
         }
@@ -322,7 +327,7 @@ function LoadedResourcePage({
           <ResourceEditor
             unitId={data.resource.unitId}
             unitType={data.resource.unitType}
-            user={session.data.user}
+            user={user}
             readOnly={!isEditing}
             onCollaboratorsChange={setCollaborators}
           />

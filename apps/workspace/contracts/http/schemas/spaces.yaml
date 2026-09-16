@@ -40,7 +40,7 @@ SpaceSummary:
       type: string
     publicRead:
       type: boolean
-      description: Whether every authenticated User can browse and open this Space read-only.
+      description: Whether anyone with a link can browse and open this Space read-only.
 
 SpaceView:
   allOf:
@@ -75,7 +75,7 @@ CreateTeamSpace:
       maxLength: 100
     publicRead:
       type: boolean
-      description: Whether signed-in users can read the Space without membership. Omit to keep it private.
+      description: Whether anyone with a link can read the Space without signing in. Omit to keep it private.
 
 PatchSpace:
   type: object

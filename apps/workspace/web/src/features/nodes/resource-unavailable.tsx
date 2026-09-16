@@ -1,5 +1,7 @@
-import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useLocation } from "@tanstack/react-router";
 import { FileQuestion, Home } from "lucide-react";
+import { sessionQueryOptions } from "../auth";
 import { ApiError } from "../../shared/api/errors";
 import { useI18n } from "../../shared/i18n";
 import { buttonVariants } from "../../shared/ui";
@@ -10,6 +12,8 @@ export function isResourceUnavailableError(error: unknown) {
 
 export function ResourceUnavailablePage() {
   const { t } = useI18n();
+  const session = useQuery(sessionQueryOptions);
+  const location = useLocation();
 
   return (
     <main className="auth-backdrop grid min-h-dvh place-items-center px-5 py-8">
@@ -23,13 +27,23 @@ export function ResourceUnavailablePage() {
         <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
           {t("resourceUnavailableDescription")}
         </p>
-        <Link
-          to="/home"
-          className={`${buttonVariants({ size: "lg" })} mt-7 no-underline`}
-        >
-          <Home />
-          {t("backToHome")}
-        </Link>
+        {session.data?.authenticated ? (
+          <Link
+            to="/home"
+            className={`${buttonVariants({ size: "lg" })} mt-7 no-underline`}
+          >
+            <Home />
+            {t("backToHome")}
+          </Link>
+        ) : (
+          <Link
+            to="/login"
+            search={{ oauthError: undefined, returnTo: location.href }}
+            className={`${buttonVariants({ size: "lg" })} mt-7 no-underline`}
+          >
+            {t("signIn")}
+          </Link>
+        )}
       </section>
     </main>
   );

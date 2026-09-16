@@ -2,6 +2,7 @@ import type { Server } from "node:http";
 import {
   MemorySessionTicketStore,
   UniverCollabEndpoint,
+  type ISessionTicketStore,
 } from "@univerjs-pro/collaboration-endpoint";
 import { UniverCommentEndpoint } from "@univerjs-pro/collaboration-comment-endpoint";
 import { UniverHistoryEndpoint } from "@univerjs-pro/collaboration-history-endpoint";
@@ -16,6 +17,7 @@ import {
 } from "@univerjs-pro/collaboration-service";
 import {
   createNodeTransport,
+  type NodeHttpHandler,
   type NodeHttpTransportContext,
   type NodeTransportConnection,
   type NodeTransportEndpoint,
@@ -43,9 +45,15 @@ import {
   WORKTREE_CHANGE_FEED_PATH,
   type WorktreeChangeFeed,
 } from "../realtime/worktree-change-feed.js";
-import { protocolUser } from "./protocol-user.js";
+import {
+  ANONYMOUS_PROTOCOL_USER_ID,
+  anonymousProtocolUser,
+  productUserId,
+  protocolUser,
+} from "./protocol-user.js";
 import { setFinalMutationSize } from "./changeset-observation.js";
 import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.js";
+import { logger } from "../../middleware/logging.js";
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
@@ -80,6 +88,15 @@ export function createCollaborationGateway(options: {
   } = options;
   const ticketStore = new MemorySessionTicketStore();
   const endpoint = new UniverCollabEndpoint(service, { ticketStore });
+  // A visitor ticket only admits a Trunk connection, never a Worktree or user feed.
+  const authenticatedTickets: ISessionTicketStore = {
+    issue: (record, ttlMs) => ticketStore.issue(record, ttlMs),
+    async consume(ticket) {
+      const record = await ticketStore.consume(ticket);
+      return record?.userID === ANONYMOUS_PROTOCOL_USER_ID ? null : record;
+    },
+  };
+  const anonymousUnits = new Map<string, Set<string>>();
   const commentEndpoint = new UniverCommentEndpoint({
     service: commentService,
     roomHost: endpoint,
@@ -87,7 +104,7 @@ export function createCollaborationGateway(options: {
   const historyEndpoint = new UniverHistoryEndpoint(historyService);
   const worktreeEndpoint = new UniverCollabWorktreeEndpoint(
     worktreeService,
-    { ticketStore }
+    { ticketStore: authenticatedTickets }
   );
   const transport = createNodeTransport();
   const nodeAccessConnections = new Set<NodeTransportConnection>();
@@ -197,6 +214,16 @@ export function createCollaborationGateway(options: {
       }
     );
     await next();
+    if (context.session.userID === ANONYMOUS_PROTOCOL_USER_ID) {
+      const members = anonymousUnits.get(context.unitID) ?? new Set<string>();
+      members.add(context.session.memberID);
+      anonymousUnits.set(context.unitID, members);
+    }
+  });
+  endpoint.on("memberLeftUnit", ({ session, unitID }) => {
+    const members = anonymousUnits.get(unitID);
+    members?.delete(session.memberID);
+    if (members?.size === 0) anonymousUnits.delete(unitID);
   });
 
   for (const action of [
@@ -293,24 +320,29 @@ export function createCollaborationGateway(options: {
   transport.use(createCollaborationMetricsMiddleware());
   transport.use(async (context, next) => {
     const session = identity.getSession(cookieHeader(context));
-    if (!session.authenticated) {
-      unauthenticated(context);
-      return;
-    }
-    context.userID = session.user.id;
-    context.customData.user = protocolUser(session.user);
+    context.userID = session.authenticated
+      ? session.user.id
+      : ANONYMOUS_PROTOCOL_USER_ID;
+    context.customData.user = session.authenticated
+      ? protocolUser(session.user)
+      : anonymousProtocolUser;
+    context.response.setHeader("Cache-Control", "private, no-store");
     await next();
   });
-  transport.register(historyEndpoint);
-  transport.register(commentEndpoint);
-  transport.register(worktreeEndpoint);
-  transport.register(worktreeChangeFeed.endpoint(ticketStore));
-  transport.register(trackConnections(endpoint, nodeAccessConnections));
+  transport.register(authorizeAnonymousReads(historyEndpoint, true));
+  transport.register(authorizeAnonymousReads(commentEndpoint, true));
+  // Both SDK endpoints register the common ticket URL; Trunk owns visitor issuance.
+  transport.register(
+    authorizeAnonymousReads(trackConnections(endpoint, nodeAccessConnections), true)
+  );
+  transport.register(authorizeAnonymousReads(worktreeEndpoint, false));
+  transport.register(worktreeChangeFeed.endpoint(authenticatedTickets));
 
   const router = Router();
   router.use((request, response, next) => {
     try {
-      response.locals.session = identity.requireSession(request.headers.cookie);
+      response.locals.session = identity.getSession(request.headers.cookie);
+      response.setHeader("Cache-Control", "private, no-store");
       next();
     } catch (error) {
       next(error);
@@ -319,7 +351,9 @@ export function createCollaborationGateway(options: {
   router.get("/user", (_request, response) => {
     response.json({
       error: OK_ERROR,
-      user: protocolUser(response.locals.session.user),
+      user: response.locals.session.authenticated
+        ? protocolUser(response.locals.session.user)
+        : anonymousProtocolUser,
     });
   });
   router.post(
@@ -330,7 +364,9 @@ export function createCollaborationGateway(options: {
       if (!Array.isArray(requests)) {
         throw new CollabError("INVALID_REQUEST", "requests must be an array");
       }
-      const userId = response.locals.session.user.id as string;
+      const userId = response.locals.session.authenticated
+        ? response.locals.session.user.id as string
+        : ANONYMOUS_PROTOCOL_USER_ID;
       response.json({
         error: OK_ERROR,
         objectActions: requests.map((value: unknown) =>
@@ -345,12 +381,14 @@ export function createCollaborationGateway(options: {
     (request, response) => {
       const unitId =
         typeof request.body?.unitID === "string" ? request.body.unitID : "";
-      const userId = response.locals.session.user.id as string;
+      const userId = response.locals.session.authenticated
+        ? response.locals.session.user.id as string
+        : ANONYMOUS_PROTOCOL_USER_ID;
       response.json({
         error: OK_ERROR,
         actions: allowedActions(
           request.body?.actions,
-          access.resolveUnit(userId, unitId)
+          access.resolveUnit(productUserId(userId), unitId)
         ),
       });
     }
@@ -365,7 +403,7 @@ export function createCollaborationGateway(options: {
         response.status(400).json({ message: "Invalid comparison mode." });
         return;
       }
-      const userId = response.locals.session.user.id as string;
+      const userId = identity.requireSession(request.headers.cookie).user.id;
       const detail = await worktrees.get(userId, request.params.worktreeId);
       const unit = detail.worktree.units.find(
         (candidate) => candidate.unitId === request.params.unitId
@@ -414,6 +452,38 @@ export function createCollaborationGateway(options: {
     transport.handleUpgrade(request, socket, head);
   };
 
+  // Link sharing, Space settings, moves and Trash can all revoke anonymous access.
+  // Recheck idle rooms as well as individual requests; authorization is never cached.
+  let checkingAnonymousAccess = false;
+  const anonymousAccessTimer = setInterval(async () => {
+    if (disposed || checkingAnonymousAccess) return;
+    checkingAnonymousAccess = true;
+    try {
+      for (const unitID of anonymousUnits.keys()) {
+        if (!access.resolveUnit(null, unitID)) {
+          await endpoint.invalidateUnitSessions({
+            unitID,
+            userID: ANONYMOUS_PROTOCOL_USER_ID,
+          });
+        }
+      }
+    } catch (error) {
+      logger.error({ err: error }, "Failed to recheck anonymous collaboration access");
+      // Close connections if authorization cannot be established; reconnects reauthorize.
+      invalidateNodeAccess();
+    } finally {
+      checkingAnonymousAccess = false;
+    }
+  }, MILLISECONDS_PER_SECOND);
+  anonymousAccessTimer.unref();
+
+  function invalidateNodeAccess(): void {
+    for (const connection of nodeAccessConnections) {
+      connection.close(1008, "Node access policy changed");
+    }
+    nodeAccessConnections.clear();
+  }
+
   return {
     router,
     attachWebSocket(server) {
@@ -423,15 +493,12 @@ export function createCollaborationGateway(options: {
       attachedServer = server;
       server.on("upgrade", handleUpgrade);
     },
-    invalidateNodeAccess() {
-      for (const connection of nodeAccessConnections) {
-        connection.close(1008, "Node access policy changed");
-      }
-      nodeAccessConnections.clear();
-    },
+    invalidateNodeAccess,
     async dispose() {
       if (disposed) return;
       disposed = true;
+      clearInterval(anonymousAccessTimer);
+      anonymousUnits.clear();
       attachedServer?.off("upgrade", handleUpgrade);
       attachedServer = undefined;
       await transport.dispose();
@@ -514,7 +581,10 @@ async function requireWorktreeProtocolAccess(
     readonly write: boolean;
   }
 ): Promise<void> {
-  if (!(await worktrees.authorizeProtocol(input))) {
+  if (
+    input.userId === ANONYMOUS_PROTOCOL_USER_ID ||
+    !(await worktrees.authorizeProtocol(input))
+  ) {
     throw new CollabError(
       "PERMISSION_DENIED",
       "Cannot access this Worktree Unit."
@@ -534,7 +604,7 @@ function allowedObjectActions(
   };
   const unitId =
     typeof candidate.unitID === "string" ? candidate.unitID : "";
-  const resource = access.resolveUnit(userId, unitId);
+  const resource = access.resolveUnit(productUserId(userId), unitId);
   return {
     unitID: unitId,
     objectID:
@@ -591,7 +661,7 @@ function requireUnitAccess(
   userId: string,
   unitId: string
 ): ResourceAccess {
-  const resource = access.resolveUnit(userId, unitId);
+  const resource = access.resolveUnit(productUserId(userId), unitId);
   if (!resource?.capabilities.openContent) {
     throw new CollabError("PERMISSION_DENIED", "Cannot read this unit.");
   }
@@ -686,4 +756,31 @@ function unauthenticated(context: NodeHttpTransportContext): void {
       },
     })
   );
+}
+
+/** Apply policy to the SDK's registered routes, without duplicating its URL contract. */
+function authorizeAnonymousReads(
+  endpoint: NodeTransportEndpoint,
+  allowReads: boolean,
+): NodeTransportEndpoint {
+  return {
+    register(router) {
+      const authenticated =
+        (handler: NodeHttpHandler) => async (context: NodeHttpTransportContext) => {
+          if (context.userID === ANONYMOUS_PROTOCOL_USER_ID) {
+            unauthenticated(context);
+            return;
+          }
+          await handler(context);
+        };
+      endpoint.register({
+        get: (path, handler) =>
+          router.get(path, allowReads ? handler : authenticated(handler)),
+        post: (path, handler) => router.post(path, authenticated(handler)),
+        delete: (path, handler) => router.delete(path, authenticated(handler)),
+        upgrade: (path, handler) => router.upgrade(path, handler),
+      });
+    },
+    dispose: () => endpoint.dispose?.(),
+  };
 }

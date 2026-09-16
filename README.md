@@ -33,7 +33,7 @@ review. Humans can continue editing and stay in control of what gets merged.
 | ------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
 | Organize content in Personal and Team Spaces            | Create and edit rich Office content through the Univer Facade API | Deploy one Browser and Server application                            |
 | Co-edit Sheets, Docs, Slides, Bases, and Boards         | Inspect data, render screenshots/PDFs, and run layout checks      | Keep product, collaboration, and Blob data under application control |
-| Share content with role- and node-aware access control  | Discover version-matched Skills and APIs offline                  | Integrate password, GitHub, Discord, or application OAuth login      |
+| Share content with role- and node-aware access control, including anonymous viewing  | Discover version-matched Skills and APIs offline                  | Integrate password, GitHub, Discord, or application OAuth login      |
 | Use Recent, Trash, file import/export, and review views | Work through multiple rounds without changing trunk               | Operate a documented HTTP API with explicit recovery boundaries      |
 
 ## Choose your entry point

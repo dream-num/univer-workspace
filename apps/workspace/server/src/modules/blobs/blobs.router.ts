@@ -77,8 +77,10 @@ export function createBlobsRouter(options: {
     router.get(
       `/blob-resources/:resourceId/${disposition}`,
       async (request, response) => {
+        const reader = options.identity.getSession(request.headers.cookie);
+        response.setHeader("Cache-Control", "private, no-store");
         const opened = await options.blobs.openContent(
-          session(request.headers.cookie),
+          reader.authenticated ? reader.user.id : null,
           required(request.params.resourceId),
           request.headers.range
         );

@@ -45,8 +45,9 @@ export function createUniverAssetsRouter(options: {
   );
 
   router.get("/file/:fileId/sign-url", async (request, response) => {
+    const session = options.identity.getSession(request.headers.cookie);
     const url = await options.assets.resolveContentUrl(
-      userId(request),
+      session.authenticated ? session.user.id : null,
       { kind: "trunk" },
       required(request.params.fileId)
     );
@@ -70,11 +71,12 @@ export function createUniverAssetsRouter(options: {
   );
 
   router.get("/file/:fileId/content", async (request, response) => {
+    const session = options.identity.getSession(request.headers.cookie);
     await sendContent(
       request,
       response,
       options.assets,
-      userId(request),
+      session.authenticated ? session.user.id : null,
       { kind: "trunk" },
       required(request.params.fileId)
     );
@@ -124,7 +126,7 @@ async function sendContent(
   request: Request,
   response: Response,
   assets: UniverAssetsModule,
-  userId: string,
+  userId: string | null,
   scope: UniverAssetScope,
   assetId: string
 ): Promise<void> {

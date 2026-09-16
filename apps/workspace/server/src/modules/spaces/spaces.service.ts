@@ -14,7 +14,7 @@ export interface SpacesModule {
     userId: string,
     input: { readonly name: unknown; readonly publicRead?: unknown }
   ): SpaceView;
-  get(userId: string, spaceId: string): SpaceView;
+  get(userId: string | null, spaceId: string): SpaceView;
   update(
     userId: string,
     spaceId: string,
@@ -118,7 +118,7 @@ export function createSpacesModule(options: {
 
 function resolveSpace(
   resolver: AccessResolver,
-  userId: string,
+  userId: string | null,
   spaceId: string
 ): SpaceView {
   const access = resolver.resolveSpace(userId, spaceId);

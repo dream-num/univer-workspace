@@ -9,17 +9,18 @@ import type {
   SpaceCapabilities,
 } from "./access.types.js";
 
+/** A null user ID represents an anonymous reader, never a persisted User. */
 export interface AccessResolver {
-  resolveSpace(userId: string, spaceId: string): SpaceAccess | null;
-  resolveNode(userId: string, nodeId: string): NodeAccess | null;
-  resolveResource(userId: string, resourceId: string): ResourceAccess | null;
-  resolveUnit(userId: string, unitId: string): ResourceAccess | null;
+  resolveSpace(userId: string | null, spaceId: string): SpaceAccess | null;
+  resolveNode(userId: string | null, nodeId: string): NodeAccess | null;
+  resolveResource(userId: string | null, resourceId: string): ResourceAccess | null;
+  resolveUnit(userId: string | null, unitId: string): ResourceAccess | null;
 }
 
 export function createAccessResolver(
   repository: AccessRepository
 ): AccessResolver {
-  function resolveNode(userId: string, nodeId: string): NodeAccess | null {
+  function resolveNode(userId: string | null, nodeId: string): NodeAccess | null {
     const row = repository.resolveNode(userId, nodeId);
     if (!row) return null;
     const assignedRole =
@@ -32,7 +33,10 @@ export function createAccessResolver(
       assignedRole,
       row.public_read ? "viewer" : null
     );
-    const role = highestRole(regularRole, row.link_sharing_role);
+    const linkRole = userId === null && row.link_sharing_role
+      ? "viewer"
+      : row.link_sharing_role;
+    const role = highestRole(regularRole, linkRole);
     if (!role) return null;
     const navigationRootNodeId =
       role === "owner" || row.space_type === "team" || Boolean(row.public_read)
@@ -76,7 +80,7 @@ export function createAccessResolver(
   }
 
   function resourceAccess(
-    userId: string,
+    userId: string | null,
     mapping: {
       readonly resource_id: string;
       readonly node_id: string;

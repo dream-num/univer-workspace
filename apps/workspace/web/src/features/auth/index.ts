@@ -5,3 +5,4 @@ export {
   sessionQueryOptions,
   validLoginReturnTo,
 } from "./auth.queries";
+export { anonymousUser } from "./anonymous-user";

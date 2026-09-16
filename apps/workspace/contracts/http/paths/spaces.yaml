@@ -44,6 +44,10 @@
       schema:
         type: string
   get:
+    security:
+      - {}
+      - sessionCookie: []
+    description: Anonymous readers receive viewer access through Link Sharing or Space public read; inaccessible content returns 404.
     tags: [Spaces]
     operationId: getSpace
     summary: Get a Space the current User may discover.
@@ -54,8 +58,6 @@
           application/json:
             schema:
               $ref: ../schemas/spaces.yaml#/SpaceView
-      "401":
-        $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound
   patch:

@@ -29,30 +29,33 @@ export function createResourcesRouter(options: {
   });
 
   router.get("/resources/:resourceId", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+    const session = options.identity.getSession(request.headers.cookie);
+    response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.resources.get(
-        session.user.id,
+        session.authenticated ? session.user.id : null,
         requiredParameter(request.params.resourceId)
       )
     );
   });
 
   router.get("/unit-resources/:unitId", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+    const session = options.identity.getSession(request.headers.cookie);
+    response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.resources.getByUnit(
-        session.user.id,
+        session.authenticated ? session.user.id : null,
         requiredParameter(request.params.unitId)
       )
     );
   });
 
   router.post("/resources/:resourceId/open", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+    const session = options.identity.getSession(request.headers.cookie);
+    response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.resources.open(
-        session.user.id,
+        session.authenticated ? session.user.id : null,
         requiredParameter(request.params.resourceId)
       )
     );

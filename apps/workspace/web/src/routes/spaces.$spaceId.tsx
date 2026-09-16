@@ -1,12 +1,14 @@
 import { Copy, Settings, Users } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import {
   NodeBrowser,
+  ResourceUnavailablePage,
+  isResourceUnavailableError,
   spaceNodesQueryOptions,
 } from "../features/nodes";
-import { requireAuthenticatedSession } from "../features/auth";
+import { sessionQueryOptions } from "../features/auth";
 import { spacesQueryOptions } from "../features/spaces";
 import {
   WorkspaceHeaderSearch,
@@ -25,22 +27,34 @@ import {
 } from "../shared/ui";
 
 export const Route = createFileRoute("/spaces/$spaceId")({
-  loader: async ({ context, params, location }) => {
-    await requireAuthenticatedSession(context.queryClient, location.href);
-    await Promise.all([
-      context.queryClient.ensureQueryData(spacesQueryOptions),
-      context.queryClient.ensureQueryData(
-        spaceNodesQueryOptions(params.spaceId)
-      ),
-    ]);
+  loader: async ({ context, params }) => {
+    const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
+    try {
+      await Promise.all([
+        session.authenticated
+          ? context.queryClient.ensureQueryData(spacesQueryOptions)
+          : undefined,
+        context.queryClient.ensureQueryData(
+          spaceNodesQueryOptions(params.spaceId)
+        ),
+      ]);
+    } catch (error) {
+      if (isResourceUnavailableError(error)) throw notFound();
+      throw error;
+    }
   },
+  notFoundComponent: ResourceUnavailablePage,
   component: SpaceNodePage,
 });
 
 function SpaceNodePage() {
   const { spaceId } = Route.useParams();
   const query = useQuery(spaceNodesQueryOptions(spaceId));
-  const spaces = useQuery(spacesQueryOptions);
+  const session = useQuery(sessionQueryOptions);
+  const spaces = useQuery({
+    ...spacesQueryOptions,
+    enabled: session.data?.authenticated === true,
+  });
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -49,7 +63,9 @@ function SpaceNodePage() {
   const [name, setName] = useState("");
   const [publicRead, setPublicRead] = useState(false);
   const [error, setError] = useState<string>();
-  const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const space = session.data?.authenticated
+    ? spaces.data?.spaces.find((item) => item.id === spaceId)
+    : undefined;
   const rename = useMutation({
     mutationFn: async (values: { readonly name: string; readonly publicRead: boolean }) => {
       const { error: apiErr } = await api.PATCH("/api/spaces/{spaceId}", {
@@ -129,6 +145,7 @@ function SpaceNodePage() {
   return (
     <WorkspaceLayout
       selectedSpaceId={spaceId}
+      headerTitle={query.data.space.name}
       headerContent={
         <WorkspaceHeaderSearch
           placeholder={t("searchNodes")}
