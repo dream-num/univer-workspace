@@ -19,3 +19,8 @@ Check normal entry, Command/Ctrl click, browser Back and direct `?view=immersive
 The HTML instance identifier and typed notes should survive presentation changes. The immersive feature
 must not react to Escape. Share view selection must change only the generated link;
 HTML defaults to immersive and text to standard. Actual live Sheet writes require a configured backend.
+
+The sidebar also includes a folder with a second text resource. Expand it, then switch
+between HTML, text, the folder and its child. The sidebar should retain its rows,
+expansion and scroll position while only the content changes. Switching to immersive
+view should preserve the current HTML instance.
