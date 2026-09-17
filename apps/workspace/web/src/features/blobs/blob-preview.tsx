@@ -19,14 +19,17 @@ interface BlobPreviewResource {
 export function BlobPreview({
   resource,
   immersive = false,
+  actionsContainer,
 }: {
   readonly resource: BlobPreviewResource;
   readonly immersive?: boolean;
+  readonly actionsContainer: HTMLElement | null;
 }) {
   if (isHtmlViewFilename(resource.originalFilename))
     return (
       <HtmlViewFile
         resource={resource}
+        actionsContainer={actionsContainer}
         showControls={!immersive && ["owner", "admin", "editor"].includes(resource.accessRole)}
       />
     );

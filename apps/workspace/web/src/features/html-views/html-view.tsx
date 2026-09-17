@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBlocker } from "@tanstack/react-router";
 import { CollaborationStatus } from "@univerjs-pro/collaboration-client";
@@ -18,9 +19,11 @@ export function HtmlView({
   source,
   allowedOrigins,
   showControls,
+  actionsContainer,
 }: {
   source: string;
   showControls: boolean;
+  actionsContainer: HTMLElement | null;
   allowedOrigins?: readonly string[];
 }) {
   const { t, language } = useI18n();
@@ -69,8 +72,9 @@ export function HtmlView({
   });
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {showControls && (
-        <div className="flex shrink-0 justify-end border-b border-border px-3 py-1.5">
+      {showControls &&
+        actionsContainer &&
+        createPortal(
           <Button
             variant={inspecting ? "secondary" : "ghost"}
             size="sm"
@@ -86,9 +90,9 @@ export function HtmlView({
             }}
           >
             {t("htmlViewInspect")}
-          </Button>
-        </div>
-      )}
+          </Button>,
+          actionsContainer,
+        )}
       {error ? (
         <p role="alert" className="m-0 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}
@@ -117,9 +121,11 @@ export function HtmlView({
 export function HtmlViewFile({
   resource,
   showControls,
+  actionsContainer,
 }: {
   resource: { contentUrl: string; byteSize: number };
   showControls: boolean;
+  actionsContainer: HTMLElement | null;
 }) {
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -151,6 +157,7 @@ export function HtmlViewFile({
       source={source}
       allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS}
       showControls={showControls}
+      actionsContainer={actionsContainer}
     />
   );
 }
