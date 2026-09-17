@@ -9,9 +9,7 @@ import { connectHtmlView, type HtmlViewEngine } from "../src/connection.js";
 
 const sdk = vi.hoisted(() => ({
   view: {
-    flush: vi.fn(),
     prepareToLeave: vi.fn(),
-    resume: vi.fn(),
     dispose: vi.fn(),
     subscribe: vi.fn(),
     inspect: { open: vi.fn(), close: vi.fn() },
@@ -137,11 +135,7 @@ it("keeps failed saves recoverable and releases only the SDK-owned view once", a
   await expect(connection.prepareToLeave()).rejects.toThrow("offline");
   expect(sdk.view.dispose).not.toHaveBeenCalled();
   await connection.prepareToLeave();
-  await connection.resume();
-  await connection.flush();
   await connection.inspect.close();
-  expect(sdk.view.resume).toHaveBeenCalledOnce();
-  expect(sdk.view.flush).toHaveBeenCalledOnce();
   expect(sdk.view.inspect.close).toHaveBeenCalledOnce();
   connection.dispose();
   connection.dispose();

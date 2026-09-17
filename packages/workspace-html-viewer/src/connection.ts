@@ -55,9 +55,7 @@ export function connectHtmlView(
     }
   });
   return {
-    flush: () => view.flush(),
-    prepareToLeave: () => view.prepareToLeave(),
-    resume: () => view.resume(),
+    prepareToLeave: view.prepareToLeave,
     hasPendingChanges: () => pending,
     inspect: {
       open: () =>
@@ -71,7 +69,7 @@ export function connectHtmlView(
             return engine?.getMetadata?.() ?? { unitId, sheets: [] };
           },
         }),
-      close: () => view.inspect.close(),
+      close: view.inspect.close,
     },
     dispose() {
       if (disposed) return;

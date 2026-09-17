@@ -1,18 +1,12 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, type CSSProperties } from "react";
 import { connectHtmlView, type HtmlViewHostOptions } from "./connection.js";
 
-export interface WorkspaceHtmlViewerHandle {
-  flush(): Promise<void>;
-  prepareToLeave(): Promise<void>;
-  resume(): Promise<void>;
-  inspect: { open(): Promise<void>; close(): Promise<void> };
-  hasPendingChanges(): boolean;
-}
+export type WorkspaceHtmlViewerHandle = Pick<
+  ReturnType<typeof connectHtmlView>,
+  "prepareToLeave" | "inspect" | "hasPendingChanges"
+>;
 
-export interface WorkspaceHtmlViewerProps extends Pick<
-  HtmlViewHostOptions,
-  "loadEngine" | "onStatus" | "onError" | "onInspectChanged"
-> {
+export interface WorkspaceHtmlViewerProps extends HtmlViewHostOptions {
   readonly source: string;
   /** Applied when mounting a page; language changes do not discard a live page. */
   readonly locale?: "zh-CN" | "en-US";
@@ -32,14 +26,8 @@ export const WorkspaceHtmlViewer = forwardRef<WorkspaceHtmlViewerHandle, Workspa
     useImperativeHandle(
       ref,
       () => ({
-        async flush() {
-          await connection.current?.flush();
-        },
         async prepareToLeave() {
           await connection.current?.prepareToLeave();
-        },
-        async resume() {
-          await connection.current?.resume();
         },
         inspect: {
           async open() {

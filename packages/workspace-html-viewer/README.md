@@ -15,10 +15,8 @@ source engines, and exposes the view's save and inspection controls through a re
 
 - `inspect.open()` / `inspect.close()` toggle the built-in inspection UI.
 - `onInspectChanged(boolean)` keeps the host's toolbar toggle in sync.
-- `flush()` saves while keeping the page interactive.
 - `prepareToLeave()` commits drafts, waits for saving and pauses page writes; hosts
   keep the component mounted until it succeeds. Failures leave the page usable.
-- `resume()` reactivates a prepared page if the host cancels navigation.
 - `hasPendingChanges()` includes drafts, writes and collaboration confirmation.
 
 Applications supply HTML source, an accessible title, `locale` (`zh-CN` or `en-US`),
@@ -39,7 +37,8 @@ Unavailable names use the SDK's `id: xxx` fallback.
 - Present errors, an inspection toggle and browser unload protection.
 - Await `prepareToLeave()` before leaving; changing source/loader or unmounting
   disposes the old view and is not an async save guard.
-- Implement route/tab/account lifecycle; resume if a prepared departure is cancelled.
+- Implement route/tab/account lifecycle. Current hosts dispose the view after a
+  successful departure preparation.
 
 The `/engine` export owns the shared Univer runtime factory: base plugins, identity and
 license installation, read-only write enforcement, metadata from the loaded workbook,
