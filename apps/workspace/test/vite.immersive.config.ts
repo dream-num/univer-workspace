@@ -7,7 +7,7 @@ import workspaceConfig from "../vite.config";
 export default defineConfig({
   root: fileURLToPath(new URL("../", import.meta.url)),
   // Match the production React 19 / SDK peer graph in this application-shell fixture.
-  resolve: workspaceConfig.resolve,
+  resolve: workspaceConfig.resolve ?? {},
   plugins: [
     react(),
     tailwindcss(),
