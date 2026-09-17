@@ -148,6 +148,54 @@ FunctionEnd
 
 !macro customInstall
   !insertmacro agentInstallTrace "install-files-complete"
+  !insertmacro agentPrepareUserData
+!macroend
+
+; Only a positively identified, non-admin user may prepare their own data here.
+; Elevated/admin/unknown contexts defer to first launch under the actual user.
+; File installation is already committed by builder at this hook. Do not Abort
+; on migration failure: .onInstFailed would restore old binaries against data
+; that might already have been activated by the new version.
+!macro agentPrepareUserData
+  ClearErrors
+  ${GetOptions} $CMDLINE "/DEFERDATAMIGRATION" $R1
+  ${IfNot} ${Errors}
+    !insertmacro agentInstallTrace "data-upgrade-deferred-explicit"
+  ${Else}
+    UserInfo::GetAccountType
+    Pop $R0
+    ${If} $R0 != "User"
+      !insertmacro agentInstallTrace "data-upgrade-deferred-user-context"
+    ${Else}
+      !insertmacro agentRunDataUpgrade
+    ${EndIf}
+  ${EndIf}
+!macroend
+
+!macro agentRunDataUpgrade
+    !insertmacro agentInstallTrace "data-upgrade-start"
+    ClearErrors
+    ${If} ${Silent}
+      ExecWait '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --migrate-data-only --migration-headless' $R0
+    ${Else}
+      ExecWait '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --migrate-data-only' $R0
+    ${EndIf}
+    ${If} ${Errors}
+      StrCpy $R0 20
+    ${EndIf}
+    !insertmacro agentInstallTrace "data-upgrade-result-$R0"
+    ${If} $R0 != 0
+      MessageBox MB_OK|MB_ICONEXCLAMATION "Program files are installed, but local data preparation did not complete (code $R0). Open Workspace Agent to see details and retry. Logs are in $APPDATA\Univer Workspace Agent\logs. Existing data and available backups have not been deleted." /SD IDOK
+      ; An application-triggered silent update asked to reopen Agent. Let its
+      ; common first-launch gate display the failure, without blocking an
+      ; unattended /S installation on a hidden interactive window.
+      ${If} ${Silent}
+      ${AndIf} ${isForceRun}
+        Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}"'
+      ${EndIf}
+      SetErrorLevel $R0
+      Quit
+    ${EndIf}
 !macroend
 
 !macro customCheckAppRunning

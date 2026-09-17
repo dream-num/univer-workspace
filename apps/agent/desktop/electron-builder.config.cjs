@@ -11,7 +11,7 @@ module.exports = {
   extraMetadata: { version },
   directories: { output: "artifacts", buildResources: "installer" },
   asar: true,
-  files: ["src/**/*.cjs", "migrations/**/*.cjs", "src/update.html", "src/update.css", "src/update.js", "package.json", "!**/*.map"],
+  files: ["src/**/*.cjs", "migrations/**/*.cjs", "src/update.html", "src/update.css", "src/update.js", "src/data-upgrade.html", "src/data-upgrade.css", "src/data-upgrade.js", "package.json", "!**/*.map"],
   extraResources: [{ from: ".build/runtime", to: "runtime" }],
   artifactName: "Univer-Workspace-Agent-${version}-${os}-${arch}.${ext}",
   publish: [

@@ -28,10 +28,11 @@ async function recoverActivation(home, journal) {
   await rm(journal);
 }
 
-async function migrateRuntimeHome(resources, home, { targetVersion = CURRENT_SCHEMA_VERSION, registry = migrations } = {}) {
+async function migrateRuntimeHome(resources, home, { targetVersion = CURRENT_SCHEMA_VERSION, registry = migrations, report = () => {} } = {}) {
   resources = resolve(resources);
   home = resolve(home);
   const journal = `${home}.upgrade.json`;
+  report({ phase: 'checking' });
   await recoverActivation(home, journal);
   // Validate before the identity fast path or touching staging. Even identical
   // resources must not open a home written by a newer data schema.
@@ -46,6 +47,7 @@ async function migrateRuntimeHome(resources, home, { targetVersion = CURRENT_SCH
   if (!refreshResources && plan.length === 0) return home;
 
   const staging = `${home}.staging`;
+  report({ phase: 'preparing' });
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
   const completed = [];
@@ -59,13 +61,14 @@ async function migrateRuntimeHome(resources, home, { targetVersion = CURRENT_SCH
     }
     completed.push(step.id);
   }
-  await migrateData({ resources, home, staging }, state, plan);
+  await migrateData({ resources, home, staging }, state, plan, report);
   await writeFile(join(staging, '.desktop-migrations.json'), JSON.stringify({ version: 1, identity, completed }, null, 2) + '\n');
   await writeFile(join(staging, '.desktop-complete'), identity);
 
   const backup = `${Date.now()}-${randomUUID()}`;
   const previous = `${home}.previous-${backup}`;
   const backedUp = await exists(home);
+  report({ phase: 'activating' });
   if (backedUp) {
     // Publish a complete journal before moving any user data. A leftover .tmp
     // only means preparation was interrupted; it has no activation authority.

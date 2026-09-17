@@ -333,6 +333,51 @@ cleanup.
 
 ## In-app diagnostics
 
+### Data upgrade entry
+
+The existing installer and updater continue to deliver program files. The same
+Desktop executable provides `--migrate-data-only` to prepare the current user's
+runtime home and exit without starting DSH or the business UI. Add
+`--migration-headless` for unattended callers; the existing `--user-data-dir`
+option selects an explicit profile for isolated tests or a custom installation.
+
+Windows NSIS invokes this entry after program files and registration are installed,
+and waits for its result. Only a positively identified non-administrator user is
+migrated during installation; administrator, elevated, and unknown contexts defer
+to first launch to avoid operating on the wrong account. `/DEFERDATAMIGRATION`
+explicitly selects first-launch preparation (also used by isolated installer smoke).
+Silent installers use headless mode. macOS DMG copies, Linux AppImage replacement,
+and automatic-update restarts use the same entry through normal application startup.
+If an application-triggered silent update requested reopening Agent, a failed
+headless migration still opens Agent's common failure page. A plain unattended
+`/S` installation returns its failure code without waiting for user interaction.
+
+Interactive preparation shows checking, staging, migration, and activation phases
+in a local sandboxed page, before DSH starts. Failure keeps that page available
+with retry, logs, backup-folder, and exit actions. Newer or unreadable data-version
+records disable retry and give corrective guidance; there is no reset-data action.
+The page supports English and Chinese and only accepts IPC from its exact main
+frame. It neither downloads nor installs application packages.
+
+Process results for migration-only mode are: `0` success, `10` another instance
+owns the profile, `20` generic failure or interactive cancellation, `21` newer data,
+`22` invalid version record, `23` insufficient space, and `24` access denied.
+The specific error codes are returned in headless mode; closing a failed
+interactive upgrade returns `20`. Program installation followed by migration
+failure is reported as **program installed, data preparation incomplete**. NSIS
+does not invoke its program-file rollback in that case, since data may already
+have been activated; backups remain available. The existing protection against
+overwriting a previous installation backup still applies to subsequent installers.
+Paired program/data rollback and a post-migration DSH health-check transaction
+are not implemented.
+
+Run `scripts/data-upgrade-smoke.mjs` against a packaged executable to verify
+headless results, failure guidance, unchanged original data, and retry into the
+usable application. Set `UWA_SMOKE_EXECUTABLE` for native Windows/macOS artifacts;
+Linux defaults to `artifacts/linux-unpacked/univer-workspace-agent-desktop`.
+
+### About and diagnostics
+
 Desktop contributes an optional **Settings → About** section through DSH's public settings slot. The web-only application
 omits this panel. Developers can inspect the application/DSH/Electron/Node
 versions, OS and architecture, update state and progress, startup event timings,

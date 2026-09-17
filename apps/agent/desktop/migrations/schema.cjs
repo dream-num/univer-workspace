@@ -5,19 +5,21 @@ const CURRENT_SCHEMA_VERSION = 1;
 const STATE_FILE = '.desktop-data-version.json';
 const migrations = [require('./v0-to-v1.cjs')];
 const validVersion = value => Number.isSafeInteger(value) && value >= 0;
+const dataError = (code, message, cause) => Object.assign(new Error(message, { cause }), { code });
 
 async function readDataVersion(home) {
   let state;
   try { state = JSON.parse(await readFile(join(home, STATE_FILE), 'utf8')); }
   catch (error) {
     if (error.code === 'ENOENT') return { formatVersion: 1, schemaVersion: 0, appliedMigrations: [] };
+    if (error instanceof SyntaxError) throw dataError('DATA_VERSION_INVALID', 'Desktop data version record is damaged.', error);
     throw error;
   }
   if (state?.formatVersion !== 1 || !validVersion(state.schemaVersion)
     || !Array.isArray(state.appliedMigrations)
     || state.appliedMigrations.some(id => typeof id !== 'string' || !id)
     || new Set(state.appliedMigrations).size !== state.appliedMigrations.length) {
-    throw new Error(`Invalid Desktop data version: ${join(home, STATE_FILE)}`);
+    throw dataError('DATA_VERSION_INVALID', `Invalid Desktop data version: ${join(home, STATE_FILE)}`);
   }
   return state;
 }
@@ -25,7 +27,7 @@ async function readDataVersion(home) {
 function planMigrations(fromVersion, targetVersion, registry) {
   if (!validVersion(fromVersion) || !validVersion(targetVersion)) throw new Error('Invalid Desktop schema version');
   if (fromVersion > targetVersion) {
-    throw new Error(`Desktop data version ${fromVersion} is newer than supported version ${targetVersion}. Use a newer Agent; data downgrade is not supported.`);
+    throw dataError('DATA_VERSION_NEWER', `Desktop data version ${fromVersion} is newer than supported version ${targetVersion}. Use a newer Agent; data downgrade is not supported.`);
   }
   const byVersion = new Map();
   const ids = new Set();
@@ -47,9 +49,10 @@ function planMigrations(fromVersion, targetVersion, registry) {
   return plan;
 }
 
-async function migrateData(context, state, plan) {
+async function migrateData(context, state, plan, report = () => {}) {
   const next = { ...state, appliedMigrations: [...state.appliedMigrations] };
   for (const step of plan) {
+    report({ phase: 'migrating', completed: next.schemaVersion - state.schemaVersion, total: plan.length });
     if (next.appliedMigrations.includes(step.id)) throw new Error(`Inconsistent Desktop migration history: ${step.id}`);
     try { await step.run(context); }
     catch (cause) { throw new Error(`Desktop data migration ${step.id} failed; existing home retained at ${context.home}`, { cause }); }

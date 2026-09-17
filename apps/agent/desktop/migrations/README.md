@@ -16,6 +16,12 @@ node apps/agent/desktop/migrations/run.cjs \
 The caller must own the home exclusively. Desktop uses its single-instance lock;
 the standalone command must not run alongside Desktop or another migration.
 
+The packaged application also exposes `--migrate-data-only`, with optional
+`--migration-headless`, under its normal single-instance lock. The installer and
+first-launch UI use this same runner; migration scripts do not import Electron.
+See the [entry and failure contract](../README.md#data-upgrade-entry).
+The runner's optional `report` callback supplies phase/step progress to its caller.
+
 ## Version contract
 
 Desktop-owned runtime-home data has an independent integer `schemaVersion`.

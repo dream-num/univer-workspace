@@ -129,8 +129,14 @@ explicit ordered transitions and rejection of newer schemas; resource identity
 only controls shipped-resource refresh. Staged activation switches data and its
 version together, with a recovery journal and retained previous-home backups;
 startup only invokes the migration entry point. This does not version DSH's
-internal session formats or Workspace server databases. Standalone Node also serves external commands;
-pinned Chromium serves document rendering. The
+internal session formats or Workspace server databases.
+The Desktop executable exposes a migration-only mode used by the Windows
+installer in a confirmed non-admin user context and by normal first launch on
+all platforms. Shared progress/failure UI runs before DSH. Silent installation
+receives process exit codes; a data-preparation failure after program installation
+does not invoke program-file rollback. Existing installation/update mechanisms
+remain responsible for application delivery. Standalone Node also serves external
+commands; pinned Chromium serves document rendering. The
 Electron packaging toolchain shares the repository pnpm workspace and lockfile.
 GitHub Releases (`agent-vX.Y.Z`, `agent-vX.Y.Z-{alpha,beta,rc}.N`) are the download and update channel; CI requires
 explicit manual dispatch and publication opt-in. Account data stays in the OS

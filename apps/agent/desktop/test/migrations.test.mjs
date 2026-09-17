@@ -126,7 +126,7 @@ test('newer data versions and corrupt metadata fail before modifying home or sta
     await assert.rejects(migrateRuntimeHome(resources, home), /Invalid Desktop data version/);
   }
   await writeFile(versionPath, '{broken');
-  await assert.rejects(migrateRuntimeHome(resources, home), SyntaxError);
+  await assert.rejects(migrateRuntimeHome(resources, home), { code: 'DATA_VERSION_INVALID' });
   assert.equal(await readFile(join(home, profile, 'package.json'), 'utf8'), '{"userPlugin":true}');
   assert.equal(await readFile(join(`${home}.staging`, 'sentinel'), 'utf8'), 'untouched');
 });
