@@ -37,4 +37,4 @@ async function run({ resources, staging }) {
     process.platform === 'win32' ? 'junction' : 'dir');
 }
 
-module.exports = { id: '001-stage-shipped-home', run };
+module.exports = { id: 'stage-shipped-home', run };

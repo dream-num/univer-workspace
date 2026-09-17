@@ -12,4 +12,4 @@ async function run({ home, staging }) {
   await cp(join(home, '.agent-presets'), join(staging, '.agent-presets'), { recursive: true });
 }
 
-module.exports = { id: '002-preserve-authored-presets', run };
+module.exports = { id: 'preserve-authored-presets', run };

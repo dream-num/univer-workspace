@@ -1,12 +1,13 @@
-const { mkdir, readFile, writeFile, rename, rm, stat } = require('node:fs/promises');
+const { cp, mkdir, readFile, writeFile, rename, rm, stat } = require('node:fs/promises');
 const { join, resolve } = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { parseArgs } = require('node:util');
 
-// Explicit ordering, independent of directory enumeration or application imports.
-const steps = [
-  require('./001-stage-shipped-home.cjs'),
-  require('./002-preserve-authored-presets.cjs'),
+const { CURRENT_SCHEMA_VERSION, migrations, readDataVersion, planMigrations, migrateData } = require('./schema.cjs');
+// Resource refresh operations are not data-version migrations.
+const resourceSteps = [
+  require('./runtime/stage-shipped-home.cjs'),
+  require('./runtime/preserve-authored-presets.cjs'),
 ];
 
 async function exists(path) {
@@ -18,7 +19,7 @@ async function recoverActivation(home, journal) {
   let pending;
   try { pending = JSON.parse(await readFile(journal, 'utf8')); }
   catch (error) { if (error.code === 'ENOENT') return; throw error; }
-  if (pending.version !== 1 || !/^\d+-[a-f0-9-]{36}$/.test(pending.backup)) {
+  if (pending?.version !== 1 || !/^\d+-[a-f0-9-]{36}$/.test(pending.backup)) {
     throw new Error(`Invalid runtime home migration journal: ${journal}`);
   }
   // A crash between the two renames must not turn the next start into a fresh
@@ -27,30 +28,38 @@ async function recoverActivation(home, journal) {
   await rm(journal);
 }
 
-async function migrateRuntimeHome(resources, home) {
+async function migrateRuntimeHome(resources, home, { targetVersion = CURRENT_SCHEMA_VERSION, registry = migrations } = {}) {
   resources = resolve(resources);
   home = resolve(home);
   const journal = `${home}.upgrade.json`;
   await recoverActivation(home, journal);
+  // Validate before the identity fast path or touching staging. Even identical
+  // resources must not open a home written by a newer data schema.
+  const state = await readDataVersion(home);
+  const plan = planMigrations(state.schemaVersion, targetVersion, registry);
   const identity = createHash('sha256')
     .update(resources).update('\0')
     .update(await readFile(join(resources, 'integrity.json'))).digest('hex');
-  try {
-    // Preserve compatibility with homes created before the migration runner.
-    if (await readFile(join(home, '.desktop-complete'), 'utf8') === identity) return home;
-  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  let refreshResources = true;
+  try { refreshResources = await readFile(join(home, '.desktop-complete'), 'utf8') !== identity; }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (!refreshResources && plan.length === 0) return home;
 
   const staging = `${home}.staging`;
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
   const completed = [];
-  for (const step of steps) {
+  // A schema-only upgrade must retain the entire customized profile, including
+  // its installed dependencies. Relative links keep the same meaning after swap.
+  if (!refreshResources) await cp(home, staging, { recursive: true, verbatimSymlinks: true });
+  for (const step of refreshResources ? resourceSteps : []) {
     try { await step.run({ resources, home, staging }); }
     catch (cause) {
       throw new Error(`Runtime home migration ${step.id} failed; existing home retained at ${home}`, { cause });
     }
     completed.push(step.id);
   }
+  await migrateData({ resources, home, staging }, state, plan);
   await writeFile(join(staging, '.desktop-migrations.json'), JSON.stringify({ version: 1, identity, completed }, null, 2) + '\n');
   await writeFile(join(staging, '.desktop-complete'), identity);
 

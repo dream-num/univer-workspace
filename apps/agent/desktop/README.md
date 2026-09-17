@@ -316,7 +316,12 @@ published DSH packages remain unmodified. Default launches use the packaged plug
 Installing the writable profile's dependencies selects its standalone DSH runtime
 on subsequent launches, with browser modules composed from that installed profile.
 A changed resource inventory runs the independent [runtime-home migrations](migrations/README.md).
-Startup calls one entry point; numbered migration scripts own the transformations.
+Startup calls one entry point; versioned migration scripts own the transformations.
+The home records its independent data `schemaVersion` in `.desktop-data-version.json`
+(currently v1); unversioned homes enter through v0. Explicit version transitions
+run once in order, independently of resource refreshes or application release numbers.
+A newer data version blocks startup; a schema-only migration preserves existing
+profile configuration and installed dependencies.
 They stage a new profile and activate it at the same path, preserving account-owned
 links to it. A journal recovers a process interruption during activation. Prior profile directories are retained
 as `home.previous-<timestamp>-<uuid>`; an old full runtime from earlier installers is
@@ -373,7 +378,9 @@ so the default startup timing budget does not cover customized profiles. Keep a 
 of the profile and authored presets before application upgrades; replaced homes are
 retained as `home.previous-<timestamp>-<uuid>`. Automatic merging and reinstallation
 of customized profiles is not implemented; the independent migration scripts
-currently carry authored presets forward and retain the old profile for recovery.
+carry authored presets forward and retain the old profile for recovery when
+resources change. This is separate from schema-only migrations, which retain the
+existing profile and dependencies.
 
 ## Startup diagnostics
 

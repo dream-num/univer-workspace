@@ -124,8 +124,12 @@ Node runtime, with native libraries unpacked. A user-installed plugin profile in
 runs the published DSH CLI with standalone Node and composes its browser modules.
 Desktop keeps the profile and authored presets in a stable writable DSH_HOME;
 account-owned sessions remain isolated. Independent Desktop migration scripts own
-runtime-home upgrades, with staged activation, a recovery journal, and retained
-previous-home backups; startup only invokes their entry point. Standalone Node also serves external commands;
+runtime-home upgrades. The home stores an independent data schema version, with
+explicit ordered transitions and rejection of newer schemas; resource identity
+only controls shipped-resource refresh. Staged activation switches data and its
+version together, with a recovery journal and retained previous-home backups;
+startup only invokes the migration entry point. This does not version DSH's
+internal session formats or Workspace server databases. Standalone Node also serves external commands;
 pinned Chromium serves document rendering. The
 Electron packaging toolchain shares the repository pnpm workspace and lockfile.
 GitHub Releases (`agent-vX.Y.Z`, `agent-vX.Y.Z-{alpha,beta,rc}.N`) are the download and update channel; CI requires
