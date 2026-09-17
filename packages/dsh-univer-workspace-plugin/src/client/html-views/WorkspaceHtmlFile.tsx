@@ -9,7 +9,6 @@ export function WorkspaceHtmlFile(props: {
   contentUrl: string;
   name: string;
   locale: ViewerLocale;
-  canInspect: boolean;
   t: (key: UniverLocaleKey) => string;
 }) {
   const locale = useRef(props.locale);
@@ -38,7 +37,6 @@ export function WorkspaceHtmlFile(props: {
           source,
           name: props.name,
           locale: locale.current,
-          canInspect: props.canInspect,
           t: (key) => translation.current(key),
           loadEngine: (unitId, signal) =>
             createAgentBindingEngine(unitId, bootstrap, signal, (code) =>

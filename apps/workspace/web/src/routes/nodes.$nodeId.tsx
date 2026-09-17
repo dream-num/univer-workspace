@@ -273,8 +273,7 @@ function ResourceActions({
   const modeLabel = isEditing ? t("editingMode") : t("readOnlyMode");
   return (
     <>
-      {resource.kind === "blob" && isHtmlViewFilename(resource.originalFilename) &&
-        ["owner", "admin", "editor"].includes(resource.accessRole) ? (
+      {resource.kind === "blob" && isHtmlViewFilename(resource.originalFilename) ? (
           <span ref={htmlActionsRef} className="contents" />
         ) : null}
       {resource.kind === "blob" ? (

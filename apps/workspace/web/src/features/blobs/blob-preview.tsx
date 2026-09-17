@@ -8,7 +8,6 @@ import { HtmlViewFile } from "../html-views";
 
 interface BlobPreviewResource {
   readonly name: string;
-  readonly accessRole: string;
   readonly originalFilename: string;
   readonly mediaType: string;
   readonly byteSize: number;
@@ -27,11 +26,7 @@ export function BlobPreview({
 }) {
   if (isHtmlViewFilename(resource.originalFilename))
     return (
-      <HtmlViewFile
-        resource={resource}
-        actionsContainer={actionsContainer}
-        showControls={!immersive && ["owner", "admin", "editor"].includes(resource.accessRole)}
-      />
+      <HtmlViewFile resource={resource} actionsContainer={actionsContainer} immersive={immersive} />
     );
   const mediaType = resource.mediaType.toLowerCase();
   if (mediaType.startsWith("image/")) {

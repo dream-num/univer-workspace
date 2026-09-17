@@ -18,11 +18,11 @@ const HTML_VIEW_ALLOWED_ORIGINS = ["https://cdn.jsdelivr.net"] as const;
 export function HtmlView({
   source,
   allowedOrigins,
-  showControls,
+  immersive,
   actionsContainer,
 }: {
   source: string;
-  showControls: boolean;
+  immersive: boolean;
   actionsContainer: HTMLElement | null;
   allowedOrigins?: readonly string[];
 }) {
@@ -51,12 +51,12 @@ export function HtmlView({
     [user?.id, user?.displayName, user?.avatarUrl],
   );
   useEffect(() => {
-    if (!showControls && inspecting) {
+    if (immersive && inspecting) {
       void viewer.current?.inspect.close().catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : String(reason));
       });
     }
-  }, [showControls, inspecting]);
+  }, [immersive, inspecting]);
   useBlocker({
     shouldBlockFn: async ({ current, next }) => {
       if (isResourceViewChange(current, next)) return false;
@@ -72,8 +72,7 @@ export function HtmlView({
   });
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {showControls &&
-        actionsContainer &&
+      {actionsContainer &&
         createPortal(
           <Button
             variant={inspecting ? "secondary" : "ghost"}
@@ -120,11 +119,11 @@ export function HtmlView({
 
 export function HtmlViewFile({
   resource,
-  showControls,
+  immersive,
   actionsContainer,
 }: {
   resource: { contentUrl: string; byteSize: number };
-  showControls: boolean;
+  immersive: boolean;
   actionsContainer: HTMLElement | null;
 }) {
   const [source, setSource] = useState<string | null>(null);
@@ -156,7 +155,7 @@ export function HtmlViewFile({
     <HtmlView
       source={source}
       allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS}
-      showControls={showControls}
+      immersive={immersive}
       actionsContainer={actionsContainer}
     />
   );
