@@ -13,6 +13,7 @@ import type { UniverLocaleKey } from "../locales.ts";
 import css from "./WorkspaceBlobViewer.module.scss";
 
 interface BlobResource {
+  readonly canInspect: boolean;
   readonly id: string;
   readonly name: string;
   readonly originalFilename: string;
@@ -125,7 +126,7 @@ function BlobPreview(props: {
   const mediaType = resource.mediaType.toLowerCase();
   const contentUrl = proxyAssetUrl(resource.contentUrl);
   if (isHtmlViewFilename(resource.originalFilename)) {
-    return <WorkspaceHtmlFile contentUrl={contentUrl} name={resource.name} t={props.t} locale={props.locale} />;
+    return <WorkspaceHtmlFile contentUrl={contentUrl} name={resource.name} t={props.t} locale={props.locale} canInspect={resource.canInspect} />;
   }
   if (mediaType.startsWith("image/")) {
     return (
@@ -250,5 +251,8 @@ function narrowBlobResource(raw: unknown, resourceId: string, fallbackName: stri
   ) {
     throw new Error("Blob open returned malformed data");
   }
-  return { id, name, originalFilename, mediaType, byteSize, contentUrl, downloadUrl };
+  return {
+    id, name, originalFilename, mediaType, byteSize, contentUrl, downloadUrl,
+    canInspect: value.accessRole === "owner" || value.accessRole === "admin" || value.accessRole === "editor",
+  };
 }

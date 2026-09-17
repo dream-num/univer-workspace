@@ -66,7 +66,8 @@ Agent 文件预览先按 `originalFilename` 识别 `.univer.html`，再走普通
 专用适配读取完整 Blob，并通过共享 `workspace-html-viewer` 调用 SDK `renderHtmlView` 渲染。
 SDK 包已包含 iframe 程序，Agent 无需 runtime 构建插件。普通 `.html` 仍显示文本源码。
 
-“检查绑定”开关控制 SDK 内置面板、hover 卡片和高亮。名称来自已授权加载的 Workbook，
+HTML 文件的 owner、admin、editor 可见“检查绑定”，viewer 不显示该功能区。
+开关控制 SDK 内置面板、hover 卡片和高亮。名称来自已授权加载的 Workbook，
 缺失时显示 `id: xxx`。检查界面使用打开页面时的 Agent 中英语言；语言变化不重建正在
 编辑的页面，重新打开后生效。
 

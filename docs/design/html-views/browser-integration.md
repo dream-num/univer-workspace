@@ -22,7 +22,9 @@ SDK 自身包含 iframe 程序，管理 iframe sandbox、CSP、握手与 Message
 应用不再注入 runtime 或注册 renderer Vite 插件。原生表单导航由 SDK 的
 `form-action 'none'` 阻止；HTML 文件无需携带 SDK 或协同凭据。
 
-页面工具栏的“检查绑定”切换 `view.inspect.open()` / `close()`。SDK 提供侧栏、hover
+HTML 功能区仅对文件的 owner、admin、editor 在标准视图下显示；viewer 不显示。
+进入沉浸视图时隐藏功能区并关闭 inspect，退出后不自动重新打开，页面实例和输入保留。
+“检查绑定”切换 `view.inspect.open()` / `close()`。SDK 提供侧栏、hover
 卡片和高亮，默认高亮全部绑定，选择元素使用单独的高亮效果。共享组件从已授权加载的
 同一个 Workbook 读取工作簿和子表名称，缺失名称显示 `id: xxx`，不创建额外的 Engine。
 语言使用页面创建时的 Workspace `language`；切换语言不销毁正在编辑的页面，重新打开后

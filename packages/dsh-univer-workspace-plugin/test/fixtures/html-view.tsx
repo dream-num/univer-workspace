@@ -63,6 +63,7 @@ function Preview() {
         anchor: anchor.current!,
         source,
         name: "Lifecycle fixture",
+        canInspect: new URLSearchParams(location.search).get("role") !== "viewer",
         locale: new URLSearchParams(location.search).get("lang") === "zh-CN" ? "zh-CN" : "en-US",
         loadEngine,
         t: (key) =>

@@ -19,6 +19,7 @@ export function mountRetainedHtmlView(options: {
   source: string;
   name: string;
   locale?: ViewerLocale;
+  canInspect: boolean;
   loadEngine: HtmlViewHostOptions["loadEngine"];
   t: (key: UniverLocaleKey) => string;
 }): () => void {
@@ -79,7 +80,7 @@ export function mountRetainedHtmlView(options: {
     container.inert = saving;
     root.render(
       <section className={css.surface} aria-label={options.name}>
-        {!released ? (
+        {!released && options.canInspect ? (
           <div className={css.toolbar}>
             <Button
               variant={inspecting ? "secondary" : "ghost"}

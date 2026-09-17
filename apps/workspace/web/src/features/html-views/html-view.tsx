@@ -17,8 +17,10 @@ const HTML_VIEW_ALLOWED_ORIGINS = ["https://cdn.jsdelivr.net"] as const;
 export function HtmlView({
   source,
   allowedOrigins,
+  showControls,
 }: {
   source: string;
+  showControls: boolean;
   allowedOrigins?: readonly string[];
 }) {
   const { t, language } = useI18n();
@@ -45,6 +47,13 @@ export function HtmlView({
     },
     [user?.id, user?.displayName, user?.avatarUrl],
   );
+  useEffect(() => {
+    if (!showControls && inspecting) {
+      void viewer.current?.inspect.close().catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      });
+    }
+  }, [showControls, inspecting]);
   useBlocker({
     shouldBlockFn: async ({ current, next }) => {
       if (isResourceViewChange(current, next)) return false;
@@ -60,24 +69,26 @@ export function HtmlView({
   });
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 justify-end border-b border-border px-3 py-1.5">
-        <Button
-          variant={inspecting ? "secondary" : "ghost"}
-          size="sm"
-          disabled={!user}
-          aria-pressed={inspecting}
-          onClick={() => {
-            const operation = inspecting
-              ? viewer.current?.inspect.close()
-              : viewer.current?.inspect.open();
-            void operation?.catch((reason: unknown) => {
-              setError(reason instanceof Error ? reason.message : String(reason));
-            });
-          }}
-        >
-          {t("htmlViewInspect")}
-        </Button>
-      </div>
+      {showControls && (
+        <div className="flex shrink-0 justify-end border-b border-border px-3 py-1.5">
+          <Button
+            variant={inspecting ? "secondary" : "ghost"}
+            size="sm"
+            disabled={!user}
+            aria-pressed={inspecting}
+            onClick={() => {
+              const operation = inspecting
+                ? viewer.current?.inspect.close()
+                : viewer.current?.inspect.open();
+              void operation?.catch((reason: unknown) => {
+                setError(reason instanceof Error ? reason.message : String(reason));
+              });
+            }}
+          >
+            {t("htmlViewInspect")}
+          </Button>
+        </div>
+      )}
       {error ? (
         <p role="alert" className="m-0 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}
@@ -103,7 +114,13 @@ export function HtmlView({
   );
 }
 
-export function HtmlViewFile({ resource }: { resource: { contentUrl: string; byteSize: number } }) {
+export function HtmlViewFile({
+  resource,
+  showControls,
+}: {
+  resource: { contentUrl: string; byteSize: number };
+  showControls: boolean;
+}) {
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -130,6 +147,10 @@ export function HtmlViewFile({ resource }: { resource: { contentUrl: string; byt
       </p>
     );
   return source === null ? null : (
-    <HtmlView source={source} allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS} />
+    <HtmlView
+      source={source}
+      allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS}
+      showControls={showControls}
+    />
   );
 }
