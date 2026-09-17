@@ -315,9 +315,11 @@ A scoped module-resolution adapter handles DSH imports from writable configurati
 published DSH packages remain unmodified. Default launches use the packaged plugin roster.
 Installing the writable profile's dependencies selects its standalone DSH runtime
 on subsequent launches, with browser modules composed from that installed profile.
-A changed resource inventory stages a new profile and activates it at the same
-path, preserving account-owned links to it. Prior profile directories are retained
-as `home.previous-<timestamp>`; an old full runtime from earlier installers is
+A changed resource inventory runs the independent [runtime-home migrations](migrations/README.md).
+Startup calls one entry point; numbered migration scripts own the transformations.
+They stage a new profile and activate it at the same path, preserving account-owned
+links to it. A journal recovers a process interruption during activation. Prior profile directories are retained
+as `home.previous-<timestamp>-<uuid>`; an old full runtime from earlier installers is
 also retained, but its binaries are no longer executed. No legacy cleanup runs
 on the startup path. Node's compile cache is stored separately in `compile-cache`.
 Quit stops the application-owned service process tree. Back up `data/`
@@ -369,7 +371,9 @@ The installed profile uses standalone Node and DSH's public CLI. It builds brows
 modules for the configured plugins instead of serving the fixed desktop browser graph,
 so the default startup timing budget does not cover customized profiles. Keep a backup
 of the profile and authored presets before application upgrades; replaced homes are
-retained as `home.previous-<timestamp>`.
+retained as `home.previous-<timestamp>-<uuid>`. Automatic merging and reinstallation
+of customized profiles is not implemented; the independent migration scripts
+currently carry authored presets forward and retain the old profile for recovery.
 
 ## Startup diagnostics
 

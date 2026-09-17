@@ -123,7 +123,9 @@ for Windows x64, macOS Apple Silicon, and Linux x64. It boots published DSH pack
 Node runtime, with native libraries unpacked. A user-installed plugin profile instead
 runs the published DSH CLI with standalone Node and composes its browser modules.
 Desktop keeps the profile and authored presets in a stable writable DSH_HOME;
-account-owned sessions remain isolated. Standalone Node also serves external commands;
+account-owned sessions remain isolated. Independent Desktop migration scripts own
+runtime-home upgrades, with staged activation, a recovery journal, and retained
+previous-home backups; startup only invokes their entry point. Standalone Node also serves external commands;
 pinned Chromium serves document rendering. The
 Electron packaging toolchain shares the repository pnpm workspace and lockfile.
 GitHub Releases (`agent-vX.Y.Z`, `agent-vX.Y.Z-{alpha,beta,rc}.N`) are the download and update channel; CI requires
