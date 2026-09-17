@@ -437,11 +437,6 @@ function AuthenticatedWorkspaceLayout({
             ) : null}
           </nav>
 
-          {navigationCollapsed ? null : (
-            <footer className="shrink-0 border-t border-border px-4.5 py-3.5 text-xs text-subtle-foreground">
-              {t("collaborationExample")}
-            </footer>
-          )}
         </aside>
 
         {!immersive && !navigationCollapsed ? (
