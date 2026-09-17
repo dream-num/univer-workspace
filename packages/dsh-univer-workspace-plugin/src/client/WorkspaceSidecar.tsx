@@ -8,6 +8,7 @@ import type { WorkspaceContentSurface } from "./navigation/workspace-navigation.
 import { WorkspaceResourceViewer } from "./components/WorkspaceResourceViewer.tsx";
 import { WorkspaceBlobViewer } from "./components/WorkspaceBlobViewer.tsx";
 import { WorkspaceWorktreeViewer } from "./components/WorkspaceWorktreeViewer.tsx";
+import { PreviewErrorBoundary } from "./components/PreviewErrorBoundary.tsx";
 
 import { getFileState, subscribeFileStateInvalidation } from "./api/univer-api.ts";
 import type { DocumentWorktreeState } from "../shared/state.ts";
@@ -86,8 +87,10 @@ export function WorkspaceSidecar(props: WorkspaceSidecarProps) {
   };
   const key = `${target.workspaceOrigin}:${target.kind}:${target.kind === "worktree" ? target.worktreeId : target.resourceId}`;
   return <div ref={container} data-workspace-sidecar-content style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
+    <PreviewErrorBoundary targetKey={key} revision={tab.navigation.revision} t={props.t}>
     {target.kind === "resource" ? <WorkspaceResourceViewer key={key} {...shared} target={target} />
       : target.kind === "blob" ? <WorkspaceBlobViewer key={key} {...shared} target={target} />
       : <WorkspaceWorktreeViewer key={key} {...shared} target={target} />}
+    </PreviewErrorBoundary>
   </div>;
 }

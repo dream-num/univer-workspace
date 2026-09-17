@@ -39,10 +39,14 @@ async function readEvents(path) {
   } finally { await file?.close(); }
 }
 
-function createDiagnostics({ app, resources, updatesEnabled, getUpdateState }) {
+function createDiagnostics({ app, resources, updatesEnabled, getUpdateState, getDshHome }) {
   const directories = { logs: join(app.getPath("userData"), "logs"),
     data: join(app.getPath("userData"), "data"), workspace: join(app.getPath("userData"), "workspace"),
     downloads: join(app.getPath("userData"), "update-downloads"), resources };
+  Object.defineProperties(directories, {
+    dshHome: { enumerable: true, get: () => getDshHome?.() ?? join(app.getPath("userData"), "runtime/home") },
+    profile: { enumerable: true, get: () => join(app.getPath("userData"), "runtime/home/profiles/univer-workspace-harness") },
+  });
   const log = join(directories.logs, "updates.log");
   const dshVersion = readFile(join(resources, "host.asar/node_modules/@deepseek-ai/dsh/package.json"), "utf8")
     .then(value => {

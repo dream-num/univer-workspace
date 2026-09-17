@@ -55,6 +55,7 @@ import { buildViewerUrls } from "./proxy.ts";
 import { comparisonUniverFactory, createComparisonUnit } from "./comparison.ts";
 import { loadComparison } from "../api/comparison-api.ts";
 import type { ViewerHandle, ViewerOptions } from "./contracts.ts";
+import { disposeViewerResources } from "./dispose.ts";
 
 // The history viewer creates a nested Univer composition. Install its formula
 // dependency compatibility before any runtime is constructed.
@@ -62,6 +63,7 @@ installHistoryShapeFormulaCompatibility();
 
 /** Mount one trunk or editable Worktree Unit through the collaboration client. */
 export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHandle> {
+  opts.signal?.throwIfAborted();
   if (!isViewerUnitTypeSupported(opts.unitType)) {
     throw new Error(
       `Unsupported embedded Viewer Unit type: ${opts.unitType}; supported types: sheet, doc, slide, base, board`,
@@ -71,7 +73,8 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
   const scope = opts.scope;
   if (scope.kind === "mergePreview") {
     const comparison = await loadComparison(scope.worktreeId, opts.unitId, "preview",
-      { base: "Base", result: "Merge preview" }, new AbortController().signal);
+      { base: "Base", result: "Merge preview" }, opts.signal ?? new AbortController().signal);
+    opts.signal?.throwIfAborted();
     const container = document.getElementById(opts.container);
     if (!container || comparison.right.unitData === null) throw new Error("Merge preview content is unavailable.");
     const instance = await comparisonUniverFactory(opts.license)({
@@ -141,22 +144,20 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
   const dispose = (): void => {
     if (disposed) return;
     disposed = true;
-    formulaResultAppliedSubscription?.unsubscribe();
-    formulaResultAppliedSubscription = undefined;
-    selectionSubscription?.dispose();
-    selectionSubscription = undefined;
-    sheetResourceRefDataProvider.dispose();
+    opts.signal?.removeEventListener('abort', dispose);
     if (window.univer === univer) delete window.univer;
     if (api !== undefined && window.univerAPI === api) delete window.univerAPI;
-    try {
-      api?.dispose();
-    } finally {
-      try {
-        univer.dispose();
-      } finally {
-      }
-    }
+    disposeViewerResources(
+      () => formulaResultAppliedSubscription?.unsubscribe(),
+      () => selectionSubscription?.dispose(),
+      () => sheetResourceRefDataProvider.dispose(),
+      () => api?.dispose(),
+      () => univer.dispose(),
+    );
+    formulaResultAppliedSubscription = undefined;
+    selectionSubscription = undefined;
   };
+  opts.signal?.addEventListener('abort', dispose, { once: true });
 
   try {
     // Use the Harness fetch transport so every document request carries the

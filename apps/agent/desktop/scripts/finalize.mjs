@@ -85,6 +85,16 @@ export async function finalizeRuntime({ desktop, runtime, version }) {
   await trimDevelopmentFiles(join(bootstrap, "node_modules"));
   await trimDevelopmentFiles(join(profile, "node_modules"));
   const { prepareDesktopClient } = await import("./prepare-client.mjs");
+  const { makeProfilePortable } = await import("./portable-profile.mjs");
+  const dshVersions = {};
+  for (const name of await readdir(join(bootstrap, 'node_modules/@deepseek-ai'))) {
+    const manifest = JSON.parse(await readFile(join(bootstrap, 'node_modules/@deepseek-ai', name, 'package.json'), 'utf8'));
+    dshVersions[manifest.name] = manifest.version;
+  }
+  await makeProfilePortable(profile, dshVersions);
+  run(node, [join(bootstrap, 'node_modules/pnpm/bin/pnpm.cjs'), 'install', '--lockfile-only', '--ignore-scripts'], {
+    cwd: profile, env, stdio: 'inherit',
+  });
   await prepareDesktopClient(runtime);
   // Capture boots the published host once; discard its generated module links.
   await sanitize(runtime);

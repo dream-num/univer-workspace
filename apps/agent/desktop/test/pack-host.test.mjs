@@ -14,6 +14,7 @@ test('archive preserves package graphs and unpacks native files under a hidden b
   const runtime = join(desktop, '.build/runtime');
   const files = {
     'bootstrap/package.json': '{}',
+    'bootstrap/node_modules/@deepseek-ai/dsh-agent-presets/presets/standard/agent.cordis.yml': '[]',
     'bootstrap/node_modules/node-pty/lib/index.js': 'native helper launcher',
     'bootstrap/node_modules/shared/index.js': 'bootstrap version',
     'bootstrap/node_modules/native/module.node': 'native binding',
@@ -31,7 +32,9 @@ test('archive preserves package graphs and unpacks native files under a hidden b
   }
   await mkdir(join(desktop, 'src'));
   await writeFile(join(desktop, 'src/dsh-host.cjs'), 'host');
+  await writeFile(join(desktop, 'src/asar-stats.cjs'), 'stats compatibility');
   await packDesktopHost(desktop, runtime);
+  assert.equal(await readFile(join(runtime, 'presets/standard/agent.cordis.yml'), 'utf8'), '[]');
   const archive = join(runtime, 'host.asar');
   assert.equal(asar.extractFile(archive, 'desktop.cordis.yml').toString(), '[]\n');
   assert.equal(asar.extractFile(archive, join('node_modules', 'shared', 'index.js')).toString(), 'bootstrap version');

@@ -10,12 +10,6 @@ async function prepareRuntimeHome(source, target) {
     .update(await readFile(join(source, 'integrity.json'))).digest('hex');
   try {
     if (await readFile(join(target, '.desktop-complete'), 'utf8') === identity) {
-      // The prebuilt browser graph belongs to this fixed Desktop roster.
-      for (const name of ['package.json', 'cordis.patch.yml']) {
-        const file = join('profiles/univer-workspace-harness', name);
-        if (!(await readFile(join(target, file))).equals(await readFile(join(source, 'home', file))))
-          throw new Error('Desktop plugin configuration differs from its packaged client; restore the packaged profile before starting');
-      }
       return target;
     }
   } catch (error) {
@@ -24,6 +18,12 @@ async function prepareRuntimeHome(source, target) {
   const staging = `${target}.staging`;
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
+  // Authored presets are user data, not part of the replaceable shipped profile.
+  try {
+    await cp(join(target, '.agent-presets'), join(staging, '.agent-presets'), { recursive: true });
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
   // Link packages individually: DSH must be able to add fallback links to the
   // writable node_modules directory without writing inside the installation.
   const links = [];

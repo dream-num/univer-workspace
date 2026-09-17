@@ -12,6 +12,8 @@ import {
   type IRange,
   type IWorkbookData,
   IUniverInstanceService,
+  LifecycleService,
+  LifecycleStages,
   type Workbook,
   Univer,
   UniverInstanceType,
@@ -80,6 +82,7 @@ export function ReadonlyUniverWorkbookView(input: {
   const gapConfigRef = useRef(input.gapConfig ?? null);
   const highlightsRef = useRef(input.highlights ?? []);
   const showFormulaTextRef = useRef(input.showFormulaText ?? false);
+  const controlledScrollRef = useRef(input.controlledScroll ?? null);
   const currentWorkbookIdRef = useRef<string | null>(null);
   const lastAppliedScrollKeyRef = useRef<string | null>(null);
   const lastEmittedScrollKeyRef = useRef<string | null>(null);
@@ -91,6 +94,7 @@ export function ReadonlyUniverWorkbookView(input: {
   activeSheetIdRef.current = input.activeSheetId ?? null;
   gapConfigRef.current = input.gapConfig ?? null;
   highlightsRef.current = input.highlights ?? [];
+  controlledScrollRef.current = input.controlledScroll ?? null;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -134,6 +138,11 @@ export function ReadonlyUniverWorkbookView(input: {
         univer.createUnit(UniverInstanceType.UNIVER_SHEET, input.snapshot as IWorkbookData);
 
         const injector = univer.__getInjector();
+        // A model and canvas can exist at Ready while the desktop sheet scroll
+        // service is only registered at Rendered. Do not expose this pane to
+        // its peer's scroll/selection effects until those render modules exist.
+        await injector.get(LifecycleService).onStage(LifecycleStages.Rendered);
+        if (disposed) return;
         const workbookModel = injector
           .get(IUniverInstanceService)
           .getCurrentUnitOfType<Workbook>(UniverInstanceType.UNIVER_SHEET);
@@ -271,6 +280,13 @@ export function ReadonlyUniverWorkbookView(input: {
           };
 
           waitForRenderServices(90);
+          applyControlledScroll({
+            controlledScroll: controlledScrollRef.current,
+            currentWorkbookId: currentWorkbookIdRef.current,
+            lastAppliedScrollKeyRef,
+            lastEmittedScrollKeyRef,
+            univer,
+          });
         }
       } catch (error) {
         if (disposed) {

@@ -163,10 +163,12 @@ async function start() {
       ${event.total ? `document.getElementById('progress').max=${event.total};document.getElementById('progress').value=${event.completed};` : "document.getElementById('progress').removeAttribute('value');"}`).catch(() => {});
   };
   const runtimeHome = await prepareRuntimeHome(resources, join(userData, "runtime/home"));
+  const profileRuntime = await require('./profile-runtime.cjs').selectProfileRuntime(resources, runtimeHome);
+  let dshHome = runtimeHome;
   if (quitting) return;
   report({ phase: "backend" });
   const bin = join(runtime, "node", "bin");
-  const node = process.execPath;
+  const node = profileRuntime.archived ? process.execPath : join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const env = {
     ...process.env,
     NODE_ENV: "production",
@@ -197,11 +199,16 @@ async function start() {
     "UWH_SHARED_CREDENTIALS_PATH",
   ])
     delete env[key];
-  env.ELECTRON_RUN_AS_NODE = "1";
+  if (profileRuntime.archived) env.ELECTRON_RUN_AS_NODE = "1";
+  else {
+    delete env.UWA_DESKTOP_HOST;
+    env.DSH_BIN = profileRuntime.dsh;
+  }
   backend = spawn(
     node,
     [
       join(runtime, "start-local.mjs"),
+      ...(profileRuntime.archived ? [] : ['--patch', profileRuntime.patch]),
       "--port",
       String(DEFAULT_PORT),
       "--no-open",
@@ -217,6 +224,9 @@ async function start() {
     },
   );
   let started = false;
+  backend.on("message", message => {
+    if (message?.type === "uwh-desktop-runtime" && typeof message.home === "string") dshHome = message.home;
+  });
   backend.on("exit", () => {
     if (started && !quitting) {
       dialog.showErrorBox(
@@ -301,6 +311,7 @@ async function start() {
   });
   diagnostics = require("./diagnostics.cjs").createDiagnostics({
     app, resources, updatesEnabled: release.updatesEnabled, getUpdateState: updateController.getState,
+    getDshHome: () => dshHome,
   });
   updateWindow.attach(updateController, diagnostics);
   const checkUpdates = updateController.check;

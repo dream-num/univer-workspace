@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld("workspaceDesktop", {
   diagnostics: () => ipcRenderer.invoke("uwa:diagnostics"),
   openDirectory: id => ipcRenderer.invoke("uwa:diagnostic-directory", id),
   exportDiagnostics: () => ipcRenderer.invoke("uwa:diagnostic-export"),
+  openDevTools: () => ipcRenderer.invoke("uwa:devtools"),
 });

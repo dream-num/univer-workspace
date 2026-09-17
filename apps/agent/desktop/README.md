@@ -64,7 +64,7 @@ dependencies retain the repository SDK upgrade policy. Desktop builds remove
 unnecessary whitespace without renaming identifiers. Standalone Node includes
 the executable and upstream notices, while npm and development headers remain
 in the build directory. DSH's pnpm and plugin installation archives remain in the runtime;
-the production Desktop plugin roster is fixed. node-pty retains only target-platform prebuilds alongside
+default launches use the precompiled plugin roster. node-pty retains only target-platform prebuilds alongside
 any locally compiled fallback; packaged smoke tests exercise a real terminal.
 Licenses, Skills, the resource catalog and native Office
 bindings are runtime assets, not blanket cleanup targets.
@@ -312,7 +312,9 @@ because macOS native process creation cannot traverse an ASAR directory. Desktop
 while standalone Node remains on PATH for external commands. The shared local
 launcher still initializes account directories, shared credentials and settings.
 A scoped module-resolution adapter handles DSH imports from writable configuration;
-published DSH packages remain unmodified. The packaged plugin roster is fixed.
+published DSH packages remain unmodified. Default launches use the packaged plugin roster.
+Installing the writable profile's dependencies selects its standalone DSH runtime
+on subsequent launches, with browser modules composed from that installed profile.
 A changed resource inventory stages a new profile and activates it at the same
 path, preserving account-owned links to it. Prior profile directories are retained
 as `home.previous-<timestamp>`; an old full runtime from earlier installers is
@@ -331,8 +333,10 @@ recent failure codes, and important directories directly in the UI. It refreshes
 once per second while mounted. Timing columns show elapsed time and time since
 the previous event, rather than inferring overlapping phase durations.
 
-The panel opens the fixed logs, application data, workspace, download cache or
-runtime directories. **Export diagnostics** uses the native save dialog to write
+The panel displays the effective **DSH_HOME** and plugin profile directory and opens
+them alongside the logs, application data, workspace, download cache and runtime
+directories. **Open developer tools** opens the main window's Chromium tools.
+**Export diagnostics** uses the native save dialog to write
 a JSON report containing the same environment and selected current/previous
 startup and update events. Reports include local directory paths, but exclude
 credentials, model keys, conversation content, raw error messages/stacks, and
@@ -340,6 +344,32 @@ signed URLs. Only whitelisted scalar diagnostic fields are exported. Update
 history is bounded and survives restart. All filesystem, save-dialog and updater
 operations remain in the Desktop main process; IPC accepts only the trusted main
 frame and fixed directory identifiers. No arbitrary path or URL is accepted.
+
+## Install additional DSH plugins
+
+1. Open **Settings → About → Plugin profile**. Quit Agent before installing packages.
+2. From a terminal in that directory, run `pnpm install`, then `pnpm add <plugin-package>`.
+   Use pnpm 11. The profile pins the packaged DSH dependency versions and its internal
+   tarballs use relative paths. A fresh dependency installation needs registry access;
+   offline installation requires a populated pnpm store.
+3. Add the plugin row to `cordis.patch.yml` for a host plugin. For an agent plugin,
+   restart Agent, use `agentPresets.copy('standard', 'my-preset')`, and add the row to
+   the returned preset's `agent.cordis.yml`. Presets are agent compositions; the
+   profile patch is the host composition. Follow the plugin's declared scope.
+4. Restart Agent and select the copied preset for a new session. Inspect
+   `agentPresets.compositionInventory()` and exercise the plugin in that session.
+
+Desktop uses a stable `DSH_HOME` under `userData/runtime/home`; authored presets live
+in its `.agent-presets` directory, separately from account-owned sessions. Shipped
+preset templates are ordinary read-only installation files so DSH's copy operation
+can read them without traversing ASAR. Existing sessions retain their preset composition;
+use a new session to verify changes.
+
+The installed profile uses standalone Node and DSH's public CLI. It builds browser
+modules for the configured plugins instead of serving the fixed desktop browser graph,
+so the default startup timing budget does not cover customized profiles. Keep a backup
+of the profile and authored presets before application upgrades; replaced homes are
+retained as `home.previous-<timestamp>`.
 
 ## Startup diagnostics
 

@@ -47,6 +47,7 @@ export function DesktopSettings({ t }: PropsLocale<"univer">) {
       <div className={css.actions}>
         <Button onClick={() => void host.openUpdates().catch(() => setError(true))}>{t("desktop.checkUpdates")}</Button>
         <Button disabled={exporting} onClick={() => void exportReport()}>{t("desktop.export")}</Button>
+        <Button onClick={() => void host.openDevTools().catch(() => setError(true))}>{t("desktop.devtools")}</Button>
         {exported && <span role="status">{t("desktop.exported")}</span>}
       </div>
       {error && <p role="alert">{t("desktop.diagnosticsError")}</p>}

@@ -162,7 +162,7 @@ const profile = join(runtime, "home", "profiles", "univer-workspace-harness");
 await mkdir(profile, { recursive: true });
 await writeFile(
   join(profile, "pnpm-workspace.yaml"),
-  `nodeLinker: hoisted\nenableGlobalVirtualStore: false\nminimumReleaseAge: 0\nallowBuilds:\n  esbuild: true\n  node-pty: true\n  koffi: true\n  node-addon-require-builtin: false\n  protobufjs: false\n  '@google/genai': false\n`,
+  `nodeLinker: hoisted\nenableGlobalVirtualStore: false\nminimumReleaseAge: 0\nallowBuilds:\n  esbuild: true\n  node-pty: true\n  koffi: true\n  '@deepseek-ai/dsh-subprocess-local': true\n  node-addon-require-builtin: false\n  protobufjs: false\n  '@google/genai': false\n`,
 );
 const dsh = join(bootstrap, "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
 run(

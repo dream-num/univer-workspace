@@ -31,6 +31,7 @@ declare global {
       diagnostics: () => Promise<DesktopDiagnostics>;
       openDirectory: (id: string) => Promise<void>;
       exportDiagnostics: () => Promise<boolean>;
+      openDevTools: () => Promise<void>;
     };
   }
 }

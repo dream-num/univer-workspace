@@ -41,6 +41,7 @@ async function fixture({ pauseHome = false } = {}) {
       child.emit('exit', 0); // Reproduce exit delivery while beforeInstall awaits.
     } },
     './runtime-home.cjs': { prepareRuntimeHome: () => homeReady },
+    './profile-runtime.cjs': { selectProfileRuntime: async () => ({ archived: true }) },
     './browser-cache.cjs': { prepareBrowserCache: async () => undefined },
     './startup-log.cjs': { createStartupLog: () => ({ write() {} }) },
     './policy.cjs': require('../src/policy.cjs'),
