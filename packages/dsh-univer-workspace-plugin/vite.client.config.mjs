@@ -1,4 +1,3 @@
-import { htmlViewRuntime } from "@univerjs-labs/html-view-renderer/vite";
 import { defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
@@ -6,7 +5,7 @@ import { resolve } from "node:path";
 const packageId = "dsh-univer-workspace-plugin";
 
 export default defineConfig({
-  plugins: [tailwindcss(), htmlViewRuntime()],
+  plugins: [tailwindcss()],
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
   },

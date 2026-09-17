@@ -19,10 +19,10 @@
     "vitest": "4.1.10"
   },
   "peerDependencies": {
-    "@univerjs-labs/html-view": "1.0.0-dev.157d3fd",
-    "@univerjs-labs/html-view-renderer": "1.0.0-dev.157d3fd",
+    "@univerjs-labs/html-view": "1.0.0-dev.6518eb0",
+    "@univerjs-labs/html-view-renderer": "1.0.0-dev.6518eb0",
     "react": ">=18 <20",
-    "@univerjs-labs/binding-engine": "1.0.0-dev.157d3fd",
+    "@univerjs-labs/binding-engine": "1.0.0-dev.6518eb0",
     "@univerjs/core": "1.0.0-rc.0",
     "@univerjs-pro/engine-formula": "1.0.0-rc.0",
     "@univerjs/docs": "1.0.0-rc.0",

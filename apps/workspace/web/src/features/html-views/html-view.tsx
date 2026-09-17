@@ -7,7 +7,7 @@ import {
   type WorkspaceHtmlViewerHandle,
 } from "@univerjs/univer-workspace-html-viewer";
 import { useI18n } from "../../shared/i18n";
-import runtime from "virtual:html-view-runtime";
+import { Button } from "../../shared/ui";
 import { anonymousUser, sessionQueryOptions } from "../auth";
 import { createWorkspaceBindingEngine } from "./workspace-binding-engine";
 import { isResourceViewChange } from "../resource-view/resource-view";
@@ -21,7 +21,7 @@ export function HtmlView({
   source: string;
   allowedOrigins?: readonly string[];
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const translation = useRef(t);
   translation.current = t;
   const session = useQuery(sessionQueryOptions);
@@ -33,6 +33,7 @@ export function HtmlView({
   const viewer = useRef<WorkspaceHtmlViewerHandle>(null);
   const unsynced = useRef(false);
   const [error, setError] = useState("");
+  const [inspecting, setInspecting] = useState(false);
   const loadEngine = useCallback(
     (unitId: string, signal: AbortSignal) => {
       if (!user) throw new Error("Session is not ready.");
@@ -48,7 +49,7 @@ export function HtmlView({
     shouldBlockFn: async ({ current, next }) => {
       if (isResourceViewChange(current, next)) return false;
       try {
-        await viewer.current?.flush();
+        await viewer.current?.prepareToLeave();
         return false;
       } catch (error) {
         setError(error instanceof Error ? error.message : String(error));
@@ -59,6 +60,24 @@ export function HtmlView({
   });
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 justify-end border-b border-border px-3 py-1.5">
+        <Button
+          variant={inspecting ? "secondary" : "ghost"}
+          size="sm"
+          disabled={!user}
+          aria-pressed={inspecting}
+          onClick={() => {
+            const operation = inspecting
+              ? viewer.current?.inspect.close()
+              : viewer.current?.inspect.open();
+            void operation?.catch((reason: unknown) => {
+              setError(reason instanceof Error ? reason.message : String(reason));
+            });
+          }}
+        >
+          {t("htmlViewInspect")}
+        </Button>
+      </div>
       {error ? (
         <p role="alert" className="m-0 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}
@@ -68,7 +87,8 @@ export function HtmlView({
         <WorkspaceHtmlViewer
           ref={viewer}
           source={source}
-          runtime={runtime}
+          locale={language}
+          onInspectChanged={setInspecting}
           title={t("htmlViewTitle")}
           className="min-h-0 w-full flex-1 border-0"
           {...(allowedOrigins ? { allowedOrigins } : {})}

@@ -7,54 +7,26 @@
 [Blob 预览入口](../../../apps/workspace/web/src/features/blobs/blob-preview.tsx) 使用 SDK 的
 `isHtmlViewFilename()` 将 `.univer.html` 交给 `HtmlViewFile`。
 `HtmlViewFile` 携带当前会话读取 `contentUrl`，`HtmlView` 组合私有共享组件
-`@univerjs/univer-workspace-html-viewer`，由共享组件调用 `parseHtmlView(source)`。
+`@univerjs/univer-workspace-html-viewer`，由 SDK 的 `renderHtmlView()` 解析并渲染 HTML。
 读取或解析失败直接展示错误。解析器同时识别文本、控件、单元格订阅和范围订阅四种声明。
 页面通过 `data-univer-cell-subscribe` / `data-univer-range-subscribe` 声明自定义组件来源，
 用原生 HTML ID 调用 `subscribeCellById()` / `subscribeRangeById()`。SDK 管理声明的订阅、
 引用切换与释放，Workspace 不提供旧版页面订阅 API 的兼容层。
 
-[Vite 配置](../../../apps/workspace/vite.config.ts) 注册发布包提供的 `htmlViewRuntime()` 插件，
-页面组件从 `virtual:html-view-runtime` 导入运行时代码。Browser 构建负责将运行时交付给页面，
-HTML 文件无需携带 SDK 或协同凭据。
-
 ## 页面与宿主连接
 
 [Web 适配组件](../../../apps/workspace/web/src/features/html-views/html-view.tsx) 在取得登录用户后，
-挂载[共享页面组件](../../../packages/workspace-html-viewer/src/viewer.tsx)。共享组件
-为本次加载生成 `connectionId`，先安装连接监听，再生成 iframe 内容：
+挂载[共享页面组件](../../../packages/workspace-html-viewer/src/viewer.tsx)。共享组件给 SDK
+`renderHtmlView({ container, html, locale, loadEngine, policy, onError })` 提供一个 div。
+SDK 自身包含 iframe 程序，管理 iframe sandbox、CSP、握手与 MessagePort、订阅和释放。
+应用不再注入 runtime 或注册 renderer Vite 插件。原生表单导航由 SDK 的
+`form-action 'none'` 阻止；HTML 文件无需携带 SDK 或协同凭据。
 
-```ts
-iframe.srcdoc = createHtmlViewDocument({
-  template: parsed,
-  runtime,
-  connectionId,
-  ...(allowedOrigins ? { allowedOrigins } : {}),
-});
-```
-
-iframe 使用 `sandbox="allow-scripts allow-forms"` 和 `referrerPolicy="no-referrer"`。
-`allow-forms` 使浏览器能够触发页面的 `submit` 事件，由页面处理函数阻止默认行为并通过
-binding API 保存数据。宿主在 SDK 生成文档的 `<head>` 起始位置加入独立的 CSP
-`form-action 'none'`，与 SDK 的资源来源策略共同生效，阻止遗漏 `preventDefault()` 或直接
-调用 `form.submit()` 时的原生表单提交。允许加载的 CDN 不因此成为表单提交目标。
-宿主按 SDK 接入合同验证连接来自该 iframe、origin 为 `null`、token 与本次连接一致，
-并接收其 MessagePort；重复连接关闭多余端口。
-
-验证通过后，宿主把 Workspace 的来源加载函数接入 SDK：
-
-```ts
-host = createBindingHost(event.ports[0], {
-  loadEngine: (unitId, signal) => createWorkspaceBindingEngine(unitId, user, signal),
-  onError: setError,
-  onClose() {
-    if (hostRef.current === host) hostRef.current = undefined;
-    host = undefined;
-  },
-  onStatus(states) {
-    // 将 SDK 协同状态映射到 Workspace 保存提示和离开提醒。
-  },
-});
-```
+页面工具栏的“检查绑定”切换 `view.inspect.open()` / `close()`。SDK 提供侧栏、hover
+卡片和高亮，默认高亮全部绑定，选择元素使用单独的高亮效果。共享组件从已授权加载的
+同一个 Workbook 读取工作簿和子表名称，缺失名称显示 `id: xxx`，不创建额外的 Engine。
+语言使用页面创建时的 Workspace `language`；切换语言不销毁正在编辑的页面，重新打开后
+应用新的检查界面语言。接口和职责见[共享组件说明](../../../packages/workspace-html-viewer/README.md)。
 
 `HtmlView` 可接收 `allowedOrigins` 并传给 SDK；当前 `HtmlViewFile` 入口允许
 `https://cdn.jsdelivr.net`，用于按需加载 ECharts 等前端库。其他外部来源需要宿主显式配置。
@@ -89,9 +61,9 @@ SDK Engine 接管独立 Univer 的加载与释放。
 ## 保存与离开
 
 Workspace 通过 `onStatus` 跟踪同步状态，供离开提醒使用；正常页面不显示独立保存或同步提示。
-路由的 `useBlocker` 在离开前执行 `await host.flush()`：成功才允许导航，失败则展示错误并
+路由的 `useBlocker` 在离开前执行 `await viewer.prepareToLeave()`：成功才允许导航，失败则展示错误并
 保留页面。草稿提交和协同确认由 SDK 完成。
 
-关闭或刷新浏览器时，`host.hasPendingChanges()` 或任一 Unit 尚未同步会触发离开提醒；
-浏览器强制结束不能保证保存完成。共享组件卸载时移除连接监听并调用 `host.dispose()`。
+关闭或刷新浏览器时，`viewer.hasPendingChanges()` 或任一 Unit 尚未同步会触发离开提醒；
+浏览器强制结束不能保证保存完成。共享组件卸载时取消状态订阅并调用 SDK `view.dispose()`。
 文件读取同样在组件清理时取消。

@@ -17,6 +17,11 @@ const source = `<!doctype html><html><head></head><body>
 </body></html>`;
 
 const loadEngine: HtmlViewHostOptions["loadEngine"] = async () => ({
+  getMetadata: () => ({
+    unitId: "unit",
+    name: "Budget workbook",
+    sheets: [{ sheetId: "sheet", name: "Summary" }],
+  }),
   getCellState: () => ({ value }),
   getRangeState: () => ({ value: [[value]] }),
   setCellValue: (_reference, next) => {
@@ -58,9 +63,14 @@ function Preview() {
         anchor: anchor.current!,
         source,
         name: "Lifecycle fixture",
+        locale: new URLSearchParams(location.search).get("lang") === "zh-CN" ? "zh-CN" : "en-US",
         loadEngine,
         t: (key) =>
           ({
+            "html.inspect":
+              new URLSearchParams(location.search).get("lang") === "zh-CN"
+                ? "检查绑定"
+                : "Inspect bindings",
             "html.saving": "Saving",
             "html.saveFailed": "Save failed",
             "html.retrySave": "Save and close",

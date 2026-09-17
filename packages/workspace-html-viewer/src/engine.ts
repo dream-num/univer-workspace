@@ -5,6 +5,7 @@ import {
   type CellValue,
   type InsertRowsWithValuesParams,
 } from "@univerjs-labs/binding-engine";
+import type { BindingUnitMetadata } from "@univerjs-labs/html-view-renderer/render";
 import "@univerjs/sheets/facade";
 import { FUniver } from "@univerjs/core/facade";
 import { UniverProFormulaEnginePlugin } from "@univerjs-pro/engine-formula";
@@ -87,7 +88,7 @@ export interface WorkspaceHtmlEngineOptions {
 export async function createWorkspaceHtmlEngine(
   options: WorkspaceHtmlEngineOptions,
   signal: AbortSignal,
-): Promise<BindingEngine> {
+): Promise<BindingEngine & { getMetadata(): BindingUnitMetadata }> {
   signal.throwIfAborted();
   const { unitId } = options;
   let univerAPI!: FUniver;
@@ -158,7 +159,20 @@ export async function createWorkspaceHtmlEngine(
     signal.throwIfAborted();
     if (options.user.anonymous || !options.canEdit)
       univerAPI.getWorkbook(unitId)!.setEditable(false);
-    return engine;
+    return Object.assign(engine, {
+      getMetadata(): BindingUnitMetadata {
+        const workbook = univerAPI.getWorkbook(unitId);
+        return {
+          unitId,
+          ...(workbook ? { name: workbook.getName() } : {}),
+          sheets:
+            workbook?.getSheets().map((sheet) => ({
+              sheetId: sheet.getSheetId(),
+              name: sheet.getSheetName(),
+            })) ?? [],
+        };
+      },
+    });
   } catch (error) {
     dispose();
     throw error;

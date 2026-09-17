@@ -6,7 +6,7 @@ import {
   type HtmlViewHostOptions,
 } from "@univerjs/univer-workspace-html-viewer";
 import { Button } from "@univerjs/univer-workspace-ui";
-import runtime from "virtual:html-view-runtime";
+import type { ViewerLocale } from "../viewer-locale.ts";
 import type { UniverLocaleKey } from "../locales.ts";
 import { retainUntilSaved } from "./retained-preview.ts";
 import css from "./html-view.module.scss";
@@ -18,6 +18,7 @@ export function mountRetainedHtmlView(options: {
   anchor: HTMLElement;
   source: string;
   name: string;
+  locale?: ViewerLocale;
   loadEngine: HtmlViewHostOptions["loadEngine"];
   t: (key: UniverLocaleKey) => string;
 }): () => void {
@@ -27,6 +28,7 @@ export function mountRetainedHtmlView(options: {
   const root = createRoot(container);
   let viewer: WorkspaceHtmlViewerHandle | null = null;
   let unsynced = false;
+  let inspecting = false;
   let error = "";
   let released = false;
   let saving = false;
@@ -42,7 +44,7 @@ export function mountRetainedHtmlView(options: {
   window.addEventListener("beforeunload", beforeUnload);
   const owner = retainUntilSaved({
     flush: async () => {
-      await viewer?.flush();
+      await viewer?.prepareToLeave();
     },
     dispose: () => {
       cancelAnimationFrame(frame);
@@ -77,6 +79,23 @@ export function mountRetainedHtmlView(options: {
     container.inert = saving;
     root.render(
       <section className={css.surface} aria-label={options.name}>
+        {!released ? (
+          <div className={css.toolbar}>
+            <Button
+              variant={inspecting ? "secondary" : "ghost"}
+              size="sm"
+              aria-pressed={inspecting}
+              onClick={() => {
+                const operation = inspecting ? viewer?.inspect.close() : viewer?.inspect.open();
+                void operation?.catch((reason: unknown) => {
+                  onError(reason instanceof Error ? reason.message : String(reason));
+                });
+              }}
+            >
+              {options.t("html.inspect")}
+            </Button>
+          </div>
+        ) : null}
         {released ? (
           <header className={css.recoveryHeader}>
             <strong>{options.name}</strong>
@@ -108,7 +127,11 @@ export function mountRetainedHtmlView(options: {
         <WorkspaceHtmlViewer
           ref={setViewer}
           source={options.source}
-          runtime={runtime}
+          locale={options.locale ?? "en-US"}
+          onInspectChanged={(value) => {
+            inspecting = value;
+            render();
+          }}
           title={options.name}
           allowedOrigins={ALLOWED_ORIGINS}
           loadEngine={options.loadEngine}
