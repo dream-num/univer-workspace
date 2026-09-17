@@ -1,36 +1,50 @@
 # Workspace HTML Viewer
 
-Private React HTML View host shared by Workspace Browser and Workspace Agent.
+Private React adapter shared by Workspace Browser and Workspace Agent.
 Import from `@univerjs/univer-workspace-html-viewer`; this package is not published.
 
 ## Responsibilities
 
-`WorkspaceHtmlViewer` composes the published HTML parser and renderer SDK. It
-owns the sandboxed iframe, per-navigation handshake token, MessagePort validation,
-Binding Host lifecycle, and cancellation on teardown. It forwards errors and
-collaboration status and exposes `flush()` and `hasPendingChanges()` through its ref.
-It permits script and form events in an opaque-origin sandbox, blocks native
-form submission, and takes the external resource allowlist from its consumer.
+`WorkspaceHtmlViewer` mounts the published SDK's `renderHtmlView` in a div. The SDK
+owns the sandboxed iframe, embedded iframe program, connection protocol, bindings,
+inspection panel, hover popovers and highlights. Consumers do not install a renderer
+Vite plugin or provide iframe scripts.
 
-Applications supply HTML source, localized title, bundled SDK runtime, and a
-stable `loadEngine(unitId, signal)` callback. Each build registers the renderer's
-`htmlViewRuntime()` Vite plugin and imports `virtual:html-view-runtime`.
+This package adapts SDK state to React callbacks, provides metadata from authorized
+source engines, and exposes the view's save and inspection controls through a ref:
+
+- `inspect.open()` / `inspect.close()` toggle the built-in inspection UI.
+- `onInspectChanged(boolean)` keeps the host's toolbar toggle in sync.
+- `prepareToLeave()` commits drafts, waits for saving and pauses page writes; hosts
+  keep the component mounted until it succeeds. Failures leave the page usable.
+- `hasPendingChanges()` includes drafts, writes and collaboration confirmation.
+
+Applications supply HTML source, an accessible title, `locale` (`zh-CN` or `en-US`),
+an external resource allowlist and a stable `loadEngine(unitId, signal)` callback.
+Locale defaults to English and is applied at page creation. Changing the UI language
+alone does not recreate a live page or discard its edits; reopen the page to apply
+that language to SDK inspection UI.
+
+Inspection metadata reads workbook and sheet names from the same loaded, authorized
+engine used by the page. It never loads a second engine or bypasses authorization.
+Unavailable names use the SDK's `id: xxx` fallback.
 
 ## Host responsibilities
 
 - Fetch Blob contents and resolve source Unit identities and permissions.
 - Resolve identity, license, permissions and collaboration endpoints, and inject
   the reference policy into `createWorkspaceHtmlEngine`.
-- Present errors and interpret collaboration status for leave protection.
-- Keep the component mounted while awaiting `flush()` before leaving; changing
-  source/loader or unmounting disposes the old Host and is not an async save guard.
-- Implement route/tab/account lifecycle and browser unload protection.
+- Present errors, an inspection toggle and browser unload protection.
+- Await `prepareToLeave()` before leaving; changing source/loader or unmounting
+  disposes the old view and is not an async save guard.
+- Implement route/tab/account lifecycle. Current hosts dispose the view after a
+  successful departure preparation.
 
 The `/engine` export owns the shared Univer runtime factory: base plugins, identity and
-license installation, read-only write enforcement, and abort/load/disposal lifecycle.
-Consumers supply resolved permissions, collaboration endpoints, network configuration
-and `registerEmbed(univer)` for their referenced-Unit policy. SDK dependencies remain
-peers, using each consumer’s runtime.
+license installation, read-only write enforcement, metadata from the loaded workbook,
+and abort/load/disposal lifecycle. Consumers supply resolved permissions, collaboration
+endpoints, network configuration and `registerEmbed(univer)` for their referenced-Unit
+policy. SDK dependencies remain peers, using each consumer’s runtime.
 
 All binding writes first reject an anonymous identity (`user.anonymous`), then
 check source edit permission. `HtmlViewWriteError.code` identifies the reason;
@@ -39,8 +53,8 @@ before the SDK serializes it for the iframe. Web and Agent own their Chinese and
 English dictionary entries. Translation callbacks read the current language without
 recreating the engine or losing pending edits when the UI language changes.
 
-No HTTP requests, credential storage, DSH services or routes belong here. The SDK owns binding syntax, subscriptions and the communication
-protocol. `workspace-ui` remains the owner of generic controls and icons.
+No HTTP requests, credential storage, DSH services or routes belong here.
+`workspace-ui` remains the owner of generic controls and icons.
 
 Web uses its route blocker. Agent's current Sidecar has no asynchronous close
 hook; its adapter keeps a stable mounted iframe while saving after native close,
@@ -58,13 +72,13 @@ Do not import an application's internal modules here.
 
 Run `pnpm --filter @univerjs/univer-workspace-html-viewer test` and `typecheck`,
 then both consumers' typechecks and builds for shared changes. The Agent browser
-fixture exercises the actual SDK handshake, live subscriptions, editing, and
-retention on save failure:
+fixture exercises the published SDK's rendering, inspection, live subscriptions,
+editing, and retention on save failure:
 
 ```bash
 pnpm --filter dsh-univer-workspace-plugin exec vite --config test/vite.html-view.config.ts
 ```
 
-Open `http://127.0.0.1:5184/test/fixtures/html-view.html`. It uses in-memory Sheet
-values and no credentials or remote data. The Web resource fixture is documented
-in [Workspace README](../../apps/workspace/README.md#沉浸视图).
+Open `http://127.0.0.1:5184/test/fixtures/html-view.html` (add `?lang=zh-CN` for Chinese).
+It uses in-memory Sheet values and no credentials or remote data. The Web resource
+fixture is documented in [Workspace README](../../apps/workspace/README.md#沉浸视图).

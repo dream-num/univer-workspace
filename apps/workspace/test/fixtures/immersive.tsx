@@ -1,9 +1,10 @@
 /** Actual resource route and renderer, backed exclusively by in-memory fixture responses. */
 export {};
 
+const accessRole = new URLSearchParams(location.search).get("role") === "viewer" ? "viewer" : "owner";
 const nativeFetch = window.fetch.bind(window);
 const space = {
-  id: "preview", name: "Design preview", type: "personal", accessRole: "owner", publicRead: false,
+  id: "preview", name: "Design preview", type: "personal", accessRole, publicRead: false,
   capabilities: { browseRoot: true, createAtRoot: false, renameSpace: false, manageMembers: false, viewTrash: false },
 };
 const user = { id: "preview-user", username: "preview", displayName: "Preview", avatarUrl: null };
@@ -24,7 +25,7 @@ document.getElementById('close').onclick=()=>document.querySelector('dialog').cl
 </script></body></html>`;
 const node = (id: string) => ({
   id, name: id === "folder" ? "示例文件夹" : id === "text" ? "阅读说明" : id === "text-2" ? "第二份说明" : "业务概览.univer.html", spaceId: space.id, parentNodeId: id === "text-2" ? "folder" : null,
-  accessRole: "owner", hasChildren: id === "folder", updatedAt: "2026-09-15T00:00:00Z",
+  accessRole, hasChildren: id === "folder", updatedAt: "2026-09-15T00:00:00Z",
   capabilities: { browseChildren: id === "folder", createChildren: false, rename: false, move: false, trash: false, share: true },
   resource: id === "folder" ? null : {
     id, kind: "blob",
@@ -51,7 +52,7 @@ window.fetch = async (input, init) => {
     const id = url.pathname.split("/")[3] ?? "html";
     const item = node(id);
     result = { node: item, resource: {
-      ...item.resource, originalFilename: id.startsWith("text") ? "notes.txt" : "dashboard.univer.html", name: item.name, spaceId: space.id, accessRole: "owner",
+      ...item.resource, originalFilename: id.startsWith("text") ? "notes.txt" : "dashboard.univer.html", name: item.name, spaceId: space.id, accessRole,
       contentUrl: `/api/blob-resources/${id}/content`, downloadUrl: `/api/blob-resources/${id}/download`,
     } };
   } else if (url.pathname === "/api/nodes/folder/children") result = {

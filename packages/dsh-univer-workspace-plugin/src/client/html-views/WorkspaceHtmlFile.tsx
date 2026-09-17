@@ -1,3 +1,4 @@
+import type { ViewerLocale } from "../viewer-locale.ts";
 import { useEffect, useRef, useState } from "react";
 import { loadViewerBootstrap } from "../viewer-bootstrap.ts";
 import type { UniverLocaleKey } from "../locales.ts";
@@ -7,8 +8,11 @@ import { createAgentBindingEngine } from "./binding-engine.ts";
 export function WorkspaceHtmlFile(props: {
   contentUrl: string;
   name: string;
+  locale: ViewerLocale;
   t: (key: UniverLocaleKey) => string;
 }) {
+  const locale = useRef(props.locale);
+  locale.current = props.locale;
   const translation = useRef(props.t);
   translation.current = props.t;
   const anchor = useRef<HTMLDivElement>(null);
@@ -32,6 +36,7 @@ export function WorkspaceHtmlFile(props: {
           anchor: anchor.current,
           source,
           name: props.name,
+          locale: locale.current,
           t: (key) => translation.current(key),
           loadEngine: (unitId, signal) =>
             createAgentBindingEngine(unitId, bootstrap, signal, (code) =>

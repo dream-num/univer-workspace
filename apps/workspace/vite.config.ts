@@ -1,6 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import { htmlViewRuntime } from "@univerjs-labs/html-view-renderer/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
@@ -41,7 +40,6 @@ export default defineConfig({
     }),
     react(),
     tailwindcss(),
-    htmlViewRuntime(),
   ],
   server: {
     host: "127.0.0.1",

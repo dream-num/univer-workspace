@@ -63,8 +63,13 @@ CLI 不装配 Browser Renderer 或 Binding Engine；页面通过 Workspace Brows
 ## Agent Sidecar 页面运行
 
 Agent 文件预览先按 `originalFilename` 识别 `.univer.html`，再走普通文本预览。
-专用适配读取完整 Blob，并通过共享 `workspace-html-viewer` 渲染；构建注入同版本
-renderer runtime。普通 `.html` 仍显示文本源码。
+专用适配读取完整 Blob，并通过共享 `workspace-html-viewer` 调用 SDK `renderHtmlView` 渲染。
+SDK 包已包含 iframe 程序，Agent 无需 runtime 构建插件。普通 `.html` 仍显示文本源码。
+
+HTML 文件的“检查绑定”对所有访问者开放，包括 viewer。
+开关控制 SDK 内置面板、hover 卡片和高亮。名称来自已授权加载的 Workbook，
+缺失时显示 `id: xxx`。检查界面使用打开页面时的 Agent 中英语言；语言变化不重建正在
+编辑的页面，重新打开后生效。
 
 Agent 适配调用共享 `createWorkspaceHtmlEngine`，复用基础插件装配、只读保护与加载/取消/释放生命周期。
 Agent 通过同源 `/univer-workspace/api/unit-resources/{unitId}`
@@ -75,7 +80,7 @@ Sheet trunk；只读来源的单元格写入和追加行均明确报错。协同
 
 当前发布的 DSH Sidecar API 无异步关闭保护，且切换会话会卸载内容。Agent 将
 HTML iframe 保留在稳定的 DOM 容器内，位置跟随 Sidecar；关闭、切换文件或会话时
-等待 `flush()`，成功后释放。失败时保留页面和“保存并关闭”重试入口，也允许用户确认后放弃尚未同步的更改
+等待 `prepareToLeave()` 提交并暂停写入，成功后释放。失败时保留页面和“保存并关闭”重试入口，也允许用户确认后放弃尚未同步的更改
 （不会撤销已保存的更改）。保存过程中
 禁止继续交互，浏览器退出时检查未保存内容和未同步状态。账号切换仍受原有连接隔离
 及页面重载机制约束，浏览器/进程强制退出无法保证保存。未来 DSH 提供公开异步

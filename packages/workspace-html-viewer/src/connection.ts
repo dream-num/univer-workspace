@@ -1,71 +1,82 @@
-import { parseHtmlView } from "@univerjs-labs/html-view";
-import { createBindingHost, createHtmlViewDocument } from "@univerjs-labs/html-view-renderer";
+import {
+  renderHtmlView,
+  type BindingEnginePort,
+  type BindingUnitMetadata,
+  type HtmlViewLocale,
+} from "@univerjs-labs/html-view-renderer/render";
+import type { CollaborationStatus } from "@univerjs-pro/collaboration-client";
 
-export type HtmlViewHostOptions = Parameters<typeof createBindingHost>[1];
+/** Metadata comes from the same authorized workbook used for binding reads and writes. */
+export type HtmlViewEngine = BindingEnginePort & {
+  getMetadata?: () => BindingUnitMetadata;
+};
 
-/** One sandbox navigation and its Host. No authentication, routing or engine construction. */
+export interface HtmlViewHostOptions {
+  loadEngine: (unitId: string, signal: AbortSignal) => Promise<HtmlViewEngine>;
+  onError?: (message: string) => void;
+  onStatus?: (states: readonly CollaborationStatus[]) => void;
+  onInspectChanged?: (inspecting: boolean) => void;
+}
+
+/** Adapts SDK state and authorized workbook metadata to the React consumers. */
 export function connectHtmlView(
-  iframe: HTMLIFrameElement,
+  container: HTMLElement,
   options: HtmlViewHostOptions & {
     source: string;
-    runtime: string;
+    locale?: HtmlViewLocale;
     allowedOrigins?: readonly string[];
   },
 ) {
-  const connectionId = crypto.randomUUID();
-  const template = parseHtmlView(options.source);
-  const document = createHtmlViewDocument({
-    template,
-    runtime: options.runtime,
-    connectionId,
-    ...(options.allowedOrigins ? { allowedOrigins: options.allowedOrigins } : {}),
-  }).replace(
-    /<head(?:\s[^>]*)?>/i,
-    // Permit submit events, but never native form navigation, including to an allowed CDN.
-    '$&<meta http-equiv="Content-Security-Policy" content="form-action \'none\'">',
-  );
+  const engines = new Map<string, Promise<HtmlViewEngine>>();
+  const view = renderHtmlView({
+    container,
+    html: options.source,
+    ...(options.locale ? { locale: options.locale } : {}),
+    ...(options.allowedOrigins ? { policy: { allowedOrigins: options.allowedOrigins } } : {}),
+    loadEngine(unitId, signal) {
+      const loading = options.loadEngine(unitId, signal);
+      engines.set(unitId, loading);
+      return loading;
+    },
+    onError: (error) => options.onError?.(error.message),
+  });
   let disposed = false;
-  let host: ReturnType<typeof createBindingHost> | undefined;
-  const connect = (event: MessageEvent) => {
-    if (
-      disposed ||
-      event.source !== iframe.contentWindow ||
-      event.origin !== "null" ||
-      event.data?.type !== "univer-html-view-connect" ||
-      event.data.token !== connectionId ||
-      !event.ports[0]
-    )
-      return;
-    if (host) {
-      event.ports[0].close();
-      return;
+  let pending = false;
+  let inspecting = false;
+  options.onInspectChanged?.(false);
+  const unsubscribe = view.subscribe((state) => {
+    pending = state.pending.drafts || state.pending.writes || state.pending.confirmation;
+    options.onStatus?.(
+      state.sources.flatMap((source) => (source.status === undefined ? [] : [source.status])),
+    );
+    if (state.inspecting !== inspecting) {
+      inspecting = state.inspecting;
+      options.onInspectChanged?.(inspecting);
     }
-    host = createBindingHost(event.ports[0], {
-      loadEngine: options.loadEngine,
-      ...(options.onStatus ? { onStatus: options.onStatus } : {}),
-      ...(options.onError ? { onError: options.onError } : {}),
-      onClose() {
-        host = undefined;
-        options.onClose?.();
-      },
-    });
-  };
-  window.addEventListener("message", connect);
-  // StrictMode may dispose this effect before its navigation starts.
-  queueMicrotask(() => {
-    if (!disposed) iframe.srcdoc = document;
   });
   return {
-    async flush() {
-      await host?.flush();
+    prepareToLeave: view.prepareToLeave,
+    hasPendingChanges: () => pending,
+    inspect: {
+      open: () =>
+        view.inspect.open({
+          async loadMetadata(unitId, signal) {
+            signal.throwIfAborted();
+            // Never create a second engine or bypass source authorization for inspection.
+            const engine = await engines.get(unitId);
+            signal.throwIfAborted();
+            if (disposed) throw new Error("HTML view is disposed.");
+            return engine?.getMetadata?.() ?? { unitId, sheets: [] };
+          },
+        }),
+      close: view.inspect.close,
     },
-    hasPendingChanges: () => host?.hasPendingChanges() ?? false,
     dispose() {
       if (disposed) return;
       disposed = true;
-      window.removeEventListener("message", connect);
-      host?.dispose();
-      host = undefined;
+      unsubscribe();
+      view.dispose();
+      engines.clear();
     },
   };
 }

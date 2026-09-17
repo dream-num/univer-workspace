@@ -15,8 +15,19 @@ interface BlobPreviewResource {
   readonly downloadUrl: string;
 }
 
-export function BlobPreview({ resource }: { readonly resource: BlobPreviewResource }) {
-  if (isHtmlViewFilename(resource.originalFilename)) return <HtmlViewFile resource={resource} />;
+export function BlobPreview({
+  resource,
+  immersive = false,
+  actionsContainer,
+}: {
+  readonly resource: BlobPreviewResource;
+  readonly immersive?: boolean;
+  readonly actionsContainer: HTMLElement | null;
+}) {
+  if (isHtmlViewFilename(resource.originalFilename))
+    return (
+      <HtmlViewFile resource={resource} actionsContainer={actionsContainer} immersive={immersive} />
+    );
   const mediaType = resource.mediaType.toLowerCase();
   if (mediaType.startsWith("image/")) {
     return (

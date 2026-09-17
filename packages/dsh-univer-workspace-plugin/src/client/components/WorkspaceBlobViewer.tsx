@@ -3,6 +3,7 @@
  * their own binding runtime for independently authorized source Sheets; other
  * Blob formats remain read-only media/text previews.
  */
+import type { ViewerLocale, ViewerLocaleInjected } from "../viewer-locale.ts";
 import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import { WorkspaceHtmlFile } from "../html-views/WorkspaceHtmlFile.tsx";
 import { useEffect, useState, type ReactElement } from "react";
@@ -26,7 +27,7 @@ type BlobState =
   | { readonly status: "ready"; readonly resource: BlobResource }
   | { readonly status: "error"; readonly message: string };
 
-export interface WorkspaceBlobViewerProps {
+export interface WorkspaceBlobViewerProps extends ViewerLocaleInjected {
   readonly target: WorkspaceBlobSurface;
   readonly onClose: () => void;
   readonly headerAction?: ReactElement | undefined;
@@ -108,7 +109,7 @@ export function WorkspaceBlobViewer(props: WorkspaceBlobViewerProps): ReactEleme
             {`${props.t("blob.loadFailed")}: ${state.message}`}
           </div>
         ) : (
-          <BlobPreview resource={state.resource} t={props.t} />
+          <BlobPreview resource={state.resource} t={props.t} locale={props.getViewerLocale()} />
         )}
       </div>
     </section>
@@ -116,6 +117,7 @@ export function WorkspaceBlobViewer(props: WorkspaceBlobViewerProps): ReactEleme
 }
 
 function BlobPreview(props: {
+  readonly locale: ViewerLocale;
   readonly resource: BlobResource;
   readonly t: (key: UniverLocaleKey) => string;
 }): ReactElement {
@@ -123,7 +125,7 @@ function BlobPreview(props: {
   const mediaType = resource.mediaType.toLowerCase();
   const contentUrl = proxyAssetUrl(resource.contentUrl);
   if (isHtmlViewFilename(resource.originalFilename)) {
-    return <WorkspaceHtmlFile contentUrl={contentUrl} name={resource.name} t={props.t} />;
+    return <WorkspaceHtmlFile contentUrl={contentUrl} name={resource.name} t={props.t} locale={props.locale} />;
   }
   if (mediaType.startsWith("image/")) {
     return (

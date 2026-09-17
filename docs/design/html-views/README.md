@@ -12,10 +12,10 @@ HTML Views 在 Workspace 中以 `.univer.html` Blob 保存，页面使用 HTML�
 | 依赖 | Workspace 中的用途 | Consumer |
 | --- | --- | --- |
 | `@univerjs-labs/html-view` | 识别文件、解析 HTML、提取声明式引用 | Browser、Agent 能力插件、CLI |
-| `@univerjs-labs/html-view-renderer` | 生成运行页面、连接页面与宿主、提供保存和释放入口 | Browser、Agent |
+| `@univerjs-labs/html-view-renderer` | 渲染隔离页面、内置绑定检查、保存和释放 | Browser、Agent |
 | `@univerjs-labs/binding-engine` | 加载 Sheet Unit，提供数据读写、订阅和协同 | Browser、Agent |
 
-`packages/workspace-html-viewer` 共享沙箱页面、Binding Host 生命周期与 Binding Engine 工厂；
+`packages/workspace-html-viewer` 共享 SDK renderHtmlView 的 React 适配、授权名称查询与 Binding Engine 工厂；
 Browser 与 Agent 提供身份、来源授权、协同配置、引用 Provider 与退出保存适配。
 
 Workspace 拥有 Blob 的产品入口、Space 与资源目录、用户身份、来源权限、Univer 配置、

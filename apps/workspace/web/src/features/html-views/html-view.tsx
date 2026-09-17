@@ -1,3 +1,5 @@
+import { ScanSearch } from "lucide-react";
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBlocker } from "@tanstack/react-router";
 import { CollaborationStatus } from "@univerjs-pro/collaboration-client";
@@ -7,7 +9,7 @@ import {
   type WorkspaceHtmlViewerHandle,
 } from "@univerjs/univer-workspace-html-viewer";
 import { useI18n } from "../../shared/i18n";
-import runtime from "virtual:html-view-runtime";
+import { Button } from "../../shared/ui";
 import { anonymousUser, sessionQueryOptions } from "../auth";
 import { createWorkspaceBindingEngine } from "./workspace-binding-engine";
 import { isResourceViewChange } from "../resource-view/resource-view";
@@ -17,11 +19,15 @@ const HTML_VIEW_ALLOWED_ORIGINS = ["https://cdn.jsdelivr.net"] as const;
 export function HtmlView({
   source,
   allowedOrigins,
+  immersive,
+  actionsContainer,
 }: {
   source: string;
+  immersive: boolean;
+  actionsContainer: HTMLElement | null;
   allowedOrigins?: readonly string[];
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const translation = useRef(t);
   translation.current = t;
   const session = useQuery(sessionQueryOptions);
@@ -33,6 +39,7 @@ export function HtmlView({
   const viewer = useRef<WorkspaceHtmlViewerHandle>(null);
   const unsynced = useRef(false);
   const [error, setError] = useState("");
+  const [inspecting, setInspecting] = useState(false);
   const loadEngine = useCallback(
     (unitId: string, signal: AbortSignal) => {
       if (!user) throw new Error("Session is not ready.");
@@ -44,11 +51,18 @@ export function HtmlView({
     },
     [user?.id, user?.displayName, user?.avatarUrl],
   );
+  useEffect(() => {
+    if (immersive && inspecting) {
+      void viewer.current?.inspect.close().catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      });
+    }
+  }, [immersive, inspecting]);
   useBlocker({
     shouldBlockFn: async ({ current, next }) => {
       if (isResourceViewChange(current, next)) return false;
       try {
-        await viewer.current?.flush();
+        await viewer.current?.prepareToLeave();
         return false;
       } catch (error) {
         setError(error instanceof Error ? error.message : String(error));
@@ -59,6 +73,28 @@ export function HtmlView({
   });
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {actionsContainer &&
+        createPortal(
+          <Button
+            variant="secondary"
+            className="aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+            size="sm"
+            disabled={!user}
+            aria-pressed={inspecting}
+            onClick={() => {
+              const operation = inspecting
+                ? viewer.current?.inspect.close()
+                : viewer.current?.inspect.open();
+              void operation?.catch((reason: unknown) => {
+                setError(reason instanceof Error ? reason.message : String(reason));
+              });
+            }}
+          >
+            <ScanSearch />
+            {t("htmlViewInspect")}
+          </Button>,
+          actionsContainer,
+        )}
       {error ? (
         <p role="alert" className="m-0 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}
@@ -68,7 +104,8 @@ export function HtmlView({
         <WorkspaceHtmlViewer
           ref={viewer}
           source={source}
-          runtime={runtime}
+          locale={language}
+          onInspectChanged={setInspecting}
           title={t("htmlViewTitle")}
           className="min-h-0 w-full flex-1 border-0"
           {...(allowedOrigins ? { allowedOrigins } : {})}
@@ -83,7 +120,15 @@ export function HtmlView({
   );
 }
 
-export function HtmlViewFile({ resource }: { resource: { contentUrl: string; byteSize: number } }) {
+export function HtmlViewFile({
+  resource,
+  immersive,
+  actionsContainer,
+}: {
+  resource: { contentUrl: string; byteSize: number };
+  immersive: boolean;
+  actionsContainer: HTMLElement | null;
+}) {
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -110,6 +155,11 @@ export function HtmlViewFile({ resource }: { resource: { contentUrl: string; byt
       </p>
     );
   return source === null ? null : (
-    <HtmlView source={source} allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS} />
+    <HtmlView
+      source={source}
+      allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS}
+      immersive={immersive}
+      actionsContainer={actionsContainer}
+    />
   );
 }

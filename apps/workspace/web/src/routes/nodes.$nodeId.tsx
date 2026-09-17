@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-router";
+import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import { Download, Lock, Maximize, Pencil, Share2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { IMember } from "@univerjs/protocol";
@@ -111,6 +112,7 @@ function NodePage() {
   const session = useQuery(sessionQueryOptions);
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
+  const [htmlActionsContainer, setHtmlActionsContainer] = useState<HTMLSpanElement | null>(null);
   const [collaboration, setCollaboration] = useState<{
     nodeId: string;
     members: readonly IMember[];
@@ -171,6 +173,7 @@ function NodePage() {
             authenticated={session.data.authenticated}
             currentUserId={user.id}
             collaborators={collaboration.members}
+            htmlActionsRef={setHtmlActionsContainer}
           />
         ) : undefined
       }
@@ -182,7 +185,7 @@ function NodePage() {
             className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background"
           >
             {resource.kind === "blob" ? (
-              <BlobPreview resource={resource} />
+              <BlobPreview resource={resource} immersive={view === "immersive"} actionsContainer={htmlActionsContainer} />
             ) : (
               <ResourceEditor
                 unitId={resource.unitId}
@@ -255,12 +258,14 @@ function ResourceActions({
   authenticated,
   currentUserId,
   collaborators,
+  htmlActionsRef,
 }: {
   readonly node: Node;
   readonly resource: components["schemas"]["ResourceOpenView"]["resource"];
   readonly authenticated: boolean;
   readonly currentUserId: string;
   readonly collaborators: readonly IMember[];
+  readonly htmlActionsRef: (element: HTMLSpanElement | null) => void;
 }) {
   const { t } = useI18n();
   const [shareOpen, setShareOpen] = useState(false);
@@ -268,6 +273,9 @@ function ResourceActions({
   const modeLabel = isEditing ? t("editingMode") : t("readOnlyMode");
   return (
     <>
+      {resource.kind === "blob" && isHtmlViewFilename(resource.originalFilename) ? (
+          <span ref={htmlActionsRef} className="contents" />
+        ) : null}
       {resource.kind === "blob" ? (
         <a
           className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "no-underline")}
