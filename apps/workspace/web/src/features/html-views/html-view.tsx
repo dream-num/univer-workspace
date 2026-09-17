@@ -1,3 +1,4 @@
+import { ScanSearch } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBlocker } from "@tanstack/react-router";
@@ -75,7 +76,8 @@ export function HtmlView({
       {actionsContainer &&
         createPortal(
           <Button
-            variant={inspecting ? "secondary" : "ghost"}
+            variant="secondary"
+            className="aria-pressed:bg-accent aria-pressed:text-accent-foreground"
             size="sm"
             disabled={!user}
             aria-pressed={inspecting}
@@ -88,6 +90,7 @@ export function HtmlView({
               });
             }}
           >
+            <ScanSearch />
             {t("htmlViewInspect")}
           </Button>,
           actionsContainer,
