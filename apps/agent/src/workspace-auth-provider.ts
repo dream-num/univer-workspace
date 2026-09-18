@@ -48,6 +48,7 @@ export class WorkspaceAuthProvider extends WorkspaceAuthService {
   private active: WorkspaceConnection | undefined;
   private configuredOrigin: string;
   private settingsMounted = false;
+  private originSourceReady = false;
   private settingsReset: Promise<void> = Promise.resolve();
   private settingsResetError: unknown;
   private originWrite: Promise<void> = Promise.resolve();
@@ -91,6 +92,7 @@ export class WorkspaceAuthProvider extends WorkspaceAuthService {
     });
     this.settingsMounted = true;
     if (state.configuredOrigin === undefined && state.active === undefined) {
+      this.originSourceReady = true;
       this.handleOriginChange();
     } else {
       if (state.configuredOrigin === undefined) {
@@ -99,6 +101,8 @@ export class WorkspaceAuthProvider extends WorkspaceAuthService {
       this.settingsReset = ctx.settings.replace(UWH_SETTINGS_NAMESPACE, {}).then(
         () => {
           this.settingsResetError = undefined;
+          this.originSourceReady = true;
+          this.handleOriginChange();
         },
         (error: unknown) => {
           this.settingsResetError = error;
@@ -114,7 +118,7 @@ export class WorkspaceAuthProvider extends WorkspaceAuthService {
   }
 
   private handleOriginChange(): void {
-    if (!this.settingsMounted) return;
+    if (!this.settingsMounted || !this.originSourceReady) return;
     const configured = this.originSource?.().workspaceOrigin;
     if (configured === undefined) return;
     const origin = canonicalWorkspaceOrigin(configured);
@@ -146,6 +150,11 @@ export class WorkspaceAuthProvider extends WorkspaceAuthService {
   }
 
   loginOrigin(): string {
+    // DSH commits scope.get() before dispatching queued change watchers. A
+    // settings acknowledgement followed immediately by sign-in must use that
+    // committed source, while startup still ignores stale account settings
+    // until their reset to the shared configured origin has completed.
+    this.handleOriginChange();
     return this.configuredOrigin;
   }
 
