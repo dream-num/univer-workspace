@@ -348,8 +348,10 @@ to first launch to avoid operating on the wrong account. `/DEFERDATAMIGRATION`
 explicitly selects first-launch preparation (also used by isolated installer smoke).
 Silent installers use headless mode. macOS DMG copies, Linux AppImage replacement,
 and automatic-update restarts use the same entry through normal application startup.
-If an application-triggered silent update requested reopening Agent, a failed
-headless migration still opens Agent's common failure page. A plain unattended
+If an application-triggered silent update requested reopening Agent and the
+failed migration has no unchanged-data proof, it opens Agent's common failure
+page. A confirmed rollback instead leaves the previous application available
+through its existing shortcuts. A plain unattended
 `/S` installation returns its failure code without waiting for user interaction.
 
 Interactive preparation shows checking, staging, migration, and activation phases
