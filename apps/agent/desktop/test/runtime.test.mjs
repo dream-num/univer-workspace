@@ -121,3 +121,35 @@ test("reports failed file and preserves staging evidence without activating it",
   assert.equal(await readFile(join(`${target}.staging`, "payload"), "utf8"), "first");
   await assert.rejects(readFile(join(target, ".complete")), { code: "ENOENT" });
 });
+
+test('Darwin shutdown waits for exiting E processes and still rejects live permission failures', async () => {
+  const vm = await import('node:vm');
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const source = await readFile(new URL('../src/runtime.cjs', import.meta.url), 'utf8');
+  for (const states of ['42 ?<Es\n42 Z', '42 ?<Es\n42 S']) {
+    const calls = [];
+    let checks = 0;
+    const module = { exports: {} };
+    vm.runInNewContext(source, {
+      module, setTimeout,
+      process: { platform: 'darwin', versions: {}, kill(pid, signal) {
+        assert.equal(pid, -42);
+        calls.push(signal);
+        if (signal === 'SIGTERM') return;
+        throw Object.assign(new Error('kill failed'), { code: checks++ === 0 ? 'EPERM' : 'ESRCH' });
+      } },
+      require: name => name === 'node:child_process' ? {
+        ...require(name), spawnSync: () => ({ status: 0, stdout: states }),
+      } : require(name),
+    });
+    const stopped = module.exports.stopBackend({ pid: 42 });
+    if (states.endsWith(' S')) {
+      await assert.rejects(stopped, { code: 'EPERM' });
+      assert.deepEqual(calls, ['SIGTERM', 0]);
+    } else {
+      await stopped;
+      assert.deepEqual(calls, ['SIGTERM', 0, 0], 'Do not return until the exiting group is gone');
+    }
+  }
+});
