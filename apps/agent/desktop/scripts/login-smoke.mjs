@@ -92,8 +92,15 @@ try {
     const entry = await readFile(join(temporary, 'share/applications', stdout.trim()), 'utf8');
     assert.ok(entry.includes('MimeType=x-scheme-handler/univer-workspace;'));
   } else {
-    assert.equal(await application.evaluate(({ app }) => app.isDefaultProtocolClient('univer-workspace')), true,
-      'Installed application did not register its sign-in protocol');
+    const protocol = await application.evaluate(async ({ app }) => {
+      let handler;
+      try { const info = await app.getApplicationInfoForProtocol('univer-workspace://login'); handler = { name: info.name, path: info.path }; }
+      catch (error) { handler = { error: error.message }; }
+      return { registered: app.isDefaultProtocolClient('univer-workspace'), executable: process.execPath, handler };
+    });
+    console.log('Installed sign-in protocol:', JSON.stringify(protocol));
+    assert.equal(protocol.registered, true,
+      `Installed application did not register its sign-in protocol: ${JSON.stringify(protocol)}`);
   }
   // Both layouts must retain the settings owner's deferred onboarding state.
   const expand = page.getByRole('button', { name: 'Expand sidebar', exact: true });
