@@ -8,6 +8,10 @@ on:
         description: Exact desktop version (X.Y.Z or X.Y.Z-{alpha,beta,rc}.N)
         type: string
         required: true
+      probe_artifact_run:
+        description: Temporary macOS protocol investigation against an existing build
+        type: string
+        required: false
       dry_run:
         description: Build and verify without publishing
         type: boolean
@@ -28,6 +32,7 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ inputs.probe_artifact_run == '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -270,3 +275,36 @@ jobs:
           if [[ "$VERSION" == *-* ]]; then PRERELEASE=(--prerelease); fi
           gh release create "$TAG" "${PRERELEASE[@]}" --verify-tag --draft --title "Workspace Agent $VERSION" --notes "Desktop installers for Windows x64, macOS Apple Silicon, and Linux x64. macOS ZIP is also used by automatic updates. Windows installers are unsigned and may show unknown-publisher or SmartScreen warnings." artifacts/*
           gh release edit "$TAG" --draft=false --latest=false
+
+  probe:
+    if: ${{ inputs.probe_artifact_run != '' && inputs.dry_run }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: agent-desktop-mac-arm64
+          run-id: ${{ inputs.probe_artifact_run }}
+          github-token: ${{ github.token }}
+          path: probe-artifacts
+      - name: Inspect bundle registration on native macOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe_root="$RUNNER_TEMP/uwa-protocol-probe"
+          mkdir -p "$probe_root"
+          archives=(probe-artifacts/*.zip)
+          ditto -x -k "${archives[0]}" "$probe_root"
+          node apps/agent/desktop/scripts/probe-mac-protocol.mjs "$probe_root/Univer Workspace Agent.app"
