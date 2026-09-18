@@ -307,4 +307,5 @@ jobs:
           mkdir -p "$probe_root"
           archives=(probe-artifacts/*.zip)
           ditto -x -k "${archives[0]}" "$probe_root"
-          node apps/agent/desktop/scripts/probe-mac-protocol.mjs "$probe_root/Univer Workspace Agent.app"
+          dmgs=(probe-artifacts/*.dmg)
+          node apps/agent/desktop/scripts/probe-mac-protocol.mjs "$probe_root/Univer Workspace Agent.app" "${dmgs[0]}"
