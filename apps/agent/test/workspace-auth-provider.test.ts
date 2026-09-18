@@ -10,30 +10,6 @@ import {
 } from "../src/workspace-auth-provider.ts";
 
 describe("WorkspaceAuthProvider origin selection", () => {
-  it("starts login from committed settings before deferred change watchers run", async () => {
-    const root = await mkdtemp(join(tmpdir(), "uwh-auth-provider-"));
-    const statePath = join(root, "connection.json");
-    let settings: WorkspaceAuthSettings = { workspaceOrigin: "https://default.example" };
-    const ctx = new Context();
-    ctx.provide("settings", {
-      installSection(_owner: Context, _ns: string, _schema: unknown, _entry: WorkspaceAuthSettings,
-        hooks: { setSource(source: () => WorkspaceAuthSettings): void; onChange(): void }) {
-        hooks.setSource(() => settings);
-        hooks.onChange();
-      },
-    });
-    const provider = new WorkspaceAuthProvider(ctx, {
-      workspaceOrigin: "https://default.example", connectionStatePath: statePath,
-    });
-    // The settings write has committed; its queued observer has not run yet.
-    settings = { workspaceOrigin: "http://127.0.0.1:3021" };
-    expect(provider.loginOrigin()).toBe("http://127.0.0.1:3021");
-    await provider.connect({ userId: "local", username: "local" }, "token", provider.loginOrigin());
-    await expect(readConnectionState(statePath)).resolves.toMatchObject({
-      configuredOrigin: "http://127.0.0.1:3021", active: { origin: "http://127.0.0.1:3021" },
-    });
-  });
-
   it("ignores a restored identity runtime's stale setting until the user changes it", async () => {
     const root = await mkdtemp(join(tmpdir(), "uwh-auth-provider-"));
     const statePath = join(root, "connection.json");

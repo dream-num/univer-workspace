@@ -16,7 +16,6 @@ const reports = join(desktop, '.build/startup-logs/login');
 await mkdir(reports, { recursive: true });
 const codes = new Map();
 let exchanged = 0, application;
-const loginDiagnostics = { settingsWrites: [] };
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
@@ -57,16 +56,6 @@ try {
     dialog.showErrorBox = (title, message) => { globalThis.smokeLoginErrors.push({ title, message }); };
   });
   const page = await application.firstWindow();
-  page.on('response', async response => {
-    if (new URL(response.url()).pathname !== '/api/settings/mutate') return;
-    // This namespace contains only the service URL. Never collect other
-    // settings, credentials, authorization URLs, or account response bodies.
-    const request = response.request().postData();
-    if (!request?.includes('univer-workspace-harness')) return;
-    try {
-      loginDiagnostics.settingsWrites.push({ request: JSON.parse(request), response: await response.json() });
-    } catch { /* A closed renderer can invalidate the diagnostic response. */ }
-  });
   await page.waitForURL(url => url.origin === 'http://127.0.0.1:3101', { timeout: 60000 });
   await application.evaluate(({ BrowserWindow }) => {
     globalThis.smokeLoginReloads = 0;
@@ -94,7 +83,6 @@ try {
     await onboarding.locator('input[type="url"]').fill(remote);
     await onboarding.getByRole('button', { name: 'Sign in to Workspace', exact: true }).click();
     await onboarding.getByRole('status').waitFor();
-    loginDiagnostics.inputAfterSubmit = await onboarding.locator('input[type="url"]').inputValue();
   } });
   if (process.platform === 'linux') {
     const { stdout } = await promisify(execFileCallback)('xdg-mime', ['query', 'default', 'x-scheme-handler/univer-workspace'], {
@@ -104,15 +92,8 @@ try {
     const entry = await readFile(join(temporary, 'share/applications', stdout.trim()), 'utf8');
     assert.ok(entry.includes('MimeType=x-scheme-handler/univer-workspace;'));
   } else {
-    const protocol = await application.evaluate(async ({ app }) => {
-      let handler;
-      try { const info = await app.getApplicationInfoForProtocol('univer-workspace://login'); handler = { name: info.name, path: info.path }; }
-      catch (error) { handler = { error: error.message }; }
-      return { registered: app.isDefaultProtocolClient('univer-workspace'), executable: process.execPath, handler };
-    });
-    console.log('Installed sign-in protocol:', JSON.stringify(protocol));
-    assert.equal(protocol.registered, true,
-      `Installed application did not register its sign-in protocol: ${JSON.stringify(protocol)}`);
+    assert.equal(await application.evaluate(({ app }) => app.isDefaultProtocolClient('univer-workspace')), true,
+      'Installed application did not register its sign-in protocol');
   }
   // Both layouts must retain the settings owner's deferred onboarding state.
   const expand = page.getByRole('button', { name: 'Expand sidebar', exact: true });
@@ -199,15 +180,6 @@ try {
   assert.equal((await application.evaluate(() => globalThis.smokeLoginErrors)).length, 1);
   console.log('Packaged browser login passed: automatic embedded fallback with fresh cookies, disconnected guidance, external browser, PKCE, both callback transports, account switch, replay rejection.');
 } catch (error) {
-  const connection = await readFile(join(temporary, 'profile/data/connection.json'), 'utf8').then(JSON.parse).catch(() => ({}));
-  const settings = await readFile(join(temporary, 'profile/data/shared/settings.yaml'), 'utf8').catch(() => '');
-  console.error('Login origin diagnostics:', JSON.stringify({
-    ...loginDiagnostics,
-    expectedOrigin: remote,
-    configuredOrigin: connection.configuredOrigin,
-    storedOrigin: settings.split('\n').filter(line => line.includes('workspaceOrigin:')),
-    authorizationOrigins: await application?.evaluate(() => globalThis.smokeLoginUrls?.map(url => new URL(url).origin)).catch(() => []),
-  }));
   await application?.windows()[0]?.screenshot({ path: join(reports, 'failure.png') }).catch(() => {});
   throw error;
 } finally {
