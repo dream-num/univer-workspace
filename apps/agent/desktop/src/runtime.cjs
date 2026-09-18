@@ -150,11 +150,15 @@ async function stopBackend(child) {
           timeout: 2000,
         });
         if (!result.error && result.status === 0 && result.stdout.trim()) {
-          const live = result.stdout.trim().split("\n").some((line) => {
+          const members = result.stdout.trim().split("\n").filter(line => Number(line.trim().split(/\s+/)[0]) === child.pid);
+          const live = members.some((line) => {
             const [group, state] = line.trim().split(/\s+/);
             return Number(group) === child.pid && !state?.startsWith("Z");
           });
           if (!live) return false;
+          error.message += ` (signal ${value}, group ${child.pid}, members ${JSON.stringify(members)})`;
+        } else {
+          error.message += ` (unable to inspect group ${child.pid}: ${result.error?.message ?? result.stderr})`;
         }
       }
       throw error;
