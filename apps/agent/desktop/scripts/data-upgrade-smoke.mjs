@@ -19,8 +19,8 @@ let application;
 async function launch(directory, extra = []) {
   return _electron.launch({ executablePath, args: [...baseArgs, '--lang=en-US', `--user-data-dir=${directory}`, ...extra] });
 }
-async function headless(directory) {
-  const child = spawn(executablePath, [...baseArgs, `--user-data-dir=${directory}`, '--migrate-data-only', '--migration-headless'],
+async function headless(directory, receipt) {
+  const child = spawn(executablePath, [...baseArgs, `--user-data-dir=${directory}`, '--migrate-data-only', '--migration-headless', ...(receipt ? [`--migration-result-file=${receipt}`] : [])],
     { stdio: 'ignore', timeout: 30000 });
   const [code] = await once(child, 'exit');
   return code;
@@ -30,7 +30,9 @@ try {
   assert.equal(await headless(silentHome), 0);
   assert.equal(JSON.parse(await readFile(statePath(silentHome))).schemaVersion, 1);
   await writeFile(statePath(silentHome), JSON.stringify(newer));
-  assert.equal(await headless(silentHome), 21);
+  const receipt = join(root, 'installer-result');
+  assert.equal(await headless(silentHome, receipt), 21);
+  assert.equal(await readFile(receipt, 'utf8'), 'unchanged');
   assert.deepEqual(JSON.parse(await readFile(statePath(silentHome))), newer);
 
   application = await launch(silentHome, ['--migrate-data-only']);

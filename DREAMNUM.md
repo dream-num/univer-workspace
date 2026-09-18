@@ -134,7 +134,10 @@ The Desktop executable exposes a migration-only mode used by the Windows
 installer in a confirmed non-admin user context and by normal first launch on
 all platforms. Shared progress/failure UI runs before DSH. Silent installation
 receives process exit codes; a data-preparation failure after program installation
-does not invoke program-file rollback. Existing installation/update mechanisms
+only permits program-file rollback before registration commit when the migration
+runner proves the original home remains active. Unknown outcomes retain both
+program trees; a later repair archives owned backups without deleting them.
+Existing installation/update mechanisms
 remain responsible for application delivery. Standalone Node also serves external
 commands; pinned Chromium serves document rendering. The
 Electron packaging toolchain shares the repository pnpm workspace and lockfile.

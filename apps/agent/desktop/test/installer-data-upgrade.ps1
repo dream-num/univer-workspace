@@ -5,7 +5,9 @@ $null = New-Item -ItemType Directory $root
 try {
     $exe = Join-Path $root 'fixture.exe'
     Copy-Item -LiteralPath $Fixture -Destination $exe
-    $runner = Join-Path $root 'MigrationFixture.exe'
+    $payload = Join-Path $root 'payload'
+    $null = New-Item -ItemType Directory $payload
+    $runner = Join-Path $payload 'MigrationFixture.exe'
     Add-Type -OutputAssembly $runner -OutputType ConsoleApplication -TypeDefinition @'
 using System;
 using System.IO;
@@ -13,34 +15,47 @@ public class MigrationFixture {
     public static int Main(string[] args) {
         string root = AppDomain.CurrentDomain.BaseDirectory;
         File.AppendAllText(Path.Combine(root, "called.txt"), String.Join(" ", args) + Environment.NewLine);
+        foreach (string arg in args) {
+            if (arg.StartsWith("--migration-result-file=") && File.Exists(Path.Combine(root, "proof.txt")))
+                File.WriteAllText(arg.Substring("--migration-result-file=".Length), "unchanged");
+        }
         return Int32.Parse(File.ReadAllText(Path.Combine(root, "result.txt")));
     }
 }
 '@
-    foreach ($scenario in @('success', 'failed', 'deferred', 'reopen')) {
+    function Install-Fixture($destination, $options = @()) {
+        $child = Start-Process $exe -ArgumentList (@('/S') + $options + "/D=$destination") -PassThru
+        if (-not $child.WaitForExit(30000)) { $child.Kill(); throw 'Installer migration fixture timed out' }
+        return $child.ExitCode
+    }
+    foreach ($scenario in @('success', 'failed', 'unknown', 'deferred', 'reopen')) {
         $destination = Join-Path $root $scenario
         $null = New-Item -ItemType Directory $destination
-        Copy-Item $runner (Join-Path $destination 'MigrationFixture.exe')
-        Set-Content (Join-Path $destination 'result.txt') $(if ($scenario -in @('failed', 'reopen')) { '21' } else { '0' })
-        Set-Content (Join-Path $destination 'new-program.txt') 'new'
-        $null = New-Item -ItemType Directory "$destination.uwa-previous"
-        Set-Content "$destination.uwa-previous/old-program.txt" 'old'
-        [IO.File]::WriteAllText("$destination.uwa-previous/.uwa-backup-owner", $destination, [Text.Encoding]::Unicode)
-        $arguments = @('/S')
-        if ($scenario -eq 'deferred') { $arguments += '/DEFERDATAMIGRATION' }
-        if ($scenario -eq 'reopen') { $arguments += '/FORCERUN' }
-        $arguments += "/D=$destination"
-        $child = Start-Process $exe -ArgumentList $arguments -PassThru
-        if (-not $child.WaitForExit(30000)) { $child.Kill(); throw 'Installer migration fixture timed out' }
-        $expected = if ($scenario -in @('failed', 'reopen')) { 21 } else { 0 }
-        if ($child.ExitCode -ne $expected) { throw "Wrong installer result for ${scenario}: $($child.ExitCode)" }
-        if (-not (Test-Path "$destination/new-program.txt") -or -not (Test-Path "$destination.uwa-previous/old-program.txt")) {
-            throw 'Data migration failure must not invoke program-file rollback'
-        }
-        if ($scenario -eq 'deferred') {
-            if (Test-Path "$destination/called.txt") { throw 'Deferred migration touched user data' }
-        } elseif (@(Get-Content "$destination/called.txt")[0] -ne '--migrate-data-only --migration-headless') {
-            throw 'Installer did not use the headless data migration entry'
+        Set-Content "$destination/old-program.txt" 'old'
+        Set-Content "$destination.registration" 'old'
+        Set-Content "$payload/result.txt" $(if ($scenario -in @('failed', 'unknown', 'reopen')) { '21' } else { '0' })
+        Set-Content "$payload/new-program.txt" 'new'
+        Remove-Item "$payload/proof.txt" -ErrorAction SilentlyContinue
+        if ($scenario -eq 'failed') { Set-Content "$payload/proof.txt" 'unchanged' }
+        $options = @()
+        if ($scenario -eq 'deferred') { $options += '/DEFERDATAMIGRATION' }
+        if ($scenario -eq 'reopen') { $options += '/FORCERUN' }
+        $code = Install-Fixture $destination $options
+        if ($scenario -eq 'failed') {
+            if ($code -eq 0 -or -not (Test-Path "$destination/old-program.txt") -or (Test-Path "$destination/new-program.txt") -or
+                (Get-Content -Raw "$destination.registration").Trim() -ne 'old') { throw 'Confirmed unchanged data did not restore old program and retain registration' }
+            if (Test-Path "$destination.uwa-previous") { throw 'Rollback left a blocking program backup' }
+        } else {
+            $expected = if ($scenario -in @('unknown', 'reopen')) { 21 } else { 0 }
+            if ($code -ne $expected) { throw "Wrong installer result for ${scenario}: $code" }
+            if (-not (Test-Path "$destination/new-program.txt") -or -not (Test-Path "$destination.uwa-previous/old-program.txt")) {
+                throw 'Unknown data state must retain both program trees'
+            }
+            if ($scenario -eq 'deferred') {
+                if (Test-Path "$destination/called.txt") { throw 'Deferred migration touched user data' }
+            } elseif (@(Get-Content "$destination/called.txt")[0] -notmatch '^--migrate-data-only --migration-headless --migration-result-file=') {
+                throw 'Installer did not pass a private migration receipt path'
+            }
         }
         if ($scenario -eq 'reopen') {
             $deadline = [DateTime]::UtcNow.AddSeconds(10)
@@ -53,8 +68,21 @@ public class MigrationFixture {
             Get-Process -Name MigrationFixture -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq "$destination\MigrationFixture.exe" } |
                 ForEach-Object { if (-not $_.WaitForExit(5000)) { throw 'Migration fixture did not exit' } }
         }
+        if ($scenario -in @('failed', 'unknown', 'deferred')) {
+            Set-Content "$payload/result.txt" '0'
+            Remove-Item "$payload/proof.txt" -ErrorAction SilentlyContinue
+            if ((Install-Fixture $destination) -ne 0 -or -not (Test-Path "$destination/new-program.txt")) {
+                throw "Repair installation blocked after $scenario"
+            }
+            if ($scenario -ne 'failed') {
+                $archives = @(Get-ChildItem -LiteralPath $root -Directory -Filter "$scenario.uwa-recovery-*")
+                if ($archives.Count -ne 1 -or -not (Test-Path "$($archives[0].FullName)/old-program.txt")) {
+                    throw 'Repair lost the original program backup'
+                }
+            }
+        }
     }
-    Write-Output 'Native NSIS data upgrade success, failure without binary rollback, deferred migration, and automatic-update reopening passed'
+    Write-Output 'Native NSIS: unchanged-data rollback, retained registration, unknown-state preservation, retry/repair installation, deferral and reopening passed'
 } finally {
     Remove-Item -LiteralPath $root -Recurse -Force
 }

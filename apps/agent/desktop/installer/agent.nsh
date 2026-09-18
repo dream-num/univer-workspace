@@ -123,12 +123,14 @@ Function .onInstFailed
     !insertmacro agentInstallTrace "restore-old-start"
     SetOutPath $TEMP
     ${If} ${FileExists} "$INSTDIR\*.*"
-      ${If} ${FileExists} "$INSTDIR.uwa-failed\*.*"
-        !insertmacro agentInstallTrace "restore-blocked-by-previous-failure"
-        Return
-      ${EndIf}
+      StrCpy $R7 "$INSTDIR.uwa-failed"
+      StrCpy $R6 0
+      ${DoWhile} ${FileExists} "$R7\*.*"
+        IntOp $R6 $R6 + 1
+        StrCpy $R7 "$INSTDIR.uwa-failed-$R6"
+      ${Loop}
       ClearErrors
-      Rename "$INSTDIR" "$INSTDIR.uwa-failed"
+      Rename "$INSTDIR" "$R7"
       ${If} ${Errors}
         !insertmacro agentInstallTrace "restore-cannot-move-partial-install"
         Return
@@ -146,17 +148,33 @@ FunctionEnd
 !endif
 !macroend
 
+Var /GLOBAL uwaMigrationStatus
+
 !macro customInstall
+  ; Registration and shortcuts have committed. This marker distinguishes a
+  ; usable replacement (including deferred/failed data preparation) from partial
+  ; extraction. A later repair installer may archive its old backup safely.
+  FileOpen $R8 "$INSTDIR\.uwa-install-committed" w
+  FileWrite $R8 "1"
+  FileClose $R8
   !insertmacro agentInstallTrace "install-files-complete"
-  !insertmacro agentPrepareUserData
+  ${If} $uwaMigrationStatus != 0
+    MessageBox MB_OK|MB_ICONEXCLAMATION "Program files are installed, but local data preparation did not complete (code $uwaMigrationStatus). Open Workspace Agent for details. Existing data and program backups are retained; a repair installer can be installed over this version." /SD IDOK
+    ${If} ${Silent}
+    ${AndIf} ${isForceRun}
+      Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}"'
+    ${EndIf}
+    SetErrorLevel $uwaMigrationStatus
+    Quit
+  ${EndIf}
 !macroend
 
-; Only a positively identified, non-admin user may prepare their own data here.
-; Elevated/admin/unknown contexts defer to first launch under the actual user.
-; File installation is already committed by builder at this hook. Do not Abort
-; on migration failure: .onInstFailed would restore old binaries against data
-; that might already have been activated by the new version.
+; The version-scoped builder adapter calls this after extraction, BEFORE registry
+; and shortcut commit. Only migrate a positively identified non-admin user.
+; A receipt proving unchanged data allows .onInstFailed to restore old binaries
+; with their original registration. Missing proof must never trigger rollback.
 !macro agentPrepareUserData
+  StrCpy $uwaMigrationStatus 0
   ClearErrors
   ${GetOptions} $CMDLINE "/DEFERDATAMIGRATION" $R1
   ${IfNot} ${Errors}
@@ -174,34 +192,48 @@ FunctionEnd
 
 !macro agentRunDataUpgrade
     !insertmacro agentInstallTrace "data-upgrade-start"
+    InitPluginsDir
+    Delete "$PLUGINSDIR\data-upgrade-result"
     ClearErrors
     ${If} ${Silent}
-      ExecWait '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --migrate-data-only --migration-headless' $R0
+      ExecWait '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --migrate-data-only --migration-headless "--migration-result-file=$PLUGINSDIR\data-upgrade-result"' $R0
     ${Else}
-      ExecWait '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --migrate-data-only' $R0
+      ExecWait '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --migrate-data-only "--migration-result-file=$PLUGINSDIR\data-upgrade-result"' $R0
     ${EndIf}
     ${If} ${Errors}
       StrCpy $R0 20
     ${EndIf}
+    StrCpy $uwaMigrationStatus $R0
     !insertmacro agentInstallTrace "data-upgrade-result-$R0"
     ${If} $R0 != 0
-      MessageBox MB_OK|MB_ICONEXCLAMATION "Program files are installed, but local data preparation did not complete (code $R0). Open Workspace Agent to see details and retry. Logs are in $APPDATA\Univer Workspace Agent\logs. Existing data and available backups have not been deleted." /SD IDOK
-      ; An application-triggered silent update asked to reopen Agent. Let its
-      ; common first-launch gate display the failure, without blocking an
-      ; unattended /S installation on a hidden interactive window.
-      ${If} ${Silent}
-      ${AndIf} ${isForceRun}
-        Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}"'
+      StrCpy $R1 ""
+      FileOpen $R8 "$PLUGINSDIR\data-upgrade-result" r
+      FileRead $R8 $R1
+      FileClose $R8
+      ${If} $R1 == "unchanged"
+        !insertmacro agentInstallTrace "data-upgrade-rollback-safe"
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Local data preparation failed (code $uwaMigrationStatus). Your previous data is unchanged. Installation will stop and restore the previous program when available. Resolve the reported data issue and run the installer again." /SD IDOK
+        SetErrorLevel $uwaMigrationStatus
+        Abort "Local data preparation failed; restoring the previous installation."
       ${EndIf}
-      SetErrorLevel $R0
-      Quit
+      ; The child may have been killed during activation. Commit the extracted
+      ; program, retain backups, and let startup recover its migration journal.
     ${EndIf}
 !macroend
 
 !macro customCheckAppRunning
   !ifndef BUILD_UNINSTALLER
-    ; Refuse a previous interrupted attempt before invoking its uninstaller.
-    ; Quit bypasses .onInstFailed, which must not restore another attempt's tree.
+    ; A committed replacement may have failed its first data preparation. Keep
+    ; its old binaries in a unique recovery directory so a fix can be installed.
+    ; Uncommitted/foreign backups remain protected from automatic mutation.
+    ${If} ${FileExists} "$INSTDIR.uwa-previous\*.*"
+      InitPluginsDir
+      File /oname=$PLUGINSDIR\preserve-install-backup.ps1 "${BUILD_RESOURCES_DIR}\preserve-install-backup.ps1"
+      System::Call 'kernel32::SetEnvironmentVariable(t "UWA_INSTALL_DIRECTORY", t "$INSTDIR")'
+      nsExec::ExecToLog /TIMEOUT=10000 '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\preserve-install-backup.ps1"'
+      Pop $R0
+      System::Call 'kernel32::SetEnvironmentVariable(t "UWA_INSTALL_DIRECTORY", t "")'
+    ${EndIf}
     ${If} ${FileExists} "$INSTDIR.uwa-previous\*.*"
       !insertmacro agentInstallTrace "backup-already-exists"
       MessageBox MB_OK|MB_ICONSTOP "Previous installation backup requires recovery before another update." /SD IDOK

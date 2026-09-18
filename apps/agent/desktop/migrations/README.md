@@ -90,6 +90,14 @@ retrying. If activation already completed, it keeps the active data and version
 and removes the journal. Backups are never cleaned up during startup. This covers
 process interruption, not power-loss durability.
 
+`prepare-install.cjs` is the installer adapter. A caller-owned receipt is cleared
+before every attempt. It writes `unchanged` only when the runner can confirm that
+a failed attempt left the original home active (including a completed activation
+rollback). Post-activation errors and failed interruption recovery produce no
+proof. NSIS may restore the previous binaries only with this proof, before its
+registration commit; a missing receipt retains both program trees for recovery.
+This does not downgrade a successfully activated schema.
+
 ## Adding a data version
 
 1. Add `vN-to-vN+1.cjs` with a stable unique ID and explicit version bounds.

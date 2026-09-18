@@ -19,6 +19,10 @@ const { createDataUpgrade, migrationFailure } = require('./data-upgrade.cjs');
 const migrationOnly = process.argv.includes('--migrate-data-only');
 const migrationHeadless = migrationOnly && process.argv.includes('--migration-headless');
 let migrationResult = 20;
+const migrationReceipt = migrationOnly && app.commandLine.getSwitchValue('migration-result-file');
+const migrateHome = (resources, home, options = {}) => migrationReceipt
+  ? require('../migrations/prepare-install.cjs').prepareInstallerHome(resources, home, { ...options, receipt: migrationReceipt })
+  : prepareRuntimeHome(resources, home, options);
 let startupLog;
 let stopping;
 function stopService() {
@@ -100,7 +104,7 @@ async function start() {
   if (release.platform !== process.platform || release.arch !== process.arch)
     throw new Error("This installer does not match this computer.");
   if (migrationHeadless) {
-    await prepareRuntimeHome(resources, join(app.getPath('userData'), 'runtime/home'));
+    await migrateHome(resources, join(app.getPath('userData'), 'runtime/home'));
     quitting = true;
     app.exit(0);
     return;
@@ -159,7 +163,7 @@ async function start() {
     label: "Open startup logs", click: () => shell.showItemInFolder(startupLog.path),
   }] }]));
   const runtimeHome = await upgrade.run(report =>
-    prepareRuntimeHome(resources, join(userData, 'runtime/home'), { report }));
+    migrateHome(resources, join(userData, 'runtime/home'), { report }));
   if (!runtimeHome || quitting) return;
   if (migrationOnly) {
     migrationResult = 0;

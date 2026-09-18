@@ -98,7 +98,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'NSIS recovery fixture failed' }
           $dataFixture = Join-Path $env:RUNNER_TEMP 'uwa-data-upgrade-fixture.exe'
           $dataSource = (Resolve-Path 'apps/agent/desktop/test/installer-data-upgrade.nsi').Path
-          & $compiler.FullName /V2 "/DAGENT_INCLUDE=$agentInclude" "/DFIXTURE_EXE=$dataFixture" $dataSource
+          & $compiler.FullName /V2 "/DAGENT_INCLUDE=$agentInclude" "/DBUILD_RESOURCES_DIR=$resources" "/DFIXTURE_EXE=$dataFixture" $dataSource
           if ($LASTEXITCODE -ne 0) { throw 'NSIS data upgrade fixture compilation failed' }
           & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File apps/agent/desktop/test/installer-data-upgrade.ps1 -Fixture $dataFixture
           if ($LASTEXITCODE -ne 0) { throw 'NSIS data upgrade fixture failed' }

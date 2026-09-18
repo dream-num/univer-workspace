@@ -341,8 +341,8 @@ runtime home and exit without starting DSH or the business UI. Add
 `--migration-headless` for unattended callers; the existing `--user-data-dir`
 option selects an explicit profile for isolated tests or a custom installation.
 
-Windows NSIS invokes this entry after program files and registration are installed,
-and waits for its result. Only a positively identified non-administrator user is
+Windows NSIS invokes this entry after extracting program files, before committing
+registration and shortcuts, and waits for its result. Only a positively identified non-administrator user is
 migrated during installation; administrator, elevated, and unknown contexts defer
 to first launch to avoid operating on the wrong account. `/DEFERDATAMIGRATION`
 explicitly selects first-launch preparation (also used by isolated installer smoke).
@@ -364,12 +364,19 @@ owns the profile, `20` generic failure or interactive cancellation, `21` newer d
 `22` invalid version record, `23` insufficient space, and `24` access denied.
 The specific error codes are returned in headless mode; closing a failed
 interactive upgrade returns `20`. Program installation followed by migration
-failure is reported as **program installed, data preparation incomplete**. NSIS
-does not invoke its program-file rollback in that case, since data may already
-have been activated; backups remain available. The existing protection against
-overwriting a previous installation backup still applies to subsequent installers.
-Paired program/data rollback and a post-migration DSH health-check transaction
-are not implemented.
+failure has two outcomes. The installer supplies a private `--migration-result-file`;
+only a completed failure that leaves the original runtime home active writes an
+`unchanged` receipt. NSIS then stops before registration changes and restores the
+previous program directory. Retries clear that receipt before touching data.
+
+Without this proof (for example, a process killed during activation), NSIS retains
+the new program and both backups, commits registration, and reports **program
+installed, data preparation incomplete**. Startup can recover the data journal.
+A committed-install marker lets a subsequent repair installer move the owned
+previous program backup to a unique `.uwa-recovery-<uuid>` directory, without
+deleting it, and proceed. Uncommitted or unowned backups still block installation.
+Completed data upgrades are never automatically downgraded. A post-migration DSH
+health-check transaction and power-loss durability are not implemented.
 
 Run `scripts/data-upgrade-smoke.mjs` against a packaged executable to verify
 headless results, failure guidance, unchanged original data, and retry into the
