@@ -3,6 +3,7 @@ import test from 'node:test';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execSync } from 'node:child_process';
 import { selectProfileRuntime } from '../src/profile-runtime.cjs';
 import { makeProfilePortable } from '../scripts/portable-profile.mjs';
 
@@ -16,13 +17,21 @@ test('portable profile removes build-machine paths from both manifest and lock',
   const source = 'file:D:/a/build/internal-packages/plugin.tgz';
   await writeFile(join(profile, 'package.json'), JSON.stringify({ dependencies: {
     '@deepseek-ai/dsh-web-app': '0.1.5-rc.1', plugin: source,
-  } }));
+  }, pnpm: { overrides: { '@deepseek-ai/dsh-settings': '0.1.5-rc.0' } } }));
   await writeFile(join(profile, 'pnpm-lock.yaml'), `specifier: ${source}\n`);
-  await makeProfilePortable(profile);
+  const overrides = { '@deepseek-ai/dsh-settings': '0.1.5-rc.1' };
+  await makeProfilePortable(profile, overrides);
   const manifest = JSON.parse(await readFile(join(profile, 'package.json')));
   assert.equal(manifest.dependencies.plugin, 'file:../../internal-packages/plugin.tgz');
   assert.equal(manifest.dependencies['@deepseek-ai/dsh'], '0.1.5-rc.1');
+  assert.equal(manifest.pnpm, undefined);
   assert.equal(await readFile(join(profile, 'pnpm-lock.yaml'), 'utf8'), 'specifier: file:../../internal-packages/plugin.tgz\n');
+  // Check pnpm's public configuration reader, not just the generated text.
+  const effective = JSON.parse(execSync('pnpm config get overrides --json', { cwd: profile, encoding: 'utf8', timeout: 15000 }));
+  assert.deepEqual(effective, overrides);
+  const workspace = JSON.parse(await readFile(join(profile, 'pnpm-workspace.yaml'), 'utf8'));
+  assert.equal(workspace.nodeLinker, 'hoisted');
+  assert.equal(workspace.allowBuilds['@deepseek-ai/dsh-subprocess-local'], true);
 });
 
 test('installed plugin profile selects the public DSH launcher and survives restart', async t => {
