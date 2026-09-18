@@ -80,9 +80,31 @@ try {
   };
   await waitForUsableAgent(page, { onWorkspaceOnboarding: async () => {
     const onboarding = page.getByRole('dialog', { name: 'Connect your Workspace' });
+    if (process.env.UWA_LOGIN_PROBE === '1') {
+      await onboarding.locator('input[type="url"]').evaluate(input => {
+        let fiber = input[Object.keys(input).find(key => key.startsWith('__reactFiber$'))];
+        while (fiber && !fiber.memoizedProps?.scope) fiber = fiber.return;
+        if (!fiber) throw new Error('Probe could not locate the onboarding settings scope');
+        const scope = fiber.memoizedProps.scope;
+        const snapshot = () => {
+          const { status, revision, writable, value } = scope.getSnapshot();
+          return { status, revision, writable, origin: value?.workspaceOrigin };
+        };
+        globalThis.loginProbe = [{ phase: 'before-input', ...snapshot() }];
+        const set = scope.set.bind(scope);
+        scope.set = async (field, value) => {
+          if (field === 'workspaceOrigin') globalThis.loginProbe.push({ phase: 'write', requested: value, ...snapshot() });
+          await set(field, value);
+          if (field === 'workspaceOrigin') globalThis.loginProbe.push({ phase: 'settled', ...snapshot() });
+        };
+      });
+    }
     await onboarding.locator('input[type="url"]').fill(remote);
+    console.log('Login input origin:', await onboarding.locator('input[type="url"]').inputValue());
     await onboarding.getByRole('button', { name: 'Sign in to Workspace', exact: true }).click();
     await onboarding.getByRole('status').waitFor();
+    if (process.env.UWA_LOGIN_PROBE === '1') console.log('Login settings probe:', JSON.stringify(await page.evaluate(() => globalThis.loginProbe)));
+    console.log('Login authorization origins:', await application.evaluate(() => globalThis.smokeLoginUrls.map(url => new URL(url).origin)));
   } });
   if (process.platform === 'linux') {
     const { stdout } = await promisify(execFileCallback)('xdg-mime', ['query', 'default', 'x-scheme-handler/univer-workspace'], {
