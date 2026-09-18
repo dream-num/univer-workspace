@@ -284,7 +284,7 @@ jobs:
           & apps/agent/desktop/scripts/install-windows.ps1 -Installer $installer.FullName -Destination $destination
           $env:UWA_SMOKE_EXECUTABLE = Join-Path $destination 'Univer Workspace Agent.exe'
           $failures = 0
-          for ($attempt = 1; $attempt -le 5; $attempt++) {
+          for ($attempt = 1; $attempt -le 10; $attempt++) {
             Write-Output "Login probe attempt $attempt"
             node apps/agent/desktop/scripts/login-smoke.mjs
             if ($LASTEXITCODE -ne 0) { $failures++ }

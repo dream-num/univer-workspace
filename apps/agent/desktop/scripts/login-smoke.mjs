@@ -56,6 +56,23 @@ try {
     dialog.showErrorBox = (title, message) => { globalThis.smokeLoginErrors.push({ title, message }); };
   });
   const page = await application.firstWindow();
+  page.on('response', async response => {
+    if (!new URL(response.url()).pathname.includes('/settings/')) return;
+    try {
+      const request = response.request().postDataJSON();
+      const body = await response.json();
+      const sanitize = value => {
+        if (Array.isArray(value)) return value.map(sanitize);
+        if (!value || typeof value !== 'object') return value;
+        return Object.fromEntries(Object.entries(value).filter(([key]) =>
+          ['id', 'ok', 'error', 'code', 'message', 'payload', 'value', 'ns', 'revision', 'workspaceOrigin', 'namespaces', 'result'].includes(key))
+          .map(([key, child]) => [key, sanitize(child)]));
+      };
+      const args = request?.payload?.args;
+      if (args?.[0] === 'univer-workspace-harness')
+        console.log('Workspace settings RPC:', JSON.stringify({ path: new URL(response.url()).pathname, args, body: sanitize(body) }));
+    } catch (error) { console.log('Settings probe parse failure:', error.message); }
+  });
   await page.waitForURL(url => url.origin === 'http://127.0.0.1:3101', { timeout: 60000 });
   await application.evaluate(({ BrowserWindow }) => {
     globalThis.smokeLoginReloads = 0;
@@ -80,34 +97,10 @@ try {
   };
   await waitForUsableAgent(page, { onWorkspaceOnboarding: async () => {
     const onboarding = page.getByRole('dialog', { name: 'Connect your Workspace' });
-    if (process.env.UWA_LOGIN_PROBE === '1') {
-      await onboarding.locator('input[type="url"]').evaluate(input => {
-        let fiber = input[Object.keys(input).find(key => key.startsWith('__reactFiber$'))];
-        while (fiber && !fiber.memoizedProps?.scope) fiber = fiber.return;
-        if (!fiber) {
-          globalThis.loginProbe = [{ phase: 'before-input', reactKeys: Object.keys(input).filter(key => key.startsWith('__react')), origin: input.value }];
-          return;
-        }
-        const scope = fiber.memoizedProps.scope;
-        const snapshot = () => {
-          const { status, revision, writable, value } = scope.getSnapshot();
-          return { status, revision, writable, origin: value?.workspaceOrigin };
-        };
-        globalThis.loginProbe = [{ phase: 'before-input', ...snapshot() }];
-        const set = scope.set.bind(scope);
-        scope.set = async (field, value) => {
-          if (field === 'workspaceOrigin') globalThis.loginProbe.push({ phase: 'write', requested: value, ...snapshot() });
-          await set(field, value);
-          if (field === 'workspaceOrigin') globalThis.loginProbe.push({ phase: 'settled', ...snapshot() });
-        };
-      });
-    }
     await onboarding.locator('input[type="url"]').fill(remote);
-    console.log('Login input origin:', await onboarding.locator('input[type="url"]').inputValue());
     await onboarding.getByRole('button', { name: 'Sign in to Workspace', exact: true }).click();
     await onboarding.getByRole('status').waitFor();
     console.log('Login input after submit:', await onboarding.locator('input[type="url"]').inputValue());
-    if (process.env.UWA_LOGIN_PROBE === '1') console.log('Login settings probe:', JSON.stringify(await page.evaluate(() => globalThis.loginProbe)));
     console.log('Login authorization origins:', await application.evaluate(() => globalThis.smokeLoginUrls.map(url => new URL(url).origin)));
   } });
   if (process.platform === 'linux') {
