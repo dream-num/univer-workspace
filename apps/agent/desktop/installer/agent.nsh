@@ -148,7 +148,9 @@ FunctionEnd
 !endif
 !macroend
 
+!ifndef BUILD_UNINSTALLER
 Var /GLOBAL uwaMigrationStatus
+!endif
 
 !macro customInstall
   ; Registration and shortcuts have committed. This marker distinguishes a
