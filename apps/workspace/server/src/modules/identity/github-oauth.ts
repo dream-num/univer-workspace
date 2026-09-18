@@ -5,13 +5,18 @@ export function createGitHubOAuthProvider(config: {
   readonly clientId: string;
   readonly clientSecret: string;
   readonly callbackUrl: string;
+  readonly allowedOrganizations?: readonly string[];
 }): GitHubOAuthProvider {
+  const allowedOrganizations = config.allowedOrganizations ?? [];
   return {
     authorizationUrl(input) {
       const url = new URL("https://github.com/login/oauth/authorize");
       url.searchParams.set("client_id", config.clientId);
       url.searchParams.set("redirect_uri", config.callbackUrl);
-      url.searchParams.set("scope", "read:user");
+      url.searchParams.set(
+        "scope",
+        allowedOrganizations.length > 0 ? "read:user read:org" : "read:user"
+      );
       url.searchParams.set("state", input.state);
       url.searchParams.set("code_challenge", input.codeChallenge);
       url.searchParams.set("code_challenge_method", "S256");
@@ -69,6 +74,12 @@ export function createGitHubOAuthProvider(config: {
       ) {
         throw oauthError("GitHub user profile could not be loaded.");
       }
+      if (allowedOrganizations.length > 0) {
+        await requireAllowedOrganization(
+          tokenBody.access_token,
+          allowedOrganizations
+        );
+      }
       return {
         subject: String(user.id),
         username: user.login,
@@ -81,6 +92,40 @@ export function createGitHubOAuthProvider(config: {
       };
     },
   };
+}
+
+async function requireAllowedOrganization(
+  accessToken: string,
+  allowedOrganizations: readonly string[]
+): Promise<void> {
+  for (const organization of allowedOrganizations) {
+    const membershipResponse = await fetch(
+      `https://api.github.com/user/memberships/orgs/${encodeURIComponent(organization)}`,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${accessToken}`,
+          "user-agent": "univer-workspace-example",
+          "x-github-api-version": "2022-11-28",
+        },
+      }
+    );
+    if (membershipResponse.status === 404) continue;
+    if (!membershipResponse.ok) {
+      throw oauthError(
+        `GitHub organization membership could not be verified (HTTP ${membershipResponse.status}).`
+      );
+    }
+    const membership = (await membershipResponse.json()) as {
+      readonly state?: unknown;
+    };
+    if (membership.state === "active") return;
+  }
+  throw new ApplicationError(
+    "GITHUB_OAUTH_FAILED",
+    403,
+    `Your GitHub account must be an active member of ${allowedOrganizations.join(" or ")}.`
+  );
 }
 
 function oauthError(message: string): ApplicationError {

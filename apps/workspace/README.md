@@ -116,6 +116,14 @@ GitHub login creates the product User and Personal Space; an existing signed-in
 User can link GitHub from the account menu. Access tokens are used only to load
 the GitHub profile during sign-in and are not persisted.
 
+Set `GITHUB_ALLOWED_ORGANIZATIONS` to a comma-separated list of GitHub
+organization names to require active membership in at least one listed
+organization for GitHub login, first-time registration, and account linking.
+This enables the GitHub `read:org` OAuth scope and checks membership during every
+GitHub OAuth callback. Existing Workspace sessions remain valid until they expire
+or are logged out. This setting restricts only GitHub OAuth; password registration,
+Discord login, and trusted Discord Bot login remain separate authentication paths.
+
 Workspace CLI uses browser approval by default. `univer-workspace-cli login`
 creates a ten-minute, one-time authorization request and prints a `/cli-login`
 URL plus verification code, persists the pending request locally, and exits.
@@ -217,6 +225,7 @@ docker run --name univer-workspace \
   -e GITHUB_CLIENT_ID \
   -e GITHUB_CLIENT_SECRET \
   -e GITHUB_CALLBACK_URL=https://workspace.example.com/api/auth/github/callback \
+  -e GITHUB_ALLOWED_ORGANIZATIONS \
   -e DISCORD_CLIENT_ID \
   -e DISCORD_CLIENT_SECRET \
   -e DISCORD_CALLBACK_URL=https://workspace.example.com/api/auth/discord/callback \
