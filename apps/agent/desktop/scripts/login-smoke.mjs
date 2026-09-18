@@ -16,6 +16,7 @@ const reports = join(desktop, '.build/startup-logs/login');
 await mkdir(reports, { recursive: true });
 const codes = new Map();
 let exchanged = 0, application;
+const loginDiagnostics = { settingsWrites: [] };
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
@@ -57,22 +58,14 @@ try {
   });
   const page = await application.firstWindow();
   page.on('response', async response => {
-    if (!new URL(response.url()).pathname.includes('settings')) return;
+    if (new URL(response.url()).pathname !== '/api/settings/mutate') return;
+    // This namespace contains only the service URL. Never collect other
+    // settings, credentials, authorization URLs, or account response bodies.
+    const request = response.request().postData();
+    if (!request?.includes('univer-workspace-harness')) return;
     try {
-      const request = response.request().postDataJSON();
-      const body = await response.json();
-      const sanitize = value => {
-        if (Array.isArray(value)) return value.map(sanitize);
-        if (!value || typeof value !== 'object') return value;
-        return Object.fromEntries(Object.entries(value).filter(([key]) =>
-          ['id', 'ok', 'error', 'code', 'message', 'payload', 'value', 'ns', 'revision', 'workspaceOrigin', 'namespaces', 'result'].includes(key))
-          .map(([key, child]) => [key, sanitize(child)]));
-      };
-      console.log('Settings RPC path:', new URL(response.url()).pathname, 'request keys:', Object.keys(request ?? {}), 'payload keys:', Object.keys(request?.payload ?? {}));
-      const args = request?.payload?.args;
-      if (args?.[0] === 'univer-workspace-harness')
-        console.log('Workspace settings RPC:', JSON.stringify({ path: new URL(response.url()).pathname, args, body: sanitize(body) }));
-    } catch (error) { console.log('Settings probe parse failure:', error.message); }
+      loginDiagnostics.settingsWrites.push({ request: JSON.parse(request), response: await response.json() });
+    } catch { /* A closed renderer can invalidate the diagnostic response. */ }
   });
   await page.waitForURL(url => url.origin === 'http://127.0.0.1:3101', { timeout: 60000 });
   await application.evaluate(({ BrowserWindow }) => {
@@ -101,11 +94,7 @@ try {
     await onboarding.locator('input[type="url"]').fill(remote);
     await onboarding.getByRole('button', { name: 'Sign in to Workspace', exact: true }).click();
     await onboarding.getByRole('status').waitFor();
-    const connection = await readFile(join(temporary, 'profile/data/connection.json'), 'utf8').then(JSON.parse).catch(() => ({}));
-    const settings = await readFile(join(temporary, 'profile/data/shared/settings.yaml'), 'utf8').catch(() => '');
-    console.log('Persisted login origin:', connection.configuredOrigin, 'setting:', settings.split('\n').filter(line => line.includes('workspaceOrigin:')));
-    console.log('Login input after submit:', await onboarding.locator('input[type="url"]').inputValue());
-    console.log('Login authorization origins:', await application.evaluate(() => globalThis.smokeLoginUrls.map(url => new URL(url).origin)));
+    loginDiagnostics.inputAfterSubmit = await onboarding.locator('input[type="url"]').inputValue();
   } });
   if (process.platform === 'linux') {
     const { stdout } = await promisify(execFileCallback)('xdg-mime', ['query', 'default', 'x-scheme-handler/univer-workspace'], {
@@ -210,6 +199,15 @@ try {
   assert.equal((await application.evaluate(() => globalThis.smokeLoginErrors)).length, 1);
   console.log('Packaged browser login passed: automatic embedded fallback with fresh cookies, disconnected guidance, external browser, PKCE, both callback transports, account switch, replay rejection.');
 } catch (error) {
+  const connection = await readFile(join(temporary, 'profile/data/connection.json'), 'utf8').then(JSON.parse).catch(() => ({}));
+  const settings = await readFile(join(temporary, 'profile/data/shared/settings.yaml'), 'utf8').catch(() => '');
+  console.error('Login origin diagnostics:', JSON.stringify({
+    ...loginDiagnostics,
+    expectedOrigin: remote,
+    configuredOrigin: connection.configuredOrigin,
+    storedOrigin: settings.split('\n').filter(line => line.includes('workspaceOrigin:')),
+    authorizationOrigins: await application?.evaluate(() => globalThis.smokeLoginUrls?.map(url => new URL(url).origin)).catch(() => []),
+  }));
   await application?.windows()[0]?.screenshot({ path: join(reports, 'failure.png') }).catch(() => {});
   throw error;
 } finally {

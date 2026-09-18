@@ -107,11 +107,13 @@ worker fork in addition to browser startup.
 
 The Desktop profile sets `patchReload: startup` and disables `hmr` and
 `client-hmr` before capturing the graph. The browser module-system entry stays in
-the captured graph. Desktop uses a fixed packaged plugin roster: profile manifest
-or profile patch edits are rejected on subsequent launches so stale prebuilt UI
-cannot silently accompany a changed profile. Application settings and account
-state stay in the normal writable data directories. The local Web development
-profile keeps its existing live-reload behavior.
+the captured graph. Default launches use the packaged plugin roster. After
+changing the writable profile manifest or patch, install that profile's
+dependencies before restarting: Desktop then selects its standalone DSH runtime
+and composes the browser modules from the installed roster. Changes without an
+installed runtime produce an explicit installation prompt. Application settings
+and account state stay in the normal writable data directories. The local Web
+development profile keeps its existing live-reload behavior.
 
 See [the upstream investigation](docs/dsh-production-upstream.md) for the exact
 published APIs and why `NODE_ENV=production` alone does not turn maps off.

@@ -13,10 +13,6 @@ on:
         type: boolean
         default: true
         required: true
-      probe_artifact_run:
-        description: Temporary Windows login diagnostic artifact run
-        type: string
-        default: ""
       target:
         description: Native targets (Windows-only is build-only)
         type: choice
@@ -25,7 +21,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: agent-desktop-${{ inputs.version }}
@@ -33,7 +28,6 @@ concurrency:
 
 jobs:
   build:
-    if: ${{ !inputs.probe_artifact_run }}
     strategy:
       fail-fast: false
       matrix:
@@ -253,52 +247,6 @@ jobs:
             apps/agent/desktop/artifacts/alpha*.yml
             apps/agent/desktop/artifacts/beta*.yml
             apps/agent/desktop/artifacts/rc*.yml
-  probe:
-    if: ${{ inputs.dry_run && inputs.probe_artifact_run }}
-    runs-on: windows-2025
-    timeout-minutes: 20
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      UWA_LOGIN_PROBE: '1'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24.18.0
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v4
-        with:
-          name: agent-desktop-win-x64
-          run-id: ${{ inputs.probe_artifact_run }}
-          github-token: ${{ github.token }}
-          path: probe-artifact
-      - name: Diagnose installed Windows login
-        shell: pwsh
-        run: |
-          $installer = Get-ChildItem probe-artifact/*.exe | Select-Object -First 1
-          $destination = Join-Path $env:RUNNER_TEMP 'Workspace Agent Login Probe'
-          & apps/agent/desktop/scripts/install-windows.ps1 -Installer $installer.FullName -Destination $destination
-          $env:UWA_SMOKE_EXECUTABLE = Join-Path $destination 'Univer Workspace Agent.exe'
-          $env:UWA_SMOKE_INSTALLER = $installer.FullName
-          $env:UWA_SMOKE_MIGRATE_ALPHA3 = '1'
-          node apps/agent/desktop/scripts/shell-smoke.mjs
-          if ($LASTEXITCODE -ne 0) { throw 'Installed application startup failed' }
-          $failures = 0
-          for ($attempt = 1; $attempt -le 5; $attempt++) {
-            Write-Output "Login probe attempt $attempt"
-            node apps/agent/desktop/scripts/login-smoke.mjs
-            if ($LASTEXITCODE -ne 0) { $failures++ }
-          }
-          if ($failures) { throw "$failures login probes failed" }
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: windows-login-probe
-          path: apps/agent/desktop/.build/startup-logs
   publish:
     if: ${{ !inputs.dry_run }}
     needs: build
