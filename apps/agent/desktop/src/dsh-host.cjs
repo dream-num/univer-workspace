@@ -95,6 +95,7 @@ function createHostResolveHook(archive, configHome) {
 }
 
 async function startDesktopHost(args) {
+  const restoreStats = require('./asar-stats.cjs').installAsarStatsCompatibility();
   const archive = path.join(__dirname, 'host.asar');
   const requireHost = createRequire(path.join(archive, 'package.json'));
   const installAnchor = pathToFileURL(path.join(archive, 'package.json')).href;
@@ -109,6 +110,11 @@ async function startDesktopHost(args) {
   // A fixed production composition therefore lives beside installed packages;
   // account storage, credentials, settings and user presets stay in DSH_HOME.
   const config = path.join(archive, 'desktop.cordis.yml');
+  const presetPatch = {
+    id: 'agent-presets',
+    config: { default: 'standard', includeShippedRoot: false,
+      roots: [{ path: path.join(__dirname, 'presets'), trust: 'system' }] },
+  };
 
   // Electron runs this host and SDK child forks in Node mode with ASAR support.
   if (!process.versions.electron || process.env.ELECTRON_RUN_AS_NODE !== '1')
@@ -126,12 +132,13 @@ async function startDesktopHost(args) {
   };
   const stop = (code = 0) => stopping ??= (async () => {
     await context?.fiber.dispose();
+    restoreStats();
     hooks.deregister();
     process.exit(code);
   })();
   host.installFailLoud('workspace-desktop', process, () => context?.fiber.dispose());
   context = await host.boot('workspace-desktop', config,
-    [...profile.layers.flatMap((layer) => layer.patches), ...profile.patches], (ctx) => {
+    [...profile.layers.flatMap((layer) => layer.patches), ...profile.patches, presetPatch], (ctx) => {
       ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, host.loadLayeredEnv('workspace-desktop'));
       provideCmdline(ctx, { args, exit: stop, ready: readiness });
     }, installAnchor);

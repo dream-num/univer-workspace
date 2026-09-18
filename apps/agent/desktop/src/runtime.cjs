@@ -150,22 +150,37 @@ async function stopBackend(child) {
           timeout: 2000,
         });
         if (!result.error && result.status === 0 && result.stdout.trim()) {
-          const live = result.stdout.trim().split("\n").some((line) => {
+          const members = result.stdout.trim().split("\n").filter(line => Number(line.trim().split(/\s+/)[0]) === child.pid);
+          const live = members.some((line) => {
             const [group, state] = line.trim().split(/\s+/);
             return Number(group) === child.pid && !state?.startsWith("Z");
           });
           if (!live) return false;
+          // Darwin's ps appends E for P_WEXIT, including the transient ?<Es
+          // state observed in native CI. These processes cannot receive signals
+          // but are still releasing resources. Keep waiting for reaping; do not
+          // mistake this for permission denial or declare the group stopped.
+          if (process.platform === "darwin" && members.every(line => {
+            const state = line.trim().split(/\s+/)[1];
+            return state?.startsWith("Z") || state?.includes("E");
+          })) return true;
+          error.message += ` (signal ${value}, group ${child.pid}, members ${JSON.stringify(members)})`;
+        } else {
+          error.message += ` (unable to inspect group ${child.pid}: ${result.error?.message ?? result.stderr})`;
         }
       }
       throw error;
     }
   };
   if (!signal("SIGTERM")) return;
-  const deadline = Date.now() + 8000;
+  let deadline = Date.now() + 8000;
+  let forced = false;
   while (signal(0)) {
     if (Date.now() >= deadline) {
-      signal("SIGKILL");
-      return;
+      if (forced) throw new Error(`Local service process group ${child.pid} did not stop`);
+      if (!signal("SIGKILL")) return;
+      forced = true;
+      deadline = Date.now() + 2000;
     }
     await new Promise((done) => setTimeout(done, 100));
   }

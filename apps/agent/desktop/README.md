@@ -64,7 +64,7 @@ dependencies retain the repository SDK upgrade policy. Desktop builds remove
 unnecessary whitespace without renaming identifiers. Standalone Node includes
 the executable and upstream notices, while npm and development headers remain
 in the build directory. DSH's pnpm and plugin installation archives remain in the runtime;
-the production Desktop plugin roster is fixed. node-pty retains only target-platform prebuilds alongside
+default launches use the precompiled plugin roster. node-pty retains only target-platform prebuilds alongside
 any locally compiled fallback; packaged smoke tests exercise a real terminal.
 Licenses, Skills, the resource catalog and native Office
 bindings are runtime assets, not blanket cleanup targets.
@@ -107,11 +107,13 @@ worker fork in addition to browser startup.
 
 The Desktop profile sets `patchReload: startup` and disables `hmr` and
 `client-hmr` before capturing the graph. The browser module-system entry stays in
-the captured graph. Desktop uses a fixed packaged plugin roster: profile manifest
-or profile patch edits are rejected on subsequent launches so stale prebuilt UI
-cannot silently accompany a changed profile. Application settings and account
-state stay in the normal writable data directories. The local Web development
-profile keeps its existing live-reload behavior.
+the captured graph. Default launches use the packaged plugin roster. After
+changing the writable profile manifest or patch, install that profile's
+dependencies before restarting: Desktop then selects its standalone DSH runtime
+and composes the browser modules from the installed roster. Changes without an
+installed runtime produce an explicit installation prompt. Application settings
+and account state stay in the normal writable data directories. The local Web
+development profile keeps its existing live-reload behavior.
 
 See [the upstream investigation](docs/dsh-production-upstream.md) for the exact
 published APIs and why `NODE_ENV=production` alone does not turn maps off.
@@ -312,10 +314,19 @@ because macOS native process creation cannot traverse an ASAR directory. Desktop
 while standalone Node remains on PATH for external commands. The shared local
 launcher still initializes account directories, shared credentials and settings.
 A scoped module-resolution adapter handles DSH imports from writable configuration;
-published DSH packages remain unmodified. The packaged plugin roster is fixed.
-A changed resource inventory stages a new profile and activates it at the same
-path, preserving account-owned links to it. Prior profile directories are retained
-as `home.previous-<timestamp>`; an old full runtime from earlier installers is
+published DSH packages remain unmodified. Default launches use the packaged plugin roster.
+Installing the writable profile's dependencies selects its standalone DSH runtime
+on subsequent launches, with browser modules composed from that installed profile.
+A changed resource inventory runs the independent [runtime-home migrations](migrations/README.md).
+Startup calls one entry point; versioned migration scripts own the transformations.
+The home records its independent data `schemaVersion` in `.desktop-data-version.json`
+(currently v1); unversioned homes enter through v0. Explicit version transitions
+run once in order, independently of resource refreshes or application release numbers.
+A newer data version blocks startup; a schema-only migration preserves existing
+profile configuration and installed dependencies.
+They stage a new profile and activate it at the same path, preserving account-owned
+links to it. A journal recovers a process interruption during activation. Prior profile directories are retained
+as `home.previous-<timestamp>-<uuid>`; an old full runtime from earlier installers is
 also retained, but its binaries are no longer executed. No legacy cleanup runs
 on the startup path. Node's compile cache is stored separately in `compile-cache`.
 Quit stops the application-owned service process tree. Back up `data/`
@@ -324,6 +335,60 @@ cleanup.
 
 ## In-app diagnostics
 
+### Data upgrade entry
+
+The existing installer and updater continue to deliver program files. The same
+Desktop executable provides `--migrate-data-only` to prepare the current user's
+runtime home and exit without starting DSH or the business UI. Add
+`--migration-headless` for unattended callers; the existing `--user-data-dir`
+option selects an explicit profile for isolated tests or a custom installation.
+
+Windows NSIS invokes this entry after extracting program files, before committing
+registration and shortcuts, and waits for its result. Only a positively identified non-administrator user is
+migrated during installation; administrator, elevated, and unknown contexts defer
+to first launch to avoid operating on the wrong account. `/DEFERDATAMIGRATION`
+explicitly selects first-launch preparation (also used by isolated installer smoke).
+Silent installers use headless mode. macOS DMG copies, Linux AppImage replacement,
+and automatic-update restarts use the same entry through normal application startup.
+If an application-triggered silent update requested reopening Agent and the
+failed migration has no unchanged-data proof, it opens Agent's common failure
+page. A confirmed rollback instead leaves the previous application available
+through its existing shortcuts. A plain unattended
+`/S` installation returns its failure code without waiting for user interaction.
+
+Interactive preparation shows checking, staging, migration, and activation phases
+in a local sandboxed page, before DSH starts. Failure keeps that page available
+with retry, logs, backup-folder, and exit actions. Newer or unreadable data-version
+records disable retry and give corrective guidance; there is no reset-data action.
+The page supports English and Chinese and only accepts IPC from its exact main
+frame. It neither downloads nor installs application packages.
+
+Process results for migration-only mode are: `0` success, `10` another instance
+owns the profile, `20` generic failure or interactive cancellation, `21` newer data,
+`22` invalid version record, `23` insufficient space, and `24` access denied.
+The specific error codes are returned in headless mode; closing a failed
+interactive upgrade returns `20`. Program installation followed by migration
+failure has two outcomes. The installer supplies a private `--migration-result-file`;
+only a completed failure that leaves the original runtime home active writes an
+`unchanged` receipt. NSIS then stops before registration changes and restores the
+previous program directory. Retries clear that receipt before touching data.
+
+Without this proof (for example, a process killed during activation), NSIS retains
+the new program and both backups, commits registration, and reports **program
+installed, data preparation incomplete**. Startup can recover the data journal.
+A committed-install marker lets a subsequent repair installer move the owned
+previous program backup to a unique `.uwa-recovery-<uuid>` directory, without
+deleting it, and proceed. Uncommitted or unowned backups still block installation.
+Completed data upgrades are never automatically downgraded. A post-migration DSH
+health-check transaction and power-loss durability are not implemented.
+
+Run `scripts/data-upgrade-smoke.mjs` against a packaged executable to verify
+headless results, failure guidance, unchanged original data, and retry into the
+usable application. Set `UWA_SMOKE_EXECUTABLE` for native Windows/macOS artifacts;
+Linux defaults to `artifacts/linux-unpacked/univer-workspace-agent-desktop`.
+
+### About and diagnostics
+
 Desktop contributes an optional **Settings → About** section through DSH's public settings slot. The web-only application
 omits this panel. Developers can inspect the application/DSH/Electron/Node
 versions, OS and architecture, update state and progress, startup event timings,
@@ -331,8 +396,10 @@ recent failure codes, and important directories directly in the UI. It refreshes
 once per second while mounted. Timing columns show elapsed time and time since
 the previous event, rather than inferring overlapping phase durations.
 
-The panel opens the fixed logs, application data, workspace, download cache or
-runtime directories. **Export diagnostics** uses the native save dialog to write
+The panel displays the effective **DSH_HOME** and plugin profile directory and opens
+them alongside the logs, application data, workspace, download cache and runtime
+directories. **Open developer tools** opens the main window's Chromium tools.
+**Export diagnostics** uses the native save dialog to write
 a JSON report containing the same environment and selected current/previous
 startup and update events. Reports include local directory paths, but exclude
 credentials, model keys, conversation content, raw error messages/stacks, and
@@ -340,6 +407,36 @@ signed URLs. Only whitelisted scalar diagnostic fields are exported. Update
 history is bounded and survives restart. All filesystem, save-dialog and updater
 operations remain in the Desktop main process; IPC accepts only the trusted main
 frame and fixed directory identifiers. No arbitrary path or URL is accepted.
+
+## Install additional DSH plugins
+
+1. Open **Settings → About → Plugin profile**. Quit Agent before installing packages.
+2. From a terminal in that directory, run `pnpm install`, then `pnpm add <plugin-package>`.
+   Use pnpm 11. The profile pins the packaged DSH dependency versions and its internal
+   tarballs use relative paths. A fresh dependency installation needs registry access;
+   offline installation requires a populated pnpm store.
+3. Add the plugin row to `cordis.patch.yml` for a host plugin. For an agent plugin,
+   restart Agent, use `agentPresets.copy('standard', 'my-preset')`, and add the row to
+   the returned preset's `agent.cordis.yml`. Presets are agent compositions; the
+   profile patch is the host composition. Follow the plugin's declared scope.
+4. Restart Agent and select the copied preset for a new session. Inspect
+   `agentPresets.compositionInventory()` and exercise the plugin in that session.
+
+Desktop uses a stable `DSH_HOME` under `userData/runtime/home`; authored presets live
+in its `.agent-presets` directory, separately from account-owned sessions. Shipped
+preset templates are ordinary read-only installation files so DSH's copy operation
+can read them without traversing ASAR. Existing sessions retain their preset composition;
+use a new session to verify changes.
+
+The installed profile uses standalone Node and DSH's public CLI. It builds browser
+modules for the configured plugins instead of serving the fixed desktop browser graph,
+so the default startup timing budget does not cover customized profiles. Keep a backup
+of the profile and authored presets before application upgrades; replaced homes are
+retained as `home.previous-<timestamp>-<uuid>`. Automatic merging and reinstallation
+of customized profiles is not implemented; the independent migration scripts
+carry authored presets forward and retain the old profile for recovery when
+resources change. This is separate from schema-only migrations, which retain the
+existing profile and dependencies.
 
 ## Startup diagnostics
 

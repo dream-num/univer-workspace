@@ -4,6 +4,7 @@ import { FUniver } from "@univerjs/core/facade";
 import { SetDocZoomRatioOperation } from "@univerjs/docs-ui";
 import type { UnitComparisonUniverFactory, UnitComparisonViewerValue } from "@univer/unit-comparison-viewer";
 import { createComparisonUnit } from "../viewer/comparison.ts";
+import { disposeViewerResources } from "../viewer/dispose.ts";
 import css from "./review-panel.module.scss";
 
 /** A full-size, immutable version alongside the structured comparison mode. */
@@ -24,12 +25,12 @@ export function ComparisonSnapshot(props: {
     void props.createUniver({ container: element, unitType: props.comparison.result.unit.type,
       locale: props.locale, darkMode: false,
     }).then(async instance => {
-      if (canceled) { instance.dispose(); return; }
-      dispose = () => instance.dispose();
+      if (canceled) { disposeViewerResources(() => instance.dispose()); return; }
+      dispose = () => disposeViewerResources(() => instance.dispose());
       try {
         createComparisonUnit(instance.univer, props.comparison);
         const api = FUniver.newAPI(instance.univer);
-        dispose = () => { api.dispose(); instance.dispose(); };
+        dispose = () => disposeViewerResources(() => api.dispose(), () => instance.dispose());
         if (props.comparison.result.unit.type === UniverInstanceType.UNIVER_DOC) {
           // Mounting a model alone does not establish the document viewport.
           // Initialize it once the host has a measurable render surface, as

@@ -570,8 +570,11 @@ The [Desktop build](desktop/README.md#production-browser-assets) captures DSH's
 browser graph and script batches during packaging through its published APIs.
 The private `desktop-client-capture` build entry exports these artifacts; the
 `desktop-client` runtime entry serves them with DSH's own bootstrap injections.
-Desktop has a fixed plugin roster, no runtime source-map generation, and no HMR
-or live profile watching. The local Web development profile is unchanged.
+Default Desktop launches use a fixed plugin roster, no runtime source-map generation,
+and no HMR or live profile watching. Installing dependencies in the writable desktop
+profile enables [additional plugins](desktop/README.md#install-additional-dsh-plugins)
+through the published DSH CLI and its browser module composition.
+The local Web development profile is unchanged.
 
 When the operating system reports that the default browser cannot be opened,
 Desktop falls back to a sandboxed built-in browser with a fresh, non-persistent

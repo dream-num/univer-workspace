@@ -144,7 +144,9 @@ try {
     }, { callback, transport });
     await page.waitForFunction(previous => globalThis.__UWH_CONNECTION_VERSION__ !== previous, old, { timeout: 60000 });
     await waitForLoginReload(exchanged);
-    await waitForUsableAgent(page, { firstRun: false });
+    // Model setup is skipped for this page only. A login reload creates a new
+    // onboarding owner; await its async credential check and dismiss its prompt.
+    await waitForUsableAgent(page);
     const me = await page.evaluate(async () => (await fetch('/api/uwh/me')).json());
     assert.equal(me.identity.userId, `user-${exchanged}`);
     return callback;
@@ -172,7 +174,7 @@ try {
     await page.evaluate(() => window.workspaceDesktop.login());
     await page.waitForFunction(previous => globalThis.__UWH_CONNECTION_VERSION__ !== previous, old, { timeout: 60000 });
     await waitForLoginReload(exchanged);
-    await waitForUsableAgent(page, { firstRun: false });
+    await waitForUsableAgent(page);
     const me = await page.evaluate(async () => (await fetch('/api/uwh/me')).json());
     assert.equal(me.identity.userId, `user-${3 + attempt}`);
     assert.equal(application.windows().length, 1, 'Fallback window closes after sign-in');

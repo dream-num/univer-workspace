@@ -7,6 +7,7 @@
 
 import * as React from "react";
 import { viewerErrorMessage } from "../viewer/error-message.ts";
+import { disposeViewerResources } from "../viewer/dispose.ts";
 import { LocaleType } from "@univerjs/core";
 import {
   createViewer,
@@ -60,11 +61,13 @@ export function ViewerMount(props: {
     const bootstrap = props.bootstrap;
     if (!supported || unitType === undefined || element === null || bootstrap === null) return;
     let disposed = false;
+    const controller = new AbortController();
     let handle: ViewerHandle | null = null;
     setError(null);
     setReady(false);
     const mount = async (): Promise<void> => {
       const created = await createViewer({
+        signal: controller.signal,
         container: instanceId,
         unitId: props.unitId,
         unitType,
@@ -76,7 +79,7 @@ export function ViewerMount(props: {
         onSelectionChange: (selection) => selectionCallbackRef.current?.(selection),
       });
       if (disposed) {
-        created.dispose();
+        disposeViewerResources(() => created.dispose());
         return;
       }
       handle = created;
@@ -87,7 +90,8 @@ export function ViewerMount(props: {
     });
     return () => {
       disposed = true;
-      handle?.dispose();
+      controller.abort();
+      disposeViewerResources(() => handle?.dispose());
       handle = null;
     };
   }, [
