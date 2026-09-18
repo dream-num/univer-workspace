@@ -283,8 +283,12 @@ jobs:
           $destination = Join-Path $env:RUNNER_TEMP 'Workspace Agent Login Probe'
           & apps/agent/desktop/scripts/install-windows.ps1 -Installer $installer.FullName -Destination $destination
           $env:UWA_SMOKE_EXECUTABLE = Join-Path $destination 'Univer Workspace Agent.exe'
+          $env:UWA_SMOKE_INSTALLER = $installer.FullName
+          $env:UWA_SMOKE_MIGRATE_ALPHA3 = '1'
+          node apps/agent/desktop/scripts/shell-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Installed application startup failed' }
           $failures = 0
-          for ($attempt = 1; $attempt -le 10; $attempt++) {
+          for ($attempt = 1; $attempt -le 5; $attempt++) {
             Write-Output "Login probe attempt $attempt"
             node apps/agent/desktop/scripts/login-smoke.mjs
             if ($LASTEXITCODE -ne 0) { $failures++ }

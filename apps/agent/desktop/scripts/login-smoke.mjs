@@ -57,7 +57,7 @@ try {
   });
   const page = await application.firstWindow();
   page.on('response', async response => {
-    if (!new URL(response.url()).pathname.includes('/settings/')) return;
+    if (!new URL(response.url()).pathname.includes('settings')) return;
     try {
       const request = response.request().postDataJSON();
       const body = await response.json();
@@ -68,6 +68,7 @@ try {
           ['id', 'ok', 'error', 'code', 'message', 'payload', 'value', 'ns', 'revision', 'workspaceOrigin', 'namespaces', 'result'].includes(key))
           .map(([key, child]) => [key, sanitize(child)]));
       };
+      console.log('Settings RPC path:', new URL(response.url()).pathname, 'request keys:', Object.keys(request ?? {}), 'payload keys:', Object.keys(request?.payload ?? {}));
       const args = request?.payload?.args;
       if (args?.[0] === 'univer-workspace-harness')
         console.log('Workspace settings RPC:', JSON.stringify({ path: new URL(response.url()).pathname, args, body: sanitize(body) }));
@@ -100,6 +101,9 @@ try {
     await onboarding.locator('input[type="url"]').fill(remote);
     await onboarding.getByRole('button', { name: 'Sign in to Workspace', exact: true }).click();
     await onboarding.getByRole('status').waitFor();
+    const connection = await readFile(join(temporary, 'profile/data/connection.json'), 'utf8').then(JSON.parse).catch(() => ({}));
+    const settings = await readFile(join(temporary, 'profile/data/shared/settings.yaml'), 'utf8').catch(() => '');
+    console.log('Persisted login origin:', connection.configuredOrigin, 'setting:', settings.split('\n').filter(line => line.includes('workspaceOrigin:')));
     console.log('Login input after submit:', await onboarding.locator('input[type="url"]').inputValue());
     console.log('Login authorization origins:', await application.evaluate(() => globalThis.smokeLoginUrls.map(url => new URL(url).origin)));
   } });
