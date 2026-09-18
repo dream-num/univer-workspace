@@ -7,7 +7,6 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { verifyRuntime } from '../src/runtime.cjs';
 const exec = promisify(execFile);
-const lsregister = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister';
 export async function installMac(dmg, destination, reportPath) {
   if (process.platform !== 'darwin') throw new Error('DMG acceptance requires native macOS');
   const scratch = await mkdtemp(join(tmpdir(), 'uwa-dmg-'));
@@ -16,7 +15,7 @@ export async function installMac(dmg, destination, reportPath) {
   const backup = `${destination}.previous`;
   const phases = [];
   const started = performance.now();
-  let mounted = false, moved = false, activated = false, unregistered = false;
+  let mounted = false, moved = false, activated = false;
   const phase = async (name, action) => {
     const at = performance.now();
     try { await action(); }
@@ -35,14 +34,6 @@ export async function installMac(dmg, destination, reportPath) {
     });
     await phase('copy', () => exec('ditto', [join(mount, 'Univer Workspace Agent.app'), staged], { timeout: 180000 }));
     await phase('verify-runtime', () => verifyRuntime(join(staged, 'Contents/Resources/runtime')));
-    // Launch Services follows a registered bundle when it is renamed. Retiring
-    // that backup later can leave the protocol pointing at a deleted bundle.
-    // Unregister the old URL while it still exists, then register the replacement.
-    try {
-      await stat(destination);
-      await phase('unregister-old-bundle', () => exec(lsregister, ['-u', destination], { timeout: 10000 }));
-      unregistered = true;
-    } catch (error) { if (error.code !== 'ENOENT') throw error; }
     await phase('activate', async () => {
       try { await rename(destination, backup); moved = true; }
       catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -53,14 +44,11 @@ export async function installMac(dmg, destination, reportPath) {
     // Services discovery. Register the copied bundle before launching its Mach-O
     // executable directly, so the probe models a normal Finder installation.
     await phase('register-bundle', () => exec(
-      lsregister,
+      '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister',
       ['-f', destination], { timeout: 10000 },
     ));
     report.success = true;
   } catch (error) {
-    if (unregistered && !activated) {
-      await exec(lsregister, ['-f', destination], { timeout: 10000 }).catch(() => {});
-    }
     report.error = error.message;
     throw error;
   } finally {
