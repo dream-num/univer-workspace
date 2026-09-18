@@ -84,7 +84,10 @@ try {
       await onboarding.locator('input[type="url"]').evaluate(input => {
         let fiber = input[Object.keys(input).find(key => key.startsWith('__reactFiber$'))];
         while (fiber && !fiber.memoizedProps?.scope) fiber = fiber.return;
-        if (!fiber) throw new Error('Probe could not locate the onboarding settings scope');
+        if (!fiber) {
+          globalThis.loginProbe = [{ phase: 'before-input', reactKeys: Object.keys(input).filter(key => key.startsWith('__react')), origin: input.value }];
+          return;
+        }
         const scope = fiber.memoizedProps.scope;
         const snapshot = () => {
           const { status, revision, writable, value } = scope.getSnapshot();
@@ -103,6 +106,7 @@ try {
     console.log('Login input origin:', await onboarding.locator('input[type="url"]').inputValue());
     await onboarding.getByRole('button', { name: 'Sign in to Workspace', exact: true }).click();
     await onboarding.getByRole('status').waitFor();
+    console.log('Login input after submit:', await onboarding.locator('input[type="url"]').inputValue());
     if (process.env.UWA_LOGIN_PROBE === '1') console.log('Login settings probe:', JSON.stringify(await page.evaluate(() => globalThis.loginProbe)));
     console.log('Login authorization origins:', await application.evaluate(() => globalThis.smokeLoginUrls.map(url => new URL(url).origin)));
   } });
