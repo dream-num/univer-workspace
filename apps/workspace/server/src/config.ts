@@ -16,6 +16,7 @@ export interface WorkspaceConfig {
     readonly clientId: string;
     readonly clientSecret: string;
     readonly callbackUrl: string;
+    readonly allowedOrganizations: readonly string[];
   } | null;
   readonly discordOAuth?: {
     readonly clientId: string;
@@ -177,13 +178,22 @@ function githubConfig(
   readonly clientId: string;
   readonly clientSecret: string;
   readonly callbackUrl: string;
+  readonly allowedOrganizations: readonly string[];
 } | null {
+  const allowedOrganizations = githubAllowedOrganizations(
+    environment.GITHUB_ALLOWED_ORGANIZATIONS
+  );
   const values = [
     environment.GITHUB_CLIENT_ID,
     environment.GITHUB_CLIENT_SECRET,
     environment.GITHUB_CALLBACK_URL,
   ];
-  if (values.every((value) => value === undefined)) return null;
+  if (
+    values.every((value) => value === undefined) &&
+    allowedOrganizations.length === 0
+  ) {
+    return null;
+  }
   if (values.some((value) => !value)) {
     throw new Error(
       "GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and GITHUB_CALLBACK_URL must be configured together"
@@ -194,7 +204,32 @@ function githubConfig(
     clientId: values[0]!,
     clientSecret: values[1]!,
     callbackUrl,
+    allowedOrganizations,
   };
+}
+
+function githubAllowedOrganizations(value: string | undefined): string[] {
+  if (value === undefined || value.trim() === "") return [];
+  const organizations = value
+    .split(",")
+    .map((organization) => organization.trim());
+  if (organizations.some((organization) => !isGitHubLogin(organization))) {
+    throw new Error(
+      "GITHUB_ALLOWED_ORGANIZATIONS must be a comma-separated list of valid GitHub organization names"
+    );
+  }
+  return [
+    ...new Map(
+      organizations.map((organization) => [
+        organization.toLowerCase(),
+        organization,
+      ])
+    ).values(),
+  ];
+}
+
+function isGitHubLogin(value: string): boolean {
+  return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(value);
 }
 
 function boolean(
