@@ -103,15 +103,19 @@ async function stopBackend(child) {
     });
     try {
       await new Promise((done, reject) => {
+        let output = "";
         const killer = spawn(join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe"), ["/PID", String(child.pid), "/T", "/F"], {
           windowsHide: true,
-          stdio: "ignore",
+          stdio: ["ignore", "pipe", "pipe"],
           timeout: 8000,
         });
+        const capture = bytes => { output = (output + bytes).slice(-8000); };
+        killer.stdout.on("data", capture);
+        killer.stderr.on("data", capture);
         killer.once("error", reject);
-        killer.once("exit", (code) => {
+        killer.once("exit", (code, signal) => {
           if (code === 0 || child.exitCode !== null || child.signalCode !== null) done();
-          else reject(new Error("Unable to stop the local service process tree"));
+          else reject(new Error(`Unable to stop the local service process tree (taskkill code ${code}, signal ${signal}): ${output.trim()}`));
         });
       });
       let timer;

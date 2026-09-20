@@ -153,3 +153,33 @@ test('Darwin shutdown waits for exiting E processes and still rejects live permi
     }
   }
 });
+
+// The real launcher exits when its DSH child exits. taskkill /T can race that
+// exit while walking from the child back to the launcher.
+test('Windows shutdown joins a supervisor that exits with its child', { skip: process.platform !== 'win32', timeout: 60000 }, async t => {
+  const { spawn } = await import('node:child_process');
+  const { once } = await import('node:events');
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const supervisor = spawn(process.execPath, ['-e', `
+      const { spawn } = require('node:child_process');
+      const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'inherit' });
+      child.once('spawn', () => process.send({ pid: child.pid }));
+      child.once('exit', () => process.exit(0));
+    `], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'], windowsHide: true });
+    const closed = once(supervisor, 'close');
+    const [{ pid }] = await once(supervisor, 'message', { signal: AbortSignal.timeout(10000) });
+    t.after(() => {
+      supervisor.kill();
+      try { process.kill(pid); } catch {}
+    });
+    try { await runtime.stopBackend(supervisor); }
+    catch (error) {
+      await Promise.race([closed, new Promise(resolve => setTimeout(resolve, 1000))]);
+      let childPresent = true;
+      try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') childPresent = false; }
+      throw new Error(`Supervisor attempt ${attempt}: exit ${supervisor.exitCode}, signal ${supervisor.signalCode}, child still present ${childPresent}`, { cause: error });
+    }
+    await closed;
+    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  }
+});
