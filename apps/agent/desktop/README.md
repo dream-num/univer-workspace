@@ -584,7 +584,10 @@ on the installed Windows/macOS apps and the packaged Linux app.
 
 When the operating system reports that the default browser cannot be opened,
 Desktop falls back to a sandboxed built-in browser with a fresh, non-persistent
-cookie session for each attempt. It intercepts the loopback return inside the
+cookie session for each attempt. On Linux it first checks for a registered browser:
+Electron can report successful dispatch before `xdg-open` fails to find one.
+The login smoke also covers this resolved-dispatch case. The built-in browser
+intercepts the loopback return inside the
 app, so fallback does not need the OS protocol handler. Closing the window
 clears its cookies. The window title identifies the fallback and notes that
 some OAuth providers reject embedded browsers. A successful browser-launch

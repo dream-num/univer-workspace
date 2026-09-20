@@ -50,8 +50,10 @@ try {
       ...(process.getuid?.() === 0 || process.argv.includes('--no-sandbox') ? ['--no-sandbox'] : [])],
     env: { ...process.env, XDG_CONFIG_HOME: temporary, XDG_DATA_HOME: join(temporary, 'share'), APPDATA: temporary },
   });
-  await application.evaluate(({ shell, dialog }) => {
+  await application.evaluate(({ app, shell, dialog }) => {
     globalThis.smokeLoginUrls = []; globalThis.smokeLoginErrors = [];
+    // This part simulates an available external browser on every native runner.
+    app.getApplicationNameForProtocol = () => 'Smoke browser';
     shell.openExternal = async url => { globalThis.smokeLoginUrls.push(url); };
     dialog.showErrorBox = (title, message) => { globalThis.smokeLoginErrors.push({ title, message }); };
   });
@@ -169,7 +171,16 @@ try {
   await application.evaluate(({ shell }) => {
     shell.openExternal = async () => { throw new Error('No default browser'); };
   });
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < (process.platform === 'linux' ? 3 : 2); attempt++) {
+    if (attempt === 2) {
+      // Linux xdg-open may fail after Electron's dispatch promise has resolved.
+      // An absent protocol handler must fall back without calling that shell.
+      await application.evaluate(({ app, shell }) => {
+        app.getApplicationNameForProtocol = () => '';
+        globalThis.smokeMissingBrowserDispatches = 0;
+        shell.openExternal = async () => { globalThis.smokeMissingBrowserDispatches++; };
+      });
+    }
     const old = await page.evaluate(() => globalThis.__UWH_CONNECTION_VERSION__);
     await page.evaluate(() => window.workspaceDesktop.login());
     await page.waitForFunction(previous => globalThis.__UWH_CONNECTION_VERSION__ !== previous, old, { timeout: 60000 });
@@ -179,6 +190,7 @@ try {
     assert.equal(me.identity.userId, `user-${3 + attempt}`);
     assert.equal(application.windows().length, 1, 'Fallback window closes after sign-in');
   }
+  if (process.platform === 'linux') assert.equal(await application.evaluate(() => globalThis.smokeMissingBrowserDispatches), 0);
   assert.equal((await application.evaluate(() => globalThis.smokeLoginErrors)).length, 1);
   console.log('Packaged browser login passed: automatic embedded fallback with fresh cookies, disconnected guidance, external browser, PKCE, both callback transports, account switch, replay rejection.');
 } catch (error) {

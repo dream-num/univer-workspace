@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { createLoginBrowser } = require('../src/login-browser.cjs');
 const origin = 'http://127.0.0.1:3101';
-function fixture(failExternal) {
+function fixture(failExternal, handler = 'System browser') {
   const windows = [], callbacks = [], failures = [], external = [];
   class Window extends EventEmitter {
     constructor(options) {
@@ -22,12 +22,20 @@ function fixture(failExternal) {
     close() { this.closed = true; this.emit('closed'); }
   }
   return { windows, callbacks, failures, external,
-    browser: createLoginBrowser({ BrowserWindow: Window, origin, accept: value => callbacks.push(value), failed: error => failures.push(error),
+    browser: createLoginBrowser({ app: { getApplicationNameForProtocol: () => handler }, platform: 'linux',
+      BrowserWindow: Window, origin, accept: value => callbacks.push(value), failed: error => failures.push(error),
       shell: { openExternal: async url => { external.push(url); if (failExternal) throw new Error('No browser handler'); } } }) };
 }
 test('default browser success creates no embedded window', async () => {
   const f = fixture(false); await f.browser.open('https://workspace.example/authorize');
   assert.equal(f.external.length, 1); assert.equal(f.windows.length, 0);
+});
+test('Linux without a registered browser opens the embedded window even if shell dispatch would succeed', async () => {
+  const f = fixture(false, '');
+  await f.browser.open('https://workspace.example/authorize');
+  assert.equal(f.external.length, 0);
+  assert.equal(f.windows.length, 1);
+  assert.deepEqual(f.windows[0].loaded, ['https://workspace.example/authorize']);
 });
 test('failed browser launch uses a sandboxed temporary session and handles callback without OS protocol', async () => {
   const f = fixture(true); await f.browser.open('https://workspace.example/authorize');

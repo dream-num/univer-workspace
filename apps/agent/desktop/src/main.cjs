@@ -275,7 +275,7 @@ async function start() {
   if (quitting) return;
   started = true;
   const loginBrowser = require("./login-browser.cjs").createLoginBrowser({
-    BrowserWindow, shell, mainWindow: window, origin, accept: acceptLoginUrl,
+    app, BrowserWindow, shell, mainWindow: window, origin, accept: acceptLoginUrl,
     failed: reportLoginError, zh: app.getLocale().startsWith("zh"),
   });
   loginController = createLoginController({ origin, fetch: optionsFetch,
