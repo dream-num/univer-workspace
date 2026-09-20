@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Univer mobile plugin verification</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 12px system-ui; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    header { padding: 6px; background: #eef6ee; flex-shrink: 0; }
+    nav { display: flex; gap: 10px; flex-wrap: wrap; }
+    #status { white-space: pre-wrap; max-height: 100px; overflow: auto; margin: 4px 0; }
+    #app { flex: 1; min-height: 0; overflow: hidden; }
+    button, a { padding: 4px; }
+  </style>
+</head>
+<body>
+<header>
+  <nav><a href="?stack=core">Core</a><a href="?stack=features">Features</a><a href="?stack=advanced">Pro</a><button id="check">检查数据</button><button id="exercise">写入/撤销/重做</button><button id="remount">保存并重建</button></nav>
+  <pre id="status">Loading SDK…</pre>
+</header>
+<div id="app"></div>
+<script type="module" src="./mobile.ts"></script>
+</body>
+</html>
