@@ -1,9 +1,12 @@
 import { lazy, Suspense } from "react";
 import type { components } from "../../../../generated/http/schema.js";
+import { isMobileDevice } from "../../shared/platform";
 import { Spinner } from "../../shared/ui";
 import type { CollaborationEditorProps } from "./collaboration-editor";
 
-const SheetEditor = lazy(() => import("./units/sheet/sheet-editor"));
+const SheetEditor = isMobileDevice()
+  ? lazy(() => import("./units/sheet/sheet-editor.mobile"))
+  : lazy(() => import("./units/sheet/sheet-editor"));
 const DocEditor = lazy(() => import("./units/doc/doc-editor"));
 const SlideEditor = lazy(() => import("./units/slide/slide-editor"));
 const BoardEditor = lazy(() => import("./units/board/board-editor"));

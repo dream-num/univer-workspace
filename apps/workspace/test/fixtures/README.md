@@ -182,3 +182,17 @@ collaboration and permissions. Workspace sequencing follows the coverage table:
 adapt the Sheet editor on rc.0 now, and extend to Doc and Slide after the next SDK
 release publishes the docs/slides Mobile plugins, using the dev examples named above
 as the reference compositions.
+
+### Production mobile composition (added 2026-09-20)
+
+The production mobile Sheet editor has landed at
+`web/src/features/editor/units/sheet/sheet-editor.mobile.tsx` +
+`sheet-mobile-presets.ts`, selected in `resource-editor.tsx` via
+`shared/platform.ts` (`pointer: coarse` or max-width 720px, evaluated once per
+page load). It uses the factory-managed collaboration path
+(`collaborationProvidedByPreset: false`), keeps formulas on the main thread
+(the deliberate no-worker deviation from the official sheets-mobile example,
+matching the Workspace desktop stack), and registers the Mobile exchange
+variants through `exchangeFeaturePlugins` so the factory's trunk/sign-in
+gating still applies. This fixture remains the isolated verification entry
+point for comparing against the official mobile composition.
