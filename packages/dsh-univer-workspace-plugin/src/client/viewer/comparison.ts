@@ -8,6 +8,7 @@ import { LOCALE_PACKS, localeKeyOf } from "./locales.ts";
 import { blockLocalEditingCommands, enforceSheetViewerReadOnlyPermissions } from "./readonly.ts";
 import { registerViewerRendering, ViewAssetIoOwner } from "./rendering.ts";
 import { installHistoryShapeFormulaCompatibility } from "./history-compatibility.ts";
+import { disposeViewerResources } from "./dispose.ts";
 
 
 /** The host supplies rendering; the shared viewer owns decoded Unit mounting. */
@@ -44,7 +45,12 @@ export function comparisonUniverFactory(license: string): UnitComparisonUniverFa
           setDocumentPermissionValue(univer.__getInjector().get(IPermissionService),
             unit.getUnitId(), unit.getUnitId(), UnitAction.Edit, false);
         });
-      return { univer, dispose: () => { docPermissions.unsubscribe(); univer.dispose(); } };
+      let disposed = false;
+      return { univer, dispose: () => {
+        if (disposed) return;
+        disposed = true;
+        disposeViewerResources(() => docPermissions.unsubscribe(), () => univer.dispose());
+      } };
     } catch (error) {
       univer.dispose();
       throw error;

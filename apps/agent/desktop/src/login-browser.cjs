@@ -3,14 +3,22 @@ const { SCHEME } = require('./login.cjs');
 const { isWebUrl, isLocalUrl } = require('./policy.cjs');
 
 /** Prefer the OS browser; use a fresh, unprivileged session only if launch fails. */
-function createLoginBrowser({ BrowserWindow, shell, mainWindow, origin, accept, failed, zh = false }) {
+function createLoginBrowser({ app, BrowserWindow, shell, mainWindow, origin, accept, failed, zh = false, platform = process.platform }) {
   let popup;
   const close = () => { if (popup && !popup.isDestroyed()) popup.close(); popup = undefined; };
   return {
     close,
     async open(authorizationUrl) {
       close();
-      try { await shell.openExternal(authorizationUrl); return; }
+      try {
+        // On Linux openExternal can resolve after spawning xdg-open, before it
+        // fails to find a browser. Check the registered handler first; otherwise
+        // a successful dispatch leaves the user waiting with no window open.
+        if (platform !== 'linux' || app.getApplicationNameForProtocol(authorizationUrl)) {
+          await shell.openExternal(authorizationUrl);
+          return;
+        }
+      }
       catch { /* No registered browser, or the OS browser launch failed. */ }
       const window = new BrowserWindow({
         parent: mainWindow, width: 1000, height: 760, autoHideMenuBar: true,
@@ -34,7 +42,15 @@ function createLoginBrowser({ BrowserWindow, shell, mainWindow, origin, accept, 
         if (isLocalUrl(url, origin) && new URL(url).pathname === '/auth/oauth/callback') {
           // Intercept the exact loopback return directly. Fallback must work
           // even when the OS custom-protocol handler is unavailable as well.
-          callback = `${SCHEME}://login#${new URL(url).searchParams.toString()}`;
+          // The Workspace OAuth response also carries metadata such as scope.
+          // Match the loopback HTTP handler's desktop callback contract instead
+          // of forwarding every OAuth parameter to the strict protocol parser.
+          // Preserve repeated callback fields so that parser still rejects them.
+          const params = new URLSearchParams();
+          for (const [key, value] of new URL(url).searchParams) {
+            if (['state', 'code', 'error'].includes(key)) params.append(key, value);
+          }
+          callback = `${SCHEME}://login#${params}`;
         } else if (url.startsWith(`${SCHEME}:`)) callback = url;
         if (!callback) return false;
         if (!returned) {

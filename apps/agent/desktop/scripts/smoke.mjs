@@ -34,6 +34,23 @@ try {
     ? resolve(source, { darwin: '../../MacOS/Univer Workspace Agent', win32: '../../Univer Workspace Agent.exe', linux: '../../univer-workspace-agent-desktop' }[process.platform])
     : process.env.UWA_SMOKE_ELECTRON ?? (await import('electron')).default);
   const nodeEnvironment = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+  const stats = spawnSync(node, ['-e', `
+    const assert = require('node:assert/strict');
+    const fs = require('node:fs/promises');
+    const { join } = require('node:path');
+    const root = ${JSON.stringify(runtime)};
+    require(join(root, 'asar-stats.cjs')).installAsarStatsCompatibility();
+    (async () => {
+      for (const method of ['stat', 'lstat']) {
+        const info = await fs[method](join(root, 'host.asar/package.json'), { bigint: true });
+        assert.equal(typeof (info.mode & 511n), 'bigint');
+        assert.ok(info.isFile());
+      }
+      await fs.cp(join(root, 'presets/standard'), join(root, '../copied-preset'), { recursive: true });
+      await fs.access(join(root, '../copied-preset/agent.cordis.yml'));
+    })().catch(error => { console.error(error); process.exitCode = 1; });
+  `], { encoding: 'utf8', timeout: 30000, env: nodeEnvironment });
+  if (stats.error || stats.status !== 0) throw new Error(`Packaged ASAR stats/preset copy failed: ${stats.error ?? stats.stderr}`);
   const sessions = spawnSync(node, [join(desktop, 'test/packaged-session.cjs'), runtime], {
     cwd: root, encoding: 'utf8', timeout: 120000, env: nodeEnvironment,
   });

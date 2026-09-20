@@ -10,6 +10,11 @@ export async function packDesktopHost(desktop, runtime) {
   const stage = join(desktop, '.build/host-stage');
   await mkdir(stage);
   try {
+    // Electron 44 fs.cp cannot recursively copy an ASAR directory (ENOENT).
+    // Preset authoring uses fs.cp; publish its small templates as ordinary files.
+    // Remove this layout exception once Electron supports the upstream operation.
+    await cp(join(runtime, 'bootstrap/node_modules/@deepseek-ai/dsh-agent-presets/presets'),
+      join(runtime, 'presets'), { recursive: true });
     await cp(join(runtime, 'bootstrap'), stage, { recursive: true, dereference: true });
     await cp(join(runtime, 'home/profiles/univer-workspace-harness'), join(stage, 'profile'),
       { recursive: true, dereference: true });
@@ -55,6 +60,7 @@ export async function packDesktopHost(desktop, runtime) {
     const builderRequire = createRequire(require.resolve('electron-builder/package.json'));
     await builderRequire('@electron/asar').createPackageFromStreams(join(runtime, 'host.asar'), [...streams, ...links]);
     await cp(join(desktop, 'src/dsh-host.cjs'), join(runtime, 'dsh-host.cjs'));
+    await cp(join(desktop, 'src/asar-stats.cjs'), join(runtime, 'asar-stats.cjs'));
     await rm(join(runtime, 'bootstrap'), { recursive: true });
     await rm(join(runtime, 'home/profiles/univer-workspace-harness/node_modules'), { recursive: true });
   } finally {

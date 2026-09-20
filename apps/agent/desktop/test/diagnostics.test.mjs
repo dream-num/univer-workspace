@@ -19,11 +19,13 @@ test('diagnostic snapshots and exports contain selected events, never credential
   ].join('\n'));
   const state = { phase: 'download-error', percent: 42, version: '0.1.0-alpha.9',
     failure: { code: 'UPDATE_HTTP_ERROR', httpStatus: 503 }, notes: 'secret-release-body', signedUrl: 'secret-url' };
+  const home = join(root, 'effective-dsh-home');
   const diagnostics = createDiagnostics({ app: { getPath: () => root, getVersion: () => '0.1.0-alpha.8', isPackaged: true },
-    resources: join(root, 'resources'), updatesEnabled: true, getUpdateState: () => state });
+    resources: join(root, 'resources'), updatesEnabled: true, getUpdateState: () => state, getDshHome: () => home });
   diagnostics.recordUpdate(state);
   const report = await diagnostics.snapshot();
   assert.equal(report.startup.length, 2);
+  assert.equal(report.directories.dshHome, home);
   assert.equal(report.startup[1].code, 'ENOENT');
   assert.equal(report.update.httpStatus, 503);
   assert.equal(report.recentUpdates.at(-1).code, 'UPDATE_HTTP_ERROR');
@@ -38,7 +40,8 @@ test('diagnostic snapshots and exports contain selected events, never credential
   assert.equal(await diagnostics.exportReport({}, { showSaveDialog: async () => ({ canceled: true }) }), false);
   const opened = [];
   await diagnostics.openDirectory('logs', { openPath: async path => { opened.push(path); return ''; } });
-  assert.deepEqual(opened, [logs]);
+  await diagnostics.openDirectory('dshHome', { openPath: async path => { opened.push(path); return ''; } });
+  assert.deepEqual(opened, [logs, home]);
   for (const id of ['../credentials', 'constructor', '__proto__', {}, null])
     await assert.rejects(diagnostics.openDirectory(id, {}), /Unknown/);
 });

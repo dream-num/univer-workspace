@@ -3,7 +3,7 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 const require = createRequire(import.meta.url);
 
-// Version-scoped diagnostic adapter for published builder templates. Modify a
+// Version-scoped installer lifecycle/diagnostic adapter for published builder templates. Modify a
 // generated copy only; refuse changed anchors when upgrading electron-builder.
 export async function prepareTracedNsis(desktop) {
   const metadata = createRequire(require.resolve('electron-builder/package.json')).resolve('app-builder-lib/package.json');
@@ -36,7 +36,8 @@ export async function prepareTracedNsis(desktop) {
     let source = await readFile(path, 'utf8');
     for (const [phase, anchor] of anchors) {
       if (source.split(anchor).length !== 2) throw new Error(`NSIS trace anchor changed: ${name}: ${phase}`);
-      source = source.replace(anchor, insert(phase, anchor));
+      source = source.replace(anchor, insert(phase, anchor) + (phase === 'payload'
+        ? '\n!insertmacro agentPrepareUserData' : ''));
     }
     await writeFile(path, source);
     // Local includes take precedence over builder's unchanged -I directory.

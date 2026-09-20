@@ -48,9 +48,11 @@ for (const candidate of [resolve(runtimeHomeFor(initial), "settings.yaml"), reso
 while (stoppingSignal === undefined) {
   const active = await readActiveConnection(statePath);
 
-  const runtimeHome = runtimeHomeFor(active);
+  // Desktop profiles and authored presets are machine-owned. Account storage
+  // still uses workspaceRuntime.home, supplied by the authenticated provider.
+  const runtimeHome = process.env.UWA_DESKTOP === '1' ? installHome : runtimeHomeFor(active);
   await mkdir(runtimeHome, { recursive: true, mode: 0o700 });
-  await ensureProfileLink(resolve(runtimeHome, "profiles"), resolve(installHome, "profiles"));
+  if (runtimeHome !== installHome) await ensureProfileLink(resolve(runtimeHome, "profiles"), resolve(installHome, "profiles"));
 
   const childEnvironment = {
     ...process.env,
@@ -61,6 +63,7 @@ while (stoppingSignal === undefined) {
     UWH_DSH_DATA_HOME: dataHome,
     ...(active === undefined ? {} : { UWH_WORKSPACE_ORIGIN: active.origin }),
   };
+  process.send?.({ type: "uwh-desktop-runtime", home: runtimeHome });
   if (active === undefined) delete childEnvironment.UWH_WORKSPACE_ORIGIN;
   console.error(
     `[uwh] starting ${active === undefined ? "unconnected" : `${active.identity.username} @ ${active.origin}`} with runtime ${runtimeHome}`,

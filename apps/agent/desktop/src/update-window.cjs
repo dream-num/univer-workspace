@@ -34,6 +34,7 @@ function createUpdateWindow({ BrowserWindow, ipcMain, shell, dialog, mainWindow,
     if (controller) { show(); void controller.check(true); }
   });
   const diagnosticActions = {
+    "uwa:devtools": () => mainWindow.webContents.openDevTools({ mode: "detach" }),
     "uwa:diagnostics": () => diagnostics.snapshot(),
     "uwa:diagnostic-directory": id => diagnostics.openDirectory(id, shell),
     "uwa:diagnostic-export": () => diagnostics.exportReport(mainWindow, dialog),

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'">
+  <title>Workspace Agent</title>
+  <link rel="stylesheet" href="data-upgrade.css">
+  <script src="data-upgrade.js" defer></script>
+</head>
+<body>
+  <main>
+    <div class="brand">UNIVER WORKSPACE AGENT</div>
+    <h1 id="heading">Preparing your workspace</h1>
+    <div role="status" aria-live="polite">
+      <p id="stage">Checking local data…</p>
+      <progress id="progress" aria-label="Data upgrade"></progress>
+      <p id="detail"></p>
+    </div>
+    <div id="actions" hidden>
+      <button id="retry" type="button" data-action="retry">Retry</button>
+      <button id="logs" type="button" data-action="logs">Open logs</button>
+      <button id="backups" type="button" data-action="backups">Open backup folder</button>
+      <button id="exit" type="button" data-action="exit">Exit</button>
+    </div>
+    <p id="action-error" role="alert"></p>
+  </main>
+</body>
+</html>

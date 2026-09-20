@@ -26,9 +26,13 @@ test('first launch links shipped packages and keeps DSH writes outside installed
   await prepareRuntimeHome(source, target);
   assert.equal(await readFile(join(target, profile, 'cordis.yml'), 'utf8'), 'writable');
   await writeFile(join(target, profile, 'package.json'), '{"edited":true}');
-  await assert.rejects(prepareRuntimeHome(source, target), /configuration differs/);
+  await mkdir(join(target, '.agent-presets/custom'), { recursive: true });
+  await writeFile(join(target, '.agent-presets/custom/agent.cordis.yml'), '[]');
+  await prepareRuntimeHome(source, target);
+  assert.equal(await readFile(join(target, profile, 'package.json'), 'utf8'), '{"edited":true}');
   await writeFile(join(source, 'integrity.json'), '{"generation":2}');
   await prepareRuntimeHome(source, target);
   const previous = (await readdir(join(root, 'user/runtime'))).find(name => name.startsWith('home.previous-'));
+  assert.equal(await readFile(join(target, '.agent-presets/custom/agent.cordis.yml'), 'utf8'), '[]');
   assert.equal(await readFile(join(root, 'user/runtime', previous, profile, 'cordis.yml'), 'utf8'), 'writable');
 });

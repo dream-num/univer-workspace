@@ -19,7 +19,9 @@ if ($SimulateAlpha3) {
     if ($keys.Count -ne 1) { throw 'Expected one isolated installation registration' }
     Set-ItemProperty -LiteralPath $keys[0].PSPath -Name DisplayVersion -Value '0.1.0-alpha.3'
 }
-$arguments = @('/S')
+# Installed-app smoke passes an isolated --user-data-dir on first launch. Never
+# let the installer migrate the tester's default Agent profile in the meantime.
+$arguments = @('/S', '/DEFERDATAMIGRATION')
 if ($Update) { $arguments += '--updated' }
 # NSIS requires /D to be the last argument, without quotes around its value.
 $arguments += "/D=$Destination"

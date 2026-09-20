@@ -26,6 +26,7 @@ export type ViewerSelection =
     };
 
 export interface ViewerOptions {
+  signal?: AbortSignal;
   container: string;
   unitId: string;
   unitType: ViewerUnitType;

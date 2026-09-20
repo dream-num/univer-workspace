@@ -15,6 +15,14 @@ const {
 const { assertPortAvailable, stopBackend } = require("./runtime.cjs");
 
 const { prepareRuntimeHome } = require("./runtime-home.cjs");
+const { createDataUpgrade, migrationFailure } = require('./data-upgrade.cjs');
+const migrationOnly = process.argv.includes('--migrate-data-only');
+const migrationHeadless = migrationOnly && process.argv.includes('--migration-headless');
+let migrationResult = 20;
+const migrationReceipt = migrationOnly && app.commandLine.getSwitchValue('migration-result-file');
+const migrateHome = (resources, home, options = {}) => migrationReceipt
+  ? require('../migrations/prepare-install.cjs').prepareInstallerHome(resources, home, { ...options, receipt: migrationReceipt })
+  : prepareRuntimeHome(resources, home, options);
 let startupLog;
 let stopping;
 function stopService() {
@@ -54,7 +62,7 @@ if (process.platform === 'win32') app.commandLine.appendSwitch('disk-cache-size'
 // directory is requested (also used by installed-application smoke tests).
 const profileDirectory = app.commandLine.getSwitchValue("user-data-dir");
 if (profileDirectory) app.setPath("userData", require("node:path").resolve(profileDirectory));
-if (!app.requestSingleInstanceLock()) app.quit();
+if (!app.requestSingleInstanceLock()) { if (migrationOnly) app.exit(10); else app.quit(); }
 else {
   app.on("second-instance", (_event, argv) => {
     const callback = argv.find(value => value.startsWith(`${SCHEME}://`));
@@ -71,13 +79,15 @@ else {
   app.on("before-quit", (event) => {
     if (quitting) return;
     event.preventDefault();
-    void stopService().catch((error) => startupLog?.write({ phase: "shutdown-failed", error: error.message })).finally(() => app.exit());
+    void stopService().catch((error) => startupLog?.write({ phase: "shutdown-failed", error: error.message })).finally(() => app.exit(migrationOnly ? migrationResult : 0));
   });
   void app
     .whenReady()
     .then(start)
     .catch((error) => {
-      startupLog?.write({ phase: "fatal", error: error.message, stack: error.stack });
+      if (migrationOnly) migrationResult = migrationFailure(error).exitCode;
+      try { startupLog?.write({ phase: "fatal", error: error.message, stack: error.stack }); } catch {}
+      if (migrationHeadless) { quitting = true; app.exit(migrationResult); return; }
       if (!quitting) dialog.showErrorBox("Unable to start Workspace Agent",
         `${error.message}\n\nStartup log: ${startupLog?.path ?? "unavailable"}`);
       app.quit();
@@ -93,20 +103,28 @@ async function start() {
   release = JSON.parse(await readFile(join(resources, "release.json"), "utf8"));
   if (release.platform !== process.platform || release.arch !== process.arch)
     throw new Error("This installer does not match this computer.");
-  await assertPortAvailable(DEFAULT_PORT);
+  if (migrationHeadless) {
+    await migrateHome(resources, join(app.getPath('userData'), 'runtime/home'));
+    quitting = true;
+    app.exit(0);
+    return;
+  }
+  if (!migrationOnly) await assertPortAvailable(DEFAULT_PORT);
   const userData = app.getPath("userData");
   const runtime = resources;
   const data = join(userData, "data");
   const workspace = join(userData, "workspace");
-  await mkdir(data, { recursive: true });
-  await mkdir(workspace, { recursive: true });
-  const browserCache = await require('./browser-cache.cjs').prepareBrowserCache(resources, userData, process.versions.electron);
-  if (browserCache) session.defaultSession.setCodeCachePath(browserCache);
+  if (!migrationOnly) {
+    await mkdir(data, { recursive: true });
+    await mkdir(workspace, { recursive: true });
+    const browserCache = await require('./browser-cache.cjs').prepareBrowserCache(resources, userData, process.versions.electron);
+    if (browserCache) session.defaultSession.setCodeCachePath(browserCache);
+  }
   window = new BrowserWindow({
-    width: 1440,
-    height: 960,
-    minWidth: 900,
-    minHeight: 600,
+    width: migrationOnly ? 680 : 1440,
+    height: migrationOnly ? 500 : 960,
+    minWidth: migrationOnly ? 580 : 900,
+    minHeight: migrationOnly ? 400 : 600,
     title: "Univer Workspace Agent",
     show: false,
     autoHideMenuBar: true,
@@ -138,35 +156,28 @@ async function start() {
   window.webContents.on("will-redirect", (event, url) => {
     if (!isLocalUrl(url, origin)) event.preventDefault();
   });
-  const html = `<meta charset="utf-8"><title>Workspace Agent</title>
-    <body style="font:16px system-ui;background:#f8fafc;color:#172033;margin:0;display:grid;place-items:center;height:100vh">
-    <main style="width:480px"><h1 style="font-size:24px">Starting Workspace Agent</h1>
-    <p id="stage">Preparing your workspace</p><progress id="progress" style="width:100%"></progress>
-    <p id="detail" style="color:#64748b">Starting your local workspace.</p>
-    <p>You can find startup details in Help → Open startup logs.</p></main></body>`;
-  await window.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-  window.show();
+  const upgrade = createDataUpgrade({ window, ipcMain, shell, log: startupLog,
+    home: join(userData, 'runtime/home'), locale: app.getLocale(), installer: migrationOnly });
+  await upgrade.load();
   Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: "Help", submenu: [{
     label: "Open startup logs", click: () => shell.showItemInFolder(startupLog.path),
   }] }]));
-  let last = 0, lastPhase;
-  const report = (event) => {
-    if (event.phase === lastPhase && Date.now() - last < 500) return;
-    last = Date.now(); lastPhase = event.phase;
-    startupLog.write(event);
-    const labels = { cleanup: "Preparing installation", copy: "Copying application files", verify: "Checking application files", activate: "Finishing setup", failed: "Setup failed", backend: "Starting local service" };
-    const label = labels[event.phase] ?? event.phase;
-    const detail = event.total ? `${event.completed} of ${event.total} files checked` :
-      event.completed ? `${event.completed} entries processed` : "Please wait";
-    void window.webContents.executeJavaScript(`document.getElementById('stage').textContent=${JSON.stringify(label)};
-      document.getElementById('detail').textContent=${JSON.stringify(detail)};
-      ${event.total ? `document.getElementById('progress').max=${event.total};document.getElementById('progress').value=${event.completed};` : "document.getElementById('progress').removeAttribute('value');"}`).catch(() => {});
-  };
-  const runtimeHome = await prepareRuntimeHome(resources, join(userData, "runtime/home"));
+  const runtimeHome = await upgrade.run(report =>
+    migrateHome(resources, join(userData, 'runtime/home'), { report }));
+  if (!runtimeHome || quitting) return;
+  if (migrationOnly) {
+    migrationResult = 0;
+    quitting = true;
+    upgrade.dispose();
+    app.exit(0);
+    return;
+  }
+  const profileRuntime = await require('./profile-runtime.cjs').selectProfileRuntime(resources, runtimeHome);
+  let dshHome = runtimeHome;
   if (quitting) return;
-  report({ phase: "backend" });
+  upgrade.report({ phase: "backend" });
   const bin = join(runtime, "node", "bin");
-  const node = process.execPath;
+  const node = profileRuntime.archived ? process.execPath : join(bin, process.platform === 'win32' ? 'node.exe' : 'node');
   const env = {
     ...process.env,
     NODE_ENV: "production",
@@ -197,11 +208,16 @@ async function start() {
     "UWH_SHARED_CREDENTIALS_PATH",
   ])
     delete env[key];
-  env.ELECTRON_RUN_AS_NODE = "1";
+  if (profileRuntime.archived) env.ELECTRON_RUN_AS_NODE = "1";
+  else {
+    delete env.UWA_DESKTOP_HOST;
+    env.DSH_BIN = profileRuntime.dsh;
+  }
   backend = spawn(
     node,
     [
       join(runtime, "start-local.mjs"),
+      ...(profileRuntime.archived ? [] : ['--patch', profileRuntime.patch]),
       "--port",
       String(DEFAULT_PORT),
       "--no-open",
@@ -217,6 +233,9 @@ async function start() {
     },
   );
   let started = false;
+  backend.on("message", message => {
+    if (message?.type === "uwh-desktop-runtime" && typeof message.home === "string") dshHome = message.home;
+  });
   backend.on("exit", () => {
     if (started && !quitting) {
       dialog.showErrorBox(
@@ -256,7 +275,7 @@ async function start() {
   if (quitting) return;
   started = true;
   const loginBrowser = require("./login-browser.cjs").createLoginBrowser({
-    BrowserWindow, shell, mainWindow: window, origin, accept: acceptLoginUrl,
+    app, BrowserWindow, shell, mainWindow: window, origin, accept: acceptLoginUrl,
     failed: reportLoginError, zh: app.getLocale().startsWith("zh"),
   });
   loginController = createLoginController({ origin, fetch: optionsFetch,
@@ -267,6 +286,7 @@ async function start() {
     return loginController.start();
   });
   await window.loadURL(address);
+  upgrade.dispose();
   startupLog.write({ phase: "ready" });
   if (app.isPackaged) {
     try { await require("./protocol.cjs").registerLoginProtocol(app); }
@@ -301,6 +321,7 @@ async function start() {
   });
   diagnostics = require("./diagnostics.cjs").createDiagnostics({
     app, resources, updatesEnabled: release.updatesEnabled, getUpdateState: updateController.getState,
+    getDshHome: () => dshHome,
   });
   updateWindow.attach(updateController, diagnostics);
   const checkUpdates = updateController.check;

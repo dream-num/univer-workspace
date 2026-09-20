@@ -126,6 +126,20 @@ try {
   await page.getByRole('button', { name: 'About', exact: true }).click();
   const diagnosticPanel = page.getByRole('region', { name: 'Software update and diagnostics', exact: true });
   await diagnosticPanel.getByRole('heading', { name: 'About Workspace Agent', exact: true }).waitFor();
+  await diagnosticPanel.getByText('DSH_HOME (active host)', { exact: true }).waitFor();
+  await diagnosticPanel.getByRole('button', { name: 'Open developer tools', exact: true }).click();
+  const devtoolsOpened = await application.evaluate(async ({ BrowserWindow }) => {
+    const contents = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().startsWith('http://127.0.0.1:3101'))?.webContents;
+    if (!contents) return false;
+    if (!contents.isDevToolsOpened()) await new Promise(resolve => {
+      contents.once('devtools-opened', resolve);
+      setTimeout(resolve, 5000);
+    });
+    const opened = contents.isDevToolsOpened();
+    contents.closeDevTools();
+    return opened;
+  });
+  if (!devtoolsOpened) throw new Error('About did not open developer tools for the main window');
   const updateWindowOpened = application.waitForEvent('window');
   await diagnosticPanel.getByRole('button', { name: 'Check for updates', exact: true }).click();
   const updatePage = await updateWindowOpened;
@@ -141,7 +155,8 @@ try {
   await diagnosticPanel.getByText('Diagnostic report saved', { exact: true }).waitFor();
   const diagnosticReport = JSON.parse(await readFile(reportPath, 'utf8'));
   if (diagnosticReport.schemaVersion !== 1 || !diagnosticReport.startup.some(event => event.phase === 'ready') ||
-      diagnosticReport.directories.logs !== join(dataPath, 'logs'))
+      diagnosticReport.directories.logs !== join(dataPath, 'logs') ||
+      diagnosticReport.directories.dshHome !== join(dataPath, 'runtime/home'))
     throw new Error('Desktop diagnostic export is missing runtime, timing or directory information');
   await diagnosticPanel.screenshot({ path: join(diagnostics, 'desktop-diagnostics.png') });
   await page.screenshot({ path: join(desktop, ".build/electron-smoke.png") });

@@ -95,23 +95,29 @@ async function stopBackend(child) {
   if (!child?.pid) return;
   if (process.platform === "win32") {
     if (child.exitCode !== null || child.signalCode !== null) return;
-    // taskkill can exit before Windows releases the terminated process handles.
+    // taskkill and the service have independent exit notifications. Even a
+    // nonzero taskkill result can precede the service's close event when a
+    // process exits during tree traversal. Join the service before deciding.
     let onClose;
     const closed = new Promise((done) => {
       onClose = done;
       child.once("close", onClose);
     });
     try {
-      await new Promise((done, reject) => {
+      const failure = await new Promise((done, reject) => {
+        let output = "";
         const killer = spawn(join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe"), ["/PID", String(child.pid), "/T", "/F"], {
           windowsHide: true,
-          stdio: "ignore",
+          stdio: ["ignore", "pipe", "pipe"],
           timeout: 8000,
         });
+        const capture = bytes => { output = (output + bytes).slice(-8000); };
+        killer.stdout.on("data", capture);
+        killer.stderr.on("data", capture);
         killer.once("error", reject);
-        killer.once("exit", (code) => {
-          if (code === 0 || child.exitCode !== null || child.signalCode !== null) done();
-          else reject(new Error("Unable to stop the local service process tree"));
+        // close also guarantees the diagnostic pipes have drained.
+        killer.once("close", (code, signal) => {
+          done(code === 0 ? null : new Error(`Unable to stop the local service process tree (taskkill code ${code}, signal ${signal}): ${output.trim()}`));
         });
       });
       let timer;
@@ -120,7 +126,7 @@ async function stopBackend(child) {
           closed,
           new Promise((_, reject) => {
             timer = setTimeout(
-              () => reject(new Error("Local service did not close after taskkill")),
+              () => reject(failure ?? new Error("Local service did not close after taskkill")),
               8000,
             );
           }),
@@ -150,22 +156,37 @@ async function stopBackend(child) {
           timeout: 2000,
         });
         if (!result.error && result.status === 0 && result.stdout.trim()) {
-          const live = result.stdout.trim().split("\n").some((line) => {
+          const members = result.stdout.trim().split("\n").filter(line => Number(line.trim().split(/\s+/)[0]) === child.pid);
+          const live = members.some((line) => {
             const [group, state] = line.trim().split(/\s+/);
             return Number(group) === child.pid && !state?.startsWith("Z");
           });
           if (!live) return false;
+          // Darwin's ps appends E for P_WEXIT, including the transient ?<Es
+          // state observed in native CI. These processes cannot receive signals
+          // but are still releasing resources. Keep waiting for reaping; do not
+          // mistake this for permission denial or declare the group stopped.
+          if (process.platform === "darwin" && members.every(line => {
+            const state = line.trim().split(/\s+/)[1];
+            return state?.startsWith("Z") || state?.includes("E");
+          })) return true;
+          error.message += ` (signal ${value}, group ${child.pid}, members ${JSON.stringify(members)})`;
+        } else {
+          error.message += ` (unable to inspect group ${child.pid}: ${result.error?.message ?? result.stderr})`;
         }
       }
       throw error;
     }
   };
   if (!signal("SIGTERM")) return;
-  const deadline = Date.now() + 8000;
+  let deadline = Date.now() + 8000;
+  let forced = false;
   while (signal(0)) {
     if (Date.now() >= deadline) {
-      signal("SIGKILL");
-      return;
+      if (forced) throw new Error(`Local service process group ${child.pid} did not stop`);
+      if (!signal("SIGKILL")) return;
+      forced = true;
+      deadline = Date.now() + 2000;
     }
     await new Promise((done) => setTimeout(done, 100));
   }

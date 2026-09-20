@@ -120,8 +120,26 @@ Update this file in the same change when any of these facts change:
 
 `apps/agent/desktop` owns experimental Electron packaging of the existing Agent
 for Windows x64, macOS Apple Silicon, and Linux x64. It boots published DSH packages and local plugins from ASAR through Electron's
-Node runtime, with native libraries unpacked. Standalone Node remains available
-for external commands; pinned Chromium serves document rendering. The
+Node runtime, with native libraries unpacked. A user-installed plugin profile instead
+runs the published DSH CLI with standalone Node and composes its browser modules.
+Desktop keeps the profile and authored presets in a stable writable DSH_HOME;
+account-owned sessions remain isolated. Independent Desktop migration scripts own
+runtime-home upgrades. The home stores an independent data schema version, with
+explicit ordered transitions and rejection of newer schemas; resource identity
+only controls shipped-resource refresh. Staged activation switches data and its
+version together, with a recovery journal and retained previous-home backups;
+startup only invokes the migration entry point. This does not version DSH's
+internal session formats or Workspace server databases.
+The Desktop executable exposes a migration-only mode used by the Windows
+installer in a confirmed non-admin user context and by normal first launch on
+all platforms. Shared progress/failure UI runs before DSH. Silent installation
+receives process exit codes; a data-preparation failure after program installation
+only permits program-file rollback before registration commit when the migration
+runner proves the original home remains active. Unknown outcomes retain both
+program trees; a later repair archives owned backups without deleting them.
+Existing installation/update mechanisms
+remain responsible for application delivery. Standalone Node also serves external
+commands; pinned Chromium serves document rendering. The
 Electron packaging toolchain shares the repository pnpm workspace and lockfile.
 GitHub Releases (`agent-vX.Y.Z`, `agent-vX.Y.Z-{alpha,beta,rc}.N`) are the download and update channel; CI requires
 explicit manual dispatch and publication opt-in. Account data stays in the OS
