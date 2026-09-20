@@ -48,8 +48,15 @@ test('pause then a new downloader reuses its on-disk partial after restart', asy
   const controller = new AbortController();
   await assert.rejects(downloadResumable({ ...f.options, signal: controller.signal,
     onProgress: p => { if (p.transferred) controller.abort(); } }));
+  // Pausing on the first progress event can split a server write across reads.
+  // Resume from the bytes actually persisted, not the server's write size.
+  const files = await readdir(f.directory);
+  assert.equal(files.length, 1);
+  const partial = await readFile(join(f.directory, files[0]));
+  assert.ok(partial.length > 0 && partial.length <= 65536);
+  assert.deepEqual(partial, f.body.subarray(0, partial.length));
   const path = await downloadResumable(f.options);
-  assert.equal(f.requests[1], 65536);
+  assert.equal(f.requests[1], partial.length);
   assert.deepEqual(await readFile(path), f.body);
 });
 test('server ignoring Range replaces partial bytes instead of appending', async t => {
