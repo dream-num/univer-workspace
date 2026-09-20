@@ -95,14 +95,16 @@ async function stopBackend(child) {
   if (!child?.pid) return;
   if (process.platform === "win32") {
     if (child.exitCode !== null || child.signalCode !== null) return;
-    // taskkill can exit before Windows releases the terminated process handles.
+    // taskkill and the service have independent exit notifications. Even a
+    // nonzero taskkill result can precede the service's close event when a
+    // process exits during tree traversal. Join the service before deciding.
     let onClose;
     const closed = new Promise((done) => {
       onClose = done;
       child.once("close", onClose);
     });
     try {
-      await new Promise((done, reject) => {
+      const failure = await new Promise((done, reject) => {
         let output = "";
         const killer = spawn(join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe"), ["/PID", String(child.pid), "/T", "/F"], {
           windowsHide: true,
@@ -113,9 +115,9 @@ async function stopBackend(child) {
         killer.stdout.on("data", capture);
         killer.stderr.on("data", capture);
         killer.once("error", reject);
-        killer.once("exit", (code, signal) => {
-          if (code === 0 || child.exitCode !== null || child.signalCode !== null) done();
-          else reject(new Error(`Unable to stop the local service process tree (taskkill code ${code}, signal ${signal}): ${output.trim()}`));
+        // close also guarantees the diagnostic pipes have drained.
+        killer.once("close", (code, signal) => {
+          done(code === 0 ? null : new Error(`Unable to stop the local service process tree (taskkill code ${code}, signal ${signal}): ${output.trim()}`));
         });
       });
       let timer;
@@ -124,7 +126,7 @@ async function stopBackend(child) {
           closed,
           new Promise((_, reject) => {
             timer = setTimeout(
-              () => reject(new Error("Local service did not close after taskkill")),
+              () => reject(failure ?? new Error("Local service did not close after taskkill")),
               8000,
             );
           }),

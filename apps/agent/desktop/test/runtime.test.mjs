@@ -154,8 +154,8 @@ test('Darwin shutdown waits for exiting E processes and still rejects live permi
   }
 });
 
-// The real launcher exits when its DSH child exits. taskkill /T can race that
-// exit while walking from the child back to the launcher.
+// A customized profile launcher exits with its DSH child. Exercise native
+// tree shutdown as well as the deterministic notification order tests below.
 test('Windows shutdown joins a supervisor that exits with its child', { skip: process.platform !== 'win32', timeout: 60000 }, async t => {
   const { spawn } = await import('node:child_process');
   const { once } = await import('node:events');
@@ -168,7 +168,9 @@ test('Windows shutdown joins a supervisor that exits with its child', { skip: pr
     `], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'], windowsHide: true });
     const closed = once(supervisor, 'close');
     const [{ pid }] = await once(supervisor, 'message', { signal: AbortSignal.timeout(10000) });
+    let cleanupNeeded = true;
     t.after(() => {
+      if (!cleanupNeeded) return;
       supervisor.kill();
       try { process.kill(pid); } catch {}
     });
@@ -181,5 +183,64 @@ test('Windows shutdown joins a supervisor that exits with its child', { skip: pr
     }
     await closed;
     assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+    cleanupNeeded = false;
+  }
+});
+
+test('Windows shutdown waits for service closure independently of taskkill completion', async t => {
+  const { runInNewContext } = await import('node:vm');
+  const { createRequire } = await import('node:module');
+  const { EventEmitter } = await import('node:events');
+  const require = createRequire(import.meta.url);
+  const source = await readFile(new URL('../src/runtime.cjs', import.meta.url), 'utf8');
+  for (const scenario of ['service-first', 'taskkill-first', 'denied', 'still-open', 'spawn-error']) {
+    await t.test(scenario, async () => {
+      const child = Object.assign(new EventEmitter(), { pid: 42, exitCode: null, signalCode: null });
+      const killer = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
+      const timers = new Set();
+      const module = { exports: {} };
+      runInNewContext(source, {
+        module,
+        process: { platform: 'win32', versions: {}, env: {} },
+        setTimeout(callback, delay) {
+          assert.equal(delay, 8000, 'Service closure must have a bounded wait');
+          timers.add(callback);
+          return callback;
+        },
+        clearTimeout: timer => timers.delete(timer),
+        require: name => name === 'node:child_process' ? {
+          ...require(name), spawn: () => killer,
+        } : require(name),
+      });
+      let settled = false;
+      const result = module.exports.stopBackend(child).then(
+        () => { settled = true; return null; },
+        error => { settled = true; return error; },
+      );
+      const closeService = () => { child.exitCode = 0; child.emit('exit', 0, null); child.emit('close', 0, null); };
+      if (scenario === 'spawn-error') {
+        const failure = Object.assign(new Error('taskkill unavailable'), { code: 'ENOENT' });
+        killer.emit('error', failure);
+        assert.equal(await result, failure);
+      } else {
+        if (scenario === 'service-first') closeService();
+        const code = scenario === 'still-open' ? 0 : 1;
+        killer.emit('exit', code, null);
+        killer.stderr.emit('data', Buffer.from('Access is denied.'));
+        killer.emit('close', code, null);
+        await new Promise(resolve => setImmediate(resolve));
+        if (scenario !== 'service-first') {
+          assert.equal(settled, false, 'taskkill completion alone does not decide service closure');
+          if (scenario === 'taskkill-first') closeService();
+          else for (const expire of timers) expire();
+        }
+        const error = await result;
+        if (scenario === 'denied') assert.match(error?.message ?? '', /taskkill code 1.*Access is denied/);
+        else if (scenario === 'still-open') assert.match(error?.message ?? '', /did not close after taskkill/);
+        else assert.equal(error, null);
+      }
+      assert.equal(child.listenerCount('close'), 0);
+      assert.equal(timers.size, 0);
+    });
   }
 });
