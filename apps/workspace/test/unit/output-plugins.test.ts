@@ -16,7 +16,7 @@ describe("Workspace output plugins", () => {
       import("@univerjs-pro/docs-exchange-client"),
       import("@univerjs-pro/docs-print"),
       import("@univerjs-pro/exchange-client"),
-      import("../../web/src/features/editor/exchange-plugins.js"),
+      import("../../web/src/features/editor/features/exchange-plugins.js"),
     ]);
 
     const enabled = createWorkspaceOutputPlugins({

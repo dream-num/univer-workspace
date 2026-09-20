@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { UNIVER_LICENSE } from "../../web/src/features/editor/license.js";
-import { resolveUniverLicense } from "../../web/src/features/editor/univer-license.js";
+import { UNIVER_LICENSE } from "../../web/src/features/editor/features/license.js";
+import { resolveUniverLicense } from "../../web/src/features/editor/features/univer-license.js";
 
 describe("Workspace Univer license", () => {
   it("uses the Univer CLI default when no override is configured", () => {

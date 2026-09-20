@@ -134,7 +134,10 @@ shared → features → routes → app
 
 应用 UI Primitive 提供工作台表单、菜单、弹窗和反馈组件。`shared/ui` 保存统一行为与
 视觉封装。Univer 编辑器相关的创建、销毁、协同 Scope 和只读状态全部封装在
-`features/editor`。
+`features/editor`：目录根保存跨类型的编辑器框架（Resource 分发、协同 Editor、比较渲染与
+快照 adapter），`features/editor/units/<type>/` 保存五类 Unit（sheet、doc、slide、board、base）
+各自的编辑器入口与 preset，`features/editor/features/` 保存跨类型共享能力（exchange、
+thread comment、license、assets），`features/editor/workarounds/` 集中保存上游 SDK workaround。
 
 Worktree 审阅保留 Agent 草稿作为默认视图，并通过 `packages/unit-comparison-viewer` 提供可选的结构化
 双栏比较。该 package 只消费已解码的 UnitData 和语义 comparison result，不请求数据或装配 Univer Runtime；Web 通过

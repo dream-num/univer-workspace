@@ -22,12 +22,12 @@ import { greenTheme } from "@univerjs/themes";
 import {
   createCollaborationEditor,
   type CollaborationEditorProps,
-} from "./collaboration-editor";
+} from "../../collaboration-editor";
 import {
   createSheetEditorPresets,
   sheetEditorLocales,
 } from "./sheet-presets";
-import { getThreadCommentCollaborationPlugins } from "./thread-comment-features";
+import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
 
 export type SheetEditorProps = CollaborationEditorProps;
 

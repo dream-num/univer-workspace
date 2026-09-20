@@ -5,11 +5,11 @@ import { describe, expect, it } from "vitest";
 describe("Workspace standard History plugins", () => {
   it("keeps each standard plugin in its Unit-specific lazy editor", async () => {
     for (const [filename, pluginName, configKey] of [
-      ["sheet-editor.tsx", "UniverSheetsHistoryUIPlugin", "historyServerUrl"],
-      ["doc-editor.tsx", "UniverDocsHistoryUIPlugin", "historyServerUrl"],
-      ["slide-editor.tsx", "UniverSlidesHistoryUIPlugin", "historyServerUrl"],
-      ["base-editor.tsx", "UniverBasesHistoryUIPlugin", "historyServerUrl"],
-      ["board-editor.tsx", "UniverBoardsHistoryUIPlugin", "historyServerUrl"],
+      ["units/sheet/sheet-editor.tsx", "UniverSheetsHistoryUIPlugin", "historyServerUrl"],
+      ["units/doc/doc-editor.tsx", "UniverDocsHistoryUIPlugin", "historyServerUrl"],
+      ["units/slide/slide-editor.tsx", "UniverSlidesHistoryUIPlugin", "historyServerUrl"],
+      ["units/base/base-editor.tsx", "UniverBasesHistoryUIPlugin", "historyServerUrl"],
+      ["units/board/board-editor.tsx", "UniverBoardsHistoryUIPlugin", "historyServerUrl"],
     ] as const) {
       const source = await readFile(
         new URL(

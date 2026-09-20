@@ -5,24 +5,24 @@ describe("Workspace standard Thread Comment plugins", () => {
   it("keeps the standard UI integration in every Unit-specific lazy editor", async () => {
     for (const [pluginFilename, scopeFilename, pluginName] of [
       [
-        "sheet-presets.ts",
-        "sheet-editor.tsx",
+        "units/sheet/sheet-presets.ts",
+        "units/sheet/sheet-editor.tsx",
         "UniverSheetsThreadCommentPreset",
       ],
-      ["doc-editor.tsx", "doc-editor.tsx", "UniverDocsThreadCommentPreset"],
+      ["units/doc/doc-editor.tsx", "units/doc/doc-editor.tsx", "UniverDocsThreadCommentPreset"],
       [
-        "slide-editor.tsx",
-        "slide-editor.tsx",
+        "units/slide/slide-editor.tsx",
+        "units/slide/slide-editor.tsx",
         "UniverSlidesThreadCommentUIPlugin",
       ],
       [
-        "base-editor.tsx",
-        "base-editor.tsx",
+        "units/base/base-editor.tsx",
+        "units/base/base-editor.tsx",
         "UniverBasesThreadCommentUIPlugin",
       ],
       [
-        "board-editor.tsx",
-        "board-editor.tsx",
+        "units/board/board-editor.tsx",
+        "units/board/board-editor.tsx",
         "UniverBoardsThreadCommentUIPlugin",
       ],
     ] as const) {
@@ -57,7 +57,7 @@ describe("Workspace standard Thread Comment plugins", () => {
     ] = await Promise.all([
       import("@univerjs-pro/bases-thread-comment-ui"),
       import("@univerjs-pro/thread-comment-datasource"),
-      import("../../web/src/features/editor/thread-comment-features.js"),
+      import("../../web/src/features/editor/features/thread-comment-features.js"),
     ]);
 
     expect(
@@ -80,7 +80,7 @@ describe("Workspace standard Thread Comment plugins", () => {
   it("keeps the Docs compatibility hook under workarounds", async () => {
     const normalSource = await readFile(
       new URL(
-        "../../web/src/features/editor/thread-comment-features.ts",
+        "../../web/src/features/editor/features/thread-comment-features.ts",
         import.meta.url
       ),
       "utf8"

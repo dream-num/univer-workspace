@@ -46,7 +46,7 @@ describe("Workspace Doc feature plugins", () => {
       import("@univerjs-pro/docs-table"),
       import("@univerjs-pro/docs-table-ui"),
       import("@univerjs-pro/engine-formula"),
-      import("../../web/src/features/editor/doc-features.js"),
+      import("../../web/src/features/editor/units/doc/doc-features.js"),
     ]);
     const expectedPlugins = [
       UniverDocsCalloutPlugin,
@@ -112,7 +112,7 @@ describe("Workspace Doc feature plugins", () => {
       { DeleteDocCommentComment },
     ] = await Promise.all([
       import("@univerjs-pro/thread-comment-datasource"),
-      import("../../web/src/features/editor/thread-comment-features.js"),
+      import("../../web/src/features/editor/features/thread-comment-features.js"),
       import(
         "../../web/src/features/editor/workarounds/doc-thread-comment-delete.js"
       ),

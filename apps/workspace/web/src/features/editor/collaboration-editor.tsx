@@ -63,10 +63,10 @@ import {
 import {
   configureExchangePresetPlugins,
   createWorkspaceOutputPlugins,
-} from "./exchange-plugins";
+} from "./features/exchange-plugins";
 import { resolveMergeReview } from "./merge-review";
 import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
-import { resolveUniverLicense } from "./univer-license";
+import { resolveUniverLicense } from "./features/univer-license";
 import {
   withWorkspaceSnapshotServerOverride,
   type WorkspaceHostSnapshotScope,

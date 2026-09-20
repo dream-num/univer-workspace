@@ -28,7 +28,7 @@ import type {
 } from "@univer/unit-comparison-viewer";
 import { EMPTY } from "rxjs";
 import type { AppLanguage } from "../../shared/i18n";
-import { resolveUniverLicense } from "./univer-license";
+import { resolveUniverLicense } from "./features/univer-license";
 
 interface ComparisonRenderingDefinition {
   readonly licenseProvidedByPreset?: boolean;
@@ -159,7 +159,7 @@ async function loadComparisonRenderingDefinition(
   switch (unitType) {
     case UniverInstanceType.UNIVER_SHEET: {
       const { createSheetEditorPresets, sheetEditorLocales } = await import(
-        "./sheet-comparison-presets"
+        "./units/sheet/sheet-comparison-presets"
       );
       return {
         licenseProvidedByPreset: true,
@@ -177,7 +177,7 @@ async function loadComparisonRenderingDefinition(
     }
     case UniverInstanceType.UNIVER_DOC: {
       const { createDocComparisonPresets, docEditorLocales } = await import(
-        "./doc-editor"
+        "./units/doc/doc-editor"
       );
       return {
         locales: docEditorLocales,
@@ -187,7 +187,7 @@ async function loadComparisonRenderingDefinition(
     }
     case UniverInstanceType.UNIVER_SLIDE: {
       const { createSlideComparisonPresets, slideEditorLocales } = await import(
-        "./slide-editor"
+        "./units/slide/slide-editor"
       );
       return {
         locales: slideEditorLocales,
@@ -197,7 +197,7 @@ async function loadComparisonRenderingDefinition(
     }
     case UniverInstanceType.UNIVER_BASE: {
       const { baseEditorLocales, createBaseComparisonPresets } = await import(
-        "./base-editor"
+        "./units/base/base-editor"
       );
       return {
         locales: baseEditorLocales,
@@ -207,7 +207,7 @@ async function loadComparisonRenderingDefinition(
     }
     case UniverInstanceType.UNIVER_BOARD: {
       const { boardEditorLocales, createBoardComparisonPresets } = await import(
-        "./board-editor"
+        "./units/board/board-editor"
       );
       return {
         locales: boardEditorLocales,

@@ -22,7 +22,7 @@ const comparisonUniverSource = readFileSync(
 );
 const sheetComparisonPresetSource = readFileSync(
   new URL(
-    "../../web/src/features/editor/sheet-comparison-presets.ts",
+    "../../web/src/features/editor/units/sheet/sheet-comparison-presets.ts",
     import.meta.url
   ),
   "utf8"
@@ -75,7 +75,7 @@ describe("editor integration assets", () => {
   });
 
   it("loads Sheet preset styles when comparison is the initial view", () => {
-    expect(comparisonUniverSource).toContain('"./sheet-comparison-presets"');
+    expect(comparisonUniverSource).toContain('"./units/sheet/sheet-comparison-presets"');
     expectImportsInOrder(sheetComparisonPresetSource, [
       "@univerjs/preset-sheets-core/lib/index.css",
       "@univerjs/preset-sheets-drawing/lib/index.css",
@@ -194,7 +194,7 @@ describe("editor integration assets", () => {
 
 function readEditorSource(product: string): string {
   return readFileSync(
-    new URL(`../../web/src/features/editor/${product}-editor.tsx`, import.meta.url),
+    new URL(`../../web/src/features/editor/units/${product}/${product}-editor.tsx`, import.meta.url),
     "utf8"
   );
 }

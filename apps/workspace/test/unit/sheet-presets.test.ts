@@ -44,8 +44,8 @@ describe("Workspace Sheet presets", () => {
       import("@univerjs/preset-sheets-sort"),
       import("@univerjs/preset-sheets-table"),
       import("@univerjs/preset-sheets-thread-comment"),
-      import("../../web/src/features/editor/sheet-presets.js"),
-      import("../../web/src/features/editor/exchange-plugins.js"),
+      import("../../web/src/features/editor/units/sheet/sheet-presets.js"),
+      import("../../web/src/features/editor/features/exchange-plugins.js"),
     ]);
     Object.defineProperty(globalThis, "window", {
       configurable: true,
@@ -132,7 +132,7 @@ describe("Workspace Sheet presets", () => {
       value: class Path2D {},
     });
     const [{ createSheetEditorPresets }] = await Promise.all([
-      import("../../web/src/features/editor/sheet-presets.js"),
+      import("../../web/src/features/editor/units/sheet/sheet-presets.js"),
     ]);
     const presets = createSheetEditorPresets({
       container,
@@ -155,7 +155,7 @@ describe("Workspace Sheet presets", () => {
       value: class Path2D {},
     });
     const [{ createSheetEditorPresets }] = await Promise.all([
-      import("../../web/src/features/editor/sheet-presets.js"),
+      import("../../web/src/features/editor/units/sheet/sheet-presets.js"),
     ]);
     const presets = createSheetEditorPresets({
       container,

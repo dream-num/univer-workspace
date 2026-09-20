@@ -68,12 +68,12 @@ import "@univerjs-pro/docs-table-ui/lib/index.css";
 import {
   createCollaborationEditor,
   type CollaborationEditorProps,
-} from "./collaboration-editor";
+} from "../../collaboration-editor";
 import {
   getDocAuthoringUIPlugins,
   getDocReplayCompatibilityPlugins,
 } from "./doc-features";
-import { getDocThreadCommentCollaborationPlugins } from "./workarounds/doc-thread-comment-delete";
+import { getDocThreadCommentCollaborationPlugins } from "../../workarounds/doc-thread-comment-delete";
 
 export type DocEditorProps = CollaborationEditorProps;
 

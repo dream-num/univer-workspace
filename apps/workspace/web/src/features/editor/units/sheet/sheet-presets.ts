@@ -44,8 +44,8 @@ import { UniverSheetsThreadCommentPreset } from "@univerjs/preset-sheets-thread-
 import UniverPresetSheetsThreadCommentEnUS from "@univerjs/preset-sheets-thread-comment/locales/en-US";
 import UniverPresetSheetsThreadCommentZhCN from "@univerjs/preset-sheets-thread-comment/locales/zh-CN";
 import { mergeLocales } from "@univerjs/presets";
-import type { AppLanguage } from "../../shared/i18n";
-import { MAX_UNIVER_IMAGE_BYTES } from "./univer-assets";
+import type { AppLanguage } from "../../../../shared/i18n";
+import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 
 export const sheetEditorLocales: Readonly<
   Record<AppLanguage, ILanguagePack>

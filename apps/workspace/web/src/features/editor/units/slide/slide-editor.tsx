@@ -72,9 +72,9 @@ import "@univerjs/thread-comment-ui/lib/index.css";
 import {
   createCollaborationEditor,
   type CollaborationEditorProps,
-} from "./collaboration-editor";
-import { getThreadCommentCollaborationPlugins } from "./thread-comment-features";
-import { MAX_UNIVER_IMAGE_BYTES } from "./univer-assets";
+} from "../../collaboration-editor";
+import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 
 export type SlideEditorProps = CollaborationEditorProps;
 
