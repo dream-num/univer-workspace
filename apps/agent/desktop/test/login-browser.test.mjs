@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { createLoginBrowser } = require('../src/login-browser.cjs');
+const { parseLoginCallback } = require('../src/login.cjs');
 const origin = 'http://127.0.0.1:3101';
 function fixture(failExternal, handler = 'System browser') {
   const windows = [], callbacks = [], failures = [], external = [];
@@ -64,4 +65,17 @@ test('retries retire the old window and cookies; unsafe navigation is blocked', 
   assert.equal(first.closed, true); assert.equal(first.cleared, true);
   assert.notEqual(f.windows[1].options.webPreferences.partition, first.options.webPreferences.partition);
   assert.equal(f.callbacks.length, 0);
+});
+test('embedded loopback converts OAuth metadata without weakening desktop callback validation', async () => {
+  const state = 'a'.repeat(43);
+  for (const extra of ['&scope=identity+session', `&scope=identity&state=${state}`, '&scope=identity&error=denied']) {
+    const f = fixture(true);
+    await f.browser.open('https://workspace.example/authorize');
+    const window = f.windows[0];
+    window.webContents.emit('will-redirect', { preventDefault() {} }, `${origin}/auth/oauth/callback?code=once&state=${state}${extra}`);
+    const parsed = parseLoginCallback(f.callbacks[0]);
+    if (extra === '&scope=identity+session') assert.deepEqual(parsed, { state, code: 'once' });
+    else assert.equal(parsed, undefined, 'Ambiguous callback fields must still be rejected');
+    assert.equal(window.closed, true);
+  }
 });

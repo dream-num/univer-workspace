@@ -25,7 +25,8 @@ const server = createServer(async (req, res) => {
       const code = `smoke-code-${codes.size}`;
       codes.set(code, { challenge: url.searchParams.get('code_challenge'), used: false });
       const redirect = new URL(url.searchParams.get('redirect_uri'));
-      redirect.search = new URLSearchParams({ state: url.searchParams.get('state'), code }).toString();
+      // Production Workspace includes the granted scope in its OAuth response.
+      redirect.search = new URLSearchParams({ state: url.searchParams.get('state'), code, scope: 'identity session' }).toString();
       res.writeHead(302, { location: redirect.href }); res.end(); return;
     }
     if (url.pathname === '/api/auth/token') {
