@@ -762,10 +762,46 @@ importers:
       '@univerjs-pro/shape-editor-ui':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-chart':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-chart-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-exchange-client':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/sheets-history':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/sheets-history-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-outline':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-outline-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-pivot':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-pivot-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-print':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-shape':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-shape-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-sparkline':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-sparkline-ui':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/slides':
@@ -807,10 +843,16 @@ importers:
       '@univerjs/core':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/data-validation':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/design':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@univerjs/docs':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/docs-drawing':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/docs-thread-comment-ui':
@@ -831,6 +873,9 @@ importers:
       '@univerjs/engine-render':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/find-replace':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/icons':
         specifier: 1.38.0
         version: 1.38.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -900,9 +945,78 @@ importers:
       '@univerjs/sheets':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-conditional-formatting':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-conditional-formatting-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-data-validation':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-data-validation-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-drawing':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-drawing-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-filter':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-filter-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-find-replace':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/sheets-formula':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-formula-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-hyper-link':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-hyper-link-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-note':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-note-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-numfmt':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-numfmt-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-sort':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-sort-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-table':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-table-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-thread-comment':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-thread-comment-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/sheets-ui':
+        specifier: 1.0.0-rc.0
+        version: 1.0.0-rc.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/themes':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0

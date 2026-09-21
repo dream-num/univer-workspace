@@ -27,6 +27,13 @@ const sheetComparisonPresetSource = readFileSync(
   ),
   "utf8"
 );
+const sheetMobileEditorSource = readFileSync(
+  new URL(
+    "../../web/src/features/editor/units/sheet/sheet-editor.mobile.tsx",
+    import.meta.url
+  ),
+  "utf8"
+);
 
 describe("editor integration assets", () => {
   it("loads shared styles before manual Plugin Mode product styles", () => {
@@ -92,6 +99,29 @@ describe("editor integration assets", () => {
     expect(sheetComparisonPresetSource).not.toContain("history-ui");
     expect(sheetComparisonPresetSource).not.toContain("thread-comment");
     expect(sheetComparisonPresetSource).not.toContain("collaboration");
+  });
+
+  it("mirrors the desktop Sheet styles and output wiring in the mobile editor", () => {
+    expectImportsInOrder(sheetMobileEditorSource, [
+      "@univerjs-pro/sheets-history-ui/lib/index.css",
+      "@univerjs/preset-sheets-core/lib/index.css",
+      "@univerjs/preset-sheets-drawing/lib/index.css",
+      "@univerjs/preset-sheets-conditional-formatting/lib/index.css",
+      "@univerjs/preset-sheets-filter/lib/index.css",
+      "@univerjs/preset-sheets-hyper-link/lib/index.css",
+      "@univerjs/preset-sheets-data-validation/lib/index.css",
+      "@univerjs/preset-sheets-find-replace/lib/index.css",
+      "@univerjs/preset-sheets-note/lib/index.css",
+      "@univerjs/preset-sheets-sort/lib/index.css",
+      "@univerjs/preset-sheets-table/lib/index.css",
+      "@univerjs/preset-sheets-thread-comment/lib/index.css",
+      "@univerjs/preset-sheets-advanced/lib/index.css",
+      "@univerjs/preset-sheets-collaboration/lib/index.css",
+    ]);
+    expect(sheetMobileEditorSource).toContain("exchangeProvidedByPreset: true");
+    expect(sheetMobileEditorSource).toContain(
+      "UniverSheetsHistoryMobileUIPlugin"
+    );
   });
 
   it("loads shared Pro styles before Doc feature styles", () => {
