@@ -7,6 +7,7 @@ export * from "./combobox";
 export * from "./confirm-dialog";
 export * from "./context-menu";
 export * from "./dialog";
+export * from "./drawer";
 export * from "./dropdown-menu";
 export * from "./editable-text";
 export * from "./empty";

@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-router";
 import { isHtmlViewFilename } from "@univerjs-labs/html-view";
-import { Download, Lock, Maximize, Pencil, Share2 } from "lucide-react";
+import { Download, Lock, Maximize, MoreHorizontal, Pencil, Share2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { IMember } from "@univerjs/protocol";
 import type { components } from "../../../generated/http/schema.js";
@@ -32,7 +32,18 @@ import { BlobPreview } from "../features/blobs";
 import { api } from "../shared/api/client";
 import { apiError } from "../shared/api/errors";
 import { useI18n } from "../shared/i18n";
-import { Button, EditableText, Tooltip, buttonVariants, toast } from "../shared/ui";
+import { useMediaQuery } from "../shared/resizable-sidebar";
+import {
+  Button,
+  EditableText,
+  MenuContent,
+  MenuItem,
+  MenuRoot,
+  MenuTrigger,
+  Tooltip,
+  buttonVariants,
+  toast,
+} from "../shared/ui";
 import { cn } from "../shared/utils/cn";
 import { parseResourceView } from "../features/resource-view/resource-view";
 
@@ -269,6 +280,7 @@ function ResourceActions({
 }) {
   const { t } = useI18n();
   const [shareOpen, setShareOpen] = useState(false);
+  const compactViewport = useMediaQuery("(max-width: 720px)");
   const isEditing = authenticated && resource.kind === "univer" && resource.editorMode === "edit";
   const modeLabel = isEditing ? t("editingMode") : t("readOnlyMode");
   return (
@@ -285,40 +297,92 @@ function ResourceActions({
           {t("download")}
         </a>
       ) : (
-        <CollaboratorAvatars members={collaborators} currentUserId={currentUserId} />
+        <CollaboratorAvatars
+          members={collaborators}
+          currentUserId={currentUserId}
+          maxVisible={compactViewport ? 1 : undefined}
+        />
       )}
       {authenticated && node.capabilities.share ? (
-        <Button size="sm" onClick={() => setShareOpen(true)}>
-          <Share2 />
-          {t("shareAction")}
-        </Button>
+        compactViewport ? (
+          <Tooltip content={t("shareAction")}>
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              aria-label={t("shareAction")}
+              onClick={() => setShareOpen(true)}
+            >
+              <Share2 />
+            </Button>
+          </Tooltip>
+        ) : (
+          <Button size="sm" onClick={() => setShareOpen(true)}>
+            <Share2 />
+            {t("shareAction")}
+          </Button>
+        )
       ) : null}
-      {authenticated && resource.kind === "univer" ? (
-        <Tooltip content={modeLabel}>
-          <span
-            aria-label={modeLabel}
-            className="grid size-8 shrink-0 place-items-center text-secondary-foreground [&_svg]:size-4"
+      {compactViewport ? (
+        <MenuRoot>
+          <MenuTrigger
+            aria-label={t("moreActions")}
+            render={<Button variant="ghost" size="icon-sm" />}
           >
-            {isEditing ? <Pencil aria-hidden="true" /> : <Lock aria-hidden="true" />}
-          </span>
-        </Tooltip>
-      ) : null}
-      <Tooltip content={t("enterImmersiveView")}>
-        <Link
-          to="/nodes/$nodeId"
-          params={{ nodeId: node.id }}
-          aria-label={t("enterImmersiveView")}
-          hash={true}
-          resetScroll={false}
-          search={(previous) => ({ ...previous, view: "immersive" })}
-          className={cn(
-            buttonVariants({ variant: "ghost", size: "icon-sm" }),
-            "shrink-0 text-muted-foreground no-underline [&_svg]:size-4",
-          )}
-        >
-          <Maximize strokeWidth={1.75} />
-        </Link>
-      </Tooltip>
+            <MoreHorizontal />
+          </MenuTrigger>
+          <MenuContent align="end">
+            {authenticated && resource.kind === "univer" ? (
+              <MenuItem disabled>
+                {isEditing ? <Pencil /> : <Lock />}
+                {modeLabel}
+              </MenuItem>
+            ) : null}
+            <MenuItem
+              render={
+                <Link
+                  to="/nodes/$nodeId"
+                  params={{ nodeId: node.id }}
+                  hash={true}
+                  resetScroll={false}
+                  search={(previous) => ({ ...previous, view: "immersive" })}
+                />
+              }
+            >
+              <Maximize />
+              {t("enterImmersiveView")}
+            </MenuItem>
+          </MenuContent>
+        </MenuRoot>
+      ) : (
+        <>
+          {authenticated && resource.kind === "univer" ? (
+            <Tooltip content={modeLabel}>
+              <span
+                aria-label={modeLabel}
+                className="grid size-8 shrink-0 place-items-center text-secondary-foreground [&_svg]:size-4"
+              >
+                {isEditing ? <Pencil aria-hidden="true" /> : <Lock aria-hidden="true" />}
+              </span>
+            </Tooltip>
+          ) : null}
+          <Tooltip content={t("enterImmersiveView")}>
+            <Link
+              to="/nodes/$nodeId"
+              params={{ nodeId: node.id }}
+              aria-label={t("enterImmersiveView")}
+              hash={true}
+              resetScroll={false}
+              search={(previous) => ({ ...previous, view: "immersive" })}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                "shrink-0 text-muted-foreground no-underline [&_svg]:size-4",
+              )}
+            >
+              <Maximize strokeWidth={1.75} />
+            </Link>
+          </Tooltip>
+        </>
+      )}
       <ShareDialog node={shareOpen ? node : null} onClose={() => setShareOpen(false)} />
     </>
   );

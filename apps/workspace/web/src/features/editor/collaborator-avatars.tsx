@@ -7,9 +7,11 @@ const VISIBLE_MEMBERS = 4;
 export function CollaboratorAvatars({
   members,
   currentUserId,
+  maxVisible = VISIBLE_MEMBERS,
 }: {
   readonly members: readonly IMember[];
   readonly currentUserId: string;
+  readonly maxVisible?: number | undefined;
 }) {
   const { t } = useI18n();
   const users = [
@@ -22,7 +24,7 @@ export function CollaboratorAvatars({
     member.userID === currentUserId
       ? t("collaboratorYou", { name: member.name || member.userID })
       : member.name || member.userID;
-  const overflow = users.slice(VISIBLE_MEMBERS);
+  const overflow = users.slice(maxVisible);
   const onlineLabel = t("collaboratorsOnline", { count: users.length });
 
   return (
@@ -32,7 +34,7 @@ export function CollaboratorAvatars({
       className="flex shrink-0 items-center px-1"
     >
       <div className="flex -space-x-1.5 items-center">
-        {users.slice(0, VISIBLE_MEMBERS).map((member) => (
+        {users.slice(0, maxVisible).map((member) => (
           <Tooltip key={member.userID} content={memberLabel(member)}>
             <span
               tabIndex={0}
