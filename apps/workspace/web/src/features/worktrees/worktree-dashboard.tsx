@@ -3,6 +3,7 @@ import {
   Bot,
   ChevronDown,
   ChevronRight,
+  PanelLeft,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import {
 import {
   Badge,
   Button,
+  Drawer,
   Empty,
   Segmented,
   Select,
@@ -98,6 +100,7 @@ export function WorktreeDashboard({
   });
   const compactViewport = useMediaQuery("(max-width: 720px)");
   const taskSidebarCollapsed = taskSidebar.collapsed || compactViewport;
+  const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
 
   const tasks = useMemo(
     () => [...(active.data?.items ?? []), ...(processed.data?.items ?? [])],
@@ -187,12 +190,15 @@ export function WorktreeDashboard({
   const selectDocument = (
     document: ReviewDocument,
     view: WorktreeReviewView = DEFAULT_WORKTREE_REVIEW_VIEW
-  ) =>
+  ) => {
+    // Selecting from the compact task drawer dismisses it.
+    setTaskDrawerOpen(false);
     onSelectionChange?.({
       worktreeId: document.worktree.id,
       unitId: document.unit.unitId,
       view,
     });
+  };
   const resetSelection = () => onSelectionChange?.(null);
   const unitChangeStatus = (unit: WorktreeUnit) => {
     if (unit.change === "modified") return t("documentModified");
@@ -201,6 +207,192 @@ export function WorktreeDashboard({
     return t("documentUnchanged");
   };
 
+  const renderTaskList = () =>
+    active.isPending || processed.isPending || loadingDetails ? (
+      <div className="grid gap-2.5 px-1.5 pt-1">
+        {Array.from({ length: 7 }, (_, index) => (
+          <div key={index} className="flex items-center gap-2.5">
+            <Skeleton className="size-5 rounded-md" />
+            <Skeleton className="h-4 flex-1" />
+          </div>
+        ))}
+      </div>
+    ) : visibleTasks.length ? (
+      <div className="grid gap-4">
+        {taskGroups(visibleTasks, t).map((group) => (
+          <section key={group.key} className="grid gap-0.5">
+            <button
+              type="button"
+              aria-expanded={isGroupOpen(group.key)}
+              aria-label={
+                isGroupOpen(group.key)
+                  ? t("collapseGroup")
+                  : t("expandGroup")
+              }
+              className="flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-semibold text-subtle-foreground transition-colors outline-none hover:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:size-3"
+              onClick={() => {
+                const open = isGroupOpen(group.key);
+                if (
+                  open &&
+                  selectedDocument &&
+                  taskGroupKeyForState(
+                    selectedDocument.worktree.state
+                  ) === group.key
+                ) {
+                  resetSelection();
+                }
+                setExpandedGroups((current) => ({
+                  ...current,
+                  [group.key]: !open,
+                }));
+              }}
+            >
+              {isGroupOpen(group.key) ? (
+                <ChevronDown />
+              ) : (
+                <ChevronRight />
+              )}
+              <span className="flex-1 text-left">
+                {group.label}
+              </span>
+              <span className="text-right tnum">
+                {group.tasks.length}
+              </span>
+            </button>
+            {isGroupOpen(group.key)
+              ? group.tasks.map((task) => {
+                  const worktree = detailByWorktreeId.get(task.id);
+                  const taskExpanded =
+                    expandedTasks[task.id] ??
+                    (!isProcessed(task) &&
+                      task.id === selectedDocument?.worktree.id);
+                  return (
+                    <div key={task.id} className="py-0.5">
+                      <button
+                        type="button"
+                        aria-expanded={taskExpanded}
+                        aria-label={
+                          taskExpanded
+                            ? t("collapseTask")
+                            : t("expandTask")
+                        }
+                        className={cn(
+                          "grid w-full cursor-pointer grid-cols-[12px_18px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-2 text-left text-secondary-foreground transition-colors outline-none",
+                          "hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40",
+                          "[&>svg:first-child]:size-2.5 [&>svg:first-child]:text-subtle-foreground"
+                        )}
+                        onClick={() => {
+                          const nextExpanded = !taskExpanded;
+                          setExpandedTasks((current) => ({
+                            ...current,
+                            [task.id]: nextExpanded,
+                          }));
+                          const firstUnit = worktree?.units[0];
+                          if (nextExpanded && firstUnit) {
+                            selectDocument({
+                              key: documentKey(
+                                worktree.id,
+                                firstUnit.unitId
+                              ),
+                              worktree,
+                              unit: firstUnit,
+                            });
+                          }
+                        }}
+                      >
+                        {taskExpanded ? (
+                          <ChevronDown />
+                        ) : (
+                          <ChevronRight />
+                        )}
+                        <Bot className="size-4 text-muted-foreground" />
+                        <strong className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                          {task.name}
+                        </strong>
+                        <Badge
+                          variant={worktreeStateVariant(
+                            task.state
+                          )}
+                          className="max-w-16 truncate"
+                        >
+                          {worktreeStateLabel(task.state, t)}
+                        </Badge>
+                        <small className="col-start-3 col-end-5 truncate text-xs text-subtle-foreground">
+                          {task.kind === "team"
+                            ? task.teamSpace?.name
+                            : t("personalSpace")}
+                          {" · "}
+                          {task.creator.displayName}
+                          {" · "}
+                          {formatWorktreeDateTime(
+                            task.updatedAt,
+                            language
+                          )}
+                        </small>
+                      </button>
+                      {taskExpanded && worktree?.units.length ? (
+                        <div className="mt-0.5 grid gap-0.5">
+                          {worktree.units.map((unit) => {
+                            const key = documentKey(
+                              worktree.id,
+                              unit.unitId
+                            );
+                            const selected =
+                              key === selectedDocument?.key;
+                            return (
+                              <button
+                                key={unit.unitId}
+                                type="button"
+                                className={cn(
+                                  "grid w-full cursor-pointer grid-cols-[20px_minmax(0,1fr)_20px] items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-left text-[13px] transition-colors outline-none",
+                                  selected
+                                    ? "bg-brand-50 font-medium text-brand-700"
+                                    : "text-secondary-foreground hover:bg-accent",
+                                  "focus-visible:ring-2 focus-visible:ring-ring/40",
+                                  unit.change === "deleted" &&
+                                    "[&>span]:line-through [&>span]:opacity-60"
+                                )}
+                                onClick={() => {
+                                  selectDocument({
+                                    key,
+                                    worktree,
+                                    unit,
+                                  });
+                                  setExpandedTasks((current) => ({
+                                    ...current,
+                                    [task.id]: true,
+                                  }));
+                                }}
+                              >
+                                <UnitTypeIcon
+                                  type={unit.unitType}
+                                />
+                                <span className="truncate">
+                                  {unit.name}
+                                </span>
+                                <UnitChangeIcon
+                                  change={unit.change}
+                                />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : taskExpanded ? (
+                        <span className="block py-1.5 pr-2 pl-8 text-xs text-muted-foreground">
+                          {t("noAgentDocuments")}
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })
+              : null}
+          </section>
+        ))}
+      </div>
+    ) : (
+      <Empty title={t("noMatchingTasks")} className="py-10" />
+    );
+
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4 max-[720px]:flex-col max-[720px]:items-start max-[720px]:px-4.5">
@@ -208,6 +400,17 @@ export function WorktreeDashboard({
           {t("workbenchDescription")}
         </p>
         <div className="flex flex-wrap items-center gap-2.5">
+          {compactViewport ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              aria-label={t("taskList")}
+              onClick={() => setTaskDrawerOpen(true)}
+            >
+              <PanelLeft />
+              {t("taskList")}
+            </Button>
+          ) : null}
           <Segmented
             size="sm"
             aria-label={t("workbench")}
@@ -244,11 +447,14 @@ export function WorktreeDashboard({
       <div
         className="grid min-h-0 flex-1"
         style={{
-          gridTemplateColumns: taskSidebarCollapsed
-            ? "48px minmax(0, 1fr)"
-            : `${taskSidebar.width}px 7px minmax(0, 1fr)`,
+          gridTemplateColumns: compactViewport
+            ? "minmax(0, 1fr)"
+            : taskSidebarCollapsed
+              ? "48px minmax(0, 1fr)"
+              : `${taskSidebar.width}px 7px minmax(0, 1fr)`,
         }}
       >
+        {compactViewport ? null : (
         <aside
           className={cn(
             "min-w-0 bg-surface",
@@ -380,193 +586,11 @@ export function WorktreeDashboard({
                   </Button>
                 </Tooltip>
               </div>
-              {active.isPending || processed.isPending || loadingDetails ? (
-                <div className="grid gap-2.5 px-1.5 pt-1">
-                  {Array.from({ length: 7 }, (_, index) => (
-                    <div key={index} className="flex items-center gap-2.5">
-                      <Skeleton className="size-5 rounded-md" />
-                      <Skeleton className="h-4 flex-1" />
-                    </div>
-                  ))}
-                </div>
-              ) : visibleTasks.length ? (
-                <div className="grid gap-4">
-                  {taskGroups(visibleTasks, t).map((group) => (
-                    <section key={group.key} className="grid gap-0.5">
-                      <button
-                        type="button"
-                        aria-expanded={isGroupOpen(group.key)}
-                        aria-label={
-                          isGroupOpen(group.key)
-                            ? t("collapseGroup")
-                            : t("expandGroup")
-                        }
-                        className="flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-semibold text-subtle-foreground transition-colors outline-none hover:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:size-3"
-                        onClick={() => {
-                          const open = isGroupOpen(group.key);
-                          if (
-                            open &&
-                            selectedDocument &&
-                            taskGroupKeyForState(
-                              selectedDocument.worktree.state
-                            ) === group.key
-                          ) {
-                            resetSelection();
-                          }
-                          setExpandedGroups((current) => ({
-                            ...current,
-                            [group.key]: !open,
-                          }));
-                        }}
-                      >
-                        {isGroupOpen(group.key) ? (
-                          <ChevronDown />
-                        ) : (
-                          <ChevronRight />
-                        )}
-                        <span className="flex-1 text-left">
-                          {group.label}
-                        </span>
-                        <span className="text-right tnum">
-                          {group.tasks.length}
-                        </span>
-                      </button>
-                      {isGroupOpen(group.key)
-                        ? group.tasks.map((task) => {
-                            const worktree = detailByWorktreeId.get(task.id);
-                            const taskExpanded =
-                              expandedTasks[task.id] ??
-                              (!isProcessed(task) &&
-                                task.id === selectedDocument?.worktree.id);
-                            return (
-                              <div key={task.id} className="py-0.5">
-                                <button
-                                  type="button"
-                                  aria-expanded={taskExpanded}
-                                  aria-label={
-                                    taskExpanded
-                                      ? t("collapseTask")
-                                      : t("expandTask")
-                                  }
-                                  className={cn(
-                                    "grid w-full cursor-pointer grid-cols-[12px_18px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-2 text-left text-secondary-foreground transition-colors outline-none",
-                                    "hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40",
-                                    "[&>svg:first-child]:size-2.5 [&>svg:first-child]:text-subtle-foreground"
-                                  )}
-                                  onClick={() => {
-                                    const nextExpanded = !taskExpanded;
-                                    setExpandedTasks((current) => ({
-                                      ...current,
-                                      [task.id]: nextExpanded,
-                                    }));
-                                    const firstUnit = worktree?.units[0];
-                                    if (nextExpanded && firstUnit) {
-                                      selectDocument({
-                                        key: documentKey(
-                                          worktree.id,
-                                          firstUnit.unitId
-                                        ),
-                                        worktree,
-                                        unit: firstUnit,
-                                      });
-                                    }
-                                  }}
-                                >
-                                  {taskExpanded ? (
-                                    <ChevronDown />
-                                  ) : (
-                                    <ChevronRight />
-                                  )}
-                                  <Bot className="size-4 text-muted-foreground" />
-                                  <strong className="min-w-0 truncate text-[13px] font-medium text-foreground">
-                                    {task.name}
-                                  </strong>
-                                  <Badge
-                                    variant={worktreeStateVariant(
-                                      task.state
-                                    )}
-                                    className="max-w-16 truncate"
-                                  >
-                                    {worktreeStateLabel(task.state, t)}
-                                  </Badge>
-                                  <small className="col-start-3 col-end-5 truncate text-xs text-subtle-foreground">
-                                    {task.kind === "team"
-                                      ? task.teamSpace?.name
-                                      : t("personalSpace")}
-                                    {" · "}
-                                    {task.creator.displayName}
-                                    {" · "}
-                                    {formatWorktreeDateTime(
-                                      task.updatedAt,
-                                      language
-                                    )}
-                                  </small>
-                                </button>
-                                {taskExpanded && worktree?.units.length ? (
-                                  <div className="mt-0.5 grid gap-0.5">
-                                    {worktree.units.map((unit) => {
-                                      const key = documentKey(
-                                        worktree.id,
-                                        unit.unitId
-                                      );
-                                      const selected =
-                                        key === selectedDocument?.key;
-                                      return (
-                                        <button
-                                          key={unit.unitId}
-                                          type="button"
-                                          className={cn(
-                                            "grid w-full cursor-pointer grid-cols-[20px_minmax(0,1fr)_20px] items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-left text-[13px] transition-colors outline-none",
-                                            selected
-                                              ? "bg-brand-50 font-medium text-brand-700"
-                                              : "text-secondary-foreground hover:bg-accent",
-                                            "focus-visible:ring-2 focus-visible:ring-ring/40",
-                                            unit.change === "deleted" &&
-                                              "[&>span]:line-through [&>span]:opacity-60"
-                                          )}
-                                          onClick={() => {
-                                            selectDocument({
-                                              key,
-                                              worktree,
-                                              unit,
-                                            });
-                                            setExpandedTasks((current) => ({
-                                              ...current,
-                                              [task.id]: true,
-                                            }));
-                                          }}
-                                        >
-                                          <UnitTypeIcon
-                                            type={unit.unitType}
-                                          />
-                                          <span className="truncate">
-                                            {unit.name}
-                                          </span>
-                                          <UnitChangeIcon
-                                            change={unit.change}
-                                          />
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                ) : taskExpanded ? (
-                                  <span className="block py-1.5 pr-2 pl-8 text-xs text-muted-foreground">
-                                    {t("noAgentDocuments")}
-                                  </span>
-                                ) : null}
-                              </div>
-                            );
-                          })
-                        : null}
-                    </section>
-                  ))}
-                </div>
-              ) : (
-                <Empty title={t("noMatchingTasks")} className="py-10" />
-              )}
+              {renderTaskList()}
             </>
           )}
         </aside>
+        )}
 
         {!taskSidebarCollapsed ? (
           <SidebarResizeHandle
@@ -598,6 +622,18 @@ export function WorktreeDashboard({
           )}
         </main>
       </div>
+
+      {compactViewport ? (
+        <Drawer
+          open={taskDrawerOpen}
+          onOpenChange={setTaskDrawerOpen}
+          label={t("taskList")}
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3.5">
+            {renderTaskList()}
+          </div>
+        </Drawer>
+      ) : null}
     </section>
   );
 }
