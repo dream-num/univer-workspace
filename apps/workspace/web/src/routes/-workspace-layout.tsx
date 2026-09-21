@@ -7,6 +7,7 @@ import {
   House,
   Lock,
   LogOut,
+  Menu,
   MessageCircle,
   Monitor,
   Moon,
@@ -53,6 +54,7 @@ import {
   Dialog,
   DialogClose,
   DiscordIcon,
+  Drawer,
   Field,
   GitHubIcon,
   Input,
@@ -169,7 +171,7 @@ function VisitorLayout({
   const { t } = useI18n();
   const location = useLocation();
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+    <div className="workspace-shell flex h-dvh flex-col overflow-hidden bg-background">
       <header
         style={{ display: immersive ? "none" : undefined }}
         className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-border px-4 py-2"
@@ -231,6 +233,12 @@ function AuthenticatedWorkspaceLayout({
   });
   const compactViewport = useMediaQuery("(max-width: 720px)");
   const navigationCollapsed = navigationSidebar.collapsed || compactViewport;
+  const location = useLocation();
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
+  // Close the compact navigation drawer after every navigation.
+  useEffect(() => {
+    setNavDrawerOpen(false);
+  }, [location.href]);
 
   const logout = useMutation({
     mutationFn: async () => {
@@ -290,36 +298,121 @@ function AuthenticatedWorkspaceLayout({
       ["draft", "ready", "merging"].includes(worktree.state)
     ).length ?? 0;
 
+  const renderNavigation = (collapsed: boolean) => (
+    <>
+      <div className="grid gap-0.5">
+        <NavLink
+          to="/home"
+          selected={selectedView === "home"}
+          collapsed={collapsed}
+          icon={<House />}
+          label={t("home")}
+        />
+        <NavLink
+          to="/worktrees"
+          selected={selectedView === "worktrees"}
+          collapsed={collapsed}
+          icon={<Bot />}
+          label={t("workbench")}
+          badge={activeTaskCount}
+          badgeTitle={t("activeTaskCount", {
+            count: activeTaskCount,
+          })}
+        />
+        {collapsed && personalSpace ? (
+          <NavLink
+            to="/spaces/$spaceId"
+            params={{ spaceId: personalSpace.id }}
+            selected={personalSpace.id === selectedSpaceId}
+            collapsed={collapsed}
+            icon={<User />}
+            label={t("personalSpace")}
+          />
+        ) : null}
+      </div>
+
+      {collapsed ? (
+        <div className="mt-5 grid gap-0.5">
+          <div className="flex justify-center py-1">
+            <Tooltip side="right" content={t("createTeamSpace")}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("createTeamSpace")}
+                onClick={() => setTeamDialogOpen(true)}
+              >
+                <Plus />
+              </Button>
+            </Tooltip>
+          </div>
+          {teamSpaces.map((space) => (
+            <NavLink
+              key={space.id}
+              to="/spaces/$spaceId"
+              params={{ spaceId: space.id }}
+              selected={space.id === selectedSpaceId}
+              collapsed
+              icon={<Users />}
+              label={space.name}
+            />
+          ))}
+        </div>
+      ) : (
+        <WorkspaceNavigationTree
+          personalSpace={personalSpace}
+          teamSpaces={teamSpaces}
+          selectedSpaceId={selectedSpaceId}
+          selectedNodeId={selectedNodeId}
+          selectedNodePath={selectedNodePath}
+          storageScope={currentSession.user.id}
+        />
+      )}
+
+      {trashSpaceId ? (
+        <div className="mt-4 grid gap-0.5 border-t border-border pt-3.5">
+          <NavLink
+            to="/spaces/$spaceId/trash"
+            params={{ spaceId: trashSpaceId }}
+            selected={selectedView === "trash"}
+            collapsed={collapsed}
+            icon={<Trash2 />}
+            label={t("trash")}
+          />
+        </div>
+      ) : null}
+    </>
+  );
+
   return (
     <>
-      <div className="flex h-dvh overflow-hidden bg-background">
+      <div className="workspace-shell flex h-dvh overflow-hidden bg-background">
         {/* ---------------------------------------------------------- */}
         {/* Sidebar                                                    */}
         {/* ---------------------------------------------------------- */}
-        <aside
-          style={{ width: navigationCollapsed ? 64 : navigationSidebar.width, display: immersive ? "none" : undefined }}
-          className="flex min-w-0 shrink-0 flex-col overflow-hidden border-r border-border bg-surface transition-[width] duration-150"
-        >
-          <div
-            className={cn(
-              "flex h-16 shrink-0 items-center",
-              navigationCollapsed
-                ? "justify-center px-2"
-                : "justify-between pr-2 pl-4.5"
-            )}
+        {compactViewport ? null : (
+          <aside
+            style={{ width: navigationCollapsed ? 64 : navigationSidebar.width, display: immersive ? "none" : undefined }}
+            className="flex min-w-0 shrink-0 flex-col overflow-hidden border-r border-border bg-surface transition-[width] duration-150"
           >
-            {navigationCollapsed ? null : (
-              <Link
-                to="/home"
-                className="flex min-w-0 items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                <BrandMark />
-                <span className="truncate text-[15px] font-bold tracking-tight text-foreground">
-                  Univer Workspace
-                </span>
-              </Link>
-            )}
-            {!compactViewport ? (
+            <div
+              className={cn(
+                "flex h-16 shrink-0 items-center",
+                navigationCollapsed
+                  ? "justify-center px-2"
+                  : "justify-between pr-2 pl-4.5"
+              )}
+            >
+              {navigationCollapsed ? null : (
+                <Link
+                  to="/home"
+                  className="flex min-w-0 items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  <BrandMark />
+                  <span className="truncate text-[15px] font-bold tracking-tight text-foreground">
+                    Univer Workspace
+                  </span>
+                </Link>
+              )}
               <Tooltip
                 side="right"
                 content={
@@ -345,99 +438,20 @@ function AuthenticatedWorkspaceLayout({
                   )}
                 </Button>
               </Tooltip>
-            ) : null}
-          </div>
-
-          <nav
-            aria-label={t("mainNavigation")}
-            className={cn(
-              "mt-3 min-w-0 flex-1 overflow-x-hidden overflow-y-auto",
-              navigationCollapsed ? "px-2.5" : "px-3"
-            )}
-          >
-            <div className="grid gap-0.5">
-              <NavLink
-                to="/home"
-                selected={selectedView === "home"}
-                collapsed={navigationCollapsed}
-                icon={<House />}
-                label={t("home")}
-              />
-              <NavLink
-                to="/worktrees"
-                selected={selectedView === "worktrees"}
-                collapsed={navigationCollapsed}
-                icon={<Bot />}
-                label={t("workbench")}
-                badge={activeTaskCount}
-                badgeTitle={t("activeTaskCount", {
-                  count: activeTaskCount,
-                })}
-              />
-              {navigationCollapsed && personalSpace ? (
-                <NavLink
-                  to="/spaces/$spaceId"
-                  params={{ spaceId: personalSpace.id }}
-                  selected={personalSpace.id === selectedSpaceId}
-                  collapsed={navigationCollapsed}
-                  icon={<User />}
-                  label={t("personalSpace")}
-                />
-              ) : null}
             </div>
 
-            {navigationCollapsed ? (
-              <div className="mt-5 grid gap-0.5">
-                <div className="flex justify-center py-1">
-                  <Tooltip side="right" content={t("createTeamSpace")}>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t("createTeamSpace")}
-                      onClick={() => setTeamDialogOpen(true)}
-                    >
-                      <Plus />
-                    </Button>
-                  </Tooltip>
-                </div>
-                {teamSpaces.map((space) => (
-                  <NavLink
-                    key={space.id}
-                    to="/spaces/$spaceId"
-                    params={{ spaceId: space.id }}
-                    selected={space.id === selectedSpaceId}
-                    collapsed
-                    icon={<Users />}
-                    label={space.name}
-                  />
-                ))}
-              </div>
-            ) : (
-              <WorkspaceNavigationTree
-                personalSpace={personalSpace}
-                teamSpaces={teamSpaces}
-                selectedSpaceId={selectedSpaceId}
-                selectedNodeId={selectedNodeId}
-                selectedNodePath={selectedNodePath}
-                storageScope={currentSession.user.id}
-              />
-            )}
+            <nav
+              aria-label={t("mainNavigation")}
+              className={cn(
+                "mt-3 min-w-0 flex-1 overflow-x-hidden overflow-y-auto",
+                navigationCollapsed ? "px-2.5" : "px-3"
+              )}
+            >
+              {renderNavigation(navigationCollapsed)}
+            </nav>
 
-            {trashSpaceId ? (
-              <div className="mt-4 grid gap-0.5 border-t border-border pt-3.5">
-                <NavLink
-                  to="/spaces/$spaceId/trash"
-                  params={{ spaceId: trashSpaceId }}
-                  selected={selectedView === "trash"}
-                  collapsed={navigationCollapsed}
-                  icon={<Trash2 />}
-                  label={t("trash")}
-                />
-              </div>
-            ) : null}
-          </nav>
-
-        </aside>
+          </aside>
+        )}
 
         {!immersive && !navigationCollapsed ? (
           <SidebarResizeHandle
@@ -454,8 +468,19 @@ function AuthenticatedWorkspaceLayout({
         {/* ---------------------------------------------------------- */}
         <div className="flex min-w-0 flex-1 flex-col bg-background">
           <header style={{ display: immersive ? "none" : undefined }} className="flex h-15 shrink-0 items-center justify-between gap-4 border-b border-border pr-4.5 pl-6 max-[720px]:px-3">
-            <div className="min-w-0 flex-1">
-              <h1 className="m-0 truncate text-[18px] font-semibold tracking-tight max-[720px]:hidden">
+            <div className="flex min-w-0 flex-1 items-center gap-1">
+              {compactViewport ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label={t("openNavigation")}
+                  onClick={() => setNavDrawerOpen(true)}
+                >
+                  <Menu />
+                </Button>
+              ) : null}
+              <h1 className="m-0 min-w-0 truncate text-[18px] font-semibold tracking-tight max-[720px]:text-[15px]">
                 {pageTitle}
               </h1>
             </div>
@@ -548,6 +573,40 @@ function AuthenticatedWorkspaceLayout({
           </main>
         </div>
       </div>
+
+      {compactViewport ? (
+        <Drawer
+          open={navDrawerOpen}
+          onOpenChange={setNavDrawerOpen}
+          label={t("mainNavigation")}
+        >
+          <div className="flex h-16 shrink-0 items-center justify-between pr-2 pl-4.5">
+            <Link
+              to="/home"
+              className="flex min-w-0 items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <BrandMark />
+              <span className="truncate text-[15px] font-bold tracking-tight text-foreground">
+                Univer Workspace
+              </span>
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("close")}
+              onClick={() => setNavDrawerOpen(false)}
+            >
+              <X />
+            </Button>
+          </div>
+          <nav
+            aria-label={t("mainNavigation")}
+            className="mt-3 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3"
+          >
+            {renderNavigation(false)}
+          </nav>
+        </Drawer>
+      ) : null}
 
       <CreateTeamDialog
         open={teamDialogOpen}

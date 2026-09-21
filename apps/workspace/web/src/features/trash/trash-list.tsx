@@ -162,7 +162,7 @@ export function TrashList({
                   <span className="text-sm max-[980px]:hidden">
                     {batch.nodeCount}
                   </span>
-                  <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                  <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-[720px]:opacity-100">
                     <Tooltip
                       content={
                         batch.restoreBlockedBy

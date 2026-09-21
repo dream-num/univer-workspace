@@ -229,6 +229,31 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Notched-device safe areas                                           */
+/*                                                                     */
+/* env() resolves to 0 on desktop, so wide layouts stay unchanged.     */
+/* ------------------------------------------------------------------ */
+.workspace-shell {
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.workspace-nav-drawer {
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+}
+
+/* iOS zooms focused inputs below 16px; scoped to the compact breakpoint. */
+@media (max-width: 720px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Univer editor integration                                           */
 /* ------------------------------------------------------------------ */
 .univer-editor-shell,
