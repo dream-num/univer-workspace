@@ -155,7 +155,12 @@ describe("collaboration gateway", () => {
           requests: [
             {
               unitID: resource.unitId,
-              actions: [UnitAction.View, UnitAction.Edit, UnitAction.Share],
+              actions: [
+                UnitAction.View,
+                UnitAction.Edit,
+                UnitAction.Comment,
+                UnitAction.Share,
+              ],
             },
           ],
         }),
@@ -166,6 +171,7 @@ describe("collaboration gateway", () => {
             actions: [
               { action: UnitAction.View, allowed: true },
               { action: UnitAction.Edit, allowed: false },
+              { action: UnitAction.Comment, allowed: true },
               { action: UnitAction.Share, allowed: false },
             ],
           },
@@ -1090,12 +1096,73 @@ describe("collaboration gateway", () => {
         body: JSON.stringify({
           memberId: viewerConnection.memberId,
           unitId: opened.resource.unitId,
-          content: "Viewer must not write",
+          content: "Viewer comment",
           mention: [],
         }),
       }
     );
-    expect(viewerAddCommentResponse.status).toBe(403);
+    expect(viewerAddCommentResponse.status).toBe(200);
+    const viewerAdded = (await viewerAddCommentResponse.json()) as {
+      readonly comment: {
+        readonly threadId: string;
+        readonly replies: readonly [{ readonly replyId: string }];
+      };
+    };
+    const viewerEditOwnerResponse = await fetch(
+      `${origin}/universer-api/comment/unit/${opened.resource.unitId}/edit`,
+      {
+        method: "POST",
+        headers: {
+          cookie: viewerCookie,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          memberId: viewerConnection.memberId,
+          unitId: opened.resource.unitId,
+          threadId: added.comment.threadId,
+          replyId: added.comment.threadId,
+          content: "Viewer must not edit the owner",
+          mention: [],
+        }),
+      }
+    );
+    expect(viewerEditOwnerResponse.status).toBe(403);
+    const viewerEditOwnResponse = await fetch(
+      `${origin}/universer-api/comment/unit/${opened.resource.unitId}/edit`,
+      {
+        method: "POST",
+        headers: {
+          cookie: viewerCookie,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          memberId: viewerConnection.memberId,
+          unitId: opened.resource.unitId,
+          threadId: viewerAdded.comment.threadId,
+          replyId: viewerAdded.comment.replies[0].replyId,
+          content: "Viewer comment edited",
+          mention: [],
+        }),
+      }
+    );
+    expect(viewerEditOwnResponse.status).toBe(200);
+    const viewerDeleteOwnerResponse = await fetch(
+      `${origin}/universer-api/comment/unit/${opened.resource.unitId}/delete`,
+      {
+        method: "POST",
+        headers: {
+          cookie: viewerCookie,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          memberId: viewerConnection.memberId,
+          unitId: opened.resource.unitId,
+          threadId: added.comment.threadId,
+          replyId: added.comment.threadId,
+        }),
+      }
+    );
+    expect(viewerDeleteOwnerResponse.status).toBe(403);
 
     const ownerDeleteConnection = await joinUnit(
       origin,

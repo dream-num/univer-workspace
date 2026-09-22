@@ -142,7 +142,7 @@ export function createCollaborationGateway(options: {
   });
 
   commentService.use("listComments", async (context, next) => {
-    requireCommentAccess(access, context.userID, context.request.unitID, false);
+    requireCommentAccess(access, context.userID, context.request.unitID);
     await next();
   });
   const authorizeCommentWrite = async (
@@ -152,7 +152,7 @@ export function createCollaborationGateway(options: {
     },
     next: () => Promise<void>
   ) => {
-    requireCommentAccess(access, context.userID, context.request.unitID, true);
+    requireCommentAccess(access, context.userID, context.request.unitID);
     await next();
   };
   commentService.use("addComment", authorizeCommentWrite);
@@ -598,9 +598,6 @@ function isActionAllowed(
   }
   return [
     UnitAction.View,
-    // Univer gates opening the built-in comment UI behind the workbook-level
-    // Comment action. Comment mutations are still authorized independently by
-    // the Comment endpoint and require editContent.
     UnitAction.Comment,
     UnitAction.Print,
     UnitAction.Copy,
@@ -658,12 +655,9 @@ function protocolUnitType(unitType: UnitType | null): UniverType {
 function requireCommentAccess(
   access: AccessResolver,
   userId: string,
-  unitId: string,
-  write: boolean
+  unitId: string
 ): ResourceContentAccess {
-  const resource = write
-    ? requireUnitEdit(access, userId, unitId)
-    : requireUnitAccess(access, userId, unitId);
+  const resource = requireUnitAccess(access, userId, unitId);
   if (resource.kind !== "univer" || resource.unitType === null) {
     throw new CollabError(
       "INVALID_REQUEST",
@@ -680,8 +674,7 @@ function authorizeCommentDelete(
   const resource = requireCommentAccess(
     access,
     context.userID,
-    context.request.unitID,
-    true
+    context.request.unitID
   );
   if (
     context.target.authorUserID !== context.userID &&
