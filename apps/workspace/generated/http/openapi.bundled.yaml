@@ -2527,12 +2527,15 @@ components:
         - authenticated
         - githubOAuthEnabled
         - discordOAuthEnabled
+        - passwordAuthEnabled
       properties:
         authenticated:
           const: false
         githubOAuthEnabled:
           type: boolean
         discordOAuthEnabled:
+          type: boolean
+        passwordAuthEnabled:
           type: boolean
     ExternalIdentitySummary:
       type: object
@@ -2568,6 +2571,7 @@ components:
         - authenticated
         - githubOAuthEnabled
         - discordOAuthEnabled
+        - passwordAuthEnabled
         - user
         - authenticationMethods
       properties:
@@ -2576,6 +2580,8 @@ components:
         githubOAuthEnabled:
           type: boolean
         discordOAuthEnabled:
+          type: boolean
+        passwordAuthEnabled:
           type: boolean
         user:
           $ref: '#/components/schemas/User'

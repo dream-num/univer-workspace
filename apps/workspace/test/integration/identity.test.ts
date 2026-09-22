@@ -117,6 +117,7 @@ describe("identity", () => {
         authenticated: false,
         githubOAuthEnabled: false,
         discordOAuthEnabled: false,
+        passwordAuthEnabled: true,
       });
 
       secondIdentity.logout(cookie);
@@ -124,6 +125,7 @@ describe("identity", () => {
         authenticated: false,
         githubOAuthEnabled: false,
         discordOAuthEnabled: false,
+        passwordAuthEnabled: true,
       });
     } finally {
       secondDatabase.close();
@@ -496,6 +498,157 @@ describe("identity", () => {
       expect(tableCount(database, "users")).toBe(1);
       expect(tableCount(database, "spaces")).toBe(1);
       expect(tableCount(database, "external_identities")).toBe(1);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("rejects password registration, login, and changes when password auth is disabled", async () => {
+    const database = openWorkspaceDatabase(":memory:");
+    const repository = new IdentityRepository(database);
+    const enabled = createIdentityModule({
+      repository,
+      sessionTtlMs: 60_000,
+    });
+
+    try {
+      const issued = await enabled.registerWithPassword({
+        username: "erin",
+        displayName: "Erin",
+        password: "correct horse battery staple",
+      });
+      const cookie = `${enabled.cookieName}=${issued.cookieValue}`;
+      const disabled = createIdentityModule({
+        repository,
+        sessionTtlMs: 60_000,
+        passwordAuthEnabled: false,
+      });
+
+      expect(disabled.getSession(undefined)).toEqual({
+        authenticated: false,
+        githubOAuthEnabled: false,
+        discordOAuthEnabled: false,
+        passwordAuthEnabled: false,
+      });
+      expect(disabled.getSession(cookie)).toMatchObject({
+        authenticated: true,
+        passwordAuthEnabled: false,
+        authenticationMethods: { password: true },
+      });
+      await expect(
+        disabled.registerWithPassword({
+          username: "frank",
+          displayName: "Frank",
+          password: "correct horse battery staple",
+        })
+      ).rejects.toMatchObject<ApplicationError>({
+        code: "PASSWORD_AUTH_DISABLED",
+        status: 403,
+      });
+      await expect(
+        disabled.loginWithPassword({
+          username: "erin",
+          password: "correct horse battery staple",
+        })
+      ).rejects.toMatchObject<ApplicationError>({
+        code: "PASSWORD_AUTH_DISABLED",
+        status: 403,
+      });
+      await expect(
+        disabled.changePassword(cookie, {
+          currentPassword: "correct horse battery staple",
+          newPassword: "replacement secure password",
+        })
+      ).rejects.toMatchObject<ApplicationError>({
+        code: "PASSWORD_AUTH_DISABLED",
+        status: 403,
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  it("keeps GitHub linked when password no longer counts as a sign-in method", async () => {
+    const database = openWorkspaceDatabase(":memory:");
+    const repository = new IdentityRepository(database);
+    const provider: GitHubOAuthProvider = {
+      authorizationUrl: ({ state, codeChallenge }) =>
+        `https://github.example/authorize?state=${state}&code_challenge=${codeChallenge}`,
+      async exchangeCode() {
+        return {
+          subject: "202",
+          username: "erin-gh",
+          displayName: "Erin",
+          avatarUrl: null,
+        };
+      },
+    };
+    const enabled = createIdentityModule({
+      repository,
+      sessionTtlMs: 60_000,
+      githubOAuthProvider: provider,
+      oauthStateSecret: "test-oauth-state-secret",
+      now: () => 1_000,
+    });
+
+    try {
+      const issued = await enabled.registerWithPassword({
+        username: "erin",
+        displayName: "Erin",
+        password: "correct horse battery staple",
+      });
+      const cookie = `${enabled.cookieName}=${issued.cookieValue}`;
+      const link = enabled.startGitHubOAuth({
+        intent: "link",
+        returnTo: "/",
+        cookieHeader: cookie,
+      });
+      const state = new URL(link.authorizationUrl).searchParams.get("state");
+      await enabled.finishGitHubOAuth({
+        code: "link-code",
+        state,
+        providerError: undefined,
+        oauthCookieHeader: `${enabled.githubOAuthCookieName}=${link.cookieValue}`,
+        sessionCookieHeader: cookie,
+      });
+
+      expect(() => enabled.unlinkGitHub(cookie)).not.toThrow();
+
+      const relink = enabled.startGitHubOAuth({
+        intent: "link",
+        returnTo: "/",
+        cookieHeader: cookie,
+      });
+      const relinkState = new URL(relink.authorizationUrl).searchParams.get(
+        "state"
+      );
+      await enabled.finishGitHubOAuth({
+        code: "relink-code",
+        state: relinkState,
+        providerError: undefined,
+        oauthCookieHeader: `${enabled.githubOAuthCookieName}=${relink.cookieValue}`,
+        sessionCookieHeader: cookie,
+      });
+
+      const disabled = createIdentityModule({
+        repository,
+        sessionTtlMs: 60_000,
+        githubOAuthProvider: provider,
+        oauthStateSecret: "test-oauth-state-secret",
+        passwordAuthEnabled: false,
+        now: () => 2_000,
+      });
+      expect(() => disabled.unlinkGitHub(cookie)).toThrowError(
+        expect.objectContaining({ code: "CONFLICT", status: 409 })
+      );
+      expect(disabled.getSession(cookie)).toMatchObject({
+        authenticationMethods: {
+          password: true,
+          externalIdentities: [
+            { provider: "github", providerUsername: "erin-gh" },
+          ],
+        },
+      });
     } finally {
       database.close();
     }

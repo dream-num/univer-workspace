@@ -11,6 +11,7 @@ export interface WorkspaceConfig {
   readonly maxBlobBytes?: number;
   readonly secureCookies: boolean;
   readonly sessionTtlMs: number;
+  readonly passwordAuthEnabled: boolean;
   readonly discordBotApiKey?: string;
   readonly githubOAuth?: {
     readonly clientId: string;
@@ -31,6 +32,16 @@ export function loadConfig(
 ): WorkspaceConfig {
   const githubOAuth = githubConfig(environment);
   const discordOAuth = discordConfig(environment);
+  const passwordAuthEnabled = boolean(
+    environment.PASSWORD_AUTH_ENABLED,
+    true,
+    "PASSWORD_AUTH_ENABLED"
+  );
+  if (!passwordAuthEnabled && !githubOAuth && !discordOAuth) {
+    throw new Error(
+      "PASSWORD_AUTH_ENABLED=false requires GitHub or Discord OAuth so the deployment still has a browser sign-in method"
+    );
+  }
   const oauthClientsConfig = oauthClientConfig(environment);
   const discordBotApiKey = optionalSecret(
     environment.DISCORD_BOT_API_KEY,
@@ -68,6 +79,7 @@ export function loadConfig(
       7 * 24 * 60 * 60 * 1000,
       "SESSION_TTL_MS"
     ),
+    passwordAuthEnabled,
     ...(discordBotApiKey ? { discordBotApiKey } : {}),
     ...(metricsToken ? { metricsToken } : {}),
     githubOAuth,

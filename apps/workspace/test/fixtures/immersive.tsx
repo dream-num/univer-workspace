@@ -39,7 +39,7 @@ window.fetch = async (input, init) => {
   if (!url.pathname.startsWith("/api/")) return nativeFetch(input, init);
   let result: unknown;
   if (url.pathname === "/api/session") result = {
-    authenticated: true, githubOAuthEnabled: false, discordOAuthEnabled: false, user,
+    authenticated: true, githubOAuthEnabled: false, discordOAuthEnabled: false, passwordAuthEnabled: true, user,
     authenticationMethods: { password: true, externalIdentities: [] },
   };
   else if (url.pathname === "/api/spaces") result = { spaces: [space] };

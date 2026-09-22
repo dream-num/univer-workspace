@@ -17,6 +17,7 @@ export interface AuthenticatedSession {
   readonly authenticated: true;
   readonly githubOAuthEnabled: boolean;
   readonly discordOAuthEnabled: boolean;
+  readonly passwordAuthEnabled: boolean;
   readonly user: User;
   readonly authenticationMethods: AuthenticationMethods;
 }
@@ -26,6 +27,7 @@ export type SessionView =
       readonly authenticated: false;
       readonly githubOAuthEnabled: boolean;
       readonly discordOAuthEnabled: boolean;
+      readonly passwordAuthEnabled: boolean;
     }
   | AuthenticatedSession;
 

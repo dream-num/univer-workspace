@@ -1329,6 +1329,7 @@ export interface components {
             authenticated: false;
             githubOAuthEnabled: boolean;
             discordOAuthEnabled: boolean;
+            passwordAuthEnabled: boolean;
         };
         ExternalIdentitySummary: {
             /** @enum {string} */
@@ -1344,6 +1345,7 @@ export interface components {
             authenticated: true;
             githubOAuthEnabled: boolean;
             discordOAuthEnabled: boolean;
+            passwordAuthEnabled: boolean;
             user: components["schemas"]["User"];
             authenticationMethods: components["schemas"]["AuthenticationMethods"];
         };

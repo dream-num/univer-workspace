@@ -166,6 +166,7 @@ export function createWorkspaceApplication(
         ? createDiscordOAuthProvider(config.discordOAuth)
         : null),
     ...(oauthStateSecret ? { oauthStateSecret } : {}),
+    passwordAuthEnabled: config.passwordAuthEnabled,
   });
   const resourcesRepository = new ResourcesRepository(database);
   let collaboration: CollaborationRuntime | null = null;
