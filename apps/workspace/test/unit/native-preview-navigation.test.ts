@@ -45,6 +45,51 @@ describe("native preview navigation", () => {
 
 
 describe("native frame message identity", () => {
+  it("exports only on a trusted request, coalesces clicks and ignores completion after disposal", async () => {
+    const parent = { postMessage: vi.fn() };
+    const addEventListener = vi.fn();
+    vi.stubGlobal("window", { parent, location: { origin: "https://workspace.example" }, addEventListener, removeEventListener: vi.fn() });
+    let finish!: () => void;
+    const download = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    const api = { getCurrentLifecycleStage: () => LifecycleStages.Rendered } as FUniver;
+    const observer = installNativePreviewNavigation(api, "deck", "token", download);
+    const receive = addEventListener.mock.calls[0]![1];
+    const event = { source: parent, origin: "https://workspace.example", data: {
+      channel: "workspace-native-unit-v1", unitId: "deck", token: "token", action: "download", requestId: "download-1",
+    } };
+    receive({ ...event, source: {} });
+    receive({ ...event, data: { ...event.data, token: "old" } });
+    receive({ ...event, data: { ...event.data, requestId: "" } });
+    expect(download).not.toHaveBeenCalled();
+    receive(event); receive(event);
+    await Promise.resolve();
+    expect(download).toHaveBeenCalledOnce();
+    expect(parent.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({ status: "downloading", requestId: "download-1" });
+    observer.dispose(); finish();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(parent.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({ status: "downloading" });
+  });
+
+  it("reports export errors without leaking details and permits an explicit retry", async () => {
+    const parent = { postMessage: vi.fn() };
+    const addEventListener = vi.fn();
+    vi.stubGlobal("window", { parent, location: { origin: "https://workspace.example" }, addEventListener, removeEventListener: vi.fn() });
+    const download = vi.fn().mockRejectedValueOnce(new Error("private internal URL")).mockResolvedValue(undefined);
+    const observer = installNativePreviewNavigation({ getCurrentLifecycleStage: () => LifecycleStages.Rendered } as FUniver, "deck", "token", download);
+    const receive = addEventListener.mock.calls[0]![1];
+    const event = { source: parent, origin: "https://workspace.example", data: {
+      channel: "workspace-native-unit-v1", unitId: "deck", token: "token", action: "download", requestId: "download-1",
+    } };
+    receive(event);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(parent.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({ status: "download-error" });
+    expect(JSON.stringify(parent.postMessage.mock.calls)).not.toContain("private internal URL");
+    receive({ ...event, data: { ...event.data, requestId: "download-2" } });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(parent.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({ status: "downloaded", requestId: "download-2" });
+    observer.dispose();
+  });
+
   it("announces readiness only after native render modules are installed", () => {
     const parent = { postMessage: vi.fn() };
     const addEventListener = vi.fn();

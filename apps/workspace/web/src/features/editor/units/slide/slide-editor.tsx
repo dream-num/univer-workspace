@@ -1,4 +1,4 @@
-import { UniverSlidesPlugin } from "@univerjs-pro/slides";
+import { SetSlideZoomRatioOperation, UniverSlidesPlugin } from "@univerjs-pro/slides";
 import ChartUIEnUS from "@univerjs-pro/chart-ui/locale/en-US";
 import ChartUIZhCN from "@univerjs-pro/chart-ui/locale/zh-CN";
 import EngineChartEnUS from "@univerjs-pro/engine-chart/locale/en-US";
@@ -76,6 +76,8 @@ import {
 import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
 import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 import { getReferencedSheetPlugins } from "../../features/referenced-sheet-plugins";
+
+import { downloadSlidePreview } from "./download-preview";
 
 export type SlideEditorProps = CollaborationEditorProps;
 
@@ -158,6 +160,25 @@ export function createSlideComparisonPresets(
 export default createCollaborationEditor({
   liveSheetReferences: true,
   label: "presentation",
+  previewDownload: downloadSlidePreview,
+  configurePreview: (api, unitId, container) => {
+    const size = api.getPresentation(unitId)?.getPageSize();
+    if (!size) return { dispose() {} };
+    let frame = 0;
+    const fit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const zoomRatio = Math.max(0.1, Math.min(1,
+          (container.clientWidth - 390) / size.width,
+          (container.clientHeight - 90) / size.height));
+        void api.executeCommand(SetSlideZoomRatioOperation.id, { unitId, zoomRatio });
+      });
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(container);
+    fit();
+    return { dispose() { observer.disconnect(); cancelAnimationFrame(frame); } };
+  },
   history: {
     createPlugin: (containerId) => [
       UniverSlidesHistoryUIPlugin,
@@ -181,7 +202,7 @@ export default createCollaborationEditor({
     ),
   exchangeFeaturePlugins: () => [UniverSlidesExchangeClientPlugin],
   printFeaturePlugins: () => [UniverSlidesPrintPlugin],
-  createPresets: (container) => [
+  createPresets: (container, _license, _scope, compact) => [
     { plugins: getReferencedSheetPlugins() },
     {
       plugins: [
@@ -191,6 +212,7 @@ export default createCollaborationEditor({
           {
             container,
             ribbonType: "grid",
+            ...(compact ? { header: false, toolbar: false, disableAutoFocus: true } : {}),
           },
         ],
         UniverDocsPlugin,

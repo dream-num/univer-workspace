@@ -133,7 +133,8 @@ interface ICollaborationEditorDefinition {
     license: string,
     collaborationScope: NonNullable<
       CollaborationEditorProps["collaborationScope"]
-    >
+    >,
+    compact: boolean
   ) => IPreset[];
   readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
   readonly collaborationFeaturePlugins?: (
@@ -143,6 +144,8 @@ interface ICollaborationEditorDefinition {
   ) => IPresetPlugin[];
   readonly exchangeFeaturePlugins?: () => IPresetPlugin[];
   readonly printFeaturePlugins?: () => IPresetPlugin[];
+  readonly previewDownload?: (api: FUniver, unitId: string) => Promise<void>;
+  readonly configurePreview?: (api: FUniver, unitId: string, container: HTMLElement) => { dispose(): void };
   readonly load: (
     univerAPI: FUniver,
     unitId: string
@@ -192,6 +195,7 @@ export function createCollaborationEditor(
       setError(null);
       setCollaborationIssue(null);
       let disposed = false;
+      let previewLayout: { dispose(): void } | undefined;
       let previewNavigation: { dispose(): void } | undefined;
       let mountedUniver: ReturnType<typeof createUniver>["univer"] | null =
         null;
@@ -275,7 +279,8 @@ export function createCollaborationEditor(
         let presets = definition.createPresets(
           element,
           license,
-          collaborationScope
+          collaborationScope,
+          Boolean(previewToken)
         );
         if (licensePlugins.length > 0) {
           // createUniver registers every preset before its top-level plugins.
@@ -507,7 +512,10 @@ export function createCollaborationEditor(
               collaboration.getCollaborationStatus(unitId)
             );
             if (previewToken) {
-              previewNavigation = installNativePreviewNavigation(univerAPI, unitId, previewToken);
+              previewLayout = definition.configurePreview?.(univerAPI, unitId, element);
+              previewNavigation = installNativePreviewNavigation(univerAPI, unitId, previewToken,
+                exchangeEnabled && definition.previewDownload
+                  ? () => definition.previewDownload!(univerAPI, unitId) : undefined);
             }
             setLoading(false);
           }
@@ -547,6 +555,7 @@ export function createCollaborationEditor(
       return () => {
         disposed = true;
         previewNavigation?.dispose();
+        previewLayout?.dispose();
         collaboratorsListener?.dispose();
         onCollaboratorsChange?.([]);
         statusListener?.dispose();
@@ -579,7 +588,7 @@ export function createCollaborationEditor(
       <div className="univer-editor-shell">
         {!loading &&
         !error &&
-        collaborationStatusPresentation.showCustom ? (
+        collaborationStatusPresentation.showCustom && !previewToken ? (
           <div
             className={cn(
               "pointer-events-none absolute top-3 right-4 z-10 flex items-center gap-1.5 rounded-full border border-border bg-background/85 py-1 pr-2.5 pl-2 text-xs font-medium shadow-sm backdrop-blur-sm",

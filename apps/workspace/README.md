@@ -368,7 +368,7 @@ may continue receiving updates until disconnected. Reconnecting readers are auth
 ## HTML-native Office previews
 
 Browser `.univer.html` files can call `window.univerWorkspace.showUnit(unitId, slot)`
-to open a live, read-only Sheet, Doc or Slides inside their layout, while keeping
+to open a live Sheet, Doc or Slides with server-authorized editing inside their layout, while keeping
 HTML cell bindings active. Each target is independently authorized; sharing the
 HTML does not share its source files. `hideUnit()` closes the preview, and the
 host's **Open file** action leads to the standard editor. Stable paragraph, cell

@@ -167,11 +167,12 @@ export default createCollaborationEditor({
     ),
   exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin],
   printFeaturePlugins: () => [UniverDocsPrintPlugin],
-  createPresets: (container, _license, collaborationScope) => [
+  createPresets: (container, _license, collaborationScope, compact) => [
     { plugins: getReferencedSheetPlugins() },
     UniverDocsCorePreset({
       container,
       ribbonType: "grid",
+      ...(compact ? { header: false, toolbar: false, disableAutoFocus: true } : {}),
     }),
     UniverDocsDrawingPreset({
       collaboration: true,
