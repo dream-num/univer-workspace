@@ -14,6 +14,7 @@ import {
   CollaborationUIEventId,
   CollaborationUIEventService,
   CollaborationStatus,
+  MemberService,
   UniverCollaborationClientPlugin,
   type IUniverCollaborationClientConfig,
 } from "@univerjs-pro/collaboration-client";
@@ -66,6 +67,7 @@ import {
 } from "./features/exchange-plugins";
 import { installNativePreviewNavigation } from "./native-preview";
 import { resolveMergeReview } from "./merge-review";
+import { subscribeWorkspaceCollaborators } from "./workarounds/collaboration-members";
 import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
 import { resolveUniverLicense } from "./features/univer-license";
 import {
@@ -472,16 +474,20 @@ export function createCollaborationEditor(
           onCollaboratorsChange &&
           collaborationScope.kind !== "mergePreview"
         ) {
-          collaboratorsListener = collaboration.subscribeCollaborators(unitId, (members) => {
-            collaborators = members;
-            if (!disposed) {
-              onCollaboratorsChange(
-                collaboration.getCollaborationStatus(unitId) === CollaborationStatus.OFFLINE
-                  ? []
-                  : members
-              );
+          collaboratorsListener = subscribeWorkspaceCollaborators(
+            univer.__getInjector().get(MemberService),
+            unitId,
+            (members) => {
+              collaborators = members;
+              if (!disposed) {
+                onCollaboratorsChange(
+                  collaboration.getCollaborationStatus(unitId) === CollaborationStatus.OFFLINE
+                    ? []
+                    : members
+                );
+              }
             }
-          });
+          );
         }
       };
 
