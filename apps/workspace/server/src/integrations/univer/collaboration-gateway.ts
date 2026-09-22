@@ -142,7 +142,7 @@ export function createCollaborationGateway(options: {
   });
 
   commentService.use("listComments", async (context, next) => {
-    requireCommentAccess(access, context.userID, context.request.unitID, false);
+    requireCommentAccess(access, context.userID, context.request.unitID);
     await next();
   });
   const authorizeCommentWrite = async (
@@ -152,7 +152,7 @@ export function createCollaborationGateway(options: {
     },
     next: () => Promise<void>
   ) => {
-    requireCommentAccess(access, context.userID, context.request.unitID, true);
+    requireCommentAccess(access, context.userID, context.request.unitID);
     await next();
   };
   commentService.use("addComment", authorizeCommentWrite);
@@ -378,8 +378,7 @@ export function createCollaborationGateway(options: {
         error: OK_ERROR,
         actions: allowedActions(
           request.body?.actions,
-          access.resolveUnitContent(userId, unitId),
-          userId
+          access.resolveUnitContent(userId, unitId)
         ),
       });
     }
@@ -568,33 +567,28 @@ function allowedObjectActions(
     unitID: unitId,
     objectID:
       typeof candidate.objectID === "string" ? candidate.objectID : "",
-    actions: allowedActions(candidate.actions, resource, userId),
+    actions: allowedActions(candidate.actions, resource),
   };
 }
 
 function allowedActions(
   value: unknown,
-  resource: ResourceContentAccess | null,
-  userId: string
+  resource: ResourceContentAccess | null
 ): Array<{ readonly action: unknown; readonly allowed: boolean }> {
   return Array.isArray(value)
     ? value.map((action) => ({
         action,
-        allowed: isActionAllowed(resource, action, userId),
+        allowed: isActionAllowed(resource, action),
       }))
     : [];
 }
 
 function isActionAllowed(
   resource: ResourceContentAccess | null,
-  action: unknown,
-  userId: string
+  action: unknown
 ): boolean {
   if (!resource || typeof action !== "number") return false;
   if (action === UnitAction.Share) return false;
-  // The client uses Comment for both the comment UI and comment mutations.
-  // Anonymous link access can list comments, but cannot receive that point.
-  if (action === UnitAction.Comment) return userId !== ANONYMOUS_USER_ID;
   if (resource.role === "owner" || resource.role === "admin") return true;
   if (resource.capabilities.editContent) {
     return ![
@@ -604,6 +598,7 @@ function isActionAllowed(
   }
   return [
     UnitAction.View,
+    UnitAction.Comment,
     UnitAction.Print,
     UnitAction.Copy,
     UnitAction.Export,
@@ -660,13 +655,9 @@ function protocolUnitType(unitType: UnitType | null): UniverType {
 function requireCommentAccess(
   access: AccessResolver,
   userId: string,
-  unitId: string,
-  write: boolean
+  unitId: string
 ): ResourceContentAccess {
   const resource = requireUnitAccess(access, userId, unitId);
-  if (write && userId === ANONYMOUS_USER_ID) {
-    throw new CollabError("PERMISSION_DENIED", "Sign in to comment.");
-  }
   if (resource.kind !== "univer" || resource.unitType === null) {
     throw new CollabError(
       "INVALID_REQUEST",
@@ -683,8 +674,7 @@ function authorizeCommentDelete(
   const resource = requireCommentAccess(
     access,
     context.userID,
-    context.request.unitID,
-    true
+    context.request.unitID
   );
   if (
     context.target.authorUserID !== context.userID &&

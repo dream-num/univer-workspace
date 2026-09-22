@@ -199,9 +199,9 @@ Cookie、OAuth callback 和产品 API 保持原有行为；外部 client 只通�
 
 Collaboration Gateway 同时组合 Core、Comment、History 与 Worktree Endpoint。Comment Service 使用
 同一 `COLLABORATION_DATABASE_FILE` 中由 Comment Adapter 独立拥有的表，并通过 Identity
-Module 批量解析评论作者资料。五类 Unit 的评论读取都要求打开权限。已登录用户的新增、回复、
-solved 和编辑不要求内容编辑权限；编辑正文由 Comment Service 限定为作者本人。匿名用户不能获得
-`UnitAction.Comment`，写入会被拒绝。删除还要求评论作者或 Resource Owner/Admin。Browser 只在 Trunk Scope
+Module 批量解析评论作者资料。五类 Unit 的评论读取、新增、回复、solved 和编辑都要求打开
+权限，不要求内容编辑权限；`UnitAction.Comment` 与 `View` 放在同一组。编辑正文由 Comment Service
+限定为作者本人，删除还要求评论作者或 Resource Owner/Admin。未登录请求只放行评论列表。Browser 只在 Trunk Scope
 按 Unit 类型注册标准 Thread Comment UI 和统一远程 datasource。
 
 History Service 使用同一文件中由 History Adapter 独立拥有的派生索引，并通过 Identity Module

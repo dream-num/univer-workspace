@@ -171,7 +171,7 @@ describe("collaboration gateway", () => {
             actions: [
               { action: UnitAction.View, allowed: true },
               { action: UnitAction.Edit, allowed: false },
-              { action: UnitAction.Comment, allowed: false },
+              { action: UnitAction.Comment, allowed: true },
               { action: UnitAction.Share, allowed: false },
             ],
           },
