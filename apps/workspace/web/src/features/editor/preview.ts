@@ -19,4 +19,3 @@ export function parseNativePreviewFocus(value: unknown): NativePreviewFocus | nu
   if (v.kind === "slide" && identity(v.slideId)) return { kind: "slide", slideId: v.slideId };
   return null;
 }
-

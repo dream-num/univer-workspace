@@ -74,6 +74,7 @@ import {
   getDocReplayCompatibilityPlugins,
 } from "./doc-features";
 import { getDocThreadCommentCollaborationPlugins } from "../../workarounds/doc-thread-comment-delete";
+import { getReferencedSheetPlugins } from "../../features/referenced-sheet-plugins";
 
 export type DocEditorProps = CollaborationEditorProps;
 
@@ -166,6 +167,7 @@ export default createCollaborationEditor({
   exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin],
   printFeaturePlugins: () => [UniverDocsPrintPlugin],
   createPresets: (container, _license, collaborationScope) => [
+    { plugins: getReferencedSheetPlugins() },
     UniverDocsCorePreset({
       container,
       ribbonType: "grid",
