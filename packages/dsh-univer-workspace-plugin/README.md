@@ -89,9 +89,10 @@ as a substitute for those explicit storage boundaries.
   deferred onboarding state.
   Workspace authorization and model credentials remain separate.
 
-- **Space ↔ dsh-workspace reconciliation**: the User's remote Spaces are
-  listed from the Workspace product API and each is bound to a mechanical
-  dsh workspace directory under the configured root; a durable shadow table
+- **Explicit Space registration**: listing remote Spaces is read-only. A new
+  device/account starts with an empty session list; a Space is bound to a local
+  dsh workspace directory only when the user selects it in the add/picker flow.
+  Removing its local registration does not cause browsing to add it back. A durable shadow table
   (`space-links` storage domain) maps a dsh workspace id back to
   `{ userId, spaceId }`. Selecting a Space in DSH selects one of the User's
   accessible Spaces; the directory is never surfaced to the User.
@@ -141,8 +142,8 @@ as a substitute for those explicit storage boundaries.
   the plugin exposes `reopen` for returning a ready Worktree to draft.
 - **Browser Space picker**: this plugin owns the Workspace Space picker and
   injects it into the stock DSH hero/sidebar slots. DSH still owns its native
-  mechanical workspace list and session persistence; selecting a Space only
-  chooses the linked DSH workspace for the next session.
+  mechanical workspace list and session persistence; selecting a Space registers
+  that Space and hands its directory to the native DSH picker/adoption flow.
 - **Browser file workspace**: the sidebar replaces the shell root with native
   DSH session and Workspace file tabs. The file tab browses the authenticated
   Space/Node/Resource tree, creates items in permitted folders, renames and
@@ -168,7 +169,8 @@ as a substitute for those explicit storage boundaries.
   tab in the current session's native right sidebar. DSH owns tab closing,
   resizing, splitting and fullscreen; Workspace renders the content inside it.
   With no selected session, the native flow reuses or creates a blank session
-  in a connected Space. Other native tab types remain available.
+  in an already-added Space. If none has been added, the UI asks the user to add
+  one first. Other native tab types remain available.
 - **Capability HTTP routes**: `/api/uwh/me`, `/api/uwh/template-fork`, Space
   rename, the same-origin Space/Node tree, and trash actions are registered by
   this plugin. The Workspace Agent only supplies the authenticated

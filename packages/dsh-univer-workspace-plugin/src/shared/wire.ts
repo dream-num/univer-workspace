@@ -15,8 +15,8 @@ export interface WorkspaceSpace {
   readonly type: "personal" | "team";
   readonly name: string;
   readonly accessRole: "owner" | "admin" | "editor" | "viewer";
-  /** The dsh workspace id backing this Space (the mechanical directory carrier). */
-  readonly dshWorkspaceId: string;
+  /** Present only after the user adds this Space to the local session list. */
+  readonly dshWorkspaceId?: string;
   readonly capabilities?: Readonly<{
     readonly browseRoot?: boolean;
     readonly createAtRoot?: boolean;

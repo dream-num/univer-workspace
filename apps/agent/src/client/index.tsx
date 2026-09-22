@@ -9,6 +9,7 @@
  */
 import type { ClientContext } from "./dsh-runtime-types.ts";
 import * as workspaceEvents from "./workspace-events.ts";
+import * as connectionRecovery from "./connection-recovery.ts";
 import * as productOnboarding from "./product-onboarding.tsx";
 import * as sessionRoute from "./session-route.ts";
 
@@ -19,5 +20,6 @@ export const inject = ["sessions"];
 export function apply(ctx: ClientContext): void {
   ctx.plugin(productOnboarding);
   ctx.plugin(sessionRoute);
+  ctx.plugin(connectionRecovery);
   ctx.plugin(workspaceEvents);
 }

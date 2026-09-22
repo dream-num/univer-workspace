@@ -216,10 +216,6 @@ function TextPreview(props: {
 function proxyAssetUrl(value: string): string {
   const path = value.startsWith("/api/") ? `/univer-workspace${value}` : value;
   const url = new URL(path, window.location.href);
-  if (url.origin === window.location.origin && url.pathname.startsWith("/univer-workspace/")) {
-    const version = (globalThis as typeof globalThis & { __UWH_CONNECTION_VERSION__?: string }).__UWH_CONNECTION_VERSION__;
-    if (version !== undefined) url.searchParams.set("uwhConnection", version);
-  }
   return url.href;
 }
 

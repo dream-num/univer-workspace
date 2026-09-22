@@ -38,7 +38,8 @@ import { WorkspaceOnboarding, WorkspaceLoginAction } from "./WorkspaceOnboarding
 import { OriginSetting, type WorkspaceAuthSettings } from "./OriginSetting.tsx";
 import { HarnessDocumentTitle } from "./DocumentTitle.tsx";
 import { WorkspaceSidecar, WorkspaceSidecarTitle, WORKSPACE_SIDECAR_KIND } from "./WorkspaceSidecar.tsx";
-import { fetchWorkspaceSpaces, renameWorkspaceSpace } from "./space-api.ts";
+import { addWorkspaceSpace, fetchWorkspaceSpaces, renameWorkspaceSpace } from "./space-api.ts";
+import { localizeWorkspaceNames } from "./space-name.ts";
 import { WorkspaceSidebarRoot } from "./WorkspaceSidebarRoot.tsx";
 import {
   createWorkspaceNavigationStore,
@@ -105,6 +106,17 @@ export function apply(ctx: ClientContext): void {
     "univer-workspace: Restore reference drafts",
   );
   let linkedSpaces: Awaited<ReturnType<typeof fetchWorkspaceSpaces>> = [];
+  let invalidateSpaceNames = () => {};
+  ctx.effect(() => {
+    const names = localizeWorkspaceNames(
+      ctx.workspaces.list,
+      () => linkedSpaces,
+      () => translate("workspace.personalSpaceName"),
+      listener => ctx.locale.subscribe(listener),
+    );
+    invalidateSpaceNames = names.invalidate;
+    return names.dispose;
+  }, "univer-workspace: localized Space names");
   let currentSpaceIdForSession: ((sessionId: string) => string | undefined) | undefined;
   const inputTriggers = services.get("inputTriggers") as {
     registerSource: (source: ReturnType<typeof createWorkspaceResourceInputSource>) => () => void;
@@ -289,6 +301,7 @@ export function apply(ctx: ClientContext): void {
       spacesPromise = fetchWorkspaceSpaces()
         .then((spaces) => {
           linkedSpaces = spaces;
+          invalidateSpaceNames();
           return spaces;
         })
         .catch((reason: unknown) => {
@@ -302,68 +315,23 @@ export function apply(ctx: ClientContext): void {
     const workspaceId = workspaces.list
       .getSnapshot()
       .items.find((item) => item.sessionIds.includes(sessionId))?.workspaceId;
+    if (workspaceId === undefined) return undefined;
     return linkedSpaces.find((space) => String(space.dshWorkspaceId) === String(workspaceId))
       ?.spaceId;
   };
-  // The product Space registry is the source of the mechanical DSH Workspace
-  // rows.  It is rebuilt from the persisted Workspace session headers after a
-  // pod restart, so reconcile it once when this capability mounts; otherwise
-  // the stock sidebar starts with an ungrouped list and only gains titles
-  // after the user opens the picker.  The initial probe is intentionally
-  // quiet for an unconnected shell; opening the picker keeps the normal
-  // connection-required state visible through loadSpaces().
+  // Load the remote catalogue for labels and references. Browsing never adds
+  // Spaces to the local DSH session list.
   ctx.effect(() => {
     let active = true;
-    void fetchWorkspaceSpaces()
-      .then((spaces) => {
-        linkedSpaces = spaces;
-        if (!active) return;
-        const refresh = (ctx.workspaces as unknown as { refresh?: () => Promise<void> }).refresh;
-        if (typeof refresh === "function") void refresh();
-      })
-      .catch(() => {
-        // Connection and transient Workspace failures remain visible when
-        // the user explicitly opens the Space picker; startup must not replace
-        // the DSH shell with a redirect or a permanent error state.
-      });
-    return () => {
-      active = false;
-    };
-  }, "univer-workspace: initial Space reconciliation");
-  const nativeStartSession = workspaceNavigation.startSession.bind(workspaceNavigation);
-  // The stock DSH action falls back to the most-recent mechanical workspace.
-  // That workspace may be an unlinked local session, which would make every
-  // Univer tool fail with SESSION_SCOPE_UNAVAILABLE. Resolve the fallback from
-  // the product Space catalogue first; explicit Workspace selections retain
-  // the native action unchanged.
-  workspaceNavigation.startSession = (workspaceId?: string): void => {
-    if (workspaceId !== undefined) {
-      nativeStartSession(workspaceId);
-      return;
-    }
-    void loadSpaces()
-      .then((spaces) => {
-        const linked = new Set(spaces.map((space) => String(space.dshWorkspaceId)));
-        const current = (
-          ctx.sessions as unknown as { list: { getSnapshot: () => { current?: string } } }
-        ).list.getSnapshot().current;
-        const currentWorkspace =
-          current === undefined
-            ? undefined
-            : workspaces.list.getSnapshot().items.find((item) => item.sessionIds.includes(current))
-                ?.workspaceId;
-        const target =
-          currentWorkspace !== undefined && linked.has(String(currentWorkspace))
-            ? undefined
-            : spaces[0]?.dshWorkspaceId;
-        nativeStartSession(target);
-      })
-      .catch(() => {
-        // Preserve the native DSH fallback when Workspace is temporarily
-        // unavailable; the resulting scope error remains actionable to the user.
-        nativeStartSession();
-      });
-  };
+    void fetchWorkspaceSpaces().then(spaces => {
+      if (!active) return;
+      linkedSpaces = spaces;
+      invalidateSpaceNames();
+    }).catch(() => {
+      // The picker exposes connection and loading errors when opened.
+    });
+    return () => { active = false; };
+  }, "univer-workspace: Space catalogue");
   workspaces.rename = async (workspaceId, title): Promise<WorkspaceView> => {
     const spaces = await loadSpaces();
     const linked = spaces.find((space) => String(space.dshWorkspaceId) === String(workspaceId));
@@ -375,7 +343,6 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(
     () => () => {
       workspaces.rename = nativeRenameWorkspace;
-      workspaceNavigation.startSession = nativeStartSession;
     },
     "univer-workspace: linked Space rename",
   );
@@ -475,8 +442,11 @@ export function apply(ctx: ClientContext): void {
 
   const spaceFlowInjected = () => ({
     loadSpaces,
-    selectSpace: (dshWorkspaceId: string) => {
-      workspaceNavigation.startSession(dshWorkspaceId);
+    addSpace: async (spaceId: string) => {
+      const path = await addWorkspaceSpace(spaceId);
+      spacesPromise = undefined;
+      await loadSpaces();
+      return path;
     },
     t: translate,
   });
@@ -634,8 +604,9 @@ export function apply(ctx: ClientContext): void {
         }
         if (clientSessions.list.getSnapshot().current === undefined) {
           const spaces = await loadSpaces();
-          const workspaceId = spaces[0]?.dshWorkspaceId;
-          if (workspaceId === undefined) throw new Error("No connected Workspace Space is available.");
+          const registered = new Set(workspaces.list.getSnapshot().items.map(item => String(item.workspaceId)));
+          const workspaceId = spaces.find(space => space.dshWorkspaceId !== undefined && registered.has(space.dshWorkspaceId))?.dshWorkspaceId;
+          if (workspaceId === undefined) throw new Error(translate("workspace.addBeforePreview"));
           const sessionId = await ctx.uiWorkspace.connectWorkspace(workspaceId as Parameters<typeof ctx.uiWorkspace.connectWorkspace>[0]);
           if (disposed || request !== generation) return;
           clientSessions.open(sessionId);

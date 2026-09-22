@@ -63,7 +63,7 @@ export function registerDiscoveryTools(ctx: Context): () => void {
                     name: { type: "string", required: true },
                     type: { type: "string", required: true },
                     accessRole: { type: "string", required: true },
-                    dshWorkspaceId: { type: "string", required: true },
+                    dshWorkspaceId: { type: "string" },
                     linked: { type: "boolean", required: true },
                   },
                 },
@@ -84,7 +84,7 @@ export function registerDiscoveryTools(ctx: Context): () => void {
               name: s.name,
               type: s.type,
               accessRole: s.accessRole,
-              dshWorkspaceId: s.dshWorkspaceId,
+              ...(s.dshWorkspaceId === undefined ? {} : { dshWorkspaceId: s.dshWorkspaceId }),
               linked: s.spaceId === scope.spaceId,
             })),
           };

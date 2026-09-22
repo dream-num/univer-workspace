@@ -279,7 +279,7 @@ async function start() {
     failed: reportLoginError, zh: app.getLocale().startsWith("zh"),
   });
   loginController = createLoginController({ origin, fetch: optionsFetch,
-    openExternal: loginBrowser.open, connected: async () => { loginBrowser.close(); focus(); await window.loadURL(origin); } });
+    openExternal: loginBrowser.open, connected: async () => { loginBrowser.close(); focus(); } });
   ipcMain.handle("uwa:login", event => {
     if (!require("./update-window.cjs").trustedFrame(event, window.webContents, url => isLocalUrl(url, origin)))
       throw new Error("Untrusted login caller");

@@ -15,6 +15,7 @@ import {
   IconBrowseOutline16,
   IconNewChatOutline16,
   IconPanelLeftOutline16,
+  IconPlusOutline16,
   Tooltip,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import { FileSidebar } from "./FileSidebar.tsx";
@@ -144,7 +145,7 @@ export function WorkspaceSidebarRoot(props: WorkspaceSidebarRootProps) {
               }
             </IconButton>
             <IconButton label={props.t("session.new.label")} onClick={() => props.startSession()}>
-              <IconNewChatOutline16 />
+              <IconPlusOutline16 />
             </IconButton>
             <IconButton
               label={props.translate("navigation.sessions")}
@@ -244,7 +245,7 @@ export function WorkspaceSidebarRoot(props: WorkspaceSidebarRootProps) {
             className={`${css.regionPane} ${tab === "sessions" ? css.visible : css.hidden}`}
           >
             <button type="button" className={css.newSession} onClick={() => props.startSession()}>
-              <IconNewChatOutline16 />
+              <IconPlusOutline16 />
               <span>{props.t("session.new")}</span>
             </button>
             {slot("sidebar.workspaces", {

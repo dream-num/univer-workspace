@@ -40,6 +40,7 @@ import type {
 } from "./workspace-resource-reference.ts";
 import type { UniverLocaleKey } from "./locales.ts";
 import css from "./FileSidebar.module.scss";
+import { localizedSpaceName } from "./space-name.ts";
 
 const PRODUCT_API = "/univer-workspace/api";
 const COLLAB_API = "/univer-workspace/collab";
@@ -302,7 +303,11 @@ export function FileSidebar({
     [refresh, refreshEpoch, workspaceOrigin],
   );
 
-  const treeSpaces = useMemo(() => spaces.map(toWorkspaceFileSpace), [spaces]);
+  const personalSpaceName = t("workspace.personalSpaceName");
+  const treeSpaces = useMemo(() => spaces.map(space => ({
+    ...toWorkspaceFileSpace(space),
+    name: localizedSpaceName(space, personalSpaceName),
+  })), [spaces, personalSpaceName]);
   const storageScope = useMemo(
     () =>
       spaces

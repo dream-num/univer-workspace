@@ -166,17 +166,6 @@ function contextPayload(value: unknown): { resourceId?: string } | undefined {
   return resourceId === undefined || resourceId === "" ? {} : { resourceId };
 }
 
-function workspaceView(workspace: Workspace): Record<string, unknown> {
-  return {
-    workspaceId: workspace.id,
-    path: workspace.path,
-    title: workspace.title,
-    sessionIds: [...workspace.sessionIds],
-    createdAt: workspace.createdAt,
-    updatedAt: workspace.updatedAt,
-  };
-}
-
 async function ensureUserWorkspace(
   ctx: Context,
   config: WebServerConfig,
@@ -309,14 +298,12 @@ function createCapabilityHandler(
         return;
       }
       try {
-        const workspace = await ensureUserWorkspace(ctx, config, user.userId, user.displayName);
         jsonResponse(res, 200, {
           identity: {
             userId: user.userId,
             username: user.displayName,
             displayName: user.displayName,
           },
-          workspace: workspaceView(workspace),
           admin: false,
           workspaceOrigin: effectiveWorkspaceOrigin(ctx, config),
           templates: config.templates,
@@ -685,6 +672,26 @@ export function createBrowserApiHandler(
               ? 404
               : 502;
         jsonResponse(res, status, { error: message }, { route: "session-context", sessionId });
+      }
+      return;
+    }
+    const addSpaceMatch = /^\/spaces\/([^/]+)\/workspace$/u.exec(subPath);
+    if (addSpaceMatch !== null) {
+      if (req.method !== "POST") {
+        jsonResponse(res, 405, { error: "method_not_allowed" });
+        return;
+      }
+      const user = authenticatedUser(ctx);
+      if (user === null) {
+        jsonResponse(res, 401, { error: "workspace_connection_required" });
+        return;
+      }
+      try {
+        const result = await ctx.get("univerWorkspace")!.addSpace(user.userId, decodeURIComponent(addSpaceMatch[1]!));
+        jsonResponse(res, 200, result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "workspace_unavailable";
+        jsonResponse(res, message === "workspace_space_unavailable" ? 404 : upstreamStatus(error), { error: message });
       }
       return;
     }

@@ -132,7 +132,7 @@ async function waitForApplication() {
   const deadline = Date.now() + 45000;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch("/api/uwh/me", { cache: "no-store", headers: { accept: "application/json", "x-uwh-connection": expected.version }, signal: AbortSignal.timeout(3000) });
+      const response = await fetch("/api/uwh/me", { cache: "no-store", headers: { accept: "application/json" }, signal: AbortSignal.timeout(3000) });
       const status = response.ok ? await response.json() : null;
       if (status?.connected === true && status.switching === false && status.identity?.userId === expected.userId && status.workspaceOrigin === expected.origin) {
         const home = await fetch("/", { cache: "no-store", signal: AbortSignal.timeout(3000) });

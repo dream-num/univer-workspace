@@ -98,16 +98,20 @@ indexes, attachments and Workspace records use the existing origin-and-user
 runtime directory; switching back restores that directory. The HTTP listener,
 browser authentication, model credentials and settings remain running.
 
-Each rendered page carries a connection version. HTTP requests and collaboration
-WebSocket upgrades from an old page are rejected after a switch. Other open tabs
-reload when the new runtime is ready, so their old selections cannot operate on
-the new account. Business notifications use a logical Remote stream on DSH's
+Workspace Agent is a single-user application with one active account per instance.
+Switching accounts affects all open tabs. They follow DSH connection state changes
+and pause the old page while checking. After an account change, each tab asks the
+user to refresh once the new runtime is ready. Ordinary reconnections to the same
+account resume the page without confirmation. A failed readiness check offers
+**Check again** after the bounded recovery window. Requests temporarily receive 503 while
+account services switch; DSH owns browser authentication and Session attachments.
+Business notifications use a logical Remote stream on DSH's
 existing WebSocket mux. The Workspace Agent shares one authenticated Workspace Worktree
 feed across local tabs; a reconnect invalidates the open review views and directory
 so missed changes are fetched again. Idle tabs do not poll connection status.
 OAuth completion and logout use short readiness checks for at most 45 seconds.
-A lost DSH connection or rejected stale-account request also checks readiness
-before reopening the application. Switching stops the previous account's active agent runtime;
+A change in DSH connection state or a restored page also checks readiness
+before allowing the page to resume or asking the user to refresh. Switching stops the previous account's active agent runtime;
 already accepted remote operations remain owned by the Workspace server.
 
 ## Local data and storage
@@ -319,7 +323,11 @@ through `OAUTH_CLIENTS_JSON` using `apps/workspace/.env.example` before startup.
 
 
 After login, the left sidebar exposes the implemented **Sessions / Files / Worktree**
-tabs. Session navigation keeps the native DSH behavior, Workspace file
+tabs. On a new device/account, the Sessions list is empty: signing in and browsing
+Files do not add Spaces. Use **Add workspace** or **Choose workspace** and select a
+Space to add it locally. Previously added Spaces and Sessions remain on that device;
+removing a local registration does not delete the remote Space or auto-add it again.
+Session navigation keeps the native DSH behavior, Workspace file
 management browses the connected Space/Node/Resource tree, and Worktree lists
 origin-level personal/team tasks with open/all/closed filtering. Open or create
 a file independently of conversations. Opening a file inserts its Viewer in the
@@ -344,7 +352,8 @@ the origin and a non-secret account identifier.
 Once the browser has opened the new token URL and loaded the authorized
 Workspace identity:
 
-1. Open **Sessions** in the left sidebar and select **New session**. Type a message in
+1. Open **Sessions** and add a Space with **Add workspace** (or **Choose workspace**
+   in the new-session view), then select **New session**. Type a message in
    the native composer on the right. Sending to a model also requires a local
    DSH model credential; Workspace login only authorizes Workspace data.
 2. Open **Files**, select a Personal or Team Space, then use **New** to create
@@ -469,13 +478,9 @@ pages are available.
 - **The authorization request expires:** start a new login from **Settings →
   Workspace**. This application uses browser OAuth with PKCE and consent; it does
   not ask you to enter a CLI device code.
-- **Session log download fails with `workspace_connection_changed`:** refresh
-  Agent after updating its local profile, then download using **Session log**.
-  The button includes the page's connection version; a copied bare
-  `/api/session.export` URL cannot pass the account-isolation check.
 - **The Viewer is unavailable:** confirm that the connected account can read the
   Resource and that the profile was rebuilt after changing plugin source.
-- **The directory still shows the previous account:** let the page refresh
+- **The directory still shows the previous account:** confirm **Refresh page** in each affected tab
   after authorization. If it persists, record the service origin and account
   names for diagnosis; preserve the local data directory and session history.
 
@@ -489,11 +494,12 @@ Workspace file and Worktree previews share one native Sidecar tab per session.
 `.univer.html` files render as live pages with independently authorized Sheet sources,
 including writes when the current user can edit. Closing or switching away retains
 the HTML runtime until saving confirms; a failed save keeps a visible retry surface.
-Account changes retain the existing connection fence and reload behavior.
+Account changes apply to all open tabs through the same connection recovery behavior.
 DSH owns its resize, split, fullscreen and close controls. Opening another file
 updates that preview; clicking the same file reveals or reopens it. With no
 selected session, opening a file uses the native blank-session flow in a
-connected Space. Sidecar layout state is session-local and memory-only.
+Space already added to the session list; otherwise, add one first. Sidecar layout
+state is session-local and memory-only.
 Worktree tab titles show the task name and status. Merged Worktrees initially show
 Changes; other states initially show Result. Users can switch explicitly.
 Title and lifecycle actions stay on one line. Wide headers show Close; narrower

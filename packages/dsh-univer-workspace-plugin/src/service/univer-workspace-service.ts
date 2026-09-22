@@ -39,7 +39,7 @@ import type {
 import type { DocumentFileState } from "../shared/state.ts";
 import type { JsonValue } from "../json-value.ts";
 
-/** The current User's accessible Univer Workspace Spaces, reconciled against dsh workspaces. */
+/** The current User's accessible Spaces, with any existing local registrations. */
 export interface ReconciledSpaces {
   readonly spaces: readonly WorkspaceSpace[];
 }
@@ -85,8 +85,11 @@ export abstract class UniverWorkspaceService extends Service {
     super(ctx, "univerWorkspace");
   }
 
-  /** List the current User's Spaces, reconciling each with a dsh workspace. */
+  /** List accessible Spaces without adding them to the local session list. */
   abstract listSpaces(userId: string): Promise<ReconciledSpaces>;
+
+  /** Explicitly add one accessible Space to the local DSH workspace registry. */
+  abstract addSpace(userId: string, spaceId: string): Promise<{ dshWorkspaceId: string; path: string }>;
 
   /** List a Space's Nodes, with optional hierarchy/search/resource filters. */
   abstract listDocuments(
