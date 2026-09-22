@@ -25,6 +25,26 @@ between HTML, text, the folder and its child. The sidebar should retain its rows
 expansion and scroll position while only the content changes. Switching to immersive
 view should preserve the current HTML instance.
 
+## Referenced Sheet replay fixture
+
+Run `pnpm --filter @univerjs/univer-workspace exec vite --config test/vite.referenced-sheet.config.ts`,
+then open `http://127.0.0.1:5184/test/fixtures/referenced-sheet.html?type=doc`
+or change `type` to `slide`.
+
+The fixture captures each production editor's preset definition and assembles it
+with the published collaboration and Embed plugins. It creates a fresh Sheet,
+serializes it through the SDK, and supplies changesets that rename its worksheet
+to `Finance` and change A1 from 100 to 12500. The host reads A1 through the Embed
+formula reference data provider. `window.referenceResult` resolves with the
+replayed name, amount, and Sheet cursor dependency result.
+
+The snapshot service is in memory; this fixture does not exercise Workspace
+authentication or a live collaboration server. The collaboration client can log
+404 responses for its session-ticket and authorization endpoints. Missing commands,
+injector errors, or an amount other than 12500 are failures. Production builds do
+not include this test entry. The matching unit tests exercise snapshot replay
+through the Workspace source provider with both editor preset definitions.
+
 ## Mobile Sheets investigation record
 
 The standalone mobile verification fixture (`mobile.html` / `mobile.ts` /

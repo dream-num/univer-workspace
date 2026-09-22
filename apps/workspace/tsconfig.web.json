@@ -15,6 +15,7 @@
     "test/fixtures/**/*.tsx",
     "test/vite.header.config.ts",
     "test/vite.immersive.config.ts",
+    "test/vite.referenced-sheet.config.ts",
     "generated/**/*.d.ts",
     "vite.config.ts"
   ]

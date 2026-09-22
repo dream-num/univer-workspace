@@ -75,6 +75,7 @@ import {
 } from "../../collaboration-editor";
 import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
 import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
+import { getReferencedSheetPlugins } from "../../features/referenced-sheet-plugins";
 
 export type SlideEditorProps = CollaborationEditorProps;
 
@@ -121,6 +122,7 @@ export function createSlideComparisonPresets(
   container: HTMLElement
 ): IPreset[] {
   return [
+    { plugins: getReferencedSheetPlugins() },
     {
       plugins: [
         UniverRenderEnginePlugin,
@@ -180,6 +182,7 @@ export default createCollaborationEditor({
   exchangeFeaturePlugins: () => [UniverSlidesExchangeClientPlugin],
   printFeaturePlugins: () => [UniverSlidesPrintPlugin],
   createPresets: (container) => [
+    { plugins: getReferencedSheetPlugins() },
     {
       plugins: [
         UniverRenderEnginePlugin,
