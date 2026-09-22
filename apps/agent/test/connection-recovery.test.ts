@@ -6,7 +6,7 @@ import { apply } from "../src/client/connection-recovery.ts";
 vi.mock("../src/client/connection-notice.ts", () => ({ createConnectionNotice: vi.fn() }));
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
-function setup() {
+function setup(initialState: "connected" | "connecting" | undefined = "connected") {
   const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async () => Response.json({ ready: true, version: "a" }));
   const replace = vi.fn();
   const events = new EventTarget();
@@ -15,7 +15,7 @@ function setup() {
   const unsubscribe = vi.fn();
   const show = vi.fn();
   const dismiss = vi.fn();
-  let connectionState = "connected";
+  let connectionState: string | undefined = initialState;
   let actions!: { refresh: () => void; retry: () => void };
   vi.mocked(createConnectionNotice).mockImplementation((_locale, handlers) => {
     actions = handlers;
@@ -34,17 +34,62 @@ function setup() {
   expect(globalThis.WebSocket).toBe(socket);
   return { fetch, replace, notify: (state = "connected") => { connectionState = state; notify(); },
     dispose: () => dispose(), unsubscribe, events, noticeState: () => show.mock.lastCall?.[0],
-    confirm: () => actions.refresh(), retry: () => actions.retry(), dismiss };
+    confirm: () => actions.refresh(), retry: () => actions.retry(), dismiss, show };
+}
+
+function pageShow(persisted: boolean) {
+  return Object.assign(new Event("pageshow"), { persisted });
 }
 
 describe("global Workspace account recovery", () => {
+  it("does not show a notice during healthy startup or the normal pageshow event", async () => {
+    vi.useFakeTimers();
+    const { notify, events, show, fetch, dispose } = setup("connecting");
+    expect(show).not.toHaveBeenCalled();
+    events.dispatchEvent(pageShow(false));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch).toHaveBeenCalledOnce();
+    notify("connected");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(show.mock.calls.every(([state]) => state === undefined)).toBe(true);
+    dispose();
+  });
+
+  it("detects an account switch during initial loading without a checking flash", async () => {
+    vi.useFakeTimers();
+    const { fetch, notify, show, noticeState, replace, dispose } = setup("connecting");
+    await vi.advanceTimersByTimeAsync(0);
+    fetch.mockResolvedValue(Response.json({ ready: true, version: "b" }));
+    notify("connected");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(noticeState()).toBe("changed");
+    expect(show).not.toHaveBeenCalledWith("checking");
+    expect(replace).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it("does not unlock a disconnected page just because HTTP is ready", async () => {
+    vi.useFakeTimers();
+    const { notify, noticeState, dispose } = setup();
+    await vi.advanceTimersByTimeAsync(0);
+    notify("disconnected");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(noticeState()).toBe("checking");
+    notify("connected");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(noticeState()).toBeUndefined();
+    dispose();
+  });
+
   it("pauses immediately on connection loss and unlocks an unchanged account after checking", async () => {
+    vi.useFakeTimers();
     const { fetch, replace, notify, noticeState, dispose } = setup();
-    await vi.waitFor(() => expect(noticeState()).toBeUndefined());
+    await vi.advanceTimersByTimeAsync(0);
     let finish!: (response: Response) => void;
     fetch.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-    notify("reconnecting");
+    notify("disconnected");
     expect(noticeState()).toBe("checking");
+    notify("connected");
     finish(Response.json({ ready: true, version: "a" }));
     await vi.waitFor(() => expect(noticeState()).toBeUndefined());
     expect(replace).not.toHaveBeenCalled();
@@ -199,7 +244,7 @@ describe("global Workspace account recovery", () => {
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     let finish!: (response: Response) => void;
     fetch.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-    events.dispatchEvent(new Event("pageshow"));
+    events.dispatchEvent(pageShow(true));
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     const signal = fetch.mock.calls[1]![1]!.signal!;
     dispose();
@@ -208,7 +253,7 @@ describe("global Workspace account recovery", () => {
     finish(Response.json({ ready: true, version: "b" }));
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(replace).not.toHaveBeenCalled();
-    events.dispatchEvent(new Event("pageshow"));
+    events.dispatchEvent(pageShow(true));
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

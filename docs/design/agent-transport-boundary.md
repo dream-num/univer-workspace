@@ -28,7 +28,12 @@ subscription and reads `/auth/connection/status`. A native modal pauses interact
 keyboard focus and existing portals. If the runtime changed, the modal stays open
 until the user confirms **Refresh page**; readiness is checked again before
 navigation. Reconnecting to the same runtime dismisses the modal automatically.
-Restored pages perform the same check. An expired DSH browser session shows a
+Initial page loading and the first connection check run without a recovery modal
+when the runtime is ready and unchanged. Only `pageshow` events with `persisted`
+set revalidate a page restored from the browser's back/forward cache; ordinary
+navigation already runs the initial check. After transport loss, HTTP readiness
+alone does not resume the old page: DSH must also report a connected transport.
+An expired DSH browser session shows a
 refresh-to-sign-in prompt. Transient failures retry within the bounded recovery
 window; exhaustion keeps the page paused with **Check again**. Healthy idle pages
 do not poll. Confirmation refreshes only that tab; the active account has already

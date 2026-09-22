@@ -16,6 +16,8 @@ export function apply(ctx: Context): void {
     let refreshing = false;
     let changed = false;
     let confirmed = false;
+    let wasConnected = connection.state.getSnapshot() === "connected";
+    let recovering = false;
     let noticeState: ConnectionNoticeState | undefined;
     const notice = createConnectionNotice(ctx.locale, {
       refresh: () => {
@@ -54,7 +56,11 @@ export function apply(ctx: Context): void {
               if (typeof state.version === "string" && pageVersion !== undefined && state.version !== pageVersion) changed = true;
               if (state.ready) {
                 if (changed && confirmed) reload();
-                else show(changed ? "changed" : undefined);
+                else if (changed) show("changed");
+                else if (!recovering || connection.state.getSnapshot() === "connected") {
+                  recovering = false;
+                  show(undefined);
+                }
                 return;
               }
               show("checking");
@@ -77,14 +83,27 @@ export function apply(ctx: Context): void {
       });
     };
     const onConnectionChange = () => {
-      // Even a recovered transport may now serve a different account runtime.
-      show("checking");
+      const connected = connection.state.getSnapshot() === "connected";
+      // Initial connection is normal startup, not recovery of an old page.
+      // Once connected, transport loss makes the existing page stale until checked.
+      if (!connected && wasConnected) {
+        recovering = true;
+        if (noticeState === undefined) show("checking");
+      }
+      if (connected) wasConnected = true;
       check();
     };
-    const onPageShow = () => { show("checking"); check(); };
+    const onPageShow = (event: PageTransitionEvent) => {
+      // A normal navigation already runs the initial check below. Only bfcache
+      // restoration brings back an old page that must be paused and revalidated.
+      if (!event.persisted) return;
+      recovering = true;
+      if (noticeState === undefined) show("checking");
+      check();
+    };
     const unsubscribe = connection.state.subscribe(onConnectionChange);
     window.addEventListener("pageshow", onPageShow);
-    onPageShow();
+    check();
     return () => {
       lifetime.abort();
       unsubscribe();
