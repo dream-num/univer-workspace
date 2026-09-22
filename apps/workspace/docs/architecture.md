@@ -299,3 +299,13 @@ Node 与 Space 页面复用现有查询、目录与只读编辑器，未登录�
 身份仍由 Session API 判断；SDK 的访客显示身份不赋予任何权限。服务端在明确开放的读取入口
 传入匿名身份，统一由 Access Resolver 根据链接分享和 Space 公开可读判定 viewer 权限。
 HTML 与引用来源继续分别鉴权，无专用匿名授权规则。
+
+## Collaborator presence lifecycle
+
+The editor observes room membership through the published SDK `MemberService`.
+SDK 1.0.0-rc.0's `subscribeCollaborators` Facade can dereference `members$` before
+the room exists, terminating the observer during editor initialization. The small
+`workarounds/collaboration-members.ts` adapter treats an absent room as empty
+presence, switches to a replacement room when emitted, and disposes on unmount.
+Remove this adapter when the SDK Facade passes the delayed-room and replacement
+regressions without it. OT, room creation and transport remain SDK responsibilities.
