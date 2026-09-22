@@ -378,7 +378,8 @@ export function createCollaborationGateway(options: {
         error: OK_ERROR,
         actions: allowedActions(
           request.body?.actions,
-          access.resolveUnitContent(userId, unitId)
+          access.resolveUnitContent(userId, unitId),
+          userId
         ),
       });
     }
@@ -567,28 +568,33 @@ function allowedObjectActions(
     unitID: unitId,
     objectID:
       typeof candidate.objectID === "string" ? candidate.objectID : "",
-    actions: allowedActions(candidate.actions, resource),
+    actions: allowedActions(candidate.actions, resource, userId),
   };
 }
 
 function allowedActions(
   value: unknown,
-  resource: ResourceContentAccess | null
+  resource: ResourceContentAccess | null,
+  userId: string
 ): Array<{ readonly action: unknown; readonly allowed: boolean }> {
   return Array.isArray(value)
     ? value.map((action) => ({
         action,
-        allowed: isActionAllowed(resource, action),
+        allowed: isActionAllowed(resource, action, userId),
       }))
     : [];
 }
 
 function isActionAllowed(
   resource: ResourceContentAccess | null,
-  action: unknown
+  action: unknown,
+  userId: string
 ): boolean {
   if (!resource || typeof action !== "number") return false;
   if (action === UnitAction.Share) return false;
+  // The client uses Comment for both the comment UI and comment mutations.
+  // Anonymous link access can list comments, but cannot receive that point.
+  if (action === UnitAction.Comment) return userId !== ANONYMOUS_USER_ID;
   if (resource.role === "owner" || resource.role === "admin") return true;
   if (resource.capabilities.editContent) {
     return ![
@@ -598,10 +604,6 @@ function isActionAllowed(
   }
   return [
     UnitAction.View,
-    // Univer gates opening the built-in comment UI behind the workbook-level
-    // Comment action. Comment mutations are still authorized independently by
-    // the Comment endpoint and require editContent.
-    UnitAction.Comment,
     UnitAction.Print,
     UnitAction.Copy,
     UnitAction.Export,
@@ -661,9 +663,10 @@ function requireCommentAccess(
   unitId: string,
   write: boolean
 ): ResourceContentAccess {
-  const resource = write
-    ? requireUnitEdit(access, userId, unitId)
-    : requireUnitAccess(access, userId, unitId);
+  const resource = requireUnitAccess(access, userId, unitId);
+  if (write && userId === ANONYMOUS_USER_ID) {
+    throw new CollabError("PERMISSION_DENIED", "Sign in to comment.");
+  }
   if (resource.kind !== "univer" || resource.unitType === null) {
     throw new CollabError(
       "INVALID_REQUEST",
