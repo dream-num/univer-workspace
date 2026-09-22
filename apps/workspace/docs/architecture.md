@@ -308,7 +308,3 @@ the room exists, terminating the observer during editor initialization. The smal
 presence, switches to a replacement room when emitted, and disposes on unmount.
 Remove this adapter when the SDK Facade passes the delayed-room and replacement
 regressions without it. OT, room creation and transport remain SDK responsibilities.
-
-The referenced-Sheet browser fixture also checks native Doc/Slide formula shapes
-after a replayed source mutation. Formula calculation and reference subscriptions
-remain in the SDK; Workspace adds no duplicate source sessions or calculation cache.
