@@ -137,6 +137,8 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
   });
   const exchange = new WorkspaceUnitExchangeFeature({
     runtime: runtimeOperations,
+    resolveImageAsset: async (input) =>
+      await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveImageAsset(input),
     createUnit: async (input) => await units.create(input),
     resolveRuntimeTarget: async (input) =>
       await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveRuntimeTarget(

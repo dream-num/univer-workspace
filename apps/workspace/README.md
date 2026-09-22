@@ -84,6 +84,12 @@ files are temporary BlobStore objects with process-local task metadata and a
 two-hour lifetime. Exchange actions are not shown for Worktree or merge-preview
 editors because those scopes do not yet have scope-aware Office conversion.
 
+Office export resolves managed image Asset IDs through the requesting user's
+existing Trunk permissions before conversion, including images in master pages
+and serialized drawing resources. The export copy contains inline image bytes;
+stored snapshots and Assets remain unchanged. Missing, inaccessible or invalid
+images fail the export instead of producing a document with missing pictures.
+
 Doc and Slide editors can read referenced Sheet data in the same editor runtime.
 They register the Sheet data plugins needed to restore source resources, replay
 changesets and resolve formulas before loading the source. Referenced Sheets do

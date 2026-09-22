@@ -304,6 +304,60 @@ describe("Workspace Office export workflow", () => {
     expect(exportToFile).toHaveBeenCalledWith(unitData, outputPath, options);
   });
 
+  it("resolves shared, master, and serialized resource images in the requested Worktree without editing content", async () => {
+    const image = { source: "asset-1", imageSourceType: "UUID" };
+    const data = {
+      id: "unit-1",
+      masterPages: { master: { elements: { image } } },
+      slides: { page: { fillImageSource: "asset-1", fillImageSourceType: "UUID" } },
+      resources: [{ name: "drawings", data: JSON.stringify([{ source: "asset-2", sourceType: "UUID" }]) }],
+      untouched: { source: "asset-1", description: "asset-2" },
+    };
+    const original = structuredClone(data);
+    const resolveImageAsset = vi.fn(async () => ({ bytes: new Uint8Array([1, 2]), mediaType: "image/png", contentLength: 2 }));
+    const exportToFile = vi.fn<WorkspaceUnitExchangeDependencies["exportToFile"] & {}>(async () => undefined);
+    await createFeature({
+      resolveRuntimeTarget: async () => target("slide"),
+      runtime: { exportUnitData: async () => data as never },
+      resolveImageAsset, exportToFile,
+    }).exportFile({ outputPath: "deck.pptx", unitId: "unit-1", worktreeId: "wt-1" });
+    expect(resolveImageAsset).toHaveBeenCalledTimes(2);
+    expect(resolveImageAsset.mock.calls).toEqual(expect.arrayContaining([
+      [{ assetId: "asset-1", worktreeId: "wt-1" }],
+      [{ assetId: "asset-2", worktreeId: "wt-1" }],
+    ]));
+    expect(data).toEqual(original);
+    expect(exportToFile.mock.calls[0]![0]).toEqual({
+      ...data,
+      masterPages: { master: { elements: { image: { source: "data:image/png;base64,AQI=", imageSourceType: "BASE64" } } } },
+      slides: { page: { fillImageSource: "data:image/png;base64,AQI=", fillImageSourceType: "BASE64" } },
+      resources: [{ name: "drawings", data: JSON.stringify([{ source: "data:image/png;base64,AQI=", sourceType: "BASE64" }]) }],
+    });
+  });
+
+  it("does not write an export when an image is unauthorized or unavailable", async () => {
+    const failure = new Error("Asset not found");
+    const exportToFile = vi.fn();
+    await expect(createFeature({
+      runtime: { exportUnitData: async () => ({ id: "unit-1", image: { source: "private-asset", imageSourceType: "UUID" } }) as never },
+      resolveImageAsset: async () => { throw failure; }, exportToFile,
+    }).exportFile({ outputPath: "book.xlsx", unitId: "unit-1", worktreeId: "wt-1" })).rejects.toBe(failure);
+    expect(exportToFile).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { mediaType: "text/html", bytes: new Uint8Array([1]) },
+    { mediaType: "image/png", bytes: new Uint8Array() },
+    { mediaType: "image/png", bytes: new Uint8Array([1]), contentLength: 2 },
+  ])("rejects invalid image content before Office conversion %#", async (asset) => {
+    const exportToFile = vi.fn();
+    await expect(createFeature({
+      runtime: { exportUnitData: async () => ({ id: "unit-1", image: { source: "asset-1", imageSourceType: "UUID" } }) as never },
+      resolveImageAsset: async () => asset, exportToFile,
+    }).exportFile({ outputPath: "book.xlsx", unitId: "unit-1", worktreeId: "wt-1" })).rejects.toMatchObject({ code: "workspace-exchange-image-invalid" });
+    expect(exportToFile).not.toHaveBeenCalled();
+  });
+
   it("preserves resolver failure before all other validation and side effects", async () => {
     const order: string[] = [];
     const failure = new Error("target unavailable");
@@ -437,6 +491,7 @@ function createFeature(
   overrides: Partial<WorkspaceUnitExchangeDependencies> = {},
 ): WorkspaceUnitExchangeFeature {
   return new WorkspaceUnitExchangeFeature({
+    resolveImageAsset: async () => { throw new Error("Unexpected Asset request"); },
     createUnit: async (input) => createdUnit(input),
     exportToFile: async () => undefined,
     importFile: async () => ({ id: "converted", name: "Imported" }),

@@ -260,6 +260,7 @@ export function createWorkspaceApplication(
     worktrees,
   });
   const exchange = createExchangeModule({
+    assets: univerAssets,
     access,
     resources,
     spaces,

@@ -15,6 +15,8 @@
 - 提供 Shell-neutral worker composition、content runtime pool、同步读取、UnitData export、Facade execution、
   embedded-image externalization 与 changeset commit workflow。
 - 提供 Node-hosted Office import/export、格式与 Unit 类型校验、Worktree Unit/runtime 集成和默认 exchange adapter。
+  导出通过当前 Worktree 的已认证 Asset 读取解析图片 ID，仅在导出副本中恢复内嵌图片；
+  缺失、无权限或无效图片使导出失败，不静默丢图，也不写回 Unit 或产生新 revision。
 - 提供 Typst bundle 编译、确定性 Doc materialization，以及可选的 Worktree Unit apply workflow。
 - 提供 render Unit 装配、browser screenshot capture、PNG 输出、PDF 打印、Slide layout lint，以及配套 render page 构建源。
 - 提供本机 SVG/relative asset 编译、真实或估算字体测量、Slide page 包装与 Worktree apply workflow。
