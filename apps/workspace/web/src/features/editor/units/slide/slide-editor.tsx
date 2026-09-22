@@ -156,6 +156,7 @@ export function createSlideComparisonPresets(
 }
 
 export default createCollaborationEditor({
+  liveSheetReferences: true,
   label: "presentation",
   history: {
     createPlugin: (containerId) => [

@@ -1,7 +1,11 @@
+import { LifecycleStages } from "@univerjs/core";
 import type { FUniver } from "@univerjs/core/facade";
-import "@univerjs/docs-ui/facade";
-import "@univerjs/sheets-ui/facade";
-import "@univerjs-pro/slides/facade";
+// Each native editor preset installs its own UI Facade. Import only the types
+// here: a Sheet UI extension in a Doc host observes referenced, headless Sheets
+// and requests UI services that the Doc runtime deliberately does not install.
+import type {} from "@univerjs/docs-ui/facade";
+import type {} from "@univerjs/sheets-ui/facade";
+import type {} from "@univerjs-pro/slides/facade";
 
 import { NATIVE_PREVIEW_CHANNEL, parseNativePreviewFocus, type NativePreviewFocus } from "./preview";
 
@@ -40,17 +44,28 @@ export function installNativePreviewNavigation(api: FUniver, unitId: string, tok
   const send = (status: string, requestId?: string) => window.parent.postMessage({
     channel: NATIVE_PREVIEW_CHANNEL, token, unitId, status, requestId,
   }, window.location.origin);
+  let ready = api.getCurrentLifecycleStage() >= LifecycleStages.Rendered;
+  let lifecycle: { dispose(): void } | undefined;
   const receive = (event: MessageEvent) => {
     if (window.parent === window || event.source !== window.parent ||
         event.origin !== window.location.origin || event.data?.channel !== NATIVE_PREVIEW_CHANNEL ||
         event.data?.token !== token || event.data?.unitId !== unitId) return;
-    if (event.data.action === "status") { send("ready"); return; }
+    if (event.data.action === "status") { if (ready) send("ready"); return; }
+    if (!ready) return;
     const focus = parseNativePreviewFocus(event.data.focus);
     if (event.data.action !== "focus" || !focus || (typeof event.data.requestId !== "string" || !/^[\w-]{1,128}$/.test(event.data.requestId))) return;
     try { send(locateNativePreview(api, unitId, focus) ? "located" : "missing", event.data.requestId); }
     catch { send("missing", event.data.requestId); }
   };
   window.addEventListener("message", receive);
-  send("ready");
-  return { dispose: () => window.removeEventListener("message", receive) };
+  // Snapshot loading precedes Sheet scroll-controller registration. Do not let
+  // the parent navigate until the native render modules are installed.
+  if (ready) send("ready");
+  else lifecycle = api.addEvent(api.Event.LifeCycleChanged, ({ stage }) => {
+    if (stage < LifecycleStages.Rendered) return;
+    ready = true;
+    lifecycle?.dispose();
+    send("ready");
+  });
+  return { dispose() { lifecycle?.dispose(); window.removeEventListener("message", receive); } };
 }

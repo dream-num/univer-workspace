@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LifecycleStages } from "@univerjs/core";
 import type { FUniver } from "@univerjs/core/facade";
-vi.mock("@univerjs/docs-ui/facade", () => ({}));
-vi.mock("@univerjs/sheets-ui/facade", () => ({}));
-vi.mock("@univerjs-pro/slides/facade", () => ({}));
+// Navigation types must not install every product UI Facade into the host.
+vi.mock("@univerjs/docs-ui/facade", () => { throw new Error("Doc UI loaded by shared navigation"); });
+vi.mock("@univerjs/sheets-ui/facade", () => { throw new Error("Sheet UI loaded by shared navigation"); });
+vi.mock("@univerjs-pro/slides/facade", () => { throw new Error("Slides Facade loaded by shared navigation"); });
 import { installNativePreviewNavigation, locateNativePreview } from "../../web/src/features/editor/native-preview";
 
 describe("native preview navigation", () => {
@@ -43,13 +45,32 @@ describe("native preview navigation", () => {
 
 
 describe("native frame message identity", () => {
+  it("announces readiness only after native render modules are installed", () => {
+    const parent = { postMessage: vi.fn() };
+    const addEventListener = vi.fn();
+    vi.stubGlobal("window", { parent, location: { origin: "https://workspace.example" }, addEventListener, removeEventListener: vi.fn() });
+    const detach = vi.fn();
+    const addEvent = vi.fn((_event: string, _callback: (event: { stage: LifecycleStages }) => void) => ({ dispose: detach }));
+    const api = { getCurrentLifecycleStage: () => LifecycleStages.Ready,
+      Event: { LifeCycleChanged: "lifecycle" }, addEvent } as unknown as FUniver;
+    const observer = installNativePreviewNavigation(api, "sheet", "token");
+    expect(parent.postMessage).not.toHaveBeenCalled();
+    const lifecycle = addEvent.mock.calls[0]![1] as (event: { stage: LifecycleStages }) => void;
+    lifecycle({ stage: LifecycleStages.Ready });
+    expect(parent.postMessage).not.toHaveBeenCalled();
+    lifecycle({ stage: LifecycleStages.Rendered });
+    expect(parent.postMessage).toHaveBeenCalledOnce();
+    expect(detach).toHaveBeenCalledOnce();
+    observer.dispose();
+  });
+
   afterEach(() => vi.unstubAllGlobals());
   it("accepts only its same-origin parent, Unit and token, and removes its listener", () => {
     const parent = { postMessage: vi.fn() };
     const addEventListener = vi.fn();
     const removeEventListener = vi.fn();
     vi.stubGlobal("window", { parent, location: { origin: "https://workspace.example" }, addEventListener, removeEventListener });
-    const api = {} as FUniver;
+    const api = { getCurrentLifecycleStage: () => LifecycleStages.Steady } as FUniver;
     const observer = installNativePreviewNavigation(api, "doc", "token");
     const receive = addEventListener.mock.calls[0]![1];
     const event = { source: parent, origin: "https://workspace.example", data: {

@@ -107,3 +107,24 @@ The Browser-only DOM adapter discovers the renderer iframe inside the viewer's
 open DOM/shadow roots without SDK class names or private properties. Revalidate
 this adapter and the production browser fixture when upgrading the renderer.
 The generic shared HTML viewer and Agent consumer remain unchanged.
+
+## Live formula sources
+
+Doc and Slide hosts subscribe to referenced Sheets through their existing SDK
+collaboration transport after snapshot materialization. This is Browser editor
+composition; the snapshot provider remains read-only and does not create sessions.
+Only sources in the host's live scope join: Trunk-to-Trunk or a Sheet mapped into
+the same Worktree. Merge previews stay frozen, and an unmapped Trunk source never
+joins a Worktree room. Source mutations from the host are blocked; authoritative
+replay and local calculation caches remain allowed. Editor disposal releases the
+subscriptions with its SDK runtime.
+
+Shared native navigation imports Facade types only. Each product editor owns its
+runtime UI extensions, so loading a headless Sheet source cannot install Sheet UI
+observers in a Doc or Slide host.
+
+SDK 1.0.0-rc.0 can calculate external Shape formulas before a changed Source's
+calculated cells are applied. The isolated `referenced-formula-results` adapter
+invalidates Host formulas after a live Source result batch. Remove it when the
+SDK refreshes external consumers after Source results apply; it does not calculate
+financial results or write Source content itself.

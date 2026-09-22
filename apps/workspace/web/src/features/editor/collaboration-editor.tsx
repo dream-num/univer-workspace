@@ -1,6 +1,8 @@
 import type { ILanguagePack } from "@univerjs/core";
+import { RegisterOtherFormulaService } from "@univerjs/engine-formula";
 import {
   CommandType,
+  ICommandService,
   LifecycleStages,
   LocaleType,
   LogLevel,
@@ -14,6 +16,7 @@ import {
   CollaborationUIEventId,
   CollaborationUIEventService,
   CollaborationStatus,
+  CollaborationController,
   MemberService,
   UniverCollaborationClientPlugin,
   type IUniverCollaborationClientConfig,
@@ -67,6 +70,8 @@ import {
 } from "./features/exchange-plugins";
 import { installNativePreviewNavigation } from "./native-preview";
 import { resolveMergeReview } from "./merge-review";
+import { refreshReferencedFormulaResults } from "./workarounds/referenced-formula-results";
+import { withLiveSheetReferences } from "./live-sheet-references";
 import { subscribeWorkspaceCollaborators } from "./workarounds/collaboration-members";
 import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
 import { resolveUniverLicense } from "./features/univer-license";
@@ -115,6 +120,7 @@ interface ICollaborationEditorDefinition {
   readonly label: string;
   readonly history: WorkspaceHistoryDefinition;
   readonly enableDocumentCollaborationUI?: boolean;
+  readonly liveSheetReferences?: boolean;
   readonly collaborationProvidedByPreset?: boolean;
   readonly exchangeProvidedByPreset?: boolean;
   readonly exchangeEnabled?: boolean;
@@ -193,6 +199,9 @@ export function createCollaborationEditor(
       let collaboratorsListener: { dispose(): void } | null = null;
       let collaborators: readonly IMember[] = [];
       let collaborationUIEventListener: { unsubscribe(): void } | null = null;
+      const liveSheetIds = new Set<string>();
+      let referencedFormulaResults: { dispose(): void } | null = null;
+      let referenceWriteGuard: { dispose(): void } | null = null;
       let readOnlyListener: { dispose(): void } | null = null;
       let readOnlyLifecycleListener: { dispose(): void } | null = null;
       onCollaboratorsChange?.([]);
@@ -228,7 +237,7 @@ export function createCollaborationEditor(
           collaborationScope,
           mappedUnitIds
         );
-        const referenceProvider =
+        const snapshotReferenceProvider =
           createWorkspaceReferencedUnitProviderRegistration({
             hostContext: referenceHostContext,
             resolveSnapshotService: () => {
@@ -240,6 +249,17 @@ export function createCollaborationEditor(
               return mountedUniver.__getInjector().get(SnapshotService);
             },
           });
+        const referenceProvider = definition.liveSheetReferences ? withLiveSheetReferences(
+          snapshotReferenceProvider,
+          referenceHostContext,
+          async (sourceUnitId) => {
+            if (disposed || !mountedUniver) throw new Error("Editor was disposed.");
+            if (sourceUnitId === unitId) return;
+            liveSheetIds.add(sourceUnitId);
+            await mountedUniver.__getInjector()
+              .get(CollaborationController).readyForCollab(sourceUnitId);
+          },
+        ) : snapshotReferenceProvider;
         const license = resolveUniverLicense();
         const licensePlugins: IPresetPlugin[] =
           definition.licenseProvidedByPreset
@@ -370,6 +390,27 @@ export function createCollaborationEditor(
         });
         mountedUniver = univer;
         univerAPIRef.current = univerAPI;
+        if (definition.liveSheetReferences) {
+          referencedFormulaResults = refreshReferencedFormulaResults(
+            univer.__getInjector().get(ICommandService),
+            univer.__getInjector().get(RegisterOtherFormulaService),
+            unitId,
+            liveSheetIds,
+          );
+        }
+        // Source Sheets are observed through SDK OT, never edited by this host.
+        referenceWriteGuard = univerAPI.addEvent(
+          univerAPI.Event.BeforeCommandExecute,
+          (event) => {
+            if (
+              event.type === CommandType.MUTATION &&
+              liveSheetIds.has(event.params?.unitId) &&
+              !event.options?.fromCollab &&
+              !event.options?.fromChangeset &&
+              !event.options?.onlyLocal
+            ) event.cancel = true;
+          },
+        );
         collaborationUIEventListener = univer
           .__getInjector()
           .get(CollaborationUIEventService)
@@ -392,13 +433,15 @@ export function createCollaborationEditor(
                   readonly options?: {
                     readonly fromCollab?: boolean;
                     readonly fromChangeset?: boolean;
+                    readonly onlyLocal?: boolean;
                   };
                   cancel: boolean;
                 };
                 if (
                   command.type === CommandType.MUTATION &&
                   !command.options?.fromCollab &&
-                  !command.options?.fromChangeset
+                  !command.options?.fromChangeset &&
+                  !command.options?.onlyLocal
                 ) {
                   command.cancel = true;
                 }
@@ -407,14 +450,14 @@ export function createCollaborationEditor(
           };
           if (
             univerAPI.getCurrentLifecycleStage() >=
-            LifecycleStages.Steady
+            LifecycleStages.Rendered
           ) {
             installReadOnlyGuard();
           } else {
             readOnlyLifecycleListener = univerAPI.addEvent(
               univerAPI.Event.LifeCycleChanged,
               ({ stage }) => {
-                if (stage < LifecycleStages.Steady) return;
+                if (stage < LifecycleStages.Rendered) return;
                 readOnlyLifecycleListener?.dispose();
                 readOnlyLifecycleListener = null;
                 installReadOnlyGuard();
@@ -508,6 +551,8 @@ export function createCollaborationEditor(
         onCollaboratorsChange?.([]);
         statusListener?.dispose();
         collaborationUIEventListener?.unsubscribe();
+        referencedFormulaResults?.dispose();
+        referenceWriteGuard?.dispose();
         readOnlyListener?.dispose();
         readOnlyLifecycleListener?.dispose();
         mountedUniver?.dispose();
