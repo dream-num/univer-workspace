@@ -84,6 +84,12 @@ files are temporary BlobStore objects with process-local task metadata and a
 two-hour lifetime. Exchange actions are not shown for Worktree or merge-preview
 editors because those scopes do not yet have scope-aware Office conversion.
 
+Doc and Slide editors can read referenced Sheet data in the same editor runtime.
+They register the Sheet data plugins needed to restore source resources, replay
+changesets and resolve formulas before loading the source. Referenced Sheets do
+not add a Sheet toolbar or replace the host editor; source access and Trunk or
+Worktree selection continue to use the Workspace reference provider.
+
 ### Configuration
 
 Copy `.env.example` to `.env`. Development, database, and production start
