@@ -13,7 +13,7 @@ export function createViewsRouter(options: {
       options.views.listRecent(session.user.id, {
         cursor: request.query.cursor,
         limit: request.query.limit,
-      })
+      }),
     );
   });
   router.get("/owned-by-me", (request, response) => {
@@ -22,7 +22,16 @@ export function createViewsRouter(options: {
       options.views.listOwned(session.user.id, {
         cursor: request.query.cursor,
         limit: request.query.limit,
-      })
+      }),
+    );
+  });
+  router.get("/html-views", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(
+      options.views.listHtmlViews(session.user.id, {
+        cursor: request.query.cursor,
+        limit: request.query.limit,
+      }),
     );
   });
   router.get("/shared-with-me", (request, response) => {
@@ -31,7 +40,7 @@ export function createViewsRouter(options: {
       options.views.listShared(session.user.id, {
         cursor: request.query.cursor,
         limit: request.query.limit,
-      })
+      }),
     );
   });
   return router;

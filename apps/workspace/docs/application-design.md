@@ -134,7 +134,7 @@ interface ResourcesModule {
   create(
     userId: string,
     idempotencyKey: string,
-    input: CreateResource
+    input: CreateResource,
   ): Promise<CreateResourceResult>;
   get(userId: string, resourceId: string): ResourceResponse;
   open(userId: string, resourceId: string): ResourceOpenView;
@@ -153,6 +153,7 @@ Blob 内容替换使用单次 PUT 和强 ETag 并发校验，直接发布到原 
 旧对象通过删除 Outbox 回收。失败或启动时发现中断的替换保留旧内容并清理新对象。
 
 `.univer.html` 使用现有 Blob 身份和上传生命周期，不新增数据库表或 Unit 类型。
+Browser 的 Apps 入口在侧栏团队空间之后，列出当前用户能打开的这类 Blob。主区域使用和 Node 页相同的 HTML 视图与顶栏操作；沉浸视图仍进入该 Node。
 Browser 根据模板中的 Unit ID 通过既有 API 检查来源访问，再由独立 Binding 引擎
 加载 headless 协同数据。HTML 文件权限不授予来源表格权限；页面脚本在隔离 iframe 中执行，来源数据访问由宿主授权。
 设计见 [Univer HTML Views](../../../docs/design/html-views/README.md)。

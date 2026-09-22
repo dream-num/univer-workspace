@@ -1324,6 +1324,24 @@ paths:
                 $ref: '#/components/schemas/OwnedResourceList'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/html-views:
+    get:
+      tags:
+        - Views
+      operationId: listHtmlViews
+      summary: List .univer.html Blobs the current user can open, newest node update first.
+      parameters:
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/LimitParameter'
+      responses:
+        '200':
+          description: HTML view Blobs visible to the current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnedResourceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /api/shared-with-me:
     get:
       tags:

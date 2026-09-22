@@ -124,6 +124,8 @@ paths:
     $ref: ./paths/views.yaml#/~1api~1recent-resources
   /api/owned-by-me:
     $ref: ./paths/views.yaml#/~1api~1owned-by-me
+  /api/html-views:
+    $ref: ./paths/views.yaml#/~1api~1html-views
   /api/shared-with-me:
     $ref: ./paths/views.yaml#/~1api~1shared-with-me
   /api/nodes/{nodeId}/trash:

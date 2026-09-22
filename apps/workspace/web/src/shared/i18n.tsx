@@ -28,6 +28,10 @@ const messages = {
     htmlViewSignInRequired: "当前为访客模式，请登录后再操作",
     htmlViewEditPermissionRequired: "你没有此表格的编辑权限，请联系所有者申请权限。",
     home: "首页",
+    apps: "Apps",
+    appsEmpty: "还没有页面",
+    appsEmptyDescription:
+      "在空间里创建 .univer.html，或由 Agent 发布后，能打开的页面会出现在这里。",
     homeViews: "首页文档视图",
     recent: "最近访问",
     ownedByMe: "归我所有",
@@ -175,8 +179,7 @@ const messages = {
     passwordMinLength: "密码至少需要 8 个字符。",
     passwordsDoNotMatch: "两次输入的新密码不一致。",
     passwordChanged: "密码已修改。",
-    workbenchDescription:
-      "查看 AI Agent 正在处理或等待确认的文档任务，审核确认后合入正式版本。",
+    workbenchDescription: "查看 AI Agent 正在处理或等待确认的文档任务，审核确认后合入正式版本。",
     searchTasks: "搜索任务、文档或创建者",
     searchNodes: "搜索当前页面的内容",
     searchTrash: "搜索回收站内容",
@@ -214,12 +217,10 @@ const messages = {
     noTaskSummary: "这个任务没有补充说明。",
     submitForReview: "提交审核",
     submitForReviewConfirm: "提交这项任务供确认？",
-    submitForReviewDescription:
-      "提交后 Agent 将不能继续修改，任务会进入待确认状态。",
+    submitForReviewDescription: "提交后 Agent 将不能继续修改，任务会进入待确认状态。",
     discardChanges: "丢弃修改",
     discardChangesConfirm: "丢弃 Agent 的全部修改？",
-    discardChangesDescription:
-      "任务将关闭，这些修改不会进入正式版本，也不能继续编辑。",
+    discardChangesDescription: "任务将关闭，这些修改不会进入正式版本，也不能继续编辑。",
     confirmMerge: "确认合入",
     mergeConfirm: "合入这项任务？",
     mergeDescription: "确认后的内容将进入正式版本。",
@@ -271,13 +272,10 @@ const messages = {
     reviewView: "查看",
     reviewCompare: "对比",
     comparisonFailed: "无法生成变更对比，请稍后重试。",
-    trunkAdvancedPreviewReady:
-      "正式版本已有新更新，系统已自动合并并生成预览。请确认合入结果。",
-    mergeConflictTip:
-      "正式版本与 AI 修改版本存在无法自动解决的冲突，暂时不能合入。",
+    trunkAdvancedPreviewReady: "正式版本已有新更新，系统已自动合并并生成预览。请确认合入结果。",
+    mergeConflictTip: "正式版本与 AI 修改版本存在无法自动解决的冲突，暂时不能合入。",
     mergeConflictBlocksMerge: "请先处理无法自动解决的合入冲突。",
-    mergePreviewCheckFailed:
-      "暂时无法检查正式版本是否领先，请稍后重试。",
+    mergePreviewCheckFailed: "暂时无法检查正式版本是否领先，请稍后重试。",
     checkingMergePreview: "正在检查正式版本更新…",
     readOnlyPreview: "只读预览",
     activeTaskCount: "{count} 个待处理任务",
@@ -295,7 +293,8 @@ const messages = {
     cliLoginDescription: "确认验证码，将当前账户安全地登录到发起请求的 CLI。",
     cliLoginLoading: "正在加载 CLI 登录请求",
     cliLoginSignInFirst: "请先登录 Workspace",
-    cliLoginSignInDescription: "登录后会返回此页面继续确认 CLI 授权；支持 GitHub、Discord 或密码登录。",
+    cliLoginSignInDescription:
+      "登录后会返回此页面继续确认 CLI 授权；支持 GitHub、Discord 或密码登录。",
     cliLoginAccount: "授权账户",
     cliLoginAccountDescription: "CLI 将以“{name}”的身份登录。",
     cliLoginCode: "验证码",
@@ -306,8 +305,7 @@ const messages = {
     cliLoginApprovedFor: "已授权 CLI 使用“{name}”账户。",
     resourceOpenFailed: "无法打开此资源",
     resourceUnavailableTitle: "无法打开此资源",
-    resourceUnavailableDescription:
-      "资源不存在、已被删除，或你没有访问权限。",
+    resourceUnavailableDescription: "资源不存在、已被删除，或你没有访问权限。",
     backToHome: "返回首页",
     close: "关闭",
     movedToTrash: "已移入回收站。",
@@ -338,13 +336,11 @@ const messages = {
     linkSharingDescription: "获得链接的任何人无需登录即可查看；登录用户按所选权限访问。",
     linkSharingEnabled: "链接访问已开启",
     linkSharingDisabled: "链接访问未开启",
-    linkSharingEnabledDescription:
-      "获得链接的任何人均可查看；不会加入“与我共享”。",
+    linkSharingEnabledDescription: "获得链接的任何人均可查看；不会加入“与我共享”。",
     linkSharingDisabledDescription: "按协作者授权或空间公开只读设置访问。",
     linkSharingOn: "开启",
     linkSharingOff: "关闭",
-    linkSharingPrivacyNote:
-      "未登录访客始终只读；编辑需要登录并具有编辑权限。",
+    linkSharingPrivacyNote: "未登录访客始终只读；编辑需要登录并具有编辑权限。",
     linkSharingAccess: "链接访问权限",
     enableLinkSharing: "开启链接分享",
     disableLinkSharing: "关闭链接分享",
@@ -386,8 +382,13 @@ const messages = {
     nativePreviewShareDescription: "Copy the link for colleagues with access. Embedded Office files and source Sheets retain their own permissions.",
     htmlViewInspect: "Inspect bindings",
     htmlViewSignInRequired: "You are browsing as a guest. Please sign in to continue.",
-    htmlViewEditPermissionRequired: "You don’t have permission to edit this spreadsheet. Contact the owner to request access.",
+    htmlViewEditPermissionRequired:
+      "You don’t have permission to edit this spreadsheet. Contact the owner to request access.",
     home: "Home",
+    apps: "Apps",
+    appsEmpty: "No pages yet",
+    appsEmptyDescription:
+      "Create a .univer.html file in a space, or publish one with the agent. Pages you can open show up here.",
     homeViews: "Home document views",
     recent: "Recent",
     ownedByMe: "Owned by me",
@@ -432,10 +433,8 @@ const messages = {
     documentMode: "Document mode",
     documentModeModern: "Modern",
     documentModeClassic: "Classic",
-    documentModeModernDescription:
-      "A continuous page designed for online collaboration.",
-    documentModeClassicDescription:
-      "Paginated layout designed for printing and Word documents.",
+    documentModeModernDescription: "A continuous page designed for online collaboration.",
+    documentModeClassicDescription: "Paginated layout designed for printing and Word documents.",
     enterGroupName: "Enter a group name.",
     enterResourceName: "Enter a document name.",
     createType: "Create {type}",
@@ -443,8 +442,7 @@ const messages = {
     groupCreated: "Group created.",
     groupCreationFailed: "Group creation failed.",
     resourceCreated: "Document created.",
-    resourceCreationContinuing:
-      "Document creation is continuing in the background.",
+    resourceCreationContinuing: "Document creation is continuing in the background.",
     resourceCreationFailed: "Document creation failed.",
     noWritableSpace: "There is no writable space for a new document.",
     editingMode: "Editable",
@@ -494,8 +492,7 @@ const messages = {
     deletedAt: "Deleted at",
     itemCount: "Items",
     spaceRoot: "Space root",
-    trashDescription:
-      "Items remain grouped by the action that moved them here.",
+    trashDescription: "Items remain grouped by the action that moved them here.",
     trashEmpty: "Trash is empty",
     restore: "Restore",
     restoreParentFirst: "Restore the parent item first",
@@ -526,13 +523,11 @@ const messages = {
     profileUpdated: "Profile updated.",
     unlinkGitHub: "Unlink GitHub",
     linkGitHub: "Link GitHub",
-    githubOnlyMethod:
-      "GitHub is your only sign-in method and cannot be unlinked.",
+    githubOnlyMethod: "GitHub is your only sign-in method and cannot be unlinked.",
     githubUnlinked: "GitHub account unlinked.",
     unlinkDiscord: "Unlink Discord",
     linkDiscord: "Link Discord",
-    discordOnlyMethod:
-      "Discord is your only sign-in method and cannot be unlinked.",
+    discordOnlyMethod: "Discord is your only sign-in method and cannot be unlinked.",
     discordUnlinked: "Discord account unlinked.",
     currentPassword: "Current password",
     newPassword: "New password",
@@ -571,8 +566,7 @@ const messages = {
     documentsCount: "{count} documents",
     noMatchingTasks: "No matching document tasks",
     noTasks: "No document tasks yet",
-    tasksCreatedByAgents:
-      "Tasks created by AI agents or the CLI appear here.",
+    tasksCreatedByAgents: "Tasks created by AI agents or the CLI appear here.",
     stateDraft: "In progress",
     stateReady: "Awaiting review",
     stateMerging: "Merging",
@@ -605,8 +599,7 @@ const messages = {
     countUnit: "{count}",
     noReviewPermission: "You do not have permission to review this task",
     noAgentDocuments: "The agent has not produced any documents yet",
-    reviewDocumentNotFound:
-      "The task document specified by this link could not be found.",
+    reviewDocumentNotFound: "The task document specified by this link could not be found.",
     documentModified: "Modified",
     documentAdded: "Added",
     documentDeleted: "Deleted",
@@ -647,16 +640,13 @@ const messages = {
       "The official version has new updates. An automatic merge preview is ready for review.",
     mergeConflictTip:
       "The official version and AI changes have conflicts that cannot be resolved automatically. Merge is currently unavailable.",
-    mergeConflictBlocksMerge:
-      "Resolve the merge conflicts before merging.",
+    mergeConflictBlocksMerge: "Resolve the merge conflicts before merging.",
     mergePreviewCheckFailed:
       "Could not check whether the official version is ahead. Try again later.",
-    checkingMergePreview:
-      "Checking the official version for updates…",
+    checkingMergePreview: "Checking the official version for updates…",
     readOnlyPreview: "Read-only preview",
     activeTaskCount: "{count} tasks need attention",
-    authTagline:
-      "Collaborative editing, permissions, and AI tasks in one workspace.",
+    authTagline: "Collaborative editing, permissions, and AI tasks in one workspace.",
     signIn: "Sign in",
     createAccount: "Create account",
     password: "Password",
@@ -698,8 +688,7 @@ const messages = {
     editNodeTitle: "Edit “{name}”",
     editNodeFallback: "Edit node",
     destinationParentNodeId: "Destination parent node ID",
-    destinationParentNodeHint:
-      "Leave empty to move the node to the space root.",
+    destinationParentNodeHint: "Leave empty to move the node to the space root.",
     shareNodeTitle: "Share “{name}”",
     shareFallback: "Share",
     shareNodeDescription: "Manage collaborators and link access.",
@@ -759,10 +748,7 @@ export type MessageKey = keyof (typeof messages)["zh-CN"];
 interface LanguageContextValue {
   readonly language: AppLanguage;
   readonly setLanguage: (language: AppLanguage) => void;
-  readonly t: (
-    key: MessageKey,
-    values?: Readonly<Record<string, string | number>>
-  ) => string;
+  readonly t: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -792,7 +778,7 @@ export function LanguageProvider({ children }: PropsWithChildren) {
         return value;
       },
     }),
-    [language]
+    [language],
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;

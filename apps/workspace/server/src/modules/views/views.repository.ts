@@ -32,11 +32,7 @@ export interface SharedRow {
 export class ViewsRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
 
-  listRecent(
-    userId: string,
-    cursor: RecentCursor | null,
-    limit: number
-  ): RecentRow[] {
+  listRecent(userId: string, cursor: RecentCursor | null, limit: number): RecentRow[] {
     const cursorClause =
       cursor === null
         ? ""
@@ -61,16 +57,37 @@ export class ViewsRepository {
            )
            ${cursorClause}
          ORDER BY last_opened_at DESC, resource_id
-         LIMIT ?`
+         LIMIT ?`,
       )
       .all(...parameters) as unknown as RecentRow[];
   }
 
-  listOwned(
-    userId: string,
-    cursor: RecentCursor | null,
-    limit: number
-  ): OwnedRow[] {
+  listHtmlViews(cursor: RecentCursor | null, limit: number): OwnedRow[] {
+    const cursorClause =
+      cursor === null
+        ? ""
+        : `AND (
+             node.updated_at < ?
+             OR (node.updated_at = ? AND resource.id > ?)
+           )`;
+    const parameters =
+      cursor === null ? [limit] : [cursor.timestamp, cursor.timestamp, cursor.id, limit];
+    return this._database.connection
+      .prepare(
+        `SELECT resource.id AS resource_id, node.updated_at
+         FROM resources AS resource
+         JOIN nodes AS node ON node.id = resource.node_id
+         JOIN blob_resources AS blob ON blob.resource_id = resource.id
+         WHERE node.trash_batch_id IS NULL
+           AND lower(blob.original_filename) LIKE '%.univer.html'
+           ${cursorClause}
+         ORDER BY node.updated_at DESC, resource.id
+         LIMIT ?`,
+      )
+      .all(...parameters) as unknown as OwnedRow[];
+  }
+
+  listOwned(userId: string, cursor: RecentCursor | null, limit: number): OwnedRow[] {
     const cursorClause =
       cursor === null
         ? ""
@@ -92,7 +109,7 @@ export class ViewsRepository {
            AND node.trash_batch_id IS NULL
            ${cursorClause}
          ORDER BY node.updated_at DESC, resource.id
-         LIMIT ?`
+         LIMIT ?`,
       )
       .all(...parameters) as unknown as OwnedRow[];
   }
@@ -110,16 +127,12 @@ export class ViewsRepository {
            JOIN ancestry ON ancestry.parent_id = parent.id
            WHERE parent.trash_batch_id IS NULL
          )
-         SELECT id, name FROM ancestry ORDER BY depth DESC`
+         SELECT id, name FROM ancestry ORDER BY depth DESC`,
       )
       .all(nodeId) as unknown as BreadcrumbRow[];
   }
 
-  listShared(
-    userId: string,
-    cursor: RecentCursor | null,
-    limit: number
-  ): SharedRow[] {
+  listShared(userId: string, cursor: RecentCursor | null, limit: number): SharedRow[] {
     const cursorClause =
       cursor === null
         ? ""
@@ -150,7 +163,7 @@ export class ViewsRepository {
            AND node.trash_batch_id IS NULL
            ${cursorClause}
          ORDER BY grant_node.created_at DESC, grant_node.node_id
-         LIMIT ?`
+         LIMIT ?`,
       )
       .all(...parameters) as unknown as SharedRow[];
   }
