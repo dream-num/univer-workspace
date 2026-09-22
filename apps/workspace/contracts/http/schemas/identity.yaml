@@ -42,13 +42,15 @@ AuthenticationMethods:
 AnonymousSession:
   type: object
   additionalProperties: false
-  required: [authenticated, githubOAuthEnabled, discordOAuthEnabled]
+  required: [authenticated, githubOAuthEnabled, discordOAuthEnabled, passwordAuthEnabled]
   properties:
     authenticated:
       const: false
     githubOAuthEnabled:
       type: boolean
     discordOAuthEnabled:
+      type: boolean
+    passwordAuthEnabled:
       type: boolean
 
 AuthenticatedSession:
@@ -58,6 +60,7 @@ AuthenticatedSession:
     - authenticated
     - githubOAuthEnabled
     - discordOAuthEnabled
+    - passwordAuthEnabled
     - user
     - authenticationMethods
   properties:
@@ -66,6 +69,8 @@ AuthenticatedSession:
     githubOAuthEnabled:
       type: boolean
     discordOAuthEnabled:
+      type: boolean
+    passwordAuthEnabled:
       type: boolean
     user:
       $ref: "#/User"

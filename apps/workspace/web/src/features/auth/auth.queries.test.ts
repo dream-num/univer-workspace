@@ -27,6 +27,7 @@ describe("requireAuthenticatedSession", () => {
       authenticated: false,
       githubOAuthEnabled: false,
       discordOAuthEnabled: false,
+      passwordAuthEnabled: true,
     });
 
     try {

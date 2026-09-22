@@ -252,6 +252,7 @@ function AuthenticatedWorkspaceLayout({
         authenticated: false,
         githubOAuthEnabled: currentSession.githubOAuthEnabled,
         discordOAuthEnabled: currentSession.discordOAuthEnabled,
+        passwordAuthEnabled: currentSession.passwordAuthEnabled,
       });
       await navigate({
         to: "/login",
@@ -543,7 +544,8 @@ function AuthenticatedWorkspaceLayout({
                       <User />
                       {t("profile")}
                     </MenuItem>
-                    {currentSession.authenticationMethods.password ? (
+                    {currentSession.passwordAuthEnabled &&
+                    currentSession.authenticationMethods.password ? (
                       <MenuItem onClick={() => setPasswordDialogOpen(true)}>
                         <Lock />
                         {t("changePassword")}
@@ -958,7 +960,7 @@ function ProfileDialog({
       (identity) => identity.provider === "discord"
     );
   const canUnlinkExternalIdentity =
-    current.authenticationMethods.password ||
+    (current.passwordAuthEnabled && current.authenticationMethods.password) ||
     current.authenticationMethods.externalIdentities.length > 1;
 
   const submit = (event: FormEvent) => {

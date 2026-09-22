@@ -85,6 +85,11 @@ export function AuthCard(props: {
     },
   });
   const error = mutation.error as ApiError | null;
+  const sessionView = session.data;
+  const passwordAuthEnabled = sessionView?.passwordAuthEnabled === true;
+  const showGitHub = sessionView?.githubOAuthEnabled === true;
+  const showDiscord = sessionView?.discordOAuthEnabled === true;
+  const oauthEnabled = showGitHub || showDiscord;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -121,20 +126,22 @@ export function AuthCard(props: {
         </div>
       </div>
 
-      <Segmented
-        aria-label={mode === "login" ? t("signIn") : t("createAccount")}
-        className="mb-6 grid w-full grid-cols-2"
-        value={mode}
-        options={[
-          { label: t("signIn"), value: "login" },
-          { label: t("createAccount"), value: "register" },
-        ]}
-        onValueChange={(value) => {
-          mutation.reset();
-          setFieldErrors({});
-          setMode(value);
-        }}
-      />
+      {passwordAuthEnabled ? (
+        <Segmented
+          aria-label={mode === "login" ? t("signIn") : t("createAccount")}
+          className="mb-6 grid w-full grid-cols-2"
+          value={mode}
+          options={[
+            { label: t("signIn"), value: "login" },
+            { label: t("createAccount"), value: "register" },
+          ]}
+          onValueChange={(value) => {
+            mutation.reset();
+            setFieldErrors({});
+            setMode(value);
+          }}
+        />
+      ) : null}
 
       {error || props.oauthError ? (
         <Alert variant="destructive" className="mb-5">
@@ -142,6 +149,7 @@ export function AuthCard(props: {
         </Alert>
       ) : null}
 
+      {passwordAuthEnabled ? (
       <form onSubmit={submit} className="grid gap-4" noValidate>
         <Field
           label={t("username")}
@@ -215,19 +223,21 @@ export function AuthCard(props: {
           {mode === "login" ? t("signIn") : t("createAccount")}
         </Button>
       </form>
+      ) : null}
 
-      {session.data &&
-      (session.data.githubOAuthEnabled || session.data.discordOAuthEnabled) ? (
+      {oauthEnabled ? (
         <>
-          <div className="my-6 flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="text-xs text-subtle-foreground">
-              {t("authDividerOr")}
-            </span>
-            <Separator className="flex-1" />
-          </div>
+          {passwordAuthEnabled ? (
+            <div className="my-6 flex items-center gap-3">
+              <Separator className="flex-1" />
+              <span className="text-xs text-subtle-foreground">
+                {t("authDividerOr")}
+              </span>
+              <Separator className="flex-1" />
+            </div>
+          ) : null}
           <div className="grid gap-3">
-            {session.data.githubOAuthEnabled ? (
+            {showGitHub ? (
               <Button
                 variant="secondary"
                 size="lg"
@@ -243,7 +253,7 @@ export function AuthCard(props: {
                 {t("continueWithGitHub")}
               </Button>
             ) : null}
-            {session.data.discordOAuthEnabled ? (
+            {showDiscord ? (
               <Button
                 variant="secondary"
                 size="lg"

@@ -124,6 +124,16 @@ GitHub OAuth callback. Existing Workspace sessions remain valid until they expir
 or are logged out. This setting restricts only GitHub OAuth; password registration,
 Discord login, and trusted Discord Bot login remain separate authentication paths.
 
+Password registration, password login, and password changes stay available unless
+`PASSWORD_AUTH_ENABLED` is `false`. A restricted deployment sets that value
+together with `GITHUB_ALLOWED_ORGANIZATIONS` and leaves Discord unset, so the
+only browser sign-in path is GitHub membership in a listed organization. The
+process refuses to start when password authentication is off and neither GitHub
+nor Discord OAuth is configured. Existing sessions remain valid until they
+expire or are logged out. A user who only has a password cannot sign in again
+after that, and a stored password no longer counts as a remaining sign-in
+method when unlinking GitHub or Discord.
+
 Workspace CLI uses browser approval by default. `univer-workspace-cli login`
 creates a ten-minute, one-time authorization request and prints a `/cli-login`
 URL plus verification code, persists the pending request locally, and exits.

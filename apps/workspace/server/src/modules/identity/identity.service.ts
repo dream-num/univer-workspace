@@ -118,6 +118,7 @@ export function createIdentityModule(options: {
   readonly githubOAuthProvider?: GitHubOAuthProvider | null;
   readonly discordOAuthProvider?: DiscordOAuthProvider | null;
   readonly oauthStateSecret?: string;
+  readonly passwordAuthEnabled?: boolean;
 }): IdentityModule {
   const now = options.now ?? Date.now;
   const repository = options.repository;
@@ -130,15 +131,35 @@ export function createIdentityModule(options: {
   const discordOAuthEnabled = Boolean(
     discordOAuthProvider && oauthStateSecret
   );
+  const passwordAuthEnabled = options.passwordAuthEnabled ?? true;
   const cliAuthorizations = new Map<string, PendingCliAuthorization>();
   const cliAuthorizationDevices = new Map<string, string>();
   repository.deleteExpiredSessions(now());
+
+  function anonymousSession(): SessionView {
+    return {
+      authenticated: false,
+      githubOAuthEnabled,
+      discordOAuthEnabled,
+      passwordAuthEnabled,
+    };
+  }
+
+  function requirePasswordAuth(): void {
+    if (passwordAuthEnabled) return;
+    throw new ApplicationError(
+      "PASSWORD_AUTH_DISABLED",
+      403,
+      "Password authentication is disabled."
+    );
+  }
 
   function authenticatedSession(user: User): AuthenticatedSession {
     return {
       authenticated: true,
       githubOAuthEnabled,
       discordOAuthEnabled,
+      passwordAuthEnabled,
       user: {
         id: user.id,
         username: user.username,
@@ -151,17 +172,15 @@ export function createIdentityModule(options: {
 
   function getSession(cookieHeader: string | undefined): SessionView {
     const token = readSessionToken(cookieHeader);
-    if (!token)
-      return { authenticated: false, githubOAuthEnabled, discordOAuthEnabled };
+    if (!token) return anonymousSession();
     const stored = repository.findSession(token.id);
-    if (!stored)
-      return { authenticated: false, githubOAuthEnabled, discordOAuthEnabled };
+    if (!stored) return anonymousSession();
     if (stored.expiresAt <= now()) {
       repository.deleteSession(stored.sessionId);
-      return { authenticated: false, githubOAuthEnabled, discordOAuthEnabled };
+      return anonymousSession();
     }
     if (!secretMatches(token.secret, stored.secretHash)) {
-      return { authenticated: false, githubOAuthEnabled, discordOAuthEnabled };
+      return anonymousSession();
     }
     return authenticatedSession(stored);
   }
@@ -204,6 +223,7 @@ export function createIdentityModule(options: {
     },
 
     async registerWithPassword(input) {
+      requirePasswordAuth();
       const username = validUsername(input.username);
       const displayName = validDisplayName(input.displayName);
       const password = validPassword(input.password);
@@ -244,6 +264,7 @@ export function createIdentityModule(options: {
     },
 
     async loginWithPassword(input) {
+      requirePasswordAuth();
       const username = validUsername(input.username);
       const password = validPassword(input.password);
       const credential = repository.findCredential(username);
@@ -427,6 +448,7 @@ export function createIdentityModule(options: {
     },
 
     async changePassword(cookieHeader, input) {
+      requirePasswordAuth();
       const session = requireSession(cookieHeader);
       const currentPassword = validPassword(
         input.currentPassword,
@@ -736,9 +758,10 @@ export function createIdentityModule(options: {
     const hasProvider = methods.externalIdentities.some(
       (identity) => identity.provider === provider
     );
+    const passwordCountsAsLogin = passwordAuthEnabled && methods.password;
     if (
       hasProvider &&
-      !methods.password &&
+      !passwordCountsAsLogin &&
       methods.externalIdentities.length === 1
     ) {
       throw new ApplicationError(
