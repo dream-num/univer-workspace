@@ -1,11 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FUniver } from "@univerjs/core/facade";
 vi.mock("@univerjs/docs-ui/facade", () => ({}));
 vi.mock("@univerjs/sheets-ui/facade", () => ({}));
 vi.mock("@univerjs-pro/slides/facade", () => ({}));
-import { locateNativePreview } from "../../web/src/features/editor/native-preview";
+import { installNativePreviewNavigation, locateNativePreview } from "../../web/src/features/editor/native-preview";
 
 describe("native preview navigation", () => {
+  afterEach(() => vi.unstubAllGlobals());
   it("uses current paragraph text/offset and a collapsed caret; rejects changed quotes", () => {
     const paragraph = { getText: vi.fn(() => "Cash consideration"), getInfo: vi.fn(() => ({ startOffset: 100 })) };
     const doc = { getParagraph: vi.fn(() => paragraph), setSelection: vi.fn() };
@@ -37,5 +38,29 @@ describe("native preview navigation", () => {
     presentation.getSlideById.mockReturnValue(null);
     expect(locateNativePreview(api, "deck", focus)).toBe(false);
     expect(presentation.setActiveSlide).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe("native frame message identity", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("accepts only its same-origin parent, Unit and token, and removes its listener", () => {
+    const parent = { postMessage: vi.fn() };
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
+    vi.stubGlobal("window", { parent, location: { origin: "https://workspace.example" }, addEventListener, removeEventListener });
+    const api = {} as FUniver;
+    const observer = installNativePreviewNavigation(api, "doc", "token");
+    const receive = addEventListener.mock.calls[0]![1];
+    const event = { source: parent, origin: "https://workspace.example", data: {
+      channel: "workspace-native-unit-v1", unitId: "doc", token: "token", action: "status",
+    } };
+    for (const invalid of [{ ...event, source: {} }, { ...event, origin: "https://other.example" },
+      { ...event, data: { ...event.data, token: "old" } }, { ...event, data: { ...event.data, unitId: "other" } }]) receive(invalid);
+    expect(parent.postMessage).toHaveBeenCalledTimes(1); // Initial ready only.
+    receive(event);
+    expect(parent.postMessage).toHaveBeenCalledTimes(2);
+    observer.dispose();
+    expect(removeEventListener).toHaveBeenCalledWith("message", receive);
   });
 });
