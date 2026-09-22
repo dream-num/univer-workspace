@@ -2,11 +2,12 @@ import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 import { connectionBrowserScript } from "../src/connection-browser.ts";
 
-function browser() {
+function browser(upload?: { fetch: typeof globalThis.fetch }) {
   const fetch = vi.fn(async (_input: Request | string, _init?: RequestInit) => Response.json({ ready: true, version: "selected" }));
   const replace = vi.fn();
   const sandbox = {
     __UWH_CONNECTION_VERSION__: "selected",
+    __DSH_FILE_UPLOAD__: upload,
     fetch,
     WebSocket: class {
       listeners = new Map<string, () => void>();
@@ -30,6 +31,54 @@ function browser() {
 }
 
 describe("browser connection fence", () => {
+  it("pins the public DSH upload carrier while preserving binary bytes and cancellation", async () => {
+    const { sandbox, fetch } = browser();
+    const controller = new AbortController();
+    const bytes = new Uint8Array([0, 255, 128, 10, 13]);
+    await sandbox.__DSH_FILE_UPLOAD__!.fetch("/api/session/uploadFileBinary?sessionId=session-1&name=file.bin", {
+      method: "POST", headers: { "content-type": "application/octet-stream" },
+      body: new Blob([bytes]), signal: controller.signal,
+    });
+    const [request, init] = fetch.mock.calls[0] as unknown as [Request, RequestInit];
+    const forwarded = new Request(request, init);
+    expect(forwarded.headers.get("x-uwh-connection")).toBe("selected");
+    expect(forwarded.headers.get("content-type")).toBe("application/octet-stream");
+    expect(forwarded.method).toBe("POST");
+    expect(new URL(forwarded.url).searchParams.get("sessionId")).toBe("session-1");
+    expect(new Uint8Array(await forwarded.arrayBuffer())).toEqual(bytes);
+    controller.abort();
+    expect(forwarded.signal.aborted).toBe(true);
+  });
+
+  it("keeps an existing upload carrier and recovers from stale-account upload rejection", async () => {
+    const customFetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(null, { status: 409 }));
+    const { sandbox, fetch, replace } = browser({ fetch: customFetch });
+    fetch.mockResolvedValueOnce(Response.json({ ready: true, version: "next" }));
+    const response = await sandbox.__DSH_FILE_UPLOAD__!.fetch("/api/session/uploadFileBinary?sessionId=old", {
+      method: "POST", body: new Blob(["old account"]),
+    });
+    expect(response.status).toBe(409);
+    expect(customFetch).toHaveBeenCalledOnce();
+    const [request, init] = customFetch.mock.calls[0]!;
+    expect(new Request(request, init).headers.get("x-uwh-connection")).toBe("selected");
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith("/"));
+  });
+
+  it("preserves streaming uploads and leaves external requests unpinned", async () => {
+    const { sandbox, fetch } = browser();
+    const body = new ReadableStream({ start(controller) {
+      controller.enqueue(new Uint8Array([1, 2, 3]));
+      controller.close();
+    } });
+    await sandbox.__DSH_FILE_UPLOAD__!.fetch("/api/session/uploadFileBinary?sessionId=session-1", {
+      method: "POST", body, duplex: "half",
+    } as RequestInit);
+    const [request, init] = fetch.mock.calls[0] as unknown as [Request, RequestInit];
+    expect(new Uint8Array(await new Request(request, init).arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+    await sandbox.__DSH_FILE_UPLOAD__!.fetch("https://other.example/api/upload", { method: "POST", body: "external" });
+    expect((fetch.mock.calls[1]![0] as Request).headers.has("x-uwh-connection")).toBe(false);
+  });
+
   it("pins local requests without changing their body or remote credentials", async () => {
     const { sandbox, fetch } = browser();
     await sandbox.fetch("/api/session/prompt", {

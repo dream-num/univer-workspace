@@ -19,14 +19,29 @@ function parseSpace(value: unknown): WorkspaceSpace | undefined {
     record.accessRole !== "viewer"
   )
     return undefined;
-  if (typeof record.dshWorkspaceId !== "string" || record.dshWorkspaceId === "") return undefined;
+  if (record.dshWorkspaceId !== undefined &&
+    (typeof record.dshWorkspaceId !== "string" || record.dshWorkspaceId === "")) return undefined;
   return {
     spaceId: record.spaceId,
     type: record.type,
     name: record.name,
     accessRole: record.accessRole,
-    dshWorkspaceId: record.dshWorkspaceId,
+    ...(record.dshWorkspaceId === undefined ? {} : { dshWorkspaceId: record.dshWorkspaceId as string }),
   };
+}
+
+/** Add only the explicitly selected Space, returning the native DSH adoption path. */
+export async function addWorkspaceSpace(spaceId: string): Promise<string> {
+  const response = await fetch(`${WORKSPACE_SPACES_PATH}/${encodeURIComponent(spaceId)}/workspace`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { accept: "application/json" },
+  });
+  if (response.status === 401) throw new Error("workspace_connection_required");
+  if (!response.ok) throw new Error("space_add_failed");
+  const body = await response.json() as { path?: unknown };
+  if (typeof body.path !== "string" || body.path === "") throw new Error("space_add_failed");
+  return body.path;
 }
 
 /** Load the authenticated user's product Spaces and their DSH carriers. */

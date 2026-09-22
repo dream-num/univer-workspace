@@ -21,7 +21,7 @@ export interface WorkspaceSpace {
   readonly type: "personal" | "team";
   readonly name: string;
   readonly accessRole: "owner" | "admin" | "editor" | "viewer";
-  readonly dshWorkspaceId: string;
+  readonly dshWorkspaceId?: string;
   readonly capabilities?: Readonly<{
     readonly browseRoot?: boolean;
     readonly createAtRoot?: boolean;

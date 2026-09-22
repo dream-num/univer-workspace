@@ -16,10 +16,11 @@ import type { WorkspaceSpace } from "./workspace-contract.ts";
 import type { UniverLocaleKey } from "./locales.ts";
 import type { DirectoryFlowOwnerProps } from "./dsh-runtime-types.ts";
 import css from "./SpaceDirectoryFlow.module.scss";
+import { localizedSpaceName } from "./space-name.ts";
 
 export interface SpaceDirectoryFlowInjected {
   readonly loadSpaces: () => Promise<readonly WorkspaceSpace[]>;
-  readonly selectSpace: (dshWorkspaceId: string) => void;
+  readonly addSpace: (spaceId: string) => Promise<string>;
   readonly t: (key: UniverLocaleKey) => string;
 }
 
@@ -29,7 +30,10 @@ type Phase = "pending" | "ready" | "error" | "login";
 export function SpaceDirectoryFlow(
   props: DirectoryFlowOwnerProps & SpaceDirectoryFlowInjected,
 ): ReactElement | null {
-  const { open, busy, loadSpaces, onCancel, selectSpace, t } = props;
+  const { open, loadSpaces, onCancel, addSpace, onPicked, t } = props;
+  const [adding, setAdding] = useState(false);
+  const [addFailed, setAddFailed] = useState(false);
+  const busy = props.busy || adding;
   const [phase, setPhase] = useState<Phase>("pending");
   const [attempt, setAttempt] = useState(0);
   const [spaces, setSpaces] = useState<readonly WorkspaceSpace[]>([]);
@@ -38,6 +42,7 @@ export function SpaceDirectoryFlow(
     if (!open) return;
     let live = true;
     setPhase("pending");
+    setAddFailed(false);
     void loadSpaces()
       .then((value) => {
         if (!live) return;
@@ -66,6 +71,7 @@ export function SpaceDirectoryFlow(
           <DialogDescription>{t("workspace.chooseSpaceHint")}</DialogDescription>
         </DialogHeader>
         <div className={css.body}>
+          {addFailed && <p className={css.error} role="alert">{t("workspace.spaceAddFailed")}</p>}
           {phase === "pending" && (
             <p className={css.status} role="status">
               {t("workspace.loadingSpaces")}
@@ -90,15 +96,22 @@ export function SpaceDirectoryFlow(
                     className={css.item}
                     variant="ghost"
                     disabled={busy}
-                    onClick={() => {
-                      onCancel();
-                      selectSpace(space.dshWorkspaceId);
+                    onClick={async () => {
+                      setAdding(true);
+                      setAddFailed(false);
+                      try {
+                        onPicked(await addSpace(space.spaceId));
+                      } catch {
+                        setAddFailed(true);
+                      } finally {
+                        setAdding(false);
+                      }
                     }}
                   >
                     <span className={css.icon} aria-hidden="true">
                       {space.type === "personal" ? <UserIcon /> : <UsersIcon />}
                     </span>
-                    <span className={css.name}>{space.name}</span>
+                    <span className={css.name}>{localizedSpaceName(space, t("workspace.personalSpaceName"))}</span>
                     <Badge variant="outline">
                       {t(
                         space.type === "personal"

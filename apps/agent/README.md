@@ -319,7 +319,11 @@ through `OAUTH_CLIENTS_JSON` using `apps/workspace/.env.example` before startup.
 
 
 After login, the left sidebar exposes the implemented **Sessions / Files / Worktree**
-tabs. Session navigation keeps the native DSH behavior, Workspace file
+tabs. On a new device/account, the Sessions list is empty: signing in and browsing
+Files do not add Spaces. Use **Add workspace** or **Choose workspace** and select a
+Space to add it locally. Previously added Spaces and Sessions remain on that device;
+removing a local registration does not delete the remote Space or auto-add it again.
+Session navigation keeps the native DSH behavior, Workspace file
 management browses the connected Space/Node/Resource tree, and Worktree lists
 origin-level personal/team tasks with open/all/closed filtering. Open or create
 a file independently of conversations. Opening a file inserts its Viewer in the
@@ -344,7 +348,8 @@ the origin and a non-secret account identifier.
 Once the browser has opened the new token URL and loaded the authorized
 Workspace identity:
 
-1. Open **Sessions** in the left sidebar and select **New session**. Type a message in
+1. Open **Sessions** and add a Space with **Add workspace** (or **Choose workspace**
+   in the new-session view), then select **New session**. Type a message in
    the native composer on the right. Sending to a model also requires a local
    DSH model credential; Workspace login only authorizes Workspace data.
 2. Open **Files**, select a Personal or Team Space, then use **New** to create
@@ -493,7 +498,8 @@ Account changes retain the existing connection fence and reload behavior.
 DSH owns its resize, split, fullscreen and close controls. Opening another file
 updates that preview; clicking the same file reveals or reopens it. With no
 selected session, opening a file uses the native blank-session flow in a
-connected Space. Sidecar layout state is session-local and memory-only.
+Space already added to the session list; otherwise, add one first. Sidecar layout
+state is session-local and memory-only.
 Worktree tab titles show the task name and status. Merged Worktrees initially show
 Changes; other states initially show Result. Users can switch explicitly.
 Title and lifecycle actions stay on one line. Wide headers show Close; narrower

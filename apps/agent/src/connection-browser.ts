@@ -29,15 +29,25 @@ export const connectionBrowserScript = `(() => {
       } while (Date.now() < deadline);
     })().finally(() => { checking = undefined; });
   }
-  globalThis.fetch = (input, init) => {
+  function connectionFetch(send, input, init) {
     const request = new Request(input instanceof Request ? input : new URL(input, location.href), init);
-    if (!owned(new URL(request.url))) return nativeFetch(request);
+    if (!owned(new URL(request.url))) return send(request);
     const headers = new Headers(request.headers);
     headers.set('x-uwh-connection', version);
-    return nativeFetch(request, {headers}).then(response => {
+    return send(request, {headers}).then(response => {
       if (response.status === 409 || response.status === 503) check();
       return response;
     });
+  }
+  globalThis.fetch = (input, init) => connectionFetch(nativeFetch, input, init);
+  // DSH's default upload Worker has its own fetch/XHR globals, outside the
+  // document's connection fence. Its published pre-boot carrier hook lets us
+  // pin uploads to this document without altering DSH or the server fence.
+  const upload = globalThis.__DSH_FILE_UPLOAD__;
+  const uploadFetch = upload ? upload.fetch.bind(upload) : nativeFetch;
+  globalThis.__DSH_FILE_UPLOAD__ = {
+    ...upload,
+    fetch: (input, init) => connectionFetch(uploadFetch, input, init),
   };
   // DSH alpha.4 exports use a detached download anchor after a fetch HEAD check.
   // Navigation cannot send the fetch header. Pin the URL without weakening the

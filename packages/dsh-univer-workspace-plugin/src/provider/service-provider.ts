@@ -1,9 +1,8 @@
 /**
  * Concrete Univer Workspace service implementation.
  *
- * Owns the space-links domain, reconciles the current User's remote Spaces
- * against dsh workspace records (provisioning the mechanical per-Space
- * directories), and resolves a session working directory back to its
+ * Owns the space-links domain, registers remote Spaces when explicitly added
+ * by the User (provisioning their mechanical directories), and resolves a session working directory back to its
  * `{ userId, spaceId }` through the workspace registry's own path
  * canonicalization.
  * @module dsh-univer-workspace-plugin/provider/service-provider
@@ -100,34 +99,48 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   }
 
   async listSpaces(userId: string): Promise<{ spaces: readonly WorkspaceSpace[] }> {
-    const auth = this.requireWorkspaceAuth();
     const client = this.currentClientFor(userId);
     if (client === undefined) {
       throw new Error("workspace connection is unavailable; connect to Workspace");
     }
     const remote = await listSpaces(client);
-    // The registry rebuilds its header index during boot. A rolling restart
-    // can recreate the per-Space directories after that bootstrap, so attach
-    // durable session headers again once the canonical paths exist.
-    const persistedHeaders = await this.persistedSessionHeaders();
+    const table = await this.requireTable();
+    const origin = new URL(client.origin).origin;
     const spaces: WorkspaceSpace[] = [];
     for (const space of remote) {
-      const dshWorkspaceId = await this.reconcileSpace(
-        userId,
-        space.spaceId,
-        space.name,
-        persistedHeaders,
+      const directory = originSpaceDirectoryPath(this.config.workspaceRoot, origin, userId, space.spaceId);
+      const linked = [...table.entries()].find(([key, record]) =>
+        record.userId === userId && record.spaceId === space.spaceId &&
+        (record.origin === undefined || record.origin === origin) &&
+        this.ctx.workspaceRegistry.get(key as WorkspaceId)?.path === directory,
       );
       spaces.push({
         spaceId: space.spaceId,
         type: space.type,
         name: space.name,
         accessRole: space.accessRole,
-        dshWorkspaceId,
+        ...(linked === undefined ? {} : { dshWorkspaceId: linked[0] }),
         ...(space.capabilities === undefined ? {} : { capabilities: space.capabilities }),
       });
     }
     return { spaces };
+  }
+
+  async addSpace(userId: string, spaceId: string): Promise<{ dshWorkspaceId: string; path: string }> {
+    const client = this.requireClient(userId);
+    const space = (await listSpaces(client)).find(space => space.spaceId === spaceId);
+    if (space === undefined) throw new Error("workspace_space_unavailable");
+    const headers = await this.persistedSessionHeaders();
+    const assertCurrent = () => {
+      const current = this.requireClient(userId);
+      if (current.origin !== client.origin || current.sessionToken !== client.sessionToken || this.requireWorkspaceAuth().switching()) {
+        throw new Error("workspace_connection_changed");
+      }
+    };
+    assertCurrent();
+    const workspace = await this.reconcileSpace(userId, spaceId, space.name, headers, client.origin, assertCurrent);
+    assertCurrent();
+    return { dshWorkspaceId: workspace.id, path: workspace.path };
   }
 
   async resolveSpaceForSession(cwd: string): Promise<SpaceScope | undefined> {
@@ -143,7 +156,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
         return undefined;
       return { userId: record.userId, spaceId: record.spaceId };
     }
-    // The account-level workspace is created by the Harness home/template flow.
+    // The account-level workspace is created by the explicit template flow.
     // Its default destination is the authenticated account's personal Space;
     // arbitrary local workspaces never inherit this connection.
     if (workspace.path !== originUserDirectoryPath(this.config.workspaceRoot, origin, identity.userId))
@@ -386,48 +399,55 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     spaceId: string,
     name: string,
     headers: readonly SessionHeader[],
-  ): Promise<string> {
+    workspaceOrigin: string,
+    assertCurrent: () => void,
+  ): Promise<Workspace> {
+    // Keep in-flight work on its original account services, even if Cordis
+    // replaces the runtime while an asynchronous storage operation is pending.
+    const registry = this.ctx.workspaceRegistry;
     const table = await this.requireTable();
-    const auth = this.requireWorkspaceAuth();
-    const origin = new URL(auth.effectiveOrigin()).origin;
+    assertCurrent();
+    const origin = new URL(workspaceOrigin).origin;
     const directory = originSpaceDirectoryPath(this.config.workspaceRoot, origin, userId, spaceId);
     // workspaceRoot is an ephemeral working volume in the deployment. Always
     // recreate the deterministic directory before resolving the registry path.
     await mkdir(directory, { recursive: true });
+    assertCurrent();
     // Reuse an existing link for this space id (same user), so the backing dsh
-    // workspace stays stable across list calls and Pod restarts.
+    // workspace stays stable across explicit additions and Pod restarts.
     for (const [key, record] of table.entries()) {
       if (
         record.userId === userId &&
         record.spaceId === spaceId &&
         (record.origin === undefined || record.origin === origin)
       ) {
-        const candidate = this.ctx.workspaceRegistry.get(key as WorkspaceId);
+        const candidate = registry.get(key as WorkspaceId);
         const workspace =
           candidate?.path === directory
             ? candidate
-            : await this.ctx.workspaceRegistry.resolveByPath(directory);
+            : await registry.resolveByPath(directory);
+        assertCurrent();
         if (workspace !== undefined) {
           if (record.origin !== origin) await table.put(key, { ...record, origin });
           await this.attachPersistedSessions(workspace, directory, headers);
-          return workspace.id;
+          return workspace;
         }
         // A stale link can only occur when a registry record was lost or was
         // manually removed. Recreate the mechanical workspace and repair the
         // link atomically from the domain consumer's perspective.
-        const recreated = await this.ctx.workspaceRegistry.create(directory, name);
+        const recreated = await registry.create(directory, name);
         await table.delete(key);
         await table.put(recreated.id, { userId, spaceId, origin });
         await this.attachPersistedSessions(recreated, directory, headers);
-        return recreated.id;
+        return recreated;
       }
     }
-    const workspace =
-      (await this.ctx.workspaceRegistry.resolveByPath(directory)) ??
-      (await this.ctx.workspaceRegistry.create(directory, name));
+    const existing = await registry.resolveByPath(directory);
+    assertCurrent();
+    const workspace = existing ?? await registry.create(directory, name);
     await table.put(workspace.id, { userId, spaceId, origin });
     await this.attachPersistedSessions(workspace, directory, headers);
-    return workspace.id;
+    return workspace;
   }
 
   private async persistedSessionHeaders(): Promise<readonly SessionHeader[]> {
