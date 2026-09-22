@@ -143,3 +143,27 @@ page load). It uses the factory-managed collaboration path
 matching the Workspace desktop stack), and registers the Mobile exchange
 variants through `exchangeFeaturePlugins` so the factory's trunk/sign-in
 gating still applies.
+
+## Native Office preview (real server)
+
+Build the Workspace web application, then from `apps/workspace` run:
+
+```bash
+node --import tsx test/fixtures/native-preview-server.ts
+```
+
+This serves production assets on `http://127.0.0.1:3091`, using fresh temporary
+product/collaboration databases and Blob storage. The console prints an HTML file
+URL and a mode-0600 local session file with test-only login credentials. Sign in
+as that fixture user; no real account is needed. SIGINT/SIGTERM closes the server
+and removes only its own temporary directory. Do not run it against real storage.
+
+Check all three preview buttons, the native close button, HTML Close, Share,
+scroll/resize, and repeated switching. Change Shared A1 while Sheet is open and
+verify the native cell updates. Locate B20 must select/scroll without a content
+mutation. Unavailable file belongs to another fixture user and must show an error
+without mounting a native frame. The HTML itself is public: in a guest context it
+opens, but its private Office sources and binding writes must stay unavailable.
+
+This fixture verifies the host boundary with simple documents. It does not certify
+complex cross-Unit formula materials, Office export fidelity or Worktree preview.

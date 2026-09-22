@@ -12,6 +12,7 @@ import { useI18n } from "../../shared/i18n";
 import { Button } from "../../shared/ui";
 import { anonymousUser, sessionQueryOptions } from "../auth";
 import { createWorkspaceBindingEngine } from "./workspace-binding-engine";
+import { useNativeUnitPreview } from "./native-unit-preview";
 import { isResourceViewChange } from "../resource-view/resource-view";
 
 const HTML_VIEW_ALLOWED_ORIGINS = ["https://cdn.jsdelivr.net"] as const;
@@ -36,6 +37,7 @@ export function HtmlView({
     : session.data
       ? anonymousUser
       : null;
+  const native = useNativeUnitPreview(source, user?.id ?? "pending");
   const viewer = useRef<WorkspaceHtmlViewerHandle>(null);
   const unsynced = useRef(false);
   const [error, setError] = useState("");
@@ -52,6 +54,7 @@ export function HtmlView({
     [user?.id, user?.displayName, user?.avatarUrl],
   );
   useEffect(() => {
+    if (inspecting) native.close();
     if (immersive && inspecting) {
       void viewer.current?.inspect.close().catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : String(reason));
@@ -72,7 +75,7 @@ export function HtmlView({
     enableBeforeUnload: () => !!viewer.current?.hasPendingChanges() || unsynced.current,
   });
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={native.root} className="relative flex h-full min-h-0 flex-col overflow-hidden">
       {actionsContainer &&
         createPortal(
           <Button
@@ -100,22 +103,25 @@ export function HtmlView({
           {error}
         </p>
       ) : null}
-      {user ? (
-        <WorkspaceHtmlViewer
-          ref={viewer}
-          source={source}
-          locale={language}
-          onInspectChanged={setInspecting}
-          title={t("htmlViewTitle")}
-          className="min-h-0 w-full flex-1 border-0"
-          {...(allowedOrigins ? { allowedOrigins } : {})}
-          loadEngine={loadEngine}
-          onError={setError}
-          onStatus={(states) => {
-            unsynced.current = states.some((state) => state !== CollaborationStatus.SYNCED);
-          }}
-        />
-      ) : null}
+      <div ref={native.viewerRoot} className="flex min-h-0 flex-1 flex-col">
+        {user ? (
+          <WorkspaceHtmlViewer
+            ref={viewer}
+            source={native.html}
+            locale={language}
+            onInspectChanged={setInspecting}
+            title={t("htmlViewTitle")}
+            className="min-h-0 w-full flex-1 border-0"
+            {...(allowedOrigins ? { allowedOrigins } : {})}
+            loadEngine={loadEngine}
+            onError={setError}
+            onStatus={(states) => {
+              unsynced.current = states.some((state) => state !== CollaborationStatus.SYNCED);
+            }}
+          />
+        ) : null}
+      </div>
+      {native.preview}
     </div>
   );
 }

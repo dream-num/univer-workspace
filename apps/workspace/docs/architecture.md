@@ -298,3 +298,21 @@ Node 与 Space 页面复用现有查询、目录与只读编辑器，未登录�
 身份仍由 Session API 判断；SDK 的访客显示身份不赋予任何权限。服务端在明确开放的读取入口
 传入匿名身份，统一由 Access Resolver 根据链接分享和 Space 公开可读判定 viewer 权限。
 HTML 与引用来源继续分别鉴权，无专用匿名授权规则。
+
+## HTML native Office preview
+
+The Browser's `features/html-views` owns a narrow template navigation bridge and
+one clipped native preview surface per HTML viewer. The shared HTML viewer and
+SDK continue to own the binding runtime, sandbox and save lifecycle. Template
+messages are pinned to the renderer frame and source generation; they carry only
+Unit identity, geometry and bounded navigation, never URLs or authority.
+
+`features/resources/native-unit-open.ts` resolves and opens each target through
+existing product APIs. `/preview/$unitId` repeats authorization and mounts the
+standard ResourceEditor read-only in an independent browsing context, isolating
+Office UI Facades from the persistent HTML Binding Engine. Target replacement
+cancels pending lookup; frame removal disposes the native runtime. All targets
+are Trunk; draft selection and editing belong to the existing file/review routes.
+`features/editor/preview.ts` is the public navigation-contract entry; actual
+Facade navigation stays inside the editor frame. Details and the page interface
+are in [native preview](../../../docs/design/html-views/native-preview.md).
