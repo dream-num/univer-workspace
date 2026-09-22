@@ -96,7 +96,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   and publishes directly; it does not use Worktree review.
 - Link Sharing and Space public read admit anonymous viewers without creating Users or Login Sessions.
   Product writes and Worktree access still require authentication; HTML source permissions remain independent.
-- Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs, sharing state, and user-authored
+- Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), sharing state, and user-authored
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal
   persisted login session and does not pass a browser cookie, password, or OAuth access token through the agent.

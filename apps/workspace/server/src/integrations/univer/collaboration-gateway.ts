@@ -1,3 +1,4 @@
+import type { ContentPermissions } from "./content-permissions.js";
 import type { Server } from "node:http";
 import {
   MemorySessionTicketStore,
@@ -23,7 +24,6 @@ import {
 } from "@univerjs-pro/collaboration-transport-node";
 import {
   ErrorCode,
-  UnitAction,
   UniverType,
 } from "@univerjs/protocol";
 import { UniverCollabWorktreeEndpoint } from "@univerjs-pro/collaboration-worktree-endpoint";
@@ -35,7 +35,7 @@ import type {
   SubmitWorktreeChangesetMiddlewareContext,
   WorktreeMiddlewareNext,
 } from "@univerjs-pro/collaboration-worktree-service";
-import { json, Router, type RequestHandler } from "express";
+import { Router, type RequestHandler } from "express";
 import type { AccessResolver, ResourceContentAccess, UnitType } from "../../modules/access/index.js";
 import { ANONYMOUS_USER_ID, type IdentityModule } from "../../modules/identity/index.js";
 import type { WorktreesModule } from "../../modules/worktrees/index.js";
@@ -69,6 +69,7 @@ export interface CollaborationGateway {
 }
 
 export function createCollaborationGateway(options: {
+  readonly contentPermissions: ContentPermissions;
   readonly service: UniverCollabService;
   readonly commentService: IUniverCommentService;
   readonly historyService: IUniverHistoryService;
@@ -79,6 +80,7 @@ export function createCollaborationGateway(options: {
   readonly worktreeChangeFeed: WorktreeChangeFeed;
 }): CollaborationGateway {
   const {
+    contentPermissions,
     service,
     commentService,
     historyService,
@@ -134,6 +136,11 @@ export function createCollaborationGateway(options: {
       context.userID,
       context.request.changeset.unitID
     );
+    for (const requirement of context.requiredUnitPermissions) {
+      if (!contentPermissions.allowed(context.userID, requirement)) {
+        throw new CollabError("PERMISSION_DENIED", "Content permission denied.");
+      }
+    }
     await next();
   });
   service.use("commitChangeset", async (context, next) => {
@@ -253,6 +260,15 @@ export function createCollaborationGateway(options: {
   ] as const) {
     worktreeService.use(action, asyncWorktreeWriteAuthorization);
   }
+  worktreeService.use("applyChangeset", async (context, next) => {
+    // asyncWorktreeWriteAuthorization has already checked the authoritative scope.
+    for (const requirement of context.requiredUnitPermissions) {
+      if (!contentPermissions.allowed(context.userID, requirement, true)) {
+        throw new CollabError("PERMISSION_DENIED", "Draft content permission denied; manage protection on Trunk.");
+      }
+    }
+    await next();
+  });
   worktreeService.use("submitChangeset", async (context, next) => {
     setServerChangesetCreateTime(context.request.changeset);
     await next();
@@ -346,43 +362,8 @@ export function createCollaborationGateway(options: {
         : anonymousProtocolUser,
     });
   });
-  router.post(
-    "/authz/-/object/-/batch_allowed",
-    json({ limit: "1mb" }),
-    (request, response) => {
-      const requests = request.body?.requests as unknown;
-      if (!Array.isArray(requests)) {
-        throw new CollabError("INVALID_REQUEST", "requests must be an array");
-      }
-      const userId = response.locals.session.authenticated
-        ? response.locals.session.user.id as string
-        : ANONYMOUS_USER_ID;
-      response.json({
-        error: OK_ERROR,
-        objectActions: requests.map((value: unknown) =>
-          allowedObjectActions(value, userId, access)
-        ),
-      });
-    }
-  );
-  router.post(
-    "/authz/:objectType/object/:objectId/allowed",
-    json({ limit: "1mb" }),
-    (request, response) => {
-      const unitId =
-        typeof request.body?.unitID === "string" ? request.body.unitID : "";
-      const userId = response.locals.session.authenticated
-        ? response.locals.session.user.id as string
-        : ANONYMOUS_USER_ID;
-      response.json({
-        error: OK_ERROR,
-        actions: allowedActions(
-          request.body?.actions,
-          access.resolveUnitContent(userId, unitId)
-        ),
-      });
-    }
-  );
+  router.use("/authz", contentPermissions.router);
+  router.use("/worktrees/:worktreeId/authz", contentPermissions.router);
   router.get(
     "/worktrees/:worktreeId/units/:unitId/comparison",
     async (request, response) => {
@@ -548,67 +529,6 @@ async function requireWorktreeProtocolAccess(
       "Cannot access this Worktree Unit."
     );
   }
-}
-
-function allowedObjectActions(
-  value: unknown,
-  userId: string,
-  access: AccessResolver
-) {
-  const candidate = value as {
-    readonly unitID?: unknown;
-    readonly objectID?: unknown;
-    readonly actions?: unknown;
-  };
-  const unitId =
-    typeof candidate.unitID === "string" ? candidate.unitID : "";
-  const resource = access.resolveUnitContent(userId, unitId);
-  return {
-    unitID: unitId,
-    objectID:
-      typeof candidate.objectID === "string" ? candidate.objectID : "",
-    actions: allowedActions(candidate.actions, resource),
-  };
-}
-
-function allowedActions(
-  value: unknown,
-  resource: ResourceContentAccess | null
-): Array<{ readonly action: unknown; readonly allowed: boolean }> {
-  return Array.isArray(value)
-    ? value.map((action) => ({
-        action,
-        allowed: isActionAllowed(resource, action),
-      }))
-    : [];
-}
-
-function isActionAllowed(
-  resource: ResourceContentAccess | null,
-  action: unknown
-): boolean {
-  if (!resource || typeof action !== "number") return false;
-  if (action === UnitAction.Share) return false;
-  if (resource.role === "owner" || resource.role === "admin") return true;
-  if (resource.capabilities.editContent) {
-    return ![
-      UnitAction.ManageCollaborator,
-      UnitAction.Delete,
-    ].includes(action);
-  }
-  return [
-    UnitAction.View,
-    UnitAction.Comment,
-    UnitAction.Print,
-    UnitAction.Copy,
-    UnitAction.Export,
-    UnitAction.IHistory,
-    UnitAction.ViemRwHgtClWdt,
-    UnitAction.ViewFilter,
-    UnitAction.SelectProtectedCells,
-    UnitAction.SelectUnProtectedCells,
-    UnitAction.ViewHistory,
-  ].includes(action);
 }
 
 function requireUnitAccess(

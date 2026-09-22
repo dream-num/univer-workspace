@@ -264,23 +264,24 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V6 product databases to V7 automatically.
+backs up and migrates supported V0 through V7 product databases to V8 automatically.
 The Collaboration Comment and History Adapters perform additive, idempotent
 initialization of their own `comment=1` and `history=1` component schemas in the
 existing Collaboration SQLite file; they do not require a product database
 migration command. Back up both SQLite files before rollout.
 
 The published Collaboration Worktree adapter upgrades its own component schema
-from V1 to V2; the product database remains V7. Older SDK builds cannot open
+from V1 to V2; the product database is V8. Older SDK builds cannot open
 Worktree V2. Validate upgrades with separate product, collaboration, and Blob
 storage paths. Never let old and new SDK builds write the same Collaboration
 SQLite file. Rolling back requires the matching pre-upgrade database backup,
 not only switching the application commit.
 V7 extends the Operation kind and object deletion reason for Blob replacement; existing
 Blob rows and upload sessions are preserved.
-For a V7 rollout, stop every old Workspace instance, start one V7 instance and
+V8 adds content permission objects and collaborators without rewriting existing tables.
+For a V8 rollout, stop every old Workspace instance, start one V8 instance and
 wait for migration and health checks to succeed, then restore normal service;
-do not let V6 and V7 processes write the same SQLite file concurrently.
+do not let V7 and V8 processes write the same SQLite file concurrently.
 
 The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
 repository tag. When provided, it checks out that tag and uses it for the container
@@ -373,3 +374,11 @@ HTML cell bindings active. Each target is independently authorized; sharing the
 HTML does not share its source files. `hideUnit()` closes the preview, and the
 host's **Open file** action leads to the standard editor. Stable paragraph, cell
 and slide navigation are supported. See the [page API and limits](../../docs/design/html-views/native-preview.md).
+
+### Unit content edit protection
+
+Sheet, Doc, Slide, Board and Base use the SDK protection UI and server mutation analysis.
+Editors create protections; their creator and current Owner/Admin manage them. Worktrees
+inherit current Trunk policy and cannot manage bindings or collaborators. Content remains
+readable under the existing file permissions, including snapshots, history and exports.
+See [validation and release gate](docs/content-permissions-validation.md).
