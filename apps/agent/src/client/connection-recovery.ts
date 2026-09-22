@@ -30,16 +30,20 @@ export function apply(ctx: Context): void {
             });
             if (lifetime.signal.aborted) return;
             if (response.status === 401) { reload(); return; }
-            if (!response.ok) return;
-            const state = await response.json() as { ready?: boolean; version?: string };
-            if (state.ready) {
-              if (typeof state.version === "string" && pageVersion !== undefined && state.version !== pageVersion) reload();
+            if (response.ok) {
+              const state = await response.json() as { ready?: boolean; version?: string };
+              if (state.ready) {
+                if (typeof state.version === "string" && pageVersion !== undefined && state.version !== pageVersion) reload();
+                return;
+              }
+            } else if (response.status < 500) {
               return;
             }
           } catch {
-            // DSH owns reconnection. Its next state notification retries this check.
-            return;
+            if (lifetime.signal.aborted) return;
           }
+          // The final DSH connection notification may precede HTTP recovery.
+          // Retry transient failures within this window; DSH still owns reconnection.
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       })().finally(() => {

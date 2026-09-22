@@ -49,6 +49,64 @@ describe("global Workspace account recovery", () => {
     expect(replace).toHaveBeenCalledExactlyOnceWith("/");
     dispose();
   });
+  it.each(["network", "503"])("retries a %s failure after the last connection notification", async (failure) => {
+    vi.useFakeTimers();
+    const { fetch, replace, notify, dispose } = setup();
+    await vi.advanceTimersByTimeAsync(0);
+    if (failure === "network") fetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    else fetch.mockResolvedValueOnce(new Response(null, { status: 503 }));
+    fetch.mockImplementation(async () => Response.json({ ready: true, version: "b" }));
+    notify();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(replace).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/");
+    const calls = fetch.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledTimes(calls);
+    dispose();
+  });
+  it("stops retries at the recovery deadline and can retry on a later notification", async () => {
+    vi.useFakeTimers();
+    const { fetch, replace, notify, dispose } = setup();
+    await vi.advanceTimersByTimeAsync(0);
+    fetch.mockImplementation(async () => new Response(null, { status: 503 }));
+    notify();
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(fetch.mock.calls.length).toBeGreaterThan(2);
+    const calls = fetch.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledTimes(calls);
+    expect(replace).not.toHaveBeenCalled();
+    fetch.mockImplementation(async () => Response.json({ ready: true, version: "b" }));
+    notify();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/");
+    dispose();
+  });
+  it("stops a retry when disposed during its delay", async () => {
+    vi.useFakeTimers();
+    const { fetch, replace, notify, dispose } = setup();
+    await vi.advanceTimersByTimeAsync(0);
+    fetch.mockRejectedValue(new TypeError("Failed to fetch"));
+    notify();
+    await vi.advanceTimersByTimeAsync(0);
+    dispose();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(replace).not.toHaveBeenCalled();
+  });
+  it("does not retry permanent HTTP errors", async () => {
+    vi.useFakeTimers();
+    const { fetch, replace, notify, dispose } = setup();
+    await vi.advanceTimersByTimeAsync(0);
+    fetch.mockResolvedValue(new Response(null, { status: 403 }));
+    notify();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(replace).not.toHaveBeenCalled();
+    dispose();
+  });
   it("keeps ordinary reconnections and reloads when browser authentication expires", async () => {
     const { fetch, replace, notify, dispose } = setup();
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
