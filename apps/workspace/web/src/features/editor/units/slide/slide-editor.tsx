@@ -122,7 +122,6 @@ export function createSlideComparisonPresets(
   container: HTMLElement
 ): IPreset[] {
   return [
-    { plugins: getReferencedSheetPlugins() },
     {
       plugins: [
         UniverRenderEnginePlugin,

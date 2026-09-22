@@ -121,7 +121,6 @@ export function createDocComparisonPresets(
   container: HTMLElement
 ): IPreset[] {
   return [
-    { plugins: getReferencedSheetPlugins() },
     UniverDocsCorePreset({
       container,
       ribbonType: "grid",
