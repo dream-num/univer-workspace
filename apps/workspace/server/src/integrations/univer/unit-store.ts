@@ -118,7 +118,7 @@ export function createCollaborationRuntime(
   } = {}
 ): CollaborationRuntime {
   const database = new SQLiteDatabaseAdapter({ filename });
-  const service = new UniverCollabService({ dbAdapter: database });
+  const service = new UniverCollabService({ dbAdapter: database, enableUnitPermissionAnalysis: true });
   const historyDatabase = new SQLiteHistoryDatabaseAdapter({ filename });
   const historyService = new UniverHistoryService({
     collabService: service,
@@ -138,6 +138,7 @@ export function createCollaborationRuntime(
   });
   const worktreeDatabase = new SQLiteWorktreeDatabaseAdapter({ filename });
   const worktreeService = new UniverCollabWorktreeService({
+    enableUnitPermissionAnalysis: true,
     trunk: {
       service,
       dbAdapter: database,

@@ -100,6 +100,8 @@ try {
       ON operations(state, next_attempt_at, lease_expires_at);
     CREATE INDEX operations_actor
       ON operations(actor_user_id, created_at DESC);
+    DROP TABLE IF EXISTS content_permission_collaborators;
+    DROP TABLE IF EXISTS content_permission_objects;
     PRAGMA user_version = 1;
     COMMIT;
     PRAGMA foreign_keys = ON;
@@ -111,7 +113,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 7);
+    assert.equal(version.user_version, 8);
     const resource = migrated.database.connection
       .prepare("SELECT id, kind FROM resources")
       .get() as { readonly id: string; readonly kind: string };

@@ -21,7 +21,7 @@
     "db:reset": "node --env-file-if-exists=.env --import tsx server/src/db/reset.ts",
     "db:reset:production": "node --env-file-if-exists=.env dist/server/db/reset.js",
     "test": "vitest run --config vitest.config.ts",
-    "test:production-import": "node test/production-import.mjs && node --import tsx test/production-migration.ts && node --import tsx test/production-v1-migration.ts && node --import tsx test/production-v2-migration.ts && node --import tsx test/production-v3-migration.ts && node --import tsx test/production-v4-migration.ts && node --import tsx test/production-v5-migration.ts && node --import tsx test/production-v6-migration.ts",
+    "test:production-import": "node test/production-import.mjs && node --import tsx test/production-migration.ts && node --import tsx test/production-v1-migration.ts && node --import tsx test/production-v2-migration.ts && node --import tsx test/production-v3-migration.ts && node --import tsx test/production-v4-migration.ts && node --import tsx test/production-v5-migration.ts && node --import tsx test/production-v6-migration.ts && node --import tsx test/production-v7-migration.ts",
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {

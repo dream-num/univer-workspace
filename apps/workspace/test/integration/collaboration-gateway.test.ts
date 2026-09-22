@@ -1,3 +1,7 @@
+import { getDocsEmptySnapshot, JSONX, TextXActionType, getBasesEmptySnapshot } from "@univerjs/core";
+import { getSlidesEmptySnapshot, PageTypeEnum, PageElementTypeEnum } from "@univerjs-pro/slides";
+import { getBoardsEmptySnapshot, BoardElementType } from "@univerjs-pro/boards";
+import { createDefaultBaseTableSnapshot } from "@univerjs-pro/bases";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1609,3 +1613,726 @@ function readStoredChangesetMetadata(
     database.close();
   }
 }
+
+// These tests use the real application, published SDK and authenticated HTTP/WS.
+describe("content permission integration", () => {
+  async function fixture(
+    type: "sheet" | "doc" | "slide" | "board" | "base" = "sheet",
+    initialData?: object,
+  ) {
+    const setup = await startApplication();
+    const { application, origin } = setup;
+    async function account(username: string) {
+      const issued = await application.identity.registerWithPassword({
+        username,
+        displayName: username,
+        password: "content permission test password",
+      });
+      return {
+        id: issued.view.user.id,
+        cookie: `${application.identity.cookieName}=${issued.cookieValue}`,
+      };
+    }
+    const owner = await account("protection-owner");
+    const editor = await account("protection-editor");
+    const viewer = await account("protection-viewer");
+    const outsider = await account("protection-outsider");
+    const space = application.spaces.list(owner.id).spaces[0]!;
+    const created = await application.resources.create(
+      owner.id,
+      "content-permission-resource-0001",
+      {
+        kind: "univer",
+        spaceId: space.id,
+        parentNodeId: null,
+        name: "Protected",
+        unitType: type,
+        ...(initialData ? { initialData } : {}),
+      },
+    );
+    if (created.status === 202 || created.body.node.resource?.kind !== "univer")
+      throw new Error("Missing Unit");
+    const node = created.body.node;
+    const unitId = created.body.node.resource.unitId;
+    application.permissions.upsertNodeGrant(owner.id, node.id, editor.id, { role: "editor" });
+    application.permissions.upsertNodeGrant(owner.id, node.id, viewer.id, { role: "viewer" });
+    async function authz(cookie: string, path: string, body?: unknown, method = "POST") {
+      return fetch(`${origin}/universer-api/authz${path}`, {
+        method,
+        headers: { cookie, "content-type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    }
+    return {
+      ...setup,
+      owner,
+      editor,
+      viewer,
+      outsider,
+      unitId,
+      node,
+      authz,
+      protocolType: {
+        sheet: UniverType.UNIVER_SHEET,
+        doc: UniverType.UNIVER_DOC,
+        slide: UniverType.UNIVER_SLIDE,
+        board: UniverType.UNIVER_BOARD,
+        base: UniverType.UNIVER_BASE,
+      }[type],
+    };
+  }
+
+  it.each([
+    ["sheet", 2, "worksheetObject"],
+    ["sheet", 3, "selectRangeObject"],
+    ["doc", 9, "documentObject"],
+    ["doc", 10, "documentObject"],
+    ["doc", 11, "documentObject"],
+    ["slide", 12, "slideObject"],
+    ["slide", 13, "slideObject"],
+    ["slide", 14, "slideObject"],
+    ["base", 15, "baseObject"],
+    ["base", 16, "baseObject"],
+    ["base", 17, "baseObject"],
+    ["base", 18, "baseObject"],
+    ["base", 19, "baseObject"],
+    ["board", 20, "boardObject"],
+  ] as const)(
+    "persists and enforces %s object type %s with the SDK Authz contract",
+    async (type, objectType, key) => {
+      const f = await fixture(type);
+      const input = {
+        objectType,
+        [key]: {
+          unitID: f.unitId,
+          name: "Protection",
+          strategies: [],
+          collaborators: [],
+          scope: { read: 1, edit: 2 },
+        },
+      };
+      expect((await f.authz(f.viewer.cookie, `/${objectType}/object`, input)).status).toBe(403);
+      const created = await f.authz(f.editor.cookie, `/${objectType}/object`, input);
+      expect(created.status).toBe(200);
+      const { objectID } = (await created.json()) as { objectID: string };
+      const query = {
+        unitID: f.unitId,
+        objectID,
+        objectType,
+        actions: [UnitAction.Edit, UnitAction.ManageCollaborator, UnitAction.View],
+      };
+      for (const [user, edit, manage, view] of [
+        [f.owner, true, true, true],
+        [f.editor, true, true, true],
+        [f.viewer, false, false, true],
+        [f.outsider, false, false, false],
+      ] as const) {
+        const response = await f.authz(user.cookie, "/-/object/-/batch_allowed", {
+          requests: [query],
+        });
+        expect(await response.json()).toMatchObject({
+          objectActions: [
+            {
+              actions: [
+                { action: UnitAction.Edit, allowed: edit },
+                { action: UnitAction.ManageCollaborator, allowed: manage },
+                { action: UnitAction.View, allowed: view },
+              ],
+            },
+          ],
+        });
+      }
+      // Owner can take over an editor-created rule. An object grant never promotes a Viewer.
+      const update = {
+        ...query,
+        name: "Owner managed",
+        strategies: [],
+        scope: { read: 1, edit: 0 },
+        collaborators: { collaborators: [{ id: f.viewer.id, role: 1 }] },
+      };
+      expect(
+        (await f.authz(f.owner.cookie, `/${objectType}/object/${objectID}`, update, "PUT")).status,
+      ).toBe(200);
+      expect(
+        (await f.authz(f.viewer.cookie, `/${objectType}/object/${objectID}`, update, "PUT")).status,
+      ).toBe(403);
+      expect(
+        (
+          await f.authz(
+            f.owner.cookie,
+            `/${objectType}/object/${objectID}`,
+            { ...update, scope: { read: 2, edit: 0 } },
+            "PUT",
+          )
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await f.authz(
+            f.owner.cookie,
+            `/${objectType}/object/${objectID}`,
+            { ...update, unitID: "another-unit" },
+            "PUT",
+          )
+        ).status,
+      ).toBe(403);
+      const listed = await f.authz(f.owner.cookie, "/-/object/list", {
+        unitID: f.unitId,
+        objectIDs: [objectID],
+        actions: [UnitAction.Edit],
+      });
+      expect(await listed.json()).toMatchObject({
+        objects: [{ objectID, name: "Owner managed", scope: { read: 1, edit: 0 } }],
+      });
+      const candidates = await f.authz(
+        f.editor.cookie,
+        `/collaborator?unitID=${f.unitId}&objectID=${f.unitId}`,
+        undefined,
+        "GET",
+      );
+      const members = (await candidates.json()) as { collaborators: { id: string }[] };
+      expect(members.collaborators.map((member) => member.id).sort()).toEqual(
+        [f.owner.id, f.editor.id, f.viewer.id].sort(),
+      );
+      f.application.permissions.removeNodeGrant(f.owner.id, f.node.id, f.editor.id);
+      expect(
+        (await f.authz(f.editor.cookie, `/${objectType}/object/${objectID}`, update, "PUT")).status,
+      ).toBe(403);
+      await stopApplication(f.application, f.server);
+      const restarted = await startApplication(f.directory);
+      const response = await fetch(`${restarted.origin}/universer-api/authz/-/object/list`, {
+        method: "POST",
+        headers: { cookie: f.owner.cookie, "content-type": "application/json" },
+        body: JSON.stringify({ unitID: f.unitId, objectIDs: [objectID], actions: [] }),
+      });
+      expect(await response.json()).toMatchObject({
+        objects: [{ objectID, name: "Owner managed" }],
+      });
+    },
+  );
+
+  async function sheetSubmit(f: Awaited<ReturnType<typeof fixture>>, cookie: string) {
+    const connection = await joinUnit(f.origin, cookie, f.unitId);
+    const snapshot = await fetch(
+      `${f.origin}/universer-api/snapshot/${f.protocolType}/unit/${f.unitId}/rev/0`,
+      { headers: { cookie } },
+    );
+    const loaded = (await snapshot.json()) as { snapshot: { workbook?: { sheetOrder: string[] } } };
+    const sheetId = loaded.snapshot.workbook?.sheetOrder[0] ?? "p1";
+    let requestId = 0;
+    return {
+      sheetId,
+      async submit(baseRev: number, id: string, params: object) {
+        const reqId = ++requestId;
+        const event = new Promise<string>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            connection.socket.removeEventListener("message", listener);
+            reject(new Error("No submission acknowledgement"));
+          }, 5000);
+          function listener(raw: MessageEvent) {
+            const message = deserializeToCombResponse(raw) as unknown as {
+              collaMsg?: {
+                eventID: string;
+                csAckEvent?: { cs: { reqId: number } };
+                permissionRejEvent?: { cs: { reqId: number } };
+                csRejEvent?: { cs: { reqId: number } };
+                csShouldRetryEvent?: { cs: { reqId: number } };
+              };
+            };
+            const payload = message.collaMsg;
+            const cs =
+              payload?.csAckEvent?.cs ??
+              payload?.permissionRejEvent?.cs ??
+              payload?.csRejEvent?.cs ??
+              payload?.csShouldRetryEvent?.cs;
+            if (cs?.reqId !== reqId || !payload) return;
+            clearTimeout(timer);
+            connection.socket.removeEventListener("message", listener);
+            resolve(payload.eventID);
+          }
+          connection.socket.addEventListener("message", listener);
+        });
+        const response = await fetch(
+          `${f.origin}/universer-api/comb/${f.protocolType}/unit/${f.unitId}/new_changes`,
+          {
+            method: "POST",
+            headers: { cookie, "content-type": "application/json" },
+            body: JSON.stringify({
+              unitID: f.unitId,
+              memberID: connection.memberId,
+              type: f.protocolType,
+              changeset: {
+                unitID: f.unitId,
+                type: f.protocolType,
+                baseRev,
+                revision: baseRev + 1,
+                sid: connection.memberId,
+                reqId,
+                userID: "untrusted-user",
+                memberID: connection.memberId,
+                mutations: [
+                  { id, data: JSON.stringify({ unitId: f.unitId, subUnitId: sheetId, ...params }) },
+                ],
+              },
+            }),
+          },
+        );
+        expect(await response.json()).toMatchObject({ error: { code: ErrorCode.OK } });
+        // HTTP acknowledges receipt; only the WS ACK proves that the edit committed.
+        return event;
+      },
+    };
+  }
+
+  it("rejects protected cell writes server-side while allowing unprotected cells and new ACL grants", async () => {
+    const f = await fixture();
+    const owner = await sheetSubmit(f, f.owner.cookie);
+    const editor = await sheetSubmit(f, f.editor.cookie);
+    const created = await f.authz(f.owner.cookie, "/3/object", {
+      objectType: 3,
+      selectRangeObject: {
+        unitID: f.unitId,
+        name: "B2",
+        collaborators: [],
+        scope: { read: 1, edit: 2 },
+      },
+    });
+    const { objectID } = (await created.json()) as { objectID: string };
+    const bind = await owner.submit(1, "sheet.mutation.add-range-protection", {
+      rules: [
+        {
+          id: "protected-b2",
+          permissionId: objectID,
+          unitId: f.unitId,
+          subUnitId: owner.sheetId,
+          unitType: 3,
+          ranges: [{ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }],
+          viewState: "othersCanView",
+          editState: "onlyMe",
+        },
+      ],
+    });
+    expect(bind).toBe("changeset_ack");
+    expect(
+      await editor.submit(2, "sheet.mutation.set-range-values", {
+        cellValue: { 1: { 1: { v: "denied" } } },
+      }),
+    ).toBe("permission_rej");
+    expect(
+      await editor.submit(2, "sheet.mutation.set-range-values", {
+        cellValue: { 0: { 0: { v: "allowed" } } },
+      }),
+    ).toBe("changeset_ack");
+    expect(
+      (
+        await f.authz(
+          f.owner.cookie,
+          `/3/object/${objectID}`,
+          {
+            unitID: f.unitId,
+            objectID,
+            objectType: 3,
+            name: "B2",
+            strategies: [],
+            scope: { read: 1, edit: 0 },
+            collaborators: { collaborators: [{ id: f.editor.id, role: 1 }] },
+          },
+          "PUT",
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      await editor.submit(3, "sheet.mutation.set-range-values", {
+        cellValue: { 1: { 1: { v: "now allowed" } } },
+      }),
+    ).toBe("changeset_ack");
+    expect(
+      await editor.submit(4, "sheet.mutation.delete-range-protection", {
+        ruleIds: ["protected-b2"],
+      }),
+    ).toBe("permission_rej");
+    const database = new DatabaseSync(f.collaborationDatabaseFilename, { readOnly: true });
+    try {
+      expect(
+        database
+          .prepare("SELECT head_revision FROM collaboration_units WHERE unit_id = ?")
+          .get(f.unitId),
+      ).toMatchObject({ head_revision: 4 });
+    } finally {
+      database.close();
+    }
+  });
+
+  it.each(["doc", "slide", "board", "base"] as const)(
+    "enforces real %s content edits and keeps unrelated edits working",
+    async (kind) => {
+      let data: object;
+      let objectType: number;
+      let objectId: string;
+      let edit: (protectedTarget: boolean) => { id: string; params: object };
+      if (kind === "doc") {
+        const snapshot = getDocsEmptySnapshot("seed");
+        snapshot.body = {
+          dataStream: "One\rTwo\r\n",
+          paragraphs: [
+            { startIndex: 3, paragraphId: "para_p1" },
+            { startIndex: 7, paragraphId: "para_p2" },
+          ],
+          sectionBreaks: [{ startIndex: 8, sectionId: "s1" }],
+        };
+        data = snapshot;
+        objectType = 10;
+        objectId = "paragraph//para_p2";
+        edit = (protectedTarget) => ({
+          id: "doc.mutation.rich-text-editing",
+          params: {
+            actions: JSONX.getInstance().editOp([
+              ...(protectedTarget ? [{ t: TextXActionType.RETAIN, len: 4 }] : []),
+              { t: TextXActionType.INSERT, len: 1, body: { dataStream: "X" } },
+            ]),
+          },
+        });
+      } else if (kind === "slide") {
+        const snapshot = getSlidesEmptySnapshot("seed");
+        snapshot.activeSlideId = "p1";
+        snapshot.slideOrder = ["p1"];
+        snapshot.slides = {
+          p1: {
+            id: "p1",
+            name: "Page",
+            pageType: PageTypeEnum.Slide,
+            elementOrder: ["e1", "e2"],
+            elements: Object.fromEntries(
+              ["e1", "e2"].map((id) => [
+                id,
+                {
+                  id,
+                  type: PageElementTypeEnum.Shape,
+                  transform: { left: 0, top: 0, width: 100, height: 50 },
+                  shapeData: { shapeType: "rect" },
+                },
+              ]),
+            ) as never,
+          },
+        };
+        data = snapshot;
+        objectType = 13;
+        objectId = "element/slide/p1/e1";
+        edit = (protectedTarget) => ({
+          id: "slide.mutation.remove-slide-element",
+          params: { subUnitId: "p1", drawingId: protectedTarget ? "e1" : "e2" },
+        });
+      } else if (kind === "board") {
+        const snapshot = getBoardsEmptySnapshot("seed");
+        snapshot.activePageId = "p1";
+        snapshot.pageOrder = ["p1"];
+        snapshot.pages = {
+          p1: {
+            id: "p1",
+            name: "Page",
+            pageType: "page",
+            elementOrder: ["e1", "e2"],
+            elements: Object.fromEntries(
+              ["e1", "e2"].map((id) => [
+                id,
+                {
+                  id,
+                  type: BoardElementType.Shape,
+                  transform: { left: 0, top: 0, width: 100, height: 50 },
+                  shapeData: { shapeType: "rect" },
+                },
+              ]),
+            ) as never,
+          },
+        };
+        snapshot.slides = snapshot.pages;
+        snapshot.slideOrder = snapshot.pageOrder;
+        snapshot.activeSlideId = "p1";
+        data = snapshot;
+        objectType = 20;
+        objectId = "element/p1/e1";
+        edit = (protectedTarget) => ({
+          id: "board.mutation.remove-element",
+          params: { subUnitId: "p1", elementId: protectedTarget ? "e1" : "e2" },
+        });
+      } else {
+        const snapshot = getBasesEmptySnapshot("seed");
+        const table = createDefaultBaseTableSnapshot({
+          id: "t1",
+          name: "Table",
+          gridViewId: "e1",
+          recordCount: 2,
+          now: 1,
+        });
+        table.views.e2 = { ...table.views.e1!, id: "e2", name: "Other" };
+        table.viewOrder.push("e2");
+        snapshot.tableOrder = ["t1"];
+        snapshot.tables = { t1: table };
+        data = snapshot;
+        objectType = 18;
+        objectId = "view/t1/e1";
+        edit = (protectedTarget) => ({
+          id: "base.mutation.apply-base-json1",
+          params: {
+            op: [
+              "tables",
+              "t1",
+              "views",
+              protectedTarget ? "e1" : "e2",
+              "name",
+              { r: protectedTarget ? "Grid" : "Other", i: "Changed" },
+            ],
+          },
+        });
+      }
+      const f = await fixture(kind, data);
+      const owner = await sheetSubmit(f, f.owner.cookie);
+      const editor = await sheetSubmit(f, f.editor.cookie);
+      const key = kind === "doc" ? "documentObject" : `${kind}Object`;
+      const created = await f.authz(f.owner.cookie, `/${objectType}/object`, {
+        objectType,
+        [key]: {
+          unitID: f.unitId,
+          name: "Protected object",
+          strategies: [],
+          collaborators: [],
+          scope: { read: 1, edit: 2 },
+        },
+      });
+      const { objectID: permissionId } = (await created.json()) as { objectID: string };
+      expect(
+        await owner.submit(1, `${kind}.mutation.set-permission-rule`, {
+          objectId,
+          objectType,
+          rule: { objectId, objectType, permissionId },
+        }),
+      ).toBe("changeset_ack");
+      const protectedEdit = edit(true);
+      expect(await editor.submit(2, protectedEdit.id, protectedEdit.params)).toBe("permission_rej");
+      const unrelatedEdit = edit(false);
+      expect(await editor.submit(2, unrelatedEdit.id, unrelatedEdit.params)).toBe("changeset_ack");
+      expect(await owner.submit(3, protectedEdit.id, protectedEdit.params)).toBe("changeset_ack");
+    },
+  );
+
+  it("inherits Trunk protection in drafts, forbids rule management, and merges ordinary edits", async () => {
+    const f = await fixture();
+    const owner = await sheetSubmit(f, f.owner.cookie);
+    const created = await f.authz(f.owner.cookie, "/3/object", {
+      objectType: 3,
+      selectRangeObject: {
+        unitID: f.unitId,
+        name: "B2",
+        collaborators: [],
+        scope: { read: 1, edit: 2 },
+      },
+    });
+    const { objectID } = (await created.json()) as { objectID: string };
+    expect(
+      await owner.submit(1, "sheet.mutation.add-range-protection", {
+        rules: [
+          {
+            id: "draft-b2",
+            permissionId: objectID,
+            unitId: f.unitId,
+            subUnitId: owner.sheetId,
+            unitType: 3,
+            ranges: [{ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }],
+            viewState: "othersCanView",
+            editState: "onlyMe",
+          },
+        ],
+      }),
+    ).toBe("changeset_ack");
+    const tree = await f.application.worktrees.create(f.editor.id, "protected-draft-create-0001", {
+      kind: "user",
+      name: "Draft",
+      summary: null,
+    });
+    const worktreeId = tree.body.id;
+    await f.application.worktrees.addUnit(f.editor.id, worktreeId, "protected-draft-add-0001", {
+      source: "trunk",
+      resourceId: f.node.resource!.id,
+    });
+    const scoped = `${f.origin}/universer-api/worktrees/${worktreeId}/authz`;
+    const headers = { cookie: f.editor.cookie, "content-type": "application/json" };
+    const query = await fetch(`${scoped}/-/object/-/batch_allowed`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        requests: [
+          {
+            unitID: f.unitId,
+            objectID: f.unitId,
+            objectType: 1,
+            actions: [UnitAction.Edit, UnitAction.CreatePermissionObject],
+          },
+          { unitID: f.unitId, objectID, objectType: 3, actions: [UnitAction.Edit] },
+        ],
+      }),
+    });
+    expect(await query.json()).toMatchObject({
+      objectActions: [
+        { actions: [{ allowed: true }, { allowed: false }] },
+        { actions: [{ allowed: false }] },
+      ],
+    });
+    expect(
+      (await fetch(`${scoped}/3/object`, { method: "POST", headers, body: "{}" })).status,
+    ).toBe(403);
+    expect(
+      (
+        await fetch(`${scoped}/-/object/list`, {
+          method: "POST",
+          headers: { ...headers, cookie: f.outsider.cookie },
+          body: JSON.stringify({ unitID: f.unitId, objectIDs: [objectID] }),
+        })
+      ).status,
+    ).toBe(403);
+    let reqId = 0;
+    const submit = (id: string, params: object) =>
+      f.application.worktrees.submitChangeset(f.editor.id, worktreeId, f.unitId, {
+        changeset: {
+          unitID: f.unitId,
+          type: UniverType.UNIVER_SHEET,
+          baseRev: 2,
+          revision: 3,
+          sid: "content-draft",
+          reqId: ++reqId,
+          userID: "",
+          memberID: "",
+          createTime: 1,
+          mutations: [
+            { id, data: JSON.stringify({ unitId: f.unitId, subUnitId: owner.sheetId, ...params }) },
+          ],
+        },
+      });
+    await expect(
+      submit("sheet.mutation.set-range-values", { cellValue: { 1: { 1: { v: "denied" } } } }),
+    ).resolves.toMatchObject({ status: "rejected", error: { code: "PERMISSION_DENIED" } });
+    await expect(
+      submit("sheet.mutation.delete-range-protection", { ruleIds: ["draft-b2"] }),
+    ).resolves.toMatchObject({ status: "rejected", error: { code: "PERMISSION_DENIED" } });
+    expect(
+      await submit("sheet.mutation.set-range-values", { cellValue: { 0: { 0: { v: "merged" } } } }),
+    ).toMatchObject({ status: "committed" });
+    await f.application.worktrees.markReady(f.editor.id, worktreeId);
+    expect(
+      await f.application.worktrees.merge(f.editor.id, worktreeId, "protected-draft-merge-0001"),
+    ).toMatchObject({ worktree: { state: "merged" }, operation: { state: "completed" } });
+  });
+
+  it("rechecks revoked content grants when merging a previously editable draft", async () => {
+    const f = await fixture();
+    const owner = await sheetSubmit(f, f.owner.cookie);
+    const created = await f.authz(f.owner.cookie, "/3/object", {
+      objectType: 3,
+      selectRangeObject: {
+        unitID: f.unitId,
+        name: "B2",
+        collaborators: [{ id: f.editor.id, role: 1 }],
+        scope: { read: 1, edit: 0 },
+      },
+    });
+    const { objectID } = (await created.json()) as { objectID: string };
+    expect(
+      await owner.submit(1, "sheet.mutation.add-range-protection", {
+        rules: [
+          {
+            id: "revoked-b2",
+            permissionId: objectID,
+            unitId: f.unitId,
+            subUnitId: owner.sheetId,
+            unitType: 3,
+            ranges: [{ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }],
+            viewState: "othersCanView",
+            editState: "specificUsers",
+          },
+        ],
+      }),
+    ).toBe("changeset_ack");
+    const tree = await f.application.worktrees.create(f.editor.id, "revoked-draft-create-0001", {
+      kind: "user",
+      name: "Revoked",
+      summary: null,
+    });
+    const worktreeId = tree.body.id;
+    await f.application.worktrees.addUnit(f.editor.id, worktreeId, "revoked-draft-add-0001", {
+      source: "trunk",
+      resourceId: f.node.resource!.id,
+    });
+    expect(
+      await f.application.worktrees.submitChangeset(f.editor.id, worktreeId, f.unitId, {
+        changeset: {
+          unitID: f.unitId,
+          type: UniverType.UNIVER_SHEET,
+          baseRev: 2,
+          revision: 3,
+          sid: "revoked-draft",
+          reqId: 1,
+          userID: "",
+          memberID: "",
+          createTime: 1,
+          mutations: [
+            {
+              id: "sheet.mutation.set-range-values",
+              data: JSON.stringify({
+                unitId: f.unitId,
+                subUnitId: owner.sheetId,
+                cellValue: { 1: { 1: { v: "before revocation" } } },
+              }),
+            },
+          ],
+        },
+      }),
+    ).toMatchObject({ status: "committed" });
+    expect(
+      (
+        await f.authz(
+          f.owner.cookie,
+          `/3/object/${objectID}`,
+          {
+            unitID: f.unitId,
+            objectID,
+            objectType: 3,
+            scope: { read: 1, edit: 2 },
+            collaborators: { collaborators: [] },
+          },
+          "PUT",
+        )
+      ).status,
+    ).toBe(200);
+    await f.application.worktrees.markReady(f.editor.id, worktreeId);
+    const merged = await f.application.worktrees.merge(
+      f.editor.id,
+      worktreeId,
+      "revoked-draft-merge-0001",
+    );
+    expect(merged.worktree.state).not.toBe("merged");
+    const database = new DatabaseSync(f.collaborationDatabaseFilename, { readOnly: true });
+    try {
+      expect(
+        database
+          .prepare("SELECT head_revision FROM collaboration_units WHERE unit_id = ?")
+          .get(f.unitId),
+      ).toMatchObject({ head_revision: 2 });
+    } finally {
+      database.close();
+    }
+  });
+
+  // Deliberately red on 1.0.0-rc.0. Do not skip/xfail or weaken the assertion.
+  // Merge gate: publish and adopt the fix for univer-collaboration-sdk#82 first.
+  it("SDK #82: ordinary Editor can change tab color without collaborator-management rights", async () => {
+    const f = await fixture();
+    const editor = await sheetSubmit(f, f.editor.cookie);
+    expect(
+      await editor.submit(1, "sheet.mutation.set-range-values", {
+        cellValue: { 0: { 0: { v: "control" } } },
+      }),
+    ).toBe("changeset_ack");
+    expect(await editor.submit(2, "sheet.mutation.set-tab-color", { color: "#ff0000" })).toBe(
+      "changeset_ack",
+    );
+  });
+});

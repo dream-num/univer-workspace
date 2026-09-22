@@ -232,14 +232,14 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 ## 产品数据库
 
-产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V7 结构，`initialize.ts`
-负责在业务 Module 初始化前识别数据库状态：空数据库应用 V7；V7 校验指纹；V6/V5/V4/V3/V2/V1/V0
+产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V8 结构，`initialize.ts`
+负责在业务 Module 初始化前识别数据库状态：空数据库应用 V8；V8 校验指纹；V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
 
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。
 - 默认数据库文件为 `.data/univer-workspace.sqlite`。
-- 部署和普通重启均保留数据库；V7 不重复备份或迁移。
+- 部署和普通重启均保留数据库；V8 不重复备份或迁移。
 - 普通进程重启不清理数据库。
 - 每个测试使用独立的临时数据库文件或内存数据库。
 
@@ -326,3 +326,8 @@ the room exists, terminating the observer during editor initialization. The smal
 presence, switches to a replacement room when emitted, and disposes on unmount.
 Remove this adapter when the SDK Facade passes the delayed-room and replacement
 regressions without it. OT, room creation and transport remain SDK responsibilities.
+
+内容保护由 `modules/content-permissions` 持久化产品 ACL；
+`integrations/univer/content-permissions.ts` 适配公开 SDK Authz 协议并解析权威文件角色。
+Trunk 与 Worktree Service 开启公开的 `enableUnitPermissionAnalysis`，在 apply 阶段校验
+SDK 生成的权限需求。Browser 为五类 Unit 注册对象权限类型，Worktree 使用 scope Authz URL。

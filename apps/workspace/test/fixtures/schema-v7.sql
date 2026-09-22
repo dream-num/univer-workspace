@@ -545,23 +545,4 @@ BEGIN
   SELECT RAISE(ABORT, 'asset upload scope is immutable');
 END;
 
-CREATE TABLE IF NOT EXISTS content_permission_objects (
-  id TEXT PRIMARY KEY,
-  unit_id TEXT NOT NULL REFERENCES univer_resources(unit_id) ON DELETE CASCADE,
-  object_type INTEGER NOT NULL,
-  creator_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  name TEXT NOT NULL,
-  strategies_json TEXT NOT NULL,
-  edit_scope INTEGER NOT NULL CHECK (edit_scope IN (0, 1, 2)),
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS content_permission_objects_unit ON content_permission_objects(unit_id);
-CREATE TABLE IF NOT EXISTS content_permission_collaborators (
-  object_id TEXT NOT NULL REFERENCES content_permission_objects(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role INTEGER NOT NULL CHECK (role IN (0, 1)),
-  PRIMARY KEY (object_id, user_id)
-);
-
-PRAGMA user_version = 8;
+PRAGMA user_version = 7;

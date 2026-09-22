@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V7 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V8 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -40,16 +40,16 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V7；
-- V7：校验 Schema 指纹；
-- V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V7；
-- V0：一致性备份后直接迁移到 V7；
+- Fresh：创建 V8；
+- V8：校验 Schema 指纹；
+- V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V8；
+- V0：一致性备份后直接迁移到 V8；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V7 Query。
+Worktree 等业务模块只编译和运行 V8 Query。
 
-V7 仅扩展 Operation 和 Object Deletion Job 枚举；不扩展 Blob 上传会话或 Worktree 合同。
+V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表，不改写现有业务表。
 
 ## Login Session Authenticator
 
@@ -276,3 +276,11 @@ Web 应用的 Tree Row 总是 Node：
 
 OpenAPI 生成类型是 Web 应用与服务端的唯一 HTTP 结构约束。旧 Route 不在 OpenAPI 中，
 Express 的未知 `/api/*` 路由直接返回 404，不落入 Web SPA Fallback。
+
+## 内容保护授权
+
+产品 `content-permissions` Repository 保存 ACL，Univer integration 实现 SDK Authz 路由和
+`applyChangeset` 授权。只保护编辑，不过滤读取。权限始终与文件访问权限取交集；Editor 可创建，
+创建者和 Owner/Admin 可管理。Worktree 使用独立 Authz 路径读取当前 Trunk ACL，拒绝管理；
+直接提交和合并通过 SDK 分析得到的权限需求逐项检查。现有产品 HTTP OpenAPI 不新增接口：
+`/universer-api/authz` 及 Worktree scope 路由仍属于 SDK 协议适配。

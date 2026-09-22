@@ -5,15 +5,15 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 /** The same preserved-data/rollback matrix runs against source and production startup. */
-export function verifyV6Migration(
+export function verifyV7Migration(
   open: (filename: string) => { connection: DatabaseSync; close(): void },
 ): void {
-  const root = mkdtempSync(join(tmpdir(), "workspace-v6-migration-"));
+  const root = mkdtempSync(join(tmpdir(), "workspace-v7-migration-"));
   try {
     for (const seeded of [false, true]) {
       const filename = join(root, `case-${seeded}.sqlite`);
       const original = new DatabaseSync(filename);
-      original.exec(readFileSync(new URL("../fixtures/schema-v6.sql", import.meta.url), "utf8"));
+      original.exec(readFileSync(new URL("../fixtures/schema-v7.sql", import.meta.url), "utf8"));
       if (seeded)
         original.exec(`
         INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1);
@@ -54,10 +54,10 @@ export function verifyV6Migration(
       );
       migrated.close();
       const backupNames = () =>
-        readdirSync(root).filter((name) => name.startsWith(`case-${seeded}.sqlite.v6-backup-`));
+        readdirSync(root).filter((name) => name.startsWith(`case-${seeded}.sqlite.v7-backup-`));
       assert.equal(backupNames().length, 1);
       const backup = new DatabaseSync(join(root, backupNames()[0]!), { readOnly: true });
-      assert.equal(backup.prepare("PRAGMA user_version").get()?.user_version, 6);
+      assert.equal(backup.prepare("PRAGMA user_version").get()?.user_version, 7);
       assert.deepEqual(
         tables.map((table) => backup.prepare(`SELECT * FROM ${table}`).all()),
         before,
@@ -68,25 +68,26 @@ export function verifyV6Migration(
     }
     const filename = join(root, "rollback.sqlite");
     const broken = new DatabaseSync(filename);
-    broken.exec(readFileSync(new URL("../fixtures/schema-v6.sql", import.meta.url), "utf8"));
-    // Force failure after operations has already been rebuilt inside the transaction.
-    broken.exec("CREATE TABLE object_deletion_jobs_v7 (collision TEXT)");
+    broken.exec(readFileSync(new URL("../fixtures/schema-v7.sql", import.meta.url), "utf8"));
+    // Fail the second CREATE after the first table/index have been added.
+    broken.exec("CREATE TABLE content_permission_collaborators (collision TEXT)");
     broken.close();
     assert.throws(() => open(filename), /rolled back.*backup/);
     const preserved = new DatabaseSync(filename);
-    assert.equal(preserved.prepare("PRAGMA user_version").get()?.user_version, 6);
-    assert.ok(
-      !String(
-        preserved.prepare("SELECT sql FROM sqlite_master WHERE name = 'operations'").get()?.sql,
-      ).includes("replace_blob_content"),
+    assert.equal(preserved.prepare("PRAGMA user_version").get()?.user_version, 7);
+    assert.equal(
+      preserved
+        .prepare("SELECT name FROM sqlite_master WHERE name = 'content_permission_objects'")
+        .get(),
+      undefined,
     );
     assert.equal(preserved.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
     preserved.close();
     const backupName = readdirSync(root).find((name) =>
-      name.startsWith("rollback.sqlite.v6-backup-"),
+      name.startsWith("rollback.sqlite.v7-backup-"),
     )!;
     const backup = new DatabaseSync(join(root, backupName), { readOnly: true });
-    assert.equal(backup.prepare("PRAGMA user_version").get()?.user_version, 6);
+    assert.equal(backup.prepare("PRAGMA user_version").get()?.user_version, 7);
     assert.equal(backup.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
     backup.close();
   } finally {

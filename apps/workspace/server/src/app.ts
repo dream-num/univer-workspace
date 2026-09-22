@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import type { Server } from "node:http";
 import { resolve } from "node:path";
+import { ContentPermissionsRepository } from "./modules/content-permissions/index.js";
+import { createContentPermissions } from "./integrations/univer/content-permissions.js";
 import { apiReference } from "@scalar/express-api-reference";
 import express from "express";
 import type { WorkspaceConfig } from "./config.js";
@@ -268,6 +270,12 @@ export function createWorkspaceApplication(
   });
   const collaborationGateway: CollaborationGateway | null = collaboration
     ? createCollaborationGateway({
+        contentPermissions: createContentPermissions({
+          repository: new ContentPermissionsRepository(database),
+          access,
+          identity,
+          worktrees,
+        }),
         service: collaboration.service,
         commentService: collaboration.commentService,
         historyService: collaboration.historyService,
