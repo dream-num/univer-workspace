@@ -44,7 +44,7 @@ import type {
   IPreset,
   IPresetPlugin,
 } from "@univerjs/presets";
-import type { IMember, IUser } from "@univerjs/protocol";
+import { UnitObject, type IMember, type IUser } from "@univerjs/protocol";
 import type { Theme } from "@univerjs/themes";
 import { createUniver, mergeLocales } from "@univerjs/presets";
 import { useEffect, useRef, useState } from "react";
@@ -89,6 +89,14 @@ import "@univerjs-pro/exchange-client/facade";
 import "@univerjs-pro/exchange-client/lib/index.css";
 
 installHistoryShapeFormulaSdkWorkaround();
+
+const CONTENT_PERMISSION_TYPES = [
+  UnitObject.Worksheet, UnitObject.SelectRange,
+  UnitObject.DocumentSection, UnitObject.DocumentParagraph, UnitObject.DocumentEntity,
+  UnitObject.SlidePage, UnitObject.SlideElement, UnitObject.SlideMaster,
+  UnitObject.BoardElement, UnitObject.BaseTable, UnitObject.BaseField,
+  UnitObject.BaseRecord, UnitObject.BaseView, UnitObject.BaseDashboard,
+];
 
 export interface CollaborationEditorProps {
   readonly previewToken?: string;
@@ -301,6 +309,7 @@ export function createCollaborationEditor(
                     wsSessionTicketUrl:
                       "/universer-api/user/session-ticket",
                     authzUrl: "/universer-api/authz",
+                    objectPermissionTypes: CONTENT_PERMISSION_TYPES,
                     loginUrlKey: "/login",
                     sendChangesetTimeout: 200,
                     ...collaborationConfig,
@@ -707,6 +716,7 @@ function configurePresetCollaboration(
               enableAuthServer: true,
               wsSessionTicketUrl: "/universer-api/user/session-ticket",
               authzUrl: "/universer-api/authz",
+              objectPermissionTypes: CONTENT_PERMISSION_TYPES,
               loginUrlKey: "/login",
               sendChangesetTimeout: 200,
               ...collaborationConfig,
@@ -773,6 +783,7 @@ async function resolveCollaborationConfig(
           origin: window.location.origin,
           worktreeID: scope.worktreeId,
         }),
+        authzUrl: `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/authz`,
         uploadFileServerUrl: `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/stream/file/upload`,
         signUrlServerUrl: `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/file/{fileID}/sign-url`,
       },
@@ -791,6 +802,7 @@ async function resolveCollaborationConfig(
       origin: window.location.origin,
       worktreeID: scope.worktreeId,
     }),
+    authzUrl: `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/authz`,
     uploadFileServerUrl: `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/stream/file/upload`,
     signUrlServerUrl: `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/file/{fileID}/sign-url`,
   };
@@ -817,6 +829,7 @@ async function resolveCollaborationConfig(
         worktreeID: scope.worktreeId,
         preview: resolution.preview,
       }),
+      authzUrl: `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/authz`,
       uploadFileServerUrl: `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/stream/file/upload`,
       signUrlServerUrl: `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/file/{fileID}/sign-url`,
     },

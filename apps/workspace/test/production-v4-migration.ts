@@ -53,6 +53,8 @@ try {
     );
     INSERT INTO external_identities SELECT * FROM external_identities_v5;
     DROP TABLE external_identities_v5;
+    DROP TABLE IF EXISTS content_permission_collaborators;
+    DROP TABLE IF EXISTS content_permission_objects;
     PRAGMA user_version = 4;
     COMMIT;
     PRAGMA foreign_keys = ON;
@@ -64,7 +66,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 7);
+    assert.equal(version.user_version, 8);
     const identity = migrated.database.connection
       .prepare(
         "SELECT provider, provider_subject, user_id FROM external_identities"

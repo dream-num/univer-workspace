@@ -1,15 +1,15 @@
 # Univer Workspace 数据模型
 
-状态：V7，已实现
+状态：V8，已实现
 
 权威定义：`server/src/db/schema.sql`
 
 产品数据库使用 SQLite，开启 Foreign Key，Schema 版本为
-`PRAGMA user_version = 7`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+`PRAGMA user_version = 8`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿另存于
-`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V7
+`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V8
 Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
 `__record_id`，并把每条 Record ID 投影到该字段；Row/Column/Cell Map 是可从 Field 与 Record
 重建的派生数据。现有持久化 Base Snapshot 均使用该表示。
@@ -17,7 +17,7 @@ Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一�
 五类 Unit 的 Thread Comment anchor 属于 Unit snapshot/changeset；评论正文、回复、solved
 状态与并发 generation 保存在同一文件的 `collaboration_comments` 表中，并由
 `collaboration_schema_versions` 的 `comment=1` 组件版本管理。Comment Adapter 首次启动时
-幂等创建该附加 Schema，不改变产品数据库 V7，也不要求执行产品迁移命令。评论当前只在
+幂等创建该附加 Schema，不改变产品数据库 V8，也不要求执行产品迁移命令。评论当前只在
 Trunk 编辑器启用；Worktree 和 Merge Preview 不读取或写入 Trunk 评论。
 
 SDK 1.0.0 的 Collaboration SQLite 组件版本为 `core=2`、`worktree=3`、`history=2`
@@ -27,7 +27,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-启动入口先将产品数据库准备到 V7，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+启动入口先将产品数据库准备到 V8，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份，在副本上按 Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件
@@ -35,7 +35,7 @@ Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库仍为 V7，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V8，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -198,7 +198,7 @@ Node 的链接分享策略，登录用户角色为 `editor | viewer`；匿名访
 Trigger 限制它只用于 Personal Space。
 
 匿名读取以保留 ID `workspace:anonymous` 进入 Access Resolver，只使用 Space 公开可读与 Link Sharing；
-不创建 User、Login Session 或 Recent。产品数据库仍为 V7，不新增字段或迁移。
+不创建 User、Login Session 或 Recent；匿名读取本身不新增持久化状态。
 
 登录用户的有效 Role 由 Access Resolver 每次按以下来源计算最高权限：
 
@@ -346,11 +346,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V7，不备份；
-2. 完整 V7：校验指纹后正常启动，不重复备份；
-3. 完整 V6/V5：先生成一致性备份，再迁移到 V7；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V7；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V7；
+1. 不存在或空文件：创建 V8，不备份；
+2. 完整 V8：校验指纹后正常启动，不重复备份；
+3. 完整 V7/V6/V5：先生成一致性备份，再迁移到 V8；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V8；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V8；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -359,7 +359,7 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 
 每个版本迁移步骤都在独立的 `BEGIN IMMEDIATE` 事务中完成，保留原 Node、Unit、User、Space、Trash Batch、
 Worktree 和 Operation ID，为现有内容生成新的 Resource ID，并类型化重写所有已完成
-Operation JSON。迁移前要求没有 Pending/Failed Operation。
+Operation JSON。V0 迁移前要求没有 Pending/Failed Operation；后续版本保留未完成恢复状态。
 
 提交前后校验：
 
@@ -372,12 +372,32 @@ Operation JSON。迁移前要求没有 Pending/Failed Operation。
 - V2 删除任务完整映射到通用 Outbox；
 - V3 Asset Upload 的内容检测字段被无损移除；声明 MIME 缺失时用旧检测值回填；
 - V4 External Identity 被无损扩展为支持 Discord Provider；
-- 旧表全部删除且 `user_version = 7`。
+- 旧表全部删除且 `user_version = 8`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
 一致性备份始终保留，下一次启动可继续升级或由运维恢复。错误中会给出备份路径。
 迁移实现是唯一兼容边界；线上数据库全部完成升级后，可以删除 `migrations/`、
-`legacy-v0/` 及初始化函数中的一次调用，不影响 V7 Schema 或业务代码。
+`legacy-v0/` 及初始化函数中的一次调用，不影响 V8 Schema 或业务代码。
 
 V6 → V7 只重建 Operation 和删除任务表以扩展 CHECK 枚举，完整保留所有行和恢复字段；
 Blob 及上传会话表不变。升级前自动创建一致性备份；停旧实例后由单个新实例完成迁移。
+
+## Unit 内容编辑保护（V8）
+
+`content_permission_objects` 保存随机权限 ID、所属 Unit、SDK 对象类型、创建者、名称、
+动作策略、查看范围和编辑范围；`content_permission_collaborators` 保存显式协作者与角色。
+它们属于产品授权数据，不保存范围坐标、文档内容、snapshot、changeset 或 revision。
+保护目标与权限 ID 的绑定仍由 SDK mutation 和协同存储管理。
+
+先提交产品 ACL，再提交协同绑定；两者没有跨库事务。未绑定和解绑后的 ACL 保留，允许重试、
+撤销与历史引用；不在普通请求中清理。永久删除 Resource 时按 Unit 外键级联删除。
+回收站、移动、重命名不改变权限 ID。创建者必须是已存在 User；失去文件编辑权限后也失去管理权。
+Owner/Admin 以当前产品角色接管管理，`cfgEnableObjInherit` 为 true。`read_scope` 与 `edit_scope`
+分别保存协议里的查看和编辑范围。编辑范围为 `OneSelf` 时，非 Owner 只在查看范围为所有协作者时保留 View。
+查看范围不是所有协作者时，能打开文件的人不再因此获得 View；显式协作者仍按角色判断。
+复制、打印、导出服从对象 strategies，缺省时 Copy 为 Reader、Print 和 Export 为 Editor。
+Snapshot、history 和 export 接口不按对象范围过滤，不构成内容保密。
+
+V7 → V8 在单个事务内新增两表及索引，不删除或改写旧字段、业务行、Blob 身份或恢复状态。
+启动前备份，校验 V7/V8 指纹、外键及完整性；失败回滚至 V7。已有未完成 Operation 可以保留。
+回滚应用版本须停新实例并恢复迁移前备份，不可让旧进程继续写 V8 文件。
