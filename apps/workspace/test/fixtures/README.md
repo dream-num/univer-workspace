@@ -36,7 +36,11 @@ with the published collaboration and Embed plugins. It creates a fresh Sheet,
 serializes it through the SDK, and supplies changesets that rename its worksheet
 to `Finance` and change A1 from 100 to 12500. The host reads A1 through the Embed
 formula reference data provider. `window.referenceResult` resolves with the
-replayed name, amount, and Sheet cursor dependency result.
+replayed name, amount, and Sheet cursor dependency result. It also creates native
+Doc/Slide formula shapes for cash and share consideration: changing the source
+cash ratio from 35% to 45% with a replayed mutation must update 105/195 to 135/165.
+This exercises the published formula pipeline without a forced-recalculation
+workaround.
 
 The snapshot service is in memory; this fixture does not exercise Workspace
 authentication or a live collaboration server. The collaboration client can log
