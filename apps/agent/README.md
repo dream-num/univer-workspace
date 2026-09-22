@@ -110,12 +110,6 @@ A lost DSH connection or rejected stale-account request also checks readiness
 before reopening the application. Switching stops the previous account's active agent runtime;
 already accepted remote operations remain owned by the Workspace server.
 
-The current browser connection fence still uses transitional global transport
-patches. The [transport boundary and migration plan](../../docs/design/agent-transport-boundary.md)
-separates Agent account policy from DSH transport ownership and records the
-upstream URL hooks required before removing those patches. Passing functional
-checks does not mean that migration is complete.
-
 ## Local data and storage
 
 The quick start keeps installation and runtime data outside the repository.
