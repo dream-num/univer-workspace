@@ -1,4 +1,10 @@
-/** Installed before DSH modules: requests belong to the account that rendered this document. */
+/**
+ * Transitional pre-boot adapter: requests belong to the account that rendered
+ * this document. The global patches are not a supported DSH integration API.
+ * Remove them once published DSH socket/resource URL hooks and explicit
+ * Workspace transports cover every protected request. Do not expand the patches.
+ * See docs/design/agent-transport-boundary.md for ownership and exit criteria.
+ */
 export const connectionBrowserScript = `(() => {
   const version = globalThis.__UWH_CONNECTION_VERSION__;
   const nativeFetch = globalThis.fetch.bind(globalThis);
