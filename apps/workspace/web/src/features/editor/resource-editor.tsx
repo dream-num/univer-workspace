@@ -15,6 +15,7 @@ const BaseEditor = lazy(() => import("./units/base/base-editor"));
 type UnitType = components["schemas"]["UnitType"];
 
 export function ResourceEditor(props: {
+  readonly previewToken?: string;
   readonly unitId: string;
   readonly unitType: NonNullable<UnitType>;
   readonly user: CollaborationEditorProps["user"];
@@ -25,6 +26,7 @@ export function ResourceEditor(props: {
 }) {
   const editorProps = {
     unitId: props.unitId,
+    ...(props.previewToken ? { previewToken: props.previewToken } : {}),
     user: props.user,
     ...(props.onCollaboratorsChange
       ? { onCollaboratorsChange: props.onCollaboratorsChange }

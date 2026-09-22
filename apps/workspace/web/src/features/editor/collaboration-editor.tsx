@@ -65,6 +65,7 @@ import {
   configureExchangePresetPlugins,
   createWorkspaceOutputPlugins,
 } from "./features/exchange-plugins";
+import { installNativePreviewNavigation } from "./native-preview";
 import { resolveMergeReview } from "./merge-review";
 import { subscribeWorkspaceCollaborators } from "./workarounds/collaboration-members";
 import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
@@ -85,6 +86,7 @@ import "@univerjs-pro/exchange-client/lib/index.css";
 installHistoryShapeFormulaSdkWorkaround();
 
 export interface CollaborationEditorProps {
+  readonly previewToken?: string;
   readonly unitId: string;
   readonly user: {
     readonly id: string;
@@ -150,6 +152,7 @@ export function createCollaborationEditor(
   );
   return function CollaborationEditor({
     unitId,
+    previewToken,
     user,
     collaborationScope = { kind: "trunk" },
     mappedUnitIds,
@@ -183,6 +186,7 @@ export function createCollaborationEditor(
       setError(null);
       setCollaborationIssue(null);
       let disposed = false;
+      let previewNavigation: { dispose(): void } | undefined;
       let mountedUniver: ReturnType<typeof createUniver>["univer"] | null =
         null;
       let statusListener: { dispose(): void } | null = null;
@@ -459,6 +463,9 @@ export function createCollaborationEditor(
             setCollaborationStatus(
               collaboration.getCollaborationStatus(unitId)
             );
+            if (previewToken) {
+              previewNavigation = installNativePreviewNavigation(univerAPI, unitId, previewToken);
+            }
             setLoading(false);
           }
         });
@@ -496,6 +503,7 @@ export function createCollaborationEditor(
 
       return () => {
         disposed = true;
+        previewNavigation?.dispose();
         collaboratorsListener?.dispose();
         onCollaboratorsChange?.([]);
         statusListener?.dispose();
@@ -510,6 +518,7 @@ export function createCollaborationEditor(
       collaborationScope.kind === "trunk"
         ? ""
         : collaborationScope.worktreeId,
+      previewToken,
       mappedUnitIdsKey,
       language,
       unitId,

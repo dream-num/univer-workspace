@@ -70,3 +70,13 @@ Workspace 通过 `onStatus` 跟踪同步状态，供离开提醒使用；正常�
 关闭或刷新浏览器时，`viewer.hasPendingChanges()` 或任一 Unit 尚未同步会触发离开提醒；
 浏览器强制结束不能保证保存完成。共享组件卸载时取消状态订阅并调用 SDK `view.dispose()`。
 文件读取同样在组件清理时取消。
+
+## 原生 Office 预览
+
+Workspace Browser 在模板中增加独立的 `window.univerWorkspace` 导航接口，用于在页面预留
+位置打开只读、实时的 Sheet / Doc / Slides。它不替代 SDK 的 `window.univerBinding`，不传递
+凭据或 Facade。`features/html-views` 拥有模板导航桥与预览布局；`/preview/$unitId` 在独立
+浏览上下文中重新鉴权，并复用标准 ResourceEditor。段落、单元格与页面定位由 Editor 的
+[预览导航入口](../../../apps/workspace/web/src/features/editor/preview.ts)约束。
+
+参见[页面接口、权限与生命周期](native-preview.md)。Agent Sidecar 当前不提供此接口。

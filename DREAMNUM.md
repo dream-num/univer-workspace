@@ -148,3 +148,14 @@ explicit manual dispatch and publication opt-in. Account data stays in the OS
 application user-data directory, separate from replaceable runtime resources and
 the local `workspace/` working directory.
 See the [desktop contract](apps/agent/desktop/README.md).
+
+## Browser HTML navigation
+
+Workspace Browser owns the `window.univerWorkspace` native-preview navigation
+interface for `.univer.html` templates. It displays independently authorized
+Trunk Sheets, Docs and Slides read-only in an isolated editor frame and supports
+bounded cell/paragraph/slide navigation and copying the HTML file link. The
+existing SDK `univerBinding` interface still owns cell data operations. No
+credentials, permission overrides, arbitrary commands or draft routing are
+exposed to templates. Workspace Agent's Sidecar does not yet provide this Browser
+navigation interface. See `docs/design/html-views/native-preview.md`.
