@@ -98,15 +98,16 @@ indexes, attachments and Workspace records use the existing origin-and-user
 runtime directory; switching back restores that directory. The HTTP listener,
 browser authentication, model credentials and settings remain running.
 
-Each rendered page carries a connection version. HTTP requests and collaboration
-WebSocket upgrades from an old page are rejected after a switch. Other open tabs
-reload when the new runtime is ready, so their old selections cannot operate on
-the new account. Business notifications use a logical Remote stream on DSH's
+Workspace Agent is a single-user application with one active account per instance.
+Switching accounts affects all open tabs. They follow DSH connection state changes
+and reload when the new runtime is ready. Requests temporarily receive 503 while
+account services switch; DSH owns browser authentication and Session attachments.
+Business notifications use a logical Remote stream on DSH's
 existing WebSocket mux. The Workspace Agent shares one authenticated Workspace Worktree
 feed across local tabs; a reconnect invalidates the open review views and directory
 so missed changes are fetched again. Idle tabs do not poll connection status.
 OAuth completion and logout use short readiness checks for at most 45 seconds.
-A lost DSH connection or rejected stale-account request also checks readiness
+A change in DSH connection state or a restored page also checks readiness
 before reopening the application. Switching stops the previous account's active agent runtime;
 already accepted remote operations remain owned by the Workspace server.
 
@@ -474,10 +475,6 @@ pages are available.
 - **The authorization request expires:** start a new login from **Settings →
   Workspace**. This application uses browser OAuth with PKCE and consent; it does
   not ask you to enter a CLI device code.
-- **Session log download fails with `workspace_connection_changed`:** refresh
-  Agent after updating its local profile, then download using **Session log**.
-  The button includes the page's connection version; a copied bare
-  `/api/session.export` URL cannot pass the account-isolation check.
 - **The Viewer is unavailable:** confirm that the connected account can read the
   Resource and that the profile was rebuilt after changing plugin source.
 - **The directory still shows the previous account:** let the page refresh
@@ -494,7 +491,7 @@ Workspace file and Worktree previews share one native Sidecar tab per session.
 `.univer.html` files render as live pages with independently authorized Sheet sources,
 including writes when the current user can edit. Closing or switching away retains
 the HTML runtime until saving confirms; a failed save keeps a visible retry surface.
-Account changes retain the existing connection fence and reload behavior.
+Account changes apply to all open tabs through the same connection recovery behavior.
 DSH owns its resize, split, fullscreen and close controls. Opening another file
 updates that preview; clicking the same file reveals or reopens it. With no
 selected session, opening a file uses the native blank-session flow in a

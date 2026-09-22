@@ -145,7 +145,7 @@ function createUpgradeHandler(
       // `target` identifies the upstream path. Every other query parameter is
       // opaque to this transport bridge and is forwarded unchanged.
       for (const [name, value] of url.searchParams) {
-        if (name !== WS_TARGET_PARAM && name !== "uwhConnection") target.searchParams.append(name, value);
+        if (name !== WS_TARGET_PARAM) target.searchParams.append(name, value);
       }
       target.protocol = target.protocol === "https:" ? "wss:" : "ws:";
       const upstreamWs = new WebSocket(target, {

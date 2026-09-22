@@ -59,7 +59,7 @@ function createLoginController({ origin, fetch, openExternal, connected, now = D
         while (now() < deadline) {
           try {
             const response = await fetch(`${origin}/api/uwh/me`, { credentials: 'include', cache: 'no-store',
-              headers: { 'x-uwh-connection': result.version }, signal: AbortSignal.timeout(3000) });
+              signal: AbortSignal.timeout(3000) });
             const me = response.ok ? await response.json() : null;
             if (me?.connected === true && me.switching === false) { await connected(); return true; }
           } catch { /* The account's services may still be restarting. */ }

@@ -29,7 +29,7 @@ test('external browser receives only authorization URL; app redeems once and ref
   await assert.rejects(controller.accept(callback()), /expired/);
   assert.equal(reloads, 1);
   assert.equal(requests[0].options.headers.origin, 'http://127.0.0.1:3101');
-  assert.equal(requests[2].options.headers['x-uwh-connection'], 'v2');
+  assert.equal(requests[2].options.headers, undefined);
 });
 test('retry supersedes old callbacks, cancellation allows another login', async () => {
   let attempts = 0;

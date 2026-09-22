@@ -8,7 +8,6 @@
  * @module @univerjs/workspace-agent
  */
 
-import { connectionBrowserScript } from "./connection-browser.ts";
 import * as workspaceEvents from "./workspace-events.ts";
 import { CONNECTION_STATUS_PATH } from "./runtime-webserver.ts";
 import { randomUUID } from "node:crypto";
@@ -355,13 +354,19 @@ export function apply(ctx: Context, config: Config): void {
   }, "uwh: local Workspace connection routes");
   ctx.on("webserver/index-inject", (rows) => {
     rows.push({ kind: "global", name: "__UWH_CONNECTION_VERSION__", value: workspaceAuth.connectionVersion() });
-    rows.push({ kind: "script", placement: "head", text: connectionBrowserScript });
   });
   ctx.plugin(workspaceEvents);
   ctx.effect(() => ctx.webServer.register({
     kind: "exact", path: CONNECTION_STATUS_PATH,
-    handler: (_req, res) => jsonResponse(res, 200, {
-      version: workspaceAuth.connectionVersion(), ready: workspaceAuth.runtimeReady(),
-    }),
+    handler: (req, res) => {
+      const rejected = ctx.connection.requestRejection(req);
+      if (rejected !== undefined) {
+        jsonResponse(res, rejected, { error: "browser_authentication_required" });
+        return;
+      }
+      jsonResponse(res, 200, {
+        version: workspaceAuth.connectionVersion(), ready: workspaceAuth.runtimeReady(),
+      });
+    },
   }), "uwh: connection readiness");
 }

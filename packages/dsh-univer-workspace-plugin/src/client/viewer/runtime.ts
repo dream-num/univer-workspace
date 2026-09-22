@@ -160,8 +160,7 @@ export async function createViewerRuntime(opts: ViewerOptions): Promise<ViewerHa
   opts.signal?.addEventListener('abort', dispose, { once: true });
 
   try {
-    // Use the Harness fetch transport so every document request carries the
-    // connection version belonging to this page, including snapshot requests.
+    // Use the SDK native Fetch implementation for same-origin proxy requests.
     univer.registerPlugin(UniverNetworkPlugin, { useFetchImpl: true });
     registerViewerRendering(univer, {
       container: opts.container,

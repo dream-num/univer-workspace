@@ -6,7 +6,7 @@ import * as connectionState from "../src/connection-state.ts";
 import { describe, expect, it, vi } from "vitest";
 import { WorkspaceAuthProvider } from "../src/workspace-auth-provider.ts";
 import { readConnectionState, runtimeHomeFor } from "../src/connection-state.ts";
-import { connectionRequestStatus } from "../src/runtime-webserver.ts";
+import { runtimeRequestStatus } from "../src/runtime-webserver.ts";
 
 function context(): Context {
   const ctx = new Context();
@@ -84,11 +84,9 @@ describe("in-process Workspace switching", () => {
     expect(provider.currentIdentity()?.userId).toBe("b");
   });
 
-  it("rejects stale documents and refuses requests while runtime services are unavailable", () => {
-    const state = { connectionVersion: () => "new", runtimeReady: () => true };
-    expect(connectionRequestStatus(state, "old")).toBe(409);
-    expect(connectionRequestStatus(state, undefined)).toBe(409);
-    expect(connectionRequestStatus(state, "new")).toBeUndefined();
-    expect(connectionRequestStatus({...state,runtimeReady:()=>false}, "new")).toBe(503);
+  it("accepts native requests without page metadata and waits while the runtime switches", () => {
+    expect(runtimeRequestStatus({ runtimeReady: () => true })).toBeUndefined();
+    expect(runtimeRequestStatus({ runtimeReady: () => false })).toBe(503);
+    expect(runtimeRequestStatus(undefined)).toBe(503);
   });
 });
