@@ -60,26 +60,12 @@ try {
   });
   const page = await application.firstWindow();
   await page.waitForURL(url => url.origin === 'http://127.0.0.1:3101', { timeout: 60000 });
-  await application.evaluate(({ BrowserWindow }) => {
-    globalThis.smokeLoginReloads = 0;
-    const main = BrowserWindow.getAllWindows()[0];
-    const load = main.loadURL.bind(main);
-    main.loadURL = async (...args) => {
-      const result = await load(...args);
-      globalThis.smokeLoginReloads++;
-      return result;
-    };
-  });
-  const waitForLoginReload = async count => {
-    // Account recovery may reload the renderer before the main-process login
-    // controller finishes. Await its final load before dismissing onboarding.
-    const completed = await application.evaluate(async (electron, count) => {
-      const deadline = Date.now() + 60000;
-      while (globalThis.smokeLoginReloads < count && Date.now() < deadline)
-        await new Promise(resolve => setTimeout(resolve, 50));
-      return globalThis.smokeLoginReloads;
-    }, count);
-    assert.ok(completed >= count, 'Main-process login did not complete its reload');
+  const confirmLoginRefresh = async oldVersion => {
+    const notice = page.getByRole('dialog', { name: 'Account changed', exact: true });
+    await notice.waitFor({ timeout: 60000 });
+    assert.equal(await page.evaluate(() => globalThis.__UWH_CONNECTION_VERSION__), oldVersion);
+    await notice.getByRole('button', { name: 'Refresh page', exact: true }).click();
+    await page.waitForFunction(previous => globalThis.__UWH_CONNECTION_VERSION__ !== previous, oldVersion, { timeout: 60000 });
   };
   await waitForUsableAgent(page, { onWorkspaceOnboarding: async () => {
     const onboarding = page.getByRole('dialog', { name: 'Connect your Workspace' });
@@ -145,8 +131,7 @@ try {
       if (transport === 'open-url') app.emit('open-url', { preventDefault() {} }, callback);
       else app.emit('second-instance', {}, ['agent', callback]);
     }, { callback, transport });
-    await page.waitForFunction(previous => globalThis.__UWH_CONNECTION_VERSION__ !== previous, old, { timeout: 60000 });
-    await waitForLoginReload(exchanged);
+    await confirmLoginRefresh(old);
     // Model setup is skipped for this page only. A login reload creates a new
     // onboarding owner; await its async credential check and dismiss its prompt.
     await waitForUsableAgent(page);
@@ -184,8 +169,7 @@ try {
     }
     const old = await page.evaluate(() => globalThis.__UWH_CONNECTION_VERSION__);
     await page.evaluate(() => window.workspaceDesktop.login());
-    await page.waitForFunction(previous => globalThis.__UWH_CONNECTION_VERSION__ !== previous, old, { timeout: 60000 });
-    await waitForLoginReload(exchanged);
+    await confirmLoginRefresh(old);
     await waitForUsableAgent(page);
     const me = await page.evaluate(async () => (await fetch('/api/uwh/me')).json());
     assert.equal(me.identity.userId, `user-${3 + attempt}`);

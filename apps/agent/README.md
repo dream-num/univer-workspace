@@ -100,7 +100,10 @@ browser authentication, model credentials and settings remain running.
 
 Workspace Agent is a single-user application with one active account per instance.
 Switching accounts affects all open tabs. They follow DSH connection state changes
-and reload when the new runtime is ready. Requests temporarily receive 503 while
+and pause the old page while checking. After an account change, each tab asks the
+user to refresh once the new runtime is ready. Ordinary reconnections to the same
+account resume the page without confirmation. A failed readiness check offers
+**Check again** after the bounded recovery window. Requests temporarily receive 503 while
 account services switch; DSH owns browser authentication and Session attachments.
 Business notifications use a logical Remote stream on DSH's
 existing WebSocket mux. The Workspace Agent shares one authenticated Workspace Worktree
@@ -108,7 +111,7 @@ feed across local tabs; a reconnect invalidates the open review views and direct
 so missed changes are fetched again. Idle tabs do not poll connection status.
 OAuth completion and logout use short readiness checks for at most 45 seconds.
 A change in DSH connection state or a restored page also checks readiness
-before reopening the application. Switching stops the previous account's active agent runtime;
+before allowing the page to resume or asking the user to refresh. Switching stops the previous account's active agent runtime;
 already accepted remote operations remain owned by the Workspace server.
 
 ## Local data and storage
@@ -477,7 +480,7 @@ pages are available.
   not ask you to enter a CLI device code.
 - **The Viewer is unavailable:** confirm that the connected account can read the
   Resource and that the profile was rebuilt after changing plugin source.
-- **The directory still shows the previous account:** let the page refresh
+- **The directory still shows the previous account:** confirm **Refresh page** in each affected tab
   after authorization. If it persists, record the service origin and account
   names for diagnosis; preserve the local data directory and session history.
 

@@ -9,6 +9,8 @@ const require = createRequire(import.meta.url);
 const source = await readFile(new URL('../src/main.cjs', import.meta.url), 'utf8');
 async function fixture({ pauseHome = false, migrationOnly = false, headless = false, migrationError } = {}) {
   const errors = [];
+  const navigations = [];
+  let loginOptions;
   const child = new EventEmitter();
   let update, spawnCount = 0, quitCount = 0, releaseHome, exitCode, windowCount = 0;
   const homeReady = pauseHome ? new Promise(resolve => { releaseHome = resolve; }) : Promise.resolve('/user/runtime/home');
@@ -25,8 +27,10 @@ async function fixture({ pauseHome = false, migrationOnly = false, headless = fa
   class BrowserWindow {
     constructor() { windowCount++; }
     webContents = webContents;
-    loadURL = async () => {};
+    loadURL = async url => { navigations.push(url); };
+    restore() {}
     show() {}
+    focus() {}
   }
   const modules = {
     electron: { app, BrowserWindow, ipcMain: { handle() {} }, Menu: { setApplicationMenu() {}, buildFromTemplate: x => x },
@@ -49,7 +53,7 @@ async function fixture({ pauseHome = false, migrationOnly = false, headless = fa
     './browser-cache.cjs': { prepareBrowserCache: async () => undefined },
     './startup-log.cjs': { createStartupLog: () => ({ write() {} }) },
     './policy.cjs': require('../src/policy.cjs'),
-    './login.cjs': require('../src/login.cjs'),
+    './login.cjs': { createLoginController(options) { loginOptions = options; return require('../src/login.cjs').createLoginController(options); } },
     './login-browser.cjs': require('../src/login-browser.cjs'),
     './updates.cjs': { createUpdateController(options) { update = options; return { check() {} }; } },
     './diagnostics.cjs': { createDiagnostics: () => ({}) },
@@ -61,7 +65,7 @@ async function fixture({ pauseHome = false, migrationOnly = false, headless = fa
     URL, setTimeout, clearTimeout, setInterval: () => ({ unref() {} }),
   });
   for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
-  return { app, errors, get update() { return update; }, get spawnCount() { return spawnCount; },
+  return { app, errors, navigations, get loginOptions() { return loginOptions; }, get update() { return update; }, get spawnCount() { return spawnCount; },
     get quitCount() { return quitCount; }, get exitCode() { return exitCode; }, get windowCount() { return windowCount; }, releaseHome };
 }
 
@@ -100,4 +104,12 @@ test('closing during profile preparation never starts an orphan backend afterwar
   for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
   assert.equal(f.spawnCount, 0);
   assert.equal(f.quitCount, 1);
+});
+
+test('login completion leaves refresh confirmation to the existing renderer', async () => {
+  const f = await fixture();
+  assert.equal(f.navigations.length, 1);
+  await f.loginOptions.connected();
+  assert.equal(f.navigations.length, 1);
+  assert.deepEqual(f.errors, []);
 });

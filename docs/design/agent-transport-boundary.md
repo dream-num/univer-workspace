@@ -24,10 +24,15 @@ DSH application into a multi-tenant service or an operating-system sandbox.
 The browser's DSH authentication cookie and the server-held Workspace credential
 have different owners. Switching the Workspace account does not revoke the DSH
 browser session. A page notices the change through DSH's public connection state
-subscription and reads `/auth/connection/status`. It reloads when the account
-runtime has changed and the replacement is ready. Restored pages perform the same
-check. An expired DSH browser session returns 401 and reopens the root authentication
-entry. Healthy idle pages do not poll.
+subscription and reads `/auth/connection/status`. A native modal pauses interaction with the old page during recovery, including
+keyboard focus and existing portals. If the runtime changed, the modal stays open
+until the user confirms **Refresh page**; readiness is checked again before
+navigation. Reconnecting to the same runtime dismisses the modal automatically.
+Restored pages perform the same check. An expired DSH browser session shows a
+refresh-to-sign-in prompt. Transient failures retry within the bounded recovery
+window; exhaustion keeps the page paused with **Check again**. Healthy idle pages
+do not poll. Confirmation refreshes only that tab; the active account has already
+changed globally.
 
 ## Implementation
 
@@ -48,7 +53,9 @@ entry. Healthy idle pages do not poll.
 ## Verification
 
 Check normal reconnection, account switching across open tabs, readiness delays,
-page restoration, and expired browser authentication. Verify that native upload
+page restoration, and expired browser authentication. Confirm that old pages are
+modal-blocked and do not navigate until the user confirms, while ordinary
+reconnections resume automatically. Verify that native upload
 and log download requests succeed without custom connection metadata, and that
 Workspace files and collaboration still work. Account directory restoration and
 remote permission checks remain covered separately.
