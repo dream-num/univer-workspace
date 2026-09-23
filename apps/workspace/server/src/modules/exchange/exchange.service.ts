@@ -10,7 +10,6 @@ import {
   ExchangeError,
   ExchangeFormat,
   FormulaCalculationMode,
-  exportSnapshotToBuffer,
   importBuffer,
   importBufferToSnapshot,
   type BufferImportOptions,
@@ -31,6 +30,8 @@ import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver, UnitType } from "../access/index.js";
 import type { ResourcesModule } from "../resources/index.js";
 import type { SpacesModule } from "../spaces/index.js";
+import type { UniverAssetsModule } from "../univer-assets/index.js";
+import { exportWorkspaceSnapshot } from "./export-images.js";
 
 export const MAX_EXCHANGE_FILE_BYTES = 50 * 1024 * 1024;
 const ARTIFACT_TTL_MS = 2 * 60 * 60 * 1000;
@@ -125,6 +126,7 @@ export interface ExchangeModule {
 }
 
 export function createExchangeModule(options: {
+  readonly assets: Pick<UniverAssetsModule, "openContent">;
   readonly access: AccessResolver;
   readonly resources: ResourcesModule;
   readonly spaces: SpacesModule;
@@ -362,9 +364,11 @@ export function createExchangeModule(options: {
           aggregate = snapshotFromJson(json);
           name = stripExtension(artifact.filename);
         }
-        const output = await exportSnapshotToBuffer(
+        const output = await exportWorkspaceSnapshot(
           aggregate,
-          exchangeExportOptions(unitType, input.format, input.options)
+          exchangeExportOptions(unitType, input.format, input.options),
+          options.assets,
+          userId
         );
         const artifact = await saveArtifact({
           ownerUserId: userId,

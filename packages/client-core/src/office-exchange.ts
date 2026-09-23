@@ -13,6 +13,8 @@ import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
 import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
 import type { WorkspaceUnitType } from "./space-model.js";
 import type { WorkspaceUnit } from "./worktree-model.js";
+import type { WorkspaceContentSource } from "./runtime-source.js";
+import { resolveWorkspaceExportImages } from "./export-images.js";
 
 type WorkspaceExchangeUnitType =
   | UniverInstanceType.UNIVER_SHEET
@@ -33,6 +35,7 @@ const importOfficeFile = importFile as unknown as ImportOfficeFile;
 const exportOfficeFile = exportToFile as unknown as ExportOfficeFile;
 
 export interface WorkspaceUnitExchangeDependencies {
+  readonly resolveImageAsset: WorkspaceContentSource["resolveImageAsset"];
   readonly runtime: Pick<WorkspaceContentRuntimeOperations, "exportUnitData">;
   readonly exportToFile?: ExportOfficeFile;
   readonly importFile?: ImportOfficeFile;
@@ -151,7 +154,7 @@ export class WorkspaceUnitExchangeFeature {
     await exportUnit(
       this.dependencies.exportToFile ?? exportOfficeFile,
       target.unitType,
-      result,
+      await resolveWorkspaceExportImages(result, input.worktreeId, this.dependencies.resolveImageAsset),
       format,
       input.outputPath,
     );

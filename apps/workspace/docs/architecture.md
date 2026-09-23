@@ -257,7 +257,10 @@ Office Exchange Module 使用已发布的 `@univerjs-pro/exchange-node` 将 Offi
 协议形状，不进入产品 OpenAPI。导入为 Unit 时通过 Resource Module 创建 Personal Space
 根目录下的正式 Node/Resource/Unit；导出时通过 Collaboration Service 固定当前 Trunk head，
 读取包含 Sheet blocks 的恢复材料，再由 `UnitSnapshotMaterializer` 补全 snapshot 后交给 Exchange
-Node。转换源文件、JSON snapshot
+Node。导出组装通过公开 SDK 解码 Unit，并以请求用户的 Trunk 权限读取图片 Asset；
+只在导出副本内恢复 Base64 图片，母版、背景和序列化 drawing resources 同样处理。
+缺失、无权限或无效的图片会使该导出任务失败，不修改协同数据或 Asset 的存储身份。
+转换源文件、JSON snapshot
 和导出文件是 `BlobStore` 中的临时对象，任务元数据只存在当前进程并在两小时后过期；它们
 不写入产品数据库，也不改变 Collaboration Database Adapter 的所有权边界。
 
