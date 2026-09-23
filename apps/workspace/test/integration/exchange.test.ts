@@ -4,6 +4,8 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateRawSync } from "node:zlib";
+import { Readable } from "node:stream";
+import { getSlidesEmptySnapshot, PageElementTypeEnum } from "@univerjs-pro/slides";
 import {
   ExchangeFormat,
   exportToBuffer,
@@ -11,6 +13,7 @@ import {
 } from "@univerjs-pro/exchange-node";
 import {
   type IWorkbookData,
+  ImageSourceType,
   UniverInstanceType,
 } from "@univerjs/core";
 import { ErrorCode, UniverType } from "@univerjs/protocol";
@@ -36,6 +39,50 @@ afterEach(async () => {
 });
 
 describe("Universer Exchange protocol", () => {
+  it("exports authorized Workspace images in slides and refuses images the viewer cannot read", async () => {
+    const { application, origin } = await startApplication();
+    const owner = await register(application, "image-export-owner");
+    const viewer = await register(application, "image-export-viewer");
+    const space = application.spaces.list(owner.userId).spaces.find(space => space.type === "personal")!;
+    const carrier = await application.resources.create(owner.userId, randomUUID(), {
+      name: "Image source", spaceId: space.id, parentNodeId: null, kind: "univer", unitType: "slide",
+    });
+    const resource = carrier.body.node.resource!;
+    if (resource.kind !== "univer") throw new Error("Expected Univer Resource");
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
+    const asset = await application.univerAssets.upload(owner.userId, { kind: "trunk" }, {
+      size: png.length, source: 3, assign: resource.unitId, filename: "image.png",
+      declaredMediaType: "image/png", body: Readable.from(png),
+    });
+    const data = getSlidesEmptySnapshot("deck", undefined, "Deck with image");
+    const slide = data.slides[data.slideOrder[0]!]!;
+    slide.elements.image = { id: "image", type: PageElementTypeEnum.Image, imageSourceType: ImageSourceType.UUID, source: asset.FileId,
+      transform: { left: 20, top: 20, width: 100, height: 100, rotation: 0 } };
+    slide.elementOrder.push("image");
+    const master = data.masterPages![data.masterPageOrder![0]!]!;
+    master.elements["master-image"] = { ...slide.elements.image, id: "master-image" };
+    master.elementOrder.push("master-image");
+    const deck = await application.resources.create(owner.userId, randomUUID(), {
+      name: "Deck with image", spaceId: space.id, parentNodeId: null, kind: "univer", unitType: "slide",
+      initialData: { ...data },
+    });
+    const deckResource = deck.body.node.resource!;
+    if (deckResource.kind !== "univer") throw new Error("Expected Univer Resource");
+    application.permissions.upsertNodeGrant(owner.userId, deck.body.node.id, viewer.userId, { role: "viewer" });
+    const start = () => startTask(origin, viewer.cookie, `/universer-api/exchange/${UniverType.UNIVER_SLIDE}/export`, {
+      unitID: deckResource.unitId, type: UniverInstanceType.UNIVER_SLIDE, format: ExchangeFormat.PPTX,
+    });
+    expect(await waitForTask(origin, viewer.cookie, await start())).toMatchObject({ status: "failed" });
+    application.permissions.upsertNodeGrant(owner.userId, carrier.body.node.id, viewer.userId, { role: "viewer" });
+    const result = await waitForTask(origin, viewer.cookie, await start());
+    expect(result, JSON.stringify(result)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
+    const file = await downloadArtifact(origin, viewer.cookie, result.export!.fileID);
+    const imported = await importBuffer(file, { type: UniverInstanceType.UNIVER_SLIDE, fileName: "images.pptx" });
+    expect(JSON.stringify(imported)).toContain(png.toString("base64"));
+    expect(slide.elements.image.source).toBe(asset.FileId);
+    expect(count(application, "univer_assets")).toBe(1);
+  }, 20_000);
+
   it("imports an Office file as a product Resource and exports it for viewers", async () => {
     const { application, origin } = await startApplication();
     const owner = await register(application, "exchange-owner");
@@ -247,7 +294,7 @@ describe("Universer Exchange protocol", () => {
       instanceType: UniverInstanceType.UNIVER_BASE,
       format: ExchangeFormat.XLSX,
     },
-  ])("imports $unitType Office content", async (fixture) => {
+  ])("imports and exports $unitType Office content", async (fixture) => {
     const { application, origin } = await startApplication();
     const owner = await register(
       application,
@@ -273,6 +320,14 @@ describe("Universer Exchange protocol", () => {
       kind: "univer",
       unitType: fixture.unitType,
     });
+    const exportTask = await startTask(
+      origin, owner.cookie, `/universer-api/exchange/${fixture.protocolType}/export`,
+      { unitID: imported.import!.unitID, type: fixture.instanceType, format: fixture.format }
+    );
+    const exported = await waitForTask(origin, owner.cookie, exportTask);
+    expect(exported, JSON.stringify(exported)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
+    const bytes = await downloadArtifact(origin, owner.cookie, exported.export!.fileID);
+    expect(bytes.subarray(0, 2).toString()).toBe("PK");
   });
 
   it("preserves a UTF-8 filename when importing Office content", async () => {
