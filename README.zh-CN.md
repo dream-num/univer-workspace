@@ -14,7 +14,7 @@
 
 </div>
 
-Univer Workspace 是一个基于 [Univer SDK](https://docs.univer.ai/) 构建、可独立部署的知识管理与
+Univer Workspace 是一个基于 [Univer Office SDK](https://github.com/dream-num/univer) 构建、可独立部署的知识管理与
 团队协作产品。你可以使用 Workspace Browser 直接编辑，通过 Workspace Agent 对话并审查变更，
 也可以使用 CLI 自动化处理任务。三个入口连接同一个负责文档存储和权限的 Workspace Server，
 让人类与 AI Agent 共同处理 Sheet、Doc、Slide、Base 与 Board。
@@ -32,6 +32,13 @@ Agent 在隔离的 Worktree 中工作、验证修改，再把结果交给人类�
 | 共同编辑 Sheet、Doc、Slide、Base 与 Board    | 检查数据、渲染截图/PDF 并执行布局检查               | 自主管理产品数据、协同数据与 Blob 数据      |
 | 通过角色与 Node 级权限控制分享和访问         | 离线发现版本匹配的 Skill 与 API                     | 接入密码、GitHub、Discord 或应用 OAuth 登录 |
 | 使用最近访问、回收站、文件导入导出与审阅视图 | 多轮修改而不影响 trunk                              | 运行具备明确恢复边界、文档完备的 HTTP API   |
+
+## 基于电子表格的 Mini App · [观看演示](https://youtu.be/4PBVltY_WEc)
+
+- Agent 可以生成基于电子表格的 Mini App，例如决策看板、交互式报告和业务看板。
+- 网页上的指标、图表和控件与单元格绑定，支持数据读取、写入和协同更新。
+
+[![Workspace Mini App 与其关联的电子表格并排显示，指标、图表和控件绑定到单元格](docs/images/workspace-mini-app.png)](https://youtu.be/4PBVltY_WEc)
 
 ## 选择操作入口
 
