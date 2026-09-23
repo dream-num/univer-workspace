@@ -72,7 +72,16 @@ function AppsPage() {
     >
       {items.length === 0 ? (
         <div className="grid min-h-0 flex-1 place-items-center">
-          <Empty title={t("appsEmpty")} description={t("appsEmptyDescription")} />
+          <Empty
+            title={t("appsEmpty")}
+            description={
+              <>
+                {t("appsEmptyDescription")}
+                <br />
+                {t("appsEmptyHint")}
+              </>
+            }
+          />
         </div>
       ) : resource?.kind === "blob" ? (
         <section

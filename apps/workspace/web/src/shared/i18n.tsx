@@ -30,8 +30,8 @@ const messages = {
     home: "首页",
     apps: "Apps",
     appsEmpty: "还没有页面",
-    appsEmptyDescription:
-      "在空间里创建 .univer.html，或由 Agent 发布后，能打开的页面会出现在这里。",
+    appsEmptyDescription: "创建与表格数据实时双向绑定的 HTML 页面，例如仪表盘、表单和报告。",
+    appsEmptyHint: "下载安装 Univer Workspace Agent，让 AI 根据表格数据创建，创建完成后会出现在这里。",
     homeViews: "首页文档视图",
     recent: "最近访问",
     ownedByMe: "归我所有",
@@ -387,8 +387,8 @@ const messages = {
     home: "Home",
     apps: "Apps",
     appsEmpty: "No pages yet",
-    appsEmptyDescription:
-      "Create a .univer.html file in a space, or publish one with the agent. Pages you can open show up here.",
+    appsEmptyDescription: "Create HTML pages with a live two-way binding to spreadsheet data, such as dashboards, forms, and reports.",
+    appsEmptyHint: "Download and install Univer Workspace Agent, then ask the AI to create one from your spreadsheet data. It shows up here when ready.",
     homeViews: "Home document views",
     recent: "Recent",
     ownedByMe: "Owned by me",

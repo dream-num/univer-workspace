@@ -29,7 +29,7 @@ export function Empty({
         <p className="text-sm font-medium text-foreground">{title}</p>
       ) : null}
       {description ? (
-        <p className="max-w-72 text-[13px] text-muted-foreground">
+        <p className="max-w-xl text-[13px] text-muted-foreground">
           {description}
         </p>
       ) : null}
