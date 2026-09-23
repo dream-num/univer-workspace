@@ -144,6 +144,7 @@ export function createDocComparisonPresets(
 }
 
 export default createCollaborationEditor({
+  liveSheetReferences: true,
   label: "document",
   history: {
     createPlugin: (containerId) => [
