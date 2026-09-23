@@ -5,6 +5,7 @@ import {
   Bot,
   ChevronDown,
   House,
+  LayoutGrid,
   Lock,
   LogOut,
   Menu,
@@ -31,12 +32,10 @@ import {
   type ReactNode,
 } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../features/auth";
+import { AppsSidebarSection } from "../features/html-views/apps-sidebar";
 import { spacesQueryKey, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceNavigationTree } from "../features/nodes";
-import {
-  useWorktreeChangeFeed,
-  worktreeListQueryOptions,
-} from "../features/worktrees";
+import { useWorktreeChangeFeed, worktreeListQueryOptions } from "../features/worktrees";
 import { api } from "../shared/api/client";
 import { workspaceHarnessOrigin } from "../shared/app-links";
 import { apiError } from "../shared/api/errors";
@@ -73,11 +72,7 @@ import {
 } from "../shared/ui";
 import { cn } from "../shared/utils/cn";
 
-type WorkspaceView =
-  | "home"
-  | "trash"
-  | "worktrees"
-  | "members";
+type WorkspaceView = "home" | "apps" | "trash" | "worktrees" | "members";
 
 export function WorkspaceHeaderSearch({
   value,
@@ -93,12 +88,7 @@ export function WorkspaceHeaderSearch({
   if (!open) {
     return (
       <Tooltip content={placeholder}>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={placeholder}
-          onClick={() => setOpen(true)}
-        >
+        <Button variant="ghost" size="icon" aria-label={placeholder} onClick={() => setOpen(true)}>
           <Search />
         </Button>
       </Tooltip>
@@ -266,37 +256,27 @@ function AuthenticatedWorkspaceLayout({
     return <LoadingScreen />;
   }
   if (!session.data?.authenticated) {
-    return (
-      <Navigate
-        to="/login"
-        search={{ oauthError: undefined, returnTo: undefined }}
-        replace
-      />
-    );
+    return <Navigate to="/login" search={{ oauthError: undefined, returnTo: undefined }} replace />;
   }
   if (session.error) throw session.error;
   if (spaces.error) throw spaces.error;
 
   const currentSession = session.data;
   const allSpaces = spaces.data?.spaces ?? [];
-  const selectedSpace = allSpaces.find(
-    (space) => space.id === selectedSpaceId
-  );
+  const selectedSpace = allSpaces.find((space) => space.id === selectedSpaceId);
   const personalSpaces = allSpaces.filter(
-    (space) => space.type === "personal" && space.accessRole === "owner"
+    (space) => space.type === "personal" && space.accessRole === "owner",
   );
   const personalSpace = personalSpaces[0];
   const teamSpaces = allSpaces.filter((space) => space.type === "team");
   const trashSpaceId = selectedSpaceId ?? personalSpaces[0]?.id;
   const pageTitle =
     headerTitle ??
-    (selectedSpace?.type === "personal"
-      ? t("personalSpace")
-      : selectedSpace?.name) ??
+    (selectedSpace?.type === "personal" ? t("personalSpace") : selectedSpace?.name) ??
     workspaceViewTitle(selectedView, t);
   const activeTaskCount =
     activeWorktrees.data?.items.filter((worktree) =>
-      ["draft", "ready", "merging"].includes(worktree.state)
+      ["draft", "ready", "merging"].includes(worktree.state),
     ).length ?? 0;
 
   const renderNavigation = (collapsed: boolean) => (
@@ -357,16 +337,26 @@ function AuthenticatedWorkspaceLayout({
               label={space.name}
             />
           ))}
+          <NavLink
+            to="/apps"
+            selected={selectedView === "apps"}
+            collapsed
+            icon={<LayoutGrid />}
+            label={t("apps")}
+          />
         </div>
       ) : (
-        <WorkspaceNavigationTree
-          personalSpace={personalSpace}
-          teamSpaces={teamSpaces}
-          selectedSpaceId={selectedSpaceId}
-          selectedNodeId={selectedNodeId}
-          selectedNodePath={selectedNodePath}
-          storageScope={currentSession.user.id}
-        />
+        <>
+          <WorkspaceNavigationTree
+            personalSpace={personalSpace}
+            teamSpaces={teamSpaces}
+            selectedSpaceId={selectedSpaceId}
+            selectedNodeId={selectedNodeId}
+            selectedNodePath={selectedNodePath}
+            storageScope={currentSession.user.id}
+          />
+          <AppsSidebarSection storageScope={currentSession.user.id} />
+        </>
       )}
 
       {trashSpaceId ? (
@@ -392,15 +382,16 @@ function AuthenticatedWorkspaceLayout({
         {/* ---------------------------------------------------------- */}
         {compactViewport ? null : (
           <aside
-            style={{ width: navigationCollapsed ? 64 : navigationSidebar.width, display: immersive ? "none" : undefined }}
+            style={{
+              width: navigationCollapsed ? 64 : navigationSidebar.width,
+              display: immersive ? "none" : undefined,
+            }}
             className="flex min-w-0 shrink-0 flex-col overflow-hidden border-r border-border bg-surface transition-[width] duration-150"
           >
             <div
               className={cn(
                 "flex h-16 shrink-0 items-center",
-                navigationCollapsed
-                  ? "justify-center px-2"
-                  : "justify-between pr-2 pl-4.5"
+                navigationCollapsed ? "justify-center px-2" : "justify-between pr-2 pl-4.5",
               )}
             >
               {navigationCollapsed ? null : (
@@ -417,26 +408,18 @@ function AuthenticatedWorkspaceLayout({
               <Tooltip
                 side="right"
                 content={
-                  navigationSidebar.collapsed
-                    ? t("expandNavigation")
-                    : t("collapseNavigation")
+                  navigationSidebar.collapsed ? t("expandNavigation") : t("collapseNavigation")
                 }
               >
                 <Button
                   variant="ghost"
                   size="icon"
                   aria-label={
-                    navigationSidebar.collapsed
-                      ? t("expandNavigation")
-                      : t("collapseNavigation")
+                    navigationSidebar.collapsed ? t("expandNavigation") : t("collapseNavigation")
                   }
                   onClick={navigationSidebar.toggleCollapsed}
                 >
-                  {navigationSidebar.collapsed ? (
-                    <PanelLeftOpen />
-                  ) : (
-                    <PanelLeftClose />
-                  )}
+                  {navigationSidebar.collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
                 </Button>
               </Tooltip>
             </div>
@@ -445,12 +428,11 @@ function AuthenticatedWorkspaceLayout({
               aria-label={t("mainNavigation")}
               className={cn(
                 "mt-3 min-w-0 flex-1 overflow-x-hidden overflow-y-auto",
-                navigationCollapsed ? "px-2.5" : "px-3"
+                navigationCollapsed ? "px-2.5" : "px-3",
               )}
             >
               {renderNavigation(navigationCollapsed)}
             </nav>
-
           </aside>
         )}
 
@@ -468,7 +450,10 @@ function AuthenticatedWorkspaceLayout({
         {/* Main                                                       */}
         {/* ---------------------------------------------------------- */}
         <div className="flex min-w-0 flex-1 flex-col bg-background">
-          <header style={{ display: immersive ? "none" : undefined }} className="flex h-15 shrink-0 items-center justify-between gap-4 border-b border-border pr-4.5 pl-6 max-[720px]:px-3">
+          <header
+            style={{ display: immersive ? "none" : undefined }}
+            className="flex h-15 shrink-0 items-center justify-between gap-4 border-b border-border pr-4.5 pl-6 max-[720px]:px-3"
+          >
             <div className="flex min-w-0 flex-1 items-center gap-1">
               {compactViewport ? (
                 <Button
@@ -496,7 +481,8 @@ function AuthenticatedWorkspaceLayout({
                     aria-label={t("openChat")}
                     onClick={() => {
                       const origin = workspaceHarnessOrigin();
-                      if (origin !== undefined) window.open(origin, "_blank", "noopener,noreferrer");
+                      if (origin !== undefined)
+                        window.open(origin, "_blank", "noopener,noreferrer");
                     }}
                   >
                     <MessageCircle />
@@ -568,7 +554,7 @@ function AuthenticatedWorkspaceLayout({
           <main
             className={cn(
               "flex min-h-0 flex-1 flex-col overflow-hidden",
-              contentMode === "editor" && "bg-background"
+              contentMode === "editor" && "bg-background",
             )}
           >
             {children}
@@ -577,11 +563,7 @@ function AuthenticatedWorkspaceLayout({
       </div>
 
       {compactViewport ? (
-        <Drawer
-          open={navDrawerOpen}
-          onOpenChange={setNavDrawerOpen}
-          label={t("mainNavigation")}
-        >
+        <Drawer open={navDrawerOpen} onOpenChange={setNavDrawerOpen} label={t("mainNavigation")}>
           <div className="flex h-16 shrink-0 items-center justify-between pr-2 pl-4.5">
             <Link
               to="/home"
@@ -622,15 +604,9 @@ function AuthenticatedWorkspaceLayout({
         }}
       />
 
-      <ProfileDialog
-        open={profileDialogOpen}
-        onOpenChange={setProfileDialogOpen}
-      />
+      <ProfileDialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen} />
 
-      <PasswordDialog
-        open={passwordDialogOpen}
-        onOpenChange={setPasswordDialogOpen}
-      />
+      <PasswordDialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen} />
 
       <Dialog
         open={appSettingsOpen}
@@ -701,12 +677,7 @@ function AuthenticatedWorkspaceLayout({
 /* ------------------------------------------------------------------ */
 
 function BrandMark() {
-  return (
-    <UniverCliIcon
-      aria-hidden="true"
-      className="size-6 shrink-0 text-foreground"
-    />
-  );
+  return <UniverCliIcon aria-hidden="true" className="size-6 shrink-0 text-foreground" />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -744,13 +715,11 @@ function NavLink({
           ? "bg-brand-50 font-medium text-brand-700"
           : "text-secondary-foreground hover:bg-accent hover:text-accent-foreground",
         "[&_svg]:size-4 [&_svg]:shrink-0",
-        selected ? "[&_svg]:text-brand-600" : "[&_svg]:text-muted-foreground"
+        selected ? "[&_svg]:text-brand-600" : "[&_svg]:text-muted-foreground",
       )}
     >
       {icon}
-      {collapsed ? null : (
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-      )}
+      {collapsed ? null : <span className="min-w-0 flex-1 truncate">{label}</span>}
       {!collapsed && badge !== undefined && badge > 0 ? (
         <span
           title={badgeTitle}
@@ -789,10 +758,7 @@ function CreateTeamDialog({
   const [publicRead, setPublicRead] = useState(false);
   const [error, setError] = useState<string>();
   const createTeam = useMutation({
-    mutationFn: async (values: {
-      readonly name: string;
-      readonly publicRead: boolean;
-    }) => {
+    mutationFn: async (values: { readonly name: string; readonly publicRead: boolean }) => {
       const { data, error: apiErr } = await api.POST("/api/team-spaces", {
         body: values,
       });
@@ -807,9 +773,7 @@ function CreateTeamDialog({
     },
     onError: (mutationError) => {
       toast.error(
-        mutationError instanceof Error
-          ? mutationError.message
-          : "Space creation failed."
+        mutationError instanceof Error ? mutationError.message : "Space creation failed.",
       );
     },
   });
@@ -856,12 +820,8 @@ function CreateTeamDialog({
         </Field>
         <label className="mt-4 flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-border p-4">
           <span className="grid gap-1">
-            <span className="text-sm font-medium text-foreground">
-              {t("publicRead")}
-            </span>
-            <span className="text-sm text-subtle-foreground">
-              {t("publicReadDescription")}
-            </span>
+            <span className="text-sm font-medium text-foreground">{t("publicRead")}</span>
+            <span className="text-sm text-subtle-foreground">{t("publicReadDescription")}</span>
           </span>
           <input
             className="mt-0.5 size-4 accent-primary"
@@ -940,9 +900,7 @@ function ProfileDialog({
     onSuccess: async (user) => {
       queryClient.setQueryData(
         sessionQueryKey,
-        session.data?.authenticated
-          ? { ...session.data, user }
-          : session.data
+        session.data?.authenticated ? { ...session.data, user } : session.data,
       );
       onOpenChange(false);
       toast.success(t("profileUpdated"));
@@ -951,14 +909,12 @@ function ProfileDialog({
   });
 
   if (!current) return null;
-  const githubLinked =
-    current.authenticationMethods.externalIdentities.some(
-      (identity) => identity.provider === "github"
-    );
-  const discordLinked =
-    current.authenticationMethods.externalIdentities.some(
-      (identity) => identity.provider === "discord"
-    );
+  const githubLinked = current.authenticationMethods.externalIdentities.some(
+    (identity) => identity.provider === "github",
+  );
+  const discordLinked = current.authenticationMethods.externalIdentities.some(
+    (identity) => identity.provider === "discord",
+  );
   const canUnlinkExternalIdentity =
     (current.passwordAuthEnabled && current.authenticationMethods.password) ||
     current.authenticationMethods.externalIdentities.length > 1;
@@ -988,11 +944,7 @@ function ProfileDialog({
         </>
       }
     >
-      <form
-        onSubmit={submit}
-        className="grid gap-4"
-        id="profile-form"
-      >
+      <form onSubmit={submit} className="grid gap-4" id="profile-form">
         <Field label={t("username")} htmlFor="profile-username" required>
           <Input
             id="profile-username"
@@ -1029,9 +981,7 @@ function ProfileDialog({
             <Button
               variant="destructive-ghost"
               className="border border-destructive/30"
-              disabled={
-                !canUnlinkExternalIdentity || unlinkGitHub.isPending
-              }
+              disabled={!canUnlinkExternalIdentity || unlinkGitHub.isPending}
               onClick={() => unlinkGitHub.mutate()}
             >
               <GitHubIcon />
@@ -1049,9 +999,7 @@ function ProfileDialog({
             </Button>
           )}
           {!canUnlinkExternalIdentity && githubLinked ? (
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              {t("githubOnlyMethod")}
-            </p>
+            <p className="mt-2 text-[13px] text-muted-foreground">{t("githubOnlyMethod")}</p>
           ) : null}
         </>
       ) : null}
@@ -1084,9 +1032,7 @@ function ProfileDialog({
             </Button>
           )}
           {!canUnlinkExternalIdentity && discordLinked ? (
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              {t("discordOnlyMethod")}
-            </p>
+            <p className="mt-2 text-[13px] text-muted-foreground">{t("discordOnlyMethod")}</p>
           ) : null}
         </>
       ) : null}
@@ -1136,8 +1082,7 @@ function PasswordDialog({
     if (!currentPassword) nextErrors.current = t("enterCurrentPassword");
     if (!newPassword) nextErrors.next = t("enterNewPassword");
     else if (newPassword.length < 8) nextErrors.next = t("passwordMinLength");
-    if (confirmPassword !== newPassword)
-      nextErrors.confirm = t("passwordsDoNotMatch");
+    if (confirmPassword !== newPassword) nextErrors.confirm = t("passwordsDoNotMatch");
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
     changePassword.mutate({ currentPassword, newPassword });
@@ -1161,11 +1106,7 @@ function PasswordDialog({
       }
     >
       <form onSubmit={submit} className="grid gap-4" id="password-form">
-        <Field
-          label={t("currentPassword")}
-          htmlFor="current-password"
-          error={errors.current}
-        >
+        <Field label={t("currentPassword")} htmlFor="current-password" error={errors.current}>
           <PasswordInput
             id="current-password"
             autoComplete="current-password"
@@ -1174,11 +1115,7 @@ function PasswordDialog({
             onChange={(event) => setCurrentPassword(event.target.value)}
           />
         </Field>
-        <Field
-          label={t("newPassword")}
-          htmlFor="new-password"
-          error={errors.next}
-        >
+        <Field label={t("newPassword")} htmlFor="new-password" error={errors.next}>
           <PasswordInput
             id="new-password"
             autoComplete="new-password"
@@ -1187,11 +1124,7 @@ function PasswordDialog({
             onChange={(event) => setNewPassword(event.target.value)}
           />
         </Field>
-        <Field
-          label={t("confirmPassword")}
-          htmlFor="confirm-password"
-          error={errors.confirm}
-        >
+        <Field label={t("confirmPassword")} htmlFor="confirm-password" error={errors.confirm}>
           <PasswordInput
             id="confirm-password"
             autoComplete="new-password"
@@ -1207,9 +1140,10 @@ function PasswordDialog({
 
 function workspaceViewTitle(
   view: WorkspaceView | undefined,
-  t: (key: MessageKey) => string
+  t: (key: MessageKey) => string,
 ): string {
   if (view === "home") return t("home");
+  if (view === "apps") return t("apps");
   if (view === "worktrees") return t("workbench");
   if (view === "trash") return t("trash");
   if (view === "members") return t("members");

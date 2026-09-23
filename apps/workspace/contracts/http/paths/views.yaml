@@ -34,6 +34,24 @@
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
 
+/api/html-views:
+  get:
+    tags: [Views]
+    operationId: listHtmlViews
+    summary: List .univer.html Blobs the current user can open, newest node update first.
+    parameters:
+      - $ref: ../schemas/common.yaml#/CursorParameter
+      - $ref: ../schemas/common.yaml#/LimitParameter
+    responses:
+      "200":
+        description: HTML view Blobs visible to the current user.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/views.yaml#/OwnedResourceList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
 /api/shared-with-me:
   get:
     tags: [Views]

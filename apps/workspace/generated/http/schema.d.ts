@@ -796,6 +796,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/html-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List .univer.html Blobs the current user can open, newest node update first. */
+        get: operations["listHtmlViews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shared-with-me": {
         parameters: {
             query?: never;
@@ -3259,6 +3276,31 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Resources owned by the current User. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnedResourceList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listHtmlViews: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the previous page. */
+                cursor?: components["parameters"]["CursorParameter"];
+                limit?: components["parameters"]["LimitParameter"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description HTML view Blobs visible to the current user. */
             200: {
                 headers: {
                     [name: string]: unknown;

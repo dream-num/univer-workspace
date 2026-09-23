@@ -6,6 +6,9 @@
 
 [Blob 预览入口](../../../apps/workspace/web/src/features/blobs/blob-preview.tsx) 使用 SDK 的
 `isHtmlViewFilename()` 将 `.univer.html` 交给 `HtmlViewFile`。
+侧栏 Apps 跟在团队空间后面，通过 `GET /api/html-views` 列出当前用户能打开的这类 Blob。
+主区域使用和 Node 页相同的 HTML 视图与顶栏操作；沉浸视图仍进入
+`/nodes/{nodeId}?view=immersive`。
 `HtmlViewFile` 携带当前会话读取 `contentUrl`，`HtmlView` 组合私有共享组件
 `@univerjs/univer-workspace-html-viewer`，由 SDK 的 `renderHtmlView()` 解析并渲染 HTML。
 读取或解析失败直接展示错误。解析器同时识别文本、控件、单元格订阅和范围订阅四种声明。
