@@ -15,7 +15,7 @@ English | [简体中文](README.zh-CN.md)
 </div>
 
 Univer Workspace is a deployable knowledge and collaboration workspace built on the
-[Univer Office SDK](https://office.univer.ai/). It brings Sheets, Docs, Slides,
+[Univer Office SDK](https://github.com/dream-num/univer). It brings Sheets, Docs, Slides,
 relational tables, canvases, and more into one shared runtime, with data and
 references staying connected across artifacts as the workspace changes.
 
@@ -35,6 +35,13 @@ review. Humans can continue editing and stay in control of what gets merged.
 | Co-edit Sheets, Docs, Slides, Bases, and Boards         | Inspect data, render screenshots/PDFs, and run layout checks      | Keep product, collaboration, and Blob data under application control |
 | Share content with role- and node-aware access control, including anonymous viewing  | Discover version-matched Skills and APIs offline                  | Integrate password, GitHub, Discord, or application OAuth login      |
 | Use Recent, Trash, file import/export, and review views | Work through multiple rounds without changing trunk               | Operate a documented HTTP API with explicit recovery boundaries      |
+
+## Spreadsheet-based mini-apps · [Watch the demo](https://youtu.be/4PBVltY_WEc)
+
+- Agents can generate spreadsheet-based mini-apps, such as decision-making dashboards, interactive reports, and business dashboards.
+- Metrics, charts, and controls on the web page are bound to cells, supporting data reads, writes, and collaborative updates.
+
+[![A Workspace mini-app beside its linked spreadsheet, with metrics, charts, and controls bound to cells](docs/images/workspace-mini-app.png)](https://youtu.be/4PBVltY_WEc)
 
 ## Choose your entry point
 
