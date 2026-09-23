@@ -89,6 +89,9 @@ They register the Sheet data plugins needed to restore source resources, replay
 changesets and resolve formulas before loading the source. Referenced Sheets do
 not add a Sheet toolbar or replace the host editor; source access and Trunk or
 Worktree selection continue to use the Workspace reference provider.
+Live sources join the existing SDK collaboration transport in matching scopes.
+The SDK owns formula dependency invalidation, calculation ordering and result
+application; Workspace does not add a second formula refresh scheduler.
 
 ### Configuration
 

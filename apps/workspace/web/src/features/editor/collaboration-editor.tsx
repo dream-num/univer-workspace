@@ -1,8 +1,6 @@
 import type { ILanguagePack } from "@univerjs/core";
-import { RegisterOtherFormulaService } from "@univerjs/engine-formula";
 import {
   CommandType,
-  ICommandService,
   LifecycleStages,
   LocaleType,
   LogLevel,
@@ -70,7 +68,6 @@ import {
 } from "./features/exchange-plugins";
 import { installNativePreviewNavigation } from "./native-preview";
 import { resolveMergeReview } from "./merge-review";
-import { refreshReferencedFormulaResults } from "./workarounds/referenced-formula-results";
 import { withLiveSheetReferences } from "./live-sheet-references";
 import { subscribeWorkspaceCollaborators } from "./workarounds/collaboration-members";
 import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
@@ -200,7 +197,6 @@ export function createCollaborationEditor(
       let collaborators: readonly IMember[] = [];
       let collaborationUIEventListener: { unsubscribe(): void } | null = null;
       const liveSheetIds = new Set<string>();
-      let referencedFormulaResults: { dispose(): void } | null = null;
       let referenceWriteGuard: { dispose(): void } | null = null;
       let readOnlyListener: { dispose(): void } | null = null;
       let readOnlyLifecycleListener: { dispose(): void } | null = null;
@@ -390,14 +386,6 @@ export function createCollaborationEditor(
         });
         mountedUniver = univer;
         univerAPIRef.current = univerAPI;
-        if (definition.liveSheetReferences) {
-          referencedFormulaResults = refreshReferencedFormulaResults(
-            univer.__getInjector().get(ICommandService),
-            univer.__getInjector().get(RegisterOtherFormulaService),
-            unitId,
-            liveSheetIds,
-          );
-        }
         // Source Sheets are observed through SDK OT, never edited by this host.
         referenceWriteGuard = univerAPI.addEvent(
           univerAPI.Event.BeforeCommandExecute,
@@ -551,7 +539,6 @@ export function createCollaborationEditor(
         onCollaboratorsChange?.([]);
         statusListener?.dispose();
         collaborationUIEventListener?.unsubscribe();
-        referencedFormulaResults?.dispose();
         referenceWriteGuard?.dispose();
         readOnlyListener?.dispose();
         readOnlyLifecycleListener?.dispose();
