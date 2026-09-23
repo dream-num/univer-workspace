@@ -40,10 +40,13 @@ export function locateNativePreview(api: FUniver, unitId: string, focus: NativeP
 }
 
 /** Only the trusted same-origin preview parent can ask for bounded navigation. */
-export function installNativePreviewNavigation(api: FUniver, unitId: string, token: string) {
+export function installNativePreviewNavigation(api: FUniver, unitId: string, token: string, download?: () => Promise<void>) {
   const send = (status: string, requestId?: string) => window.parent.postMessage({
     channel: NATIVE_PREVIEW_CHANNEL, token, unitId, status, requestId,
+    ...(download ? { downloadFormat: "pptx" } : {}),
   }, window.location.origin);
+  let disposed = false;
+  let downloading = false;
   let ready = api.getCurrentLifecycleStage() >= LifecycleStages.Rendered;
   let lifecycle: { dispose(): void } | undefined;
   const receive = (event: MessageEvent) => {
@@ -51,7 +54,18 @@ export function installNativePreviewNavigation(api: FUniver, unitId: string, tok
         event.origin !== window.location.origin || event.data?.channel !== NATIVE_PREVIEW_CHANNEL ||
         event.data?.token !== token || event.data?.unitId !== unitId) return;
     if (event.data.action === "status") { if (ready) send("ready"); return; }
-    if (!ready) return;
+    if (!ready || disposed) return;
+    if (event.data.action === "download" && download && !downloading &&
+        typeof event.data.requestId === "string" && /^[\w-]{1,128}$/.test(event.data.requestId)) {
+      const requestId = event.data.requestId;
+      downloading = true;
+      send("downloading", requestId);
+      void Promise.resolve().then(download).then(
+        () => { if (!disposed) send("downloaded", requestId); },
+        () => { if (!disposed) send("download-error", requestId); },
+      ).finally(() => { downloading = false; });
+      return;
+    }
     const focus = parseNativePreviewFocus(event.data.focus);
     if (event.data.action !== "focus" || !focus || (typeof event.data.requestId !== "string" || !/^[\w-]{1,128}$/.test(event.data.requestId))) return;
     try { send(locateNativePreview(api, unitId, focus) ? "located" : "missing", event.data.requestId); }
@@ -67,5 +81,5 @@ export function installNativePreviewNavigation(api: FUniver, unitId: string, tok
     lifecycle?.dispose();
     send("ready");
   });
-  return { dispose() { lifecycle?.dispose(); window.removeEventListener("message", receive); } };
+  return { dispose() { disposed = true; lifecycle?.dispose(); window.removeEventListener("message", receive); } };
 }

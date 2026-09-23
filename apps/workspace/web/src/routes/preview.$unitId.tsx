@@ -22,7 +22,7 @@ function NativeUnitPage() {
   return (
     <section className="flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-background">
       <ResourceEditor key={resource.unitId} unitId={resource.unitId} unitType={resource.unitType}
-        user={user} readOnly {...(token ? { previewToken: token } : {})} />
+        user={user} readOnly={resource.editorMode !== "edit"} {...(token ? { previewToken: token } : {})} />
     </section>
   );
 }

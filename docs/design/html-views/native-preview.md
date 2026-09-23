@@ -23,7 +23,7 @@ Feature-detect it when authoring a page used in multiple hosts.
 | --- | --- |
 | `version` | `1` |
 | `capabilities` | `native-preview`, `native-focus`, `share-link` |
-| `showUnit(unitId, connectedElement, options?)` | Requests a live, read-only Sheet, Doc or Slides preview in the element's rectangle. Returns immediately; observe status events for the result. Only one native preview is mounted per HTML viewer. |
+| `showUnit(unitId, connectedElement, options?)` | Requests a live Sheet, Doc or Slides preview using the server-selected editor mode in the element's rectangle. Returns immediately; observe status events for the result. Only one native preview is mounted per HTML viewer. |
 | `hideUnit()` | Closes and disposes the current native frame; HTML bindings remain mounted. |
 | `share()` | Opens a host-owned link dialog for the current HTML file. It does not invite users or change permissions. |
 
@@ -33,9 +33,20 @@ slot hides the native surface. Call `hideUnit()` when permanently removing a slo
 to release its runtime. Showing the same Unit again changes placement/navigation
 without remounting it; showing another Unit cancels the previous open request.
 
-The host provides a compact title, read-only label, **Open file** link and Close
-button. Editing and the native Office export tools are available through the
-standard file entry. Preview content is real Univer rendering, not screenshots
+The host provides a compact title, live/editability label, **Open file** link and Close
+button. Doc and Slides previews hide the redundant ribbon/header; Slides fit the
+available viewport with a local zoom operation. Authorized editors can edit the
+native content; viewers retain the read-only guard. **Open file** provides the full
+native controls. Signed-in users also receive a **Download PPTX** button in the
+host header when the Slides editor exposes export. It calculates and exports the
+current native snapshot through the existing authenticated SDK Exchange service,
+so visible reference results are included without writing document content. Export
+progress/errors remain in that header. Managed image export requires the server's
+Workspace Asset resolution support.
+
+The share dialog has a Copy link action and inline success/failure feedback.
+Copying does not change access: the HTML and each referenced Unit remain separately
+authorized. Preview content is real Univer rendering, not screenshots
 or a second copy of document data.
 
 Opening and closing a preview are personal navigation. They do not change model
@@ -86,8 +97,8 @@ with a generic error and close control. Close and reopen to retry.
   Unit-to-Resource lookup and Resource Open API; the native route independently
   repeats authorization. Snapshot and collaboration access remain server-enforced.
 - Public HTML can be viewed anonymously. Private sources stay unavailable, and
-  previews are read-only even for signed-in owners. **Open file** uses the standard
-  editor's authoritative editing permission.
+  the native route uses the Resource Open API's authoritative `editorMode`. The
+  HTML cannot grant editing. Anonymous previews have no export action.
 - Targets are published **Trunk** Units. This interface does not select draft or
   merge-preview scopes, and the HTML Blob remains outside Unit Worktree review.
 - The template can supply only identity, geometry and bounded navigation. It

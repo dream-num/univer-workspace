@@ -313,7 +313,7 @@ Unit identity, geometry and bounded navigation, never URLs or authority.
 
 `features/resources/native-unit-open.ts` resolves and opens each target through
 existing product APIs. `/preview/$unitId` repeats authorization and mounts the
-standard ResourceEditor read-only in an independent browsing context, isolating
+standard ResourceEditor with the server-selected editor mode in an independent browsing context, isolating
 Office UI Facades from the persistent HTML Binding Engine. Target replacement
 cancels pending lookup; frame removal disposes the native runtime. All targets
 are Trunk; draft selection and editing belong to the existing file/review routes.
@@ -329,3 +329,10 @@ the room exists, terminating the observer during editor initialization. The smal
 presence, switches to a replacement room when emitted, and disposes on unmount.
 Remove this adapter when the SDK Facade passes the delayed-room and replacement
 regressions without it. OT, room creation and transport remain SDK responsibilities.
+
+Native preview chrome offers an authenticated Slides snapshot export, separate from
+HTML's sandboxed navigation messages. Only the same-origin parent, current frame
+token, Unit and bounded request ID can start it; concurrent requests coalesce and
+late completion after disposal is ignored. The host renders progress/errors and a
+copy-link action without adding a toolbar inside the native content. Preview
+compaction and Slide zoom are local view configuration, not Unit mutations.
