@@ -61,6 +61,8 @@ Comment 1 和产品 V7 不变。任何组件迁移失败均不发布副本，原
 当前版本重复启动不再次迁移或备份。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
+启动诊断按模块加载、产品库准备、协同库准备和应用初始化分阶段记录；协同迁移进一步标记备份、创建事实读取、各 SDK 迁移、校验及替换。阶段日志不改变迁移顺序和失败传播，OOM 时以同一 startupId 的最后未完成阶段定位范围。
+
 ## Login Session Authenticator
 
 需要登录的产品 HTTP、Changeset 与 Worktree 入口使用同一 Login Session：

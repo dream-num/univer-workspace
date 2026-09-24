@@ -1,3 +1,4 @@
+import { startupStage, startupStageAsync } from "../../../startup-logging.js";
 import { randomUUID } from "node:crypto";
 import { chmodSync, copyFileSync, existsSync, renameSync, rmSync, statSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -41,8 +42,8 @@ export async function prepareCollaborationDatabase(
   const source = new DatabaseSync(filename);
   try {
     source.exec("PRAGMA busy_timeout = 5000");
-    assertIntegrity(source);
-    const versions = readComponentVersions(source);
+    startupStage("collaboration.source.validate", () => assertIntegrity(source));
+    const versions = startupStage("collaboration.versions.read", () => readComponentVersions(source));
     if (!versions) return { status: "fresh" };
     if (
       !Object.entries(TARGET).some(([component, target]) => {
@@ -52,7 +53,7 @@ export async function prepareCollaborationDatabase(
     )
       return { status: "current" };
 
-    const journalMode = claimExclusiveAccess(source);
+    const journalMode = startupStage("collaboration.lock", () => claimExclusiveAccess(source));
     try {
       const backupFilename = await migrateCopy(
         filename,
@@ -140,47 +141,60 @@ async function migrateCopy(
   productDatabaseFilename: string,
   journalMode: string,
 ): Promise<string> {
-  const creation = readUnitCreationFacts(source, productDatabaseFilename, Date.now());
+  const creation = startupStage("collaboration.creation-facts.read", () =>
+    readUnitCreationFacts(source, productDatabaseFilename, Date.now()),
+  );
   const backupFilename = `${filename}.pre-sdk-1.0.0-${Date.now()}-${randomUUID()}.bak`;
-  source.prepare("VACUUM INTO ?").run(backupFilename);
+  startupStage("collaboration.backup", () => source.prepare("VACUUM INTO ?").run(backupFilename));
   chmodSync(backupFilename, 0o600);
 
   const stagedFilename = `${backupFilename}.migrating`;
   try {
-    copyFileSync(backupFilename, stagedFilename);
+    startupStage("collaboration.staging.copy", () => copyFileSync(backupFilename, stagedFilename));
     if (versions.get("core") === 1)
-      await migrateSQLiteCoreV1ToV2({
-        filename: stagedFilename,
-        resolveUnitCreation: creation.resolveUnitCreation,
-      });
-    if (versions.get("worktree") === 1) migrateSQLiteWorktreeV1ToV2({ filename: stagedFilename });
+      await startupStageAsync("collaboration.core.v1-to-v2", () =>
+        migrateSQLiteCoreV1ToV2({
+          filename: stagedFilename,
+          resolveUnitCreation: creation.resolveUnitCreation,
+        }),
+      );
+    if (versions.get("worktree") === 1)
+      startupStage("collaboration.worktree.v1-to-v2", () =>
+        migrateSQLiteWorktreeV1ToV2({ filename: stagedFilename }),
+      );
     if ((versions.get("worktree") ?? 3) < 3)
-      await migrateSQLiteWorktreeV2ToV3({
-        filename: stagedFilename,
-        resolveUnitCreation: creation.resolveWorktreeUnitCreation,
-      });
+      await startupStageAsync("collaboration.worktree.v2-to-v3", () =>
+        migrateSQLiteWorktreeV2ToV3({
+          filename: stagedFilename,
+          resolveUnitCreation: creation.resolveWorktreeUnitCreation,
+        }),
+      );
     // Core and Worktree migrations must read V1 History creation facts first.
     if (versions.get("history") === 1)
-      await migrateSQLiteHistoryV1ToV2({ filename: stagedFilename });
+      await startupStageAsync("collaboration.history.v1-to-v2", () =>
+        migrateSQLiteHistoryV1ToV2({ filename: stagedFilename }),
+      );
 
     // Public Adapter constructors validate their own schema fingerprints. They
     // also initialize components missing from older deployments on the copy.
-    for (const Adapter of [
-      SQLiteDatabaseAdapter,
-      SQLiteWorktreeDatabaseAdapter,
-      SQLiteHistoryDatabaseAdapter,
-    ]) {
-      await new Adapter({ filename: stagedFilename }).dispose();
+    for (const [component, Adapter] of [
+      ["core", SQLiteDatabaseAdapter],
+      ["worktree", SQLiteWorktreeDatabaseAdapter],
+      ["history", SQLiteHistoryDatabaseAdapter],
+    ] as const) {
+      await startupStageAsync(`collaboration.adapter.${component}.validate`, async () => {
+        await new Adapter({ filename: stagedFilename }).dispose();
+      });
     }
     const staged = new DatabaseSync(stagedFilename);
     try {
-      assertIntegrity(staged);
+      startupStage("collaboration.staging.validate", () => assertIntegrity(staged));
       if (journalMode === "wal") staged.exec("PRAGMA journal_mode = WAL");
     } finally {
       staged.close();
     }
     chmodSync(stagedFilename, statSync(filename).mode & 0o777);
-    renameSync(stagedFilename, filename);
+    startupStage("collaboration.staging.publish", () => renameSync(stagedFilename, filename));
     return backupFilename;
   } catch (error) {
     throw new Error(

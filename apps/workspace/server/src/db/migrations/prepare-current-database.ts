@@ -1,3 +1,4 @@
+import { startupStage } from "../../startup-logging.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { dirname, basename, join } from "node:path";
@@ -135,7 +136,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       }
       const backupFilename = createBackup(filename, database, 6);
       try {
-        migrateV6ToV7(database);
+        startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
@@ -150,8 +151,8 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       assertV5Fingerprint(database);
       const backupFilename = createBackup(filename, database, 5);
       try {
-        migrateV5ToV6(database);
-        migrateV6ToV7(database);
+        startupStage("product.v5-to-v6", () => migrateV5ToV6(database));
+        startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
@@ -176,11 +177,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       const backupFilename = createBackup(filename, database, 4);
       try {
         if (preAssetMigration) {
-          migrateV3ToV4(database);
+          startupStage("product.v3-to-v4", () => migrateV3ToV4(database));
         }
-        migrateV4ToV5(database);
-        migrateV5ToV6(database);
-        migrateV6ToV7(database);
+        startupStage("product.v4-to-v5", () => migrateV4ToV5(database));
+        startupStage("product.v5-to-v6", () => migrateV5ToV6(database));
+        startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
@@ -195,10 +196,10 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       assertV3Fingerprint(database);
       const backupFilename = createBackup(filename, database, 3);
       try {
-        migrateV3ToV4(database);
-        migrateV4ToV5(database);
-        migrateV5ToV6(database);
-        migrateV6ToV7(database);
+        startupStage("product.v3-to-v4", () => migrateV3ToV4(database));
+        startupStage("product.v4-to-v5", () => migrateV4ToV5(database));
+        startupStage("product.v5-to-v6", () => migrateV5ToV6(database));
+        startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
@@ -213,11 +214,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       assertV2Fingerprint(database);
       const backupFilename = createBackup(filename, database, 2);
       try {
-        migrateV2ToV3(database);
-        migrateV3ToV4(database);
-        migrateV4ToV5(database);
-        migrateV5ToV6(database);
-        migrateV6ToV7(database);
+        startupStage("product.v2-to-v3", () => migrateV2ToV3(database));
+        startupStage("product.v3-to-v4", () => migrateV3ToV4(database));
+        startupStage("product.v4-to-v5", () => migrateV4ToV5(database));
+        startupStage("product.v5-to-v6", () => migrateV5ToV6(database));
+        startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
@@ -232,12 +233,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       assertV1Fingerprint(database);
       const backupFilename = createBackup(filename, database, 1);
       try {
-        migrateV1ToV2(database);
-        migrateV2ToV3(database);
-        migrateV3ToV4(database);
-        migrateV4ToV5(database);
-        migrateV5ToV6(database);
-        migrateV6ToV7(database);
+        startupStage("product.v1-to-v2", () => migrateV1ToV2(database));
+        startupStage("product.v2-to-v3", () => migrateV2ToV3(database));
+        startupStage("product.v3-to-v4", () => migrateV3ToV4(database));
+        startupStage("product.v4-to-v5", () => migrateV4ToV5(database));
+        startupStage("product.v5-to-v6", () => migrateV5ToV6(database));
+        startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         assertV7Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
@@ -262,7 +263,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     const backupFilename = createBackup(filename, database, 0);
 
     try {
-      migrateLegacyV0(database);
+      startupStage("product.v0-to-v7", () => migrateLegacyV0(database));
     } catch (error) {
       throw new Error(
         `Legacy Workspace database migration failed. The original V0 database was preserved by the transaction and its consistent backup is at ${backupFilename}.`,
@@ -291,8 +292,8 @@ function createBackup(
 ): string {
   const backupFilename = uniqueBackupFilename(filename, version);
   try {
-    database.prepare("VACUUM INTO ?").run(backupFilename);
-    verifyBackup(backupFilename, version);
+    startupStage("product.backup", () => database.prepare("VACUUM INTO ?").run(backupFilename));
+    startupStage("product.backup.validate", () => verifyBackup(backupFilename, version));
     return backupFilename;
   } catch (error) {
     throw new Error(
