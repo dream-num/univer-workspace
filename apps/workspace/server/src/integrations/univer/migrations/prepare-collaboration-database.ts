@@ -42,7 +42,6 @@ export async function prepareCollaborationDatabase(
   const source = new DatabaseSync(filename);
   try {
     source.exec("PRAGMA busy_timeout = 5000");
-    startupStage("collaboration.source.validate", () => assertIntegrity(source));
     const versions = startupStage("collaboration.versions.read", () => readComponentVersions(source));
     if (!versions) return { status: "fresh" };
     if (
@@ -55,6 +54,7 @@ export async function prepareCollaborationDatabase(
 
     const journalMode = startupStage("collaboration.lock", () => claimExclusiveAccess(source));
     try {
+      startupStage("collaboration.source.validate", () => assertIntegrity(source));
       const backupFilename = await migrateCopy(
         filename,
         source,

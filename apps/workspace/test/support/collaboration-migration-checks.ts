@@ -179,6 +179,20 @@ export async function verifyCollaborationMigration(
       const files = readdirSync(directory).sort();
       assert.deepEqual(await prepareWithProduct(filename), { status: "current" });
       assert.deepEqual(readdirSync(directory).sort(), files);
+      if (populated) {
+        // A current database only needs its component versions read at startup.
+        const current = new DatabaseSync(filename);
+        current.exec("PRAGMA foreign_keys = OFF");
+        current.exec(
+          "INSERT INTO collaboration_resources (unit_id, resource_id, payload_json) VALUES ('missing-unit', 'orphan', '{}')",
+        );
+        assert.notDeepEqual(current.prepare("PRAGMA foreign_key_check").all(), []);
+        current.close();
+        assert.deepEqual(await prepareWithProduct(filename), { status: "current" });
+        const cleanup = new DatabaseSync(filename);
+        cleanup.exec("DELETE FROM collaboration_resources WHERE resource_id = 'orphan'");
+        cleanup.close();
+      }
       const runtime = createRuntime(filename);
       try {
         if (populated) {
@@ -256,6 +270,20 @@ export async function verifyCollaborationMigration(
     );
     assert.equal(
       readdirSync(directory).some((name) => name.startsWith("future.sqlite.pre-")),
+      false,
+    );
+
+    // A source that needs migration is still checked before a backup is made.
+    const invalid = createLegacy("invalid-source.sqlite");
+    invalid.db.exec("PRAGMA foreign_keys = OFF");
+    invalid.db.exec(
+      "INSERT INTO collaboration_resources (unit_id, resource_id, payload_json) VALUES ('missing-unit', 'orphan', '{}')",
+    );
+    assert.notDeepEqual(invalid.db.prepare("PRAGMA foreign_key_check").all(), []);
+    invalid.db.close();
+    await assert.rejects(prepareWithProduct(invalid.filename), /foreign-key validation/);
+    assert.equal(
+      readdirSync(directory).some((name) => name.startsWith("invalid-source.sqlite.pre-")),
       false,
     );
 
