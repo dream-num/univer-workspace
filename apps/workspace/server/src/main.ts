@@ -2,13 +2,18 @@ import { prepareCollaborationDatabase } from "./integrations/univer/migrations/p
 import { createServer } from "node:http";
 import { createWorkspaceApplication } from "./app.js";
 import { loadConfig } from "./config.js";
+import { prepareCurrentDatabase } from "./db/migrations/prepare-current-database.js";
 import { startOperationRecovery } from "./jobs/operation-recovery.js";
 import { startBlobMaintenance } from "./jobs/blob-maintenance.js";
 import { shutdownServer } from "./server-lifecycle.js";
 import { logger } from "./middleware/logging.js";
 
 const config = loadConfig();
-await prepareCollaborationDatabase(config.collaborationDatabaseFilename);
+prepareCurrentDatabase(config.databaseFilename);
+await prepareCollaborationDatabase(
+  config.collaborationDatabaseFilename,
+  config.databaseFilename,
+);
 const application = createWorkspaceApplication(config);
 await application.initialize();
 const operationRecovery = startOperationRecovery(application.resources);

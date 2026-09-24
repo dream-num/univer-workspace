@@ -107,8 +107,9 @@ type DatabasePreparation =
 /**
  * Temporary rollout boundary for the supported legacy schemas.
  *
- * Delete this migrations directory and the call from db/initialize.ts after
- * every deployed database is on V7. Business repositories never import it.
+ * Delete this migrations directory and the calls from db/initialize.ts and
+ * main.ts after every deployed database is on V7. Business repositories never
+ * import it.
  */
 export function prepareCurrentDatabase(filename: string): DatabasePreparation {
   if (
