@@ -1,42 +1,33 @@
 import { randomUUID } from "node:crypto";
-import { writeSync } from "node:fs";
-import { hostname } from "node:os";
 import { getHeapStatistics } from "node:v8";
+import { flushLogs, logger } from "./logger.js";
 
-const startupId = randomUUID();
-const host = hostname();
+const startupLogger = logger.child({ event: "workspace.startup", startupId: randomUUID() });
 
-// Startup diagnostics must survive a fatal V8 OOM, including during module
-// loading or synchronous migrations. No application imports or buffered writes.
 export function beginStartupStage(stage: string) {
   const started = performance.now();
+  let finished = false;
   const log = (status: "started" | "completed" | "failed", error?: unknown) => {
+    if (finished) return;
+    finished = status !== "started";
+    const level = status === "failed" ? "error" : "info";
+    if (!startupLogger.isLevelEnabled(level)) return;
     try {
-      writeSync(
-        1,
-        `${JSON.stringify({
-          level: status === "failed" ? 50 : 30,
-          time: Date.now(),
-          pid: process.pid,
-          hostname: host,
-          event: "workspace.startup",
-          startupId,
+      startupLogger[level](
+        {
           stage,
           status,
           elapsedMs: Math.round(performance.now() - started),
           uptimeMs: Math.round(process.uptime() * 1000),
           memory: process.memoryUsage(),
           heapSizeLimit: getHeapStatistics().heap_size_limit,
-          ...(status === "failed"
-            ? {
-                errorType: error instanceof Error ? error.name : typeof error,
-              }
-            : {}),
-          msg: `Workspace startup ${stage} ${status}`,
-        })}\n`,
+          ...(status === "failed" ? { err: error } : {}),
+        },
+        `Workspace startup ${stage} ${status}`,
       );
+      flushLogs();
     } catch {
-      // A closed log sink must not change migration or startup semantics.
+      // 日志输出失败不能替换原始异常或改变迁移结果。
     }
   };
   log("started");

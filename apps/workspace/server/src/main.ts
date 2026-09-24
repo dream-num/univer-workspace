@@ -1,7 +1,13 @@
 import { createServer } from "node:http";
-import { beginStartupStage, startupStage, startupStageAsync } from "./startup-logging.js";
+import { loadConfig } from "./config.js";
+import { prepareCurrentDatabase } from "./db/migrations/prepare-current-database.js";
+import { startOperationRecovery } from "./jobs/operation-recovery.js";
+import { startBlobMaintenance } from "./jobs/blob-maintenance.js";
+import { shutdownServer } from "./server-lifecycle.js";
+import { logger } from "./logging/logger.js";
+import { beginStartupStage, startupStage, startupStageAsync } from "./logging/startup.js";
 
-// Dynamic imports expose OOMs during SDK/module evaluation before main runs.
+// 只在 SDK 和应用模块加载边界保留动态导入，以记录初始化前的失败。
 const { prepareCollaborationDatabase } = await startupStageAsync(
   "modules.collaboration-migrations",
   () => import("./integrations/univer/migrations/prepare-collaboration-database.js"),
@@ -10,24 +16,6 @@ const { createWorkspaceApplication } = await startupStageAsync(
   "modules.application",
   () => import("./app.js"),
 );
-const [
-  { loadConfig },
-  { prepareCurrentDatabase },
-  { startOperationRecovery },
-  { startBlobMaintenance },
-  { shutdownServer },
-  { logger },
-] = await startupStageAsync("modules.startup", () =>
-  Promise.all([
-    import("./config.js"),
-    import("./db/migrations/prepare-current-database.js"),
-    import("./jobs/operation-recovery.js"),
-    import("./jobs/blob-maintenance.js"),
-    import("./server-lifecycle.js"),
-    import("./middleware/logging.js"),
-  ]),
-);
-
 const config = startupStage("config.load", () => loadConfig());
 startupStage("database.product.prepare", () => prepareCurrentDatabase(config.databaseFilename));
 await startupStageAsync("database.collaboration.prepare", () =>
@@ -35,19 +23,15 @@ await startupStageAsync("database.collaboration.prepare", () =>
 );
 const application = startupStage("application.create", () => createWorkspaceApplication(config));
 await startupStageAsync("application.initialize", () => application.initialize());
-const operationRecovery = startupStage("jobs.operation-recovery.start", () =>
-  startOperationRecovery(application.resources),
-);
-const blobMaintenance = startupStage("jobs.blob-maintenance.start", () =>
-  startBlobMaintenance(application.blobs),
-);
+const operationRecovery = startOperationRecovery(application.resources);
+const blobMaintenance = startBlobMaintenance(application.blobs);
 const background = {
   async dispose() {
     await Promise.all([operationRecovery.dispose(), blobMaintenance.dispose()]);
   },
 };
 const server = createServer(application.app);
-startupStage("server.attach-websocket", () => application.attachWebSocket(server));
+application.attachWebSocket(server);
 
 const logListen = beginStartupStage("server.listen");
 server.listen(config.port, config.host, () => {

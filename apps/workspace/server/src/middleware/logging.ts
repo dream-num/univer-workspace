@@ -1,13 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { ServerResponse } from "node:http";
-import pino from "pino";
+import type pino from "pino";
 import { pinoHttp } from "pino-http";
 import type { Request, RequestHandler } from "express";
-
-// Write structured JSON logs to stdout for collection by the deployment environment.
-export const logger = pino({
-  level: process.env.LOG_LEVEL ?? "info",
-});
+import { logger } from "../logging/logger.js";
 
 // Reuse a valid caller request ID or generate a UUID, and return it in the
 // response headers so callers can correlate a response with its logs.

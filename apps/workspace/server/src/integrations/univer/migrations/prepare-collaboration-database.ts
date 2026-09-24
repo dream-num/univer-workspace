@@ -1,4 +1,4 @@
-import { startupStage, startupStageAsync } from "../../../startup-logging.js";
+import { startupStage, startupStageAsync } from "../../../logging/startup.js";
 import { randomUUID } from "node:crypto";
 import { chmodSync, copyFileSync, existsSync, renameSync, rmSync, statSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
