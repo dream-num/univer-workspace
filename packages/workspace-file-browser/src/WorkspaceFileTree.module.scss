@@ -193,6 +193,7 @@
 .nodeRow.selected > .actions {
   position: static;
   flex: none;
+  padding-inline-start: 6px;
 }
 
 .status,
