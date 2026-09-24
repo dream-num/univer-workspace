@@ -19,7 +19,7 @@ export function CollaboratorAvatars({
   ].sort((left, right) =>
     Number(right.userID === currentUserId) - Number(left.userID === currentUserId)
   );
-  if (users.length === 0) return null;
+  if (users.length < 2) return null;
   const memberLabel = (member: IMember) =>
     member.userID === currentUserId
       ? t("collaboratorYou", { name: member.name || member.userID })
