@@ -52,7 +52,6 @@ import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.j
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
-const MILLISECONDS_PER_SECOND = 1_000;
 // Transport middleware runs before route matching. Allow only these SDK read paths.
 const ANONYMOUS_READ_PATHS = [
   /^\/universer-api\/user\/session-ticket$/,
@@ -125,7 +124,6 @@ export function createCollaborationGateway(options: {
       context.userID,
       context.request.changeset.unitID
     );
-    setServerChangesetCreateTime(context.request.changeset);
     await next();
   });
   service.use("applyChangeset", async (context, next) => {
@@ -253,10 +251,6 @@ export function createCollaborationGateway(options: {
   ] as const) {
     worktreeService.use(action, asyncWorktreeWriteAuthorization);
   }
-  worktreeService.use("submitChangeset", async (context, next) => {
-    setServerChangesetCreateTime(context.request.changeset);
-    await next();
-  });
   worktreeService.use("commitChangeset", async (context, next) => {
     setFinalMutationSize(context.changeset);
     await next();
@@ -465,12 +459,6 @@ export function createCollaborationGateway(options: {
       await transport.dispose();
     },
   };
-}
-
-function setServerChangesetCreateTime(changeset: {
-  createTime?: number | undefined;
-}) {
-  changeset.createTime = Math.floor(Date.now() / MILLISECONDS_PER_SECOND);
 }
 
 function trackConnections(

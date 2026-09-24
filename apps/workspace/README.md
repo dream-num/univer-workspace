@@ -40,9 +40,10 @@ comment bodies, replies, and solved state use the Comment component in the same
 Collaboration SQLite file. Thread Comments are enabled only in Trunk editors
 because the Comment protocol does not define Worktree branch or merge semantics.
 
-The same Collaboration SQLite file stores a rebuildable, persistent History
-index. A startup-only compatibility backfill indexes product-backed Units that
-predate persistent History; normal History reads never scan or repair data.
+The same Collaboration SQLite file stores a persistent History segment index.
+SDK 1.0.0 owns automatic indexing from authoritative Core creation facts and
+changesets. When History has no records, reads calculate segments and persist
+them in the background.
 Trunk Sheet, Doc, Slide, Base, and Board editors use the standard SDK
 version-history UI. Viewers can inspect versions, while users with content edit
 permission can restore one. Worktree and merge-preview editors do not expose
@@ -274,17 +275,29 @@ docker run --rm \
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
 backs up and migrates supported V0 through V6 product databases to V7 automatically.
-The Collaboration Comment and History Adapters perform additive, idempotent
-initialization of their own `comment=1` and `history=1` component schemas in the
-existing Collaboration SQLite file; they do not require a product database
-migration command. Back up both SQLite files before rollout.
+SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
+`history=2`; `comment=1` and the product V7 schema are unchanged. Before creating
+application Services, the server entry point prepares the Collaboration file:
 
-The published Collaboration Worktree adapter upgrades its own component schema
-from V1 to V2; the product database remains V7. Older SDK builds cannot open
-Worktree V2. Validate upgrades with separate product, collaboration, and Blob
-storage paths. Never let old and new SDK builds write the same Collaboration
-SQLite file. Rolling back requires the matching pre-upgrade database backup,
-not only switching the application commit.
+1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
+2. Start a single new instance. Startup checkpoints WAL and creates a consistent
+   `<collaboration-file>.pre-sdk-1.0.0-<timestamp>-<uuid>.bak` beside the database.
+3. The published SDK migrations run on a staging copy in Core → Worktree → History
+   order. Schema validation, `foreign_key_check`, and `integrity_check` must pass
+   before the copy atomically replaces the original. A failed migration leaves
+   the original database and backup available; startup fails before accepting traffic.
+4. Verify startup and document/Worktree access, then restore normal service.
+   Subsequent startups do not rerun migrations or create another backup.
+
+Core V1, Worktree V1/V2, and History V1 are supported; fresh files are initialized
+by the current Adapters. Existing History creation facts are used before migrating
+its index. Where historical facts are missing, SDK defaults use `anonymous` and
+the migration time; these values are fallbacks, not reconstructed authorship.
+Custom server entry points must await `prepareCollaborationDatabase` before
+constructing `createWorkspaceApplication` for an existing database.
+Never run old and new SDK writers together. To roll back, stop the new instance
+and restore the matching pre-upgrade product/Collaboration/Blob backups; changing
+only the application image is insufficient. Retain backups until rollout is accepted.
 V7 extends the Operation kind and object deletion reason for Blob replacement; existing
 Blob rows and upload sessions are preserved.
 For a V7 rollout, stop every old Workspace instance, start one V7 instance and

@@ -20,13 +20,20 @@ Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一�
 幂等创建该附加 Schema，不改变产品数据库 V7，也不要求执行产品迁移命令。评论当前只在
 Trunk 编辑器启用；Worktree 和 Merge Preview 不读取或写入 Trunk 评论。
 
-五类 Trunk Unit 的标准版本历史索引保存在同一文件的
-`collaboration_history_revisions` 表中，并由 `collaboration_schema_versions` 的 `history=1`
-组件版本管理。History Adapter 首次启动时幂等创建该附加 Schema；索引可从产品映射的 Unit、
-权威 Trunk revision 与 changeset 重建。为兼容启用 History 前的历史数据，服务启动时执行一次
-内部 backfill；正常请求不执行该逻辑。该索引不属于产品数据库 V7，也不改变其迁移路径。
-History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；Worktree 和 Merge Preview 不读取或
-写入 Trunk History。
+SDK 1.0.0 的 Collaboration SQLite 组件版本为 `core=2`、`worktree=3`、`history=2`
+和 `comment=1`。Core 与 Worktree 保存 Unit 创建者、创建时间及 changeset 提交时间；
+History 只保存 `collaboration_history_records` 分段索引，从 Core 权威事实与 changeset
+构造列表。SDK 自动订阅创建/编辑事件，并在 History 读取时追赶索引；Workspace 不再维护
+旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
+Worktree 和 Merge Preview 不读取或写入 Trunk History。
+
+启动入口在构造 Service/Adapter 前集中调用已发布 SDK 的 Core V1→V2、Worktree V1→V2→V3
+与 History V1→V2 迁移。先停止全部写入者、checkpoint WAL 并生成一致性备份，在副本上按
+Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件使用；通过 Adapter
+Schema 校验、外键和完整性检查后原子替换文件。失败不发布副本，原文件和备份保留，启动失败。
+当前版本不重复迁移或备份。历史信息缺失时沿用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
+当作原始事实。产品数据库仍为 V7，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 ## 核心关系
 

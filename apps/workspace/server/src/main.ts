@@ -1,3 +1,4 @@
+import { prepareCollaborationDatabase } from "./integrations/univer/migrations/prepare-collaboration-database.js";
 import { createServer } from "node:http";
 import { createWorkspaceApplication } from "./app.js";
 import { loadConfig } from "./config.js";
@@ -7,6 +8,7 @@ import { shutdownServer } from "./server-lifecycle.js";
 import { logger } from "./middleware/logging.js";
 
 const config = loadConfig();
+await prepareCollaborationDatabase(config.collaborationDatabaseFilename);
 const application = createWorkspaceApplication(config);
 await application.initialize();
 const operationRecovery = startOperationRecovery(application.resources);

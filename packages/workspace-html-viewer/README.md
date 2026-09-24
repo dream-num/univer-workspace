@@ -63,7 +63,8 @@ or account reload cannot guarantee saving; existing account fences remain active
 
 ## React and validation
 
-The component uses React 18-compatible APIs and the consumer's React runtime
+Local development pins React and React DOM together at 18.3.1 to keep automatically
+installed SDK peers on the same renderer. The component uses React 18-compatible APIs and the consumer's React runtime
 (Web 19, Agent 18). SDK packages are peers so each application's dependency graph
 supplies its own versions. Web also deduplicates these SDK peers at its Vite
 composition root, preventing this package’s React 18 development graph from

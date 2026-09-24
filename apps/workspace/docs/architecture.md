@@ -205,10 +205,10 @@ Module 批量解析评论作者资料。五类 Unit 的评论读取、新增、�
 按 Unit 类型注册标准 Thread Comment UI 和统一远程 datasource。
 
 History Service 使用同一文件中由 History Adapter 独立拥有的派生索引，并通过 Identity Module
-批量解析版本作者。现有 Collaboration Runtime 统一装配 History Adapter、Service、live attachment
-和 lifecycle；其内部 compatibility backfill 只在服务启动时按产品 `univer_resources` 映射为启用
-History 前的已有 Unit 补建索引。正常读取不触发扫描或修复，正常提交由 Service attachment 增量
-索引。History Endpoint 复用 Unit 打开权限；恢复版本仍通过普通 Collaboration changeset 写入并
+批量解析版本作者。现有 Collaboration Runtime 统一装配 History Adapter、Service 和 lifecycle；SDK 1.0.0 的
+History Service 自行订阅 Core 创建与提交事件，并在读取时从 Core 创建事实与 changeset 追赶分段索引。
+启动入口先通过独立的 `integrations/univer/migrations` 边界备份并迁移协同数据库，再装配 Runtime。
+History Endpoint 复用 Unit 打开权限；恢复版本仍通过普通 Collaboration changeset 写入并
 要求内容编辑权限。Browser 按 Unit 类型只为 Trunk Sheet、Doc、Slide、Base 和 Board 注册标准
 SDK History UI，Worktree 与 Merge Preview 不注册。
 
@@ -247,10 +247,9 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 snapshot、changeset 或 revision。Tree Blob 和内嵌 Asset 共用注入的 `BlobStore`；当前实现是
 本地目录，未来可替换为 `S3BlobStore` 或迁移包装器。Univer Collaboration Database Adapter
 独立管理 snapshot、changeset 与 revision；Comment Database Adapter 在同一文件中独立管理
-评论正文、回复和 solved 状态；History Database Adapter 在同一文件中保存可从 Trunk Unit 与
-changeset 重建的版本索引。Workspace 在 Trunk 和 Worktree 的 `submitChangeset` middleware 中
-以服务端当前 Unix 秒覆盖 `changeset.createTime`；该字段表示服务端开始处理本次提交的时间，
-不是数据库事务的精确提交时间。两者不把协作内容写入产品数据库。
+评论正文、回复和 solved 状态；History Database Adapter 在同一文件中保存可从 Core 创建事实与
+changeset 重建的分段索引。SDK 1.0.0 的 Core/Worktree SQLite Adapter 在写入时以当前 Unix 秒覆盖
+`changeset.createTime`，并返回实际保存的 changeset；重复提交保留原时间。两者不把协作内容写入产品数据库。
 
 Office Exchange Module 使用已发布的 `@univerjs-pro/exchange-node` 将 Office 字节与 Univer
 数据互转。`/universer-api/exchange/**`、Exchange File Upload 和签名下载遵循 Universer
