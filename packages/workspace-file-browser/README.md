@@ -47,8 +47,10 @@ For example, Agent supplies an add-to-conversation action for documents and
 folders. Its adapter uses `node.resource === null` to identify folders, creates
 the appropriate reference, and restores the selected conversation. Workspace
 Browser does not supply this action and does not acquire conversation behavior.
-Folder creation keeps a plain plus icon; adding a reference uses a conversation
-plus icon and a descriptive accessible label.
+The plain plus action creates children under any node with `createChildren`
+permission, including documents, and expands the node after creation. Deletion
+is available in the more-actions and context menus. Adding a reference uses a
+conversation plus icon and a descriptive accessible label.
 
 For a substantially different row composition, use `WorkspaceFileTree` with
 `renderSpaceActions`, `renderTeamActions`, and `decorateNodeRow`. The decorator

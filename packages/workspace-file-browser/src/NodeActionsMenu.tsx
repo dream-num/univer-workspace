@@ -122,33 +122,10 @@ export function NodeActionsMenu(props: {
     </MenuRoot>
   );
 
-  const quickTrash = props.node.capabilities.trash ? (
-    <Tooltip content={copy.moveToTrash}>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label={copy.moveToTrash}
-        onClick={(event) => {
-          event.stopPropagation();
-          setTrashOpen(true);
-        }}
-      >
-        <TrashIcon />
-      </Button>
-    </Tooltip>
-  ) : null;
-
   return (
     <>
       <ContextMenuRoot>
-        <ContextMenuTrigger
-          render={props.children(
-            <>
-              {quickTrash}
-              {dropdown}
-            </>,
-          )}
-        />
+        <ContextMenuTrigger render={props.children(dropdown)} />
         <ContextMenuContent className={css.menu}>
           <NodeActionItems context locale={props.locale} node={props.node} onAction={onAction} />
         </ContextMenuContent>

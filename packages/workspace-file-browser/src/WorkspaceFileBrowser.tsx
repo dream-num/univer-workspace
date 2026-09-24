@@ -100,7 +100,7 @@ export function WorkspaceFileBrowser(props: WorkspaceFileBrowserProps) {
             {(nodeActions) =>
               renderRow(
                 <>
-                  {node.resource === null && node.capabilities.createChildren ? (
+                  {node.capabilities.createChildren ? (
                     <CreateNodeMenu
                       spaceId={node.spaceId}
                       parentNodeId={node.id}

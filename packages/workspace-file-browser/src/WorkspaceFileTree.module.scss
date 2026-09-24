@@ -188,10 +188,12 @@
   opacity: 1;
 }
 
-.nodeRow:hover > .itemButton,
-.nodeRow:focus-within > .itemButton,
-.selected > .itemButton {
-  padding-right: 112px;
+.nodeRow:hover > .actions,
+.nodeRow:focus-within > .actions,
+.nodeRow.selected > .actions {
+  position: static;
+  flex: none;
+  padding-inline-start: 6px;
 }
 
 .status,
