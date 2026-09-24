@@ -1,7 +1,13 @@
 import { createServer } from "node:http";
+import { loadConfig } from "./config.js";
+import { prepareCurrentDatabase } from "./db/migrations/prepare-current-database.js";
+import { startOperationRecovery } from "./jobs/operation-recovery.js";
+import { startBlobMaintenance } from "./jobs/blob-maintenance.js";
+import { shutdownServer } from "./server-lifecycle.js";
+import { logger } from "./logging.js";
 import { beginStartupStage, startupStage, startupStageAsync } from "./startup-logging.js";
 
-// Dynamic imports expose OOMs during SDK/module evaluation before main runs.
+// 只在 SDK 和应用模块加载边界保留动态导入，以记录初始化前的失败。
 const { prepareCollaborationDatabase } = await startupStageAsync(
   "modules.collaboration-migrations",
   () => import("./integrations/univer/migrations/prepare-collaboration-database.js"),
@@ -10,24 +16,6 @@ const { createWorkspaceApplication } = await startupStageAsync(
   "modules.application",
   () => import("./app.js"),
 );
-const [
-  { loadConfig },
-  { prepareCurrentDatabase },
-  { startOperationRecovery },
-  { startBlobMaintenance },
-  { shutdownServer },
-  { logger },
-] = await startupStageAsync("modules.startup", () =>
-  Promise.all([
-    import("./config.js"),
-    import("./db/migrations/prepare-current-database.js"),
-    import("./jobs/operation-recovery.js"),
-    import("./jobs/blob-maintenance.js"),
-    import("./server-lifecycle.js"),
-    import("./middleware/logging.js"),
-  ]),
-);
-
 const config = startupStage("config.load", () => loadConfig());
 startupStage("database.product.prepare", () => prepareCurrentDatabase(config.databaseFilename));
 await startupStageAsync("database.collaboration.prepare", () =>
