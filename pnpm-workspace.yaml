@@ -15,61 +15,62 @@ allowBuilds:
   esbuild: true
   protobufjs: true
 
-# This SDK release emits direct Redi type imports without declaring the
+# Published 1.0.0 declarations still emit direct Redi type imports without declaring the
 # dependency. Keep service identifiers in their host's React peer graph instead
 # of resolving the workspace's hoisted copy. Prefer upstream declaration output
 # that references DI types through @univerjs/core. Remove each extension once
 # published declarations no longer leak an undeclared direct Redi import, and
-# clean installs/typechecks pass in both host React peer graphs.
+# clean installs/typechecks pass in both host React peer graphs. Redi 1.1.3
+# matches the exact dependency published by @univerjs/core@1.0.0.
 packageExtensions:
-  "@univerjs/network@1.0.0-rc.0":
+  "@univerjs/network@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/engine-render@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/engine-render@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-ui@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/sheets-ui@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/thread-comment@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/thread-comment@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/boards-ui@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/boards-ui@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/slides-ui@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/slides-ui@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/collaboration@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/collaboration@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/bases@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/bases@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/boards@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/boards@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs-pro/slides@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/slides@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/docs-ui@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/docs-ui@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/drawing@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/drawing@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/engine-formula@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/engine-formula@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/sheets@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-formula@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/sheets-formula@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
-  "@univerjs/sheets-numfmt@1.0.0-rc.0":
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/sheets-numfmt@1.0.0":
     dependencies:
-      "@wendellhu/redi": "1.1.2"
+      "@wendellhu/redi": "1.1.3"
   # Router declarations import React types but omit the type peer. Bind them to
   # the consuming application's React major; remove once upstream declares it.
   "@tanstack/react-router@1.170.31":

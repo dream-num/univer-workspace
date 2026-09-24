@@ -185,7 +185,6 @@ export function createWorkspaceApplication(
             return identity.findUsers(userIds).map(protocolUser);
           },
         },
-        existingHistoryUnits: () => resourcesRepository.listHistoryUnits(),
       }
     )).unitStore;
   const unitSnapshotStore =
@@ -391,9 +390,8 @@ export function createWorkspaceApplication(
     blobs,
     univerAssets,
     exchange,
-    async initialize() {
-      await collaboration?.initialize();
-    },
+    // Retain the application startup hook; SDK History now owns its catch-up.
+    async initialize() {},
     attachWebSocket(server) {
       collaborationGateway?.attachWebSocket(server);
     },

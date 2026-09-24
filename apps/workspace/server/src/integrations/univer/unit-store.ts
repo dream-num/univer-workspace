@@ -13,10 +13,6 @@ import type * as SlidesModule from "@univerjs-pro/slides";
 import type * as CoreModule from "@univerjs/core";
 import type * as ProtocolModule from "@univerjs/protocol";
 import type { UnitType } from "../../modules/access/index.js";
-import {
-  type ExistingHistoryUnit,
-  backfillExistingHistory,
-} from "./history/compatibility/backfill-existing-history.js";
 
 const moduleRequire = createRequire(import.meta.url);
 const { getBoardsEmptySnapshot } = moduleRequire(
@@ -105,7 +101,6 @@ export interface CollaborationRuntime {
   readonly commentService: CommentServiceModule.UniverCommentService;
   readonly historyService: HistoryServiceModule.UniverHistoryService;
   readonly worktreeService: WorktreeServiceModule.UniverCollabWorktreeService;
-  initialize(): Promise<void>;
   dispose(): Promise<void>;
 }
 
@@ -114,7 +109,6 @@ export function createCollaborationRuntime(
   options: {
     readonly commentUserProvider?: CommentServiceModule.ICommentUserProvider;
     readonly historyUserProvider?: HistoryServiceModule.IHistoryUserProvider;
-    readonly existingHistoryUnits?: () => readonly ExistingHistoryUnit[];
   } = {}
 ): CollaborationRuntime {
   const database = new SQLiteDatabaseAdapter({ filename });
@@ -127,7 +121,6 @@ export function createCollaborationRuntime(
       ? { userProvider: options.historyUserProvider }
       : {}),
   });
-  const historyAttachment = historyService.attach(service);
 
   const commentDatabase = new SQLiteCommentDatabaseAdapter({ filename });
   const commentService = new UniverCommentService({
@@ -150,14 +143,6 @@ export function createCollaborationRuntime(
         const options = collaborationCallOptions(input.userId);
         const unitData = createUnitData(input);
         const created = await service.createUnitFromData(unitData, options);
-        await historyService.indexUnitCreated(
-          {
-            unitID: created.unitID,
-            type: unitData.type,
-            createdAt: Date.now(),
-          },
-          options
-        );
         const loaded = await service.getUnitLoadData(
           {
             unitID: input.unitId,
@@ -221,22 +206,11 @@ export function createCollaborationRuntime(
     commentService,
     historyService,
     worktreeService,
-    initialize() {
-      // Startup-only compatibility for data written before persistent History
-      // was enabled. The application calls this once before accepting traffic.
-      return backfillExistingHistory({
-        collaborationDatabase: database,
-        historyDatabase,
-        historyService,
-        units: options.existingHistoryUnits?.() ?? [],
-      });
-    },
     async dispose() {
       await worktreeService.dispose();
       await worktreeDatabase.dispose();
       await commentService.dispose();
       await commentDatabase.dispose();
-      historyAttachment.dispose();
       await historyService.dispose();
       await historyDatabase.dispose();
       await service.dispose();

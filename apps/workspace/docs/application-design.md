@@ -51,6 +51,15 @@ Worktree 等业务模块只编译和运行 V7 Query。
 
 V7 仅扩展 Operation 和 Object Deletion Job 枚举；不扩展 Blob 上传会话或 Worktree 合同。
 
+## Collaboration SDK 升级边界
+
+SDK 1.0.0 启动时先运行隔离的 `prepareCollaborationDatabase`，再构造应用 Service。
+Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写部署、WAL
+checkpoint、一致性备份、迁移副本验证和原子替换。组件版本为 Core 2、Worktree 3、History 2；
+Comment 1 和产品 V7 不变。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+当前版本重复启动不再次迁移或备份。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
+不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
+
 ## Login Session Authenticator
 
 需要登录的产品 HTTP、Changeset 与 Worktree 入口使用同一 Login Session：
@@ -221,8 +230,7 @@ Thread Comment，Worktree 与 Merge Preview 保持关闭。
 History Endpoint 同样复用 Login Session 与 Access Resolver，但服务五类 Trunk Unit。Viewer
 可以列出版本、作者并读取版本 changeset；恢复版本会生成标准 Collaboration changeset，因此仍
 由 Submit 权限要求 Editor 以上。History Adapter 的记录是权威 Trunk Unit/changeset 的派生索引；
-服务启动时通过独立 compatibility backfill 为启用 History 前的历史数据补建一次，正常读取不执行
-扫描或修复；它不能替代 Collaboration Database Adapter。Browser 只在 Trunk Scope 按 Unit 类型
+SDK 自动索引并在 History 读取时从 Core 追赶；它不能替代 Collaboration Database Adapter。Browser 只在 Trunk Scope 按 Unit 类型
 注册标准 SDK History UI，Worktree 与 Merge Preview 保持关闭。
 
 Worktree 和 Merge Preview 先解析 Worktree Visibility，再校验 Trunk Resource 或激活目标

@@ -495,11 +495,11 @@ describe("collaboration gateway", () => {
       });
     }
 
-    // Simulate data created before persistent History was introduced. The
-    // compatibility backfill is startup-only; a normal read must not run it.
+    // History 1.0.0 owns rebuilding its segment index from Core creation facts
+    // and changesets, including recovery during a normal History read.
     const database = new DatabaseSync(collaborationDatabaseFilename);
     try {
-      database.prepare("DELETE FROM collaboration_history_revisions").run();
+      database.prepare("DELETE FROM collaboration_history_records").run();
     } finally {
       database.close();
     }
@@ -509,7 +509,7 @@ describe("collaboration gateway", () => {
     );
     expect(beforeRestart.status).toBe(200);
     await expect(beforeRestart.json()).resolves.toMatchObject({
-      historyIds: [],
+      historyIds: [expect.any(String)],
     });
     await stopApplication(application, started.server);
     const restarted = await startApplication(started.directory);
@@ -537,11 +537,11 @@ describe("collaboration gateway", () => {
             "SELECT version FROM collaboration_schema_versions WHERE component = 'history'"
           )
           .get()
-      ).toMatchObject({ version: 1 });
+      ).toMatchObject({ version: 2 });
       expect(
         historyDatabase
           .prepare(
-            "SELECT COUNT(*) AS count FROM collaboration_history_revisions"
+            "SELECT COUNT(*) AS count FROM collaboration_history_records"
           )
           .get()
       ).toMatchObject({ count: 5 });
