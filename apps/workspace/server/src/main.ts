@@ -23,19 +23,15 @@ await startupStageAsync("database.collaboration.prepare", () =>
 );
 const application = startupStage("application.create", () => createWorkspaceApplication(config));
 await startupStageAsync("application.initialize", () => application.initialize());
-const operationRecovery = startupStage("jobs.operation-recovery.start", () =>
-  startOperationRecovery(application.resources),
-);
-const blobMaintenance = startupStage("jobs.blob-maintenance.start", () =>
-  startBlobMaintenance(application.blobs),
-);
+const operationRecovery = startOperationRecovery(application.resources);
+const blobMaintenance = startBlobMaintenance(application.blobs);
 const background = {
   async dispose() {
     await Promise.all([operationRecovery.dispose(), blobMaintenance.dispose()]);
   },
 };
 const server = createServer(application.app);
-startupStage("server.attach-websocket", () => application.attachWebSocket(server));
+application.attachWebSocket(server);
 
 const logListen = beginStartupStage("server.listen");
 server.listen(config.port, config.host, () => {

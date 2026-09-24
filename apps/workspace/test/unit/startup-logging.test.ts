@@ -15,8 +15,8 @@ it.each(["info", "error", "silent"])(
     import assert from "node:assert/strict";
     import { startupStage, startupStageAsync } from "./server/src/startup-logging.ts";
     const { logger } = await import("./server/src/logging.ts");
-    const { logger: httpLogger } = await import("./server/src/middleware/logging.ts");
-    assert.equal(logger, httpLogger);
+    const { requestLogger } = await import("./server/src/middleware/logging.ts");
+    assert.equal(logger, requestLogger({}));
     logger.info({ event: "application.test" }, "shared logger");
     const value = {};
     assert.equal(startupStage("sync", () => value), value);
