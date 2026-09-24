@@ -18,6 +18,7 @@ export interface AuthenticatedSession {
   readonly githubOAuthEnabled: boolean;
   readonly discordOAuthEnabled: boolean;
   readonly passwordAuthEnabled: boolean;
+  readonly trialDeployment: boolean;
   readonly user: User;
   readonly authenticationMethods: AuthenticationMethods;
 }

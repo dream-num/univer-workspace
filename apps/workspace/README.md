@@ -150,6 +150,13 @@ expire or are logged out. A user who only has a password cannot sign in again
 after that, and a stored password no longer counts as a remaining sign-in
 method when unlinking GitHub or Discord.
 
+Set `TRIAL_DEPLOYMENT=true` on a public trial deployment. After signing in, each
+User sees a dialog stating that the environment does not guarantee data
+durability and linking to the open-source repository for self-hosting. The
+acknowledgement is stored in the browser's `localStorage` per User, so the
+dialog appears again in a new browser or after site data is cleared. Visitors
+and the sign-in page do not show the notice. The flag defaults to `false`.
+
 Workspace CLI uses browser approval by default. `univer-workspace-cli login`
 creates a ten-minute, one-time authorization request and prints a `/cli-login`
 URL plus verification code, persists the pending request locally, and exits.

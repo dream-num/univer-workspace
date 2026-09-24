@@ -119,6 +119,7 @@ export function createIdentityModule(options: {
   readonly discordOAuthProvider?: DiscordOAuthProvider | null;
   readonly oauthStateSecret?: string;
   readonly passwordAuthEnabled?: boolean;
+  readonly trialDeployment?: boolean;
 }): IdentityModule {
   const now = options.now ?? Date.now;
   const repository = options.repository;
@@ -132,6 +133,7 @@ export function createIdentityModule(options: {
     discordOAuthProvider && oauthStateSecret
   );
   const passwordAuthEnabled = options.passwordAuthEnabled ?? true;
+  const trialDeployment = options.trialDeployment ?? false;
   const cliAuthorizations = new Map<string, PendingCliAuthorization>();
   const cliAuthorizationDevices = new Map<string, string>();
   repository.deleteExpiredSessions(now());
@@ -160,6 +162,7 @@ export function createIdentityModule(options: {
       githubOAuthEnabled,
       discordOAuthEnabled,
       passwordAuthEnabled,
+      trialDeployment,
       user: {
         id: user.id,
         username: user.username,

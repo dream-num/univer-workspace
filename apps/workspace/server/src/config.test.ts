@@ -31,6 +31,22 @@ describe("GitHub organization allowlist configuration", () => {
   });
 });
 
+describe("trial deployment configuration", () => {
+  it("is disabled by default", () => {
+    expect(loadConfig({}).trialDeployment).toBe(false);
+  });
+
+  it("enables the trial notice when configured", () => {
+    expect(loadConfig({ TRIAL_DEPLOYMENT: "true" }).trialDeployment).toBe(true);
+  });
+
+  it("rejects an invalid trial deployment flag", () => {
+    expect(() => loadConfig({ TRIAL_DEPLOYMENT: "yes" })).toThrow(
+      "TRIAL_DEPLOYMENT must be true or false",
+    );
+  });
+});
+
 describe("password authentication configuration", () => {
   it("enables password authentication by default", () => {
     expect(loadConfig({}).passwordAuthEnabled).toBe(true);

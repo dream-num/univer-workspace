@@ -1363,6 +1363,8 @@ export interface components {
             githubOAuthEnabled: boolean;
             discordOAuthEnabled: boolean;
             passwordAuthEnabled: boolean;
+            /** @description Whether this deployment is a trial environment without a data durability guarantee. */
+            trialDeployment: boolean;
             user: components["schemas"]["User"];
             authenticationMethods: components["schemas"]["AuthenticationMethods"];
         };

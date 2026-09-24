@@ -167,6 +167,7 @@ export function createWorkspaceApplication(
         : null),
     ...(oauthStateSecret ? { oauthStateSecret } : {}),
     passwordAuthEnabled: config.passwordAuthEnabled,
+    trialDeployment: config.trialDeployment ?? false,
   });
   const resourcesRepository = new ResourcesRepository(database);
   let collaboration: CollaborationRuntime | null = null;
