@@ -61,6 +61,7 @@ AuthenticatedSession:
     - githubOAuthEnabled
     - discordOAuthEnabled
     - passwordAuthEnabled
+    - trialDeployment
     - user
     - authenticationMethods
   properties:
@@ -72,6 +73,9 @@ AuthenticatedSession:
       type: boolean
     passwordAuthEnabled:
       type: boolean
+    trialDeployment:
+      type: boolean
+      description: Whether this deployment is a trial environment without a data durability guarantee.
     user:
       $ref: "#/User"
     authenticationMethods:

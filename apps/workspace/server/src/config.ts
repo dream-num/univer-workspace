@@ -12,6 +12,7 @@ export interface WorkspaceConfig {
   readonly secureCookies: boolean;
   readonly sessionTtlMs: number;
   readonly passwordAuthEnabled: boolean;
+  readonly trialDeployment?: boolean;
   readonly discordBotApiKey?: string;
   readonly githubOAuth?: {
     readonly clientId: string;
@@ -80,6 +81,11 @@ export function loadConfig(
       "SESSION_TTL_MS"
     ),
     passwordAuthEnabled,
+    trialDeployment: boolean(
+      environment.TRIAL_DEPLOYMENT,
+      false,
+      "TRIAL_DEPLOYMENT"
+    ),
     ...(discordBotApiKey ? { discordBotApiKey } : {}),
     ...(metricsToken ? { metricsToken } : {}),
     githubOAuth,

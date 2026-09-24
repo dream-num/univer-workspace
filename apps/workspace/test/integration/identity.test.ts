@@ -503,6 +503,35 @@ describe("identity", () => {
     }
   });
 
+  it("reports the trial deployment flag in authenticated sessions", async () => {
+    const database = openWorkspaceDatabase(":memory:");
+    const repository = new IdentityRepository(database);
+    const regular = createIdentityModule({ repository, sessionTtlMs: 60_000 });
+    const trial = createIdentityModule({
+      repository,
+      sessionTtlMs: 60_000,
+      trialDeployment: true,
+    });
+
+    try {
+      const issued = await regular.registerWithPassword({
+        username: "grace",
+        displayName: "Grace",
+        password: "correct horse battery staple",
+      });
+      const cookie = `${regular.cookieName}=${issued.cookieValue}`;
+
+      expect(issued.view.trialDeployment).toBe(false);
+      expect(trial.getSession(cookie)).toMatchObject({
+        authenticated: true,
+        trialDeployment: true,
+      });
+      expect(trial.getSession(undefined)).not.toHaveProperty("trialDeployment");
+    } finally {
+      database.close();
+    }
+  });
+
   it("rejects password registration, login, and changes when password auth is disabled", async () => {
     const database = openWorkspaceDatabase(":memory:");
     const repository = new IdentityRepository(database);
