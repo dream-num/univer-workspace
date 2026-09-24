@@ -13,8 +13,8 @@ it.each(["info", "error", "silent"])(
         "-e",
         `
     import assert from "node:assert/strict";
-    import { startupStage, startupStageAsync } from "./server/src/startup-logging.ts";
-    const { logger } = await import("./server/src/logging.ts");
+    import { startupStage, startupStageAsync } from "./server/src/logging/startup.ts";
+    const { logger } = await import("./server/src/logging/logger.ts");
     const { requestLogger } = await import("./server/src/middleware/logging.ts");
     assert.equal(logger, requestLogger({}));
     logger.info({ event: "application.test" }, "shared logger");

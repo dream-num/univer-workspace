@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getHeapStatistics } from "node:v8";
-import { flushLogs, logger } from "./logging.js";
+import { flushLogs, logger } from "./logger.js";
 
 const startupLogger = logger.child({ event: "workspace.startup", startupId: randomUUID() });
 

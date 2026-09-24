@@ -1,4 +1,4 @@
-import { startupStage } from "../../startup-logging.js";
+import { startupStage } from "../../logging/startup.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { dirname, basename, join } from "node:path";

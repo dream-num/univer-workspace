@@ -3,7 +3,7 @@ import type { ServerResponse } from "node:http";
 import type pino from "pino";
 import { pinoHttp } from "pino-http";
 import type { Request, RequestHandler } from "express";
-import { logger } from "../logging.js";
+import { logger } from "../logging/logger.js";
 
 // Reuse a valid caller request ID or generate a UUID, and return it in the
 // response headers so callers can correlate a response with its logs.

@@ -4,8 +4,8 @@ import { prepareCurrentDatabase } from "./db/migrations/prepare-current-database
 import { startOperationRecovery } from "./jobs/operation-recovery.js";
 import { startBlobMaintenance } from "./jobs/blob-maintenance.js";
 import { shutdownServer } from "./server-lifecycle.js";
-import { logger } from "./logging.js";
-import { beginStartupStage, startupStage, startupStageAsync } from "./startup-logging.js";
+import { logger } from "./logging/logger.js";
+import { beginStartupStage, startupStage, startupStageAsync } from "./logging/startup.js";
 
 // 只在 SDK 和应用模块加载边界保留动态导入，以记录初始化前的失败。
 const { prepareCollaborationDatabase } = await startupStageAsync(
