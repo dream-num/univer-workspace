@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import packageHooks from "../.pnpmfile.cjs";
 import {
   alignManifestSdkDependencies,
   discoverWorkspacePackages,
@@ -10,6 +11,29 @@ import {
   validateWorkspaceSdkDependencies,
   validateWorkspaceSdkOverrides,
 } from "./update-sdk-dependencies.mjs";
+
+test("repairs only the published 1.0.0 UI renderer dependency without fixing a React major", () => {
+  for (const name of ["@univerjs-pro/docs-table-ui", "@univerjs-pro/bases-dashboard-ui"]) {
+    const pkg = {
+      name,
+      version: "1.0.0",
+      dependencies: { "react-dom": "19.3.0", "@univerjs/core": "1.0.0" },
+      peerDependencies: { react: ">=18 <20" },
+    };
+    packageHooks.hooks.readPackage(pkg);
+    assert.deepEqual(pkg.dependencies, { "@univerjs/core": "1.0.0" });
+    assert.equal(pkg.peerDependencies["react-dom"], pkg.peerDependencies.react);
+  }
+  for (const [name, version] of [
+    ["@univerjs-pro/docs-table-ui", "1.0.1"],
+    ["@univerjs-pro/bases-dashboard-ui", "1.0.0-rc.0"],
+    ["unrelated-ui", "1.0.0"],
+  ]) {
+    const pkg = { name, version, dependencies: { "react-dom": "19.3.0" } };
+    const before = structuredClone(pkg);
+    assert.deepEqual(packageHooks.hooks.readPackage(pkg), before);
+  }
+});
 
 test("exposes the update:univer-sdk command", () => {
   const packageJson = JSON.parse(

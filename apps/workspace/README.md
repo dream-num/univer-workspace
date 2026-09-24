@@ -41,8 +41,9 @@ Collaboration SQLite file. Thread Comments are enabled only in Trunk editors
 because the Comment protocol does not define Worktree branch or merge semantics.
 
 The same Collaboration SQLite file stores a persistent History segment index.
-SDK 1.0.0 owns automatic indexing and recovery from authoritative Core creation
-facts and changesets, including catch-up when History is read.
+SDK 1.0.0 owns automatic indexing from authoritative Core creation facts and
+changesets. When History has no records, reads calculate segments and persist
+them in the background.
 Trunk Sheet, Doc, Slide, Base, and Board editors use the standard SDK
 version-history UI. Viewers can inspect versions, while users with content edit
 permission can restore one. Worktree and merge-preview editors do not expose

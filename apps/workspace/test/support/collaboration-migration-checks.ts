@@ -154,6 +154,36 @@ export async function verifyCollaborationMigration(
       }
     }
 
+    // Older deployments may have no History yet, or Worktree V1.
+    for (const variant of ["no-history", "worktree-v1"] as const) {
+      const legacy = createLegacy(`${variant}.sqlite`);
+      if (variant === "no-history") {
+        legacy.db.exec(
+          "DROP TABLE collaboration_history_revisions; DELETE FROM collaboration_schema_versions WHERE component = 'history'",
+        );
+      } else {
+        legacy.db.exec(
+          "ALTER TABLE collaboration_worktree_units DROP COLUMN removed; UPDATE collaboration_schema_versions SET version = 1 WHERE component = 'worktree'",
+        );
+      }
+      legacy.db.close();
+      assert.equal((await prepare(legacy.filename)).status, "migrated");
+      const runtime = createRuntime(legacy.filename);
+      await runtime.dispose();
+      assert.equal((await prepare(legacy.filename)).status, "current");
+    }
+
+    const future = createLegacy("future.sqlite");
+    future.db.exec(
+      "UPDATE collaboration_schema_versions SET version = 99 WHERE component = 'core'",
+    );
+    future.db.close();
+    await assert.rejects(prepare(future.filename), /Unsupported Collaboration core schema 99/);
+    assert.equal(
+      readdirSync(directory).some((name) => name.startsWith("future.sqlite.pre-")),
+      false,
+    );
+
     // Failure in the final component must not publish Core/Worktree upgrades.
     const failed = createLegacy("failed.sqlite", true);
     failed.db.exec("DROP TABLE collaboration_history_revisions");
