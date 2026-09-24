@@ -27,12 +27,15 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-启动入口在构造 Service/Adapter 前集中调用已发布 SDK 的 Core V1→V2、Worktree V1→V2→V3
-与 History V1→V2 迁移。先停止全部写入者、checkpoint WAL 并生成一致性备份，在副本上按
-Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件使用；通过 Adapter
-Schema 校验、外键和完整性检查后原子替换文件。失败不发布副本，原文件和备份保留，启动失败。
-当前版本不重复迁移或备份。历史信息缺失时沿用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。产品数据库仍为 V7，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+启动入口先将产品数据库准备到 V7，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
+文件取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。随后生成
+一致性备份，在副本上按 Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件
+使用；通过 Adapter Schema 校验、外键和完整性检查后原子替换文件，并保持原 journal mode。失败
+不发布副本，原文件和备份保留，启动失败。当前版本不重复迁移或备份。Unit 创建者与创建时间依次
+取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
+Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库仍为 V7，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 ## 核心关系

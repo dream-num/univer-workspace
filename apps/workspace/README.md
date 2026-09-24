@@ -287,20 +287,29 @@ SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
 application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
-2. Start a single new instance. Startup checkpoints WAL and creates a consistent
+   With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
+2. Start a single new instance. Startup first prepares the product database to V7,
+   then takes an exclusive lock on the Collaboration file and creates a consistent
    `<collaboration-file>.pre-sdk-1.0.0-<timestamp>-<uuid>.bak` beside the database.
+   If another process still has a WAL-mode file open, or holds any lock on it,
+   startup fails before the backup. An idle rollback-journal connection holds no
+   lock and cannot be detected, so step 1 remains required.
 3. The published SDK migrations run on a staging copy in Core → Worktree → History
-   order. Schema validation, `foreign_key_check`, and `integrity_check` must pass
-   before the copy atomically replaces the original. A failed migration leaves
-   the original database and backup available; startup fails before accepting traffic.
+   order while the lock is held. Schema validation, `foreign_key_check`, and
+   `integrity_check` must pass before the copy atomically replaces the original.
+   A failed migration leaves the original database, its journal mode, and the
+   backup available; startup fails before accepting traffic.
 4. Verify startup and document/Worktree access, then restore normal service.
    Subsequent startups do not rerun migrations or create another backup.
 
 Core V1, Worktree V1/V2, and History V1 are supported; fresh files are initialized
-by the current Adapters. Existing History creation facts are used before migrating
-its index. Where historical facts are missing, SDK defaults use `anonymous` and
-the migration time; these values are fallbacks, not reconstructed authorship.
-Custom server entry points must await `prepareCollaborationDatabase` before
+by the current Adapters. Unit creator and creation time come from History V1
+revision 1, then from the product database: the Trunk Node for a Unit, or the
+Worktree node intent for a Unit created in a Worktree. Only when both lack a value
+does the migration use `anonymous` and the migration time; these values are
+fallbacks, not reconstructed authorship. Changeset times keep the SDK defaults.
+Custom server entry points must prepare the product database and then await
+`prepareCollaborationDatabase(collaborationFile, productFile)` before
 constructing `createWorkspaceApplication` for an existing database.
 Never run old and new SDK writers together. To roll back, stop the new instance
 and restore the matching pre-upgrade product/Collaboration/Blob backups; changing

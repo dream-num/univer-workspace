@@ -14,18 +14,23 @@ import {
   SQLiteHistoryDatabaseAdapter,
   migrateSQLiteHistoryV1ToV2,
 } from "@univerjs-pro/collaboration-history-database-sqlite";
+import { readUnitCreationFacts } from "./unit-creation-facts.js";
 
 const TARGET = { core: 2, worktree: 3, history: 2, comment: 1 } as const;
 
+type ComponentVersions = ReadonlyMap<string, number>;
+
 /**
  * Offline startup boundary for SDK 1.0.0. Stop every writer before calling this,
- * before constructing any Service/Adapter. The SDK owns schema migrations; we
- * migrate a consistent copy so a failure in any component leaves the original
- * usable by the previous release. Retire legacy branches after all deployments
- * have upgraded; never invoke this from a request or recovery job.
+ * before constructing any Service/Adapter, and after the product database is
+ * on V7. The SDK owns schema migrations; we migrate a consistent copy so a
+ * failure in any component leaves the original usable by the previous release.
+ * Retire legacy branches after all deployments have upgraded; never invoke
+ * this from a request or recovery job.
  */
 export async function prepareCollaborationDatabase(
   filename: string,
+  productDatabaseFilename: string,
 ): Promise<
   | { readonly status: "fresh" | "current" }
   | { readonly status: "migrated"; readonly backupFilename: string }
@@ -34,44 +39,11 @@ export async function prepareCollaborationDatabase(
     return { status: "fresh" };
   }
   const source = new DatabaseSync(filename);
-  let backupFilename: string;
-  let versions: Map<string, number>;
   try {
     source.exec("PRAGMA busy_timeout = 5000");
     assertIntegrity(source);
-    if (
-      !source
-        .prepare(
-          "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'collaboration_schema_versions'",
-        )
-        .get()
-    ) {
-      if (
-        source
-          .prepare(
-            "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name LIKE 'collaboration_%'",
-          )
-          .get()
-      ) {
-        throw new Error("Collaboration schema is missing its component versions.");
-      }
-      return { status: "fresh" };
-    }
-    versions = new Map(
-      source
-        .prepare("SELECT component, version FROM collaboration_schema_versions")
-        .all()
-        .map((row) => [String(row.component), Number(row.version)]),
-    );
-    for (const [component, target] of Object.entries(TARGET)) {
-      const version = versions.get(component);
-      if (
-        version !== undefined &&
-        (!Number.isInteger(version) || version < 1 || version > target)
-      ) {
-        throw new Error(`Unsupported Collaboration ${component} schema ${version}.`);
-      }
-    }
+    const versions = readComponentVersions(source);
+    if (!versions) return { status: "fresh" };
     if (
       !Object.entries(TARGET).some(([component, target]) => {
         const version = versions.get(component);
@@ -80,25 +52,113 @@ export async function prepareCollaborationDatabase(
     )
       return { status: "current" };
 
-    // Drain WAL before replacing the file; stale WAL pages must never be applied
-    // to the migrated database. No application writers may be active here.
-    const checkpoint = source.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get();
-    if (checkpoint?.busy !== 0)
-      throw new Error("Collaboration database is busy; stop all writers before upgrading.");
-    backupFilename = `${filename}.pre-sdk-1.0.0-${Date.now()}-${randomUUID()}.bak`;
-    source.prepare("VACUUM INTO ?").run(backupFilename);
-    chmodSync(backupFilename, 0o600);
+    const journalMode = claimExclusiveAccess(source);
+    try {
+      const backupFilename = await migrateCopy(
+        filename,
+        source,
+        versions,
+        productDatabaseFilename,
+        journalMode,
+      );
+      return { status: "migrated", backupFilename };
+    } catch (error) {
+      if (journalMode === "wal") source.exec("PRAGMA journal_mode = WAL");
+      throw error;
+    }
   } finally {
     source.close();
   }
+}
+
+function readComponentVersions(source: DatabaseSync): ComponentVersions | undefined {
+  if (
+    !source
+      .prepare(
+        "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'collaboration_schema_versions'",
+      )
+      .get()
+  ) {
+    if (
+      source
+        .prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name LIKE 'collaboration_%'")
+        .get()
+    ) {
+      throw new Error("Collaboration schema is missing its component versions.");
+    }
+    return undefined;
+  }
+  const versions = new Map(
+    source
+      .prepare("SELECT component, version FROM collaboration_schema_versions")
+      .all()
+      .map((row) => [String(row.component), Number(row.version)]),
+  );
+  for (const [component, target] of Object.entries(TARGET)) {
+    const version = versions.get(component);
+    if (version !== undefined && (!Number.isInteger(version) || version < 1 || version > target)) {
+      throw new Error(`Unsupported Collaboration ${component} schema ${version}.`);
+    }
+  }
+  return versions;
+}
+
+/**
+ * Holds an exclusive file lock from before the backup until the migrated copy
+ * replaces the original, so no other connection can read stale data or commit
+ * a write that the replacement would discard. Leaving WAL mode fails while any
+ * other connection has the file open. Idle rollback-journal connections hold
+ * no lock and cannot be detected; deployment must still stop old instances.
+ */
+function claimExclusiveAccess(source: DatabaseSync): string {
+  source.exec("PRAGMA locking_mode = EXCLUSIVE");
+  const journalMode = String(source.prepare("PRAGMA journal_mode").get()?.journal_mode);
+  let leftWal = false;
+  try {
+    if (journalMode === "wal") {
+      if (source.prepare("PRAGMA journal_mode = DELETE").get()?.journal_mode !== "delete") {
+        throw new Error("Could not leave WAL mode.");
+      }
+      leftWal = true;
+    }
+    // In exclusive locking mode the lock is retained after COMMIT until close.
+    source.exec("BEGIN EXCLUSIVE; COMMIT");
+  } catch (error) {
+    if (leftWal) source.exec("PRAGMA journal_mode = WAL");
+    throw new Error(
+      "Collaboration database is in use; stop every Workspace instance before upgrading.",
+      { cause: error },
+    );
+  }
+  return journalMode;
+}
+
+async function migrateCopy(
+  filename: string,
+  source: DatabaseSync,
+  versions: ComponentVersions,
+  productDatabaseFilename: string,
+  journalMode: string,
+): Promise<string> {
+  const creation = readUnitCreationFacts(source, productDatabaseFilename, Date.now());
+  const backupFilename = `${filename}.pre-sdk-1.0.0-${Date.now()}-${randomUUID()}.bak`;
+  source.prepare("VACUUM INTO ?").run(backupFilename);
+  chmodSync(backupFilename, 0o600);
 
   const stagedFilename = `${backupFilename}.migrating`;
   try {
     copyFileSync(backupFilename, stagedFilename);
-    if (versions.get("core") === 1) await migrateSQLiteCoreV1ToV2({ filename: stagedFilename });
+    if (versions.get("core") === 1)
+      await migrateSQLiteCoreV1ToV2({
+        filename: stagedFilename,
+        resolveUnitCreation: creation.resolveUnitCreation,
+      });
     if (versions.get("worktree") === 1) migrateSQLiteWorktreeV1ToV2({ filename: stagedFilename });
     if ((versions.get("worktree") ?? 3) < 3)
-      await migrateSQLiteWorktreeV2ToV3({ filename: stagedFilename });
+      await migrateSQLiteWorktreeV2ToV3({
+        filename: stagedFilename,
+        resolveUnitCreation: creation.resolveWorktreeUnitCreation,
+      });
     // Core and Worktree migrations must read V1 History creation facts first.
     if (versions.get("history") === 1)
       await migrateSQLiteHistoryV1ToV2({ filename: stagedFilename });
@@ -115,13 +175,13 @@ export async function prepareCollaborationDatabase(
     const staged = new DatabaseSync(stagedFilename);
     try {
       assertIntegrity(staged);
-      staged.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      if (journalMode === "wal") staged.exec("PRAGMA journal_mode = WAL");
     } finally {
       staged.close();
     }
     chmodSync(stagedFilename, statSync(filename).mode & 0o777);
     renameSync(stagedFilename, filename);
-    return { status: "migrated", backupFilename };
+    return backupFilename;
   } catch (error) {
     throw new Error(
       `Collaboration SDK 1.0.0 migration failed; the original database is unchanged. Consistent backup: ${backupFilename}`,
