@@ -40,7 +40,7 @@ Workspace 登录与模型凭据是两回事：浏览文档不需要发送模型�
 4. 按照[使用 Workspace Agent](#使用-workspace-agent)浏览文档、开始对话和审查变更。
    使用期间保持启动器运行。
 
-共享的 `workspace.univer.plus` 是内部测试部署。请使用自己的 Workspace 服务完成安装。
+默认 Workspace 服务地址为 `https://space.univer.ai/`，也可以连接自己的 Workspace 服务。
 
 ## 职责
 
@@ -235,7 +235,7 @@ DSH 会重定向到 `/` 并设置 HttpOnly 浏览器会话 Cookie。
 
 在 **设置 → Workspace** 中填写自己的 Workspace 服务地址。本地运行时先完成下方
 [连接本地 Workspace](#连接本地-workspace)，使用 `http://127.0.0.1:5173`。
-共享的 `workspace.univer.plus` 是内部测试环境，不是本应用要求使用的公共服务。
+默认服务地址为 `https://space.univer.ai/`；可通过 `UWH_WORKSPACE_ORIGIN` 覆盖初始默认值。
 首次登录使用浏览器 OAuth：点击 **Sign in to Workspace**，在 Workspace 登录或注册，然后批准 Agent 访问请求。
 Workspace 重定向到本地 Agent 回调，Agent 使用 PKCE 交换一次性授权码并在服务端保存 Workspace Session。
 无需设备码或手动完成按钮。授权过期时从设置重新开始登录。

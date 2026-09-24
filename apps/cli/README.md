@@ -92,6 +92,7 @@ Install the CLI in the environment used by the agent:
 npm install --global univer-workspace-cli@latest
 ```
 
+The default Workspace service is `https://space.univer.ai/`.
 Point the CLI at your own Workspace deployment with
 `univer-workspace-cli config set workspace.origin <origin>`. Give the
 agent access to the executable and that Workspace; the bundled guidance supplies the

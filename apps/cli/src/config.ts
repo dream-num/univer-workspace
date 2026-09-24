@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { configCodecs, createFileConfig, defineConfig, type Config } from "@univer-cli/config";
 import { UNIVER_LICENSE } from "./license.js";
 
-export const DEFAULT_ORIGIN = "https://workspace.univer.plus/";
+export const DEFAULT_ORIGIN = "https://space.univer.ai/";
 export const UNIVER_LICENSE_ENV = "UNIVER_LICENSE";
 export const UNIVER_HOME_ENV = "UNIVER_HOME";
 export const WORKSPACE_ORIGIN_CONFIG_KEY = "workspace.origin";

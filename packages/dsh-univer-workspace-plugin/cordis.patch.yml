@@ -10,7 +10,7 @@
         workspaceRoot: !!js >-
           process.env.UWH_WORKSPACE_ROOT ?? (ctx.workspaceRuntime.home + '/workspace')
         workspaceOrigin: !!js >-
-          process.env.UWH_WORKSPACE_ORIGIN ?? 'https://workspace.univer.plus'
+          process.env.UWH_WORKSPACE_ORIGIN ?? 'https://space.univer.ai/'
         publicOrigin: !!js >-
           process.env.UWH_PUBLIC_ORIGIN ?? 'http://127.0.0.1:3080'
         templates: !!js >-
