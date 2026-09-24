@@ -11,7 +11,7 @@ WORKDIR /app
 
 RUN corepack enable
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .pnpmfile.cjs .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 # pnpm reads every configured patch before applying workspace filters.
 COPY patches ./patches
 COPY apps/workspace/package.json ./apps/workspace/package.json
