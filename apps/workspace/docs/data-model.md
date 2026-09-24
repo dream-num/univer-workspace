@@ -38,6 +38,8 @@ Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁
 当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库仍为 V7，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
+迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
+
 ## 核心关系
 
 ```text

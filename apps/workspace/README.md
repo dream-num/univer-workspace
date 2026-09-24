@@ -327,6 +327,27 @@ image. When omitted, it builds the workflow dispatch commit and tags the image a
 not deploy Workspace automatically, and the deployment workflow does not publish the
 CLI.
 
+### Startup diagnostics
+
+Startup emits synchronous JSON lines to stdout with `event: "workspace.startup"`,
+`startupId`, `stage`, and `status` (`started`, `completed`, or `failed`). These
+bounded diagnostics are always emitted, independently of `LOG_LEVEL`, so module
+loading and synchronous migration failures can be located even before HTTP starts.
+Each line includes stage `elapsedMs`, process `uptimeMs`, `memory` (Node memory
+usage in bytes, including `rss`, `heapUsed`, `heapTotal`, `external`, and
+`arrayBuffers`) and V8 `heapSizeLimit` in bytes. Configuration values, document
+contents and credentials are not included.
+
+Stages cover module loading, configuration, product and Collaboration database
+preparation, application creation/initialization, background jobs, WebSocket setup
+and HTTP listening. Migration sub-stages identify backup, creation-fact loading,
+Core/Worktree/History upgrades, validation and publication of the staging copy.
+In Grafana Loki, use `{container="colla-workspace"} | json | event="workspace.startup"`
+and select the affected Pod. For an OOM, inspect the last `started` stage without
+a matching `completed`/`failed` within the same `startupId`; a fatal OOM cannot
+reliably emit a failure record. Stage memory values are boundary samples, not peak
+measurements, and there is no timer-based progress log during blocking SDK work.
+
 ## Commands
 
 ```bash
