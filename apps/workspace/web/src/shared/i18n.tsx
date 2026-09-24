@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -763,17 +764,40 @@ interface LanguageContextValue {
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 const STORAGE_KEY = "univer-workspace-language";
 
-export function LanguageProvider({ children }: PropsWithChildren) {
-  const [language, setLanguage] = useState<AppLanguage>(() => {
+export function browserLanguage(preferences: readonly string[]): AppLanguage {
+  for (const preference of preferences) {
+    const primary = preference.toLowerCase().split("-")[0];
+    if (primary === "zh") return "zh-CN";
+    if (primary === "en") return "en-US";
+  }
+  return "en-US";
+}
+
+function initialLanguage(): AppLanguage {
+  try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === "zh-CN" || stored === "en-US") return stored;
-    return "zh-CN";
-  });
+  } catch {
+    // Fall back to the browser preference when storage is unavailable.
+  }
+  return browserLanguage(navigator.languages ?? [navigator.language]);
+}
+
+export function LanguageProvider({ children }: PropsWithChildren) {
+  const [language, setCurrentLanguage] = useState<AppLanguage>(initialLanguage);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, language);
     document.documentElement.lang = language;
   }, [language]);
+
+  const setLanguage = useCallback((next: AppLanguage) => {
+    setCurrentLanguage(next);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      // The choice still applies for the current page.
+    }
+  }, []);
 
   const value = useMemo<LanguageContextValue>(
     () => ({
@@ -787,7 +811,7 @@ export function LanguageProvider({ children }: PropsWithChildren) {
         return value;
       },
     }),
-    [language],
+    [language, setLanguage],
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
