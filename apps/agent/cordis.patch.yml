@@ -105,7 +105,7 @@
         # calls. It is a deployment value overridable at runtime through the
         # `univer-workspace-harness` settings namespace.
         workspaceOrigin: !!js >-
-          process.env.UWH_WORKSPACE_ORIGIN ?? 'https://workspace.univer.plus'
+          process.env.UWH_WORKSPACE_ORIGIN ?? 'https://space.univer.ai/'
 
         # The local browser origin is used only for same-origin route checks.
         publicOrigin: !!js >-

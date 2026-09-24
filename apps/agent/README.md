@@ -54,7 +54,7 @@ model request, but chatting with the agent does.
    start a conversation, and review changes. Keep the launcher running while using
    the application.
 
-The shared `workspace.univer.plus` service is an internal test deployment. Use your
+The default Workspace service is `https://space.univer.ai/`. You can use your
 own Workspace service for this setup.
 
 ## Responsibilities
@@ -299,8 +299,8 @@ once; after the user opens it, the browser can use the clean root URL.
 
 In Settings → Workspace, enter the origin of your own Workspace service. For a
 local setup, complete [Connect to a local Workspace](#connect-to-a-local-workspace)
-below and use `http://127.0.0.1:5173`. The shared `workspace.univer.plus` deployment
-is an internal test environment, not a public service required by this application. The first
+below and use `http://127.0.0.1:5173`. The default service is
+`https://space.univer.ai/`; `UWH_WORKSPACE_ORIGIN` overrides the initial default. The first
 login uses browser OAuth: click “Sign in to Workspace”, sign in or register on
 Workspace, then approve the Workspace Agent access request. Workspace redirects to the
 local Workspace Agent callback; the Workspace Agent exchanges the one-time code using PKCE and
