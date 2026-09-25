@@ -37,6 +37,7 @@ export const Route = createFileRoute("/worktrees")({
 function WorktreesPage() {
   const { t } = useI18n();
   const {
+    spaceId,
     worktree,
     unit,
     view = DEFAULT_WORKTREE_REVIEW_VIEW,
@@ -46,6 +47,7 @@ function WorktreesPage() {
 
   return (
     <WorkspaceLayout
+      {...(spaceId ? { selectedSpaceId: spaceId } : {})}
       selectedView="worktrees"
       headerContent={
         <WorkspaceHeaderSearch
@@ -56,6 +58,7 @@ function WorktreesPage() {
       }
     >
       <WorktreeDashboard
+        {...(spaceId ? { spaceId } : {})}
         searchQuery={searchQuery}
         {...(worktree === undefined
           ? {}
@@ -67,11 +70,12 @@ function WorktreesPage() {
             to: "/worktrees",
             search: selection
               ? {
+                  ...(spaceId ? { spaceId } : {}),
                   worktree: selection.worktreeId,
                   unit: selection.unitId,
                   view: selection.view,
                 }
-              : {},
+              : spaceId ? { spaceId } : {},
           });
         }}
       />

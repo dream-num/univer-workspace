@@ -26,6 +26,7 @@ import {
   Button,
   Dialog,
   DialogClose,
+  Empty,
   Field,
   Input,
   toast,
@@ -36,6 +37,9 @@ type RepositoryApp = components["schemas"]["OwnedResourceItem"];
 type RepositoryBlob = components["schemas"]["OpenBlobResource"];
 
 export const Route = createFileRoute("/spaces/$spaceId")({
+  validateSearch: (search: Readonly<Record<string, unknown>>) => ({
+    ...(search.view === "data" ? { view: "data" as const } : {}),
+  }),
   loader: async ({ context, params }) => {
     const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
     try {
@@ -58,6 +62,7 @@ export const Route = createFileRoute("/spaces/$spaceId")({
 
 function SpaceNodePage() {
   const { spaceId } = Route.useParams();
+  const { view } = Route.useSearch();
   const query = useQuery(spaceNodesQueryOptions(spaceId));
   const session = useQuery(sessionQueryOptions);
   const spaces = useQuery({
@@ -93,6 +98,10 @@ function SpaceNodePage() {
     ...resourceOpenQueryOptions(selectedApp?.resource.id ?? ""),
     enabled: selectedApp !== undefined,
   });
+  const retryRepositoryPage = () => {
+    void apps.refetch();
+    if (selectedApp) void selectedResource.refetch();
+  };
   const setLandingApp = (nodeId: string) => {
     setLandingNodeId(nodeId);
     try {
@@ -180,25 +189,29 @@ function SpaceNodePage() {
   return (
     <WorkspaceLayout
       selectedSpaceId={spaceId}
+      repositoryDataActive={view === "data"}
       headerTitle={query.data.space.name}
-      headerContent={
+      headerContent={view === "data" ? (
         <WorkspaceHeaderSearch
           placeholder={t("searchNodes")}
           value={searchQuery}
           onChange={setSearchQuery}
         />
-      }
+      ) : undefined}
     >
-      {workspaceTheme === "repository" && space?.type === "team" ? (
+      {workspaceTheme === "repository" && space?.type === "team" && view !== "data" ? (
         <RepositoryOverview
           spaceName={space.name}
           page={query.data}
           apps={spaceApps}
           selectedApp={selectedApp}
           resource={selectedResource.data?.resource.kind === "blob" ? selectedResource.data.resource : undefined}
+          loading={apps.isPending || (selectedApp !== undefined && selectedResource.isPending)}
+          error={apps.isError || selectedResource.isError}
+          onRetry={retryRepositoryPage}
           onSelectApp={setLandingApp}
-          onOpenApps={() => navigate({ to: "/apps" })}
-          onOpenWorktrees={() => navigate({ to: "/worktrees" })}
+          onOpenApps={() => navigate({ to: "/apps", search: { spaceId } })}
+          onOpenWorktrees={() => navigate({ to: "/worktrees", search: { spaceId } })}
         />
       ) : (
         <NodeBrowser
@@ -285,6 +298,9 @@ function RepositoryOverview({
   apps,
   selectedApp,
   resource,
+  loading,
+  error,
+  onRetry,
   onSelectApp,
   onOpenApps,
   onOpenWorktrees,
@@ -294,10 +310,14 @@ function RepositoryOverview({
   readonly apps: readonly RepositoryApp[];
   readonly selectedApp: RepositoryApp | undefined;
   readonly resource: RepositoryBlob | undefined;
+  readonly loading: boolean;
+  readonly error: boolean;
+  readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
   readonly onOpenApps: () => void;
   readonly onOpenWorktrees: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-background">
       <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -321,7 +341,23 @@ function RepositoryOverview({
                 </select>
               </label> : null}
             </div>
-            {resource?.kind === "blob" ? <div className="h-[min(70vh,720px)]"><BlobPreview resource={resource} actionsContainer={null} /></div> : <div className="grid min-h-64 place-items-center p-8 text-center text-sm text-muted-foreground">{apps.length ? "正在打开 Repository Page…" : "还没有 .univer.html。请先在 Apps 中创建一个页面。"}</div>}
+            {loading ? (
+              <Empty title={t("repositoryPageLoading")} className="min-h-64" />
+            ) : error ? (
+              <Empty title={t("repositoryPageError")} className="min-h-64">
+                <Button variant="secondary" onClick={onRetry}>{t("repositoryPageRetry")}</Button>
+              </Empty>
+            ) : resource?.kind === "blob" ? (
+              <div className="h-[min(70vh,720px)]"><BlobPreview resource={resource} actionsContainer={null} /></div>
+            ) : apps.length ? (
+              <Empty title={t("repositoryPageUnavailable")} className="min-h-64">
+                <Button variant="secondary" onClick={onRetry}>{t("repositoryPageRetry")}</Button>
+              </Empty>
+            ) : (
+              <Empty title={t("appsEmpty")} description={t("appsEmptyDescription")} className="min-h-64">
+                <Button variant="secondary" onClick={onOpenApps}>{t("apps")}</Button>
+              </Empty>
+            )}
           </section>
         </section>
         <aside className="space-y-4">

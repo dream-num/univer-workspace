@@ -135,6 +135,7 @@ export function WorkspaceHeaderSearch({
 
 type WorkspaceLayoutProps = PropsWithChildren<{
   readonly selectedSpaceId?: string;
+  readonly repositoryDataActive?: boolean;
   readonly selectedNodeId?: string;
   readonly selectedNodePath?: readonly string[];
   readonly selectedView?: WorkspaceView;
@@ -196,6 +197,7 @@ function VisitorLayout({
 function AuthenticatedWorkspaceLayout({
   children,
   selectedSpaceId,
+  repositoryDataActive,
   selectedView,
   contentMode = "default",
   immersive = false,
@@ -280,9 +282,14 @@ function AuthenticatedWorkspaceLayout({
     (selectedSpace?.type === "personal" ? t("personalSpace") : selectedSpace?.name) ??
     workspaceViewTitle(selectedView, t);
   const activeTaskCount =
-    activeWorktrees.data?.items.filter((worktree) =>
-      ["draft", "ready", "merging"].includes(worktree.state),
-    ).length ?? 0;
+    activeWorktrees.data?.items.filter((worktree) => {
+      if (!["draft", "ready", "merging"].includes(worktree.state)) return false;
+      return (
+        workspaceTheme !== "repository" ||
+        selectedSpaceId === undefined ||
+        worktree.teamSpace?.id === selectedSpaceId
+      );
+    }).length ?? 0;
 
   const renderNavigation = (collapsed: boolean) => workspaceTheme === "repository" ? (
     <>
@@ -295,14 +302,14 @@ function AuthenticatedWorkspaceLayout({
       {selectedSpace?.type === "team" && (
         <div className="grid gap-1 border-t border-border py-3">
           {!collapsed && <p className="truncate px-3 text-xs font-semibold">{selectedSpace.name}</p>}
-          <NavLink to="/spaces/$spaceId" params={{ spaceId: selectedSpace.id }} selected={!selectedView} collapsed={collapsed} icon={<LayoutGrid />} label={t("repositoryData")} />
+          <NavLink to="/spaces/$spaceId" params={{ spaceId: selectedSpace.id }} search={{ view: "data" }} selected={repositoryDataActive === true} collapsed={collapsed} icon={<LayoutGrid />} label={t("repositoryData")} />
           <NavLink to="/spaces/$spaceId/members" params={{ spaceId: selectedSpace.id }} selected={selectedView === "members"} collapsed={collapsed} icon={<Users />} label={t("members")} />
           <NavLink to="/spaces/$spaceId/trash" params={{ spaceId: selectedSpace.id }} selected={selectedView === "trash"} collapsed={collapsed} icon={<Trash2 />} label={t("trash")} />
         </div>
       )}
       <div className="grid gap-1 border-t border-border pt-3">
-        <NavLink to="/worktrees" selected={selectedView === "worktrees"} collapsed={collapsed} icon={<Bot />} label={t("workbench")} badge={activeTaskCount} />
-        <NavLink to="/apps" selected={selectedView === "apps"} collapsed={collapsed} icon={<LayoutGrid />} label={t("apps")} />
+        <NavLink to="/worktrees" {...(selectedSpaceId ? { search: { spaceId: selectedSpaceId } } : {})} selected={selectedView === "worktrees"} collapsed={collapsed} icon={<Bot />} label={t("workbench")} badge={activeTaskCount} />
+        <NavLink to="/apps" {...(selectedSpaceId ? { search: { spaceId: selectedSpaceId } } : {})} selected={selectedView === "apps"} collapsed={collapsed} icon={<LayoutGrid />} label={t("apps")} />
         {personalSpace && <NavLink to="/spaces/$spaceId" params={{ spaceId: personalSpace.id }} selected={personalSpace.id === selectedSpaceId} collapsed={collapsed} icon={<User />} label={t("personalSpace")} />}
       </div>
     </>
@@ -728,6 +735,7 @@ function NavLink({
   params,
   selected,
   collapsed,
+  search,
   icon,
   label,
   badge,
@@ -737,6 +745,7 @@ function NavLink({
   readonly params?: Record<string, string>;
   readonly selected: boolean;
   readonly collapsed: boolean;
+  readonly search?: Record<string, string>;
   readonly icon: ReactElement;
   readonly label: string;
   readonly badge?: number;
@@ -746,6 +755,7 @@ function NavLink({
     <Link
       to={to}
       {...(params ? { params } : {})}
+      {...(search ? { search } : {})}
       title={collapsed ? label : undefined}
       className={cn(
         "flex items-center gap-2.5 rounded-md text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40",

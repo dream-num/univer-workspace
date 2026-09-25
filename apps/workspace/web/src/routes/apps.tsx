@@ -8,12 +8,13 @@ import { ResourceActions, ResourceTitle, nodeQueryOptions } from "../features/no
 import { resourceOpenQueryOptions } from "../features/resources";
 import { htmlViewsQueryOptions } from "../features/views/html-views.queries";
 import { useI18n } from "../shared/i18n";
-import { Empty } from "../shared/ui";
+import { Button, Empty } from "../shared/ui";
 import { WorkspaceLayout } from "./-workspace-layout";
 
 export const Route = createFileRoute("/apps")({
   validateSearch: (search: Readonly<Record<string, unknown>>) => ({
     ...(typeof search.node === "string" && search.node ? { node: search.node } : {}),
+    ...(typeof search.spaceId === "string" && search.spaceId ? { spaceId: search.spaceId } : {}),
   }),
   loader: async ({ context, location }) => {
     await requireAuthenticatedSession(context.queryClient, location.href);
@@ -26,9 +27,11 @@ function AppsPage() {
   const { t } = useI18n();
   const query = useQuery(htmlViewsQueryOptions);
   const session = useQuery(sessionQueryOptions);
-  const { node: selectedNodeId } = Route.useSearch();
+  const { node: selectedNodeId, spaceId } = Route.useSearch();
   const [htmlActionsContainer, setHtmlActionsContainer] = useState<HTMLSpanElement | null>(null);
-  const items = query.data?.items ?? [];
+  const items = (query.data?.items ?? []).filter(
+    (item) => spaceId === undefined || item.location.space.id === spaceId,
+  );
   const selected = items.length === 0 ? undefined : selectedHtmlView(items, selectedNodeId);
   const nodeQuery = useQuery({
     ...nodeQueryOptions(selected?.node.id ?? ""),
@@ -44,6 +47,7 @@ function AppsPage() {
 
   return (
     <WorkspaceLayout
+      {...(spaceId ? { selectedSpaceId: spaceId } : {})}
       selectedView="apps"
       contentMode={selected ? "editor" : "default"}
       headerTitle={
@@ -70,7 +74,17 @@ function AppsPage() {
         ) : undefined
       }
     >
-      {items.length === 0 ? (
+      {query.isPending ? (
+        <div className="grid min-h-0 flex-1 place-items-center">
+          <Empty title={t("repositoryPageLoading")} />
+        </div>
+      ) : query.isError ? (
+        <div className="grid min-h-0 flex-1 place-items-center">
+          <Empty title={t("repositoryPageError")}>
+            <Button variant="secondary" onClick={() => void query.refetch()}>{t("repositoryPageRetry")}</Button>
+          </Empty>
+        </div>
+      ) : items.length === 0 ? (
         <div className="grid min-h-0 flex-1 place-items-center">
           <Empty
             title={t("appsEmpty")}
@@ -82,6 +96,16 @@ function AppsPage() {
               </>
             }
           />
+        </div>
+      ) : resourceQuery.isPending ? (
+        <div className="grid min-h-0 flex-1 place-items-center">
+          <Empty title={t("repositoryPageLoading")} />
+        </div>
+      ) : resourceQuery.isError ? (
+        <div className="grid min-h-0 flex-1 place-items-center">
+          <Empty title={t("repositoryPageError")}>
+            <Button variant="secondary" onClick={() => void resourceQuery.refetch()}>{t("repositoryPageRetry")}</Button>
+          </Empty>
         </div>
       ) : resource?.kind === "blob" ? (
         <section

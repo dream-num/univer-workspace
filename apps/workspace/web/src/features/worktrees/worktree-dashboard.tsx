@@ -63,12 +63,14 @@ export interface WorktreeDashboardSelection {
 }
 
 export function WorktreeDashboard({
+  spaceId,
   searchQuery = "",
   selectedWorktreeId,
   selectedUnitId,
   selectedView = DEFAULT_WORKTREE_REVIEW_VIEW,
   onSelectionChange,
 }: {
+  readonly spaceId?: string;
   readonly searchQuery?: string;
   readonly selectedWorktreeId?: string;
   readonly selectedUnitId?: string;
@@ -103,8 +105,13 @@ export function WorktreeDashboard({
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
 
   const tasks = useMemo(
-    () => [...(active.data?.items ?? []), ...(processed.data?.items ?? [])],
-    [active.data?.items, processed.data?.items]
+    () => {
+      const allTasks = [...(active.data?.items ?? []), ...(processed.data?.items ?? [])];
+      return spaceId
+        ? allTasks.filter((task) => task.teamSpace?.id === spaceId)
+        : allTasks;
+    },
+    [active.data?.items, processed.data?.items, spaceId]
   );
   const scopedTasks = tasks.filter(
     (task) =>
