@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useTheme } from "../shared/theme";
 import { useState } from "react";
 import { requireAuthenticatedSession } from "../features/auth";
 import { CreateNodeDropdown } from "../features/nodes";
@@ -40,11 +41,16 @@ export const Route = createFileRoute("/home")({
 function HomePage() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { workspaceTheme } = useTheme();
   const spaces = useQuery(spacesQueryOptions);
   const { view = "recent" } = Route.useSearch();
   const [searchQuery, setSearchQuery] = useState("");
   const personalSpace = spaces.data?.spaces.find(
     (space) => space.type === "personal" && space.accessRole === "owner"
+  );
+  const repositorySpaces = spaces.data?.spaces.filter((space) => space.type === "team") ?? [];
+  const filteredRepositories = repositorySpaces.filter((space) =>
+    space.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase()),
   );
   const tabs: readonly { readonly value: HomeView; readonly label: MessageKey }[] = [
     { value: "recent", label: "recent" },
@@ -57,13 +63,29 @@ function HomePage() {
       selectedView="home"
       headerContent={
         <WorkspaceHeaderSearch
-          placeholder={t("searchNodes")}
+          placeholder={workspaceTheme === "repository" ? t("repositories") : t("searchNodes")}
           value={searchQuery}
           onChange={setSearchQuery}
         />
       }
     >
-      <div className="flex h-full min-h-0 flex-col bg-background">
+      {workspaceTheme === "repository" ? (
+        <section className="overflow-auto p-6">
+          <h2 className="text-xl font-semibold">{t("repositories")}</h2>
+          <p className="mt-2 mb-6 text-sm text-muted-foreground">{t("repositoryHint")}</p>
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {filteredRepositories.map((space) => (
+              <li key={space.id}>
+                <Link to="/spaces/$spaceId" params={{ spaceId: space.id }} className="flex items-center justify-between gap-3 p-5 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
+                  <span className="font-semibold text-primary">{space.name}</span>
+                  <span className="text-xs text-muted-foreground">{space.publicRead ? t("publicRead") : t("teamSpace")}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {repositorySpaces.length === 0 ? <p className="py-6 text-muted-foreground">{t("repositoriesEmpty")}</p> : filteredRepositories.length === 0 ? <p className="py-6 text-muted-foreground">{t("searchNodes")}</p> : null}
+        </section>
+      ) : <div className="flex h-full min-h-0 flex-col bg-background">
         <div className="grid shrink-0 grid-cols-2 gap-3 bg-gradient-to-b from-surface/55 to-background px-6 pt-4 pb-3 max-[720px]:grid-cols-1 max-[720px]:px-4 max-[720px]:pt-3">
           <CreateNodeDropdown
             {...(personalSpace ? { spaceId: personalSpace.id } : {})}
@@ -116,7 +138,7 @@ function HomePage() {
             <SharedWithMe searchQuery={searchQuery} />
           )}
         </div>
-      </div>
+      </div>}
     </WorkspaceLayout>
   );
 }

@@ -215,7 +215,7 @@ function AuthenticatedWorkspaceLayout({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { language, setLanguage, t } = useI18n();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, workspaceTheme, setWorkspaceTheme } = useTheme();
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
@@ -284,7 +284,29 @@ function AuthenticatedWorkspaceLayout({
       ["draft", "ready", "merging"].includes(worktree.state),
     ).length ?? 0;
 
-  const renderNavigation = (collapsed: boolean) => (
+  const renderNavigation = (collapsed: boolean) => workspaceTheme === "repository" ? (
+    <>
+      <NavLink to="/home" selected={selectedView === "home"} collapsed={collapsed} icon={<House />} label={t("repositories")} />
+      {!collapsed && <p className="px-3 py-2 text-xs text-muted-foreground">{t("repositoryTheme")}</p>}
+      {teamSpaces.map((space) => (
+        <NavLink key={space.id} to="/spaces/$spaceId" params={{ spaceId: space.id }} selected={space.id === selectedSpaceId} collapsed={collapsed} icon={<Users />} label={space.name} />
+      ))}
+      <Button variant="ghost" className="my-2 w-full" aria-label={t("createTeamSpace")} onClick={() => setTeamDialogOpen(true)}><Plus />{!collapsed && t("createTeamSpace")}</Button>
+      {selectedSpace?.type === "team" && (
+        <div className="grid gap-1 border-t border-border py-3">
+          {!collapsed && <p className="truncate px-3 text-xs font-semibold">{selectedSpace.name}</p>}
+          <NavLink to="/spaces/$spaceId" params={{ spaceId: selectedSpace.id }} selected={!selectedView} collapsed={collapsed} icon={<LayoutGrid />} label={t("repositoryData")} />
+          <NavLink to="/spaces/$spaceId/members" params={{ spaceId: selectedSpace.id }} selected={selectedView === "members"} collapsed={collapsed} icon={<Users />} label={t("members")} />
+          <NavLink to="/spaces/$spaceId/trash" params={{ spaceId: selectedSpace.id }} selected={selectedView === "trash"} collapsed={collapsed} icon={<Trash2 />} label={t("trash")} />
+        </div>
+      )}
+      <div className="grid gap-1 border-t border-border pt-3">
+        <NavLink to="/worktrees" selected={selectedView === "worktrees"} collapsed={collapsed} icon={<Bot />} label={t("workbench")} badge={activeTaskCount} />
+        <NavLink to="/apps" selected={selectedView === "apps"} collapsed={collapsed} icon={<LayoutGrid />} label={t("apps")} />
+        {personalSpace && <NavLink to="/spaces/$spaceId" params={{ spaceId: personalSpace.id }} selected={personalSpace.id === selectedSpaceId} collapsed={collapsed} icon={<User />} label={t("personalSpace")} />}
+      </div>
+    </>
+  ) : (
     <>
       <div className="grid gap-0.5">
         <NavLink
@@ -624,6 +646,14 @@ function AuthenticatedWorkspaceLayout({
         width="sm"
       >
         <div className="-my-1 divide-y divide-border">
+          <div className="grid gap-3 py-3.5">
+            <span className="text-sm font-medium">{t("layoutTheme")}</span>
+            <Segmented aria-label={t("layoutTheme")} size="sm" value={workspaceTheme} onValueChange={setWorkspaceTheme} options={[
+              { label: "Wiki", value: "wiki" },
+              { label: t("repositoryTheme"), value: "repository" },
+            ]} />
+            <p className="text-xs text-muted-foreground">{t("repositoryHint")}</p>
+          </div>
           <div className="flex items-center justify-between gap-4 py-3.5 max-[440px]:flex-col max-[440px]:items-start max-[440px]:gap-2.5">
             <span className="text-sm font-medium">{t("language")}</span>
             <Segmented
