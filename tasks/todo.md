@@ -46,12 +46,12 @@
   - Files: HTML View query, HTTP contract/server query if required, repository route tests.
   - Dependencies: Task 5.
 
-- [ ] Task 8 [P2]: Improve mobile touch targets
+- [x] Task 8 [P2]: Improve mobile touch targets
   - Acceptance: Repository overview buttons, Page selector, and collapsed navigation controls meet a 44px touch target at mobile widths while retaining visible keyboard focus.
   - Files: repository overview and workspace navigation styles.
   - Dependencies: Task 5.
 
-- [ ] Task 9 [P3]: Clear invalid landing App preferences
+- [x] Task 9 [P3]: Clear invalid landing App preferences
   - Acceptance: When a stored landing App is deleted or inaccessible, the browser falls back to the first readable App and removes the stale Team Space localStorage key.
   - Files: repository route landing App selection logic and focused tests.
   - Dependencies: Task 5.

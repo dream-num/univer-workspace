@@ -1,7 +1,7 @@
 import { ArrowRight, Copy, FileText, Settings, Users } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   NodeBrowser,
   ResourceUnavailablePage,
@@ -94,6 +94,15 @@ function SpaceNodePage() {
   });
   const spaceApps = (apps.data?.items ?? []).filter((item) => item.location.space.id === spaceId);
   const selectedApp = spaceApps.find((item) => item.node.id === landingNodeId) ?? spaceApps[0];
+  useEffect(() => {
+    if (!landingNodeId || !apps.isSuccess || spaceApps.some((item) => item.node.id === landingNodeId)) return;
+    setLandingNodeId(undefined);
+    try {
+      window.localStorage.removeItem(`univer-workspace-landing-app:${spaceId}`);
+    } catch {
+      // Local storage may be unavailable.
+    }
+  }, [apps.isSuccess, landingNodeId, spaceApps, spaceId]);
   const selectedResource = useQuery({
     ...resourceOpenQueryOptions(selectedApp?.resource.id ?? ""),
     enabled: selectedApp !== undefined,
@@ -328,7 +337,7 @@ function RepositoryOverview({
               <h2 className="mt-1 text-2xl font-bold">{spaceName}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{t("repositoryDescription")}</p>
             </div>
-            <button type="button" className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium" onClick={onOpenApps}>
+            <button type="button" className="flex min-h-11 items-center gap-2 rounded-md border border-border px-4 text-sm font-medium md:min-h-9 md:px-3" onClick={onOpenApps}>
               {t("apps")} <ArrowRight className="size-4" />
             </button>
           </div>
@@ -336,7 +345,7 @@ function RepositoryOverview({
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-medium"><FileText className="size-4 text-primary" /> {t("repositoryPage")}</div>
               {apps.length > 1 ? <label className="flex items-center gap-2 text-xs text-muted-foreground">{t("repositoryPageSelect")}
-                <select className="rounded-md border border-border bg-background px-2 py-1 text-foreground" aria-label={t("repositoryPageSelect")} value={selectedApp?.node.id ?? ""} onChange={(event) => onSelectApp(event.target.value)}>
+                <select className="min-h-11 rounded-md border border-border bg-background px-3 text-foreground md:min-h-8 md:px-2" aria-label={t("repositoryPageSelect")} value={selectedApp?.node.id ?? ""} onChange={(event) => onSelectApp(event.target.value)}>
                   {apps.map((app) => <option key={app.node.id} value={app.node.id}>{app.node.name}</option>)}
                 </select>
               </label> : null}

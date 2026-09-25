@@ -759,7 +759,7 @@ function NavLink({
       title={collapsed ? label : undefined}
       className={cn(
         "flex items-center gap-2.5 rounded-md text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-        collapsed ? "h-10 justify-center px-0" : "h-9 px-2.5",
+        collapsed ? "h-11 justify-center px-0 md:h-10" : "h-11 px-2.5 md:h-9",
         selected
           ? "bg-brand-50 font-medium text-brand-700"
           : "text-secondary-foreground hover:bg-accent hover:text-accent-foreground",
