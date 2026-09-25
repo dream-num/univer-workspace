@@ -36,26 +36,11 @@ The installed package supplies the operational contract an agent needs:
 - Offline Facade API and SVG resource discovery
 - CLI help aligned with the installed SDK and command surface
 
-Read a Skill with `univer-workspace-cli skills get <name>`. When it links to bundled
-references, the output lists their paths and read commands; JSON exposes them as
-`data[].resources` entries with `path` and `readCommand`. Use, for example,
-`univer-workspace-cli skills read html-view references/authoring.md` to read one
-document without browsing the installation directory. `skills read --json` returns
-`data: { name, path, content }`. Only listed reference/template paths are accepted.
-`skills get <name> --full` prints all bundled references and templates at once.
-
-The repository composes storage-neutral authentication protocols, Space/Node access, local
-Node-hosted Blob/Asset transfer, runtime target and Snapshot reads, and referenced-Unit policy from the private
-`@univerjs/univer-workspace-client-core` package. Packaging builds and bundles that code into the
-self-contained CLI artifact. The CLI remains the sole owner of origin configuration, Session files,
-password input, daemon socket/control and process signals, packaged worker entry, browser binary
-install/probe/resolve, and command presentation. Client Core owns Asset image resolution, render Unit
-assembly, screenshot capture, PNG output, PDF printing, Slide layout lint, the render-page source, shared worker composition, runtime pool,
-content execution, embedded-image externalization, changeset commit workflow, Node-hosted Office
-exchange, and Typst compile/materialize/apply workflows; users do not install Client Core separately.
-Client Core also owns SVG source/asset compilation, text measurement, Slide page wrapping, and apply orchestration.
-The CLI continues to own Office, Typst, and SVG command presentation, local output writes, daemon transport,
-render-page artifact copy, and native binding delivery in its installable artifact.
+Read a Skill with `univer-workspace-cli skills get <name>`. It lists bundled reference
+paths and how to read them. Read one document with
+`univer-workspace-cli skills read <name> <path>`. Only listed reference and template
+paths are accepted. `skills get <name> --full` prints the bundled references and
+templates at once.
 
 ## SDK capabilities in one CLI
 
@@ -68,18 +53,6 @@ render-page artifact copy, and native binding delivery in its installable artifa
 | Generate content        | Typst-to-Doc and SVG-to-editable-Slide compilation                            |
 | Compose across Units    | Embedded Units and cross-Unit formulas backed by Workspace identities         |
 | Deliver for review      | Worktree revisions, ready state, direct review links, and controlled merging  |
-
-Worktree screenshots resolve UUID-backed images through the Workspace Asset sign/content flow
-before rendering. Host, formula-reference, and embedded Unit data are rewritten only in the
-render copy, including image references serialized inside `resources[].data`.
-
-Print a Sheet, Doc, Slide, or Board from an explicit trunk or Worktree scope to a local PDF. Base
-Units are not printable, and an existing output file is never replaced:
-
-```bash
-univer-workspace-cli print-pdf ./reports/book.pdf --trunk --unit <unit-id>
-univer-workspace-cli print-pdf ./reports/review.pdf --worktree <worktree-id> --unit <unit-id>
-```
 
 Together, these capabilities show the range of products and workflows that can be built with the
 Univer SDK.
@@ -132,10 +105,7 @@ univer-workspace-cli login --username <name>
 
 ## License policy
 
-The CLI bundles the same application-owned runtime development license as the
-Workspace browser. Both copies are rotated every 90 days; this credential is
-not the repository software license. Set `UNIVER_LICENSE` to a non-empty value
-to override the bundled credential.
+Set `UNIVER_LICENSE` to a non-empty value to override the bundled runtime license.
 
 ## Project links
 

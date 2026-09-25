@@ -1,8 +1,9 @@
 # Univer Workspace 仓库指南
 
 本文件适用于整个仓库。修改前先阅读根 `README.md`、目标目录的 README 和相关设计文档。
-`apps/workspace/AGENTS.md` 对 `apps/workspace/**` 提供更具体的数据库与部署约束；两者同时适用，
-冲突时以更具体且更严格的规则为准。
+`apps/workspace/AGENTS.md` 对 `apps/workspace/**` 提供更具体的数据库与部署约束。
+`apps/cli/AGENTS.md` 对 `apps/cli/**` 提供 CLI 与 Client Core 的职责边界，以及从用户 README
+移出的 Skills、渲染副本、PDF 打印和运行时许可证约束。两者同时适用，冲突时以更具体且更严格的规则为准。
 
 ## 项目目标
 
