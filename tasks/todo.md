@@ -36,7 +36,7 @@
   - Files: repository route, Worktree/App query composition, existing route search contracts.
   - Dependencies: Tasks 1-3.
 
-- [ ] Task 6 [P1]: Clarify repository copy and remove inactive controls
+- [x] Task 6 [P1]: Clarify repository copy and remove inactive controls
   - Acceptance: Repository overview labels are available in both supported languages; the repository search input filters visible data or is removed; empty and error messages describe the actual state.
   - Files: `apps/workspace/web/src/shared/i18n.tsx`, repository route and related UI.
   - Dependencies: Task 5.

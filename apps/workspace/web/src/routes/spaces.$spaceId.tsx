@@ -324,19 +324,19 @@ function RepositoryOverview({
         <section className="min-w-0">
           <div className="mb-5 flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-primary">Repository</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t("repository")}</p>
               <h2 className="mt-1 text-2xl font-bold">{spaceName}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">团队空间的数据、智能工作台和 Apps。</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t("repositoryDescription")}</p>
             </div>
             <button type="button" className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium" onClick={onOpenApps}>
-              Apps <ArrowRight className="size-4" />
+              {t("apps")} <ArrowRight className="size-4" />
             </button>
           </div>
           <section className="overflow-hidden rounded-lg border border-border bg-background">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-medium"><FileText className="size-4 text-primary" /> Repository Page</div>
-              {apps.length > 1 ? <label className="flex items-center gap-2 text-xs text-muted-foreground">选择 Page
-                <select className="rounded-md border border-border bg-background px-2 py-1 text-foreground" aria-label="选择 Repository Page" value={selectedApp?.node.id ?? ""} onChange={(event) => onSelectApp(event.target.value)}>
+              <div className="flex items-center gap-2 text-sm font-medium"><FileText className="size-4 text-primary" /> {t("repositoryPage")}</div>
+              {apps.length > 1 ? <label className="flex items-center gap-2 text-xs text-muted-foreground">{t("repositoryPageSelect")}
+                <select className="rounded-md border border-border bg-background px-2 py-1 text-foreground" aria-label={t("repositoryPageSelect")} value={selectedApp?.node.id ?? ""} onChange={(event) => onSelectApp(event.target.value)}>
                   {apps.map((app) => <option key={app.node.id} value={app.node.id}>{app.node.name}</option>)}
                 </select>
               </label> : null}
@@ -361,8 +361,8 @@ function RepositoryOverview({
           </section>
         </section>
         <aside className="space-y-4">
-          <section className="rounded-lg border border-border bg-background p-4"><h3 className="font-semibold">Repository</h3><p className="mt-2 text-sm text-muted-foreground">{page.nodes.length} 个根目录项目</p><button type="button" className="mt-4 flex items-center gap-2 text-sm font-medium text-primary" onClick={onOpenWorktrees}>打开智能工作台 <ArrowRight className="size-4" /></button></section>
-          <section className="rounded-lg border border-border bg-background p-4"><h3 className="font-semibold">Pages</h3><p className="mt-2 text-sm text-muted-foreground">{apps.length} 个 Apps，可选择一个作为默认页面。</p><button type="button" className="mt-4 flex items-center gap-2 text-sm font-medium text-primary" onClick={onOpenApps}>查看 Apps <ArrowRight className="size-4" /></button></section>
+          <section className="rounded-lg border border-border bg-background p-4"><h3 className="font-semibold">{t("repository")}</h3><p className="mt-2 text-sm text-muted-foreground">{t("repositoryRootItems", { count: page.nodes.length })}</p><button type="button" className="mt-4 flex items-center gap-2 text-sm font-medium text-primary" onClick={onOpenWorktrees}>{t("openWorkbench")} <ArrowRight className="size-4" /></button></section>
+          <section className="rounded-lg border border-border bg-background p-4"><h3 className="font-semibold">{t("pages")}</h3><p className="mt-2 text-sm text-muted-foreground">{t("repositoryAppsSummary", { count: apps.length })}</p><button type="button" className="mt-4 flex items-center gap-2 text-sm font-medium text-primary" onClick={onOpenApps}>{t("viewApps")} <ArrowRight className="size-4" /></button></section>
         </aside>
       </div>
     </div>
