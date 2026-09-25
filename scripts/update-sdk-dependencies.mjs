@@ -29,6 +29,10 @@ const SDK_PACKAGE_PATTERN = /^@(?:univer-cli|univerjs|univerjs-pro)\//u;
 const EXACT_SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const DEV_VERSION_PATTERN = /^\d+\.\d+\.\d+-dev(?:[.-]|$)/u;
+// Backports may pin an SDK package to the insiders channel while the rest of the
+// SDK stays on the release baseline. `latest`, `rc` and ranges stay rejected
+// because they silently pin an SDK package to a version nobody reviewed.
+const INSIDERS_VERSION_PATTERN = /^\d+\.\d+\.\d+-insiders(?:[.-]|$)/u;
 const TOP_LEVEL_KEY_PATTERN = /^([A-Za-z0-9_-]+):(?:\s|$)/u;
 const INLINE_VALUE_PATTERN = /^[A-Za-z0-9_-]+:\s*([^#\s].*)$/u;
 const OVERRIDE_ENTRY_PATTERN =
@@ -150,17 +154,24 @@ export function validateWorkspaceSdkDependencies(packages, baselineVersion) {
 }
 
 // SDK overrides are a development-scenario mechanism: they let a dev build of
-// one collaboration package deviate from the baseline. A release-channel
-// override would silently pin an older SDK package, so only dev overrides are
-// accepted and the baseline update drops them all.
+// one collaboration package deviate from the baseline, and let a reviewable
+// insiders build backport one landed fix ahead of the next stable release. Every
+// other release channel stays rejected: `latest`, `rc` and ranges would silently
+// pin an older or unreviewed SDK package. The baseline update drops them all.
+//
+// A key may be scoped as `parent@version>child`, which constrains one edge
+// instead of the whole graph. A scoped key is already a targeted correction, so
+// it may hold any version form; only whole-graph SDK pins are channel-checked.
 export function validateWorkspaceSdkOverrides(source) {
   let declarations = 0;
   for (const block of findOverridesBlocks(source.split("\n"))) {
     for (const entry of block.entries) {
-      if (!isSdkPackage(entry.name)) continue;
-      if (!DEV_VERSION_PATTERN.test(entry.value)) {
+      const pinned = entry.name.slice(entry.name.lastIndexOf(">") + 1);
+      if (!isSdkPackage(pinned) || entry.name.includes(">")) continue;
+      const value = unquote(entry.value);
+      if (!DEV_VERSION_PATTERN.test(value) && !INSIDERS_VERSION_PATTERN.test(value)) {
         throw new Error(
-          `pnpm-workspace.yaml overrides.${entry.name} must pin a dev SDK version, got ${entry.value}.`
+          `pnpm-workspace.yaml overrides.${entry.name} must pin a dev or insiders SDK version, got ${value}.`
         );
       }
       declarations += 1;
