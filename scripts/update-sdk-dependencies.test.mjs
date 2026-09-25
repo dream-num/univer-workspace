@@ -263,27 +263,43 @@ test("leaves a workspace configuration without overrides untouched", () => {
   assert.deepEqual(stripSdkOverrides(source), { source, removed: [] });
 });
 
-test("accepts dev SDK overrides and rejects release-channel SDK overrides", () => {
+test("accepts dev and insiders SDK overrides and rejects other release channels", () => {
   assert.equal(
     validateWorkspaceSdkOverrides(
       [
         "overrides:",
         '  "@univerjs-pro/collaboration-service": "1.0.0-dev.worktree-removal.20260907"',
+        '  "@univerjs-pro/engine-formula": "1.0.2-insiders.20260925-bfcfbdc"',
         '  left-pad: "1.3.0"',
         "",
       ].join("\n")
     ),
-    1
+    2
   );
-  for (const specifier of ["1.0.0-insiders.20260907-70fc579", "1.0.0-rc.0", "1.0.0", "^1.0.0"]) {
+  for (const specifier of ["1.0.0-rc.0", "1.0.0", "^1.0.0", "1.0.0-nightly.20260907"]) {
     assert.throws(
       () =>
         validateWorkspaceSdkOverrides(
           ["overrides:", `  "@univer-cli/config": "${specifier}"`, ""].join("\n")
         ),
-      /must pin a dev SDK version/
+      /must pin a dev or insiders SDK version/
     );
   }
+});
+
+test("accepts any version form on a scoped override key", () => {
+  assert.equal(
+    validateWorkspaceSdkOverrides(
+      [
+        "overrides:",
+        '  "@univerjs-pro/engine-formula": "1.0.2-insiders.20260925-bfcfbdc"',
+        '  "@univerjs-pro/engine-formula@1.0.2-insiders.20260925-bfcfbdc>@univerjs/core": "1.0.2"',
+        '  "@univerjs-pro/engine-formula@1.0.2-insiders.20260925-bfcfbdc>@univerjs/rpc": "^1.0.0"',
+        "",
+      ].join("\n")
+    ),
+    1
+  );
 });
 
 test("refuses a flow-style overrides mapping instead of silently skipping it", () => {
@@ -298,7 +314,7 @@ test("refuses a flow-style overrides mapping instead of silently skipping it", (
   assert.throws(() => validateWorkspaceSdkOverrides(source), /overrides must use block style/);
 });
 
-test("the workspace configuration carries no release-channel SDK override", () => {
+test("the workspace configuration carries only reviewable SDK overrides", () => {
   const source = readFileSync(new URL("../pnpm-workspace.yaml", import.meta.url), "utf8");
   assert.doesNotThrow(() => validateWorkspaceSdkOverrides(source));
 });

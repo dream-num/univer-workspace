@@ -62,6 +62,9 @@ packageExtensions:
   "@univerjs/engine-formula@1.0.2":
     dependencies:
       "@wendellhu/redi": "1.1.3"
+  "@univerjs/engine-formula@1.0.2-insiders.20260925-bfcfbdc":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
   "@univerjs/sheets@1.0.2":
     dependencies:
       "@wendellhu/redi": "1.1.3"
@@ -79,6 +82,27 @@ packageExtensions:
     peerDependenciesMeta:
       "@types/react":
         optional: true
+
+# TEMPORARY (remove once the fix ships in a stable SDK release):
+# univer-pro#5747 "fix(formula): rebuild cached other-formula precedents after
+# source recovery" is only published on the insiders channel. Backport it by
+# pinning the two changed formula packages to that insider build; the rest of the
+# SDK stays on the stable 1.0.2 baseline.
+#
+# The insider build declares its sibling SDK dependencies as
+# 1.0.2-insiders.20260925-bfcfbdc, so the scoped pins below hold those unchanged
+# dependencies at 1.0.2. Without them a second @univerjs/core enters the graph,
+# which would split Univer's singleton DI container. Only the formula packages
+# are part of the fix: their public .d.ts is unchanged except one added `private`
+# member. Remove these pins when the fix is published on a stable release.
+overrides:
+  "@univerjs-pro/engine-formula": "1.0.2-insiders.20260925-bfcfbdc"
+  "@univerjs/engine-formula": "1.0.2-insiders.20260925-bfcfbdc"
+  "@univerjs-pro/engine-formula@1.0.2-insiders.20260925-bfcfbdc>@univerjs-pro/license": "1.0.2"
+  "@univerjs-pro/engine-formula@1.0.2-insiders.20260925-bfcfbdc>@univerjs/core": "1.0.2"
+  "@univerjs-pro/engine-formula@1.0.2-insiders.20260925-bfcfbdc>@univerjs/rpc": "1.0.2"
+  "@univerjs/engine-formula@1.0.2-insiders.20260925-bfcfbdc>@univerjs/core": "1.0.2"
+  "@univerjs/engine-formula@1.0.2-insiders.20260925-bfcfbdc>@univerjs/rpc": "1.0.2"
 
 # The Univer SDK and DSH release trains are pinned to exact releases and may be
 # updated on release day; only these selected scopes are exempt from

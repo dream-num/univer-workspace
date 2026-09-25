@@ -77,7 +77,8 @@ pnpm update:univer-sdk --sdk_version <exact-sdk-version>
 `@univerjs-pro/engine-formula-rust-binding` 和 `@univerjs-pro/exchange-node-binding` 由 wrapper 包
 `@univerjs-pro/engine-formula-rust`、`@univerjs-pro/exchange-node` 声明，manifest 只声明 wrapper；
 CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时依赖。`pnpm-workspace.yaml` 的
-`overrides` 只承载 dev 版本探索，升级时清空其中的全部 SDK 条目。
+`overrides` 只承载 dev 版本探索与 insiders 修复回移：顶层 SDK 条目必须是 dev 或 insiders 版本，
+`父包@版本>子包` 形式的 scoped 条目只约束一条边，可持任意版本形式。升级时清空其中的全部 SDK 条目。
 
 必须同时提交所有受影响的 manifest 和 `pnpm-lock.yaml`，不得手工只更新其中一部分。
 
