@@ -28,7 +28,7 @@ export interface ViewsModule {
   ): OwnedResourceList;
   listHtmlViews(
     userId: string,
-    page: { readonly cursor: unknown; readonly limit: unknown },
+    page: { readonly cursor: unknown; readonly limit: unknown; readonly spaceId?: unknown },
   ): OwnedResourceList;
   listShared(
     userId: string,
@@ -99,13 +99,14 @@ export function createViewsModule(options: {
 
     listHtmlViews(userId, page) {
       const limit = validLimit(page.limit);
+      const spaceId = optionalSpaceId(page.spaceId);
       let scanCursor = decodeCursor(page.cursor);
       const visible: Array<{
         readonly row: OwnedRow;
         readonly resource: ResourceAccess;
       }> = [];
       while (visible.length < limit + 1) {
-        const rows = options.repository.listHtmlViews(scanCursor, 100);
+        const rows = options.repository.listHtmlViews(scanCursor, 100, spaceId);
         for (const row of rows) {
           const resource = options.access.resolveResource(userId, row.resource_id);
           if (resource) visible.push({ row, resource });
@@ -221,6 +222,14 @@ function validLimit(value: unknown): number {
     throw invalidInput("limit must be an integer between 1 and 200.", "limit");
   }
   return limit;
+}
+
+function optionalSpaceId(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value) {
+    throw invalidInput("spaceId must be a non-empty string.", "spaceId");
+  }
+  return value;
 }
 
 function decodeCursor(value: unknown): RecentCursor | null {

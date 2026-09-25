@@ -89,7 +89,7 @@ function SpaceNodePage() {
     ? spaces.data?.spaces.find((item) => item.id === spaceId)
     : undefined;
   const apps = useQuery({
-    ...htmlViewsQueryOptions,
+    ...htmlViewsQueryOptions(spaceId),
     enabled: workspaceTheme === "repository" && space?.type === "team",
   });
   const spaceApps = (apps.data?.items ?? []).filter((item) => item.location.space.id === spaceId);

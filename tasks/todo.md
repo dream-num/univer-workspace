@@ -41,7 +41,7 @@
   - Files: `apps/workspace/web/src/shared/i18n.tsx`, repository route and related UI.
   - Dependencies: Task 5.
 
-- [ ] Task 7 [P2]: Filter HTML Views by Team Space at the query boundary
+- [x] Task 7 [P2]: Filter HTML Views by Team Space at the query boundary
   - Acceptance: Repository pages request only readable `.univer.html` items for the current Team Space; client-side ownership filtering remains as a safety check; pagination remains correct.
   - Files: HTML View query, HTTP contract/server query if required, repository route tests.
   - Dependencies: Task 5.

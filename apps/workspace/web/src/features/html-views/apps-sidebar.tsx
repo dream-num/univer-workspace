@@ -27,7 +27,7 @@ export function AppsSidebarSection(props: { readonly storageScope: string }) {
   const location = useLocation();
   const onApps = location.pathname === "/apps";
   const routeSearch = onApps ? readAppsSearch(location.search) : {};
-  const query = useQuery(htmlViewsQueryOptions);
+  const query = useQuery(htmlViewsQueryOptions());
   const items = query.data?.items ?? [];
   const tree = buildAppTree(items);
   const selected = onApps ? selectedHtmlView(items, routeSearch.node) : undefined;

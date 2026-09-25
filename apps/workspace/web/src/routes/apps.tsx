@@ -16,18 +16,19 @@ export const Route = createFileRoute("/apps")({
     ...(typeof search.node === "string" && search.node ? { node: search.node } : {}),
     ...(typeof search.spaceId === "string" && search.spaceId ? { spaceId: search.spaceId } : {}),
   }),
-  loader: async ({ context, location }) => {
+  loaderDeps: ({ search }) => ({ spaceId: search.spaceId }),
+  loader: async ({ context, location, deps }) => {
     await requireAuthenticatedSession(context.queryClient, location.href);
-    await context.queryClient.ensureQueryData(htmlViewsQueryOptions);
+    await context.queryClient.ensureQueryData(htmlViewsQueryOptions(deps.spaceId));
   },
   component: AppsPage,
 });
 
 function AppsPage() {
   const { t } = useI18n();
-  const query = useQuery(htmlViewsQueryOptions);
   const session = useQuery(sessionQueryOptions);
   const { node: selectedNodeId, spaceId } = Route.useSearch();
+  const query = useQuery(htmlViewsQueryOptions(spaceId));
   const [htmlActionsContainer, setHtmlActionsContainer] = useState<HTMLSpanElement | null>(null);
   const items = (query.data?.items ?? []).filter(
     (item) => spaceId === undefined || item.location.space.id === spaceId,

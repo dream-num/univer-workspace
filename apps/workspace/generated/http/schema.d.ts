@@ -3295,6 +3295,8 @@ export interface operations {
                 /** @description Opaque cursor returned by the previous page. */
                 cursor?: components["parameters"]["CursorParameter"];
                 limit?: components["parameters"]["LimitParameter"];
+                /** @description Restrict results to one accessible Space. */
+                spaceId?: string;
             };
             header?: never;
             path?: never;

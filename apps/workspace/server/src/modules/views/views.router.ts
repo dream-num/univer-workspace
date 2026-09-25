@@ -31,6 +31,7 @@ export function createViewsRouter(options: {
       options.views.listHtmlViews(session.user.id, {
         cursor: request.query.cursor,
         limit: request.query.limit,
+        spaceId: request.query.spaceId,
       }),
     );
   });
