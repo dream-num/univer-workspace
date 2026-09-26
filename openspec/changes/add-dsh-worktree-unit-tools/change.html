@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Change 4：Worktree、Unit 与 review handoff</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      padding: 40px 24px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    .page { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow { margin-bottom: 8px; color: var(--accent-text); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+    h1 { max-width: 900px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 820px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 820px; height: auto; }
+    .brief { display: grid; grid-template-columns: 1.05fr 1.15fr 0.9fr; gap: 16px; margin-top: 24px; }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .card ul { padding-left: 20px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View · add-dsh-worktree-unit-tools</p>
+      <h1>把发现到的 Resource 送进可评审的 Worktree</h1>
+      <p class="thesis">十二个稳定 tools 与一个静态 core Skill 复用同一 Host owner 和 Client Core，在不复制 CLI 或 Workspace 协议的前提下交付任务准备、rework 与 review handoff。</p>
+    </header>
+
+    <section class="diagram" aria-label="Worktree、Unit 与 review handoff 架构图，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1000 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="worktree-flow-title worktree-flow-desc">
+        <title id="worktree-flow-title">dsh-univer-work Worktree 与 Unit 工作流边界</title>
+        <desc id="worktree-flow-desc">Agent 加载随包 core Skill 并调用十二个稳定工具，八个 mutation 在 approval 前校验参数且在 body 再验，所有调用再经共享 Host owner、认证 resolver 与 Workspace Client Core 到达 Workspace Server 和 Browser review route。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1000" height="640" fill="#f5f5f5"/>
+
+        <path d="M 190 298 H 220 V 145 H 270" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 190 330 H 270" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 365 200 V 260" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 460 330 H 530" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 710 330 H 780" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 870 400 V 480" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="40" y="270" width="150" height="120" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="115" y="323" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="20" text-anchor="middle">DSH Agent</text>
+        <text x="115" y="352" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">local Host profile</text>
+
+        <rect x="270" y="80" width="190" height="120" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="365" y="126" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="19" font-weight="600" text-anchor="middle">静态 core Skill</text>
+        <text x="365" y="154" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">new task / rework</text>
+        <text x="365" y="176" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">ready / review / merge</text>
+
+        <rect x="270" y="260" width="190" height="140" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="365" y="303" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="19" font-weight="600" text-anchor="middle">12 个稳定 tools</text>
+        <text x="365" y="333" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">4 个 read / review</text>
+        <text x="365" y="357" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">8 个 mutation</text>
+        <text x="365" y="381" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">validate → ask → body</text>
+
+        <rect x="530" y="260" width="180" height="140" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="620" y="302" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">共享 Host owner</text>
+        <text x="620" y="331" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">authenticated resolver</text>
+        <text x="620" y="355" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">errors + signals</text>
+        <text x="620" y="379" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">dispose drain</text>
+
+        <rect x="780" y="260" width="180" height="140" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="870" y="292" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Workspace</text>
+        <text x="870" y="315" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Client Core</text>
+        <text x="870" y="342" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Worktree / Unit / open</text>
+        <text x="870" y="365" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">stable identity</text>
+        <text x="870" y="388" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">read-back / unknown</text>
+
+        <rect x="780" y="480" width="180" height="110" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="870" y="524" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" text-anchor="middle">Workspace</text>
+        <text x="870" y="552" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Server + review route</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <ul>
+          <li>覆盖 Worktree、Unit 与 review URL outcome；不复制 Commander tree。</li>
+          <li>首个 core Skill 只引用 Changes 2–4 已存在的 tools。</li>
+          <li>文件、content runtime、Office、render、discovery 与其余 Skills 后移。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>merge、discard 等操作各用独立 tool；不增加 generic lifecycle router。</li>
+          <li>八个 mutation 先复用纯 validator，成功后才请求一次性 approval，body 再验。</li>
+          <li>review URL 固定使用本次 authenticated grant 的 origin。</li>
+          <li>Skill 由 Host 显式注册，不增加 provider、watcher 或新依赖。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <ul>
+          <li>取消后的远程写入可能未知：停止新 attempt，保留 result-unknown，先 get/list 核对。</li>
+          <li>非法参数只留在 DSH-owned Native 一份或 Code Mode start/settled 两份 records；approval interaction/events、result/failure 与 plugin-owned payload 不复制。</li>
+          <li>影响 DSH application 与 Core 的 optional signal；CLI 省略 signal 时保持兼容。</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer>
+      本页由 <a href="proposal.md">proposal.md</a> 与 <a href="design.md">design.md</a> 派生，仅供评审；Markdown sources are authoritative.
+    </footer>
+  </main>
+</body>
+</html>
