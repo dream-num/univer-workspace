@@ -67,7 +67,10 @@ import {
   createWorkspaceOutputPlugins,
 } from "./features/exchange-plugins";
 import { installNativePreviewNavigation } from "./native-preview";
-import { resolveMergeReview } from "./merge-review";
+import {
+  decodeMergePreviewEvaluation,
+  resolveMergeReview,
+} from "./merge-review";
 import { withLiveSheetReferences } from "./live-sheet-references";
 import { subscribeWorkspaceCollaborators } from "./workarounds/collaboration-members";
 import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
@@ -489,25 +492,30 @@ export function createCollaborationEditor(
             }
           }
         );
-        await definition.load(univerAPI, unitId).then((unit) => {
-          if (!disposed && !unit) {
-            throw new Error(
-              `The ${definition.label} could not be loaded.`
-            );
+        const unit = await loadEditorUnit(
+          definition,
+          univerAPI,
+          univer,
+          unitId,
+          collaborationConfig
+        );
+        if (!disposed && !unit) {
+          throw new Error(
+            `The ${definition.label} could not be loaded.`
+          );
+        }
+        if (!disposed) {
+          setCollaborationStatus(
+            collaboration.getCollaborationStatus(unitId)
+          );
+          if (previewToken) {
+            previewLayout = definition.configurePreview?.(univerAPI, unitId, element);
+            previewNavigation = installNativePreviewNavigation(univerAPI, unitId, previewToken,
+              exchangeEnabled && definition.previewDownload
+                ? () => definition.previewDownload!(univerAPI, unitId) : undefined);
           }
-          if (!disposed) {
-            setCollaborationStatus(
-              collaboration.getCollaborationStatus(unitId)
-            );
-            if (previewToken) {
-              previewLayout = definition.configurePreview?.(univerAPI, unitId, element);
-              previewNavigation = installNativePreviewNavigation(univerAPI, unitId, previewToken,
-                exchangeEnabled && definition.previewDownload
-                  ? () => definition.previewDownload!(univerAPI, unitId) : undefined);
-            }
-            setLoading(false);
-          }
-        });
+          setLoading(false);
+        }
         if (
           !disposed &&
           onCollaboratorsChange &&
@@ -834,7 +842,50 @@ async function loadMergeReviewResolution(
   const body = (await response.json()) as {
     readonly evaluation?: Parameters<typeof resolveMergeReview>[0];
   };
-  return resolveMergeReview(body.evaluation);
+  return resolveMergeReview(decodeMergePreviewEvaluation(body.evaluation));
+}
+
+function loadEditorUnit(
+  definition: ICollaborationEditorDefinition,
+  univerAPI: FUniver,
+  univer: NonNullable<ReturnType<typeof createUniver>["univer"]>,
+  unitId: string,
+  collaborationConfig: { readonly enableCollaboration?: boolean }
+): Promise<unknown> {
+  // A frozen merge preview sets enableCollaboration to false so the local
+  // snapshot is not joined to a live room. The facade loaders still wait for
+  // readyForCollab, and that room is never created when collaboration is off.
+  if (collaborationConfig.enableCollaboration === false) {
+    return loadFrozenSnapshot(
+      univer.__getInjector().get(SnapshotService),
+      definition.label,
+      unitId
+    );
+  }
+  return definition.load(univerAPI, unitId);
+}
+
+function loadFrozenSnapshot(
+  snapshotService: SnapshotService,
+  label: string,
+  unitId: string
+): Promise<unknown> {
+  switch (label) {
+    case "spreadsheet":
+      return snapshotService.loadSheet(unitId, 0);
+    case "document":
+      return snapshotService.loadDoc(unitId, 0);
+    case "presentation":
+      return snapshotService.loadSlide(unitId, 0);
+    case "base":
+      return snapshotService.loadBase(unitId, 0);
+    case "board":
+      return snapshotService.loadBoard(unitId, 0);
+    default:
+      return Promise.reject(
+        new Error(`The ${label} could not be loaded.`)
+      );
+  }
 }
 
 function createReferenceHostContext(
