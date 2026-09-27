@@ -127,7 +127,7 @@ function decodeSnapshotMetadata(
 function decodeWireBytes(value: unknown, subject: string): Uint8Array {
   if (value instanceof Uint8Array) return value;
   if (typeof value !== "string") {
-    throw new Error(`合入预览的${subject}不是有效数据。`);
+    throw new Error(`The merge preview ${subject} is not valid data.`);
   }
   try {
     const binary = atob(value);
@@ -137,6 +137,6 @@ function decodeWireBytes(value: unknown, subject: string): Uint8Array {
     }
     return bytes;
   } catch {
-    throw new Error(`合入预览的${subject}不是有效数据。`);
+    throw new Error(`The merge preview ${subject} is not valid data.`);
   }
 }

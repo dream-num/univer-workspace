@@ -806,8 +806,8 @@ async function resolveCollaborationConfig(
   if (resolution.kind === "unavailable") {
     throw new Error(
       resolution.reason === "conflict"
-        ? "文档存在合入冲突，暂时无法生成预览。"
-        : "暂时无法生成合入预览。"
+        ? "The document has a merge conflict and cannot be previewed."
+        : "The merge preview is unavailable."
     );
   }
   return {
