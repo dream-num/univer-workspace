@@ -43,3 +43,100 @@ export function resolveMergeReviewStatus(
     ? "conflict"
     : "unavailable";
 }
+
+/** The merge-preview HTTP body carries Sheet blocks and unit metadata as
+ * base64. The snapshot service expects the same bytes the Worktree client
+ * decodes before building a frozen preview. */
+export function decodeMergePreviewEvaluation(
+  evaluation: WorktreeUnitMergeEvaluation | undefined
+): WorktreeUnitMergeEvaluation | undefined {
+  if (evaluation?.status !== "preview") return evaluation;
+  const preview: SaveSnapshotInput = {
+    ...evaluation.preview,
+    snapshot: decodeSnapshotMetadata(evaluation.preview.snapshot),
+  };
+  if (!evaluation.preview.sheetBlocks) {
+    return { ...evaluation, preview };
+  }
+  return {
+    ...evaluation,
+    preview: {
+      ...preview,
+      sheetBlocks: evaluation.preview.sheetBlocks.map((block) => ({
+        ...block,
+        data: decodeWireBytes(block.data, `Sheet block ${block.id}`),
+      })),
+    },
+  };
+}
+
+function decodeSnapshotMetadata(
+  snapshot: SaveSnapshotInput["snapshot"]
+): SaveSnapshotInput["snapshot"] {
+  const workbook = snapshot.workbook as
+    | {
+        readonly originalMeta?: unknown;
+        readonly sheets?: Readonly<
+          Record<string, { readonly originalMeta?: unknown }>
+        >;
+      }
+    | undefined;
+  if (workbook) {
+    const sheets = workbook.sheets ?? {};
+    return {
+      ...snapshot,
+      workbook: {
+        ...snapshot.workbook,
+        originalMeta: decodeWireBytes(
+          workbook.originalMeta,
+          "workbook metadata"
+        ),
+        sheets: Object.fromEntries(
+          Object.entries(sheets).map(([sheetId, sheet]) => [
+            sheetId,
+            {
+              ...sheet,
+              originalMeta: decodeWireBytes(
+                sheet.originalMeta,
+                `Sheet ${sheetId} metadata`
+              ),
+            },
+          ])
+        ),
+      },
+    } as SaveSnapshotInput["snapshot"];
+  }
+
+  let decoded = snapshot;
+  for (const field of ["doc", "slide", "board"] as const) {
+    const metadata = snapshot[field] as
+      | { readonly originalMeta?: unknown }
+      | undefined;
+    if (!metadata) continue;
+    decoded = {
+      ...decoded,
+      [field]: {
+        ...metadata,
+        originalMeta: decodeWireBytes(metadata.originalMeta, `${field} metadata`),
+      },
+    } as SaveSnapshotInput["snapshot"];
+  }
+  return decoded;
+}
+
+function decodeWireBytes(value: unknown, subject: string): Uint8Array {
+  if (value instanceof Uint8Array) return value;
+  if (typeof value !== "string") {
+    throw new Error(`The merge preview ${subject} is not valid data.`);
+  }
+  try {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+  } catch {
+    throw new Error(`The merge preview ${subject} is not valid data.`);
+  }
+}
