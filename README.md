@@ -133,8 +133,9 @@ in the [Workspace application guide](apps/workspace/README.md).
 
 ## Use Workspace Agent
 
-Install Agent to discuss documents, use `@` references, and review changes beside
-the conversation. The [Agent guide](apps/agent/README.md#installation-and-first-use)
+Workspace Agent is a desktop app built on DSH for Univer Workspace. Reference Workspace files with `@`, create and edit documents through conversation, then review changes and choose whether to merge or discard them.
+
+The [Agent guide](apps/agent/README.md#installation-and-first-use)
 includes a prompt you can give a coding agent before cloning the repository, as
 well as manual setup and usage instructions. It walks through choosing or starting
 your own Workspace service, registering the OAuth callback, configuring model
@@ -146,10 +147,11 @@ Agent release tags never trigger automatic publication.
 
 ## Use the Workspace CLI
 
-Install the agent-facing CLI:
+To use Workspace with an existing agent such as Claude, Codex, or Kimi Work, install the CLI and [Workspace CLI Skill](skills/univer-workspace-cli/SKILL.md) in the environment where the agent runs:
 
 ```bash
 npm install --global univer-workspace-cli@latest
+npx skills add dream-num/univer-workspace --skill univer-workspace-cli -g
 ```
 
 Point the CLI at your own Workspace deployment, then begin browser-approved login:
