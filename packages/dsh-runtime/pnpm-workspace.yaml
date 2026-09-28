@@ -1,0 +1,10 @@
+packages:
+  - "."
+allowBuilds:
+  "node-pty": true
+  koffi: true
+  "@deepseek-ai/dsh-subprocess-local": true
+  "node-addon-require-builtin": false
+  "@google/genai": false
+  protobufjs: false
+  esbuild: false

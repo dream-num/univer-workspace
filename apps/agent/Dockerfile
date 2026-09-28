@@ -46,11 +46,12 @@ RUN mkdir -p /opt/dsh/home/internal-packages \
   && pnpm --filter dsh-univer-workspace-plugin pack --pack-destination /opt/dsh/home/internal-packages \
   && pnpm --filter dsh-univer-workspace-skin-plugin pack --pack-destination /opt/dsh/home/internal-packages
 
-# Materialize the DSH runtime cohort (packages/dsh-runtime) from the shared
+# Materialize the DSH runtime cohort (packages/dsh-runtime) from its committed
 # lockfile into a self-contained bootstrap tree. Deploying keeps the CLI's
-# react 18 graph outside the workspace install, and the dedicated deploy
-# lockfile pins transitive versions that previously floated at build time.
-RUN pnpm deploy --legacy \
+# react 18 graph outside the workspace install, and the frozen install pins
+# transitive versions that previously floated at build time.
+RUN pnpm --dir packages/dsh-runtime install --frozen-lockfile \
+  && pnpm --dir packages/dsh-runtime deploy --legacy \
       --filter @univerjs/univer-workspace-dsh-runtime \
       --prod --config.node-linker=hoisted /opt/dsh/bootstrap
 

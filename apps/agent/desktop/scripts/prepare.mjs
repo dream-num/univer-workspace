@@ -131,11 +131,14 @@ for (const name of ["LICENSE", "README.md", "CHANGELOG.md"]) {
 }
 const node = join(runtime, "node", "bin", platform === "win32" ? "node.exe" : "node");
 const bootstrap = join(runtime, "bootstrap");
-// Materialize the DSH runtime cohort (packages/dsh-runtime) from the shared
-// root lockfile instead of floating at build time. The hoisted deploy output
-// is a load-bearing layout: finalize scans its top-level @deepseek-ai scope
-// for the profile's portability overrides, pack-host copies preset templates
-// from it, and the packed ASAR root must stay free of store symlinks.
+// Materialize the DSH runtime cohort (packages/dsh-runtime) from its own
+// committed lockfile instead of floating at build time. The cohort lives in a
+// standalone nested workspace: sharing the root graph re-resolves consumers'
+// optional peers and splits branded types (SessionId, Context) across the
+// workspace. The hoisted deploy output is a load-bearing layout: finalize
+// scans its top-level @deepseek-ai scope for the profile's portability
+// overrides, pack-host copies preset templates from it, and the packed ASAR
+// root must stay free of store symlinks.
 await rm(bootstrap, { recursive: true, force: true });
 // prepare:runtime always runs through the pnpm CLI, which exposes its own
 // entry script so the deploy uses the same pnpm that produced the lockfile.
@@ -143,6 +146,9 @@ const pnpmExecPath = process.env.npm_execpath;
 if (!pnpmExecPath || !/\.[cm]js$/.test(pnpmExecPath)) {
   throw new Error("prepare:runtime must run through the pnpm CLI (pnpm --dir apps/agent/desktop prepare:runtime)");
 }
+const dshRuntime = join(repo, "packages", "dsh-runtime");
+// Fail here when the manifest and the committed lockfile drift apart.
+run(node, [pnpmExecPath, "install", "--frozen-lockfile"], { cwd: dshRuntime });
 run(node, [
   pnpmExecPath,
   "deploy",
@@ -153,7 +159,7 @@ run(node, [
   "--prod",
   "--config.node-linker=hoisted",
   bootstrap,
-], { cwd: repo });
+], { cwd: dshRuntime });
 const { delimiter } = await import("node:path");
 const env = {
   ...process.env,
