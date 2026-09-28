@@ -4,6 +4,21 @@ import { cp, mkdir, rm, writeFile, readFile, access, readdir, stat } from 'node:
 import { join, dirname, relative } from 'node:path';
 import { Readable } from 'node:stream';
 
+// The bootstrap install has no lockfile: npm may hoist the presets package or
+// nest it under dsh when upstream peer pins conflict, so ask that graph where
+// it actually placed it instead of assuming a hoisted path.
+function resolveBootstrapPresets(runtime) {
+  const bootstrapRequire = createRequire(
+    join(runtime, 'bootstrap/node_modules/@deepseek-ai/dsh/package.json'));
+  try {
+    return dirname(bootstrapRequire.resolve('@deepseek-ai/dsh-agent-presets/package.json'));
+  } catch (error) {
+    if (error?.code !== 'MODULE_NOT_FOUND') throw error;
+    throw new Error(
+      'bootstrap runtime has no @deepseek-ai/dsh-agent-presets to copy preset templates from');
+  }
+}
+
 // Preserve the two published dependency graphs: profile packages resolve their
 // own versions first, then the bootstrap graph at the archive root.
 export async function packDesktopHost(desktop, runtime) {
@@ -13,7 +28,7 @@ export async function packDesktopHost(desktop, runtime) {
     // Electron 44 fs.cp cannot recursively copy an ASAR directory (ENOENT).
     // Preset authoring uses fs.cp; publish its small templates as ordinary files.
     // Remove this layout exception once Electron supports the upstream operation.
-    await cp(join(runtime, 'bootstrap/node_modules/@deepseek-ai/dsh-agent-presets/presets'),
+    await cp(join(resolveBootstrapPresets(runtime), 'presets'),
       join(runtime, 'presets'), { recursive: true });
     await cp(join(runtime, 'bootstrap'), stage, { recursive: true, dereference: true });
     await cp(join(runtime, 'home/profiles/univer-workspace-harness'), join(stage, 'profile'),
