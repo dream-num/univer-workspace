@@ -263,6 +263,7 @@ type WorkspaceLayoutProps = PropsWithChildren<{
   readonly selectedSpaceId?: string;
   readonly repositoryDataActive?: boolean;
   readonly repositoryTab?: RepositoryTab;
+  readonly repositoryHome?: boolean;
   readonly repositoryBreadcrumbs?: readonly RepositoryBreadcrumb[];
   readonly selectedNodeId?: string;
   readonly selectedNodePath?: readonly string[];
@@ -327,6 +328,7 @@ function AuthenticatedWorkspaceLayout({
   selectedSpaceId,
   repositoryDataActive,
   repositoryTab,
+  repositoryHome = false,
   repositoryBreadcrumbs,
   selectedView,
   contentMode = "default",
@@ -413,7 +415,9 @@ function AuthenticatedWorkspaceLayout({
     workspaceTheme === "repository" &&
     !repositoryDataActive &&
     !immersive &&
-    (repositoryTab !== undefined || (selectedSpaceId !== undefined && selectedView === undefined));
+    (repositoryHome ||
+      repositoryTab !== undefined ||
+      (selectedSpaceId !== undefined && selectedView === undefined));
   const pageTitle = repositoryShell
     ? typeof headerTitle === "string"
       ? `${spaceTitle ?? t("repositories")} · ${headerTitle}`

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Globe, Plus, Search, User, Users } from "lucide-react";
 import { useTheme } from "../shared/theme";
 import { useState } from "react";
 import { requireAuthenticatedSession } from "../features/auth";
@@ -17,6 +18,8 @@ import { useI18n, type MessageKey } from "../shared/i18n";
 import { cn } from "../shared/utils/cn";
 import { WorkspaceHeaderSearch, WorkspaceLayout, CreateTeamDialog } from "./-workspace-layout";
 import { spacesQueryKey } from "../features/spaces";
+import { Button, Input, Segmented } from "../shared/ui";
+import type { components } from "../../../generated/http/schema.js";
 
 type HomeView = "recent" | "owned" | "shared";
 
@@ -52,8 +55,11 @@ function HomePage() {
     ...(spaces.data?.spaces.filter((space) => space.type === "team") ?? []),
   ];
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
-  const filteredRepositories = repositorySpaces.filter((space) =>
-    space.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase()),
+  const [typeFilter, setTypeFilter] = useState<"all" | "personal" | "team">("all");
+  const filteredRepositories = repositorySpaces.filter(
+    (space) =>
+      (typeFilter === "all" || space.type === typeFilter) &&
+      space.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase()),
   );
   const tabs: readonly { readonly value: HomeView; readonly label: MessageKey }[] = [
     { value: "recent", label: "recent" },
@@ -64,59 +70,101 @@ function HomePage() {
   return (
     <WorkspaceLayout
       selectedView="home"
+      repositoryHome={workspaceTheme === "repository"}
+      headerTitle={workspaceTheme === "repository" ? t("repositories") : undefined}
       headerContent={
-        <WorkspaceHeaderSearch
-          placeholder={workspaceTheme === "repository" ? t("repositories") : t("searchNodes")}
-          value={searchQuery}
-          onChange={setSearchQuery}
-        />
+        workspaceTheme === "repository" ? undefined : (
+          <WorkspaceHeaderSearch
+            placeholder={t("searchNodes")}
+            value={searchQuery}
+            onChange={setSearchQuery}
+          />
+        )
       }
     >
       {workspaceTheme === "repository" ? (
-        <section className="overflow-auto p-6">
-          <h2 className="text-xl font-semibold">{t("repositories")}</h2>
-          <p className="mt-2 mb-6 text-sm text-muted-foreground">{t("repositoryHint")}</p>
-          <ul className="divide-y divide-border rounded-lg border border-border">
-            {filteredRepositories.map((space) => (
-              <li key={space.id}>
-                <Link
-                  to="/spaces/$spaceId"
-                  params={{ spaceId: space.id }}
-                  className="flex items-center justify-between gap-3 p-5 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="font-semibold text-primary">{space.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {space.type === "personal"
-                      ? t("personalSpace")
+        <div className="min-h-0 flex-1 overflow-y-auto bg-background">
+          <div className="mx-auto max-w-6xl px-6 py-6 max-[720px]:px-4 max-[720px]:py-4">
+            <div className="flex flex-wrap items-center gap-3 border-b border-border pb-4">
+              <div className="relative min-w-0 flex-1 sm:max-w-80">
+                <Search
+                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  aria-label={t("searchRepositories")}
+                  className="h-9 pl-9"
+                  placeholder={t("searchRepositories")}
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+              </div>
+              <Segmented
+                aria-label={t("repositoryType")}
+                size="sm"
+                value={typeFilter}
+                onValueChange={setTypeFilter}
+                options={[
+                  { label: t("allTypes"), value: "all" },
+                  { label: t("personalSpace"), value: "personal" },
+                  { label: t("teamSpace"), value: "team" },
+                ]}
+              />
+              <Button
+                className="ml-auto"
+                onClick={() => setCreateTeamOpen(true)}
+              >
+                <Plus />
+                {t("createTeamSpace")}
+              </Button>
+            </div>
+            {repositorySpaces.length === 0 ? (
+              <p className="py-6 text-muted-foreground">{t("repositoriesEmpty")}</p>
+            ) : filteredRepositories.length === 0 ? (
+              <p className="py-6 text-muted-foreground">{t("searchRepositories")}</p>
+            ) : (
+              <ul className="m-0 list-none divide-y divide-border p-0">
+                {filteredRepositories.map((space) => {
+                  const Icon = space.type === "personal" ? User : space.publicRead ? Globe : Users;
+                  const visibility =
+                    space.type === "personal"
+                      ? t("repositoryVisibilityPersonal")
                       : space.publicRead
-                        ? t("publicRead")
-                        : t("teamSpace")}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            className="mt-4 inline-flex min-h-10 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-accent"
-            onClick={() => setCreateTeamOpen(true)}
-          >
-            {t("createTeamSpace")}
-          </button>
-          {repositorySpaces.length === 0 ? (
-            <p className="py-6 text-muted-foreground">{t("repositoriesEmpty")}</p>
-          ) : filteredRepositories.length === 0 ? (
-            <p className="py-6 text-muted-foreground">{t("searchNodes")}</p>
-          ) : null}
-          <CreateTeamDialog
-            open={createTeamOpen}
-            onOpenChange={setCreateTeamOpen}
-            onCreated={async (space) => {
-              await queryClient.invalidateQueries({ queryKey: spacesQueryKey });
-              await navigate({ to: "/spaces/$spaceId", params: { spaceId: space.id } });
-            }}
-          />
-        </section>
+                        ? t("repositoryVisibilityPublic")
+                        : t("repositoryVisibilityPrivate");
+                  return (
+                    <li key={space.id}>
+                      <Link
+                        to="/spaces/$spaceId"
+                        params={{ spaceId: space.id }}
+                        className="flex items-center gap-3 rounded-md px-2 py-3.5 no-underline transition-colors hover:bg-accent/60"
+                      >
+                        <Icon className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 truncate font-semibold text-primary">
+                          {space.name}
+                        </span>
+                        <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                          {visibility}
+                        </span>
+                        <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                          {t(accessRoleKey(space.accessRole))}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <CreateTeamDialog
+              open={createTeamOpen}
+              onOpenChange={setCreateTeamOpen}
+              onCreated={async (space) => {
+                await queryClient.invalidateQueries({ queryKey: spacesQueryKey });
+                await navigate({ to: "/spaces/$spaceId", params: { spaceId: space.id } });
+              }}
+            />
+          </div>
+        </div>
       ) : (
         <div className="flex h-full min-h-0 flex-col bg-background">
           <div className="grid shrink-0 grid-cols-2 gap-3 bg-gradient-to-b from-surface/55 to-background px-6 pt-4 pb-3 max-[720px]:grid-cols-1 max-[720px]:px-4 max-[720px]:pt-3">
@@ -179,4 +227,11 @@ function HomePage() {
 
 function isHomeView(value: unknown): value is HomeView {
   return value === "recent" || value === "owned" || value === "shared";
+}
+
+function accessRoleKey(role: components["schemas"]["SpaceRole"]): MessageKey {
+  if (role === "owner") return "accessOwner";
+  if (role === "admin") return "accessAdmin";
+  if (role === "editor") return "accessEditor";
+  return "accessViewer";
 }
