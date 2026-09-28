@@ -1,7 +1,7 @@
-# Repository View UX 审计与改进计划（提案）
+# Repository View UX 审计与改进计划
 
-> 状态：提案，未实施。本文记录 2026-09-28 对 Repository 主题（实验性）的审计结论和改进计划，
-> 不代表已实现的行为。
+> 状态：已实施（2026-09-29）。本文记录 2026-09-28 的审计结论和六个阶段的改进计划，第 6 节之后
+> 是实施与验收记录。
 >
 > 审计样例：团队空间 `mini-crm`（`/spaces/0afc2180-…?view=files`），账号 `weimin`。
 > 视口：1440×900 桌面、390×844 移动；浏览器为暗色系统主题。
@@ -282,3 +282,40 @@ Repositories
 4. **[P1]** `$impeccable clarify`：阶段 6，处理 i18n、文案和标题层级。
 5. **[P2]** `$impeccable adapt`：复查 390px 和 720px 断点。
 6. `$impeccable polish`：收尾，包括 PR 状态色和仓库列表行细节。
+
+## 7. 实施记录（2026-09-29）
+
+六个阶段按顺序落地，每个阶段一个 commit：
+
+| 阶段 | Commit | 内容 |
+|------|--------|------|
+| 1 | `a3fd875` | 统一仓库外壳：`repositoryTab` 取代隐式判断，分段 breadcrumb，Settings tab 与 General/Members/Trash 子导航，目录页 `..` 行，PR/App 行改为链接 |
+| 2 | `2c5f013` | 仓库 header 按 GitHub 重排：breadcrumb 中显示 visibility，`New` 移到页头，tab 只留 tabs + 右侧 Settings，PR 徽标只统计 Open |
+| 3 | `a97d5e2` | 去掉固定高度盒子，Files 与 App 随页面滚动；header 搜索接入文件列表；App 用 tabs 切换并去掉 `.univer.html`；About 卡片填入真实字段 |
+| 4 | `59537fa` | 空间内的 PR 详情留在仓库外壳并高亮 PRs tab；PR 行补充合并时间与单复数；App 行去掉冗余标签 |
+| 5 | `b025ea5` | 仓库列表页去掉重复 sidebar，搜索/类型筛选/主按钮重排，行内显示类型图标、visibility 和角色 |
+| 6 | `dfae899` | 文案全部走 i18n 并删除失效 key，卡片标题统一 `h2`，移除手写按钮样式 |
+| 验收修复 | `9ca74a8` | 文件页通过父目录补齐祖先链；tab 与 breadcrumb 使用精确匹配，避免 `aria-current` 误报；移动端 breadcrumb 折叠为 `… / 当前项` |
+
+### 验收结果
+
+| 验收项 | 结果 |
+|--------|------|
+| 根目录 → `data` → `商机管线`，任一上级一步可达，仓库名始终可见 | 通过（`✳ Univer Workspace / mini-crm 公开 / data / 商机管线`，`data` 可点击） |
+| 成员、回收站、PR 详情保持仓库外壳，对应 tab 高亮 | 通过（`aria-current` 只落在 Settings / PRs tab） |
+| PR 与 App 行可点击、可中键新标签打开 | 通过（真实 `href`：`/worktrees?spaceId=…&worktree=…`、`/nodes/<id>`） |
+| Files 视图只有一个主滚动条 | 通过（`overflow-y-auto` 容器计数为 1） |
+| 390px 下 tabs 单行、文件页能看到文件名 | 通过（tab 行高一行且无横向溢出；breadcrumb 为 `✳ / 当前项`） |
+| 中文界面无仓库页英文残留 | 通过（仅保留 `Pull requests`、`Apps`、`SpaceId` 等产品或 schema 术语） |
+| `typecheck` 与 `impeccable detect` | 通过（`tsc -p tsconfig.web.json --noEmit` 无输出；detect 结果为空数组） |
+| 单元测试 | 通过（59 个文件、291 个测试） |
+| Wiki 主题未受影响 | 通过（sidebar、最近访问/归我所有/与我共享、创建入口均保持原样） |
+
+### 仍未完成的部分
+
+- **App iframe 内容自适应高度**：仍是上游 `@univerjs-labs/html-view-renderer` 的能力缺口，
+  当前用「接近一屏高度 + 页面滚动」规避，sandbox 未放宽。
+- **Type 筛选只做了 All / Personal / Teams**：`Public` 是 visibility 而不是类型，没有伪造第四个筛选值。
+- **PR 列表缺少 PR 编号**：产品模型里没有这个字段，未编造。
+- 性能项（每次进入仓库首页都会挂载实时协同 HTML App、Worktree 列表客户端过滤）不在本次改动范围，
+  需要单独评估。

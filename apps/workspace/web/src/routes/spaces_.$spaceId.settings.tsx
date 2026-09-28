@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { requireAuthenticatedSession, sessionQueryOptions } from "../features/auth";
+import { requireAuthenticatedSession } from "../features/auth";
 import { RepositoryTabs, SpaceSettingsNav } from "../features/spaces";
 import { spacesQueryKey, spacesQueryOptions } from "../features/spaces";
 import {
