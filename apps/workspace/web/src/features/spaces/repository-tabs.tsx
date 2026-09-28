@@ -45,12 +45,7 @@ export function RepositoryTabs({
     readonly count?: number;
   }[] = [
     { tab: "files", label: t("repositoryFiles"), icon: FileText },
-    {
-      tab: "prs",
-      label: "PRs",
-      icon: GitPullRequest,
-      ...(openWorktreeCount ? { count: openWorktreeCount } : {}),
-    },
+    { tab: "prs", label: t("repositoryPullRequests"), icon: GitPullRequest, ...(openWorktreeCount ? { count: openWorktreeCount } : {}) },
     { tab: "apps", label: t("apps"), icon: AppWindow },
   ];
   return (

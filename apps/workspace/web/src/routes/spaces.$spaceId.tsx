@@ -323,7 +323,7 @@ function FilesView({
                       aria-selected={selectedApp?.node.id === app.node.id}
                       onClick={() => onSelectApp(app.node.id)}
                       className={cn(
-                        "max-w-52 truncate rounded-t-sm border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                        "max-w-52 truncate border-b-2 px-3 py-2 text-sm font-medium transition-colors",
                         selectedApp?.node.id === app.node.id
                           ? "border-primary text-foreground"
                           : "border-transparent text-muted-foreground hover:text-foreground",
