@@ -8,13 +8,11 @@ import { packDesktopHost } from '../scripts/pack-host.mjs';
 
 const require = createRequire(import.meta.url);
 const asar = createRequire(require.resolve('electron-builder/package.json'))('@electron/asar');
-test('archive preserves package graphs and unpacks native files under a hidden build directory', async (t) => {
-  const desktop = await mkdtemp(join(tmpdir(), 'uwa pack host '));
-  t.after(() => rm(desktop, { recursive: true, force: true }));
+async function stageRuntime(desktop, extraFiles = {}) {
   const runtime = join(desktop, '.build/runtime');
   const files = {
     'bootstrap/package.json': '{}',
-    'bootstrap/node_modules/@deepseek-ai/dsh-agent-presets/presets/standard/agent.cordis.yml': '[]',
+    'bootstrap/node_modules/@deepseek-ai/dsh/package.json': '{"name":"@deepseek-ai/dsh","version":"0.1.5-rc.1"}',
     'bootstrap/node_modules/node-pty/lib/index.js': 'native helper launcher',
     'bootstrap/node_modules/shared/index.js': 'bootstrap version',
     'bootstrap/node_modules/native/module.node': 'native binding',
@@ -24,6 +22,7 @@ test('archive preserves package graphs and unpacks native files under a hidden b
     'home/profiles/univer-workspace-harness/node_modules/shared/index.js': 'profile version',
     'home/profiles/univer-workspace-harness/node_modules/@workspace/agent/package.json': '{"name":"@workspace/agent","version":"1.0.0"}',
     'home/profiles/univer-workspace-harness/node_modules/workspace-tools/package.json': '{"name":"workspace-tools","version":"1.0.0"}',
+    ...extraFiles,
   };
   for (const [name, value] of Object.entries(files)) {
     const path = join(runtime, name);
@@ -33,6 +32,15 @@ test('archive preserves package graphs and unpacks native files under a hidden b
   await mkdir(join(desktop, 'src'));
   await writeFile(join(desktop, 'src/dsh-host.cjs'), 'host');
   await writeFile(join(desktop, 'src/asar-stats.cjs'), 'stats compatibility');
+  return runtime;
+}
+test('archive preserves package graphs and unpacks native files under a hidden build directory', async (t) => {
+  const desktop = await mkdtemp(join(tmpdir(), 'uwa pack host '));
+  t.after(() => rm(desktop, { recursive: true, force: true }));
+  const runtime = await stageRuntime(desktop, {
+    'bootstrap/node_modules/@deepseek-ai/dsh-agent-presets/package.json': '{"name":"@deepseek-ai/dsh-agent-presets","version":"0.1.5-rc.2"}',
+    'bootstrap/node_modules/@deepseek-ai/dsh-agent-presets/presets/standard/agent.cordis.yml': '[]',
+  });
   await packDesktopHost(desktop, runtime);
   assert.equal(await readFile(join(runtime, 'presets/standard/agent.cordis.yml'), 'utf8'), '[]');
   const archive = join(runtime, 'host.asar');
@@ -52,4 +60,20 @@ test('archive preserves package graphs and unpacks native files under a hidden b
     assert.equal(JSON.parse(asar.extractFile(archive, join('node_modules', name, 'package.json'))).name, name);
   }
   assert.ok(JSON.parse(await readFile(join(runtime, 'home/profiles/univer-workspace-harness/package.json'), 'utf8')).dsh);
+});
+test('copies preset templates when npm nests the presets package under dsh', async (t) => {
+  const desktop = await mkdtemp(join(tmpdir(), 'uwa pack host nested '));
+  t.after(() => rm(desktop, { recursive: true, force: true }));
+  const runtime = await stageRuntime(desktop, {
+    'bootstrap/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-agent-presets/package.json': '{"name":"@deepseek-ai/dsh-agent-presets","version":"0.1.5-rc.3"}',
+    'bootstrap/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-agent-presets/presets/standard/agent.cordis.yml': '[]',
+  });
+  await packDesktopHost(desktop, runtime);
+  assert.equal(await readFile(join(runtime, 'presets/standard/agent.cordis.yml'), 'utf8'), '[]');
+});
+test('fails with a named error when the bootstrap graph has no presets package', async (t) => {
+  const desktop = await mkdtemp(join(tmpdir(), 'uwa pack host missing '));
+  t.after(() => rm(desktop, { recursive: true, force: true }));
+  const runtime = await stageRuntime(desktop);
+  await assert.rejects(packDesktopHost(desktop, runtime), /no @deepseek-ai\/dsh-agent-presets/);
 });
