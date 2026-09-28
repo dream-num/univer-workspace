@@ -131,38 +131,29 @@ for (const name of ["LICENSE", "README.md", "CHANGELOG.md"]) {
 }
 const node = join(runtime, "node", "bin", platform === "win32" ? "node.exe" : "node");
 const bootstrap = join(runtime, "bootstrap");
-await mkdir(bootstrap, { recursive: true });
-await writeFile(
-  join(bootstrap, "package.json"),
-  JSON.stringify({
-    private: true,
-    // These client modules are used by our plugins, not supplied by the stock Web bundle.
-    dependencies: {
-      "@deepseek-ai/dsh": "0.1.5-rc.1",
-      "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.1",
-      "@deepseek-ai/dsh-client-ui-primitives": "0.1.5-rc.1",
-      pnpm: "11.24.0",
-    },
-    // The install has no lockfile, and the floating dsh cohort pins cordis
-    // peers inconsistently since 0.1.5-rc.3 / cordis 4.0.4: npm then nests the
-    // cohort under dsh, breaking the hoisted bootstrap layout that finalize
-    // scans for portability overrides and pack-host copies presets from.
-    // Pin the conflicting cordis graph; drop this once the upstream cohort
-    // pins it consistently or the bootstrap install gains a lockfile.
-    overrides: {
-      "@deepseek-ai/cordis": "4.0.2",
-      "@deepseek-ai/cordis-plugin-include": "1.0.7",
-      "@deepseek-ai/cordis-plugin-loader": "1.0.3",
-    },
-  }),
-);
-// npm is taken from the verified Node distribution; bootstrap stays outside
-// the workspace and retains its own React 18 dependency graph.
-const npm =
-  platform === "win32"
-    ? join(root, stem, "node_modules/npm/bin/npm-cli.js")
-    : join(root, stem, "lib/node_modules/npm/bin/npm-cli.js");
-run(node, [npm, "install", "--prefix", bootstrap, "--no-audit", "--no-fund"], { cwd: bootstrap });
+// Materialize the DSH runtime cohort (packages/dsh-runtime) from the shared
+// root lockfile instead of floating at build time. The hoisted deploy output
+// is a load-bearing layout: finalize scans its top-level @deepseek-ai scope
+// for the profile's portability overrides, pack-host copies preset templates
+// from it, and the packed ASAR root must stay free of store symlinks.
+await rm(bootstrap, { recursive: true, force: true });
+// prepare:runtime always runs through the pnpm CLI, which exposes its own
+// entry script so the deploy uses the same pnpm that produced the lockfile.
+const pnpmExecPath = process.env.npm_execpath;
+if (!pnpmExecPath || !/\.[cm]js$/.test(pnpmExecPath)) {
+  throw new Error("prepare:runtime must run through the pnpm CLI (pnpm --dir apps/agent/desktop prepare:runtime)");
+}
+run(node, [
+  pnpmExecPath,
+  "deploy",
+  // pnpm v10+ deploys only injected workspaces; nothing here needs injection.
+  "--legacy",
+  "--filter",
+  "@univerjs/univer-workspace-dsh-runtime",
+  "--prod",
+  "--config.node-linker=hoisted",
+  bootstrap,
+], { cwd: repo });
 const { delimiter } = await import("node:path");
 const env = {
   ...process.env,

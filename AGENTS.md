@@ -61,9 +61,10 @@ scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
 checkout、其他仓库的绝对路径或未发布源码目录。
 
 `apps/agent` 与两个 dsh 插件包通过公开 npm 的 `@deepseek-ai/*` 包使用 DSH（dsh 是外部产品，本仓库
-不 fork、不修改其源码）。dsh CLI 二进制在镜像构建时隔离安装（`apps/agent/Dockerfile` 的 bootstrap
-目录），不进入 workspace 依赖图——dsh client 的 react 18 类型树与 Univer SDK 的 react 19 会分裂
-`@wendellhu/redi` 实例。
+不 fork、不修改其源码）。dsh CLI 运行时图的版本由 `packages/dsh-runtime` 以精确 pin 声明、随根
+`pnpm-lock.yaml` 统一锁定；桌面产物与 agent 镜像在构建时用 `pnpm deploy --prod
+--config.node-linker=hoisted` 把它物化为 workspace 安装之外的自包含目录，不在构建时浮动解析。
+物化使 dsh client 的 react 18 树与 Univer SDK 的 react 19 图保持分离，不分裂 `@wendellhu/redi` 实例。
 
 所有 version-coupled `@univer-cli/*`、`@univerjs/*` 和 `@univerjs-pro/*` 依赖使用同一个精确
 SDK release。升级时运行：
@@ -190,9 +191,12 @@ pnpm package:workspace-cli
 Workspace Browser uses React 19; the published DSH browser packages consumed by
 Workspace Agent use React 18. This is intentional application isolation, not a
 request to deduplicate React across the repository. Shared private UI components
-run with the consuming application's React runtime. Keep the DSH CLI installation
-outside the pnpm workspace, and do not resolve browser React from a neighboring
-application or add a second React runtime to its bundle.
+run with the consuming application's React runtime. The DSH CLI runtime graph is
+declared by `packages/dsh-runtime`, pinned in the root lockfile, and materialized
+only at build time with `pnpm deploy` into a detached, self-contained tree.
+Nothing imports that package: never add `@deepseek-ai/*` React-18 dependencies to
+another manifest, resolve browser React from a neighboring application, or add a
+second React runtime to an application bundle.
 
 Univer consumers should obtain DI APIs and types through `@univerjs/core`, which
 owns the Redi dependency. Some published SDK `.d.ts` files nevertheless emit

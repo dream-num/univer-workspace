@@ -5,6 +5,10 @@ packages:
 
 # Like DSH's signer patch, skip Framework symlinks; also bound file probing
 # for the external runtime. Remove once osx-sign fixes both in a release.
+# Unused patches stay a warning because `pnpm deploy --legacy` of
+# packages/dsh-runtime builds a dedicated lockfile that legitimately does not
+# use this patch.
+allowUnusedPatches: true
 patchedDependencies:
   "@electron/osx-sign@1.3.3": patches/@electron__osx-sign@1.3.3.patch
 
@@ -14,6 +18,12 @@ allowBuilds:
   "@parcel/watcher": true
   esbuild: true
   protobufjs: true
+  # Native/scripted builds required by the dsh-runtime cohort (packages/dsh-runtime).
+  "node-pty": true
+  koffi: true
+  "@deepseek-ai/dsh-subprocess-local": true
+  "node-addon-require-builtin": false
+  "@google/genai": false
 
 # Published 1.0.2 declarations still emit direct Redi type imports without declaring the
 # dependency. Keep service identifiers in their host's React peer graph instead

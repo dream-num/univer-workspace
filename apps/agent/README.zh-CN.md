@@ -183,8 +183,9 @@ pnpm install --frozen-lockfile
 
 仓库的 `.npmrc` 为固定版本的 Univer SDK 选择 Registry，安装过程还需要访问公共 npm Registry 获取 DSH 包。
 
-Agent 是本地 Web 页面，不是桌面应用。DSH CLI 必须安装在 pnpm workspace 外，
-避免其 React 18 依赖树进入 Univer React 19 依赖图。从仓库根目录准备隔离的本地安装：
+Agent 是本地 Web 页面，不是桌面应用。DSH 运行时依赖图由 `packages/dsh-runtime` 声明并
+钉在根 `pnpm-lock.yaml` 中；`pnpm deploy` 将其物化为 workspace 安装之外的自包含目录，
+让 CLI 保持自己的 React 18 依赖树。从仓库根目录准备本地安装：
 
 ```bash
 export UWH_LOCAL_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/univer-workspace-harness"
@@ -194,8 +195,8 @@ export UWH_DSH_DATA_HOME="$UWH_LOCAL_ROOT/data"
 mkdir -p "$UWH_DSH_BOOTSTRAP" "$DSH_HOME/internal-packages"
 export UWA_PACKAGES="$(mktemp -d "$DSH_HOME/internal-packages/build.XXXXXX")"
 
-npm install --prefix "$UWH_DSH_BOOTSTRAP" --save-exact \
-  @deepseek-ai/dsh@0.1.5-rc.1
+pnpm deploy --legacy --filter @univerjs/univer-workspace-dsh-runtime \
+  --prod --config.node-linker=hoisted "$UWH_DSH_BOOTSTRAP"
 export DSH_BIN="$UWH_DSH_BOOTSTRAP/node_modules/@deepseek-ai/dsh/lib/bin.js"
 
 pnpm --filter @univerjs/workspace-agent build
