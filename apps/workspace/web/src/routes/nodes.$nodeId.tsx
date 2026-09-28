@@ -113,15 +113,9 @@ function NodePage() {
   const user = session.data.authenticated ? session.data.user : anonymousUser;
   const selectedNodePath = [...query.data.breadcrumbs.map((item) => item.id), node.id];
   const repository = workspaceTheme === "repository";
-  // The node endpoint only returns the Node itself in `breadcrumbs`; a resource
-  // needs its parent's children page to know the folder it lives in.
-  const parentPage = useQuery({
-    ...nodeChildrenQueryOptions(node.parentNodeId ?? ""),
-    enabled: repository && node.resource !== null && node.parentNodeId !== null,
-  });
-  const ancestorCrumbs =
-    node.resource === null ? children.data?.breadcrumbs : parentPage.data?.breadcrumbs;
-  const repositoryBreadcrumbs = (ancestorCrumbs ?? []).map((item) => ({
+  // `/nodes/{id}` already returns the full ancestor chain, including this Node;
+  // the shell drops a trailing crumb that repeats the page title.
+  const repositoryBreadcrumbs = query.data.breadcrumbs.map((item) => ({
     label: item.name,
     nodeId: item.id,
   }));

@@ -8,6 +8,7 @@ import { apiError } from "../../shared/api/errors";
 import { NodeIcon } from "./node-icon";
 import { CreateNodeDropdown } from "./create-node-dropdown";
 import { NodeActionsMenu } from "./node-actions-menu";
+import { nodeParentRow } from "./node-parent-row";
 import { useI18n } from "../../shared/i18n";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import {
@@ -58,10 +59,7 @@ export function NodeBrowser(props: {
   const normalizedSearch = (props.searchQuery ?? "")
     .trim()
     .toLocaleLowerCase();
-  const parentBreadcrumb =
-    props.page.breadcrumbs.length > 0
-      ? props.page.breadcrumbs[props.page.breadcrumbs.length - 1]!
-      : undefined;
+  const parentRow = props.showParentRow ? nodeParentRow(props.page) : undefined;
   const visibleNodes = props.page.nodes.filter((node) => {
     const matchesType =
       typeFilter === "all" ||
@@ -210,7 +208,7 @@ export function NodeBrowser(props: {
               <span aria-hidden="true" />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 max-[720px]:px-1.5">
-              {props.showParentRow ? (
+              {parentRow ? (
                 <div
                   className={cn(
                     nodeGrid,
@@ -218,28 +216,26 @@ export function NodeBrowser(props: {
                     "hover:bg-muted/70 focus-within:z-10"
                   )}
                 >
-                  {parentBreadcrumb ? (
-                    <Link
-                      to="/nodes/$nodeId"
-                      params={{ nodeId: parentBreadcrumb.id }}
-                      aria-label={parentBreadcrumb.name}
-                      className="absolute inset-0 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                    />
-                  ) : (
-                    <Link
-                      to="/spaces/$spaceId"
-                      params={{ spaceId: props.page.space.id }}
-                      search={{}}
-                      aria-label={props.page.space.name}
-                      className="absolute inset-0 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                    />
-                  )}
+                  <Link
+                    {...(parentRow.nodeId === undefined
+                      ? {
+                          to: "/spaces/$spaceId",
+                          params: { spaceId: props.page.space.id },
+                          search: {},
+                        }
+                      : {
+                          to: "/nodes/$nodeId",
+                          params: { nodeId: parentRow.nodeId },
+                        })}
+                    aria-label={t("repositoryGoToParent", { name: parentRow.label })}
+                    className="absolute inset-0 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  />
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="grid size-5 shrink-0 place-items-center">
                       <FolderUp className="size-4" aria-hidden="true" />
                     </span>
                     <span className="truncate text-sm font-medium text-foreground">
-                      {parentBreadcrumb?.name ?? props.page.space.name}
+                      ..
                     </span>
                   </div>
                   <span aria-hidden="true" className="max-[980px]:hidden" />
