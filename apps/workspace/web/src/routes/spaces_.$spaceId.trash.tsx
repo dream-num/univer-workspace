@@ -22,7 +22,10 @@ function SpaceTrashPage() {
     <WorkspaceLayout
       selectedSpaceId={spaceId}
       repositoryTab="settings"
-      repositoryBreadcrumbs={[{ label: t("spaceSettings") }, { label: t("trash") }]}
+      repositoryBreadcrumbs={[
+        { label: t("spaceSettings"), settingsSpaceId: spaceId },
+        { label: t("trash") },
+      ]}
       headerTitle={t("trash")}
       headerContent={
         <WorkspaceHeaderSearch

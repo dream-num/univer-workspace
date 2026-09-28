@@ -32,7 +32,7 @@ import {
   type ReactNode,
 } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../features/auth";import { AppsSidebarSection } from "../features/html-views/apps-sidebar";
-import { spacesQueryKey, spacesQueryOptions } from "../features/spaces";
+import { spaceDisplayName, spacesQueryKey, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceNavigationTree } from "../features/nodes";
 import { useWorktreeChangeFeed, worktreeListQueryOptions } from "../features/worktrees";
 import { api } from "../shared/api/client";
@@ -91,6 +91,8 @@ export type RepositoryTab = "files" | "prs" | "apps" | "settings";
 export type RepositoryBreadcrumb = {
   readonly label: string;
   readonly nodeId?: string;
+  /** Set inside Settings so the segment links back to the settings page. */
+  readonly settingsSpaceId?: string;
 };
 
 export function WorkspaceHeaderSearch({
@@ -202,7 +204,7 @@ function RepositoryBreadcrumbs({
     ancestorItems.push(
       <li key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-2">
         <BreadcrumbSeparator className={isLastAncestor ? undefined : "hidden sm:inline"} />
-        {item.nodeId === undefined ? (
+        {item.nodeId === undefined && item.settingsSpaceId === undefined ? (
           <span
             className={cn(
               "max-w-40 truncate text-muted-foreground sm:max-w-52",
@@ -213,8 +215,12 @@ function RepositoryBreadcrumbs({
           </span>
         ) : (
           <Link
-            to="/nodes/$nodeId"
-            params={{ nodeId: item.nodeId }}
+            {...(item.nodeId === undefined
+              ? {
+                  to: "/spaces/$spaceId/settings",
+                  params: { spaceId: item.settingsSpaceId! },
+                }
+              : { to: "/nodes/$nodeId", params: { nodeId: item.nodeId } })}
             search={{}}
             className={cn(
               breadcrumbLinkClass,
@@ -237,7 +243,7 @@ function RepositoryBreadcrumbs({
             className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <BrandMark />
-            <span className="hidden font-semibold tracking-tight sm:inline">Univer Workspace</span>
+            <span className="hidden font-semibold tracking-tight sm:inline">OfficeLab</span>
           </Link>
         </li>
         {ancestorItems}
@@ -375,6 +381,30 @@ function AuthenticatedWorkspaceLayout({
     setNavDrawerOpen(false);
   }, [location.href]);
 
+  // Derived before the loading guards below so the document title effect runs on
+  // every render rather than after a conditional return.
+  const username = session.data?.authenticated ? session.data.user.username : undefined;
+  const allSpaces = spaces.data?.spaces ?? [];
+  const selectedSpace = allSpaces.find((space) => space.id === selectedSpaceId);
+  const spaceTitle =
+    selectedSpace?.type === "personal" ? t("personalSpace") : selectedSpace?.name;
+  const repositorySpaceName = spaceDisplayName(selectedSpace, t, username) ?? spaceTitle;
+  const repositoryShell =
+    workspaceTheme === "repository" &&
+    !repositoryDataActive &&
+    !immersive &&
+    (repositoryHome ||
+      repositoryTab !== undefined ||
+      (selectedSpaceId !== undefined && selectedView === undefined));
+  useEffect(() => {
+    if (!repositoryShell) return;
+    const previous = document.title;
+    document.title = `${repositorySpaceName ?? t("repositories")} · OfficeLab`;
+    return () => {
+      document.title = previous;
+    };
+  }, [repositoryShell, repositorySpaceName, t]);
+
   const logout = useMutation({
     mutationFn: async () => {
       const { error } = await api.POST("/api/auth/logout");
@@ -407,23 +437,12 @@ function AuthenticatedWorkspaceLayout({
   if (spaces.error) throw spaces.error;
 
   const currentSession = session.data;
-  const allSpaces = spaces.data?.spaces ?? [];
-  const selectedSpace = allSpaces.find((space) => space.id === selectedSpaceId);
   const personalSpaces = allSpaces.filter(
     (space) => space.type === "personal" && space.accessRole === "owner",
   );
   const personalSpace = personalSpaces[0];
   const teamSpaces = allSpaces.filter((space) => space.type === "team");
   const trashSpaceId = selectedSpaceId ?? personalSpaces[0]?.id;
-  const spaceTitle =
-    selectedSpace?.type === "personal" ? t("personalSpace") : selectedSpace?.name;
-  const repositoryShell =
-    workspaceTheme === "repository" &&
-    !repositoryDataActive &&
-    !immersive &&
-    (repositoryHome ||
-      repositoryTab !== undefined ||
-      (selectedSpaceId !== undefined && selectedView === undefined));
   const pageTitle = repositoryShell
     ? typeof headerTitle === "string"
       ? `${spaceTitle ?? t("repositories")} · ${headerTitle}`
@@ -657,7 +676,7 @@ function AuthenticatedWorkspaceLayout({
               {repositoryShell ? (
                 <RepositoryBreadcrumbs
                   spaceId={selectedSpaceId}
-                  spaceName={spaceTitle ?? t("repositories")}
+                  spaceName={repositorySpaceName ?? t("repositories")}
                   space={selectedSpace}
                   breadcrumbs={repositoryBreadcrumbs}
                   current={headerTitle}
@@ -687,16 +706,18 @@ function AuthenticatedWorkspaceLayout({
                   </Button>
                 </Tooltip>
               ) : null}
-              <Tooltip content={t("appSettings")}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t("appSettings")}
-                  onClick={() => setAppSettingsOpen(true)}
-                >
-                  <Settings />
-                </Button>
-              </Tooltip>
+              {workspaceTheme === "repository" ? null : (
+                <Tooltip content={t("appSettings")}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("appSettings")}
+                    onClick={() => setAppSettingsOpen(true)}
+                  >
+                    <Settings />
+                  </Button>
+                </Tooltip>
+              )}
               <MenuRoot>
                 <MenuTrigger
                   aria-label={t("account")}
@@ -733,6 +754,12 @@ function AuthenticatedWorkspaceLayout({
                       <MenuItem onClick={() => setPasswordDialogOpen(true)}>
                         <Lock />
                         {t("changePassword")}
+                      </MenuItem>
+                    ) : null}
+                    {workspaceTheme === "repository" ? (
+                      <MenuItem onClick={() => setAppSettingsOpen(true)}>
+                        <Settings />
+                        {t("appSettings")}
                       </MenuItem>
                     ) : null}
                   </MenuGroup>
@@ -992,7 +1019,7 @@ export function CreateTeamDialog({
     },
     onError: (mutationError) => {
       toast.error(
-        mutationError instanceof Error ? mutationError.message : "Space creation failed.",
+        mutationError instanceof Error ? mutationError.message : t("spaceCreationFailed"),
       );
     },
   });

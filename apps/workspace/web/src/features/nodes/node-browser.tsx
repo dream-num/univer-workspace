@@ -43,6 +43,8 @@ export function NodeBrowser(props: {
   readonly actions?: ReactNode;
   readonly searchQuery?: string;
   readonly showParentRow?: boolean;
+  /** Display name of the Space for the parent row; defaults to the API name. */
+  readonly spaceName?: string | undefined;
   readonly className?: string;
 }) {
   const [editNode, setEditNode] = useState<Node | null>(null);
@@ -59,7 +61,7 @@ export function NodeBrowser(props: {
   const normalizedSearch = (props.searchQuery ?? "")
     .trim()
     .toLocaleLowerCase();
-  const parentRow = props.showParentRow ? nodeParentRow(props.page) : undefined;
+  const parentRow = props.showParentRow ? nodeParentRow(props.page, props.spaceName) : undefined;
   const visibleNodes = props.page.nodes.filter((node) => {
     const matchesType =
       typeFilter === "all" ||

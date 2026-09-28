@@ -13,7 +13,7 @@ import {
 } from "../features/nodes";
 import { anonymousUser, sessionQueryOptions } from "../features/auth";
 import { resourceOpenQueryOptions } from "../features/resources";
-import { RepositoryTabs, spacesQueryOptions } from "../features/spaces";
+import { RepositoryTabs, spaceDisplayName, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceHeaderSearch, WorkspaceLayout } from "./-workspace-layout";
 import { ResourceEditor } from "../features/editor";
 import { BlobPreview } from "../features/blobs";
@@ -192,6 +192,11 @@ function NodePage() {
                     page={children.data}
                     searchQuery={searchQuery}
                     showParentRow
+                    spaceName={spaceDisplayName(
+                      query.data.space,
+                      t,
+                      session.data.authenticated ? session.data.user.username : undefined,
+                    )}
                     className="[&>div]:h-auto [&>div]:overflow-visible [&>div>div:last-child]:overflow-visible"
                   />
                 </section>

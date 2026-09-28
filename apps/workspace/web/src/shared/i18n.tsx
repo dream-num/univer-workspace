@@ -7,6 +7,7 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
+import { useTheme } from "./theme";
 
 export type AppLanguage = "zh-CN" | "en-US";
 
@@ -77,6 +78,7 @@ const messages = {
     worktreeStateDiscarded: "已放弃",
     settingsGeneral: "常规",
     repositoriesEmpty: "还没有团队空间",
+    repositoriesNoMatch: "没有匹配的仓库",
     home: "首页",
     apps: "Apps",
     appsEmpty: "还没有页面",
@@ -93,6 +95,7 @@ const messages = {
     members: "成员管理",
     trash: "回收站",
     createTeamSpace: "新建团队空间",
+    spaceCreationFailed: "空间创建失败。",
     spaceSettings: "空间设置",
     spaceName: "空间名称",
     teamSpaceId: "SpaceId",
@@ -489,6 +492,7 @@ const messages = {
     worktreeStateDiscarded: "Discarded",
     settingsGeneral: "General",
     repositoriesEmpty: "No team spaces yet",
+    repositoriesNoMatch: "No repositories match",
     home: "Home",
     apps: "Apps",
     appsEmpty: "No pages yet",
@@ -505,6 +509,7 @@ const messages = {
     members: "Members",
     trash: "Trash",
     createTeamSpace: "Create team space",
+    spaceCreationFailed: "Space creation failed.",
     spaceSettings: "Space settings",
     spaceName: "Space name",
     teamSpaceId: "SpaceId",
@@ -857,6 +862,78 @@ const messages = {
 
 export type MessageKey = keyof (typeof messages)["zh-CN"];
 
+/**
+ * Copy that follows the repository theme. The repository view is organised like
+ * a GitHub repository, where a Space reads as a repository and its members as
+ * collaborators; the wiki theme keeps the original wording. Only the keys whose
+ * text mentions a Space need an entry.
+ */
+const repositoryMessages: Record<AppLanguage, Partial<Record<MessageKey, string>>> = {
+  "zh-CN": {
+    repositoryHint: "仓库视图按 GitHub 的方式组织。主题设置仅保存在当前浏览器。",
+    searchRepositories: "查找仓库…",
+    repositoriesEmpty: "还没有仓库",
+    personalSpace: "个人",
+    teamSpace: "团队",
+    createTeamSpace: "新建仓库",
+    spaceCreationFailed: "仓库创建失败。",
+    spaceSettings: "设置",
+    spaceName: "仓库名称",
+    teamSpaceId: "仓库 ID",
+    copySpaceId: "复制仓库 ID",
+    spaceIdCopied: "仓库 ID 已复制。",
+    copySpaceIdFailed: "无法复制仓库 ID。",
+    enterSpaceName: "请输入仓库名称。",
+    spaceRenamed: "仓库设置已更新。",
+    publicReadDescription: "开启后，获得链接的任何人无需登录即可浏览并只读打开此仓库中的文件。",
+    noWritableSpace: "没有可用于新建文档的仓库。",
+    spaceEmpty: "此仓库为空",
+    openSpace: "打开仓库",
+    spaceRoot: "仓库根目录",
+    searchMembers: "搜索协作者",
+    members: "协作者",
+    allSpaces: "全部仓库",
+    belongingSpace: "所属仓库",
+    destinationParentNodeHint: "留空则移动到仓库根目录。",
+    linkSharingDisabledDescription: "按协作者授权或仓库公开只读设置访问。",
+    spaceMembersTitle: "{name}的协作者",
+    spaceMembersDescription: "协作者的角色适用于此仓库中的所有文件。",
+  },
+  "en-US": {
+    repositoryHint:
+      "The repository view follows GitHub conventions. This theme is saved only in this browser.",
+    searchRepositories: "Find a repository…",
+    repositoriesEmpty: "No repositories yet",
+    personalSpace: "Personal",
+    teamSpace: "Team",
+    createTeamSpace: "New repository",
+    spaceCreationFailed: "Repository creation failed.",
+    spaceSettings: "Settings",
+    spaceName: "Repository name",
+    teamSpaceId: "Repository ID",
+    copySpaceId: "Copy repository ID",
+    spaceIdCopied: "Repository ID copied.",
+    copySpaceIdFailed: "Unable to copy the repository ID.",
+    enterSpaceName: "Enter a repository name.",
+    spaceRenamed: "Repository settings updated.",
+    publicReadDescription:
+      "When enabled, anyone with the link can browse and open files in this repository read-only without signing in.",
+    noWritableSpace: "There is no writable repository for a new document.",
+    spaceEmpty: "This repository is empty",
+    openSpace: "Open repository",
+    spaceRoot: "Repository root",
+    searchMembers: "Find a collaborator",
+    members: "Collaborators",
+    allSpaces: "All repositories",
+    belongingSpace: "Repository",
+    destinationParentNodeHint: "Leave empty to move the node to the repository root.",
+    linkSharingDisabledDescription:
+      "Access follows collaborator grants or the repository's public read-only setting.",
+    spaceMembersTitle: "{name} collaborators",
+    spaceMembersDescription: "Collaborator roles apply to every file in this repository.",
+  },
+};
+
 interface LanguageContextValue {
   readonly language: AppLanguage;
   readonly setLanguage: (language: AppLanguage) => void;
@@ -887,6 +964,7 @@ function initialLanguage(): AppLanguage {
 
 export function LanguageProvider({ children }: PropsWithChildren) {
   const [language, setCurrentLanguage] = useState<AppLanguage>(initialLanguage);
+  const { workspaceTheme } = useTheme();
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -906,14 +984,15 @@ export function LanguageProvider({ children }: PropsWithChildren) {
       language,
       setLanguage,
       t(key, values) {
-        let value: string = messages[language][key];
+        const override = workspaceTheme === "repository" ? repositoryMessages[language][key] : undefined;
+        let value: string = override ?? messages[language][key];
         for (const [name, replacement] of Object.entries(values ?? {})) {
           value = value.replaceAll(`{${name}}`, String(replacement));
         }
         return value;
       },
     }),
-    [language, setLanguage],
+    [language, setLanguage, workspaceTheme],
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;

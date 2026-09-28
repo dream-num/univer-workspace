@@ -37,7 +37,10 @@ function TeamMembersPage() {
     <WorkspaceLayout
       selectedSpaceId={spaceId}
       repositoryTab="settings"
-      repositoryBreadcrumbs={[{ label: t("members") }]}
+      repositoryBreadcrumbs={[
+        { label: t("spaceSettings"), settingsSpaceId: spaceId },
+        { label: t("members") },
+      ]}
       headerTitle={t("members")}
       headerContent={
         <WorkspaceHeaderSearch

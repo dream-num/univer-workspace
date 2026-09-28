@@ -20,7 +20,7 @@ import { sessionQueryOptions } from "../features/auth";
 import { BlobPreview } from "../features/blobs";
 import { htmlViewsQueryOptions } from "../features/views/html-views.queries";
 import { resourceOpenQueryOptions } from "../features/resources";
-import { RepositoryTabs, spacesQueryOptions } from "../features/spaces";
+import { RepositoryTabs, spaceDisplayName, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceHeaderSearch, WorkspaceLayout } from "./-workspace-layout";
 import { formatRelativeDate } from "../shared/format-relative-date";
 import { useI18n, type MessageKey } from "../shared/i18n";
@@ -84,6 +84,11 @@ function SpaceNodePage() {
   const space = session.data?.authenticated
     ? spaces.data?.spaces.find((item) => item.id === spaceId)
     : undefined;
+  const spaceName = spaceDisplayName(
+    space,
+    t,
+    session.data?.authenticated ? session.data.user.username : undefined,
+  );
   const repositoryTheme = workspaceTheme === "repository" && space !== undefined;
   const apps = useQuery({
     ...htmlViewsQueryOptions(spaceId),
@@ -163,6 +168,7 @@ function SpaceNodePage() {
           <RepositoryOverview
             spaceId={spaceId}
             space={space}
+            spaceName={spaceName}
             page={query.data}
             apps={spaceApps}
             selectedApp={selectedApp}
@@ -197,6 +203,7 @@ function SpaceNodePage() {
 function RepositoryOverview({
   spaceId,
   space,
+  spaceName,
   page,
   apps,
   selectedApp,
@@ -214,6 +221,7 @@ function RepositoryOverview({
 }: {
   readonly spaceId: string;
   readonly space: SpaceView | undefined;
+  readonly spaceName: string | undefined;
   readonly page: RepositoryPage;
   readonly apps: readonly RepositoryApp[];
   readonly selectedApp: RepositoryApp | undefined;
@@ -236,6 +244,7 @@ function RepositoryOverview({
           <FilesView
             spaceId={spaceId}
             space={space}
+            spaceName={spaceName}
             page={page}
             apps={apps}
             selectedApp={selectedApp}
@@ -280,6 +289,7 @@ function FilesView({
   openWorktreeCount,
   fileCount,
   space,
+  spaceName,
 }: {
   readonly spaceId: string;
   readonly page: RepositoryPage;
@@ -295,6 +305,7 @@ function FilesView({
   readonly openWorktreeCount: number;
   readonly fileCount: number;
   readonly space: SpaceView | undefined;
+  readonly spaceName: string | undefined;
 }) {
   const { t } = useI18n();
   const showDefaultApp = loading || error || apps.length > 0;
@@ -306,6 +317,7 @@ function FilesView({
             page={page}
             canCreateAtRoot={false}
             showParentRow={page.parentNode !== null}
+            spaceName={spaceName}
             searchQuery={searchQuery}
             className="[&>div]:h-auto [&>div]:overflow-visible [&>div>div:last-child]:overflow-visible"
           />

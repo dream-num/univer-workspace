@@ -41,7 +41,9 @@ function SpaceSettingsPage() {
     <WorkspaceLayout
       selectedSpaceId={spaceId}
       repositoryTab="settings"
-      repositoryBreadcrumbs={[{ label: t("spaceSettings") }]}
+      repositoryBreadcrumbs={[
+        { label: t("spaceSettings"), settingsSpaceId: spaceId },
+      ]}
       headerTitle={t("settingsGeneral")}
     >
       <RepositoryTabs spaceId={spaceId} active="settings" />

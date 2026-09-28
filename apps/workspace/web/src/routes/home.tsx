@@ -3,9 +3,9 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Globe, Plus, Search, User, Users } from "lucide-react";
 import { useTheme } from "../shared/theme";
 import { useState } from "react";
-import { requireAuthenticatedSession } from "../features/auth";
+import { requireAuthenticatedSession, sessionQueryOptions } from "../features/auth";
 import { CreateNodeDropdown } from "../features/nodes";
-import { spacesQueryOptions } from "../features/spaces";
+import { spaceDisplayName, spacesQueryOptions } from "../features/spaces";
 import {
   OwnedByMe,
   RecentResources,
@@ -47,6 +47,7 @@ function HomePage() {
   const queryClient = useQueryClient();
   const { view = "recent" } = Route.useSearch();
   const [searchQuery, setSearchQuery] = useState("");
+  const session = useQuery(sessionQueryOptions);
   const personalSpace = spaces.data?.spaces.find(
     (space) => space.type === "personal" && space.accessRole === "owner",
   );
@@ -121,11 +122,17 @@ function HomePage() {
             {repositorySpaces.length === 0 ? (
               <p className="py-6 text-muted-foreground">{t("repositoriesEmpty")}</p>
             ) : filteredRepositories.length === 0 ? (
-              <p className="py-6 text-muted-foreground">{t("searchRepositories")}</p>
+              <p className="py-6 text-muted-foreground">{t("repositoriesNoMatch")}</p>
             ) : (
               <ul className="m-0 list-none divide-y divide-border p-0">
                 {filteredRepositories.map((space) => {
                   const Icon = space.type === "personal" ? User : space.publicRead ? Globe : Users;
+                  const name =
+                    spaceDisplayName(
+                      space,
+                      t,
+                      session.data?.authenticated ? session.data.user.username : undefined,
+                    ) ?? space.name;
                   const visibility =
                     space.type === "personal"
                       ? t("repositoryVisibilityPersonal")
@@ -141,7 +148,7 @@ function HomePage() {
                       >
                         <Icon className="size-4 shrink-0 text-muted-foreground" />
                         <span className="min-w-0 truncate font-semibold text-primary">
-                          {space.name}
+                          {name}
                         </span>
                         <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
                           {visibility}

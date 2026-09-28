@@ -14,12 +14,13 @@ export type NodeParentRow = {
 };
 
 export function nodeParentRow(
-  page: Pick<NodePage, "breadcrumbs" | "navigationRootNodeId" | "space">
+  page: Pick<NodePage, "breadcrumbs" | "navigationRootNodeId" | "space">,
+  spaceName: string = page.space.name
 ): NodeParentRow | undefined {
   const crumbs = page.breadcrumbs;
   const parent = crumbs.length >= 2 ? crumbs[crumbs.length - 2] : undefined;
   if (parent) return { label: parent.name, nodeId: parent.id };
   // A shared subtree starts at its navigation root, which has no reachable parent.
   if (page.navigationRootNodeId !== null) return undefined;
-  return { label: page.space.name };
+  return { label: spaceName };
 }
