@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 import { MarkdownViewer } from "@univerjs/univer-workspace-markdown-viewer";
-import {
-  MARKDOWN_PREVIEW_BYTES,
-  readMarkdownContent,
-  type MarkdownContent,
-} from "@univerjs/univer-workspace-markdown-viewer/content";
+import { readMarkdownContent } from "@univerjs/univer-workspace-markdown-viewer/content";
 import type { ViewerLocale } from "../viewer-locale.ts";
 import type { UniverLocaleKey } from "../locales.ts";
 import css from "./WorkspaceBlobViewer.module.scss";
@@ -16,20 +12,19 @@ export function WorkspaceMarkdownPreview(props: {
   readonly locale: ViewerLocale;
   readonly t: (key: UniverLocaleKey) => string;
 }) {
-  const [content, setContent] = useState<MarkdownContent | null>(null);
+  const [content, setContent] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     setContent(null);
     setFailed(false);
     if (props.byteSize === 0) {
-      setContent({ text: "", truncated: false });
+      setContent("");
       return;
     }
     void fetch(props.contentUrl, {
       credentials: "same-origin",
       signal: controller.signal,
-      headers: { Range: `bytes=0-${MARKDOWN_PREVIEW_BYTES}` },
     })
       .then(readMarkdownContent)
       .then((value) => {
@@ -49,11 +44,11 @@ export function WorkspaceMarkdownPreview(props: {
         </a>
       </div>
     );
-  if (!content)
+  if (content === null)
     return (
       <p className={css.status} role="status">
         {props.t("blob.loading")}
       </p>
     );
-  return <MarkdownViewer {...content} locale={props.locale} />;
+  return <MarkdownViewer text={content} locale={props.locale} />;
 }

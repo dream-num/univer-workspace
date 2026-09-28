@@ -86,8 +86,8 @@ Remote `.md`/`.markdown` Blobs use the private
 [Markdown viewer](../workspace-markdown-viewer/README.md), shared with Workspace
 Browser. Preview/Source switching supports CommonMark/GFM, tables, read-only
 tasks and footnotes. Content is fetched through the existing authenticated
-proxy. Above 256 KiB only a source prefix is shown; downloads retain the original
-file. Raw HTML stays text, relative paths are not resolved, and external images
+proxy. Preview and Source both show the complete file without a preview size
+cutoff. Raw HTML stays text, relative paths are not resolved, and external images
 require a click. This does not replace DSH chat or local-file rendering.
 
 ## Delivered so far

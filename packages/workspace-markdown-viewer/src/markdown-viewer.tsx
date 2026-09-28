@@ -10,7 +10,6 @@ const messages = {
     preview: "预览",
     source: "源码",
     empty: "文件为空",
-    truncated: "文件较大，仅显示前 256 KiB 源码。请下载查看完整内容。",
     unresolved: "暂不支持此链接或相对路径",
     image: "加载外部图片",
     imageFailed: "图片加载失败",
@@ -19,7 +18,6 @@ const messages = {
     preview: "Preview",
     source: "Source",
     empty: "This file is empty",
-    truncated: "Showing only the first 256 KiB of source. Download the file to read it in full.",
     unresolved: "Unsupported link or relative path",
     image: "Load external image",
     imageFailed: "Image failed to load",
@@ -64,11 +62,9 @@ function ExternalImage({
 
 export function MarkdownViewer({
   text,
-  truncated = false,
   locale = "en-US",
 }: {
   readonly text: string;
-  readonly truncated?: boolean;
   readonly locale?: "zh-CN" | "en-US";
 }) {
   const labels = messages[locale];
@@ -152,27 +148,21 @@ export function MarkdownViewer({
       <div className={css.toolbar} role="group" aria-label="Markdown">
         <button
           type="button"
-          aria-pressed={!source && !truncated}
-          disabled={truncated}
+          aria-pressed={!source}
           onClick={() => setSource(false)}
         >
           {labels.preview}
         </button>
-        <button type="button" aria-pressed={source || truncated} onClick={() => setSource(true)}>
+        <button type="button" aria-pressed={source} onClick={() => setSource(true)}>
           {labels.source}
         </button>
       </div>
       <div className={css.scroll}>
-        {truncated ? (
-          <p className={css.notice} role="status">
-            {labels.truncated}
-          </p>
-        ) : null}
         {!text ? (
           <p className={css.notice} role="status">
             {labels.empty}
           </p>
-        ) : source || truncated ? (
+        ) : source ? (
           <pre className={css.source}>{text}</pre>
         ) : (
           <article className={css.prose}>{rendered}</article>

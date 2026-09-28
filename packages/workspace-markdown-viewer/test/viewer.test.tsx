@@ -15,8 +15,8 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
 });
-function render(text: string, truncated = false) {
-  act(() => root.render(<MarkdownViewer text={text} truncated={truncated} locale="zh-CN" />));
+function render(text: string) {
+  act(() => root.render(<MarkdownViewer text={text} locale="zh-CN" />));
 }
 function click(element: Element) {
   act(() => element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
@@ -78,11 +78,17 @@ describe("Markdown viewer", () => {
     }
   });
 
-  it("shows truncated source rather than rendering incomplete syntax, and handles empty files", () => {
-    render("# partial", true);
-    expect(container.querySelector("h1")).toBeNull();
-    expect(container.querySelector("pre")?.textContent).toBe("# partial");
-    expect(container.querySelector("button")?.disabled).toBe(true);
+  it("renders the entire large document, including references defined at its end", () => {
+    const text = "[reference][end]\n\n" + "中文 ".repeat(50000) + "\n\n## 文件末尾\n\n[end]: https://example.org";
+    render(text);
+    expect(container.querySelector("h2")?.textContent).toBe("文件末尾");
+    expect(container.querySelector("a")?.href).toBe("https://example.org/");
+    expect(container.querySelector("button")?.disabled).toBe(false);
+    click(container.querySelectorAll("button")[1]!);
+    expect(container.querySelector("pre")?.textContent).toBe(text);
+  });
+
+  it("handles empty files", () => {
     render("");
     expect(container.textContent).toContain("文件为空");
   });

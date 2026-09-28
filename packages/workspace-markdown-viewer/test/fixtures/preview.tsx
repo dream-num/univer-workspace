@@ -10,7 +10,7 @@ const sample = `# Markdown 预览\n\n中文内容与 **加粗**、*斜体*、~~�
 const samples: Record<string, string> = {
   normal: sample,
   empty: "",
-  large: "# Too large\n" + "中文 ".repeat(50000),
+  large: "# 大文件全文预览\n" + "中文 ".repeat(50000) + "\n\n## 文件末尾",
   binary: "bad\0data",
   error: "",
 };
@@ -22,14 +22,7 @@ window.fetch = async (input, init) => {
   const key = new URL(request.url).pathname.split("/").pop()!;
   if (key === "error") return new Response("Forbidden", { status: 403 });
   const bytes = new TextEncoder().encode(samples[key]);
-  const end = Math.min(
-    Number(request.headers.get("range")?.split("-")[1] ?? bytes.length - 1),
-    bytes.length - 1,
-  );
-  return new Response(bytes.slice(0, end + 1), {
-    status: 206,
-    headers: { "Content-Range": `bytes 0-${end}/${bytes.length}` },
-  });
+  return new Response(bytes);
 };
 function Fixture() {
   const [selected, setSelected] = useState("normal");

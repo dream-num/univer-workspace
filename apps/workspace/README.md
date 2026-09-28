@@ -104,8 +104,8 @@ application; Workspace does not add a second formula refresh scheduler.
 
 Uploaded `.md` and `.markdown` files open in a read-only CommonMark/GFM preview,
 with Preview/Source switching and the original download action. Tables, task
-lists, strikethrough and footnotes are supported. Files larger than 256 KiB show
-only a source prefix; download them to read in full. Content must be UTF-8 text.
+lists, strikethrough and footnotes are supported. Preview and Source both load
+the complete file without a preview size cutoff. Content must be UTF-8 text.
 Raw HTML is shown as text; relative file/image paths are not resolved. External
 images load only after a click. Markdown stays a Blob and does not become a
 collaborative Univer Doc. The Agent remote-file viewer uses the same renderer.

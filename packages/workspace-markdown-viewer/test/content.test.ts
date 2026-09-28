@@ -3,11 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   isMarkdownFile,
   markdownUrl,
-  MARKDOWN_PREVIEW_BYTES,
   readMarkdownContent,
 } from "../src/content.js";
 
-describe("Markdown classification and bounded reads", () => {
+describe("Markdown classification and full reads", () => {
   it("recognizes uploads and historical MIME values without treating known binary formats as text", () => {
     for (const name of ["readme.md", "README.MD", "notes.markdown"]) {
       expect(isMarkdownFile(name, "text/plain; charset=utf-8")).toBe(true);
@@ -20,32 +19,20 @@ describe("Markdown classification and bounded reads", () => {
   });
 
   it("decodes complete UTF-8, BOM and empty files", async () => {
-    expect(await readMarkdownContent(new Response("\ufeff# 中文 😀"))).toEqual({
-      text: "# 中文 😀",
-      truncated: false,
-    });
-    expect(await readMarkdownContent(new Response(""))).toEqual({ text: "", truncated: false });
-    expect(
-      (await readMarkdownContent(new Response("x".repeat(MARKDOWN_PREVIEW_BYTES)))).truncated,
-    ).toBe(false);
+    expect(await readMarkdownContent(new Response("\ufeff# 中文 😀"))).toBe("# 中文 😀");
+    expect(await readMarkdownContent(new Response(""))).toBe("");
   });
 
-  it("bounds even a server that ignores Range and drops only the incomplete UTF-8 tail", async () => {
-    const result = await readMarkdownContent(new Response("中".repeat(MARKDOWN_PREVIEW_BYTES)));
-    expect(result.truncated).toBe(true);
-    expect(result.text).toBe("中".repeat(Math.floor(MARKDOWN_PREVIEW_BYTES / 3)));
+  it("reads files larger than 256 KiB through the final character", async () => {
+    const text = "# 大文件\n" + "中文😀".repeat(50000) + "\n## 文件末尾";
+    expect(await readMarkdownContent(new Response(text))).toBe(text);
   });
 
-  it("handles partial responses and rejects invalid ranges, invalid UTF-8, binary and HTTP errors", async () => {
-    expect(
-      await readMarkdownContent(
-        new Response("abc", { status: 206, headers: { "Content-Range": "bytes 0-2/10" } }),
-      ),
-    ).toEqual({ text: "abc", truncated: true });
+  it("rejects partial responses, invalid UTF-8, binary and HTTP errors", async () => {
     for (const response of [
       new Response("no", { status: 403 }),
       new Response("abc", { status: 206 }),
-      new Response("abc", { status: 206, headers: { "Content-Range": "bytes 3-5/6" } }),
+      new Response("abc", { status: 206, headers: { "Content-Range": "bytes 0-2/10" } }),
       new Response(new Uint8Array([0xff])),
       new Response(new Uint8Array([0xe4, 0xb8])),
       new Response("bad\0text"),
@@ -54,18 +41,15 @@ describe("Markdown classification and bounded reads", () => {
     }
   });
 
-  it("cancels oversized streams", async () => {
-    let cancelled = false;
+  it("preserves UTF-8 characters split across stream chunks", async () => {
+    const bytes = new TextEncoder().encode("中文😀");
     const stream = new ReadableStream({
-      pull(controller) {
-        controller.enqueue(new Uint8Array(MARKDOWN_PREVIEW_BYTES + 10).fill(65));
-      },
-      cancel() {
-        cancelled = true;
+      start(controller) {
+        for (const byte of bytes) controller.enqueue(new Uint8Array([byte]));
+        controller.close();
       },
     });
-    expect((await readMarkdownContent(new Response(stream))).truncated).toBe(true);
-    expect(cancelled).toBe(true);
+    expect(await readMarkdownContent(new Response(stream))).toBe("中文😀");
   });
 });
 
