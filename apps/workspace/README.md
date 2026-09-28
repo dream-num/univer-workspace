@@ -281,14 +281,15 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V6 product databases to V7 automatically.
+backs up and migrates supported V0 through V7 product databases to V8 automatically.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` and the product V7 schema are unchanged. Before creating
+`history=2`; `comment=1` is unchanged. The product schema moves from V7 to V8 by
+adding content-permission tables. Before creating
 application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V7,
+2. Start a single new instance. Startup first prepares the product database to V8,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -319,9 +320,10 @@ and restore the matching pre-upgrade product/Collaboration/Blob backups; changin
 only the application image is insufficient. Retain backups until rollout is accepted.
 V7 extends the Operation kind and object deletion reason for Blob replacement; existing
 Blob rows and upload sessions are preserved.
-For a V7 rollout, stop every old Workspace instance, start one V7 instance and
+V8 adds content permission objects and collaborators without rewriting existing tables.
+For a V8 rollout, stop every old Workspace instance, start one V8 instance and
 wait for migration and health checks to succeed, then restore normal service;
-do not let V6 and V7 processes write the same SQLite file concurrently.
+do not let V7 and V8 processes write the same SQLite file concurrently.
 
 The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
 repository tag. When provided, it checks out that tag and uses it for the container
@@ -435,3 +437,11 @@ HTML cell bindings active. Each target is independently authorized; sharing the
 HTML does not share its source files. `hideUnit()` closes the preview, and the
 host's **Open file** action leads to the standard editor. Stable paragraph, cell
 and slide navigation are supported. See the [page API and limits](../../docs/design/html-views/native-preview.md).
+
+### Unit content edit protection
+
+Sheet, Doc, Slide, Board and Base use the SDK protection UI and server mutation analysis.
+Editors create protections; their creator and current Owner/Admin manage them. Worktrees
+inherit current Trunk policy and cannot manage bindings or collaborators. Content remains
+readable under the existing file permissions, including snapshots, history and exports.
+See [validation and release gate](docs/content-permissions-validation.md).

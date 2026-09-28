@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V7 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V8 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -40,16 +40,16 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V7；
-- V7：校验 Schema 指纹；
-- V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V7；
-- V0：一致性备份后直接迁移到 V7；
+- Fresh：创建 V8；
+- V8：校验 Schema 指纹；
+- V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V8；
+- V0：一致性备份后直接迁移到 V8；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V7 Query。
+Worktree 等业务模块只编译和运行 V8 Query。
 
-V7 仅扩展 Operation 和 Object Deletion Job 枚举；不扩展 Blob 上传会话或 Worktree 合同。
+V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表，不改写现有业务表。
 
 ## Collaboration SDK 升级边界
 
@@ -57,7 +57,7 @@ SDK 1.0.0 启动时先准备产品数据库，再运行隔离的 `prepareCollabo
 应用 Service。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 2、Worktree 3、History 2；
-Comment 1 和产品 V7 不变。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Comment 1 不变。产品数据库先准备到 V8，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
@@ -288,3 +288,13 @@ Web 应用的 Tree Row 总是 Node：
 
 OpenAPI 生成类型是 Web 应用与服务端的唯一 HTTP 结构约束。旧 Route 不在 OpenAPI 中，
 Express 的未知 `/api/*` 路由直接返回 404，不落入 Web SPA Fallback。
+
+## 内容保护授权
+
+产品 `content-permissions` Repository 保存 ACL，Univer integration 实现 SDK Authz 路由，并在
+`commitChangeset` 按 SDK 分析出的权限需求授权。文件 Owner 与 Admin 继承对象权限。查看和编辑范围都保存；
+编辑范围为 `OneSelf` 时，非 Owner 只在查看范围为所有协作者时保留 View；否则 View 只来自对象角色。复制、打印、导出服从对象 strategies。
+Snapshot、history 和 export 不按对象范围过滤。权限始终与文件访问权限取交集；Editor 可创建，
+创建者和 Owner/Admin 可管理。Worktree 使用独立 Authz 路径读取当前 Trunk ACL，拒绝管理；
+直接提交和合并都在 commit 阶段重新检查。现有产品 HTTP OpenAPI 不新增接口：
+`/universer-api/authz` 及 Worktree scope 路由仍属于 SDK 协议适配。
