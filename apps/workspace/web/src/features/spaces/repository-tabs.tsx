@@ -112,6 +112,7 @@ function RepositoryTabLink({
       to="/spaces/$spaceId"
       params={{ spaceId }}
       search={to.tab === "files" ? {} : { view: to.view }}
+      activeOptions={{ exact: true, includeSearch: true }}
       aria-current={active ? "page" : undefined}
       className={repositoryTabClass(active)}
     >

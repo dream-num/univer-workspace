@@ -112,13 +112,21 @@ function NodePage() {
   const resource = resourceQuery.data?.resource;
   const user = session.data.authenticated ? session.data.user : anonymousUser;
   const selectedNodePath = [...query.data.breadcrumbs.map((item) => item.id), node.id];
-  const repositoryBreadcrumbs = query.data.breadcrumbs.map((item) => ({
+  const repository = workspaceTheme === "repository";
+  // The node endpoint only returns the Node itself in `breadcrumbs`; a resource
+  // needs its parent's children page to know the folder it lives in.
+  const parentPage = useQuery({
+    ...nodeChildrenQueryOptions(node.parentNodeId ?? ""),
+    enabled: repository && node.resource !== null && node.parentNodeId !== null,
+  });
+  const ancestorCrumbs =
+    node.resource === null ? children.data?.breadcrumbs : parentPage.data?.breadcrumbs;
+  const repositoryBreadcrumbs = (ancestorCrumbs ?? []).map((item) => ({
     label: item.name,
     nodeId: item.id,
   }));
   const isEditing =
     session.data.authenticated && resource?.kind === "univer" && resource.editorMode === "edit";
-  const repository = workspaceTheme === "repository";
 
   // Keep one layout for folders, Blobs and Univer documents. Only the resource
   // content and its header controls reset when their identity changes.

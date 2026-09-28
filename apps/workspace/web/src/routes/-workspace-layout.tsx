@@ -175,11 +175,12 @@ function RepositoryBreadcrumbs({
   if (spaceId !== undefined) {
     ancestorItems.push(
       <li key={`space-${spaceId}`} className="flex min-w-0 items-center gap-2">
-        <BreadcrumbSeparator />
+        <BreadcrumbSeparator className="hidden sm:inline" />
         <Link
           to="/spaces/$spaceId"
           params={{ spaceId }}
           search={{}}
+          activeOptions={{ exact: true }}
           className={cn(
             breadcrumbLinkClass,
             "max-w-40 sm:max-w-52",
@@ -200,9 +201,14 @@ function RepositoryBreadcrumbs({
     const isLastAncestor = index === trail.length - 1 && current === undefined;
     ancestorItems.push(
       <li key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-2">
-        <BreadcrumbSeparator />
+        <BreadcrumbSeparator className={isLastAncestor ? undefined : "hidden sm:inline"} />
         {item.nodeId === undefined ? (
-          <span className={cn("max-w-40 truncate text-muted-foreground sm:max-w-52")}>
+          <span
+            className={cn(
+              "max-w-40 truncate text-muted-foreground sm:max-w-52",
+              isLastAncestor ? undefined : "hidden sm:inline",
+            )}
+          >
             {item.label}
           </span>
         ) : (
@@ -237,7 +243,7 @@ function RepositoryBreadcrumbs({
         {ancestorItems}
         {current !== undefined ? (
           <li className="flex min-w-0 items-center gap-2">
-            <BreadcrumbSeparator />
+            <BreadcrumbSeparator className={undefined} />
             <h1 className="m-0 min-w-0 truncate text-[18px] font-semibold tracking-tight max-[720px]:text-[15px]">
               {current}
             </h1>
@@ -248,9 +254,9 @@ function RepositoryBreadcrumbs({
   );
 }
 
-function BreadcrumbSeparator() {
+function BreadcrumbSeparator({ className }: { readonly className: string | undefined }) {
   return (
-    <span aria-hidden="true" className="shrink-0 text-muted-foreground/60">
+    <span aria-hidden="true" className={cn("shrink-0 text-muted-foreground/60", className)}>
       /
     </span>
   );
