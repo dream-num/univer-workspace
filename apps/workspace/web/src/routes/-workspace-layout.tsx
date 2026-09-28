@@ -31,8 +31,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { sessionQueryKey, sessionQueryOptions } from "../features/auth";
-import { AppsSidebarSection } from "../features/html-views/apps-sidebar";
+import { sessionQueryKey, sessionQueryOptions } from "../features/auth";import { AppsSidebarSection } from "../features/html-views/apps-sidebar";
 import { spacesQueryKey, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceNavigationTree } from "../features/nodes";
 import { useWorktreeChangeFeed, worktreeListQueryOptions } from "../features/worktrees";
@@ -76,6 +75,9 @@ import {
   toast,
 } from "../shared/ui";
 import { cn } from "../shared/utils/cn";
+import type { components } from "../../../generated/http/schema.js";
+
+type SpaceView = components["schemas"]["SpaceView"];
 
 type WorkspaceView = "home" | "apps" | "trash" | "worktrees" | "members";
 
@@ -148,17 +150,27 @@ export function WorkspaceHeaderSearch({
 function RepositoryBreadcrumbs({
   spaceId,
   spaceName,
+  space,
   breadcrumbs,
   current,
 }: {
   readonly spaceId: string | undefined;
   readonly spaceName: string;
+  readonly space: SpaceView | undefined;
   readonly breadcrumbs: readonly RepositoryBreadcrumb[] | undefined;
   readonly current: ReactNode | undefined;
 }) {
+  const { t } = useI18n();
   const trail = [...(breadcrumbs ?? [])];
   // The current page is rendered from `current`; a matching last crumb would only repeat it.
   if (typeof current === "string" && trail[trail.length - 1]?.label === current) trail.pop();
+  const visibility = space
+    ? space.type === "personal"
+      ? "repositoryVisibilityPersonal"
+      : space.publicRead
+        ? "repositoryVisibilityPublic"
+        : "repositoryVisibilityPrivate"
+    : undefined;
   const ancestorItems: ReactNode[] = [];
   if (spaceId !== undefined) {
     ancestorItems.push(
@@ -176,6 +188,11 @@ function RepositoryBreadcrumbs({
         >
           {spaceName}
         </Link>
+        {visibility ? (
+          <span className="hidden shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground sm:inline">
+            {t(visibility)}
+          </span>
+        ) : null}
       </li>,
     );
   }
@@ -631,6 +648,7 @@ function AuthenticatedWorkspaceLayout({
                 <RepositoryBreadcrumbs
                   spaceId={selectedSpaceId}
                   spaceName={spaceTitle ?? t("repositories")}
+                  space={selectedSpace}
                   breadcrumbs={repositoryBreadcrumbs}
                   current={headerTitle}
                 />

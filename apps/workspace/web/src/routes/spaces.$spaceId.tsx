@@ -140,6 +140,11 @@ function SpaceNodePage() {
     <WorkspaceLayout
       selectedSpaceId={spaceId}
       {...(repositoryTheme ? { repositoryTab: repositoryView } : {})}
+      headerActions={
+        repositoryTheme && space.capabilities.createAtRoot ? (
+          <CreateNodeDropdown spaceId={spaceId} />
+        ) : undefined
+      }
       headerContent={
         repositoryTheme ? (
           <WorkspaceHeaderSearch
@@ -274,14 +279,8 @@ function FilesView({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="grid min-w-0 content-start gap-6">
         <section className="min-w-0 rounded-lg border border-border bg-background">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div className="border-b border-border px-4 py-3">
             <h2 className="m-0 text-base font-semibold">{t("repositoryFiles")}</h2>
-            {page.nodes.length > 0 ? (
-              <CreateNodeDropdown
-                spaceId={spaceId}
-                {...(page.parentNode ? { parentNodeId: page.parentNode.id } : {})}
-              />
-            ) : null}
           </div>
           <NodeBrowser
             page={page}
