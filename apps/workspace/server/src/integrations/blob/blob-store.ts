@@ -106,7 +106,7 @@ export class LocalBlobStore implements BlobStore {
         etag: sha256,
       };
       return sample
-        ? { ...stored, mediaType: detectMediaType(Buffer.concat(sample)) }
+        ? { ...stored, mediaType: detectMediaType(Buffer.concat(sample), byteSize > sampleBytes) }
         : stored;
     } catch (error) {
       output.destroy();
@@ -165,7 +165,7 @@ export class LocalBlobStore implements BlobStore {
   }
 }
 
-function detectMediaType(sample: Buffer): string {
+function detectMediaType(sample: Buffer, truncated: boolean): string {
   if (sample.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"))) {
     return "image/png";
   }
@@ -192,7 +192,7 @@ function detectMediaType(sample: Buffer): string {
   }
   if (sample.byteLength === 0) return "application/octet-stream";
   try {
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(sample);
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(sample, { stream: truncated });
     if (![...text].some((character) => character < " " && !"\n\r\t".includes(character))) {
       return "text/plain; charset=utf-8";
     }

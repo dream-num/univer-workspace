@@ -158,7 +158,9 @@ interface ResourcesModule {
 
 Resource 是由 `kind` 判别的联合。现有 `POST /api/resources` 只创建 Univer Resource；
 Blob Module 通过 Upload Session 接收字节，只有 Complete 才发布 Node/Resource。BlobStore
-保存字节，产品数据库保存元数据和删除 Outbox；前端根据服务端检测的 MIME 自行选择预览。
+保存字节，产品数据库保存元数据和删除 Outbox；前端根据服务端检测的 MIME 和原始文件扩展名选择预览。
+`.md`/`.markdown` 使用只读 GFM 预览，保留源码切换与下载；兼容历史 octet-stream 分类时，
+读取后先验证 UTF-8 与控制字符，不把文件名当成内容安全保证。
 
 Blob 内容替换使用单次 PUT 和强 ETag 并发校验，直接发布到原 Resource。
 `replace_blob_content` Operation 记录上传意图；产品事务只在新字节就绪且权限仍有效时切换对象，
@@ -282,7 +284,7 @@ Web 应用的 Tree Row 总是 Node：
 - `resource === null` 表示纯组织 Node；
 - `resource !== null` 时用 Resource ID 调 Open API；
 - `resource.kind === "univer"` 时打开 Univer Editor；
-- `resource.kind === "blob"` 时根据 MIME 选择预览，未知类型显示下载；
+- `resource.kind === "blob"` 时根据 MIME 与原始文件扩展名选择预览，未知类型显示下载；
 - 权限、Move、Trash 全部传 Node ID；
 - Recent 和 Worktree 内容操作使用 Resource ID。
 

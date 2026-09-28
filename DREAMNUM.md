@@ -33,6 +33,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   It owns sandbox rendering and Binding Host lifecycle; applications own source authorization,
   runtime assembly, and leave/save behavior.
 
+- The private Markdown viewer under `packages/workspace-markdown-viewer`, shared by Browser and Agent.
+  It owns read-only GFM rendering and URL presentation policy; applications own authenticated
+  content loading and downloads. Markdown remains a Blob Resource, not a new Unit type.
+
 ## Provides
 
 - **Univer Workspace** — the deployable Browser and Server application, product HTTP API, authenticated and anonymous read-only
