@@ -49,6 +49,10 @@ version-history UI. Viewers can inspect versions, while users with content edit
 permission can restore one. Worktree and merge-preview editors do not expose
 Trunk History.
 
+The smart workbench offers Workspace Agent downloads and CLI/Skill installation guidance
+when the signed-in user has never created a Worktree and has no visible tasks. Users with
+visible team tasks see a compact introduction alongside their task list.
+
 Worktree review keeps the agent draft as its default view and also offers a
 structured, read-only side-by-side comparison. The Server materializes and
 decodes the authoritative Trunk and draft states, computes semantic differences

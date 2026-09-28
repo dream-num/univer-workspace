@@ -188,6 +188,7 @@ export interface WorktreesModule {
     }
   ): Promise<{
     readonly items: readonly WorktreeSummary[];
+    readonly hasCreatedWorktree: boolean;
     readonly nextCursor: string | null;
   }>;
   create(

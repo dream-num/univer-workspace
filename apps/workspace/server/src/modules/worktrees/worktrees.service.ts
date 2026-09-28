@@ -207,6 +207,7 @@ export function createWorktreesModule(options: {
       const last = page.at(-1);
       return {
         items: page.map((item) => item.summary),
+        hasCreatedWorktree: options.repository.hasCreatedWorktree(userId),
         nextCursor:
           hasNext && last
             ? encodeCursor({

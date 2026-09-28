@@ -167,3 +167,12 @@ opens, but its private Office sources and binding writes must stay unavailable.
 
 This fixture verifies the host boundary with simple documents. It does not certify
 complex cross-Unit formula materials, Office export fidelity or Worktree preview.
+
+## Worktree onboarding fixture
+
+Using the header fixture Vite command above, open
+`http://127.0.0.1:5182/test/fixtures/worktree-onboarding.html`.
+This renders the production onboarding component without accessing product data.
+Check both languages, light/dark themes, the compact team hint, narrow widths, and
+copying the two installation commands or the example service origin. Download and
+installation-guide links open the real public GitHub pages.

@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,6 +26,63 @@ afterEach(async () => {
 });
 
 describe("Worktrees", () => {
+  it("exposes creation history only for the authenticated HTTP caller", async () => {
+    const application = createTestApplication();
+    const creator = await register(application, "history-creator");
+    await application.worktrees.create(creator.id, "history-http-created", {
+      kind: "user", name: "Private task", summary: null,
+    });
+    const issued = await application.identity.registerWithPassword({
+      username: "history-newcomer", displayName: "Newcomer", password: "correct horse battery staple",
+    });
+    const server = createServer(application.app);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Missing test address");
+      const url = `http://127.0.0.1:${address.port}/api/worktrees?userId=${creator.id}`;
+      expect((await fetch(url)).status).toBe(401);
+      const response = await fetch(url, {
+        headers: { cookie: `${application.identity.cookieName}=${issued.cookieValue}` },
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ items: [], nextCursor: null, hasCreatedWorktree: false });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("reports the actor's creation history independently of visibility, filters and processed state", async () => {
+    const application = createTestApplication();
+    const owner = await register(application, "onboarding-owner");
+    const member = await register(application, "onboarding-member");
+    expect(await application.worktrees.list(owner.id, {})).toMatchObject({
+      items: [], hasCreatedWorktree: false,
+    });
+    const team = application.spaces.createTeamSpace(owner.id, { name: "Onboarding" });
+    application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role: "editor" });
+    const task = await application.worktrees.create(owner.id, "onboarding-team-task", {
+      kind: "team", teamSpaceId: team.id, visibility: "space", name: "Team draft", summary: null,
+    });
+    const memberList = await application.worktrees.list(member.id, {});
+    expect(memberList.items).toHaveLength(1);
+    expect(memberList.hasCreatedWorktree).toBe(false);
+    expect(await application.worktrees.list(owner.id, { search: "unmatched", kind: "user", limit: 1 }))
+      .toMatchObject({ items: [], hasCreatedWorktree: true });
+    await application.worktrees.discard(owner.id, task.body.id, "onboarding-discard");
+    expect(await application.worktrees.list(owner.id, { scope: "active" }))
+      .toMatchObject({ items: [], hasCreatedWorktree: true });
+    expect(await application.worktrees.list(owner.id, { scope: "processed" }))
+      .toMatchObject({ hasCreatedWorktree: true, items: [{ state: "discarded" }] });
+
+    const ownTask = await application.worktrees.create(member.id, "onboarding-member-task", {
+      kind: "team", teamSpaceId: team.id, visibility: "private", name: "My draft", summary: null,
+    });
+    application.permissions.removeTeamMember(owner.id, team.id, member.id);
+    expect((await application.worktrees.list(member.id, { search: "missing" })).hasCreatedWorktree).toBe(true);
+    expect(ownTask.body.creator.id).toBe(member.id);
+  });
+
   it("shares resource resolution within a summary and rechecks permissions on the next request", async () => {
     const application = createTestApplication();
     const owner = await register(application, "summary-owner");

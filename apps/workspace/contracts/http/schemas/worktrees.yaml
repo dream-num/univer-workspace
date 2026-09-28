@@ -194,8 +194,11 @@ WorktreeSummaryEnvelope:
 WorktreeList:
   type: object
   additionalProperties: false
-  required: [items, nextCursor]
+  required: [items, nextCursor, hasCreatedWorktree]
   properties:
+    hasCreatedWorktree:
+      type: boolean
+      description: Whether the authenticated user has a product Worktree creation record, including merged and discarded Worktrees. Independent of list filters and pagination; other users' Team Worktrees do not count.
     items:
       type: array
       items:

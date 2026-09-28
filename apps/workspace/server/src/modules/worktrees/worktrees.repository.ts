@@ -75,6 +75,14 @@ export interface WorktreeOperationRow {
 export class WorktreesRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
 
+  hasCreatedWorktree(userId: string): boolean {
+    return Boolean(
+      this._database.connection
+        .prepare("SELECT 1 FROM worktrees WHERE creator_user_id = ? LIMIT 1")
+        .get(userId)
+    );
+  }
+
   audience(worktreeId: string): string[] {
     const rows = this._database.connection
       .prepare(
