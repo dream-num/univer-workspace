@@ -136,7 +136,7 @@ function NodePage() {
       contentMode={node.resource ? "editor" : "default"}
       headerTitle={node.name}
       headerContent={
-        node.resource ? undefined : (
+        node.resource || repository ? undefined : (
           <WorkspaceHeaderSearch
             placeholder={t("searchNodes")}
             value={searchQuery}
@@ -197,6 +197,9 @@ function NodePage() {
                       t,
                       session.data.authenticated ? session.data.user.username : undefined,
                     )}
+                    onSearchChange={setSearchQuery}
+                    searchPlaceholder={t("repositoryGoToFile")}
+                    compact
                     className="[&>div]:h-auto [&>div]:overflow-visible [&>div>div:last-child]:overflow-visible"
                   />
                 </section>

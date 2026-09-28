@@ -10,7 +10,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  CreateNodeDropdown,
   NodeBrowser,
   ResourceUnavailablePage,
   isResourceUnavailableError,
@@ -21,7 +20,7 @@ import { BlobPreview } from "../features/blobs";
 import { htmlViewsQueryOptions } from "../features/views/html-views.queries";
 import { resourceOpenQueryOptions } from "../features/resources";
 import { RepositoryTabs, spaceDisplayName, spacesQueryOptions } from "../features/spaces";
-import { WorkspaceHeaderSearch, WorkspaceLayout } from "./-workspace-layout";
+import { WorkspaceLayout } from "./-workspace-layout";
 import { formatRelativeDate } from "../shared/format-relative-date";
 import { useI18n, type MessageKey } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
@@ -73,7 +72,6 @@ function SpaceNodePage() {
   const navigate = useNavigate();
   const { language, t } = useI18n();
   const { workspaceTheme } = useTheme();
-  const [searchQuery, setSearchQuery] = useState("");
   const [landingNodeId, setLandingNodeId] = useState<string | undefined>(() => {
     try {
       return window.localStorage.getItem(`univer-workspace-landing-app:${spaceId}`) ?? undefined;
@@ -147,20 +145,6 @@ function SpaceNodePage() {
     <WorkspaceLayout
       selectedSpaceId={spaceId}
       {...(repositoryTheme ? { repositoryTab: repositoryView } : {})}
-      headerActions={
-        repositoryTheme && space.capabilities.createAtRoot ? (
-          <CreateNodeDropdown spaceId={spaceId} />
-        ) : undefined
-      }
-      headerContent={
-        repositoryTheme ? (
-          <WorkspaceHeaderSearch
-            placeholder={t("repositoryGoToFile")}
-            value={searchQuery}
-            onChange={setSearchQuery}
-          />
-        ) : undefined
-      }
     >
       {repositoryTheme ? (
         <>
@@ -179,7 +163,6 @@ function SpaceNodePage() {
             }
             loading={apps.isPending || (selectedApp !== undefined && selectedResource.isPending)}
             error={apps.isError || selectedResource.isError}
-            searchQuery={searchQuery}
             onRetry={retryRepositoryPage}
             onSelectApp={setLandingApp}
             onOpenApps={() => navigate({ to: "/apps", search: { spaceId } })}
@@ -193,7 +176,6 @@ function SpaceNodePage() {
         <NodeBrowser
           page={query.data}
           canCreateAtRoot={space?.capabilities.createAtRoot ?? false}
-          searchQuery={searchQuery}
         />
       )}
     </WorkspaceLayout>
@@ -210,7 +192,6 @@ function RepositoryOverview({
   resource,
   loading,
   error,
-  searchQuery,
   onRetry,
   onSelectApp,
   onOpenApps,
@@ -228,7 +209,6 @@ function RepositoryOverview({
   readonly resource: RepositoryBlob | undefined;
   readonly loading: boolean;
   readonly error: boolean;
-  readonly searchQuery: string;
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
   readonly onOpenApps: () => void;
@@ -251,7 +231,6 @@ function RepositoryOverview({
             resource={resource}
             loading={loading}
             error={error}
-            searchQuery={searchQuery}
             onRetry={onRetry}
             onSelectApp={onSelectApp}
             onOpenApps={onOpenApps}
@@ -282,7 +261,6 @@ function FilesView({
   resource,
   loading,
   error,
-  searchQuery,
   onRetry,
   onSelectApp,
   onOpenApps,
@@ -298,7 +276,6 @@ function FilesView({
   readonly resource: RepositoryBlob | undefined;
   readonly loading: boolean;
   readonly error: boolean;
-  readonly searchQuery: string;
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
   readonly onOpenApps: () => void;
@@ -309,16 +286,20 @@ function FilesView({
 }) {
   const { t } = useI18n();
   const showDefaultApp = loading || error || apps.length > 0;
+  const [searchQuery, setSearchQuery] = useState("");
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="grid min-w-0 content-start gap-6">
         <section className="min-w-0 rounded-lg border border-border bg-background">
           <NodeBrowser
             page={page}
-            canCreateAtRoot={false}
+            canCreateAtRoot={space?.capabilities.createAtRoot ?? false}
             showParentRow={page.parentNode !== null}
             spaceName={spaceName}
             searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder={t("repositoryGoToFile")}
+            compact
             className="[&>div]:h-auto [&>div]:overflow-visible [&>div>div:last-child]:overflow-visible"
           />
         </section>

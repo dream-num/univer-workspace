@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { FolderUp } from "lucide-react";
+import { FolderUp, Search } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
@@ -36,15 +36,24 @@ type NodeFilter =
 const nodeGrid =
   "grid items-center gap-5 grid-cols-[minmax(280px,1fr)_132px_180px_40px] max-[980px]:grid-cols-[minmax(220px,1fr)_160px_40px] max-[720px]:grid-cols-[minmax(160px,1fr)_40px] max-[720px]:gap-3";
 
+/** The repository shell drops the access column and shows denser rows. */
+const compactNodeGrid =
+  "grid items-center gap-5 grid-cols-[minmax(280px,1fr)_180px_40px] max-[720px]:grid-cols-[minmax(160px,1fr)_40px] max-[720px]:gap-3";
+
 /** Repository pages embed the browser in a naturally growing card instead of a fixed-height pane. */
 export function NodeBrowser(props: {
   readonly page: NodePage;
   readonly canCreateAtRoot?: boolean;
   readonly actions?: ReactNode;
   readonly searchQuery?: string;
+  /** Renders the search box in the card header when provided. */
+  readonly onSearchChange?: (value: string) => void;
+  readonly searchPlaceholder?: string;
   readonly showParentRow?: boolean;
   /** Display name of the Space for the parent row; defaults to the API name. */
   readonly spaceName?: string | undefined;
+  /** Hides the access column and tightens rows for the repository view. */
+  readonly compact?: boolean;
   readonly className?: string;
 }) {
   const [editNode, setEditNode] = useState<Node | null>(null);
@@ -61,6 +70,9 @@ export function NodeBrowser(props: {
   const normalizedSearch = (props.searchQuery ?? "")
     .trim()
     .toLocaleLowerCase();
+  const nodeGridClass = props.compact ? compactNodeGrid : nodeGrid;
+  const rowHeightClass = props.compact ? "min-h-10 max-[720px]:min-h-12" : "min-h-14";
+  const searchLabel = props.searchPlaceholder ?? t("searchNodes");
   const parentRow = props.showParentRow ? nodeParentRow(props.page, props.spaceName) : undefined;
   const visibleNodes = props.page.nodes.filter((node) => {
     const matchesType =
@@ -126,42 +138,63 @@ export function NodeBrowser(props: {
     <>
       <div className={cn("flex h-full min-h-0 flex-col", props.className)}>
         <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border px-6 py-2.5 max-[720px]:px-4">
-          <div className="grid min-w-0 gap-0.5">
-            {parentNodeId && !props.showParentRow ? (
-              <Breadcrumb
-                items={[
-                  ...(props.page.navigationRootNodeId === null ? [{
-                    label: props.page.space.name,
-                    link: (
-                      <Link
-                        to="/spaces/$spaceId"
-                        params={{ spaceId: props.page.space.id }}
-                      >
-                        {props.page.space.name}
-                      </Link>
-                    ),
-                  }] : []),
-                  ...props.page.breadcrumbs.map((item, index) => ({
-                    label: item.name,
-                    link:
-                      index === props.page.breadcrumbs.length - 1
-                        ? undefined
-                        : (
-                            <Link
-                              to="/nodes/$nodeId"
-                              params={{ nodeId: item.id }}
-                            >
-                              {item.name}
-                            </Link>
-                          ),
-                  })),
-                ]}
-              />
-            ) : null}
-            <p className="m-0 text-[13px] text-muted-foreground">
-              {t("itemsCount", { count: props.page.nodes.length })}
-            </p>
-          </div>
+          {props.onSearchChange ? (
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+              <div className="relative w-full max-w-sm min-w-0">
+                <Search
+                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  aria-label={searchLabel}
+                  className="h-9 pl-9"
+                  placeholder={searchLabel}
+                  value={props.searchQuery ?? ""}
+                  onChange={(event) => props.onSearchChange?.(event.target.value)}
+                />
+              </div>
+              <p className="m-0 text-[13px] text-muted-foreground">
+                {t("itemsCount", { count: props.page.nodes.length })}
+              </p>
+            </div>
+          ) : (
+            <div className="grid min-w-0 gap-0.5">
+              {parentNodeId && !props.showParentRow ? (
+                <Breadcrumb
+                  items={[
+                    ...(props.page.navigationRootNodeId === null ? [{
+                      label: props.page.space.name,
+                      link: (
+                        <Link
+                          to="/spaces/$spaceId"
+                          params={{ spaceId: props.page.space.id }}
+                        >
+                          {props.page.space.name}
+                        </Link>
+                      ),
+                    }] : []),
+                    ...props.page.breadcrumbs.map((item, index) => ({
+                      label: item.name,
+                      link:
+                        index === props.page.breadcrumbs.length - 1
+                          ? undefined
+                          : (
+                              <Link
+                                to="/nodes/$nodeId"
+                                params={{ nodeId: item.id }}
+                              >
+                                {item.name}
+                              </Link>
+                            ),
+                    })),
+                  ]}
+                />
+              ) : null}
+              <p className="m-0 text-[13px] text-muted-foreground">
+                {t("itemsCount", { count: props.page.nodes.length })}
+              </p>
+            </div>
+          )}
           {props.actions || canCreate ? (
             <div className="flex flex-wrap items-center gap-2">
               {props.actions}
@@ -182,8 +215,9 @@ export function NodeBrowser(props: {
           <>
             <div
               className={cn(
-                nodeGrid,
-                "h-11 shrink-0 border-b border-border px-6 text-[13px] font-medium text-muted-foreground max-[720px]:px-4"
+                nodeGridClass,
+                "shrink-0 border-b border-border px-6 text-[13px] font-medium text-muted-foreground max-[720px]:px-4",
+                props.compact ? "h-10" : "h-11"
               )}
             >
               <Select<NodeFilter>
@@ -203,7 +237,9 @@ export function NodeBrowser(props: {
                 ]}
                 onValueChange={setTypeFilter}
               />
-              <span className="max-[980px]:hidden">{t("access")}</span>
+              {props.compact ? null : (
+                <span className="max-[980px]:hidden">{t("access")}</span>
+              )}
               <span className="max-[720px]:hidden">
                 {t("lastModified")}
               </span>
@@ -213,8 +249,9 @@ export function NodeBrowser(props: {
               {parentRow ? (
                 <div
                   className={cn(
-                    nodeGrid,
-                    "group relative min-h-14 rounded-lg px-3 text-muted-foreground transition-colors max-[720px]:px-2.5",
+                    nodeGridClass,
+                    rowHeightClass,
+                    "group relative rounded-lg px-3 text-muted-foreground transition-colors max-[720px]:px-2.5",
                     "hover:bg-muted/70 focus-within:z-10"
                   )}
                 >
@@ -240,7 +277,9 @@ export function NodeBrowser(props: {
                       ..
                     </span>
                   </div>
-                  <span aria-hidden="true" className="max-[980px]:hidden" />
+                  {props.compact ? null : (
+                    <span aria-hidden="true" className="max-[980px]:hidden" />
+                  )}
                   <span className="text-sm max-[720px]:hidden">
                     {t("parentDirectory")}
                   </span>
@@ -263,8 +302,9 @@ export function NodeBrowser(props: {
                     {(actions) => (
                       <div
                         className={cn(
-                          nodeGrid,
-                          "group relative min-h-14 rounded-lg px-3 text-muted-foreground transition-colors max-[720px]:px-2.5",
+                          nodeGridClass,
+                          rowHeightClass,
+                          "group relative rounded-lg px-3 text-muted-foreground transition-colors max-[720px]:px-2.5",
                           "hover:bg-muted/70 data-popup-open:bg-muted/70 focus-within:z-10"
                         )}
                       >
@@ -298,9 +338,11 @@ export function NodeBrowser(props: {
                             {node.name}
                           </span>
                         </div>
-                        <span className="truncate text-sm max-[980px]:hidden">
-                          {accessRoleLabel(node.accessRole, t)}
-                        </span>
+                        {props.compact ? null : (
+                          <span className="truncate text-sm max-[980px]:hidden">
+                            {accessRoleLabel(node.accessRole, t)}
+                          </span>
+                        )}
                         <time
                           className="truncate text-sm max-[720px]:hidden"
                           dateTime={node.updatedAt}
