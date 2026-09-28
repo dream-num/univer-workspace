@@ -46,18 +46,14 @@ RUN mkdir -p /opt/dsh/home/internal-packages \
   && pnpm --filter dsh-univer-workspace-plugin pack --pack-destination /opt/dsh/home/internal-packages \
   && pnpm --filter dsh-univer-workspace-skin-plugin pack --pack-destination /opt/dsh/home/internal-packages
 
-# Install the dsh CLI into a bootstrap directory separate from the workspace so
-# the harness never depends on @deepseek-ai/dsh at the workspace level (that
-# would drag the dsh client's react 18 tree into the Univer react 19 graph).
-RUN mkdir -p /opt/dsh/bootstrap && cd /opt/dsh/bootstrap \
-  && printf 'registry=%s\n' "$NPM_REGISTRY" > .npmrc \
-  && corepack pnpm add --prefer-offline \
-      --allow-build=@deepseek-ai/dsh-subprocess-local \
-      --allow-build=@google/genai \
-      --allow-build=koffi \
-      --allow-build=node-pty \
-      --allow-build=protobufjs \
-      @deepseek-ai/dsh@0.1.5-rc.1
+# Materialize the DSH runtime cohort (packages/dsh-runtime) from its committed
+# lockfile into a self-contained bootstrap tree. Deploying keeps the CLI's
+# react 18 graph outside the workspace install, and the frozen install pins
+# transitive versions that previously floated at build time.
+RUN pnpm --dir packages/dsh-runtime install --frozen-lockfile \
+  && pnpm --dir packages/dsh-runtime deploy --legacy \
+      --filter @univerjs/univer-workspace-dsh-runtime \
+      --prod --config.node-linker=hoisted /opt/dsh/bootstrap
 
 # Build the profile through the official `dsh plugin` command so the profile's
 # package.json and dsh.profile.bundles list are reconciled by the tool — never

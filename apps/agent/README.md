@@ -239,10 +239,11 @@ pnpm install --frozen-lockfile
 The checked-in `.npmrc` selects the registry for the pinned Univer SDK release.
 The installation also needs access to the public npm registry for DSH packages.
 
-The Workspace Agent is a local Web page, not a desktop application. The DSH CLI must be
-installed outside this pnpm workspace so its React 18 dependency tree does not
-enter the Univer React 19 graph. From the repository root, prepare one isolated
-local installation:
+The Workspace Agent is a local Web page, not a desktop application. The DSH runtime
+cohort is declared by `packages/dsh-runtime`, a standalone nested workspace whose
+committed lockfile pins the whole graph; `pnpm deploy` materializes it as a
+self-contained tree outside the workspace install so the CLI keeps its own React 18
+dependency graph. From the repository root, prepare the local installation:
 
 ```bash
 export UWH_LOCAL_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/univer-workspace-harness"
@@ -252,8 +253,10 @@ export UWH_DSH_DATA_HOME="$UWH_LOCAL_ROOT/data"
 mkdir -p "$UWH_DSH_BOOTSTRAP" "$DSH_HOME/internal-packages"
 export UWA_PACKAGES="$(mktemp -d "$DSH_HOME/internal-packages/build.XXXXXX")"
 
-npm install --prefix "$UWH_DSH_BOOTSTRAP" --save-exact \
-  @deepseek-ai/dsh@0.1.5-rc.1
+pnpm --dir packages/dsh-runtime install --frozen-lockfile
+pnpm --dir packages/dsh-runtime deploy --legacy \
+  --filter @univerjs/univer-workspace-dsh-runtime \
+  --prod --config.node-linker=hoisted "$UWH_DSH_BOOTSTRAP"
 export DSH_BIN="$UWH_DSH_BOOTSTRAP/node_modules/@deepseek-ai/dsh/lib/bin.js"
 
 pnpm --filter @univerjs/workspace-agent build

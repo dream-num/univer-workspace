@@ -2,6 +2,10 @@ packages:
   - apps/*
   - apps/agent/desktop
   - packages/*
+  # The dsh runtime cohort is a standalone nested workspace with its own
+  # committed lockfile: sharing the root graph re-resolves consumers' optional
+  # peers and splits branded types across the workspace.
+  - "!packages/dsh-runtime"
 
 # Like DSH's signer patch, skip Framework symlinks; also bound file probing
 # for the external runtime. Remove once osx-sign fixes both in a release.
