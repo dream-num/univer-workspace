@@ -27,8 +27,10 @@ import { useI18n, type MessageKey } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
 import { worktreeListQueryOptions } from "../features/worktrees";
 import type { components } from "../../../generated/http/schema.js";
-import { Button, Empty } from "../shared/ui";
+import { Button, Empty, buttonVariants } from "../shared/ui";
 import { cn } from "../shared/utils/cn";
+
+type SpaceView = components["schemas"]["SpaceView"];
 
 type RepositoryPage = components["schemas"]["NodePage"];
 type RepositoryApp = components["schemas"]["OwnedResourceItem"];
@@ -160,6 +162,7 @@ function SpaceNodePage() {
           <RepositoryTabs spaceId={spaceId} active={repositoryView} />
           <RepositoryOverview
             spaceId={spaceId}
+            space={space}
             page={query.data}
             apps={spaceApps}
             selectedApp={selectedApp}
@@ -170,10 +173,12 @@ function SpaceNodePage() {
             }
             loading={apps.isPending || (selectedApp !== undefined && selectedResource.isPending)}
             error={apps.isError || selectedResource.isError}
+            searchQuery={searchQuery}
             onRetry={retryRepositoryPage}
             onSelectApp={setLandingApp}
             onOpenApps={() => navigate({ to: "/apps", search: { spaceId } })}
             view={repositoryView}
+            openWorktreeCount={openWorktreeCount}
             worktrees={spaceWorktrees}
             onOpenWorktrees={() => navigate({ to: "/worktrees", search: { spaceId } })}
           />
@@ -191,30 +196,36 @@ function SpaceNodePage() {
 
 function RepositoryOverview({
   spaceId,
+  space,
   page,
   apps,
   selectedApp,
   resource,
   loading,
   error,
+  searchQuery,
   onRetry,
   onSelectApp,
   onOpenApps,
   view,
+  openWorktreeCount,
   worktrees,
   onOpenWorktrees,
 }: {
   readonly spaceId: string;
+  readonly space: SpaceView | undefined;
   readonly page: RepositoryPage;
   readonly apps: readonly RepositoryApp[];
   readonly selectedApp: RepositoryApp | undefined;
   readonly resource: RepositoryBlob | undefined;
   readonly loading: boolean;
   readonly error: boolean;
+  readonly searchQuery: string;
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
   readonly onOpenApps: () => void;
   readonly view: RepositoryView;
+  readonly openWorktreeCount: number;
   readonly worktrees: readonly Worktree[];
   readonly onOpenWorktrees: () => void;
 }) {
@@ -224,15 +235,19 @@ function RepositoryOverview({
         {view === "files" ? (
           <FilesView
             spaceId={spaceId}
+            space={space}
             page={page}
             apps={apps}
             selectedApp={selectedApp}
             resource={resource}
             loading={loading}
             error={error}
+            searchQuery={searchQuery}
             onRetry={onRetry}
             onSelectApp={onSelectApp}
             onOpenApps={onOpenApps}
+            openWorktreeCount={openWorktreeCount}
+            fileCount={page.nodes.length}
           />
         ) : view === "apps" ? (
           <AppsView
@@ -258,9 +273,13 @@ function FilesView({
   resource,
   loading,
   error,
+  searchQuery,
   onRetry,
   onSelectApp,
   onOpenApps,
+  openWorktreeCount,
+  fileCount,
+  space,
 }: {
   readonly spaceId: string;
   readonly page: RepositoryPage;
@@ -269,9 +288,13 @@ function FilesView({
   readonly resource: RepositoryBlob | undefined;
   readonly loading: boolean;
   readonly error: boolean;
+  readonly searchQuery: string;
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
   readonly onOpenApps: () => void;
+  readonly openWorktreeCount: number;
+  readonly fileCount: number;
+  readonly space: SpaceView | undefined;
 }) {
   const { t } = useI18n();
   const showDefaultApp = loading || error || apps.length > 0;
@@ -279,35 +302,55 @@ function FilesView({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="grid min-w-0 content-start gap-6">
         <section className="min-w-0 rounded-lg border border-border bg-background">
-          <div className="border-b border-border px-4 py-3">
-            <h2 className="m-0 text-base font-semibold">{t("repositoryFiles")}</h2>
-          </div>
           <NodeBrowser
             page={page}
             canCreateAtRoot={false}
             showParentRow={page.parentNode !== null}
+            searchQuery={searchQuery}
             className="[&>div]:h-auto [&>div]:overflow-visible [&>div>div:last-child]:overflow-visible"
           />
         </section>
         {showDefaultApp ? (
           <section className="min-w-0 rounded-lg border border-border bg-background">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <h2 className="m-0 min-w-0 truncate text-base font-semibold">
-                {selectedApp ? displayAppName(selectedApp.node.name) : t("apps")}
-              </h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2">
               {apps.length > 1 ? (
-                <select
-                  className="min-h-8 max-w-52 rounded-md border border-border bg-background px-2 text-sm"
-                  aria-label={t("repositoryAppPreview")}
-                  value={selectedApp?.node.id ?? ""}
-                  onChange={(event) => onSelectApp(event.target.value)}
-                >
+                <div role="tablist" aria-label={t("repositoryAppPreview")} className="flex min-w-0 gap-1">
                   {apps.map((app) => (
-                    <option key={app.node.id} value={app.node.id}>
+                    <button
+                      key={app.node.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selectedApp?.node.id === app.node.id}
+                      onClick={() => onSelectApp(app.node.id)}
+                      className={cn(
+                        "max-w-52 truncate rounded-t-sm border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                        selectedApp?.node.id === app.node.id
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground",
+                      )}
+                    >
                       {displayAppName(app.node.name)}
-                    </option>
+                    </button>
                   ))}
-                </select>
+                </div>
+              ) : (
+                <h2 className="m-0 min-w-0 truncate py-1 text-base font-semibold">
+                  {selectedApp ? displayAppName(selectedApp.node.name) : t("apps")}
+                </h2>
+              )}
+              {selectedApp ? (
+                <Link
+                  to="/nodes/$nodeId"
+                  params={{ nodeId: selectedApp.node.id }}
+                  aria-label={t("repositoryOpenPage")}
+                  title={t("repositoryOpenPage")}
+                  className={cn(
+                    buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                    "shrink-0 text-muted-foreground no-underline",
+                  )}
+                >
+                  <ExternalLink className="size-4" />
+                </Link>
               ) : null}
             </div>
             {loading ? (
@@ -319,7 +362,7 @@ function FilesView({
                 </Button>
               </Empty>
             ) : resource?.kind === "blob" ? (
-              <div className="h-[min(48vh,520px)]">
+              <div className="h-[calc(100dvh-8rem)] min-h-[640px] overflow-hidden rounded-b-lg">
                 <BlobPreview resource={resource} actionsContainer={null} />
               </div>
             ) : (
@@ -336,10 +379,56 @@ function FilesView({
         <div className="border-b border-border px-4 py-3">
           <h2 className="m-0 text-base font-semibold">{t("repositoryAbout")}</h2>
         </div>
-        <p className="px-4 py-3 text-sm text-muted-foreground">{t("repositoryDescription")}</p>
+        {space ? (
+          <div className="grid gap-2 px-4 py-3 text-sm text-muted-foreground">
+            <p className="m-0">
+              {space.type === "personal"
+                ? t("repositoryVisibilityPersonal")
+                : space.publicRead
+                  ? t("repositoryVisibilityPublic")
+                  : t("repositoryVisibilityPrivate")}
+            </p>
+            <dl className="m-0 grid gap-1.5">
+              <AboutRow label={t("repositoryAboutRole")} value={t(accessRoleKey(space.accessRole))} />
+              <AboutRow
+                label={t("repositoryAboutFiles")}
+                value={String(fileCount)}
+              />
+              <AboutRow label={t("repositoryAboutApps")} value={String(apps.length)} />
+              <AboutRow
+                label={t("repositoryAboutOpenPrs")}
+                value={String(openWorktreeCount)}
+              />
+            </dl>
+            {space.type === "team" ? (
+              <div className="flex min-w-0 items-center gap-1 text-xs text-subtle-foreground">
+                <span className="shrink-0">{t("teamSpaceId")}:</span>
+                <code className="truncate text-foreground" title={spaceId}>
+                  {spaceId}
+                </code>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </aside>
     </div>
   );
+}
+
+function AboutRow({ label, value }: { readonly label: string; readonly value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="m-0">{label}</dt>
+      <dd className="m-0 font-medium text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function accessRoleKey(role: SpaceView["accessRole"]): MessageKey {
+  if (role === "owner") return "accessOwner";
+  if (role === "admin") return "accessAdmin";
+  if (role === "editor") return "accessEditor";
+  return "accessViewer";
 }
 
 function displayAppName(name: string): string {
