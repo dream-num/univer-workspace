@@ -143,6 +143,17 @@ await writeFile(
       "@deepseek-ai/dsh-client-ui-primitives": "0.1.5-rc.1",
       pnpm: "11.24.0",
     },
+    // The install has no lockfile, and the floating dsh cohort pins cordis
+    // peers inconsistently since 0.1.5-rc.3 / cordis 4.0.4: npm then nests the
+    // cohort under dsh, breaking the hoisted bootstrap layout that finalize
+    // scans for portability overrides and pack-host copies presets from.
+    // Pin the conflicting cordis graph; drop this once the upstream cohort
+    // pins it consistently or the bootstrap install gains a lockfile.
+    overrides: {
+      "@deepseek-ai/cordis": "4.0.2",
+      "@deepseek-ai/cordis-plugin-include": "1.0.7",
+      "@deepseek-ai/cordis-plugin-loader": "1.0.3",
+    },
   }),
 );
 // npm is taken from the verified Node distribution; bootstrap stays outside
