@@ -126,7 +126,8 @@ pnpm workspace:dev:web
 
 ## 使用 Workspace Agent
 
-安装 Agent 后，可以通过对话处理文档、使用 `@` 引用，并在对话旁审查变更。
+Workspace Agent 是基于 DSH、专为 Univer Workspace 构建的桌面应用。通过 `@` 引用 Workspace 文件，在对话中创建和编辑文档，审核改动并决定合入或丢弃。
+
 [Agent 指南](apps/agent/README.zh-CN.md#安装与首次使用)提供可以直接交给编程 Agent 的安装提示词，
 尚未克隆仓库也能使用，同时包含手动安装与使用说明。
 指南会引导你选择或启动自己的 Workspace 服务、注册 OAuth 回调、配置模型凭据，
@@ -134,10 +135,11 @@ pnpm workspace:dev:web
 
 ## 使用 Workspace CLI
 
-安装面向 Agent 的 CLI：
+如果想配合 Claude、Codex、Kimi Work 等现有 Agent 软件使用，请在 Agent 的运行环境中安装 CLI 和 [Workspace CLI Skill](skills/univer-workspace-cli/SKILL.md)：
 
 ```bash
 npm install --global univer-workspace-cli@latest
+npx skills add dream-num/univer-workspace --skill univer-workspace-cli -g
 ```
 
 先把 CLI 指向你自己的 Workspace 部署，再开始需要 Browser 确认的登录流程：

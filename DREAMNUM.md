@@ -16,7 +16,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   Collaboration Endpoint integration, local persistence layout, and deployment lifecycle. See the
   [Workspace README](apps/workspace/README.md).
 - The Workspace-specific CLI composition and agent workflow over remote Workspace Resources and Worktrees,
-  including version-matched operational Skills, CLI-based reference reading and review handoff.
+  including the agent-installable discovery entry at `skills/univer-workspace-cli/SKILL.md`,
+  version-matched operational Skills, CLI-based reference reading and review handoff.
+  This repository owns the discovery source; operational Skills remain in the CLI artifact.
   See the [CLI README](apps/cli/README.md).
 - The private Node-hosted Workspace Client Core under `packages/client-core`, including shared Workspace HTTP,
   error, storage-neutral authentication protocol, Space/Node model, remote workflow behavior, and worker-backed

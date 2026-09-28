@@ -59,10 +59,11 @@ Univer SDK.
 
 ## Install
 
-Install the CLI in the environment used by the agent:
+To use Workspace with an existing agent such as Claude, Codex, or Kimi Work, install the CLI and [Workspace CLI Skill](../../skills/univer-workspace-cli/SKILL.md) in the environment where the agent runs:
 
 ```bash
 npm install --global univer-workspace-cli@latest
+npx skills add dream-num/univer-workspace --skill univer-workspace-cli -g
 ```
 
 The default Workspace service is `https://space.univer.ai/`.
