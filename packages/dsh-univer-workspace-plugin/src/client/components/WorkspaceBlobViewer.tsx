@@ -10,6 +10,8 @@ import { useEffect, useState, type ReactElement } from "react";
 import { CloseIcon, ExternalLinkIcon, FileIcon, FileTextIcon } from "@univerjs/univer-workspace-ui";
 import type { WorkspaceBlobSurface } from "../navigation/workspace-navigation.ts";
 import type { UniverLocaleKey } from "../locales.ts";
+import { isMarkdownFile } from "@univerjs/univer-workspace-markdown-viewer/content";
+import { WorkspaceMarkdownPreview } from "./WorkspaceMarkdownPreview.tsx";
 import css from "./WorkspaceBlobViewer.module.scss";
 
 interface BlobResource {
@@ -150,6 +152,18 @@ function BlobPreview(props: {
   }
   if (mediaType === "application/pdf") {
     return <iframe className={css.pdf} src={contentUrl} title={resource.name} />;
+  }
+  if (isMarkdownFile(resource.originalFilename, mediaType)) {
+    return (
+      <WorkspaceMarkdownPreview
+        key={`${contentUrl}:${resource.byteSize}`}
+        contentUrl={contentUrl}
+        downloadUrl={proxyAssetUrl(resource.downloadUrl)}
+        byteSize={resource.byteSize}
+        locale={props.locale}
+        t={props.t}
+      />
+    );
   }
   if (mediaType.startsWith("text/")) {
     return <TextPreview resource={resource} t={props.t} />;

@@ -1,12 +1,17 @@
 import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import { Download, FileQuestion } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { isMarkdownFile } from "@univerjs/univer-workspace-markdown-viewer/content";
 import { useI18n } from "../../shared/i18n";
 import { buttonVariants } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { HtmlViewFile } from "../html-views";
 
-interface BlobPreviewResource {
+const MarkdownPreview = lazy(() =>
+  import("./markdown-preview").then((module) => ({ default: module.MarkdownPreview })),
+);
+
+export interface BlobPreviewResource {
   readonly name: string;
   readonly originalFilename: string;
   readonly mediaType: string;
@@ -68,10 +73,26 @@ export function BlobPreview({
       />
     );
   }
+  if (isMarkdownFile(resource.originalFilename, mediaType)) {
+    return (
+      <Suspense fallback={<MarkdownLoading />}>
+        <MarkdownPreview key={`${resource.contentUrl}:${resource.byteSize}`} resource={resource} />
+      </Suspense>
+    );
+  }
   if (mediaType.startsWith("text/")) {
     return <TextPreview resource={resource} />;
   }
   return <UnsupportedPreview resource={resource} />;
+}
+
+function MarkdownLoading() {
+  const { t } = useI18n();
+  return (
+    <p className="p-6 text-muted-foreground" role="status">
+      {t("filePreviewLoading")}
+    </p>
+  );
 }
 
 function TextPreview({ resource }: { readonly resource: BlobPreviewResource }) {

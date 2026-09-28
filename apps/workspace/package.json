@@ -192,6 +192,7 @@
     "@univerjs/ui": "1.0.2",
     "@univerjs/univer-workspace-file-browser": "workspace:*",
     "@univerjs/univer-workspace-html-viewer": "workspace:*",
+    "@univerjs/univer-workspace-markdown-viewer": "workspace:*",
     "@univerjs/univer-workspace-reference-provider": "workspace:*",
     "@univerjs/univer-workspace-ui": "workspace:*",
     "busboy": "^1.6.0",

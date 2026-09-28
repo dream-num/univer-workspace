@@ -100,6 +100,16 @@ Live sources join the existing SDK collaboration transport in matching scopes.
 The SDK owns formula dependency invalidation, calculation ordering and result
 application; Workspace does not add a second formula refresh scheduler.
 
+### Markdown files
+
+Uploaded `.md` and `.markdown` files open in a read-only CommonMark/GFM preview,
+with Preview/Source switching and the original download action. Tables, task
+lists, strikethrough and footnotes are supported. Preview and Source both load
+the complete file without a preview size cutoff. Content must be UTF-8 text.
+Raw HTML is shown as text; relative file/image paths are not resolved. External
+images load only after a click. Markdown stays a Blob and does not become a
+collaborative Univer Doc. The Agent remote-file viewer uses the same renderer.
+
 ### Configuration
 
 Copy `.env.example` to `.env`. Development, database, and production start

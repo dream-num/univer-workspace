@@ -180,6 +180,7 @@ apps/agent                     Workspace Agent application for document conversa
 packages/client-core           Private Node-hosted Workspace Agent Client capabilities
 packages/reference-provider   Private Browser-only referenced-Unit policy
 packages/workspace-html-viewer Private shared HTML View sandbox and binding host
+packages/workspace-markdown-viewer Private shared read-only Markdown preview
 packages/dsh-univer-workspace-plugin        Workspace Agent Workspace capabilities and browser UI
 packages/dsh-univer-workspace-skin-plugin   Workspace Agent Workspace visual skin
 scripts                       SDK version and local CLI release tooling

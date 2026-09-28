@@ -80,6 +80,16 @@ custom name. See the [Agent storage guide](../../apps/agent/README.md#local-data
 for installation paths, shared state, and account data; do not use a profile name
 as a substitute for those explicit storage boundaries.
 
+## Markdown file preview
+
+Remote `.md`/`.markdown` Blobs use the private
+[Markdown viewer](../workspace-markdown-viewer/README.md), shared with Workspace
+Browser. Preview/Source switching supports CommonMark/GFM, tables, read-only
+tasks and footnotes. Content is fetched through the existing authenticated
+proxy. Preview and Source both show the complete file without a preview size
+cutoff. Raw HTML stays text, relative paths are not resolved, and external images
+require a click. This does not replace DSH chat or local-file rendering.
+
 ## Delivered so far
 
 - **Workspace sign-in onboarding**: a first-run step before model setup offers

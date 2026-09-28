@@ -124,6 +124,10 @@ apps/workspace/
 宿主注入来源授权结果、身份/license、协同配置与引用 Provider。
 设计与当前状态见 [Univer HTML Views](../../../docs/design/html-views/README.md)。
 
+`features/blobs` 与 Agent 的远程 Blob 预览使用 private `workspace-markdown-viewer`
+渲染 Markdown。共享包拥有 GFM、源码切换、链接策略和样式；宿主负责内容请求、认证、取消和下载。
+两端继续使用各自的 React runtime。Markdown 读取完整文件，预览与源码均展示全文，不设置预览大小截断。
+
 `routes` 对应 URL 和页面组合，`features` 按用户能力组织，`shared` 保存无业务归属的
 基础代码。依赖方向为：
 

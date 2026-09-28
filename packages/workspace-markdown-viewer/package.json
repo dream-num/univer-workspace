@@ -1,0 +1,37 @@
+{
+  "name": "@univerjs/univer-workspace-markdown-viewer",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Read-only Markdown presentation shared by Workspace Browser and Agent.",
+  "type": "module",
+  "sideEffects": [
+    "**/*.scss"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./content": "./src/content.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "github-slugger": "2.0.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
+  },
+  "devDependencies": {
+    "@types/hast": "3.0.4",
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.7",
+    "jsdom": "30.0.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  },
+  "peerDependencies": {
+    "react": ">=18 <20",
+    "react-dom": ">=18 <20"
+  }
+}
