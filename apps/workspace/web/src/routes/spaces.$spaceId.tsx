@@ -469,9 +469,6 @@ function AppsView({
               >
                 {displayAppName(app.node.name)}
               </Link>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {t("repositoryHtmlView")}
-              </span>
               <Button
                 variant="ghost"
                 size="sm"
@@ -565,17 +562,28 @@ function PullRequestsView({
                   <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">
                     <span className="truncate font-medium text-foreground">{worktree.name}</span>
                     <span className="shrink-0 text-sm text-muted-foreground">
-                      {t("repositoryWorktreeUnits", { count: worktree.unitCount })}
+                      {worktree.unitCount === 1
+                        ? t("repositoryWorktreeUnit")
+                        : t("repositoryWorktreeUnits", { count: worktree.unitCount })}
                     </span>
                   </p>
-                  <p className="mt-1 mb-0 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+                  <p className="mt-1 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                     <span>
                       {t("repositoryWorktreeCreatedBy", {
                         name: worktree.creator.displayName,
                         date: formatRelativeDate(worktree.createdAt, language),
                       })}
                     </span>
-                    <WorktreeStateLabel state={worktree.state} />
+                    {worktree.processedAt ? (
+                      <span>
+                        {t("repositoryWorktreeProcessedAt", {
+                          state: t(WORKTREE_STATE_LABELS[worktree.state]),
+                          date: formatRelativeDate(worktree.processedAt, language),
+                        })}
+                      </span>
+                    ) : (
+                      <WorktreeStateLabel state={worktree.state} />
+                    )}
                   </p>
                   {worktree.summary ? (
                     <p className="mt-1.5 mb-0 line-clamp-2 text-sm text-muted-foreground">
@@ -583,7 +591,6 @@ function PullRequestsView({
                     </p>
                   ) : null}
                 </div>
-                <ExternalLink className="mt-1 size-4 shrink-0 text-muted-foreground" />
               </Link>
             </li>
           ))}
