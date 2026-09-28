@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { FolderUp } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
@@ -34,11 +35,14 @@ type NodeFilter =
 const nodeGrid =
   "grid items-center gap-5 grid-cols-[minmax(280px,1fr)_132px_180px_40px] max-[980px]:grid-cols-[minmax(220px,1fr)_160px_40px] max-[720px]:grid-cols-[minmax(160px,1fr)_40px] max-[720px]:gap-3";
 
+/** Repository pages embed the browser in a naturally growing card instead of a fixed-height pane. */
 export function NodeBrowser(props: {
   readonly page: NodePage;
   readonly canCreateAtRoot?: boolean;
   readonly actions?: ReactNode;
   readonly searchQuery?: string;
+  readonly showParentRow?: boolean;
+  readonly className?: string;
 }) {
   const [editNode, setEditNode] = useState<Node | null>(null);
   const [typeFilter, setTypeFilter] = useState<NodeFilter>("all");
@@ -54,6 +58,10 @@ export function NodeBrowser(props: {
   const normalizedSearch = (props.searchQuery ?? "")
     .trim()
     .toLocaleLowerCase();
+  const parentBreadcrumb =
+    props.page.breadcrumbs.length > 0
+      ? props.page.breadcrumbs[props.page.breadcrumbs.length - 1]!
+      : undefined;
   const visibleNodes = props.page.nodes.filter((node) => {
     const matchesType =
       typeFilter === "all" ||
@@ -116,10 +124,10 @@ export function NodeBrowser(props: {
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col">
+      <div className={cn("flex h-full min-h-0 flex-col", props.className)}>
         <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border px-6 py-2.5 max-[720px]:px-4">
           <div className="grid min-w-0 gap-0.5">
-            {parentNodeId ? (
+            {parentNodeId && !props.showParentRow ? (
               <Breadcrumb
                 items={[
                   ...(props.page.navigationRootNodeId === null ? [{
@@ -202,6 +210,45 @@ export function NodeBrowser(props: {
               <span aria-hidden="true" />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 max-[720px]:px-1.5">
+              {props.showParentRow ? (
+                <div
+                  className={cn(
+                    nodeGrid,
+                    "group relative min-h-14 rounded-lg px-3 text-muted-foreground transition-colors max-[720px]:px-2.5",
+                    "hover:bg-muted/70 focus-within:z-10"
+                  )}
+                >
+                  {parentBreadcrumb ? (
+                    <Link
+                      to="/nodes/$nodeId"
+                      params={{ nodeId: parentBreadcrumb.id }}
+                      aria-label={parentBreadcrumb.name}
+                      className="absolute inset-0 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                    />
+                  ) : (
+                    <Link
+                      to="/spaces/$spaceId"
+                      params={{ spaceId: props.page.space.id }}
+                      search={{}}
+                      aria-label={props.page.space.name}
+                      className="absolute inset-0 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                    />
+                  )}
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid size-5 shrink-0 place-items-center">
+                      <FolderUp className="size-4" aria-hidden="true" />
+                    </span>
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {parentBreadcrumb?.name ?? props.page.space.name}
+                    </span>
+                  </div>
+                  <span aria-hidden="true" className="max-[980px]:hidden" />
+                  <span className="text-sm max-[720px]:hidden">
+                    {t("parentDirectory")}
+                  </span>
+                  <span aria-hidden="true" />
+                </div>
+              ) : null}
               {visibleNodes.length === 0 ? (
                 <Empty className="mt-16" title={t("noMatchingNodes")} />
               ) : (

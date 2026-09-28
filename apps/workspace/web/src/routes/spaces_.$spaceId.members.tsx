@@ -6,7 +6,7 @@ import {
   teamMembersQueryOptions,
 } from "../features/permissions";
 import { requireAuthenticatedSession } from "../features/auth";
-import { spacesQueryOptions } from "../features/spaces";
+import { RepositoryTabs, SpaceSettingsNav, spacesQueryOptions } from "../features/spaces";
 import { useI18n } from "../shared/i18n";
 import {
   WorkspaceHeaderSearch,
@@ -36,7 +36,9 @@ function TeamMembersPage() {
   return (
     <WorkspaceLayout
       selectedSpaceId={spaceId}
-      selectedView="members"
+      repositoryTab="settings"
+      repositoryBreadcrumbs={[{ label: t("members") }]}
+      headerTitle={t("members")}
       headerContent={
         <WorkspaceHeaderSearch
           placeholder={t("searchMembers")}
@@ -45,13 +47,21 @@ function TeamMembersPage() {
         />
       }
     >
-      <TeamMemberManager
-        spaceId={spaceId}
-        spaceName={space.name}
-        canManage={space.capabilities.manageMembers}
-        actorRole={space.accessRole}
-        searchQuery={searchQuery}
-      />
+      <RepositoryTabs spaceId={spaceId} active="settings" />
+      <div className="min-h-0 flex-1 overflow-y-auto bg-background">
+        <div className="mx-auto flex max-w-6xl gap-8 px-6 py-6 max-[720px]:flex-col max-[720px]:gap-4 max-[720px]:px-4 max-[720px]:py-4">
+          <SpaceSettingsNav spaceId={spaceId} current="members" />
+          <div className="min-w-0 flex-1">
+            <TeamMemberManager
+              spaceId={spaceId}
+              spaceName={space.name}
+              canManage={space.capabilities.manageMembers}
+              actorRole={space.accessRole}
+              searchQuery={searchQuery}
+            />
+          </div>
+        </div>
+      </div>
     </WorkspaceLayout>
   );
 }

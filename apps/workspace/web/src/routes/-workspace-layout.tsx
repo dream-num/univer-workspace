@@ -79,6 +79,18 @@ import { cn } from "../shared/utils/cn";
 
 type WorkspaceView = "home" | "apps" | "trash" | "worktrees" | "members";
 
+/**
+ * Which repository tab a space-scoped route belongs to. Routes inside a
+ * repository pass this instead of `selectedView` so the shell keeps its
+ * repository chrome (breadcrumb, tabs) after leaving the repository root.
+ */
+export type RepositoryTab = "files" | "prs" | "apps" | "settings";
+
+export type RepositoryBreadcrumb = {
+  readonly label: string;
+  readonly nodeId?: string;
+};
+
 export function WorkspaceHeaderSearch({
   value,
   placeholder,
@@ -133,9 +145,108 @@ export function WorkspaceHeaderSearch({
   );
 }
 
+function RepositoryBreadcrumbs({
+  spaceId,
+  spaceName,
+  breadcrumbs,
+  current,
+}: {
+  readonly spaceId: string | undefined;
+  readonly spaceName: string;
+  readonly breadcrumbs: readonly RepositoryBreadcrumb[] | undefined;
+  readonly current: ReactNode | undefined;
+}) {
+  const trail = [...(breadcrumbs ?? [])];
+  // The current page is rendered from `current`; a matching last crumb would only repeat it.
+  if (typeof current === "string" && trail[trail.length - 1]?.label === current) trail.pop();
+  const ancestorItems: ReactNode[] = [];
+  if (spaceId !== undefined) {
+    ancestorItems.push(
+      <li key={`space-${spaceId}`} className="flex min-w-0 items-center gap-2">
+        <BreadcrumbSeparator />
+        <Link
+          to="/spaces/$spaceId"
+          params={{ spaceId }}
+          search={{}}
+          className={cn(
+            breadcrumbLinkClass,
+            "max-w-40 sm:max-w-52",
+            current === undefined ? "truncate" : "hidden sm:inline",
+          )}
+        >
+          {spaceName}
+        </Link>
+      </li>,
+    );
+  }
+  for (const [index, item] of trail.entries()) {
+    const isLastAncestor = index === trail.length - 1 && current === undefined;
+    ancestorItems.push(
+      <li key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-2">
+        <BreadcrumbSeparator />
+        {item.nodeId === undefined ? (
+          <span className={cn("max-w-40 truncate text-muted-foreground sm:max-w-52")}>
+            {item.label}
+          </span>
+        ) : (
+          <Link
+            to="/nodes/$nodeId"
+            params={{ nodeId: item.nodeId }}
+            search={{}}
+            className={cn(
+              breadcrumbLinkClass,
+              "max-w-40 truncate sm:max-w-52",
+              isLastAncestor ? undefined : "hidden sm:inline",
+            )}
+          >
+            {item.label}
+          </Link>
+        )}
+      </li>,
+    );
+  }
+  return (
+    <nav aria-label="Breadcrumb" className="min-w-0">
+      <ol className="m-0 flex min-w-0 list-none items-center gap-2 p-0">
+        <li className="flex min-w-0 items-center gap-2">
+          <Link
+            to="/home"
+            className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <BrandMark />
+            <span className="hidden font-semibold tracking-tight sm:inline">Univer Workspace</span>
+          </Link>
+        </li>
+        {ancestorItems}
+        {current !== undefined ? (
+          <li className="flex min-w-0 items-center gap-2">
+            <BreadcrumbSeparator />
+            <h1 className="m-0 min-w-0 truncate text-[18px] font-semibold tracking-tight max-[720px]:text-[15px]">
+              {current}
+            </h1>
+          </li>
+        ) : null}
+      </ol>
+    </nav>
+  );
+}
+
+function BreadcrumbSeparator() {
+  return (
+    <span aria-hidden="true" className="shrink-0 text-muted-foreground/60">
+      /
+    </span>
+  );
+}
+
+const breadcrumbLinkClass =
+  "min-w-0 shrink-0 truncate text-muted-foreground no-underline outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm";
+
 type WorkspaceLayoutProps = PropsWithChildren<{
   readonly selectedSpaceId?: string;
   readonly repositoryDataActive?: boolean;
+  readonly repositoryTab?: RepositoryTab;
+  readonly repositoryBreadcrumbs?: readonly RepositoryBreadcrumb[];
   readonly selectedNodeId?: string;
   readonly selectedNodePath?: readonly string[];
   readonly selectedView?: WorkspaceView;
@@ -198,6 +309,8 @@ function AuthenticatedWorkspaceLayout({
   children,
   selectedSpaceId,
   repositoryDataActive,
+  repositoryTab,
+  repositoryBreadcrumbs,
   selectedView,
   contentMode = "default",
   immersive = false,
@@ -277,16 +390,18 @@ function AuthenticatedWorkspaceLayout({
   const personalSpace = personalSpaces[0];
   const teamSpaces = allSpaces.filter((space) => space.type === "team");
   const trashSpaceId = selectedSpaceId ?? personalSpaces[0]?.id;
-  const pageTitle =
-    headerTitle ??
-    (selectedSpace?.type === "personal" ? t("personalSpace") : selectedSpace?.name) ??
-    workspaceViewTitle(selectedView, t);
+  const spaceTitle =
+    selectedSpace?.type === "personal" ? t("personalSpace") : selectedSpace?.name;
   const repositoryShell =
     workspaceTheme === "repository" &&
-    selectedSpaceId !== undefined &&
-    selectedView === undefined &&
-    repositoryDataActive !== true &&
-    immersive !== true;
+    !repositoryDataActive &&
+    !immersive &&
+    (repositoryTab !== undefined || (selectedSpaceId !== undefined && selectedView === undefined));
+  const pageTitle = repositoryShell
+    ? typeof headerTitle === "string"
+      ? `${spaceTitle ?? t("repositories")} · ${headerTitle}`
+      : (spaceTitle ?? t("repositories"))
+    : (headerTitle ?? spaceTitle ?? workspaceViewTitle(selectedView, t));
   const activeTaskCount =
     activeWorktrees.data?.items.filter((worktree) => {
       if (!["draft", "ready", "merging"].includes(worktree.state)) return false;
@@ -513,19 +628,12 @@ function AuthenticatedWorkspaceLayout({
                 </Button>
               ) : null}
               {repositoryShell ? (
-                <Link
-                  to="/home"
-                  className="flex min-w-0 items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                >
-                  <BrandMark />
-                  <span className="hidden truncate text-[15px] font-bold tracking-tight text-foreground sm:inline">
-                    Univer Workspace
-                  </span>
-                  <span className="text-muted-foreground">/</span>
-                  <h1 className="m-0 min-w-0 truncate text-[18px] font-semibold tracking-tight max-[720px]:text-[15px]">
-                    {pageTitle}
-                  </h1>
-                </Link>
+                <RepositoryBreadcrumbs
+                  spaceId={selectedSpaceId}
+                  spaceName={spaceTitle ?? t("repositories")}
+                  breadcrumbs={repositoryBreadcrumbs}
+                  current={headerTitle}
+                />
               ) : (
                 <h1 className="m-0 min-w-0 truncate text-[18px] font-semibold tracking-tight max-[720px]:text-[15px]">
                   {pageTitle}
