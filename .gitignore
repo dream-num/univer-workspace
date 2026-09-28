@@ -11,3 +11,4 @@ coverage/
 .agents/
 .claude/
 skills-lock.json
+.gstack/
