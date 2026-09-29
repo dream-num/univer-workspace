@@ -30,6 +30,9 @@ Understand these identities before running a mutation:
 - **Personal Space**: the authenticated user's own Space. Files here are personal Workspace files.
   A Personal Space is not a Worktree and is not the same thing as `--scope user`.
 - **Team Space**: a Space shared by a team. Access depends on current team membership and role.
+- **Issue**: a Team Space discussion item addressed by Space and number (`#12`), with a Markdown
+  body, comments, labels, assignees, and referenced Nodes. Personal Spaces have no Issues. An Issue
+  is a request, not a Worktree: reading or commenting on it never changes Space files.
 - **Node**: one tree position addressed by `nodeId`. Every Node may have children. A pure
   organizational Node has `resource: null`; a Node with a Resource may still have children.
 - **Resource**: the product content identity attached to a Node, discriminated by `kind`.
@@ -185,6 +188,45 @@ The first command returns `status: "authorization_required"`, `verificationUrl`,
 has not finished. If it is still pending, show the same URL/code to the user and wait for their
 reply; do not create a polling loop. Password, GitHub, and Discord browser accounts all use this
 same handoff.
+
+## Work from an Issue
+
+When the user asks you to handle an Issue ("work on #12"), the Issue is the brief. Do not ask the user
+to restate it.
+
+1. Resolve the Space with `space list` and read the Issue with its whole discussion:
+
+   ```bash
+   univer-workspace-cli issue get 12 --space <space-id> --timeline --json
+   ```
+
+   The newest comments may change or narrow the request; read them before acting. Without a Space
+   ID, `issue list --assignee me --json` shows the work assigned to the user across Team Spaces.
+2. `issue.references[]` lists the files the Issue points at. Use `resource.id` as the
+   `resourceId` and `nodeId` to stage them. A reference with `available: false` was trashed or
+   became unreadable; say so instead of guessing which file was meant.
+3. Follow "Start a new task" in a **new** Space-scoped Worktree named `#12 <Issue title>`. The
+   Worktree does not link to the Issue itself, so that name is what ties them together for reviewers.
+4. Verify and hand off as usual, then report on the Issue. Post the review URL with what you changed;
+   write multi-line Markdown through stdin so nothing needs shell escaping:
+
+   ```bash
+   univer-workspace-cli issue comment 12 --space <space-id> --body-file - --json <<'MD'
+   Updated `Budget!B12` to include the East region.
+
+   Review: <review-url>
+
+   _Posted by an agent on the user's behalf._
+   MD
+   ```
+
+5. Leave the Issue open. Closing it (`issue close`) or merging the Worktree is the user's decision;
+   do either only when they ask.
+
+Issue writes are not idempotent. If a create or comment fails with `workspace-result-unknown`,
+read `issue get ... --timeline` before repeating it, or the discussion may end up with a duplicate.
+Labels and assignees need triage rights; when the CLI reports `FORBIDDEN`, tell the user rather than
+working around it. Use `issue create` to record follow-up work you found but were not asked to do.
 
 ## Start a new task
 
@@ -355,6 +397,7 @@ Use `univer-workspace-cli <command> --help` as the syntax authority.
 | ------------------------- | --------------------------------------------------------------------------- |
 | Connect                   | `config set workspace.origin`, `login`, `whoami`, `logout`                  |
 | Discover/organize Spaces  | `space list`, `space browse`, `space find`, `space node create/rename/move` |
+| Read and update Issues    | `issue list/get/create/update/comment/close/reopen`, `issue label ...`      |
 | Preserve original files   | `blob upload`, `blob get`, `blob download`, `blob replace`                  |
 | Start a task              | `worktree create`, `unit create`, `unit add`                                |
 | Inspect a known Worktree  | `worktree get`, `unit list`                                                 |
