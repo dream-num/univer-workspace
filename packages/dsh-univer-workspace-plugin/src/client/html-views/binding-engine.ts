@@ -2,6 +2,7 @@ import {
   createWorkspaceHtmlEngine,
   type TranslateHtmlViewWriteError,
 } from "@univerjs/univer-workspace-html-viewer/engine";
+import { UniverChartEmbedPlugin } from "@univerjs-pro/chart-embed";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverCollaborationEmbedPlugin } from "@univerjs-pro/collaboration-embed";
 import { buildViewerUrls } from "../viewer/proxy.ts";
@@ -31,6 +32,9 @@ export async function createAgentBindingEngine(
       registerEmbed(univer) {
         univer.registerPlugin(UniverEmbedPlugin);
         univer.registerPlugin(UniverCollaborationEmbedPlugin);
+        // Keep the agent HTML view aligned with the workspace HTML view: the
+        // referenced-chart runtime must follow UniverEmbedPlugin.
+        univer.registerPlugin(UniverChartEmbedPlugin);
       },
     },
     signal,

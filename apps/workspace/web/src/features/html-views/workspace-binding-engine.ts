@@ -2,6 +2,7 @@ import {
   createWorkspaceHtmlEngine,
   type TranslateHtmlViewWriteError,
 } from "@univerjs/univer-workspace-html-viewer/engine";
+import { UniverChartEmbedPlugin } from "@univerjs-pro/chart-embed";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { SnapshotService } from "@univerjs-pro/collaboration";
 import { createWorkspaceReferencedUnitProviderRegistration } from "@univerjs/univer-workspace-reference-provider";
@@ -62,6 +63,9 @@ export async function createWorkspaceBindingEngine(
             }),
           ],
         });
+        // Referenced charts resolve through the embed runtime, so they must be
+        // registered after UniverEmbedPlugin owns the referenced-Unit policy.
+        univer.registerPlugin(UniverChartEmbedPlugin);
       },
     },
     signal,
