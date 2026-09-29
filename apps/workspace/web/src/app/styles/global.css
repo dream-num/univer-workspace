@@ -79,6 +79,26 @@
   --color-state-closed-soft: #fdecec;
 
   /* ------------------------------------------------------------------ */
+  /* Issue label palette (the server stores only the key)                */
+  /* ------------------------------------------------------------------ */
+  --color-label-gray: #4b5563;
+  --color-label-gray-soft: #eef0f3;
+  --color-label-blue: #1d4ed8;
+  --color-label-blue-soft: #e8f0fe;
+  --color-label-green: #157347;
+  --color-label-green-soft: #e6f6ef;
+  --color-label-yellow: #8a5a00;
+  --color-label-yellow-soft: #fdf3d6;
+  --color-label-orange: #b45309;
+  --color-label-orange-soft: #fdeee0;
+  --color-label-red: #b42318;
+  --color-label-red-soft: #fdecec;
+  --color-label-purple: #6d28d9;
+  --color-label-purple-soft: #f1eafd;
+  --color-label-pink: #be185d;
+  --color-label-pink-soft: #fce8f1;
+
+  /* ------------------------------------------------------------------ */
   /* Unit type accents                                                   */
   /* ------------------------------------------------------------------ */
   --color-doc: #2f6de0;
@@ -348,6 +368,24 @@
   --color-state-merged-soft: #241c40;
   --color-state-closed: #f3a9a2;
   --color-state-closed-soft: #382124;
+
+  /* Issue label palette */
+  --color-label-gray: #b5bcc8;
+  --color-label-gray-soft: #262a33;
+  --color-label-blue: #8ab0fa;
+  --color-label-blue-soft: #16233d;
+  --color-label-green: #4ade80;
+  --color-label-green-soft: #14281c;
+  --color-label-yellow: #fbbf24;
+  --color-label-yellow-soft: #2c2610;
+  --color-label-orange: #f0a260;
+  --color-label-orange-soft: #2e1f10;
+  --color-label-red: #f3a9a2;
+  --color-label-red-soft: #382124;
+  --color-label-purple: #a78bfa;
+  --color-label-purple-soft: #241c40;
+  --color-label-pink: #f4a3c8;
+  --color-label-pink-soft: #351a29;
 
   /* Unit type accents */
   --color-doc: #5f8ff0;

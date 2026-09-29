@@ -1,9 +1,10 @@
 import { useRouter } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Ellipsis, ExternalLink, Link2, Pencil, Share2, Trash2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CircleDot, Ellipsis, ExternalLink, Link2, Pencil, Share2, Trash2 } from "lucide-react";
 import { useState, type ReactElement, type ReactNode } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { ShareDialog } from "../permissions";
+import { spacesQueryOptions } from "../spaces/spaces.queries";
 import { trashQueryKey } from "../trash";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
@@ -46,6 +47,10 @@ export function NodeActionsMenu(props: {
   const [renameOpen, setRenameOpen] = useState(false);
   const [editName, setEditName] = useState(props.node.name);
   const [trashOpen, setTrashOpen] = useState(false);
+  const spaces = useQuery(spacesQueryOptions);
+  const space = spaces.data?.spaces.find((item) => item.id === props.node.spaceId);
+  // Referencing a file on an Issue is a triage action, so only Team Space editors and above see it.
+  const canReferenceInIssue = space?.type === "team" && space.capabilities.triageIssues;
   const nodeUrl = new URL(
     `/nodes/${encodeURIComponent(props.node.id)}`,
     window.location.origin,
@@ -129,6 +134,14 @@ export function NodeActionsMenu(props: {
       void copyLink();
       return;
     }
+    if (action === "issue") {
+      void router.navigate({
+        to: "/spaces/$spaceId/issues/new",
+        params: { spaceId: props.node.spaceId },
+        search: { node: props.node.id },
+      });
+      return;
+    }
     if (action === "rename") {
       if (props.onEdit) {
         props.onEdit();
@@ -168,7 +181,12 @@ export function NodeActionsMenu(props: {
         />
       </Tooltip>
       <MenuContent align="end" sideOffset={4} className="w-56">
-        <NodeActionItems node={props.node} customEdit={Boolean(props.onEdit)} onAction={onAction} />
+        <NodeActionItems
+          node={props.node}
+          customEdit={Boolean(props.onEdit)}
+          canReferenceInIssue={canReferenceInIssue}
+          onAction={onAction}
+        />
       </MenuContent>
     </MenuRoot>
   );
@@ -188,6 +206,7 @@ export function NodeActionsMenu(props: {
             context
             node={props.node}
             customEdit={Boolean(props.onEdit)}
+            canReferenceInIssue={canReferenceInIssue}
             onAction={onAction}
           />
         </ContextMenuContent>
@@ -240,12 +259,13 @@ export function NodeActionsMenu(props: {
   );
 }
 
-type NodeAction = "open" | "share" | "copy" | "rename" | "trash";
+type NodeAction = "open" | "share" | "copy" | "issue" | "rename" | "trash";
 
 function NodeActionItems(props: {
   readonly node: Node;
   readonly context?: boolean;
   readonly customEdit?: boolean;
+  readonly canReferenceInIssue?: boolean;
   readonly onAction: (action: NodeAction) => void;
 }) {
   const { t } = useI18n();
@@ -270,6 +290,12 @@ function NodeActionItems(props: {
         <Link2 />
         {t("copyLink")}
       </Item>
+      {props.canReferenceInIssue ? (
+        <Item onClick={() => props.onAction("issue")}>
+          <CircleDot />
+          {t("issueReferenceFromNode")}
+        </Item>
+      ) : null}
       {canEdit ? <Separator /> : null}
       {canEdit ? (
         <Item onClick={() => props.onAction("rename")}>

@@ -15,6 +15,12 @@ describe("parseWorktreeChangeFeedMessage", () => {
     ).toEqual({ event: "worktreesChanged" });
   });
 
+  it("accepts the Issue refetch hint without exposing its Space", () => {
+    expect(
+      parseWorktreeChangeFeedMessage(JSON.stringify({ event: "issuesChanged", spaceId: "s1" }))
+    ).toEqual({ event: "issuesChanged" });
+  });
+
   it("ignores malformed and unknown messages", () => {
     expect(parseWorktreeChangeFeedMessage("not-json")).toBeNull();
     expect(

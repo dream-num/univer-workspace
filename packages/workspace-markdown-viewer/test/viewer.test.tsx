@@ -23,6 +23,13 @@ function click(element: Element) {
 }
 
 describe("Markdown viewer", () => {
+  it("renders only the content when chrome is none", () => {
+    act(() => root.render(<MarkdownViewer text={"**bold** [x](https://example.com)"} chrome="none" />));
+    expect(container.querySelector("strong")?.textContent).toBe("bold");
+    expect(container.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(container.querySelector("button")).toBeNull();
+  });
+
   it("renders GFM with read-only tasks and preserves exact source on toggle", () => {
     const text =
       "# 标题\n\n| 名称 | 值 |\n| --- | --- |\n| 中文 | 42 |\n\n- [x] 完成\n\n~~删除~~\n\n```ts\nconst x = 1;\n```";

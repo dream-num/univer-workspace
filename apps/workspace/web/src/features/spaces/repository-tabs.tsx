@@ -1,11 +1,12 @@
-import { AppWindow, FileText, GitPullRequest, Settings } from "lucide-react";
+import { AppWindow, CircleDot, FileText, GitPullRequest, Settings } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "../../shared/i18n";
 import { worktreeBelongsToSpace, worktreeListQueryOptions } from "../worktrees";
+import { issueCountsQueryOptions } from "../issues/issues.queries";
 import { spacesQueryOptions } from "./spaces.queries";
 
-export type RepositoryTab = "files" | "prs" | "apps" | "settings";
+export type RepositoryTab = "files" | "issues" | "prs" | "apps" | "settings";
 
 type RepositoryTabTarget =
   | { readonly tab: "files" }
@@ -27,6 +28,8 @@ export function RepositoryTabs({
   const activeWorktrees = useQuery(worktreeListQueryOptions("active"));
   const processedWorktrees = useQuery(worktreeListQueryOptions("processed"));
   const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const hasIssues = space?.type === "team";
+  const issueCounts = useQuery({ ...issueCountsQueryOptions(spaceId), enabled: hasIssues });
   const openWorktreeCount = space
     ? [
         ...(activeWorktrees.data?.items ?? []),
@@ -48,6 +51,16 @@ export function RepositoryTabs({
     readonly count?: number;
   }[] = [
     { tab: "files", label: t("repositoryFiles"), icon: FileText },
+    ...(hasIssues
+      ? [
+          {
+            tab: "issues" as const,
+            label: t("issues"),
+            icon: CircleDot,
+            ...(issueCounts.data?.open ? { count: issueCounts.data.open } : {}),
+          },
+        ]
+      : []),
     { tab: "prs", label: t("repositoryPullRequests"), icon: GitPullRequest, ...(openWorktreeCount ? { count: openWorktreeCount } : {}) },
     { tab: "apps", label: t("apps"), icon: AppWindow },
   ];
@@ -55,10 +68,25 @@ export function RepositoryTabs({
     <div className="border-b border-border bg-surface">
       <nav
         aria-label={t("repository")}
-        className="mx-auto flex max-w-6xl items-end gap-1 px-6 max-[720px]:gap-0 max-[720px]:px-4"
+        className="mx-auto flex max-w-6xl items-end gap-1 overflow-x-auto px-6 max-[720px]:gap-0 max-[720px]:px-4"
       >
         {items.map(({ tab, label, icon: Icon, count }) =>
-          tab === "files" ? (
+          tab === "issues" ? (
+            <Link
+              key={tab}
+              to="/spaces/$spaceId/issues"
+              params={{ spaceId }}
+              search={{}}
+              aria-current={active === "issues" ? "page" : undefined}
+              className={repositoryTabClass(active === "issues")}
+            >
+              <Icon className="size-4" />
+              {label}
+              {count ? (
+                <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{count}</span>
+              ) : null}
+            </Link>
+          ) : tab === "files" ? (
             <RepositoryTabLink
               key={tab}
               spaceId={spaceId}
