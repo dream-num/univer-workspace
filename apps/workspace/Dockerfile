@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 ARG BASE_IMAGE=node:24-bookworm-slim
 ARG HTTP_PROXY=""
 ARG PROXY_SSL=""
