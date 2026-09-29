@@ -1,11 +1,17 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-bookworm-slim AS build
+ARG BASE_IMAGE=node:24-bookworm-slim
+ARG HTTP_PROXY=""
+ARG PROXY_SSL=""
+ARG NODE_MAX_OLD_SPACE_SIZE="4096"
+
+FROM ${BASE_IMAGE} AS build
 
 ARG VITE_UNIVER_LICENSE
 ENV VITE_UNIVER_LICENSE=$VITE_UNIVER_LICENSE
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
+ENV NODE_EXTRA_CA_CERTS=${PROXY_SSL}
 
 WORKDIR /app
 
@@ -22,7 +28,7 @@ COPY packages/workspace-ui/package.json ./packages/workspace-ui/package.json
 COPY packages/workspace-html-viewer/package.json ./packages/workspace-html-viewer/package.json
 COPY packages/workspace-markdown-viewer/package.json ./packages/workspace-markdown-viewer/package.json
 
-RUN pnpm install \
+RUN HTTP_PROXY="${HTTP_PROXY}" HTTPS_PROXY="${HTTP_PROXY}" pnpm install \
     --frozen-lockfile \
     --filter @univerjs/univer-workspace... \
     --filter .
@@ -37,12 +43,12 @@ COPY packages/workspace-html-viewer ./packages/workspace-html-viewer
 COPY packages/workspace-markdown-viewer ./packages/workspace-markdown-viewer
 
 # The production Workspace graph excludes the desktop-only signing package.
-RUN pnpm --filter @univerjs/univer-workspace-reference-provider build \
-    && pnpm --filter @univerjs/univer-workspace build \
-    && pnpm --filter @univerjs/univer-workspace \
+RUN NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" pnpm --filter @univerjs/univer-workspace-reference-provider build \
+    && NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" pnpm --filter @univerjs/univer-workspace build \
+    && NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" pnpm --filter @univerjs/univer-workspace \
       deploy --legacy --prod --config.allow-unused-patches=true /app/deploy
 
-FROM node:24-bookworm-slim AS runtime
+FROM ${BASE_IMAGE} AS runtime
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0

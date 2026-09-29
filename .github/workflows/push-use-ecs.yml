@@ -1,0 +1,78 @@
+name: Deploy Workspace Using ECS
+
+run-name: "[${{ inputs.environment }}]: ${{ inputs.acr-region }}-${{ inputs.instance-size }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        required: true
+        default: staging
+        type: environment
+      acr-region:
+        description: ACR registry
+        type: choice
+        default: cn-shenzhen
+        options:
+          - cn-shenzhen
+          - us-east-1
+      instance-size:
+        description: ECS instance size
+        type: string
+        default: 16c32g
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    env:
+      CR: univer-acr-registry.cn-shenzhen.cr.aliyuncs.com
+    steps:
+      - name: Check client license
+        env:
+          CLIENT_LICENSE_TEXT: ${{ secrets.UNIVER_WORKSPACE_BROWSER_LICENSE }}
+        run: test -n "$CLIENT_LICENSE_TEXT"
+
+      - name: Set IMAGE_TAG environment variable
+        run: echo "IMAGE_TAG=$(echo ${{ github.sha }} | cut -c 1-7)" >> $GITHUB_ENV
+
+      - name: Set FEATURE environment variable
+        if: ${{ startsWith(inputs.environment, 'feature') }}
+        run: echo "FEATURE=$(echo "${GITHUB_REF#refs/heads/feat/}")" >> "$GITHUB_ENV"
+
+      - name: Set US ACR region
+        if: ${{ inputs.acr-region == 'us-east-1' || inputs.environment == 'univer.ai' }}
+        run: |
+          echo "CR=univer-acr-eastus-registry.us-east-1.cr.aliyuncs.com" >> "$GITHUB_ENV"
+
+      - uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          repository: dream-num/runner-machine
+          event-type: create-ci
+          client-payload: >
+            {
+              "service": "colla-workspace",
+              "git_ref": "${{ github.ref }}",
+              "image_tag": "${{ env.IMAGE_TAG }}",
+              "cr": "${{ env.CR }}",
+              "client_license_text": ${{ toJSON(secrets.UNIVER_WORKSPACE_BROWSER_LICENSE) }},
+              "machine": {
+                "instance_size": "${{ inputs.instance-size }}",
+                "region": "${{ inputs.acr-region == 'cn-shenzhen' && 'shenzhen' || 'us-virginia' }}",
+                "internet_bandwidth": "100"
+              },
+              "helm_dispatch": {
+                "event": "${{ vars.DISPATCH_EVENT_TYPE }}",
+                "service": "colla-workspace",
+                "feature": "${{ env.FEATURE }}"
+              }
+            }
