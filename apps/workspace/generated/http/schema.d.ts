@@ -1724,6 +1724,8 @@ export interface components {
             discard: boolean;
         };
         WorktreeList: {
+            /** @description Whether the authenticated user has a product Worktree creation record, including merged and discarded Worktrees. Independent of list filters and pagination; other users' Team Worktrees do not count. */
+            hasCreatedWorktree: boolean;
             items: components["schemas"]["WorktreeSummary"][];
             nextCursor: string | null;
         };

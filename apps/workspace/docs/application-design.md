@@ -300,3 +300,8 @@ Snapshot、history 和 export 不按对象范围过滤。权限始终与文件�
 创建者和 Owner/Admin 可管理。Worktree 使用独立 Authz 路径读取当前 Trunk ACL，拒绝管理；
 直接提交和合并都在 commit 阶段重新检查。现有产品 HTTP OpenAPI 不新增接口：
 `/universer-api/authz` 及 Worktree scope 路由仍属于 SDK 协议适配。
+
+## 智能工作台首次创建引导
+
+从未创建过 Worktree 的用户可在智能工作台获取 Workspace Agent 下载和 CLI/Skill 安装引导。
+已有可见任务时，以简洁提示提供入口，保留任务列表和审核界面。

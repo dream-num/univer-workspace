@@ -27,6 +27,7 @@ import {
 } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { spacesQueryOptions } from "../spaces/spaces.queries";
+import { WorktreeOnboarding } from "./worktree-onboarding";
 import {
   UnitChangeIcon,
   UnitTypeIcon,
@@ -197,6 +198,13 @@ export function WorktreeDashboard({
   if (active.error) throw active.error;
   if (processed.error) throw processed.error;
   if (detailError) throw detailError;
+
+  const neverCreated = active.data?.hasCreatedWorktree === false &&
+    processed.data?.hasCreatedWorktree === false;
+  const listsLoaded = active.isSuccess && processed.isSuccess;
+  const showOnboarding = listsLoaded && neverCreated && tasks.length === 0 &&
+    !active.data.nextCursor && !processed.data.nextCursor &&
+    !selectionRequested && !normalizedSearch;
 
   const selectDocument = (
     document: ReviewDocument,
@@ -404,8 +412,15 @@ export function WorktreeDashboard({
       <Empty title={t("noMatchingTasks")} className="py-10" />
     );
 
+  if (showOnboarding) {
+    return <WorktreeOnboarding origin={window.location.origin} />;
+  }
+
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+      {listsLoaded && neverCreated && tasks.length > 0 ? (
+        <WorktreeOnboarding compact origin={window.location.origin} />
+      ) : null}
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4 max-[720px]:flex-col max-[720px]:items-start max-[720px]:px-4.5">
         {spaceId ? null : (
           <p className="m-0 max-w-2xl text-[13px] leading-5 text-muted-foreground">
@@ -618,12 +633,21 @@ export function WorktreeDashboard({
         ) : null}
 
         <main className="@container/review min-w-0 overflow-hidden">
-          {!selectedDocument ? (
+          {active.isPending || processed.isPending || loadingDetails ? (
+            <div className="grid gap-4 p-6" role="status" aria-label={t("onboardingLoading")}>
+              <Skeleton className="h-8 w-1/2" />
+              <Skeleton className="h-60 w-full" />
+            </div>
+          ) : !selectedDocument ? (
             <Empty
               className="mt-[min(22vh,200px)]"
               icon={Bot}
-              title={t("noTasks")}
-              description={t("tasksCreatedByAgents")}
+              title={t(selectionRequested ? "workbenchSelectionUnavailable" : tasks.length === 0
+                ? (normalizedSearch ? "noMatchingTasks" : "noTasks")
+                : visibleTasks.length === 0 ? "noMatchingTasks" : "workbenchChooseDocument")}
+              description={tasks.length === 0 && !normalizedSearch && !selectionRequested
+                ? t("tasksCreatedByAgents")
+                : selectionRequested ? t("workbenchSelectionUnavailableDescription") : undefined}
             />
           ) : (
             <WorktreeReviewPanel
