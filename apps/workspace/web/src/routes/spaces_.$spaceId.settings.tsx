@@ -14,6 +14,7 @@ import { WorkspaceLayout } from "./-workspace-layout";
 import { api } from "../shared/api/client";
 import { apiError } from "../shared/api/errors";
 import { useI18n } from "../shared/i18n";
+import { useTheme } from "../shared/theme";
 import { Button, Field, Input, toast } from "../shared/ui";
 
 export const Route = createFileRoute("/spaces_/$spaceId/settings")({
@@ -37,24 +38,40 @@ export const Route = createFileRoute("/spaces_/$spaceId/settings")({
 function SpaceSettingsPage() {
   const { spaceId } = Route.useParams();
   const { t } = useI18n();
+  const { workspaceTheme } = useTheme();
+  const repository = workspaceTheme === "repository";
   return (
     <WorkspaceLayout
       selectedSpaceId={spaceId}
-      repositoryTab="settings"
-      repositoryBreadcrumbs={[
-        { label: t("spaceSettings"), settingsSpaceId: spaceId },
-      ]}
+      {...(repository
+        ? {
+            repositoryTab: "settings" as const,
+            repositoryBreadcrumbs: [
+              { label: t("spaceSettings"), settingsSpaceId: spaceId },
+            ],
+          }
+        : {})}
       headerTitle={t("settingsGeneral")}
     >
-      <RepositoryTabs spaceId={spaceId} active="settings" />
-      <div className="min-h-0 flex-1 overflow-y-auto bg-background">
-        <div className="mx-auto flex max-w-6xl gap-8 px-6 py-6 max-[720px]:flex-col max-[720px]:gap-4 max-[720px]:px-4 max-[720px]:py-4">
-          <SpaceSettingsNav spaceId={spaceId} current="general" />
-          <div className="min-w-0 flex-1">
+      {repository ? (
+        <>
+          <RepositoryTabs spaceId={spaceId} active="settings" />
+          <div className="min-h-0 flex-1 overflow-y-auto bg-background">
+            <div className="mx-auto flex max-w-6xl gap-8 px-6 py-6 max-[720px]:flex-col max-[720px]:gap-4 max-[720px]:px-4 max-[720px]:py-4">
+              <SpaceSettingsNav spaceId={spaceId} current="general" />
+              <div className="min-w-0 flex-1">
+                <SpaceGeneralSettings spaceId={spaceId} />
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto bg-background">
+          <div className="mx-auto max-w-6xl px-6 py-6 max-[720px]:px-4 max-[720px]:py-4">
             <SpaceGeneralSettings spaceId={spaceId} />
           </div>
         </div>
-      </div>
+      )}
     </WorkspaceLayout>
   );
 }
@@ -87,6 +104,7 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
     onError: (mutationError) => toast.error(mutationError.message),
   });
   if (!space) return null;
+  const canEdit = space.capabilities.renameSpace;
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim()) {
@@ -110,6 +128,7 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
           id="space-name"
           maxLength={100}
           value={name}
+          disabled={!canEdit}
           invalid={Boolean(error)}
           onChange={(event) => {
             setError(undefined);
@@ -144,11 +163,12 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
           className="mt-0.5 size-4 accent-primary"
           type="checkbox"
           checked={publicRead}
+          disabled={!canEdit}
           onChange={(event) => setPublicRead(event.target.checked)}
         />
       </label>
       <div className="flex justify-end">
-        <Button type="submit" disabled={rename.isPending}>
+        <Button type="submit" disabled={!canEdit || rename.isPending}>
           {t("save")}
         </Button>
       </div>

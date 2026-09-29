@@ -6,6 +6,8 @@ import {
   GitPullRequestClosed,
   GitPullRequestDraft,
   Link as LinkIcon,
+  Settings,
+  Users,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
@@ -142,6 +144,35 @@ function SpaceNodePage() {
     }
   };
   if (!query.data) return null;
+  // Wiki mode keeps its Space management entry points; repository mode reaches
+  // the same pages through the repository tabs.
+  const wikiPageActions =
+    space?.type === "team" || space?.capabilities.renameSpace ? (
+      <>
+        {space?.type === "team" ? (
+          <Button
+            variant="secondary"
+            onClick={() =>
+              void navigate({ to: "/spaces/$spaceId/members", params: { spaceId } })
+            }
+          >
+            <Users />
+            {t("members")}
+          </Button>
+        ) : null}
+        {space?.capabilities.renameSpace ? (
+          <Button
+            variant="secondary"
+            onClick={() =>
+              void navigate({ to: "/spaces/$spaceId/settings", params: { spaceId } })
+            }
+          >
+            <Settings />
+            {t("spaceSettings")}
+          </Button>
+        ) : null}
+      </>
+    ) : null;
 
   return (
     <WorkspaceLayout
@@ -177,6 +208,7 @@ function SpaceNodePage() {
         <NodeBrowser
           page={query.data}
           canCreateAtRoot={space?.capabilities.createAtRoot ?? false}
+          actions={wikiPageActions}
         />
       )}
     </WorkspaceLayout>
