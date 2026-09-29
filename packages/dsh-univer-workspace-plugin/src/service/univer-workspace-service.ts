@@ -22,6 +22,14 @@ import type {
 } from "@univer-cli/univer-collaboration-runtime";
 import type { ContentInspectionResult } from "@univer-cli/content-inspection";
 import type {
+  IssueChange,
+  IssueDetailView,
+  IssueListView,
+  IssueSets,
+  IssueSummaryView,
+  ListIssuesQuery,
+} from "../provider/issues-api.ts";
+import type {
   CreatedDocument,
   CreateWorktreeLocalUnitInput,
   OpenedWorktreeUnit,
@@ -171,6 +179,46 @@ export abstract class UniverWorkspaceService extends Service {
 
   /** Reopen a ready Worktree back to draft. */
   abstract reopenWorktree(userId: string, worktreeId: string): Promise<WorktreeSummary>;
+
+  /** List Team Space Issues in one Space, or across the user's Team Spaces when no Space is given. */
+  abstract listIssues(userId: string, query: ListIssuesQuery): Promise<IssueListView>;
+
+  /** Read one Issue; `sets` carries the IDs needed for a full-set update. */
+  abstract readIssue(
+    userId: string,
+    spaceId: string,
+    number: number,
+    options: { readonly timeline: boolean },
+  ): Promise<{ readonly view: IssueDetailView; readonly sets: IssueSets }>;
+
+  /** Open an Issue. */
+  abstract createIssue(
+    userId: string,
+    spaceId: string,
+    input: IssueChange & { readonly title: string },
+  ): Promise<IssueSummaryView>;
+
+  /** Change an Issue's text, state, or whole label/assignee/file sets. */
+  abstract updateIssue(
+    userId: string,
+    spaceId: string,
+    number: number,
+    change: IssueChange,
+  ): Promise<IssueSummaryView>;
+
+  /** Comment on an Issue. */
+  abstract commentOnIssue(
+    userId: string,
+    spaceId: string,
+    number: number,
+    body: string,
+  ): Promise<{ readonly id: string }>;
+
+  /** A Space's Issue labels, for resolving names to IDs. */
+  abstract listIssueLabels(
+    userId: string,
+    spaceId: string,
+  ): Promise<readonly { readonly id: string; readonly name: string }[]>;
 
   /** Collaboration state for one document (trunk viewer + related worktrees). */
   abstract getFileState(userId: string, resourceId: string): Promise<DocumentFileState>;
