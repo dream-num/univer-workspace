@@ -52,7 +52,7 @@ describe("Worktree dashboard onboarding", () => {
     const html = renderToStaticMarkup(createElement(WorktreeDashboard));
     expect(html).toContain("onboardingTitle");
     expect(html).toContain("https://workspace.example.test");
-    expect(html).toContain('https://github.com/dream-num/univer-workspace/releases"');
+    expect(html).toContain('https://github.com/dream-num/univer-workspace/releases/latest"');
     expect(html).toContain("npx skills add dream-num/univer-workspace");
     expect(html).not.toContain("taskList");
   });

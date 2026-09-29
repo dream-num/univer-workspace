@@ -14,7 +14,7 @@ import { Button, buttonVariants } from "../../shared/ui/button";
 import { toast } from "../../shared/ui/toaster";
 import { cn } from "../../shared/utils/cn";
 
-const AGENT_DOWNLOAD_URL = "https://github.com/dream-num/univer-workspace/releases";
+const AGENT_DOWNLOAD_URL = "https://github.com/dream-num/univer-workspace/releases/latest";
 const CLI_GUIDE_URL =
   "https://github.com/dream-num/univer-workspace/blob/main/apps/cli/README.md#install";
 const INSTALL_COMMANDS = [
