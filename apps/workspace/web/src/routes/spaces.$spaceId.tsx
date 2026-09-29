@@ -5,6 +5,7 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   GitPullRequestDraft,
+  Link as LinkIcon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
@@ -19,6 +20,7 @@ import { sessionQueryOptions } from "../features/auth";
 import { BlobPreview } from "../features/blobs";
 import { htmlViewsQueryOptions } from "../features/views/html-views.queries";
 import { resourceOpenQueryOptions } from "../features/resources";
+import { resourceShareUrl } from "../features/resource-view/resource-view";
 import { RepositoryTabs, spaceDisplayName, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceLayout } from "./-workspace-layout";
 import { formatRelativeDate } from "../shared/format-relative-date";
@@ -26,7 +28,7 @@ import { useI18n, type MessageKey } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
 import { worktreeListQueryOptions } from "../features/worktrees";
 import type { components } from "../../../generated/http/schema.js";
-import { Button, Empty, buttonVariants } from "../shared/ui";
+import { Button, Empty, buttonVariants, toast } from "../shared/ui";
 import { cn } from "../shared/utils/cn";
 
 type SpaceView = components["schemas"]["SpaceView"];
@@ -165,7 +167,6 @@ function SpaceNodePage() {
             error={apps.isError || selectedResource.isError}
             onRetry={retryRepositoryPage}
             onSelectApp={setLandingApp}
-            onOpenApps={() => navigate({ to: "/apps", search: { spaceId } })}
             view={repositoryView}
             openWorktreeCount={openWorktreeCount}
             worktrees={spaceWorktrees}
@@ -194,7 +195,6 @@ function RepositoryOverview({
   error,
   onRetry,
   onSelectApp,
-  onOpenApps,
   view,
   openWorktreeCount,
   worktrees,
@@ -211,7 +211,6 @@ function RepositoryOverview({
   readonly error: boolean;
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
-  readonly onOpenApps: () => void;
   readonly view: RepositoryView;
   readonly openWorktreeCount: number;
   readonly worktrees: readonly Worktree[];
@@ -233,7 +232,6 @@ function RepositoryOverview({
             error={error}
             onRetry={onRetry}
             onSelectApp={onSelectApp}
-            onOpenApps={onOpenApps}
             openWorktreeCount={openWorktreeCount}
             fileCount={page.nodes.length}
           />
@@ -243,7 +241,6 @@ function RepositoryOverview({
             apps={apps}
             selectedApp={selectedApp}
             onSelectApp={onSelectApp}
-            onOpenApps={onOpenApps}
           />
         ) : (
           <PullRequestsView spaceId={spaceId} worktrees={worktrees} onOpenWorktrees={onOpenWorktrees} />
@@ -263,7 +260,6 @@ function FilesView({
   error,
   onRetry,
   onSelectApp,
-  onOpenApps,
   openWorktreeCount,
   fileCount,
   space,
@@ -278,7 +274,6 @@ function FilesView({
   readonly error: boolean;
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
-  readonly onOpenApps: () => void;
   readonly openWorktreeCount: number;
   readonly fileCount: number;
   readonly space: SpaceView | undefined;
@@ -335,6 +330,7 @@ function FilesView({
                 <Link
                   to="/nodes/$nodeId"
                   params={{ nodeId: selectedApp.node.id }}
+                  search={(previous) => ({ ...previous, view: "immersive" })}
                   aria-label={t("repositoryOpenPage")}
                   title={t("repositoryOpenPage")}
                   className={cn(
@@ -359,11 +355,16 @@ function FilesView({
                 <BlobPreview resource={resource} actionsContainer={null} />
               </div>
             ) : (
-              <Empty title={t("repositoryNoApps")} description={t("repositoryNoAppsDescription")}>
-                <Button variant="secondary" onClick={onOpenApps}>
-                  {t("viewApps")}
-                </Button>
-              </Empty>
+              <Empty
+                title={t("repositoryNoApps")}
+                description={
+                  <>
+                    {t("appsEmptyDescription")}
+                    <br />
+                    {t("appsEmptyHint")}
+                  </>
+                }
+              />
             )}
           </section>
         ) : null}
@@ -387,12 +388,22 @@ function FilesView({
                 label={t("repositoryAboutFiles")}
                 value={String(fileCount)}
               />
-              <AboutRow label={t("repositoryAboutApps")} value={String(apps.length)} />
               <AboutRow
                 label={t("repositoryAboutOpenPrs")}
                 value={String(openWorktreeCount)}
               />
             </dl>
+            {selectedApp ? (
+              <Link
+                to="/nodes/$nodeId"
+                params={{ nodeId: selectedApp.node.id }}
+                search={(previous) => ({ ...previous, view: "immersive" })}
+                className="flex min-w-0 items-center gap-1.5 text-brand-700 no-underline hover:underline dark:text-brand-400"
+              >
+                <LinkIcon className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{t("repositoryDefaultPage")}</span>
+              </Link>
+            ) : null}
             {space.type === "team" ? (
               <div className="flex min-w-0 items-center gap-1 text-xs text-subtle-foreground">
                 <span className="shrink-0">{t("teamSpaceId")}:</span>
@@ -433,15 +444,25 @@ function AppsView({
   apps,
   selectedApp,
   onSelectApp,
-  onOpenApps,
 }: {
   readonly spaceId: string;
   readonly apps: readonly RepositoryApp[];
   readonly selectedApp: RepositoryApp | undefined;
   readonly onSelectApp: (nodeId: string) => void;
-  readonly onOpenApps: () => void;
 }) {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
+  const defaultPageUrl = selectedApp
+    ? resourceShareUrl(window.location.origin, selectedApp.node.id, "immersive")
+    : undefined;
+  const copyDefaultPageUrl = async () => {
+    if (!defaultPageUrl) return;
+    try {
+      await navigator.clipboard.writeText(defaultPageUrl);
+      toast.success(t("repositoryPageLinkCopied"));
+    } catch {
+      toast.error(t("repositoryCopyPageLinkFailed"));
+    }
+  };
   return (
     <section className="rounded-lg border border-border bg-background">
       <div className="border-b border-border px-4 py-3">
@@ -450,37 +471,96 @@ function AppsView({
           {t("repositoryAppsSummary", { count: apps.length })}
         </p>
       </div>
-      {apps.length ? (
-        <ul className="m-0 list-none divide-y divide-border p-0">
-          {apps.map((app) => (
-            <li key={app.node.id} className="flex items-center gap-3 px-4 py-3">
-              <AppWindow className="size-4 shrink-0 text-muted-foreground" />
+      {selectedApp ? (
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-surface/50 px-4 py-3">
+          <div className="min-w-0">
+            <p className="m-0 flex min-w-0 items-center gap-2 text-sm">
+              <span
+                className="size-2 shrink-0 rounded-full bg-emerald-500"
+                aria-hidden="true"
+              />
+              <span className="shrink-0 text-muted-foreground">
+                {t("repositoryDefaultPage")}:
+              </span>
               <Link
                 to="/nodes/$nodeId"
-                params={{ nodeId: app.node.id }}
-                className="min-w-0 flex-1 truncate font-medium text-foreground no-underline hover:underline"
+                params={{ nodeId: selectedApp.node.id }}
+                className="min-w-0 truncate font-medium text-foreground no-underline hover:underline"
               >
-                {displayAppName(app.node.name)}
+                {displayAppName(selectedApp.node.name)}
               </Link>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={selectedApp?.node.id === app.node.id}
-                onClick={() => onSelectApp(app.node.id)}
+            </p>
+            <p className="mt-1 mb-0 flex min-w-0 items-center gap-1.5 pl-4">
+              <code
+                className="min-w-0 truncate text-xs text-muted-foreground"
+                title={defaultPageUrl}
               >
-                {selectedApp?.node.id === app.node.id
-                  ? t("repositoryLandingApp")
-                  : t("repositorySetLandingApp")}
-              </Button>
-            </li>
-          ))}
+                {defaultPageUrl}
+              </code>
+            </p>
+            <p className="mt-1 mb-0 pl-4 text-xs text-subtle-foreground">
+              {t("repositoryDefaultPageLocalOnly")}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => void copyDefaultPageUrl()}>
+              {t("repositoryCopyPageLink")}
+            </Button>
+            <Link
+              to="/nodes/$nodeId"
+              params={{ nodeId: selectedApp.node.id }}
+              search={(previous) => ({ ...previous, view: "immersive" })}
+              className={cn(buttonVariants({ size: "sm" }), "no-underline")}
+            >
+              {t("repositoryVisitPage")}
+              <ExternalLink className="size-3.5" />
+            </Link>
+          </div>
+        </div>
+      ) : null}
+      {apps.length ? (
+        <ul className="m-0 list-none divide-y divide-border p-0">
+          {apps.map((app) => {
+            const isDefault = selectedApp?.node.id === app.node.id;
+            return (
+              <li key={app.node.id} className="flex items-center gap-3 px-4 py-3">
+                <AppWindow className="size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <Link
+                    to="/nodes/$nodeId"
+                    params={{ nodeId: app.node.id }}
+                    className="block truncate font-medium text-foreground no-underline hover:underline"
+                  >
+                    {displayAppName(app.node.name)}
+                  </Link>
+                  <p className="m-0 mt-0.5 truncate text-xs text-muted-foreground">
+                    {app.node.name} · {formatRelativeDate(app.node.updatedAt, language)}
+                  </p>
+                </div>
+                {isDefault ? (
+                  <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                    {t("repositoryIsDefaultPage")}
+                  </span>
+                ) : (
+                  <Button variant="ghost" size="sm" onClick={() => onSelectApp(app.node.id)}>
+                    {t("repositorySetDefaultPage")}
+                  </Button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : (
-        <Empty title={t("repositoryNoApps")} description={t("repositoryNoAppsDescription")}>
-          <Button variant="secondary" onClick={onOpenApps}>
-            {t("viewApps")}
-          </Button>
-        </Empty>
+        <Empty
+          title={t("repositoryNoApps")}
+          description={
+            <>
+              {t("appsEmptyDescription")}
+              <br />
+              {t("appsEmptyHint")}
+            </>
+          }
+        />
       )}
     </section>
   );
