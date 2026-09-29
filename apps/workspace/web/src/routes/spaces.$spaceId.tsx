@@ -26,7 +26,7 @@ import { WorkspaceLayout } from "./-workspace-layout";
 import { formatRelativeDate } from "../shared/format-relative-date";
 import { useI18n, type MessageKey } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
-import { worktreeListQueryOptions } from "../features/worktrees";
+import { worktreeBelongsToSpace, worktreeListQueryOptions } from "../features/worktrees";
 import type { components } from "../../../generated/http/schema.js";
 import { Button, Empty, buttonVariants, toast } from "../shared/ui";
 import { cn } from "../shared/utils/cn";
@@ -107,7 +107,7 @@ function SpaceNodePage() {
   const spaceWorktrees = [
     ...(worktrees.data?.items ?? []),
     ...(processedWorktrees.data?.items ?? []),
-  ].filter((item) => item.teamSpace?.id === spaceId);
+  ].filter((item) => space !== undefined && worktreeBelongsToSpace(item, space));
   const openWorktreeCount = spaceWorktrees.filter((item) =>
     OPEN_WORKTREE_STATES.includes(item.state),
   ).length;

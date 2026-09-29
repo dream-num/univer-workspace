@@ -31,10 +31,15 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { sessionQueryKey, sessionQueryOptions } from "../features/auth";import { AppsSidebarSection } from "../features/html-views/apps-sidebar";
+import { sessionQueryKey, sessionQueryOptions } from "../features/auth";
+import { AppsSidebarSection } from "../features/html-views/apps-sidebar";
 import { spaceDisplayName, spacesQueryKey, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceNavigationTree } from "../features/nodes";
-import { useWorktreeChangeFeed, worktreeListQueryOptions } from "../features/worktrees";
+import {
+  useWorktreeChangeFeed,
+  worktreeBelongsToSpace,
+  worktreeListQueryOptions,
+} from "../features/worktrees";
 import { api } from "../shared/api/client";
 import { workspaceHarnessOrigin } from "../shared/app-links";
 import { apiError } from "../shared/api/errors";
@@ -451,11 +456,8 @@ function AuthenticatedWorkspaceLayout({
   const activeTaskCount =
     activeWorktrees.data?.items.filter((worktree) => {
       if (!["draft", "ready", "merging"].includes(worktree.state)) return false;
-      return (
-        workspaceTheme !== "repository" ||
-        selectedSpaceId === undefined ||
-        worktree.teamSpace?.id === selectedSpaceId
-      );
+      if (workspaceTheme !== "repository" || selectedSpaceId === undefined) return true;
+      return selectedSpace !== undefined && worktreeBelongsToSpace(worktree, selectedSpace);
     }).length ?? 0;
 
   const renderNavigation = (collapsed: boolean) =>

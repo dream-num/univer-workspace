@@ -1,4 +1,5 @@
 export { WorktreeDashboard } from "./worktree-dashboard";
+export { worktreeBelongsToSpace } from "./worktree-space";
 export {
   worktreeListQueryOptions,
   worktreeQueryOptions,

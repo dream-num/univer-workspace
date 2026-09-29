@@ -2,7 +2,7 @@ import { AppWindow, FileText, GitPullRequest, Settings } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "../../shared/i18n";
-import { worktreeListQueryOptions } from "../worktrees";
+import { worktreeBelongsToSpace, worktreeListQueryOptions } from "../worktrees";
 import { spacesQueryOptions } from "./spaces.queries";
 
 export type RepositoryTab = "files" | "prs" | "apps" | "settings";
@@ -27,13 +27,16 @@ export function RepositoryTabs({
   const activeWorktrees = useQuery(worktreeListQueryOptions("active"));
   const processedWorktrees = useQuery(worktreeListQueryOptions("processed"));
   const space = spaces.data?.spaces.find((item) => item.id === spaceId);
-  const openWorktreeCount = [
-    ...(activeWorktrees.data?.items ?? []),
-    ...(processedWorktrees.data?.items ?? []),
-  ].filter(
-    (worktree) =>
-      worktree.teamSpace?.id === spaceId && OPEN_WORKTREE_STATES.includes(worktree.state),
-  ).length;
+  const openWorktreeCount = space
+    ? [
+        ...(activeWorktrees.data?.items ?? []),
+        ...(processedWorktrees.data?.items ?? []),
+      ].filter(
+        (worktree) =>
+          worktreeBelongsToSpace(worktree, space) &&
+          OPEN_WORKTREE_STATES.includes(worktree.state),
+      ).length
+    : 0;
   const canOpenSettings =
     space?.capabilities.renameSpace ||
     space?.capabilities.manageMembers ||

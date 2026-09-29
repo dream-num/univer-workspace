@@ -26,6 +26,7 @@ import {
   Tooltip,
 } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
+import { spacesQueryOptions } from "../spaces/spaces.queries";
 import {
   UnitChangeIcon,
   UnitTypeIcon,
@@ -34,6 +35,7 @@ import {
   worktreeStateVariant,
 } from "./worktree-review-panel";
 import { formatWorktreeDateTime } from "./worktree-review-presentation";
+import { worktreeBelongsToSpace } from "./worktree-space";
 import {
   worktreeListQueryOptions,
   worktreeQueryOptions,
@@ -82,6 +84,8 @@ export function WorktreeDashboard({
   const { language, t } = useI18n();
   const active = useQuery(worktreeListQueryOptions("active"));
   const processed = useQuery(worktreeListQueryOptions("processed"));
+  const spaces = useQuery(spacesQueryOptions);
+  const scopedSpace = spaces.data?.spaces.find((item) => item.id === spaceId);
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
   const [expandedTasks, setExpandedTasks] = useState<
@@ -107,11 +111,11 @@ export function WorktreeDashboard({
   const tasks = useMemo(
     () => {
       const allTasks = [...(active.data?.items ?? []), ...(processed.data?.items ?? [])];
-      return spaceId
-        ? allTasks.filter((task) => task.teamSpace?.id === spaceId)
+      return scopedSpace
+        ? allTasks.filter((task) => worktreeBelongsToSpace(task, scopedSpace))
         : allTasks;
     },
-    [active.data?.items, processed.data?.items, spaceId]
+    [active.data?.items, processed.data?.items, scopedSpace]
   );
   const scopedTasks = tasks.filter(
     (task) =>
