@@ -46,7 +46,7 @@ export function verifyV6Migration(
         tables.map((table) => migrated.connection.prepare(`SELECT * FROM ${table}`).all()),
         before,
       );
-      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 8);
+      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 9);
       assert.deepEqual(migrated.connection.prepare("PRAGMA foreign_key_check").all(), []);
       assert.equal(
         migrated.connection.prepare("PRAGMA integrity_check").get()?.integrity_check,

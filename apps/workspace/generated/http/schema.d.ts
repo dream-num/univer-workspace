@@ -1006,6 +1006,185 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Issues across every Team Space the caller owns or belongs to.
+         * @description Public-read Spaces the caller does not belong to are excluded. Use `assignee=me` for the caller's work queue.
+         */
+        get: operations["listMyIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{spaceId}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List Issues in a Team Space.
+         * @description Personal Spaces return 409 because Issues are available only in Team Spaces.
+         */
+        get: operations["listSpaceIssues"];
+        put?: never;
+        /**
+         * Open an Issue.
+         * @description Space Members of any role may open an Issue; labels, assignees and file references need the triage capability. Not idempotent; after an unknown result, list the Space before retrying.
+         */
+        post: operations["createIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{spaceId}/issues/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        /** Read one Issue by its Space-scoped number. */
+        get: operations["getIssue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change an Issue.
+         * @description Title, body and state may be changed by the author or a user with the
+         *     triage capability. Labels, assignees and referenced files replace the
+         *     whole set and need the triage capability. Concurrent edits use
+         *     last-writer-wins; there is no revision precondition.
+         */
+        patch: operations["updateIssue"];
+        trace?: never;
+    };
+    "/api/spaces/{spaceId}/issues/{number}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        /** List comments and events of an Issue in chronological order. */
+        get: operations["listIssueTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{spaceId}/issues/{number}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Comment on an Issue.
+         * @description Not idempotent; after an unknown result, read the timeline before retrying.
+         */
+        post: operations["createIssueComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/issue-comments/{commentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a comment. Its author, the Space owner and admins may do so. */
+        delete: operations["deleteIssueComment"];
+        options?: never;
+        head?: never;
+        /** Edit a comment. Only its author may do so. */
+        patch: operations["updateIssueComment"];
+        trace?: never;
+    };
+    "/api/spaces/{spaceId}/issue-labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        /** List the labels of a Team Space with their open Issue counts. */
+        get: operations["listIssueLabels"];
+        put?: never;
+        /** Create a label. Requires the Space owner or an admin. */
+        post: operations["createIssueLabel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/issue-labels/{labelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                labelId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a label and remove it from every Issue. Requires the Space owner or an admin.
+         * @description Timeline events keep a snapshot of the label name and color.
+         */
+        delete: operations["deleteIssueLabel"];
+        options?: never;
+        head?: never;
+        /** Rename or recolor a label. Requires the Space owner or an admin. */
+        patch: operations["updateIssueLabel"];
+        trace?: never;
+    };
     "/api/worktrees": {
         parameters: {
             query?: never;
@@ -1320,6 +1499,33 @@ export interface components {
             /** Format: date-time */
             updatedAt: string | null;
         };
+        Issue: components["schemas"]["IssueSummary"] & {
+            /** @description Markdown. */
+            body: string;
+            references: components["schemas"]["IssueReference"][];
+            capabilities: components["schemas"]["IssueCapabilities"];
+        };
+        IssueSummary: {
+            id: string;
+            /** @description Human-facing number, unique inside the Space (#12). */
+            number: number;
+            space: components["schemas"]["IssueSpaceRef"];
+            title: string;
+            state: components["schemas"]["IssueState"];
+            stateReason: components["schemas"]["IssueStateReason"] | null;
+            author: components["schemas"]["User"];
+            closedBy: components["schemas"]["User"] | null;
+            /** Format: date-time */
+            closedAt: string | null;
+            labels: components["schemas"]["IssueLabel"][];
+            assignees: components["schemas"]["User"][];
+            commentCount: number;
+            referenceCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         WorktreeSummary: {
             id: string;
             name: string;
@@ -1435,6 +1641,12 @@ export interface components {
             renameSpace: boolean;
             manageMembers: boolean;
             viewTrash: boolean;
+            /** @description The caller may open Issues and comment in this Team Space. */
+            createIssue: boolean;
+            /** @description The caller may edit, close, label, assign and reference files on any Issue. */
+            triageIssues: boolean;
+            /** @description The caller may create, change and delete this Space's Issue labels. */
+            manageIssueLabels: boolean;
         };
         SpaceList: {
             spaces: components["schemas"]["SpaceView"][];
@@ -1707,6 +1919,157 @@ export interface components {
             enabled: boolean;
             role: components["schemas"]["LinkSharingRole"];
         };
+        IssueSpaceRef: {
+            id: string;
+            name: string;
+        };
+        /** @enum {string} */
+        IssueState: "open" | "closed";
+        /** @enum {string} */
+        IssueStateReason: "completed" | "not_planned";
+        IssueLabel: {
+            id: string;
+            name: string;
+            /** @description A palette key; historical labels are not rewritten if the palette changes. */
+            color: string;
+            description: string;
+        };
+        IssueList: {
+            items: components["schemas"]["IssueSummary"][];
+            nextCursor: string | null;
+            /** @description Match counts for every filter except `state`. */
+            counts: {
+                open: number;
+                closed: number;
+            };
+        };
+        CreateIssue: {
+            title: string;
+            body?: string;
+            /** @description Requires the triage capability. */
+            labelIds?: string[];
+            /** @description Requires the triage capability. Assignees must be the owner or a member of the Space. */
+            assigneeUserIds?: string[];
+            /** @description Requires the triage capability. Nodes must be in the Space and not in Trash. */
+            nodeIds?: string[];
+        };
+        IssueReference: {
+            nodeId: string;
+            /** @description False when the Node is in Trash, deleted or no longer readable by the caller. */
+            available: boolean;
+            /** @description Null when the reference is unavailable. */
+            name: string | null;
+            resource: {
+                id: string;
+                /** @constant */
+                kind: "univer";
+                unitId: string;
+                unitType: components["schemas"]["UnitType"];
+            } | {
+                id: string;
+                /** @constant */
+                kind: "blob";
+                mediaType: string;
+            } | null;
+        };
+        IssueCapabilities: {
+            /** @description The caller may change the title and body. */
+            edit: boolean;
+            /** @description The caller may close or reopen the Issue. */
+            close: boolean;
+            /** @description The caller may change labels, assignees and referenced files. */
+            triage: boolean;
+            comment: boolean;
+        };
+        UpdateIssue: {
+            title?: string;
+            body?: string;
+            state?: components["schemas"]["IssueState"];
+            /** @description Only valid together with `state: closed`; defaults to `completed`. */
+            stateReason?: components["schemas"]["IssueStateReason"];
+            /** @description Replaces the whole set. Requires the triage capability. */
+            labelIds?: string[];
+            /** @description Replaces the whole set. Existing assignees that left the Space may be kept. */
+            assigneeUserIds?: string[];
+            /** @description Replaces the whole set. Existing references that became unavailable may be kept. */
+            nodeIds?: string[];
+        };
+        IssueTimelineComment: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "comment";
+            id: string;
+            author: components["schemas"]["User"];
+            body: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        IssueEventKind: "closed" | "reopened" | "renamed" | "labeled" | "unlabeled" | "assigned" | "unassigned" | "node_referenced" | "node_unreferenced";
+        IssueTimelineEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "event";
+            id: string;
+            kind: components["schemas"]["IssueEventKind"];
+            actor: components["schemas"]["User"];
+            /**
+             * @description Snapshot taken when the event happened. `closed` carries `reason`;
+             *     `renamed` carries `from` and `to`; `labeled` and `unlabeled` carry
+             *     `labelId`, `name` and `color`; `assigned` and `unassigned` carry
+             *     `userId`, `username` and `displayName`; `node_referenced` and
+             *     `node_unreferenced` carry `nodeId` and `name`.
+             */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            createdAt: string;
+        };
+        IssueTimelineItem: components["schemas"]["IssueTimelineComment"] | components["schemas"]["IssueTimelineEvent"];
+        IssueTimelinePage: {
+            items: components["schemas"]["IssueTimelineItem"][];
+            nextCursor: string | null;
+        };
+        IssueCommentBody: {
+            body: string;
+        };
+        IssueComment: {
+            id: string;
+            author: components["schemas"]["User"];
+            body: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        IssueLabelUsage: components["schemas"]["IssueLabel"] & {
+            openIssueCount: number;
+        };
+        IssueLabelList: {
+            labels: components["schemas"]["IssueLabelUsage"][];
+        };
+        /**
+         * @description Palette key. The Browser maps each key to light and dark theme colors.
+         * @enum {string}
+         */
+        IssueLabelColor: "gray" | "blue" | "green" | "yellow" | "orange" | "red" | "purple" | "pink";
+        CreateIssueLabel: {
+            name: string;
+            color: components["schemas"]["IssueLabelColor"];
+            description?: string;
+        };
+        UpdateIssueLabel: {
+            name?: string;
+            color?: components["schemas"]["IssueLabelColor"];
+            description?: string;
+        };
         /** @enum {string} */
         WorktreeKind: "user" | "team";
         /** @enum {string} */
@@ -1966,6 +2329,18 @@ export interface components {
         Range: string;
         /** @description Return 304 when the current content ETag matches. */
         IfNoneMatch: string;
+        IssueLimitParameter: number;
+        IssueStateParameter: "open" | "closed" | "all";
+        /** @description Label name, case-insensitive. Repeat to require several labels. */
+        IssueLabelParameter: string[];
+        /** @description A User ID, `me`, or `none` for unassigned Issues. */
+        IssueAssigneeParameter: string;
+        /** @description A User ID or `me`. */
+        IssueAuthorParameter: string;
+        /** @description Case-insensitive substring match on title and body. */
+        IssueSearchParameter: string;
+        IssueSortParameter: "created" | "updated";
+        IssueOrderParameter: "asc" | "desc";
     };
     requestBodies: never;
     headers: never;
@@ -3677,6 +4052,400 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listMyIssues: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the previous page. */
+                cursor?: components["parameters"]["CursorParameter"];
+                limit?: components["parameters"]["IssueLimitParameter"];
+                state?: components["parameters"]["IssueStateParameter"];
+                /** @description Label name, case-insensitive. Repeat to require several labels. */
+                label?: components["parameters"]["IssueLabelParameter"];
+                /** @description A User ID, `me`, or `none` for unassigned Issues. */
+                assignee?: components["parameters"]["IssueAssigneeParameter"];
+                /** @description A User ID or `me`. */
+                author?: components["parameters"]["IssueAuthorParameter"];
+                /** @description Case-insensitive substring match on title and body. */
+                q?: components["parameters"]["IssueSearchParameter"];
+                sort?: components["parameters"]["IssueSortParameter"];
+                order?: components["parameters"]["IssueOrderParameter"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listSpaceIssues: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the previous page. */
+                cursor?: components["parameters"]["CursorParameter"];
+                limit?: components["parameters"]["IssueLimitParameter"];
+                state?: components["parameters"]["IssueStateParameter"];
+                /** @description Label name, case-insensitive. Repeat to require several labels. */
+                label?: components["parameters"]["IssueLabelParameter"];
+                /** @description A User ID, `me`, or `none` for unassigned Issues. */
+                assignee?: components["parameters"]["IssueAssigneeParameter"];
+                /** @description A User ID or `me`. */
+                author?: components["parameters"]["IssueAuthorParameter"];
+                /** @description Case-insensitive substring match on title and body. */
+                q?: components["parameters"]["IssueSearchParameter"];
+                sort?: components["parameters"]["IssueSortParameter"];
+                order?: components["parameters"]["IssueOrderParameter"];
+            };
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue page with open and closed counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    createIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIssue"];
+            };
+        };
+        responses: {
+            /** @description Created Issue. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue with the caller's capabilities. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    updateIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIssue"];
+            };
+        };
+        responses: {
+            /** @description Updated Issue. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listIssueTimeline: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the previous page. */
+                cursor?: components["parameters"]["CursorParameter"];
+                limit?: components["parameters"]["LimitParameter"];
+            };
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Timeline page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueTimelinePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    createIssueComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCommentBody"];
+            };
+        };
+        responses: {
+            /** @description Created comment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueComment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteIssueComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Comment deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateIssueComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCommentBody"];
+            };
+        };
+        responses: {
+            /** @description Updated comment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueComment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listIssueLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Labels ordered by name. A Space has at most 100. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueLabelList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    createIssueLabel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIssueLabel"];
+            };
+        };
+        responses: {
+            /** @description Created label. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueLabel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteIssueLabel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                labelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Label deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateIssueLabel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                labelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIssueLabel"];
+            };
+        };
+        responses: {
+            /** @description Updated label. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueLabel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listWorktrees: {

@@ -15,6 +15,9 @@ SpaceCapabilities:
     - renameSpace
     - manageMembers
     - viewTrash
+    - createIssue
+    - triageIssues
+    - manageIssueLabels
   properties:
     browseRoot:
       type: boolean
@@ -26,6 +29,15 @@ SpaceCapabilities:
       type: boolean
     viewTrash:
       type: boolean
+    createIssue:
+      type: boolean
+      description: The caller may open Issues and comment in this Team Space.
+    triageIssues:
+      type: boolean
+      description: The caller may edit, close, label, assign and reference files on any Issue.
+    manageIssueLabels:
+      type: boolean
+      description: The caller may create, change and delete this Space's Issue labels.
 
 SpaceSummary:
   type: object

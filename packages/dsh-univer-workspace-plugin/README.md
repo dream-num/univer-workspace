@@ -117,6 +117,12 @@ require a click. This does not replace DSH chat or local-file rendering.
 - **Review**: `univer_worktree` drives the Worktree lifecycle
   (create/ready/merge/discard) with merge and discard forced through the
   `tools/pre-execute` approval waterfall.
+- **Issues**: `univer_issue` reads and operates Team Space Issues
+  (list/get/create/update/comment/close/reopen) through the Workspace product
+  API as the authenticated user. `get` returns the discussion and linked files
+  with the `resourceId`s the other tools take. Nothing needs approval because
+  every Issue action can be reversed by another; the `univer` skill tells the
+  agent to comment its result and leave closing to the user.
 - **Worktree-local Unit**: `univer_unit` implements the Workspace product's
   `source=worktree` create contract with the calling Space as its enforced
   scope, stable idempotency, pending-Operation polling, and complete Unit

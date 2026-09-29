@@ -295,15 +295,19 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V7 product databases to V8 automatically.
+backs up and migrates supported V0 through V8 product databases to V9 automatically.
+While the container runs, touch its SQLite files only from inside it
+(`docker exec … node`). The product database is in WAL mode: opening it from
+the host with another SQLite build — even just to read it — can corrupt the
+file. Stop the container before inspecting or copying `.data`.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` is unchanged. The product schema moves from V7 to V8 by
-adding content-permission tables. Before creating
+`history=2`; `comment=1` is unchanged. The product schema moves from V8 to V9 by
+adding Issue tables (V8 added content-permission tables). Before creating
 application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V8,
+2. Start a single new instance. Startup first prepares the product database to V9,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -335,9 +339,11 @@ only the application image is insufficient. Retain backups until rollout is acce
 V7 extends the Operation kind and object deletion reason for Blob replacement; existing
 Blob rows and upload sessions are preserved.
 V8 adds content permission objects and collaborators without rewriting existing tables.
-For a V8 rollout, stop every old Workspace instance, start one V8 instance and
+V9 adds Space-scoped Issues, comments, events, labels, assignees and file references
+without rewriting existing tables.
+For a V9 rollout, stop every old Workspace instance, start one V9 instance and
 wait for migration and health checks to succeed, then restore normal service;
-do not let V7 and V8 processes write the same SQLite file concurrently.
+do not let V8 and V9 processes write the same SQLite file concurrently.
 
 The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
 repository tag. When provided, it checks out that tag and uses it for the container

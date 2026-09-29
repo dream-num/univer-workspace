@@ -16,6 +16,18 @@
     14px/1.75 system-ui,
     sans-serif;
 }
+.embedded {
+  flex: none;
+  height: auto;
+  font-size: inherit;
+}
+.embedded .prose {
+  max-width: none;
+  margin: 0;
+}
+.embedded .prose > :last-child {
+  margin-bottom: 0;
+}
 .toolbar {
   display: flex;
   gap: 6px;

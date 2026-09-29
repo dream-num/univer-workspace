@@ -23,6 +23,7 @@ import {
   WorkspaceCompileSvgFeature,
   WorkspaceContentExecutionFeature,
   WorkspaceContentSource,
+  WorkspaceIssueFeature,
   WorkspaceOpenFeature,
   WorkspacePrintPdfFeature,
   WorkspaceRenderUnitLoader,
@@ -44,6 +45,7 @@ import { createWorkspaceDaemonRuntimeOperations } from "./features/content/execu
 import { createWorkspaceUnitExchangeCommands } from "./features/exchange/command.js";
 import { createHtmlViewCommand } from "./features/html-view/command.js";
 import { WorkspaceHtmlViewFeature } from "./features/html-view/html-view.js";
+import { createIssueCommand } from "./features/issue/command.js";
 import { createWorkspaceUnitLayoutLintCommand } from "./features/lint/command.js";
 import { createOpenCommand } from "./features/open/command.js";
 import { createWorkspacePrintPdfCommand } from "./features/print-pdf/command.js";
@@ -196,6 +198,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createSpaceCommand(
       new WorkspaceSpaceFeature(async () => await auth.authenticatedHttp("client")),
     ),
+    createIssueCommand(new WorkspaceIssueFeature(authenticatedHttp)),
     createWorktreeCommand(worktrees),
     createUnitCommand(units),
     ...createWorkspaceUnitExchangeCommands(exchange),

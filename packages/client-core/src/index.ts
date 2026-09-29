@@ -10,6 +10,23 @@ export {
   type WorkspaceSubject,
 } from "./auth.js";
 export { WorkspaceBlobFeature } from "./blob.js";
+export {
+  WorkspaceIssueFeature,
+  type ListIssuesInput,
+  type UpdateIssueInput,
+  type WorkspaceIssueLabelUsage,
+} from "./issue.js";
+export type {
+  WorkspaceIssue,
+  WorkspaceIssueLabel,
+  WorkspaceIssuePage,
+  WorkspaceIssueReference,
+  WorkspaceIssueState,
+  WorkspaceIssueStateReason,
+  WorkspaceIssueSummary,
+  WorkspaceIssueTimelineItem,
+  WorkspaceIssueUser,
+} from "./issue-model.js";
 export { resolveWorkspaceAssetContent } from "./asset-content.js";
 export { WorkspaceAssetFeature } from "./asset.js";
 export {

@@ -35,6 +35,8 @@ tags:
     description: Team Space membership management.
   - name: Sharing
     description: Personal Space Direct Share management.
+  - name: Issues
+    description: Space-scoped Issues, comments, labels and assignees for Team Spaces.
   - name: Worktrees
     description: Isolated collaborative draft and merge workflows.
 security:
@@ -146,6 +148,22 @@ paths:
     $ref: ./paths/permissions.yaml#/~1api~1nodes~1{nodeId}~1grants~1{userId}
   /api/nodes/{nodeId}/link-sharing:
     $ref: ./paths/permissions.yaml#/~1api~1nodes~1{nodeId}~1link-sharing
+  /api/issues:
+    $ref: ./paths/issues.yaml#/~1api~1issues
+  /api/spaces/{spaceId}/issues:
+    $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issues
+  /api/spaces/{spaceId}/issues/{number}:
+    $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issues~1{number}
+  /api/spaces/{spaceId}/issues/{number}/timeline:
+    $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issues~1{number}~1timeline
+  /api/spaces/{spaceId}/issues/{number}/comments:
+    $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issues~1{number}~1comments
+  /api/issue-comments/{commentId}:
+    $ref: ./paths/issues.yaml#/~1api~1issue-comments~1{commentId}
+  /api/spaces/{spaceId}/issue-labels:
+    $ref: ./paths/issues.yaml#/~1api~1spaces~1{spaceId}~1issue-labels
+  /api/issue-labels/{labelId}:
+    $ref: ./paths/issues.yaml#/~1api~1issue-labels~1{labelId}
   /api/worktrees:
     $ref: ./paths/worktrees.yaml#/~1api~1worktrees
   /api/worktrees/{worktreeId}:
@@ -209,6 +227,10 @@ components:
       $ref: ./schemas/permissions.yaml#/NodeGrant
     NodeLinkSharing:
       $ref: ./schemas/permissions.yaml#/NodeLinkSharing
+    Issue:
+      $ref: ./schemas/issues.yaml#/Issue
+    IssueSummary:
+      $ref: ./schemas/issues.yaml#/IssueSummary
     WorktreeSummary:
       $ref: ./schemas/worktrees.yaml#/WorktreeSummary
     WorktreeDetail:

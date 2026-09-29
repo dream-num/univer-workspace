@@ -1,0 +1,506 @@
+IssueState:
+  type: string
+  enum: [open, closed]
+
+IssueStateReason:
+  type: string
+  enum: [completed, not_planned]
+
+IssueLabelColor:
+  type: string
+  description: Palette key. The Browser maps each key to light and dark theme colors.
+  enum: [gray, blue, green, yellow, orange, red, purple, pink]
+
+IssueLabel:
+  type: object
+  additionalProperties: false
+  required: [id, name, color, description]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    color:
+      type: string
+      description: A palette key; historical labels are not rewritten if the palette changes.
+    description:
+      type: string
+
+IssueLabelUsage:
+  allOf:
+    - $ref: "#/IssueLabel"
+    - type: object
+      required: [openIssueCount]
+      properties:
+        openIssueCount:
+          type: integer
+          minimum: 0
+  unevaluatedProperties: false
+
+IssueLabelList:
+  type: object
+  additionalProperties: false
+  required: [labels]
+  properties:
+    labels:
+      type: array
+      items:
+        $ref: "#/IssueLabelUsage"
+
+IssueReference:
+  type: object
+  additionalProperties: false
+  required: [nodeId, available, name, resource]
+  properties:
+    nodeId:
+      type: string
+    available:
+      type: boolean
+      description: False when the Node is in Trash, deleted or no longer readable by the caller.
+    name:
+      type: [string, "null"]
+      description: Null when the reference is unavailable.
+    resource:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [id, kind, unitId, unitType]
+          properties:
+            id:
+              type: string
+            kind:
+              type: string
+              const: univer
+            unitId:
+              type: string
+            unitType:
+              $ref: ./nodes.yaml#/UnitType
+        - type: object
+          additionalProperties: false
+          required: [id, kind, mediaType]
+          properties:
+            id:
+              type: string
+            kind:
+              type: string
+              const: blob
+            mediaType:
+              type: string
+        - type: "null"
+
+IssueSpaceRef:
+  type: object
+  additionalProperties: false
+  required: [id, name]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+
+IssueSummary:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - number
+    - space
+    - title
+    - state
+    - stateReason
+    - author
+    - closedBy
+    - closedAt
+    - labels
+    - assignees
+    - commentCount
+    - referenceCount
+    - createdAt
+    - updatedAt
+  properties:
+    id:
+      type: string
+    number:
+      type: integer
+      minimum: 1
+      description: Human-facing number, unique inside the Space (#12).
+    space:
+      $ref: "#/IssueSpaceRef"
+    title:
+      type: string
+    state:
+      $ref: "#/IssueState"
+    stateReason:
+      oneOf:
+        - $ref: "#/IssueStateReason"
+        - type: "null"
+    author:
+      $ref: ./identity.yaml#/PublicUser
+    closedBy:
+      oneOf:
+        - $ref: ./identity.yaml#/PublicUser
+        - type: "null"
+    closedAt:
+      type: [string, "null"]
+      format: date-time
+    labels:
+      type: array
+      items:
+        $ref: "#/IssueLabel"
+    assignees:
+      type: array
+      items:
+        $ref: ./identity.yaml#/PublicUser
+    commentCount:
+      type: integer
+      minimum: 0
+    referenceCount:
+      type: integer
+      minimum: 0
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+IssueCapabilities:
+  type: object
+  additionalProperties: false
+  required: [edit, close, triage, comment]
+  properties:
+    edit:
+      type: boolean
+      description: The caller may change the title and body.
+    close:
+      type: boolean
+      description: The caller may close or reopen the Issue.
+    triage:
+      type: boolean
+      description: The caller may change labels, assignees and referenced files.
+    comment:
+      type: boolean
+
+Issue:
+  allOf:
+    - $ref: "#/IssueSummary"
+    - type: object
+      required: [body, references, capabilities]
+      properties:
+        body:
+          type: string
+          description: Markdown.
+        references:
+          type: array
+          items:
+            $ref: "#/IssueReference"
+        capabilities:
+          $ref: "#/IssueCapabilities"
+  unevaluatedProperties: false
+
+IssueList:
+  type: object
+  additionalProperties: false
+  required: [items, nextCursor, counts]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/IssueSummary"
+    nextCursor:
+      type: [string, "null"]
+    counts:
+      type: object
+      additionalProperties: false
+      required: [open, closed]
+      description: Match counts for every filter except `state`.
+      properties:
+        open:
+          type: integer
+          minimum: 0
+        closed:
+          type: integer
+          minimum: 0
+
+IssueComment:
+  type: object
+  additionalProperties: false
+  required: [id, author, body, createdAt, updatedAt]
+  properties:
+    id:
+      type: string
+    author:
+      $ref: ./identity.yaml#/PublicUser
+    body:
+      type: string
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+IssueEventKind:
+  type: string
+  enum:
+    - closed
+    - reopened
+    - renamed
+    - labeled
+    - unlabeled
+    - assigned
+    - unassigned
+    - node_referenced
+    - node_unreferenced
+
+IssueTimelineComment:
+  type: object
+  additionalProperties: false
+  required: [type, id, author, body, createdAt, updatedAt]
+  properties:
+    type:
+      type: string
+      const: comment
+    id:
+      type: string
+    author:
+      $ref: ./identity.yaml#/PublicUser
+    body:
+      type: string
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+IssueTimelineEvent:
+  type: object
+  additionalProperties: false
+  required: [type, id, kind, actor, payload, createdAt]
+  properties:
+    type:
+      type: string
+      const: event
+    id:
+      type: string
+    kind:
+      $ref: "#/IssueEventKind"
+    actor:
+      $ref: ./identity.yaml#/PublicUser
+    payload:
+      type: object
+      additionalProperties: true
+      description: |
+        Snapshot taken when the event happened. `closed` carries `reason`;
+        `renamed` carries `from` and `to`; `labeled` and `unlabeled` carry
+        `labelId`, `name` and `color`; `assigned` and `unassigned` carry
+        `userId`, `username` and `displayName`; `node_referenced` and
+        `node_unreferenced` carry `nodeId` and `name`.
+    createdAt:
+      type: string
+      format: date-time
+
+IssueTimelineItem:
+  oneOf:
+    - $ref: "#/IssueTimelineComment"
+    - $ref: "#/IssueTimelineEvent"
+  discriminator:
+    propertyName: type
+    mapping:
+      comment: "#/IssueTimelineComment"
+      event: "#/IssueTimelineEvent"
+
+IssueTimelinePage:
+  type: object
+  additionalProperties: false
+  required: [items, nextCursor]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/IssueTimelineItem"
+    nextCursor:
+      type: [string, "null"]
+
+CreateIssue:
+  type: object
+  additionalProperties: false
+  required: [title]
+  properties:
+    title:
+      type: string
+      minLength: 1
+      maxLength: 256
+    body:
+      type: string
+      maxLength: 65536
+    labelIds:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+      description: Requires the triage capability.
+    assigneeUserIds:
+      type: array
+      maxItems: 10
+      items:
+        type: string
+      description: Requires the triage capability. Assignees must be the owner or a member of the Space.
+    nodeIds:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+      description: Requires the triage capability. Nodes must be in the Space and not in Trash.
+
+UpdateIssue:
+  type: object
+  additionalProperties: false
+  minProperties: 1
+  properties:
+    title:
+      type: string
+      minLength: 1
+      maxLength: 256
+    body:
+      type: string
+      maxLength: 65536
+    state:
+      $ref: "#/IssueState"
+    stateReason:
+      $ref: "#/IssueStateReason"
+      description: "Only valid together with `state: closed`; defaults to `completed`."
+    labelIds:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+      description: Replaces the whole set. Requires the triage capability.
+    assigneeUserIds:
+      type: array
+      maxItems: 10
+      items:
+        type: string
+      description: Replaces the whole set. Existing assignees that left the Space may be kept.
+    nodeIds:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+      description: Replaces the whole set. Existing references that became unavailable may be kept.
+
+IssueCommentBody:
+  type: object
+  additionalProperties: false
+  required: [body]
+  properties:
+    body:
+      type: string
+      minLength: 1
+      maxLength: 65536
+
+CreateIssueLabel:
+  type: object
+  additionalProperties: false
+  required: [name, color]
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 50
+    color:
+      $ref: "#/IssueLabelColor"
+    description:
+      type: string
+      maxLength: 200
+
+UpdateIssueLabel:
+  type: object
+  additionalProperties: false
+  minProperties: 1
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 50
+    color:
+      $ref: "#/IssueLabelColor"
+    description:
+      type: string
+      maxLength: 200
+
+IssueLimitParameter:
+  name: limit
+  in: query
+  required: false
+  schema:
+    type: integer
+    minimum: 1
+    maximum: 200
+    default: 50
+
+IssueStateParameter:
+  name: state
+  in: query
+  required: false
+  schema:
+    type: string
+    enum: [open, closed, all]
+    default: open
+
+IssueLabelParameter:
+  name: label
+  in: query
+  required: false
+  description: Label name, case-insensitive. Repeat to require several labels.
+  style: form
+  explode: true
+  schema:
+    type: array
+    maxItems: 10
+    items:
+      type: string
+
+IssueAssigneeParameter:
+  name: assignee
+  in: query
+  required: false
+  description: A User ID, `me`, or `none` for unassigned Issues.
+  schema:
+    type: string
+
+IssueAuthorParameter:
+  name: author
+  in: query
+  required: false
+  description: A User ID or `me`.
+  schema:
+    type: string
+
+IssueSearchParameter:
+  name: q
+  in: query
+  required: false
+  description: Case-insensitive substring match on title and body.
+  schema:
+    type: string
+    maxLength: 200
+
+IssueSortParameter:
+  name: sort
+  in: query
+  required: false
+  schema:
+    type: string
+    enum: [created, updated]
+    default: created
+
+IssueOrderParameter:
+  name: order
+  in: query
+  required: false
+  schema:
+    type: string
+    enum: [asc, desc]
+    default: desc

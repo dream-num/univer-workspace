@@ -260,6 +260,7 @@ function syntheticSpace(node: NodeAccess): SpaceAccess {
     name: node.spaceName,
     ownerUserId: "",
     publicRead: false,
+    member: false,
     role: node.role,
     capabilities: {
       browseRoot: false,
@@ -267,6 +268,9 @@ function syntheticSpace(node: NodeAccess): SpaceAccess {
       renameSpace: false,
       manageMembers: false,
       viewTrash: false,
+      createIssue: false,
+      triageIssues: false,
+      manageIssueLabels: false,
     },
   };
 }

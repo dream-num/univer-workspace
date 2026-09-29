@@ -154,6 +154,38 @@ Discard actions, but cannot read its Unit list or draft content. Other Members
 cannot discover it. A space-visible Team Worktree can be discovered and reviewed
 read-only by current Space Members.
 
+## Issues
+
+Issues exist only in Team Spaces. A Personal Space returns `409 CONFLICT`; a Space the caller
+cannot discover returns `404`. Every endpoint requires a login Session.
+
+An Issue is addressed by its Space-scoped number (`#12`) in the path and by an opaque ID
+elsewhere (comments, labels). Numbers increase inside a Space and are never reused.
+
+| Action | owner | admin | editor | viewer member | public-read non-member |
+|---|---|---|---|---|---|
+| Read Issues, comments, labels | yes | yes | yes | yes | yes |
+| Open an Issue, comment | yes | yes | yes | yes | no |
+| Edit or close one's own Issue | yes | yes | yes | yes | no |
+| Edit, close, label, assign or reference files on any Issue | yes | yes | yes | no | no |
+| Create, change, delete labels | yes | yes | no | no | no |
+| Edit a comment | author | author | author | author | no |
+| Delete a comment | yes | yes | author | author | no |
+
+`SpaceView.capabilities.createIssue`, `triageIssues` and `manageIssueLabels` and
+`Issue.capabilities` report what the caller may do. Clients never infer rights from a role.
+
+`PATCH` replaces `labelIds`, `assigneeUserIds` and `nodeIds` as whole sets. Existing
+assignees who left the Space and references that became unavailable may stay in a
+submitted set; only newly added entries are validated. Concurrent edits are
+last-writer-wins. Issue writes touch only the product database, so they carry no
+`Idempotency-Key`; after an unknown result, list the Space or read the timeline before
+retrying a create or comment.
+
+The timeline merges comments and events in chronological order. Event payloads are
+snapshots (label name and color, user names, file names), so they stay readable after a
+label is deleted or a file is renamed.
+
 ## Collaboration protocol
 
 The product OpenAPI description does not redefine Univer Collaboration

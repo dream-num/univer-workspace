@@ -75,6 +75,8 @@ repository checkout, guessed installation paths, or a different CLI version's AP
   that same task. Read-only inspection does not require creating a task draft.
 - Follow the loaded Skills to author and verify. Read back stored content; inspect rendered
   output when appearance matters. A successful command alone is not verification.
+- When the user points at an Issue ("work on #12"), read it with `issue get` first; the installed
+  core Skill describes the Issue workflow.
 - Hand off the verified result with its review URL. Leave merge or discard to the user's
   decision unless the user has explicitly authorized that action.
 - Blob and Space organization writes are direct operations, outside Worktree review. Follow

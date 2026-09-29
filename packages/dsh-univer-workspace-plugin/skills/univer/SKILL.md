@@ -47,6 +47,18 @@ Only `colorEditable: true` resources may follow an authored color. Fixed logos, 
 
 `find` is case-insensitive. Each query is searched independently and returns its own matches; queries are not combined as AND, and `find` does not interpret intent. Pass a useful returned label to `show` instead of searching that label again.
 
+## Work from an Issue
+
+An Issue is a request recorded by the user's team in a Team Space, addressed by Space and number (`#12`). When the user says "work on #12" or points at an Issue, the Issue is the brief: do not ask them to restate it.
+
+1. Call `univer_issue` with `action: "get"` and the `number` (add `spaceId` when the session is not linked to that Team Space). Read the body and the whole discussion; later comments can change or narrow the request. `univer_issue` with `action: "list"` and `scope: "mine"`, `assignee: "me"` shows what is assigned to the user.
+2. `references` lists the files the Issue points at. Open each available Univer file with `univer_open` using its `resourceId`, and pass that `resourceId` to `univer_worktree` `create`. An entry with `available: false` was trashed or became unreadable; say so instead of guessing which file was meant. A reference with `kind: "blob"` is an original file: pass its `resourceId` to `univer_blob`. A reference with `kind: null` is a folder: browse it with `univer_documents` using its `nodeId`.
+3. Follow the required workflow below in a **new** Worktree named `#12 <Issue title>`. The Worktree does not link to the Issue itself, so the name is what ties them together for reviewers.
+4. When the Worktree is `ready`, report back on the Issue with `univer_issue` `comment`: say what changed and name the Worktree. End the comment with "(Posted by an agent on the user's behalf.)" because the comment appears under the user's name.
+5. Leave the Issue open. Closing it (`action: "close"`) is the user's decision, as is merging; do neither unless they ask.
+
+Issue writes are not idempotent. If a `create` or `comment` fails with an unknown result, `get` the Issue before repeating it, or the discussion may end up with a duplicate. Labels, assignees and linked files need triage rights; if `univer_issue` reports access denied, tell the user rather than working around it. Use `create` to record follow-up work you found but were not asked to do. Issues exist only in Team Spaces: `ISSUES_TEAM_SPACE_ONLY` means the session's Space is personal, so pass a Team Space `spaceId`.
+
 ## Required workflow
 
 For document deletion, use `univer_unit` with `action: "remove"`, `worktreeId`, and `unitId`. This only records draft intent; use `action: "restore"` to undo it before Ready. Existing documents enter Trash after an approved merge, and canceled new draft Units are never published. Do not use permanent deletion or filesystem operations for this workflow.
@@ -85,6 +97,7 @@ Never reopen or reuse a merged or discarded worktree; create a new worktree inst
 | Discover | `univer_spaces`, `univer_documents`, `univer_open` | Discover remote documents and resolve their identities. |
 | Direct creation | `univer_new`, `univer_create` | Create a typed document immediately in trunk; prefer Worktree-local creation for agent tasks. |
 | Start | `univer_status` | Inspect a document or Worktree using an explicit identity. |
+| Start | `univer_issue` | `list`, `get`, `create`, `update`, `comment`, `close`, or `reopen` Team Space Issues. `get` before working on one. |
 | Start | `univer_worktree` | `create`, `ready`, `reopen`, `merge`, or `discard`. |
 | Start | `univer_unit` | Create a draft Unit, mark one for deletion with `remove`, or undo its deletion intent with `restore`. |
 | Start | `univer_import` | Import local xlsx, csv, tsv, docx, or pptx as a new Unit. |

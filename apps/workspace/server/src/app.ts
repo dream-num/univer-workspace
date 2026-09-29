@@ -85,6 +85,12 @@ import {
   type ViewsModule,
 } from "./modules/views/index.js";
 import {
+  createIssuesModule,
+  createIssuesRouter,
+  IssuesRepository,
+  type IssuesModule,
+} from "./modules/issues/index.js";
+import {
   createTrashModule,
   createTrashRouter,
   TrashRepository,
@@ -126,6 +132,7 @@ export interface WorkspaceApplication {
   readonly views: ViewsModule;
   readonly permissions: PermissionsModule;
   readonly trash: TrashModule;
+  readonly issues: IssuesModule;
   readonly worktrees: WorktreesModule;
   readonly operations: OperationsModule;
   readonly blobs: BlobsModule;
@@ -237,6 +244,11 @@ export function createWorkspaceApplication(
   });
   const univerAssetsRepository = new UniverAssetsRepository(database);
   const worktreeChangeFeed = createWorktreeChangeFeed();
+  const issues = createIssuesModule({
+    repository: new IssuesRepository(database),
+    access,
+    onChanged: (change) => worktreeChangeFeed.publishIssues(change),
+  });
   const worktrees = createWorktreesModule({
     trash,
     repository: new WorktreesRepository(database),
@@ -351,6 +363,7 @@ export function createWorkspaceApplication(
     createPermissionsRouter({ identity, permissions })
   );
   app.use("/api", createTrashRouter({ identity, trash }));
+  app.use("/api", createIssuesRouter({ identity, issues }));
   app.use(
     "/api",
     createOperationsRouter({ identity, operations })
@@ -394,6 +407,7 @@ export function createWorkspaceApplication(
     views,
     permissions,
     trash,
+    issues,
     worktrees,
     operations,
     blobs,

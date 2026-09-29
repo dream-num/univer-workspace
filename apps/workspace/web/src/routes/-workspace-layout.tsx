@@ -4,6 +4,7 @@ import { UniverCliIcon } from "@univerjs/icons";
 import {
   Bot,
   ChevronDown,
+  CircleDot,
   House,
   LayoutGrid,
   Lock,
@@ -33,6 +34,7 @@ import {
 } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../features/auth";
 import { AppsSidebarSection } from "../features/html-views/apps-sidebar";
+import { IssuesSidebarSection } from "../features/issues";
 import { spaceDisplayName, spacesQueryKey, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceNavigationTree } from "../features/nodes";
 import {
@@ -84,20 +86,22 @@ import type { components } from "../../../generated/http/schema.js";
 
 type SpaceView = components["schemas"]["SpaceView"];
 
-type WorkspaceView = "home" | "apps" | "trash" | "worktrees" | "members";
+type WorkspaceView = "home" | "apps" | "trash" | "worktrees" | "members" | "issues";
 
 /**
  * Which repository tab a space-scoped route belongs to. Routes inside a
  * repository pass this instead of `selectedView` so the shell keeps its
  * repository chrome (breadcrumb, tabs) after leaving the repository root.
  */
-export type RepositoryTab = "files" | "prs" | "apps" | "settings";
+export type RepositoryTab = "files" | "issues" | "prs" | "apps" | "settings";
 
 export type RepositoryBreadcrumb = {
   readonly label: string;
   readonly nodeId?: string;
   /** Set inside Settings so the segment links back to the settings page. */
   readonly settingsSpaceId?: string;
+  /** Set inside an Issue page so the segment links back to that Space's Issue list. */
+  readonly issuesSpaceId?: string;
 };
 
 export function WorkspaceHeaderSearch({
@@ -209,7 +213,7 @@ function RepositoryBreadcrumbs({
     ancestorItems.push(
       <li key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-2">
         <BreadcrumbSeparator className={isLastAncestor ? undefined : "hidden sm:inline"} />
-        {item.nodeId === undefined && item.settingsSpaceId === undefined ? (
+        {item.nodeId === undefined && item.settingsSpaceId === undefined && item.issuesSpaceId === undefined ? (
           <span
             className={cn(
               "max-w-40 truncate text-muted-foreground sm:max-w-52",
@@ -220,12 +224,17 @@ function RepositoryBreadcrumbs({
           </span>
         ) : (
           <Link
-            {...(item.nodeId === undefined
+            {...(item.issuesSpaceId !== undefined
               ? {
-                  to: "/spaces/$spaceId/settings",
-                  params: { spaceId: item.settingsSpaceId! },
+                  to: "/spaces/$spaceId/issues" as const,
+                  params: { spaceId: item.issuesSpaceId },
                 }
-              : { to: "/nodes/$nodeId", params: { nodeId: item.nodeId } })}
+              : item.nodeId === undefined
+                ? {
+                    to: "/spaces/$spaceId/settings" as const,
+                    params: { spaceId: item.settingsSpaceId! },
+                  }
+                : { to: "/nodes/$nodeId" as const, params: { nodeId: item.nodeId } })}
             search={{}}
             className={cn(
               breadcrumbLinkClass,
@@ -550,6 +559,13 @@ function AuthenticatedWorkspaceLayout({
               icon={<LayoutGrid />}
               label={t("apps")}
             />
+            <NavLink
+              to="/issues"
+              selected={selectedView === "issues"}
+              collapsed
+              icon={<CircleDot />}
+              label={t("issues")}
+            />
           </div>
         ) : (
           <>
@@ -562,6 +578,7 @@ function AuthenticatedWorkspaceLayout({
               storageScope={currentSession.user.id}
             />
             <AppsSidebarSection storageScope={currentSession.user.id} />
+            <IssuesSidebarSection storageScope={currentSession.user.id} />
           </>
         )}
 
@@ -692,6 +709,18 @@ function AuthenticatedWorkspaceLayout({
             <div className="flex shrink-0 items-center gap-1.5">
               {headerContent}
               {headerActions}
+              {workspaceTheme === "repository" ? (
+                <Tooltip content={t("issues")}>
+                  <Link
+                    to="/issues"
+                    search={{}}
+                    aria-label={t("issues")}
+                    className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "no-underline")}
+                  >
+                    <CircleDot />
+                  </Link>
+                </Tooltip>
+              ) : null}
               {workspaceHarnessOrigin() ? (
                 <Tooltip content={t("openChat")}>
                   <Button
@@ -1444,5 +1473,6 @@ function workspaceViewTitle(
   if (view === "worktrees") return t("workbench");
   if (view === "trash") return t("trash");
   if (view === "members") return t("members");
+  if (view === "issues") return t("issues");
   return t("home");
 }

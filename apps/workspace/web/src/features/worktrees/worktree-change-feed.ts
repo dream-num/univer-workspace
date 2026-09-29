@@ -1,12 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { issuesQueryKey } from "../issues/issues.queries";
 import { worktreesQueryKey } from "./worktrees.queries";
 
 const RECONNECT_DELAY_MS = 1_000;
 
 type WorktreeChangeFeedMessage =
   | { readonly event: "worktreeChangeFeedReady" }
-  | { readonly event: "worktreesChanged" };
+  | { readonly event: "worktreesChanged" }
+  | { readonly event: "issuesChanged" };
 
 export function useWorktreeChangeFeed(enabled: boolean): void {
   const queryClient = useQueryClient();
@@ -44,6 +46,10 @@ export function useWorktreeChangeFeed(enabled: boolean): void {
         socket.addEventListener("message", (event) => {
           const message = parseWorktreeChangeFeedMessage(event.data);
           if (!message) return;
+          if (message.event === "issuesChanged") {
+            void queryClient.invalidateQueries({ queryKey: issuesQueryKey });
+            return;
+          }
           void Promise.all([
             queryClient.invalidateQueries({ queryKey: worktreesQueryKey }),
             queryClient.invalidateQueries({ queryKey: ["nodes"] }),
@@ -76,7 +82,9 @@ export function parseWorktreeChangeFeedMessage(
       typeof value === "string" ? (JSON.parse(value) as unknown) : value;
     if (!parsed || typeof parsed !== "object") return null;
     const event = (parsed as { readonly event?: unknown }).event;
-    return event === "worktreeChangeFeedReady" || event === "worktreesChanged"
+    return event === "worktreeChangeFeedReady" ||
+      event === "worktreesChanged" ||
+      event === "issuesChanged"
       ? { event }
       : null;
   } catch {

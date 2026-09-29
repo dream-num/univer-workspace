@@ -10,6 +10,7 @@ export const WORKSPACE_TOOL_NAMES = [
   "univer_new",
   "univer_create",
   "univer_worktree",
+  "univer_issue",
   "univer_edit",
   "univer_inspect",
   "univer_execute",
@@ -31,6 +32,7 @@ export interface WorkspaceToolRowModel {
     | "tool.status"
     | "tool.create"
     | "tool.worktree"
+    | "tool.issue"
     | "tool.edit"
     | "tool.inspect"
     | "tool.execute"
@@ -53,6 +55,7 @@ const TITLE_KEYS: Record<WorkspaceToolName, WorkspaceToolRowModel["titleKey"]> =
   univer_new: "tool.create",
   univer_create: "tool.create",
   univer_worktree: "tool.worktree",
+  univer_issue: "tool.issue",
   univer_edit: "tool.edit",
   univer_inspect: "tool.inspect",
   univer_execute: "tool.execute",

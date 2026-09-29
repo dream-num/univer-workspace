@@ -65,7 +65,15 @@ import {
   openWorktreeUnit,
   reopenWorktree,
   resolveUnitResource as apiResolveUnitResource,
+  commentOnIssue as apiCommentOnIssue,
+  createIssue as apiCreateIssue,
+  listIssueLabels as apiListIssueLabels,
+  listIssues as apiListIssues,
+  readIssue as apiReadIssue,
+  updateIssue as apiUpdateIssue,
   type CreateWorktreeLocalUnitInput,
+  type IssueChange,
+  type ListIssuesQuery,
 } from "./workspace-api.ts";
 import { inspectionQuery } from "./inspection.ts";
 
@@ -209,6 +217,30 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   async createWorktree(userId: string, input: { name: string; summary: string | null }) {
     const client = this.requireClient(userId);
     return await apiCreateWorktree(client, input);
+  }
+
+  async listIssues(userId: string, query: ListIssuesQuery) {
+    return await apiListIssues(this.requireClient(userId), query);
+  }
+
+  async readIssue(userId: string, spaceId: string, number: number, options: { readonly timeline: boolean }) {
+    return await apiReadIssue(this.requireClient(userId), spaceId, number, options);
+  }
+
+  async createIssue(userId: string, spaceId: string, input: IssueChange & { readonly title: string }) {
+    return await apiCreateIssue(this.requireClient(userId), spaceId, input);
+  }
+
+  async updateIssue(userId: string, spaceId: string, number: number, change: IssueChange) {
+    return await apiUpdateIssue(this.requireClient(userId), spaceId, number, change);
+  }
+
+  async commentOnIssue(userId: string, spaceId: string, number: number, body: string) {
+    return await apiCommentOnIssue(this.requireClient(userId), spaceId, number, body);
+  }
+
+  async listIssueLabels(userId: string, spaceId: string) {
+    return await apiListIssueLabels(this.requireClient(userId), spaceId);
   }
 
   async getWorktreeDetail(userId: string, worktreeId: string) {

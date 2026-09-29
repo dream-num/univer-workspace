@@ -63,9 +63,15 @@ function ExternalImage({
 export function MarkdownViewer({
   text,
   locale = "en-US",
+  chrome = "full",
 }: {
   readonly text: string;
   readonly locale?: "zh-CN" | "en-US";
+  /**
+   * `full` is the file viewer with its Preview/Source toolbar and own scroll area.
+   * `none` renders only the content so a host can embed it, e.g. in a comment.
+   */
+  readonly chrome?: "full" | "none";
 }) {
   const labels = messages[locale];
   const [source, setSource] = useState(false);
@@ -143,6 +149,13 @@ export function MarkdownViewer({
     ),
     [text, locale, prefix, labels],
   );
+  if (chrome === "none") {
+    return (
+      <div className={`${css.viewer} ${css.embedded}`} ref={root}>
+        <article className={css.prose}>{rendered}</article>
+      </div>
+    );
+  }
   return (
     <div className={css.viewer} ref={root}>
       <div className={css.toolbar} role="group" aria-label="Markdown">

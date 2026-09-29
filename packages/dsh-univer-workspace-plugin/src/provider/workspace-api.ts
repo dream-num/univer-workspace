@@ -62,3 +62,20 @@ export type {
 
 export { getWorktreeFileState, getFileState } from "./file-state-api.ts";
 export type { DocumentFileState } from "./file-state-api.ts";
+
+export {
+  commentOnIssue,
+  createIssue,
+  readIssue,
+  listIssueLabels,
+  listIssues,
+  updateIssue,
+} from "./issues-api.ts";
+export type {
+  IssueChange,
+  IssueDetailView,
+  IssueListView,
+  IssueSets,
+  IssueSummaryView,
+  ListIssuesQuery,
+} from "./issues-api.ts";

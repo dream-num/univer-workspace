@@ -10,6 +10,9 @@ export interface SpaceCapabilities {
   readonly renameSpace: boolean;
   readonly manageMembers: boolean;
   readonly viewTrash: boolean;
+  readonly createIssue: boolean;
+  readonly triageIssues: boolean;
+  readonly manageIssueLabels: boolean;
 }
 
 export interface NodeCapabilities {
@@ -33,6 +36,8 @@ export interface SpaceAccess {
   readonly name: string;
   readonly ownerUserId: string;
   readonly publicRead: boolean;
+  /** True for the owner and Space Members; false for public-read viewers. */
+  readonly member: boolean;
   readonly role: AccessRole;
   readonly capabilities: SpaceCapabilities;
 }

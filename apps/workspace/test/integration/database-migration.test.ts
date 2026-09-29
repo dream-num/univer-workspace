@@ -22,7 +22,7 @@ afterEach(() => {
   }
 });
 
-describe("automatic product database migration to V8", () => {
+describe("automatic product database migration to V9", () => {
   it("backs up a WAL database, migrates all mappings, and is idempotent on restart", () => {
     const { directory, filename, legacy } = legacyDatabase();
     legacy.exec("PRAGMA journal_mode = WAL");
@@ -50,7 +50,7 @@ describe("automatic product database migration to V8", () => {
     backupDatabase.close();
 
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 8,
+      user_version: 9,
     });
     expect(
       migrated.connection.prepare("SELECT id, name FROM nodes ORDER BY id").all()
@@ -233,7 +233,7 @@ describe("automatic product database migration to V8", () => {
     const filename = join(directory, "workspace.sqlite");
     const database = openWorkspaceDatabase(filename);
     expect(database.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 8,
+      user_version: 9,
     });
     database.close();
     expect(backups(directory)).toEqual([]);
@@ -251,6 +251,13 @@ describe("automatic product database migration to V8", () => {
         (id, type, name, owner_user_id, created_at, updated_at)
       VALUES ('space', 'personal', 'Existing space', 'owner', 1, 1);
       ALTER TABLE spaces DROP COLUMN public_read;
+      DROP TABLE IF EXISTS issue_node_refs;
+      DROP TABLE IF EXISTS issue_assignees;
+      DROP TABLE IF EXISTS issue_label_links;
+      DROP TABLE IF EXISTS issue_labels;
+      DROP TABLE IF EXISTS issue_events;
+      DROP TABLE IF EXISTS issue_comments;
+      DROP TABLE IF EXISTS issues;
       DROP TABLE IF EXISTS content_permission_collaborators;
       DROP TABLE IF EXISTS content_permission_objects;
       PRAGMA user_version = 5;
@@ -259,7 +266,7 @@ describe("automatic product database migration to V8", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 8,
+      user_version: 9,
     });
     expect(
       migrated.connection
@@ -378,7 +385,7 @@ describe("automatic product database migration to V8", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 8,
+      user_version: 9,
     });
     expect(
       migrated.connection
@@ -454,6 +461,13 @@ describe("automatic product database migration to V8", () => {
       );
       INSERT INTO external_identities SELECT * FROM external_identities_v5;
       DROP TABLE external_identities_v5;
+      DROP TABLE IF EXISTS issue_node_refs;
+      DROP TABLE IF EXISTS issue_assignees;
+      DROP TABLE IF EXISTS issue_label_links;
+      DROP TABLE IF EXISTS issue_labels;
+      DROP TABLE IF EXISTS issue_events;
+      DROP TABLE IF EXISTS issue_comments;
+      DROP TABLE IF EXISTS issues;
       DROP TABLE IF EXISTS content_permission_collaborators;
       DROP TABLE IF EXISTS content_permission_objects;
       PRAGMA user_version = 4;
@@ -464,7 +478,7 @@ describe("automatic product database migration to V8", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 8,
+      user_version: 9,
     });
     expect(
       migrated.connection.prepare("SELECT * FROM external_identities").get()
@@ -497,6 +511,13 @@ describe("automatic product database migration to V8", () => {
       INSERT INTO external_identities
         (provider, provider_subject, user_id, provider_username, created_at, updated_at)
       VALUES ('discord', 'discord-owner', 'owner', 'ownerdiscord', 4, 4);
+      DROP TABLE IF EXISTS issue_node_refs;
+      DROP TABLE IF EXISTS issue_assignees;
+      DROP TABLE IF EXISTS issue_label_links;
+      DROP TABLE IF EXISTS issue_labels;
+      DROP TABLE IF EXISTS issue_events;
+      DROP TABLE IF EXISTS issue_comments;
+      DROP TABLE IF EXISTS issues;
       DROP TABLE IF EXISTS content_permission_collaborators;
       DROP TABLE IF EXISTS content_permission_objects;
       PRAGMA user_version = 4;
@@ -505,7 +526,7 @@ describe("automatic product database migration to V8", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 8,
+      user_version: 9,
     });
     expect(
       migrated.connection.prepare("PRAGMA table_info(univer_asset_uploads)").all()
@@ -532,7 +553,7 @@ describe("automatic product database migration to V8", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 8,
+      user_version: 9,
     });
     expect(
       migrated.connection.prepare("PRAGMA table_info(univer_asset_uploads)").all()
@@ -613,7 +634,7 @@ describe("automatic product database migration to V8", () => {
     damaged.close();
 
     expect(() => openWorkspaceDatabase(filename)).toThrow(
-      /V3 to V8 migration failed.*consistent backup is at/
+      /V3 to V9 migration failed.*consistent backup is at/
     );
     expect(onlyBackup(directory)).toContain(".v3-backup-");
     const original = new DatabaseSync(filename, { readOnly: true });
@@ -650,7 +671,7 @@ describe("automatic product database migration to V8", () => {
     );
     try {
       expect(application.database.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-        user_version: 8,
+        user_version: 9,
       });
       expect(count(application.database.connection, "univer_asset_uploads")).toBe(0);
       expect(count(application.database.connection, "univer_assets")).toBe(2);
@@ -679,7 +700,7 @@ describe("automatic product database migration to V8", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 8,
+      user_version: 9,
     });
     expect(count(migrated.connection, "blob_resources")).toBe(1);
     expect(count(migrated.connection, "blob_upload_sessions")).toBe(1);
@@ -750,7 +771,7 @@ describe("automatic product database migration to V8", () => {
     damaged.close();
 
     expect(() => openWorkspaceDatabase(filename)).toThrow(
-      /V2 to V8 migration failed.*consistent backup is at/
+      /V2 to V9 migration failed.*consistent backup is at/
     );
     expect(onlyBackup(directory)).toContain(".v2-backup-");
     const original = new DatabaseSync(filename, { readOnly: true });
@@ -828,10 +849,10 @@ describe("automatic product database migration to V8", () => {
     const directory = temporaryDirectory();
     const filename = join(directory, "workspace.sqlite");
     const database = new DatabaseSync(filename);
-    database.exec("PRAGMA user_version = 9");
+    database.exec("PRAGMA user_version = 10");
     database.close();
     expect(() => openWorkspaceDatabase(filename)).toThrow(
-      /Unsupported product database version 9/
+      /Unsupported product database version 10/
     );
     expect(backups(directory)).toEqual([]);
   });
@@ -952,6 +973,13 @@ function richV1Database(): {
       ON operations(state, next_attempt_at, lease_expires_at);
     CREATE INDEX operations_actor
       ON operations(actor_user_id, created_at DESC);
+    DROP TABLE IF EXISTS issue_node_refs;
+    DROP TABLE IF EXISTS issue_assignees;
+    DROP TABLE IF EXISTS issue_label_links;
+    DROP TABLE IF EXISTS issue_labels;
+    DROP TABLE IF EXISTS issue_events;
+    DROP TABLE IF EXISTS issue_comments;
+    DROP TABLE IF EXISTS issues;
     DROP TABLE IF EXISTS content_permission_collaborators;
     DROP TABLE IF EXISTS content_permission_objects;
     PRAGMA user_version = 1;
@@ -1093,6 +1121,13 @@ function richV3Database(): {
     BEGIN
       SELECT RAISE(ABORT, 'asset upload scope is immutable');
     END;
+    DROP TABLE IF EXISTS issue_node_refs;
+    DROP TABLE IF EXISTS issue_assignees;
+    DROP TABLE IF EXISTS issue_label_links;
+    DROP TABLE IF EXISTS issue_labels;
+    DROP TABLE IF EXISTS issue_events;
+    DROP TABLE IF EXISTS issue_comments;
+    DROP TABLE IF EXISTS issues;
     DROP TABLE IF EXISTS content_permission_collaborators;
     DROP TABLE IF EXISTS content_permission_objects;
     PRAGMA user_version = 3;
@@ -1198,6 +1233,13 @@ function richV2Database(): {
         'delete-upload', '00000000-0000-4000-8000-000000000004',
         'upload_abandoned', 0, 301, NULL, NULL, NULL, NULL, 3, 3
       );
+    DROP TABLE IF EXISTS issue_node_refs;
+    DROP TABLE IF EXISTS issue_assignees;
+    DROP TABLE IF EXISTS issue_label_links;
+    DROP TABLE IF EXISTS issue_labels;
+    DROP TABLE IF EXISTS issue_events;
+    DROP TABLE IF EXISTS issue_comments;
+    DROP TABLE IF EXISTS issues;
     DROP TABLE IF EXISTS content_permission_collaborators;
     DROP TABLE IF EXISTS content_permission_objects;
     PRAGMA user_version = 2;

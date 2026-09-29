@@ -52,6 +52,7 @@ templates at once.
 | Exchange business files | Office import and export with original-file preservation                      |
 | Generate content        | Typst-to-Doc and SVG-to-editable-Slide compilation                            |
 | Compose across Units    | Embedded Units and cross-Unit formulas backed by Workspace identities         |
+| Take requests from teams | Team Space Issues: read the brief and its discussion, comment, label, and close |
 | Deliver for review      | Worktree revisions, ready state, direct review links, and controlled merging  |
 
 Together, these capabilities show the range of products and workflows that can be built with the

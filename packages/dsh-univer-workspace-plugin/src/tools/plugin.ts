@@ -8,6 +8,7 @@ import type { Context } from "@deepseek-ai/cordis";
 import { registerBlobTool } from "./blob.ts";
 import { registerDiscoveryTools } from "./discovery.ts";
 import { registerDocumentTools } from "./documents.ts";
+import { registerIssueTool } from "./issue.ts";
 import { registerWorktreeTools } from "./worktree.ts";
 import { registerEditTool } from "./edit.ts";
 import { registerExchangeTools } from "./exchange.ts";
@@ -31,6 +32,7 @@ export function apply(ctx: Context, config: Config): void {
     const disposeBlob = registerBlobTool(ctx);
     const disposeDiscovery = registerDiscoveryTools(ctx);
     const disposeDocuments = registerDocumentTools(ctx);
+    const disposeIssue = registerIssueTool(ctx);
     const disposeWorktree = registerWorktreeTools(ctx);
     const disposeEdit = registerEditTool(ctx);
     const disposeExchange = registerExchangeTools(ctx);
@@ -63,6 +65,7 @@ export function apply(ctx: Context, config: Config): void {
       disposeExchange();
       disposeEdit();
       disposeWorktree();
+      disposeIssue();
       disposeDocuments();
       disposeDiscovery();
     };
