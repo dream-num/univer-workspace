@@ -183,7 +183,19 @@ export class WorkspaceIssueFeature {
     number: number,
     options: { readonly comment?: string; readonly reason?: "completed" | "not_planned" } = {},
   ): Promise<WorkspaceIssue> {
-    if (options.comment !== undefined) await this.comment(spaceId, number, options.comment);
+    if (options.comment !== undefined) {
+      // The comment goes first so it precedes the closing event on the timeline. Check the right
+      // before posting it: a denied close must not leave a comment that claims one happened.
+      const issue = await this.get(spaceId, number);
+      if (!issue.capabilities.close) {
+        throw workspaceError(
+          "issue-close-forbidden",
+          "The current user cannot close this Issue.",
+          { number, spaceId },
+        );
+      }
+      await this.comment(spaceId, number, options.comment);
+    }
     return await this.update(spaceId, number, {
       state: "closed",
       stateReason: options.reason ?? "completed",

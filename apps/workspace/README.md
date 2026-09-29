@@ -296,6 +296,10 @@ docker run --rm \
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
 backs up and migrates supported V0 through V8 product databases to V9 automatically.
+While the container runs, touch its SQLite files only from inside it
+(`docker exec … node`). The product database is in WAL mode: opening it from
+the host with another SQLite build — even just to read it — can corrupt the
+file. Stop the container before inspecting or copying `.data`.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
 `history=2`; `comment=1` is unchanged. The product schema moves from V8 to V9 by
 adding Issue tables (V8 added content-permission tables). Before creating

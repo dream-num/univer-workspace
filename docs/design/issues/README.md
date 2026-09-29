@@ -444,6 +444,8 @@ Q3 预算表缺少华东区  #12                                   [Edit] [New i
 
 - `update` 接受 `addLabels`、`removeLabels`、`addAssignees`、`removeAssignees`、`addNodes`、
   `removeNodes`，内部先 `get` 再整体 PATCH。
+- `close` 在带评论时先 `get` 并检查 `capabilities.close`，再发评论、再改状态：评论必须排在关闭
+  事件之前，而权限不足的关闭不能留下一条声称已关闭的评论。
 - 标签参数接受名称，由 Client Core 解析为 ID。未知名称返回 `issue-label-not-found`，不自动创建标签。
 - Assignee 参数接受 `me` 或 userId。
 

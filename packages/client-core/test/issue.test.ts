@@ -79,6 +79,19 @@ describe("Workspace Issue feature", () => {
     expect(calls.some((call) => call.method === "PATCH")).toBe(false);
   });
 
+  it("refuses to comment when the caller cannot close, leaving no stray comment", async () => {
+    const { feature: issues, calls } = feature(({ path }) =>
+      path === "/api/spaces/s1/issues/7"
+        ? { ...rawIssue({ number: 7 }), capabilities: { edit: false, close: false, triage: false, comment: true } }
+        : rawIssue({ number: 7 }));
+    await expect(issues.close("s1", 7, { comment: "closing note" })).rejects.toMatchObject({
+      code: "issue-close-forbidden",
+    });
+    expect(calls.map((call) => call.method)).toEqual(["GET"]);
+    expect(calls.some((call) => call.path.endsWith("/comments"))).toBe(false);
+    expect(calls.some((call) => call.method === "PATCH")).toBe(false);
+  });
+
   it("posts the closing comment before closing with the default reason", async () => {
     const { feature: issues, calls } = feature(({ path }) =>
       path.endsWith("/comments")
@@ -87,10 +100,11 @@ describe("Workspace Issue feature", () => {
     const closed = await issues.close("s1", 7, { comment: "done" });
     expect(closed.state).toBe("closed");
     expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
+      "GET /api/spaces/s1/issues/7",
       "POST /api/spaces/s1/issues/7/comments",
       "PATCH /api/spaces/s1/issues/7",
     ]);
-    expect(calls[1]?.body).toEqual({ state: "closed", stateReason: "completed" });
+    expect(calls[2]?.body).toEqual({ state: "closed", stateReason: "completed" });
   });
 
   it("follows timeline cursors and rejects malformed items", async () => {

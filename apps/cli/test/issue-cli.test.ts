@@ -73,6 +73,7 @@ describe("Workspace CLI Issue commands", () => {
       const rejected = await runCli(["issue", "get", "abc", "--space", "s1"], env);
 
       expect(requests).toEqual([
+        { body: undefined, method: "GET", path: "/api/spaces/s1/issues/3" },
         { body: { body: "closing note\n" }, method: "POST", path: "/api/spaces/s1/issues/3/comments" },
         { body: { state: "closed", stateReason: "not_planned" }, method: "PATCH", path: "/api/spaces/s1/issues/3" },
         { body: undefined, method: "GET", path: "/api/spaces/s1/issues?state=open&label=bug&label=docs&assignee=me" },
