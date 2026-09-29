@@ -403,9 +403,11 @@ export function WorktreeDashboard({
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4 max-[720px]:flex-col max-[720px]:items-start max-[720px]:px-4.5">
-        <p className="m-0 max-w-2xl text-[13px] leading-5 text-muted-foreground">
-          {t("workbenchDescription")}
-        </p>
+        {spaceId ? null : (
+          <p className="m-0 max-w-2xl text-[13px] leading-5 text-muted-foreground">
+            {t("workbenchDescription")}
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2.5">
           {compactViewport ? (
             <Button
@@ -433,21 +435,23 @@ export function WorktreeDashboard({
               { label: t("processed"), value: "processed" },
             ]}
           />
-          <Select<ScopeFilter>
-            size="sm"
-            className="w-32"
-            aria-label={t("belongingSpace")}
-            value={scopeFilter}
-            onValueChange={(value) => {
-              setScopeFilter(value);
-              resetSelection();
-            }}
-            options={[
-              { label: t("allSpaces"), value: "all" },
-              { label: t("personalSpace"), value: "user" },
-              { label: t("teamSpace"), value: "team" },
-            ]}
-          />
+          {spaceId ? null : (
+            <Select<ScopeFilter>
+              size="sm"
+              className="w-32"
+              aria-label={t("belongingSpace")}
+              value={scopeFilter}
+              onValueChange={(value) => {
+                setScopeFilter(value);
+                resetSelection();
+              }}
+              options={[
+                { label: t("allSpaces"), value: "all" },
+                { label: t("personalSpace"), value: "user" },
+                { label: t("teamSpace"), value: "team" },
+              ]}
+            />
+          )}
         </div>
       </header>
 

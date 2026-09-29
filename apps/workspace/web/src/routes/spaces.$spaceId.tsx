@@ -282,9 +282,27 @@ function FilesView({
   const { t } = useI18n();
   const showDefaultApp = loading || error || apps.length > 0;
   const [searchQuery, setSearchQuery] = useState("");
+  const visibility = space
+    ? space.type === "personal"
+      ? t("repositoryVisibilityPersonal")
+      : space.publicRead
+        ? t("repositoryVisibilityPublic")
+        : t("repositoryVisibilityPrivate")
+    : undefined;
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="grid min-w-0 content-start gap-6">
+        {space ? (
+          <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground lg:hidden">
+            {visibility ? <span>{visibility}</span> : null}
+            <span aria-hidden="true">·</span>
+            <span>{t(accessRoleKey(space.accessRole))}</span>
+            <span aria-hidden="true">·</span>
+            <span>{t("repositoryMetaFiles", { count: fileCount })}</span>
+            <span aria-hidden="true">·</span>
+            <span>{t("repositoryMetaPages", { count: apps.length })}</span>
+          </p>
+        ) : null}
         <section className="min-w-0 rounded-lg border border-border bg-background">
           <NodeBrowser
             page={page}
@@ -369,7 +387,7 @@ function FilesView({
           </section>
         ) : null}
       </div>
-      <aside className="min-w-0 self-start rounded-lg border border-border bg-background">
+      <aside className="hidden min-w-0 self-start rounded-lg border border-border bg-background lg:block">
         <div className="border-b border-border px-4 py-3">
           <h2 className="m-0 text-base font-semibold">{t("repositoryAbout")}</h2>
         </div>
@@ -403,14 +421,6 @@ function FilesView({
                 <LinkIcon className="size-3.5 shrink-0" aria-hidden="true" />
                 <span className="truncate">{t("repositoryDefaultPage")}</span>
               </Link>
-            ) : null}
-            {space.type === "team" ? (
-              <div className="flex min-w-0 items-center gap-1 text-xs text-subtle-foreground">
-                <span className="shrink-0">{t("teamSpaceId")}:</span>
-                <code className="truncate text-foreground" title={spaceId}>
-                  {spaceId}
-                </code>
-              </div>
             ) : null}
           </div>
         ) : null}
@@ -476,7 +486,7 @@ function AppsView({
           <div className="min-w-0">
             <p className="m-0 flex min-w-0 items-center gap-2 text-sm">
               <span
-                className="size-2 shrink-0 rounded-full bg-emerald-500"
+                className="size-2 shrink-0 rounded-full bg-state-open"
                 aria-hidden="true"
               />
               <span className="shrink-0 text-muted-foreground">
@@ -591,8 +601,7 @@ function PullRequestsView({
   );
   return (
     <section className="rounded-lg border border-border bg-background">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <h2 className="m-0 text-base font-semibold">{t("repositoryPullRequests")}</h2>
+      <div className="flex flex-wrap items-center gap-4 border-b border-border px-4 py-3">
         <div className="flex items-center gap-4 text-sm">
           <button
             type="button"
@@ -683,12 +692,12 @@ function PullRequestsView({
 }
 
 function WorktreeStateIcon({ state }: { readonly state: Worktree["state"] }) {
-  if (state === "merged") return <GitMerge className="mt-1 size-4 shrink-0 text-violet-600" />;
+  if (state === "merged") return <GitMerge className="mt-1 size-4 shrink-0 text-state-merged" />;
   if (state === "discarded")
-    return <GitPullRequestClosed className="mt-1 size-4 shrink-0 text-destructive" />;
+    return <GitPullRequestClosed className="mt-1 size-4 shrink-0 text-state-closed" />;
   if (state === "draft")
     return <GitPullRequestDraft className="mt-1 size-4 shrink-0 text-muted-foreground" />;
-  return <GitPullRequest className="mt-1 size-4 shrink-0 text-emerald-600" />;
+  return <GitPullRequest className="mt-1 size-4 shrink-0 text-state-open" />;
 }
 
 const WORKTREE_STATE_LABELS: Record<Worktree["state"], MessageKey> = {
@@ -707,10 +716,10 @@ function WorktreeStateLabel({ state }: { readonly state: Worktree["state"] }) {
       className={cn(
         "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
         open
-          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+          ? "bg-state-open-soft text-state-open"
           : state === "merged"
-            ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
-            : "bg-destructive/10 text-destructive",
+            ? "bg-state-merged-soft text-state-merged"
+            : "bg-state-closed-soft text-state-closed",
       )}
     >
       {t(WORKTREE_STATE_LABELS[state])}

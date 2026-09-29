@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Globe, Plus, Search, User, Users } from "lucide-react";
+import { BookMarked, Plus, Search } from "lucide-react";
 import { useTheme } from "../shared/theme";
 import { useState } from "react";
 import { requireAuthenticatedSession, sessionQueryOptions } from "../features/auth";
@@ -126,7 +126,6 @@ function HomePage() {
             ) : (
               <ul className="m-0 list-none divide-y divide-border p-0">
                 {filteredRepositories.map((space) => {
-                  const Icon = space.type === "personal" ? User : space.publicRead ? Globe : Users;
                   const name =
                     spaceDisplayName(
                       space,
@@ -146,7 +145,7 @@ function HomePage() {
                         params={{ spaceId: space.id }}
                         className="flex items-center gap-3 rounded-md px-2 py-3.5 no-underline transition-colors hover:bg-accent/60"
                       >
-                        <Icon className="size-4 shrink-0 text-muted-foreground" />
+                        <BookMarked className="size-4 shrink-0 text-muted-foreground" />
                         <span className="min-w-0 truncate font-semibold text-primary">
                           {name}
                         </span>

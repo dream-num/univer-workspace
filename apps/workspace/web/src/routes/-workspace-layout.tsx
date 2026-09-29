@@ -185,8 +185,8 @@ function RepositoryBreadcrumbs({
           activeOptions={{ exact: true }}
           className={cn(
             breadcrumbLinkClass,
-            "max-w-40 sm:max-w-52",
-            current === undefined ? "truncate" : "hidden sm:inline",
+            "max-w-24 sm:max-w-52",
+            current === undefined ? "truncate" : undefined,
           )}
         >
           {spaceName}
@@ -479,7 +479,7 @@ function AuthenticatedWorkspaceLayout({
             selected={space.id === selectedSpaceId}
             collapsed={collapsed}
             icon={<Users />}
-            label={space.name}
+            label={spaceDisplayName(space, t, username) ?? space.name}
           />
         ))}
       </>
