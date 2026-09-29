@@ -13,7 +13,7 @@ ENV NODE_EXTRA_CA_CERTS=${PROXY_SSL}
 
 WORKDIR /app
 
-RUN corepack enable
+RUN corepack enable && echo "$NODE_EXTRA_CA_CERTS"
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 # pnpm reads every configured patch before applying workspace filters.
