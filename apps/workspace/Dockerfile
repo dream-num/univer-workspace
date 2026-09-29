@@ -1,12 +1,10 @@
-# syntax=docker/dockerfile:1
-
 ARG BASE_IMAGE=node:24-bookworm-slim
-ARG HTTP_PROXY=""
-ARG PROXY_SSL=""
-ARG NODE_MAX_OLD_SPACE_SIZE="4096"
 
 FROM ${BASE_IMAGE} AS build
 
+ARG HTTP_PROXY=""
+ARG PROXY_SSL=""
+ARG NODE_MAX_OLD_SPACE_SIZE="4096"
 ARG VITE_UNIVER_LICENSE
 ENV VITE_UNIVER_LICENSE=$VITE_UNIVER_LICENSE
 ENV PNPM_HOME=/pnpm
@@ -15,7 +13,7 @@ ENV NODE_EXTRA_CA_CERTS=${PROXY_SSL}
 
 WORKDIR /app
 
-RUN corepack enable
+RUN corepack enable && echo "$NODE_EXTRA_CA_CERTS"
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 # pnpm reads every configured patch before applying workspace filters.
