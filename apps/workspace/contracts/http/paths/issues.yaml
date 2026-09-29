@@ -1,0 +1,383 @@
+/api/issues:
+  get:
+    tags: [Issues]
+    operationId: listMyIssues
+    summary: List Issues across every Team Space the caller owns or belongs to.
+    description: Public-read Spaces the caller does not belong to are excluded. Use `assignee=me` for the caller's work queue.
+    parameters:
+      - $ref: ../schemas/common.yaml#/CursorParameter
+      - $ref: ../schemas/issues.yaml#/IssueLimitParameter
+      - $ref: ../schemas/issues.yaml#/IssueStateParameter
+      - $ref: ../schemas/issues.yaml#/IssueLabelParameter
+      - $ref: ../schemas/issues.yaml#/IssueAssigneeParameter
+      - $ref: ../schemas/issues.yaml#/IssueAuthorParameter
+      - $ref: ../schemas/issues.yaml#/IssueSearchParameter
+      - $ref: ../schemas/issues.yaml#/IssueSortParameter
+      - $ref: ../schemas/issues.yaml#/IssueOrderParameter
+    responses:
+      "200":
+        description: Issue page.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/IssueList
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/spaces/{spaceId}/issues:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Issues]
+    operationId: listSpaceIssues
+    summary: List Issues in a Team Space.
+    description: Personal Spaces return 409 because Issues are available only in Team Spaces.
+    parameters:
+      - $ref: ../schemas/common.yaml#/CursorParameter
+      - $ref: ../schemas/issues.yaml#/IssueLimitParameter
+      - $ref: ../schemas/issues.yaml#/IssueStateParameter
+      - $ref: ../schemas/issues.yaml#/IssueLabelParameter
+      - $ref: ../schemas/issues.yaml#/IssueAssigneeParameter
+      - $ref: ../schemas/issues.yaml#/IssueAuthorParameter
+      - $ref: ../schemas/issues.yaml#/IssueSearchParameter
+      - $ref: ../schemas/issues.yaml#/IssueSortParameter
+      - $ref: ../schemas/issues.yaml#/IssueOrderParameter
+    responses:
+      "200":
+        description: Issue page with open and closed counts.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/IssueList
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+  post:
+    tags: [Issues]
+    operationId: createIssue
+    summary: Open an Issue.
+    description: Space Members of any role may open an Issue; labels, assignees and file references need the triage capability. Not idempotent; after an unknown result, list the Space before retrying.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/issues.yaml#/CreateIssue
+    responses:
+      "201":
+        description: Created Issue.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/Issue
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/spaces/{spaceId}/issues/{number}:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: number
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  get:
+    tags: [Issues]
+    operationId: getIssue
+    summary: Read one Issue by its Space-scoped number.
+    responses:
+      "200":
+        description: Issue with the caller's capabilities.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/Issue
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+  patch:
+    tags: [Issues]
+    operationId: updateIssue
+    summary: Change an Issue.
+    description: |
+      Title, body and state may be changed by the author or a user with the
+      triage capability. Labels, assignees and referenced files replace the
+      whole set and need the triage capability. Concurrent edits use
+      last-writer-wins; there is no revision precondition.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/issues.yaml#/UpdateIssue
+    responses:
+      "200":
+        description: Updated Issue.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/Issue
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/spaces/{spaceId}/issues/{number}/timeline:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: number
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  get:
+    tags: [Issues]
+    operationId: listIssueTimeline
+    summary: List comments and events of an Issue in chronological order.
+    parameters:
+      - $ref: ../schemas/common.yaml#/CursorParameter
+      - $ref: ../schemas/common.yaml#/LimitParameter
+    responses:
+      "200":
+        description: Timeline page.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/IssueTimelinePage
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/spaces/{spaceId}/issues/{number}/comments:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: number
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  post:
+    tags: [Issues]
+    operationId: createIssueComment
+    summary: Comment on an Issue.
+    description: Not idempotent; after an unknown result, read the timeline before retrying.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/issues.yaml#/IssueCommentBody
+    responses:
+      "201":
+        description: Created comment.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/IssueComment
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/issue-comments/{commentId}:
+  parameters:
+    - name: commentId
+      in: path
+      required: true
+      schema:
+        type: string
+  patch:
+    tags: [Issues]
+    operationId: updateIssueComment
+    summary: Edit a comment. Only its author may do so.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/issues.yaml#/IssueCommentBody
+    responses:
+      "200":
+        description: Updated comment.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/IssueComment
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+  delete:
+    tags: [Issues]
+    operationId: deleteIssueComment
+    summary: Delete a comment. Its author, the Space owner and admins may do so.
+    responses:
+      "204":
+        description: Comment deleted.
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/spaces/{spaceId}/issue-labels:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Issues]
+    operationId: listIssueLabels
+    summary: List the labels of a Team Space with their open Issue counts.
+    responses:
+      "200":
+        description: Labels ordered by name. A Space has at most 100.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/IssueLabelList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+  post:
+    tags: [Issues]
+    operationId: createIssueLabel
+    summary: Create a label. Requires the Space owner or an admin.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/issues.yaml#/CreateIssueLabel
+    responses:
+      "201":
+        description: Created label.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/IssueLabel
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/issue-labels/{labelId}:
+  parameters:
+    - name: labelId
+      in: path
+      required: true
+      schema:
+        type: string
+  patch:
+    tags: [Issues]
+    operationId: updateIssueLabel
+    summary: Rename or recolor a label. Requires the Space owner or an admin.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/issues.yaml#/UpdateIssueLabel
+    responses:
+      "200":
+        description: Updated label.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/issues.yaml#/IssueLabel
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+  delete:
+    tags: [Issues]
+    operationId: deleteIssueLabel
+    summary: Delete a label and remove it from every Issue. Requires the Space owner or an admin.
+    description: Timeline events keep a snapshot of the label name and color.
+    responses:
+      "204":
+        description: Label deleted.
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound

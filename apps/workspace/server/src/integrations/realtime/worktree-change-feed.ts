@@ -3,6 +3,7 @@ import type {
   NodeTransportConnection,
   NodeTransportEndpoint,
 } from "@univerjs-pro/collaboration-transport-node";
+import type { IssueProductChange } from "../../modules/issues/index.js";
 import type { WorktreeProductChange } from "../../modules/worktrees/index.js";
 
 export const WORKTREE_CHANGE_FEED_PATH = "/api/worktree-events";
@@ -10,6 +11,8 @@ export const WORKTREE_CHANGE_FEED_PATH = "/api/worktree-events";
 export interface WorktreeChangeFeed {
   endpoint(ticketStore: ISessionTicketStore): NodeTransportEndpoint;
   publish(change: WorktreeProductChange): void;
+  /** Same channel and audience rules; the event only tells clients to refetch that Space's Issues. */
+  publishIssues(change: IssueProductChange): void;
   dispose(): Promise<void>;
 }
 
@@ -63,17 +66,27 @@ export function createWorktreeChangeFeed(): WorktreeChangeFeed {
     },
 
     publish(change) {
-      if (disposed) return;
-      const message = JSON.stringify({ event: "worktreesChanged" });
-      for (const userId of change.audienceUserIds) {
-        for (const connection of connections.get(userId)?.values() ?? []) {
-          safeSend(connection, message);
-        }
-      }
+      broadcast(change.audienceUserIds, JSON.stringify({ event: "worktreesChanged" }));
+    },
+
+    publishIssues(change) {
+      broadcast(
+        change.audienceUserIds,
+        JSON.stringify({ event: "issuesChanged", spaceId: change.spaceId }),
+      );
     },
 
     dispose,
   };
+
+  function broadcast(userIds: readonly string[], message: string): void {
+    if (disposed) return;
+    for (const userId of userIds) {
+      for (const connection of connections.get(userId)?.values() ?? []) {
+        safeSend(connection, message);
+      }
+    }
+  }
 
   function removeConnection(userId: string, connectionId: string): void {
     const userConnections = connections.get(userId);

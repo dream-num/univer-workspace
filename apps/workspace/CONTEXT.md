@@ -104,6 +104,29 @@ A user's authority to read or edit one Resource's content, derived from its
 Node Access.
 _Avoid_: Unit permission
 
+## Issues
+
+**Issue**:
+A Team Space discussion item with a Space-scoped number, Markdown body, open or closed
+state, comments, labels, assignees, and references to Nodes. It records a need or defect
+and does not change Space content.
+_Avoid_: Ticket, Task
+
+**Issue Number**:
+The Space-scoped `#N` that identifies an Issue for people, the CLI, and agents. It is
+never reused inside a Space.
+_Avoid_: Issue ID
+
+**Issue Label**:
+A Space-defined name with a palette color that classifies Issues. Only a Space Owner or
+Admin manages labels.
+_Avoid_: Tag
+
+**Issue Reference**:
+A link from an Issue to a Node in the same Space. It reads as unavailable once the Node
+enters Trash.
+_Avoid_: Attachment
+
 ## Change preparation
 
 **Trunk**:

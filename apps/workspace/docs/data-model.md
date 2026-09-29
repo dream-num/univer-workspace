@@ -1,15 +1,15 @@
 # Univer Workspace 数据模型
 
-状态：V8，已实现
+状态：V9，已实现
 
 权威定义：`server/src/db/schema.sql`
 
 产品数据库使用 SQLite，开启 Foreign Key，Schema 版本为
-`PRAGMA user_version = 8`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+`PRAGMA user_version = 9`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿另存于
-`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V8
+`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V9
 Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
 `__record_id`，并把每条 Record ID 投影到该字段；Row/Column/Cell Map 是可从 Field 与 Record
 重建的派生数据。现有持久化 Base Snapshot 均使用该表示。
@@ -27,7 +27,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-启动入口先将产品数据库准备到 V8，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+启动入口先将产品数据库准备到 V9，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份，在副本上按 Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件
@@ -35,7 +35,7 @@ Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V8，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V9，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -53,6 +53,10 @@ Space
        └── Trash Batch
 
 User ── Recent Resource ── Resource
+Team Space ── Issue ─┬── Issue Comment / Issue Event
+                     ├── Issue Label Link ── Issue Label
+                     ├── Issue Assignee ── User
+                     └── Issue Node Reference ── Node
 Worktree ── Worktree Unit ── Resource ID
                          └── optional Node activation intent
 
@@ -269,6 +273,43 @@ User Worktree 必须是 Private 且没有 Team Space；Team Worktree 必须绑�
 激活在一个产品事务中创建 Node、Resource、Univer Resource，并标记 Intent。它不接受
 客户端指定 Node、Resource 或 Unit ID。
 
+## Issues
+
+Issue 只属于 Team Space，不保存 snapshot、changeset 或 revision，也不与 Worktree 关联（V1 不做）。
+所有写入都是单个 `BEGIN IMMEDIATE` 事务，不使用 Operation。权限从 Space 角色推导，不设 Issue 级 ACL；
+个人空间的 Issue 接口返回 409。
+
+### `issues`
+
+| 字段 | 语义 |
+| --- | --- |
+| `id` | 随机主键 |
+| `space_id`, `number` | 复合唯一；`number` 是 Space 内递增的 `#N`，在创建事务内取 `MAX(number)+1` |
+| `title`, `body` | 标题（1–256 字符）与 Markdown 正文（≤ 65 536 字符） |
+| `state`, `state_reason` | `open` 时原因为空；`closed` 时为 `completed | not_planned`，由表级 CHECK 保证 |
+| `author_user_id`, `closed_by_user_id`, `closed_at` | 作者与关闭信息 |
+| `created_at`, `updated_at` | 评论、事件和关系变更都会刷新 `updated_at` |
+
+V1 不允许删除 Issue，所以编号不会复用。以后加入删除，需要改用独立计数表。
+
+### `issue_comments` 与 `issue_events`
+
+评论保存作者、正文和时间；作者可编辑，作者、Owner、Admin 可硬删除。事件保存 `kind`
+（`closed | reopened | renamed | labeled | unlabeled | assigned | unassigned | node_referenced | node_unreferenced`）
+和 `payload_json` 快照（标签名与颜色键、用户名、Node 名称），标签被删除或文件被改名后历史仍可读。
+时间线按 `(created_at, 评论优先, id)` 合并两张表，用 keyset 分页。
+
+### `issue_labels` 与 `issue_label_links`
+
+标签属于 Space，名称在 Space 内大小写不敏感唯一。`color` 保存调色板键（`gray | blue | green | yellow | orange | red | purple | pink`），
+只在服务层校验，调整调色板不需要迁移。每个 Space 最多 100 个标签，每个 Issue 最多 20 个。删除标签会级联移除关联。
+
+### `issue_assignees` 与 `issue_node_refs`
+
+Assignee 指派时必须是 Space Owner 或成员，最多 10 人；成员离开 Space 后已有指派保留。
+引用 Node 指派时必须在同一 Space 且不在回收站，最多 20 个；Node 被永久删除时引用级联删除，
+Node 在回收站时读取侧显示为不可用且不返回名称。
+
 ## Operations
 
 `operations` 是跨产品数据库与 Collaboration 服务操作的幂等日志。支持：
@@ -347,11 +388,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V8，不备份；
-2. 完整 V8：校验指纹后正常启动，不重复备份；
-3. 完整 V7/V6/V5：先生成一致性备份，再迁移到 V8；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V8；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V8；
+1. 不存在或空文件：创建 V9，不备份；
+2. 完整 V9：校验指纹后正常启动，不重复备份；
+3. 完整 V8/V7/V6/V5：先生成一致性备份，再迁移到 V9；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V9；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V9；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -373,12 +414,12 @@ Operation JSON。V0 迁移前要求没有 Pending/Failed Operation；后续版�
 - V2 删除任务完整映射到通用 Outbox；
 - V3 Asset Upload 的内容检测字段被无损移除；声明 MIME 缺失时用旧检测值回填；
 - V4 External Identity 被无损扩展为支持 Discord Provider；
-- 旧表全部删除且 `user_version = 8`。
+- 旧表全部删除且 `user_version = 9`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
 一致性备份始终保留，下一次启动可继续升级或由运维恢复。错误中会给出备份路径。
 迁移实现是唯一兼容边界；线上数据库全部完成升级后，可以删除 `migrations/`、
-`legacy-v0/` 及初始化函数中的一次调用，不影响 V8 Schema 或业务代码。
+`legacy-v0/` 及初始化函数中的一次调用，不影响 V9 Schema 或业务代码。
 
 V6 → V7 只重建 Operation 和删除任务表以扩展 CHECK 枚举，完整保留所有行和恢复字段；
 Blob 及上传会话表不变。升级前自动创建一致性备份；停旧实例后由单个新实例完成迁移。
@@ -402,3 +443,7 @@ Snapshot、history 和 export 接口不按对象范围过滤，不构成内容�
 V7 → V8 在单个事务内新增两表及索引，不删除或改写旧字段、业务行、Blob 身份或恢复状态。
 启动前备份，校验 V7/V8 指纹、外键及完整性；失败回滚至 V7。已有未完成 Operation 可以保留。
 回滚应用版本须停新实例并恢复迁移前备份，不可让旧进程继续写 V8 文件。
+
+V8 → V9 在单个事务内新增 Issue 相关的七张表及索引，不删除或改写旧字段、业务行、Blob 身份或恢复状态。
+启动前备份，校验 V8/V9 指纹、外键及完整性；失败回滚至 V8。已有未完成 Operation 可以保留。
+回滚应用版本须停新实例并恢复迁移前备份，不可让旧进程继续写 V9 文件。

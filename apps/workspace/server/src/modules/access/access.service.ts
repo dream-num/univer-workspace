@@ -14,6 +14,7 @@ import type {
   ResourceCapabilities,
   SpaceAccess,
   SpaceCapabilities,
+  SpaceType,
 } from "./access.types.js";
 
 export interface AccessResolver {
@@ -156,6 +157,7 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
       const row = repository.resolveSpace(userId, spaceId);
       if (!row) return null;
       const assignedRole = row.owner_user_id === userId ? "owner" : row.member_role;
+      const member = userId !== ANONYMOUS_USER_ID && assignedRole !== null;
       const role = highestRole(
         userId === ANONYMOUS_USER_ID ? null : assignedRole,
         row.public_read ? "viewer" : null,
@@ -168,7 +170,8 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
         ownerUserId: row.owner_user_id,
         publicRead: Boolean(row.public_read),
         role,
-        capabilities: spaceCapabilities(role),
+        member,
+        capabilities: spaceCapabilities(role, { type: row.type, member }),
       };
     },
     resolveNode,
@@ -181,13 +184,20 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
   };
 }
 
-export function spaceCapabilities(role: AccessRole): SpaceCapabilities {
+export function spaceCapabilities(
+  role: AccessRole,
+  context: { readonly type: SpaceType; readonly member: boolean },
+): SpaceCapabilities {
+  const team = context.type === "team";
   return {
     browseRoot: true,
     createAtRoot: role !== "viewer",
     renameSpace: role === "owner" || role === "admin",
     manageMembers: role === "owner" || role === "admin",
     viewTrash: role === "owner" || role === "admin",
+    createIssue: team && context.member,
+    triageIssues: team && context.member && role !== "viewer",
+    manageIssueLabels: team && context.member && (role === "owner" || role === "admin"),
   };
 }
 

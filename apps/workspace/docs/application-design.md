@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V8 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V9 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -17,6 +17,7 @@ React
   │           ├── Office Exchange
   │           ├── Univer Assets / File Gateway
   │           ├── Permissions / Trash / Views
+  │           ├── Issues
   │           ├── Worktrees
   │           └── Operations
   ├── Worktree Change Feed
@@ -40,16 +41,16 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V8；
-- V8：校验 Schema 指纹；
-- V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V8；
-- V0：一致性备份后直接迁移到 V8；
+- Fresh：创建 V9；
+- V9：校验 Schema 指纹；
+- V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V9；
+- V0：一致性备份后直接迁移到 V9；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V8 Query。
+Worktree 等业务模块只编译和运行 V9 Query。
 
-V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表，不改写现有业务表。
+V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
 ## Collaboration SDK 升级边界
 
@@ -57,7 +58,7 @@ SDK 1.0.0 启动时先准备产品数据库，再运行隔离的 `prepareCollabo
 应用 Service。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 2、Worktree 3、History 2；
-Comment 1 不变。产品数据库先准备到 V8，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Comment 1 不变。产品数据库先准备到 V9，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
@@ -118,6 +119,9 @@ interface AccessResolver {
 - Trash 状态；
 - Node/Resource 以及对应 Univer/Blob 扩展映射；
 - Resource Node 是否有子 Node（与内容访问彼此独立）。
+
+`SpaceAccess.member` 区分 Space Owner/成员与只靠 `public_read` 得到 `viewer` 的读者。Issue 写入按它判断，
+其余模块继续只看 Role。
 
 调用者不直接查询授权表或从客户端字段推断权限。Move 同时验证 Source、Target、同
 Space 与后代链。
@@ -252,6 +256,22 @@ interface RecentResourceRecorder {
 ```
 
 Collaboration Snapshot 重试、Node 元数据加载、Worktree Preview 和失败打开都不写 Recent。
+
+## Issues
+
+`modules/issues` 只读写产品数据库，权限来自 `AccessResolver.resolveSpace`：
+
+- 无法发现的 Space 返回 404；Personal Space 返回 409，因为调用者本来就能看到自己的空间，
+  明确的错误比隐藏更有用；
+- 读取对所有能发现 Team Space 的登录用户开放（含公开读），写入要求 `member`；
+- 标题、正文与状态由作者或 triage 权限修改，标签、Assignee 与引用文件只有 triage 权限可改，
+  标签定义只有 Owner/Admin 可改；
+- 引用文件以调用者身份经 `resolveNode` 解析，Trash 中或已不可读的 Node 只返回 `available: false`，
+  不暴露名称；
+- 每次写入成功后通过 `onChanged({ spaceId, audienceUserIds })` 通知 Owner 和全部成员，推送失败不影响写入结果。
+
+Issue 写入不是跨系统写入，不使用 Operation，也不接受 `Idempotency-Key`。客户端遇到结果未知时先读列表
+或时间线，再决定是否重试。
 
 ## Operation Runner
 

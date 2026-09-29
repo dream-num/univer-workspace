@@ -43,7 +43,10 @@ export function createSpacesModule(options: {
             name: row.name,
             publicRead: Boolean(row.public_read),
             accessRole: role,
-            capabilities: spaceCapabilities(role),
+            capabilities: spaceCapabilities(role, {
+              type: row.type,
+              member: row.owner_user_id === userId || row.member_role !== null,
+            }),
           };
         }),
       };
@@ -68,7 +71,7 @@ export function createSpacesModule(options: {
         name,
         publicRead,
         accessRole: "owner",
-        capabilities: spaceCapabilities("owner"),
+        capabilities: spaceCapabilities("owner", { type: "team", member: true }),
       };
     },
 

@@ -37,6 +37,8 @@ tags:
     description: Team Space membership management.
   - name: Sharing
     description: Personal Space Direct Share management.
+  - name: Issues
+    description: Space-scoped Issues, comments, labels and assignees for Team Spaces.
   - name: Worktrees
     description: Isolated collaborative draft and merge workflows.
 paths:
@@ -1685,6 +1687,395 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/issues:
+    get:
+      tags:
+        - Issues
+      operationId: listMyIssues
+      summary: List Issues across every Team Space the caller owns or belongs to.
+      description: Public-read Spaces the caller does not belong to are excluded. Use `assignee=me` for the caller's work queue.
+      parameters:
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/IssueLimitParameter'
+        - $ref: '#/components/parameters/IssueStateParameter'
+        - $ref: '#/components/parameters/IssueLabelParameter'
+        - $ref: '#/components/parameters/IssueAssigneeParameter'
+        - $ref: '#/components/parameters/IssueAuthorParameter'
+        - $ref: '#/components/parameters/IssueSearchParameter'
+        - $ref: '#/components/parameters/IssueSortParameter'
+        - $ref: '#/components/parameters/IssueOrderParameter'
+      responses:
+        '200':
+          description: Issue page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/spaces/{spaceId}/issues:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Issues
+      operationId: listSpaceIssues
+      summary: List Issues in a Team Space.
+      description: Personal Spaces return 409 because Issues are available only in Team Spaces.
+      parameters:
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/IssueLimitParameter'
+        - $ref: '#/components/parameters/IssueStateParameter'
+        - $ref: '#/components/parameters/IssueLabelParameter'
+        - $ref: '#/components/parameters/IssueAssigneeParameter'
+        - $ref: '#/components/parameters/IssueAuthorParameter'
+        - $ref: '#/components/parameters/IssueSearchParameter'
+        - $ref: '#/components/parameters/IssueSortParameter'
+        - $ref: '#/components/parameters/IssueOrderParameter'
+      responses:
+        '200':
+          description: Issue page with open and closed counts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    post:
+      tags:
+        - Issues
+      operationId: createIssue
+      summary: Open an Issue.
+      description: Space Members of any role may open an Issue; labels, assignees and file references need the triage capability. Not idempotent; after an unknown result, list the Space before retrying.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIssue'
+      responses:
+        '201':
+          description: Created Issue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/spaces/{spaceId}/issues/{number}:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      tags:
+        - Issues
+      operationId: getIssue
+      summary: Read one Issue by its Space-scoped number.
+      responses:
+        '200':
+          description: Issue with the caller's capabilities.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    patch:
+      tags:
+        - Issues
+      operationId: updateIssue
+      summary: Change an Issue.
+      description: |
+        Title, body and state may be changed by the author or a user with the
+        triage capability. Labels, assignees and referenced files replace the
+        whole set and need the triage capability. Concurrent edits use
+        last-writer-wins; there is no revision precondition.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIssue'
+      responses:
+        '200':
+          description: Updated Issue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/spaces/{spaceId}/issues/{number}/timeline:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      tags:
+        - Issues
+      operationId: listIssueTimeline
+      summary: List comments and events of an Issue in chronological order.
+      parameters:
+        - $ref: '#/components/parameters/CursorParameter'
+        - $ref: '#/components/parameters/LimitParameter'
+      responses:
+        '200':
+          description: Timeline page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueTimelinePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/spaces/{spaceId}/issues/{number}/comments:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      tags:
+        - Issues
+      operationId: createIssueComment
+      summary: Comment on an Issue.
+      description: Not idempotent; after an unknown result, read the timeline before retrying.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueCommentBody'
+      responses:
+        '201':
+          description: Created comment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueComment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/issue-comments/{commentId}:
+    parameters:
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      tags:
+        - Issues
+      operationId: updateIssueComment
+      summary: Edit a comment. Only its author may do so.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueCommentBody'
+      responses:
+        '200':
+          description: Updated comment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueComment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Issues
+      operationId: deleteIssueComment
+      summary: Delete a comment. Its author, the Space owner and admins may do so.
+      responses:
+        '204':
+          description: Comment deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/spaces/{spaceId}/issue-labels:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Issues
+      operationId: listIssueLabels
+      summary: List the labels of a Team Space with their open Issue counts.
+      responses:
+        '200':
+          description: Labels ordered by name. A Space has at most 100.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueLabelList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    post:
+      tags:
+        - Issues
+      operationId: createIssueLabel
+      summary: Create a label. Requires the Space owner or an admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIssueLabel'
+      responses:
+        '201':
+          description: Created label.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueLabel'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/issue-labels/{labelId}:
+    parameters:
+      - name: labelId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      tags:
+        - Issues
+      operationId: updateIssueLabel
+      summary: Rename or recolor a label. Requires the Space owner or an admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIssueLabel'
+      responses:
+        '200':
+          description: Updated label.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueLabel'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+        - Issues
+      operationId: deleteIssueLabel
+      summary: Delete a label and remove it from every Issue. Requires the Space owner or an admin.
+      description: Timeline events keep a snapshot of the label name and color.
+      responses:
+        '204':
+          description: Label deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/worktrees:
     get:
       tags:
@@ -2480,6 +2871,92 @@ components:
             - string
             - 'null'
           format: date-time
+    Issue:
+      allOf:
+        - $ref: '#/components/schemas/IssueSummary'
+        - type: object
+          required:
+            - body
+            - references
+            - capabilities
+          properties:
+            body:
+              type: string
+              description: Markdown.
+            references:
+              type: array
+              items:
+                $ref: '#/components/schemas/IssueReference'
+            capabilities:
+              $ref: '#/components/schemas/IssueCapabilities'
+      unevaluatedProperties: false
+    IssueSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - number
+        - space
+        - title
+        - state
+        - stateReason
+        - author
+        - closedBy
+        - closedAt
+        - labels
+        - assignees
+        - commentCount
+        - referenceCount
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        number:
+          type: integer
+          minimum: 1
+          description: Human-facing number, unique inside the Space (#12).
+        space:
+          $ref: '#/components/schemas/IssueSpaceRef'
+        title:
+          type: string
+        state:
+          $ref: '#/components/schemas/IssueState'
+        stateReason:
+          oneOf:
+            - $ref: '#/components/schemas/IssueStateReason'
+            - type: 'null'
+        author:
+          $ref: '#/components/schemas/User'
+        closedBy:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - type: 'null'
+        closedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        labels:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueLabel'
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        commentCount:
+          type: integer
+          minimum: 0
+        referenceCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     WorktreeSummary:
       type: object
       additionalProperties: false
@@ -2814,6 +3291,9 @@ components:
         - renameSpace
         - manageMembers
         - viewTrash
+        - createIssue
+        - triageIssues
+        - manageIssueLabels
       properties:
         browseRoot:
           type: boolean
@@ -2825,6 +3305,15 @@ components:
           type: boolean
         viewTrash:
           type: boolean
+        createIssue:
+          type: boolean
+          description: The caller may open Issues and comment in this Team Space.
+        triageIssues:
+          type: boolean
+          description: The caller may edit, close, label, assign and reference files on any Issue.
+        manageIssueLabels:
+          type: boolean
+          description: The caller may create, change and delete this Space's Issue labels.
     SpaceList:
       type: object
       additionalProperties: false
@@ -3596,6 +4085,403 @@ components:
           type: boolean
         role:
           $ref: '#/components/schemas/LinkSharingRole'
+    IssueSpaceRef:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    IssueState:
+      type: string
+      enum:
+        - open
+        - closed
+    IssueStateReason:
+      type: string
+      enum:
+        - completed
+        - not_planned
+    IssueLabel:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - color
+        - description
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          description: A palette key; historical labels are not rewritten if the palette changes.
+        description:
+          type: string
+    IssueList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - nextCursor
+        - counts
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueSummary'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+        counts:
+          type: object
+          additionalProperties: false
+          required:
+            - open
+            - closed
+          description: Match counts for every filter except `state`.
+          properties:
+            open:
+              type: integer
+              minimum: 0
+            closed:
+              type: integer
+              minimum: 0
+    CreateIssue:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 256
+        body:
+          type: string
+          maxLength: 65536
+        labelIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+          description: Requires the triage capability.
+        assigneeUserIds:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+          description: Requires the triage capability. Assignees must be the owner or a member of the Space.
+        nodeIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+          description: Requires the triage capability. Nodes must be in the Space and not in Trash.
+    IssueReference:
+      type: object
+      additionalProperties: false
+      required:
+        - nodeId
+        - available
+        - name
+        - resource
+      properties:
+        nodeId:
+          type: string
+        available:
+          type: boolean
+          description: False when the Node is in Trash, deleted or no longer readable by the caller.
+        name:
+          type:
+            - string
+            - 'null'
+          description: Null when the reference is unavailable.
+        resource:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required:
+                - id
+                - kind
+                - unitId
+                - unitType
+              properties:
+                id:
+                  type: string
+                kind:
+                  type: string
+                  const: univer
+                unitId:
+                  type: string
+                unitType:
+                  $ref: '#/components/schemas/UnitType'
+            - type: object
+              additionalProperties: false
+              required:
+                - id
+                - kind
+                - mediaType
+              properties:
+                id:
+                  type: string
+                kind:
+                  type: string
+                  const: blob
+                mediaType:
+                  type: string
+            - type: 'null'
+    IssueCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        - edit
+        - close
+        - triage
+        - comment
+      properties:
+        edit:
+          type: boolean
+          description: The caller may change the title and body.
+        close:
+          type: boolean
+          description: The caller may close or reopen the Issue.
+        triage:
+          type: boolean
+          description: The caller may change labels, assignees and referenced files.
+        comment:
+          type: boolean
+    UpdateIssue:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 256
+        body:
+          type: string
+          maxLength: 65536
+        state:
+          $ref: '#/components/schemas/IssueState'
+        stateReason:
+          $ref: '#/components/schemas/IssueStateReason'
+          description: 'Only valid together with `state: closed`; defaults to `completed`.'
+        labelIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+          description: Replaces the whole set. Requires the triage capability.
+        assigneeUserIds:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+          description: Replaces the whole set. Existing assignees that left the Space may be kept.
+        nodeIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+          description: Replaces the whole set. Existing references that became unavailable may be kept.
+    IssueTimelineComment:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - id
+        - author
+        - body
+        - createdAt
+        - updatedAt
+      properties:
+        type:
+          type: string
+          const: comment
+        id:
+          type: string
+        author:
+          $ref: '#/components/schemas/User'
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    IssueEventKind:
+      type: string
+      enum:
+        - closed
+        - reopened
+        - renamed
+        - labeled
+        - unlabeled
+        - assigned
+        - unassigned
+        - node_referenced
+        - node_unreferenced
+    IssueTimelineEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - id
+        - kind
+        - actor
+        - payload
+        - createdAt
+      properties:
+        type:
+          type: string
+          const: event
+        id:
+          type: string
+        kind:
+          $ref: '#/components/schemas/IssueEventKind'
+        actor:
+          $ref: '#/components/schemas/User'
+        payload:
+          type: object
+          additionalProperties: true
+          description: |
+            Snapshot taken when the event happened. `closed` carries `reason`;
+            `renamed` carries `from` and `to`; `labeled` and `unlabeled` carry
+            `labelId`, `name` and `color`; `assigned` and `unassigned` carry
+            `userId`, `username` and `displayName`; `node_referenced` and
+            `node_unreferenced` carry `nodeId` and `name`.
+        createdAt:
+          type: string
+          format: date-time
+    IssueTimelineItem:
+      oneOf:
+        - $ref: '#/components/schemas/IssueTimelineComment'
+        - $ref: '#/components/schemas/IssueTimelineEvent'
+      discriminator:
+        propertyName: type
+        mapping:
+          comment: '#/components/schemas/IssueTimelineComment'
+          event: '#/components/schemas/IssueTimelineEvent'
+    IssueTimelinePage:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueTimelineItem'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    IssueCommentBody:
+      type: object
+      additionalProperties: false
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 65536
+    IssueComment:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - author
+        - body
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        author:
+          $ref: '#/components/schemas/User'
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    IssueLabelUsage:
+      allOf:
+        - $ref: '#/components/schemas/IssueLabel'
+        - type: object
+          required:
+            - openIssueCount
+          properties:
+            openIssueCount:
+              type: integer
+              minimum: 0
+      unevaluatedProperties: false
+    IssueLabelList:
+      type: object
+      additionalProperties: false
+      required:
+        - labels
+      properties:
+        labels:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueLabelUsage'
+    IssueLabelColor:
+      type: string
+      description: Palette key. The Browser maps each key to light and dark theme colors.
+      enum:
+        - gray
+        - blue
+        - green
+        - yellow
+        - orange
+        - red
+        - purple
+        - pink
+    CreateIssueLabel:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - color
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        color:
+          $ref: '#/components/schemas/IssueLabelColor'
+        description:
+          type: string
+          maxLength: 200
+    UpdateIssueLabel:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        color:
+          $ref: '#/components/schemas/IssueLabelColor'
+        description:
+          type: string
+          maxLength: 200
     WorktreeKind:
       type: string
       enum:
@@ -4124,6 +5010,80 @@ components:
       schema:
         type: string
       description: Return 304 when the current content ETag matches.
+    IssueLimitParameter:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    IssueStateParameter:
+      name: state
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - open
+          - closed
+          - all
+        default: open
+    IssueLabelParameter:
+      name: label
+      in: query
+      required: false
+      description: Label name, case-insensitive. Repeat to require several labels.
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 10
+        items:
+          type: string
+    IssueAssigneeParameter:
+      name: assignee
+      in: query
+      required: false
+      description: A User ID, `me`, or `none` for unassigned Issues.
+      schema:
+        type: string
+    IssueAuthorParameter:
+      name: author
+      in: query
+      required: false
+      description: A User ID or `me`.
+      schema:
+        type: string
+    IssueSearchParameter:
+      name: q
+      in: query
+      required: false
+      description: Case-insensitive substring match on title and body.
+      schema:
+        type: string
+        maxLength: 200
+    IssueSortParameter:
+      name: sort
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - created
+          - updated
+        default: created
+    IssueOrderParameter:
+      name: order
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - asc
+          - desc
+        default: desc
   responses:
     BadRequest:
       description: Invalid request.

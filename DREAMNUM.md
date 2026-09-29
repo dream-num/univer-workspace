@@ -10,7 +10,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 ### Owns
 
 - The Workspace product model for identity, Spaces, Nodes, Resources, access, sharing, Trash, recent activity,
-  Blobs, Univer Assets, product-level Worktrees, and recoverable cross-system operations. See the
+  Blobs, Univer Assets, product-level Worktrees, Team Space Issues, and recoverable cross-system operations. See the
   [application design](apps/workspace/docs/application-design.md).
 - The deployable Workspace Browser and Server composition, including the product HTTP contract, authenticated and anonymous read-only
   Collaboration Endpoint integration, local persistence layout, and deployment lifecycle. See the
