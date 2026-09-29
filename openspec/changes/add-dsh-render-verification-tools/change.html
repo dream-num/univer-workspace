@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH 渲染验证工具</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      padding: 40px 24px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    .page { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow { margin-bottom: 8px; color: var(--accent-text); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+    h1 { max-width: 840px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 820px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 820px; height: auto; }
+    .brief { display: grid; grid-template-columns: 1.05fr 1fr 0.95fr; gap: 16px; margin-top: 24px; }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .card ul { padding-left: 20px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View</p>
+      <h1>给 DSH Agent 可审阅的截图与 Slide 布局诊断</h1>
+      <p class="thesis">两个 DSH-native tools 复用同一套 Client Core render owner；截图经过本地文件 policy、一次 approval 与写前 canonical result gate，lint 保持只读，二者共享完整取消和安装资源闭包。</p>
+    </header>
+
+    <section class="diagram" aria-label="DSH 截图与布局检查架构图，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1100 650" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="render-tools-title render-tools-desc">
+        <title id="render-tools-title">DSH render verification 工具架构</title>
+        <desc id="render-tools-desc">DSH Agent 分别调用截图与布局检查工具。截图先经过本地文件策略和一次批准，布局检查保持只读；两者复用现有 Client Core render loader、当前 worker runtime 与每次调用的 browser。截图完整 canonical metadata 在首个 PNG publication 前校验，最终返回 Session cwd 中的 PNG 或完整 lint report。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1100" height="650" fill="#f5f5f5"/>
+
+        <path d="M 220 315 H 258 Q 274 315 274 299 V 205 Q 274 189 290 189 H 310" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 220 335 H 258 Q 274 335 274 351 V 445 Q 274 461 290 461 H 310" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 500 189 H 524 Q 540 189 540 205 V 297 Q 540 313 556 313 H 575" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 500 461 H 524 Q 540 461 540 445 V 353 Q 540 337 556 337 H 575" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 785 325 H 835" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 1000 325 H 1030" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="370" y="239" width="108" height="28" rx="4" fill="#f5f5f5"/>
+        <text x="424" y="258" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">policy + ask</text>
+        <rect x="385" y="382" width="82" height="28" rx="4" fill="#f5f5f5"/>
+        <text x="426" y="401" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">read-only</text>
+        <rect x="687" y="278" width="108" height="28" rx="4" fill="#f5f5f5"/>
+        <text x="741" y="297" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">fused signal</text>
+
+        <rect x="55" y="275" width="165" height="100" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="137" y="320" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="20" font-weight="600" text-anchor="middle">DSH Agent</text>
+        <text x="137" y="347" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Host-only / local</text>
+
+        <rect x="310" y="135" width="190" height="108" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="405" y="180" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">workspace_screenshot</text>
+        <text x="405" y="207" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">approval · 写前 result gate</text>
+
+        <rect x="310" y="407" width="190" height="108" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="405" y="452" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">workspace_layout_lint</text>
+        <text x="405" y="479" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Worktree Slide</text>
+
+        <rect x="575" y="265" width="210" height="120" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="680" y="309" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Client Core render owner</text>
+        <text x="680" y="338" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">target · UnitData · Assets</text>
+        <text x="680" y="362" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">current worker runtime</text>
+
+        <rect x="835" y="270" width="165" height="110" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="917" y="315" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">每次调用 browser</text>
+        <text x="917" y="343" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">packaged render page</text>
+
+        <rect x="1030" y="255" width="60" height="140" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="1060" y="298" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="15" font-weight="600" text-anchor="middle">PNG</text>
+        <text x="1060" y="321" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">或</text>
+        <text x="1060" y="345" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="15" font-weight="600" text-anchor="middle">lint</text>
+        <text x="1060" y="368" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">report</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <ul>
+          <li>截图覆盖 Trunk/Worktree 的五类 Unit；lint 只检查 Worktree Slide。</li>
+          <li>PNG 只写 local Session cwd，不返回 bytes、不覆盖既有文件。</li>
+          <li>Chromium 保持 <code>--no-sandbox</code>；部署需受限 OS user/container。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>两个 outcome-specific tools，共用既有 Core render capability。</li>
+          <li>截图在 approval 两侧重查 file policy、local provider 与 path containment。</li>
+          <li>完整 metadata 在首 PNG 前过 schema/8 MiB/depth gate；失败写零文件。</li>
+          <li>取消或晚期失败保留已确认 PNG、固定 partial identity，禁止自动重放。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <ul>
+          <li>tarball 新增 render page；从 runtime 实际安装位置解析 exact Puppeteer versions。</li>
+          <li>浏览器缺失时明确失败，不隐式下载。</li>
+          <li>approval 只管文件 effect，不提供 browser process isolation。</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer>
+      Derived from <a href="proposal.md">proposal.md</a> and <a href="design.md">design.md</a>. Markdown sources are authoritative.
+    </footer>
+  </main>
+</body>
+</html>

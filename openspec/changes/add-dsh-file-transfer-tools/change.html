@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH Blob/Asset 本地文件传输</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body { min-width: 320px; min-height: 100vh; padding: 40px 24px; background: var(--paper); color: var(--ink); font-family: var(--sans); }
+    .page { width: min(1200px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow { margin-bottom: 8px; color: var(--accent-text); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+    h1 { max-width: 900px; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; }
+    .thesis { max-width: 860px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 960px; height: auto; }
+    .brief { display: grid; grid-template-columns: 1.05fr 1fr 0.95fr; gap: 16px; margin-top: 24px; }
+    .card { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .card ul { padding-left: 20px; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .brief { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View · add-dsh-file-transfer-tools</p>
+      <h1>把 Blob/Asset 字节安全落在调用 Session 的 cwd</h1>
+      <p class="thesis">两种 download 先按当前 policy 拒绝 read-only，再用 rc.2 public LocalFileSystem constructor 证明 Host-local；E2B 即使没有 sandboxMode 也在零 path/ask/I/O 下失败。通过 identity 与 containment 才询问一次，body 重做三道 gate 后才调用 processPath。</p>
+    </header>
+
+    <section class="diagram" aria-label="本地文件传输架构，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1200 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="file-transfer-title file-transfer-desc">
+        <title id="file-transfer-title">DSH 本地 Blob 与 Asset 文件传输架构</title>
+        <desc id="file-transfer-desc">download 先检查当前 policy，再以 public LocalFileSystem constructor 排除 E2B 和其他 non-local provider，最后检查 policy root 与 Session cwd path。符合条件的 transfer 只询问一次 approval，body 再重复 policy、constructor identity 与 canonical path gate，随后才调用 Workspace Client Core。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1200" height="560" fill="#f5f5f5"/>
+
+        <path d="M 220 280 H 264" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 440 280 H 484" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 676 280 H 720" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#arrow-accent)"/>
+        <path d="M 920 224 H 944 V 148 H 976" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M 920 336 H 944 V 412 H 976" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="224" y="260" width="36" height="18" rx="4" fill="#f5f5f5"/>
+        <text x="242" y="273" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">调用</text>
+        <rect x="444" y="260" width="36" height="18" rx="4" fill="#f5f5f5"/>
+        <text x="462" y="273" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">可写</text>
+        <rect x="680" y="256" width="36" height="22" rx="4" fill="#f5f5f5"/>
+        <text x="698" y="270" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="10" text-anchor="middle">问一次</text>
+        <rect x="932" y="164" width="88" height="18" rx="4" fill="#f5f5f5"/>
+        <text x="976" y="177" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="10" text-anchor="middle">HTTP / signed content</text>
+        <rect x="930" y="372" width="92" height="18" rx="4" fill="#f5f5f5"/>
+        <text x="976" y="385" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="10" text-anchor="middle">private temp / commit</text>
+
+        <rect x="40" y="204" width="180" height="152" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="130" y="240" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">4 个 DSH tools</text>
+        <text x="130" y="272" fill="#4f5d75" font-family="SFMono-Regular, monospace" font-size="11" text-anchor="middle">blob_get / upload</text>
+        <text x="130" y="294" fill="#4f5d75" font-family="SFMono-Regular, monospace" font-size="11" text-anchor="middle">blob_download</text>
+        <text x="130" y="316" fill="#4f5d75" font-family="SFMono-Regular, monospace" font-size="11" text-anchor="middle">asset_download</text>
+
+        <rect x="264" y="204" width="176" height="152" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="352" y="240" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Policy preflight</text>
+        <text x="352" y="274" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">① current policy / read-only deny</text>
+        <text x="352" y="298" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">② instanceof LocalFileSystem</text>
+        <text x="352" y="322" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">non-local：零 path · 零 ask</text>
+
+        <rect x="484" y="176" width="192" height="208" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="580" y="216" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Session cwd 路径门禁</text>
+        <text x="580" y="252" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">workspace-write：policy root + cwd</text>
+        <text x="580" y="278" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">danger / bare local：仍限 cwd</text>
+        <text x="580" y="304" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">Host-local provider 证明</text>
+        <text x="580" y="330" fill="#4f5d75" font-family="SFMono-Regular, monospace" font-size="11" text-anchor="middle">preflight: resolve / contains only</text>
+        <text x="580" y="356" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">拒绝越界与 remote world</text>
+
+        <rect x="720" y="176" width="200" height="208" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="820" y="216" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Workspace Client Core</text>
+        <text x="820" y="252" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">Blob stable intent</text>
+        <text x="820" y="278" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">unknown + public intent</text>
+        <text x="820" y="304" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">exact bytes / cookie isolation</text>
+        <text x="820" y="330" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">fsync / atomic publication</text>
+        <text x="820" y="356" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">optional AbortSignal</text>
+
+        <rect x="976" y="84" width="184" height="128" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="1068" y="126" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Workspace Server / CDN</text>
+        <text x="1068" y="158" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">Blob Resource / Upload Session</text>
+        <text x="1068" y="182" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">Worktree Asset bytes</text>
+
+        <rect x="976" y="348" width="184" height="128" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="1068" y="390" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">本地 Session cwd</text>
+        <text x="1068" y="422" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">regular source</text>
+        <text x="1068" y="446" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">0600 output · no-clobber</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <ul>
+          <li>Blob metadata、upload/download 与 Worktree Asset download。</li>
+          <li>路径必须落在调用 Agent Session cwd；workspace-write 还受 policy root 约束。</li>
+          <li>不支持 E2B、remote filesystem、inline bytes、Office、render、Jobs 或 Skills。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>read-only 在 provider 前 typed deny；non-local 在 path 前 typed deny，均不 ask。</li>
+          <li>只正向接受 rc.2 public LocalFileSystem 与本地 sandbox subclass。</li>
+          <li>preflight 不留状态；body 重读 policy/identity/path 后才 processPath。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <ul>
+          <li><code>sandboxMode</code> undefined 不能证明 local；public constructor gate 排除 E2B。</li>
+          <li>Core 的 <code>node:fs</code> 不经过 DSH text fence；approval 两侧三道 gate 关闭该绕过。</li>
+          <li>取消撞上远端 unknown 时保留 public intent，停止后续 recovery。</li>
+          <li><code>force</code> 仍需 approval，且完整写入后才原子替换。</li>
+          <li>影响 DSH app 与 Client Core；Server、OpenAPI、CLI command 不变。</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer>
+      此页面由 <a href="proposal.md">proposal.md</a> 与 <a href="design.md">design.md</a> 派生，仅供评审；Markdown sources are authoritative.
+    </footer>
+  </main>
+</body>
+</html>
