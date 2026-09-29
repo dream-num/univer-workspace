@@ -26,6 +26,7 @@ import {
   Tooltip,
 } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
+import { spacesQueryOptions } from "../spaces/spaces.queries";
 import {
   UnitChangeIcon,
   UnitTypeIcon,
@@ -34,6 +35,7 @@ import {
   worktreeStateVariant,
 } from "./worktree-review-panel";
 import { formatWorktreeDateTime } from "./worktree-review-presentation";
+import { worktreeBelongsToSpace } from "./worktree-space";
 import {
   worktreeListQueryOptions,
   worktreeQueryOptions,
@@ -63,12 +65,14 @@ export interface WorktreeDashboardSelection {
 }
 
 export function WorktreeDashboard({
+  spaceId,
   searchQuery = "",
   selectedWorktreeId,
   selectedUnitId,
   selectedView = DEFAULT_WORKTREE_REVIEW_VIEW,
   onSelectionChange,
 }: {
+  readonly spaceId?: string;
   readonly searchQuery?: string;
   readonly selectedWorktreeId?: string;
   readonly selectedUnitId?: string;
@@ -80,6 +84,8 @@ export function WorktreeDashboard({
   const { language, t } = useI18n();
   const active = useQuery(worktreeListQueryOptions("active"));
   const processed = useQuery(worktreeListQueryOptions("processed"));
+  const spaces = useQuery(spacesQueryOptions);
+  const scopedSpace = spaces.data?.spaces.find((item) => item.id === spaceId);
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
   const [expandedTasks, setExpandedTasks] = useState<
@@ -103,8 +109,13 @@ export function WorktreeDashboard({
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
 
   const tasks = useMemo(
-    () => [...(active.data?.items ?? []), ...(processed.data?.items ?? [])],
-    [active.data?.items, processed.data?.items]
+    () => {
+      const allTasks = [...(active.data?.items ?? []), ...(processed.data?.items ?? [])];
+      return scopedSpace
+        ? allTasks.filter((task) => worktreeBelongsToSpace(task, scopedSpace))
+        : allTasks;
+    },
+    [active.data?.items, processed.data?.items, scopedSpace]
   );
   const scopedTasks = tasks.filter(
     (task) =>
@@ -396,9 +407,11 @@ export function WorktreeDashboard({
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4 max-[720px]:flex-col max-[720px]:items-start max-[720px]:px-4.5">
-        <p className="m-0 max-w-2xl text-[13px] leading-5 text-muted-foreground">
-          {t("workbenchDescription")}
-        </p>
+        {spaceId ? null : (
+          <p className="m-0 max-w-2xl text-[13px] leading-5 text-muted-foreground">
+            {t("workbenchDescription")}
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2.5">
           {compactViewport ? (
             <Button
@@ -426,21 +439,23 @@ export function WorktreeDashboard({
               { label: t("processed"), value: "processed" },
             ]}
           />
-          <Select<ScopeFilter>
-            size="sm"
-            className="w-32"
-            aria-label={t("belongingSpace")}
-            value={scopeFilter}
-            onValueChange={(value) => {
-              setScopeFilter(value);
-              resetSelection();
-            }}
-            options={[
-              { label: t("allSpaces"), value: "all" },
-              { label: t("personalSpace"), value: "user" },
-              { label: t("teamSpace"), value: "team" },
-            ]}
-          />
+          {spaceId ? null : (
+            <Select<ScopeFilter>
+              size="sm"
+              className="w-32"
+              aria-label={t("belongingSpace")}
+              value={scopeFilter}
+              onValueChange={(value) => {
+                setScopeFilter(value);
+                resetSelection();
+              }}
+              options={[
+                { label: t("allSpaces"), value: "all" },
+                { label: t("personalSpace"), value: "user" },
+                { label: t("teamSpace"), value: "team" },
+              ]}
+            />
+          )}
         </div>
       </header>
 

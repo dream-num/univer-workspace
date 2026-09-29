@@ -7,6 +7,7 @@ export type WorktreeReviewView =
 export const DEFAULT_WORKTREE_REVIEW_VIEW: WorktreeReviewView = "agent";
 
 export interface WorktreeDashboardSearch {
+  readonly spaceId?: string;
   readonly worktree?: string;
   readonly unit?: string;
   readonly view?: WorktreeReviewView;
@@ -15,6 +16,10 @@ export interface WorktreeDashboardSearch {
 export function parseWorktreeDashboardSearch(
   search: Readonly<Record<string, unknown>>
 ): WorktreeDashboardSearch {
+  const spaceId =
+    typeof search.spaceId === "string" && search.spaceId
+      ? search.spaceId
+      : undefined;
   const worktree =
     typeof search.worktree === "string" && search.worktree
       ? search.worktree
@@ -24,6 +29,7 @@ export function parseWorktreeDashboardSearch(
       ? search.unit
       : undefined;
   return {
+    ...(spaceId === undefined ? {} : { spaceId }),
     ...(worktree === undefined ? {} : { worktree }),
     ...(unit === undefined ? {} : { unit }),
     ...optionalReviewView(search.view),

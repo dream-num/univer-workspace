@@ -3,9 +3,9 @@ import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import type { IMember } from "@univerjs/protocol";
 import {
+  CreateNodeDropdown,
   NodeBrowser,
   ResourceActions,
-  ResourceTitle,
   ResourceUnavailablePage,
   isResourceUnavailableError,
   nodeChildrenQueryOptions,
@@ -13,12 +13,13 @@ import {
 } from "../features/nodes";
 import { anonymousUser, sessionQueryOptions } from "../features/auth";
 import { resourceOpenQueryOptions } from "../features/resources";
-import { spacesQueryOptions } from "../features/spaces";
+import { RepositoryTabs, spaceDisplayName, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceHeaderSearch, WorkspaceLayout } from "./-workspace-layout";
 import { ResourceEditor } from "../features/editor";
 import { BlobPreview } from "../features/blobs";
 import { api } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
+import { useTheme } from "../shared/theme";
 import { parseResourceView } from "../features/resource-view/resource-view";
 export const Route = createFileRoute("/nodes/$nodeId")({
   validateSearch: (
@@ -88,6 +89,7 @@ function NodePage() {
   });
   const session = useQuery(sessionQueryOptions);
   const { t } = useI18n();
+  const { workspaceTheme } = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
   const [htmlActionsContainer, setHtmlActionsContainer] = useState<HTMLSpanElement | null>(null);
   const [collaboration, setCollaboration] = useState<{
@@ -110,6 +112,13 @@ function NodePage() {
   const resource = resourceQuery.data?.resource;
   const user = session.data.authenticated ? session.data.user : anonymousUser;
   const selectedNodePath = [...query.data.breadcrumbs.map((item) => item.id), node.id];
+  const repository = workspaceTheme === "repository";
+  // `/nodes/{id}` already returns the full ancestor chain, including this Node;
+  // the shell drops a trailing crumb that repeats the page title.
+  const repositoryBreadcrumbs = query.data.breadcrumbs.map((item) => ({
+    label: item.name,
+    nodeId: item.id,
+  }));
   const isEditing =
     session.data.authenticated && resource?.kind === "univer" && resource.editorMode === "edit";
 
@@ -119,21 +128,15 @@ function NodePage() {
     <WorkspaceLayout
       immersive={node.resource !== null && view === "immersive"}
       selectedSpaceId={query.data.space.id}
+      {...(node.resource === null
+        ? { repositoryTab: "files" as const, repositoryBreadcrumbs }
+        : { repositoryBreadcrumbs })}
       selectedNodeId={node.id}
       selectedNodePath={selectedNodePath}
       contentMode={node.resource ? "editor" : "default"}
-      headerTitle={
-        node.resource ? (
-          <ResourceTitle
-            key={node.id}
-            node={node}
-            resourceId={node.resource.id}
-            authenticated={session.data.authenticated}
-          />
-        ) : undefined
-      }
+      headerTitle={node.name}
       headerContent={
-        node.resource ? undefined : (
+        node.resource || repository ? undefined : (
           <WorkspaceHeaderSearch
             placeholder={t("searchNodes")}
             value={searchQuery}
@@ -179,7 +182,33 @@ function NodePage() {
           </section>
         ) : null
       ) : children.data ? (
-        <NodeBrowser page={children.data} searchQuery={searchQuery} />
+        repository ? (
+          <>
+            <RepositoryTabs spaceId={query.data.space.id} active="files" />
+            <div className="min-h-0 flex-1 overflow-y-auto bg-background">
+              <div className="mx-auto max-w-6xl px-6 py-6 max-[720px]:px-4 max-[720px]:py-4">
+                <section className="min-w-0 rounded-lg border border-border bg-background">
+                  <NodeBrowser
+                    page={children.data}
+                    searchQuery={searchQuery}
+                    showParentRow
+                    spaceName={spaceDisplayName(
+                      query.data.space,
+                      t,
+                      session.data.authenticated ? session.data.user.username : undefined,
+                    )}
+                    onSearchChange={setSearchQuery}
+                    searchPlaceholder={t("repositoryGoToFile")}
+                    compact
+                    className="[&>div]:h-auto [&>div]:overflow-visible [&>div>div:last-child]:overflow-visible"
+                  />
+                </section>
+              </div>
+            </div>
+          </>
+        ) : (
+          <NodeBrowser page={children.data} searchQuery={searchQuery} />
+        )
       ) : null}
     </WorkspaceLayout>
   );

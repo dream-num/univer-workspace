@@ -69,6 +69,16 @@
   --color-info-soft-foreground: #1d4ed8;
 
   /* ------------------------------------------------------------------ */
+  /* Worktree / pull request states                                      */
+  /* ------------------------------------------------------------------ */
+  --color-state-open: #15803d;
+  --color-state-open-soft: #e9f7ef;
+  --color-state-merged: #7c3aed;
+  --color-state-merged-soft: #f1eafd;
+  --color-state-closed: #b42318;
+  --color-state-closed-soft: #fdecec;
+
+  /* ------------------------------------------------------------------ */
   /* Unit type accents                                                   */
   /* ------------------------------------------------------------------ */
   --color-doc: #2f6de0;
@@ -330,6 +340,14 @@
 
   --color-info-soft: #16233d;
   --color-info-soft-foreground: #8ab0fa;
+
+  /* Worktree / pull request states */
+  --color-state-open: #4ade80;
+  --color-state-open-soft: #14281c;
+  --color-state-merged: #a78bfa;
+  --color-state-merged-soft: #241c40;
+  --color-state-closed: #f3a9a2;
+  --color-state-closed-soft: #382124;
 
   /* Unit type accents */
   --color-doc: #5f8ff0;

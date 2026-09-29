@@ -42,6 +42,13 @@
     parameters:
       - $ref: ../schemas/common.yaml#/CursorParameter
       - $ref: ../schemas/common.yaml#/LimitParameter
+      - name: spaceId
+        in: query
+        required: false
+        description: Restrict results to one accessible Space.
+        schema:
+          type: string
+          minLength: 1
     responses:
       "200":
         description: HTML view Blobs visible to the current user.

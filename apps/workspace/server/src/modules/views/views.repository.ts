@@ -62,7 +62,7 @@ export class ViewsRepository {
       .all(...parameters) as unknown as RecentRow[];
   }
 
-  listHtmlViews(cursor: RecentCursor | null, limit: number): OwnedRow[] {
+  listHtmlViews(cursor: RecentCursor | null, limit: number, spaceId?: string): OwnedRow[] {
     const cursorClause =
       cursor === null
         ? ""
@@ -70,8 +70,13 @@ export class ViewsRepository {
              node.updated_at < ?
              OR (node.updated_at = ? AND resource.id > ?)
            )`;
+    const spaceClause = spaceId === undefined ? "" : "AND node.space_id = ?";
     const parameters =
-      cursor === null ? [limit] : [cursor.timestamp, cursor.timestamp, cursor.id, limit];
+      cursor === null
+        ? (spaceId === undefined ? [limit] : [spaceId, limit])
+        : (spaceId === undefined
+          ? [cursor.timestamp, cursor.timestamp, cursor.id, limit]
+          : [spaceId, cursor.timestamp, cursor.timestamp, cursor.id, limit]);
     return this._database.connection
       .prepare(
         `SELECT resource.id AS resource_id, node.updated_at
@@ -80,6 +85,7 @@ export class ViewsRepository {
          JOIN blob_resources AS blob ON blob.resource_id = resource.id
          WHERE node.trash_batch_id IS NULL
            AND lower(blob.original_filename) LIKE '%.univer.html'
+           ${spaceClause}
            ${cursorClause}
          ORDER BY node.updated_at DESC, resource.id
          LIMIT ?`,

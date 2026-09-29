@@ -27,7 +27,7 @@ export function AppsSidebarSection(props: { readonly storageScope: string }) {
   const location = useLocation();
   const onApps = location.pathname === "/apps";
   const routeSearch = onApps ? readAppsSearch(location.search) : {};
-  const query = useQuery(htmlViewsQueryOptions);
+  const query = useQuery(htmlViewsQueryOptions());
   const items = query.data?.items ?? [];
   const tree = buildAppTree(items);
   const selected = onApps ? selectedHtmlView(items, routeSearch.node) : undefined;
@@ -69,10 +69,10 @@ export function AppsSidebarSection(props: { readonly storageScope: string }) {
 
   return (
     <section className="mt-1 min-w-0" aria-label={t("apps")}>
-      <div className="flex min-h-8 items-center rounded-md pr-0.5 pl-1.5">
+      <div className="flex min-h-11 items-center rounded-md pr-0.5 pl-1.5 md:min-h-8">
         <button
           type="button"
-          className="grid size-3.5 shrink-0 place-items-center rounded-sm text-subtle-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="grid size-9 shrink-0 place-items-center rounded-sm text-subtle-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 md:size-3.5"
           aria-expanded={sectionExpanded}
           aria-label={t(sectionExpanded ? "collapseSection" : "expandSection", { name: t("apps") })}
           onClick={() => setSectionExpanded(!sectionExpanded)}
@@ -87,7 +87,7 @@ export function AppsSidebarSection(props: { readonly storageScope: string }) {
         <Link
           to="/apps"
           search={{}}
-          className="ml-[5px] flex h-8 min-w-0 flex-1 items-center truncate text-xs font-semibold text-subtle-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="ml-[5px] flex h-11 min-w-0 flex-1 items-center truncate text-xs font-semibold text-subtle-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 md:h-8"
           onClick={() => setSectionExpanded(true)}
         >
           {t("apps")}
@@ -147,11 +147,11 @@ function AppTreeSpaceRow({
 }) {
   return (
     <div>
-      <div className="flex min-h-8 items-center rounded-md pr-0.5 text-secondary-foreground hover:bg-accent hover:text-foreground">
+      <div className="flex min-h-11 items-center rounded-md pr-0.5 text-secondary-foreground hover:bg-accent hover:text-foreground md:min-h-8">
         <TreeToggle expanded={expanded} name={label} onClick={onToggle} />
         <button
           type="button"
-          className="flex min-h-8 min-w-0 flex-1 items-center gap-2 px-1 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-1 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
           onClick={onToggle}
         >
           {space.type === "team" ? (
@@ -203,13 +203,13 @@ function AppTreeFolders({
         return (
           <div key={folder.id}>
             <div
-              className="flex min-h-8 items-center rounded-md pr-0.5 text-secondary-foreground hover:bg-accent hover:text-foreground"
+              className="flex min-h-11 items-center rounded-md pr-0.5 text-secondary-foreground hover:bg-accent hover:text-foreground md:min-h-8"
               style={depth === 0 ? undefined : { marginInlineStart: depth * 18 }}
             >
               <TreeToggle expanded={open} name={folder.name} onClick={() => onToggle(folder.id)} />
               <button
                 type="button"
-                className="flex min-h-8 min-w-0 flex-1 items-center gap-2 px-1 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-1 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
                 onClick={() => onToggle(folder.id)}
               >
                 <FolderIcon className="size-4 shrink-0" />
@@ -236,7 +236,7 @@ function AppTreeFolders({
           <div
             key={item.resource.id}
             className={cn(
-              "flex min-h-8 items-center rounded-md pr-0.5",
+              "flex min-h-11 items-center rounded-md pr-0.5 md:min-h-8",
               selected
                 ? "bg-brand-50 font-medium text-brand-700"
                 : "text-secondary-foreground hover:bg-accent hover:text-foreground",
@@ -246,7 +246,7 @@ function AppTreeFolders({
             <span className="size-7 shrink-0" aria-hidden="true" />
             <button
               type="button"
-              className="flex min-h-8 min-w-0 flex-1 items-center gap-2 px-1 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-1 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
               aria-current={selected ? "true" : undefined}
               onClick={() => onOpen(item.node.id)}
             >
@@ -273,7 +273,7 @@ function TreeToggle({
   return (
     <button
       type="button"
-      className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:size-7"
       aria-expanded={expanded}
       aria-label={t(expanded ? "collapseNode" : "expandNode", { name })}
       onClick={onClick}

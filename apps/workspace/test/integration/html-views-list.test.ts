@@ -153,6 +153,11 @@ describe("html view list", () => {
     ]);
     expect(second.nextCursor).toBeNull();
     expect(second.items.map((item) => item.resource.id)).not.toContain(hidden.resourceId);
+    expect(
+      app.views
+        .listHtmlViews(owner, { limit: 10, cursor: undefined, spaceId: team.id })
+        .items.map((item) => item.resource.id),
+    ).toEqual([oldest.resourceId]);
 
     expect(app.views.listHtmlViews(member, page).items).toEqual([]);
     app.permissions.upsertTeamMember(owner, team.id, member, { role: "viewer" });
