@@ -1,7 +1,8 @@
 # Repository View 第二轮审计：术语、Pages 与导航修复
 
-> 状态：待实施（2026-09-29）。本文是 [repository-view-ux-audit.md](./repository-view-ux-audit.md)
-> 六个阶段落地后的复审，只记录新发现的问题和本轮计划，不重复已完成的内容。
+> 状态：已实施（2026-09-29）。本文记录 2026-09-29 的审计结论和五个阶段的改进计划，
+> 第 7 节是实施与验收记录。上一轮的六阶段计划见
+> [repository-view-ux-audit.md](./repository-view-ux-audit.md)。
 >
 > 审计样例：团队空间 `mini-crm`（`/spaces/0afc2180-…?view=files`），账号 `weimin`，
 > Repository 主题，中文界面。视口：1440×900 桌面、390×844 移动；系统暗色主题。
@@ -318,3 +319,41 @@ About 可以删除这一行；如果保留，需要加上复制按钮。
 4. **[P1]** `$impeccable shape`：阶段 4，完成 Pages tab 和默认页面状态框。
 5. **[P2]** `$impeccable adapt`：阶段 5 中的移动端 About 和 breadcrumb。
 6. `$impeccable polish`：处理 PR 列表头部、状态色 token 和列表行细节。
+
+## 8. 实施记录（2026-09-29）
+
+五个阶段按顺序落地，每个阶段一个 commit：
+
+| 阶段 | Commit | 内容 |
+|------|--------|------|
+| 1 | `68f0244` | 「上一级」指向真正的父级，在分享子树的导航根上隐藏；文件页删除多余的 children 请求，同时修正 Early return 之后调用 `useQuery` 的问题 |
+| 2 | `30297b0` | `repositoryMessages` 覆盖表（中英文）、个人仓库按所有者显示、OfficeLab 品牌与 `document.title`、应用设置移入头像菜单、设置三页 breadcrumb 统一 |
+| 3 | `ff5b9d8` | 搜索框和「新建」进入 Files 卡片头部，页头不再有搜索和「新建」；隐藏重复的「权限」列，行高 56px → 40px（触屏 48px） |
+| 4 | `c126744` | Pages tab：默认页面状态框（地址、复制、访问）、行内源文件与时间、About 改为默认页面链接、空状态不再跳出仓库 |
+| 5 | `313abce` | 仓库列表单一图标、移动端 About 一行元信息、移动端 breadcrumb 保留仓库名、PR 列表头部去掉重复标题、仓库内 PR 详情隐藏「全部仓库」筛选、About 删除截断的 SpaceId、PR 状态色改用 token |
+
+### 验收结果
+
+| 验收项 | 结果 |
+|--------|------|
+| `mini-crm → data` 点击 `..` 回到仓库根目录 | 通过（`aria-label="返回上一级：mini-crm"`，链接到 `/spaces/<id>`） |
+| 分享子树根上不显示 `..` | 通过（纯函数测试覆盖二级目录、一级目录、共享根三种情况） |
+| 根目录与子目录的「新建」都在 Files 卡片右上角 | 通过（页头只剩「账户」，卡片内各有 1 个「新建」） |
+| 页头只有一个齿轮（仓库 Settings tab） | 通过（`svg.lucide-settings` 计数 1，应用设置在头像菜单中） |
+| Repository 主题中英文界面没有「空间」/“space” | 通过（13 个仓库页面逐一扫描，含 `/worktrees` 与仓库导航；新建对话框同样通过） |
+| Wiki 主题文案不变 | 通过（`/home`、`/spaces/<id>`、`/apps` 的关键文案与改动前一致） |
+| 仓库页左上角 `OfficeLab`，标题 `<仓库名> · OfficeLab` | 通过（`mini-crm · OfficeLab`，仓库列表为 `Repositories · OfficeLab`） |
+| Pages 可以看到默认页面地址并访问 | 通过（沉浸视图地址、复制成功、`访问页面` 打开 `?view=immersive`） |
+| 空状态不离开仓库外壳 | 通过（仓库页面内 `/apps?spaceId=` 链接数为 0，空状态改为 Agent 创建指引） |
+| 390px 下无横向溢出、tabs 单行 | 通过（文件 / 目录 / 设置 / Pages 四页 `scrollWidth - clientWidth = 0`，tab 行高 48px） |
+| 移动端设置页保留仓库名 | 通过（breadcrumb 为 `mini-crm / 常规`） |
+| `typecheck`、`test`、`impeccable detect` | 通过（`tsc -p tsconfig.web.json --noEmit` 无输出；295 个测试通过；detect 结果为空数组） |
+
+### 实施中的偏差
+
+- **默认页面的范围**：Pages 页用一行小字说明「默认页面仅对当前浏览器生效」，因为默认页面仍保存在
+  `localStorage`。改为仓库级设置需要 schema 迁移和 HTTP contract 变更，仍属后续独立立项。
+- **非仓库页面的侧边栏**：仓库主题的导航在原计划外一并改为按所有者显示个人仓库
+  （`/worktrees`、`/recent` 等不套仓库外壳的页面），否则这些页面仍会出现「个人空间」。
+- **`/apps?spaceId=<id>`**：仓库视图中已无入口，直接访问仍会落到 Wiki 外壳。是否重定向到
+  Pages tab 属于产品决策，未在本次实施。
