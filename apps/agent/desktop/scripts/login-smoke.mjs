@@ -173,7 +173,13 @@ try {
     await waitForUsableAgent(page);
     const me = await page.evaluate(async () => (await fetch('/api/uwh/me')).json());
     assert.equal(me.identity.userId, `user-${3 + attempt}`);
-    assert.equal(application.windows().length, 1, 'Fallback window closes after sign-in');
+    // The fallback window tears down asynchronously after sign-in; poll the
+    // settled state instead of asserting an instantaneous window count.
+    const closeDeadline = Date.now() + 15000;
+    while (application.windows().length !== 1) {
+      if (Date.now() > closeDeadline) assert.equal(application.windows().length, 1, 'Fallback window closes after sign-in');
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
   }
   if (process.platform === 'linux') assert.equal(await application.evaluate(() => globalThis.smokeMissingBrowserDispatches), 0);
   assert.equal((await application.evaluate(() => globalThis.smokeLoginErrors)).length, 1);
