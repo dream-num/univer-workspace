@@ -27,9 +27,10 @@ test("selects stable Agent releases independently of CLI versions and API order"
     { tag_name: "agent-v9.0.0-rc.1" },
     { tag_name: "agent-v1.1.0" },
   ];
-  const selected = policy.selectRelease(releases, "1.0.0");
+  const selected = policy.selectRelease(releases, "1.0.0", false);
   assert.equal(selected.tag_name, "agent-v1.2.0");
-  assert.equal(policy.selectRelease(releases, "1.2.0"), undefined);
+  assert.equal(policy.selectRelease(releases, "1.2.0", false), undefined);
+  assert.equal(policy.selectRelease(releases, "1.2.0", true).tag_name, "agent-v9.0.0-rc.1");
   assert.equal(
     policy.releaseFeed(selected),
     "https://github.com/dream-num/univer-workspace/releases/download/agent-v1.2.0/",
@@ -38,7 +39,7 @@ test("selects stable Agent releases independently of CLI versions and API order"
   assert.throws(() => policy.releaseFeed({ tag_name: "agent-v1.2.0/../../latest" }));
 });
 
-test("alpha updates stay ordered and graduate to stable without enrolling stable users", () => {
+test("flags never demote: the newest eligible release wins for the given preference", () => {
   const releases = [
     { tag_name: "agent-v0.1.0-alpha.2", prerelease: true },
     { tag_name: "agent-v0.1.0-alpha.10", prerelease: true },
@@ -46,10 +47,10 @@ test("alpha updates stay ordered and graduate to stable without enrolling stable
     { tag_name: "agent-v0.2.0", prerelease: true },
     { tag_name: "agent-v0.3.0-alpha.1", prerelease: true, draft: true },
   ];
-  assert.equal(policy.selectRelease(releases, "0.1.0-alpha.1").tag_name, "agent-v0.1.0-alpha.10");
-  assert.equal(policy.selectRelease(releases, "0.1.0"), undefined);
-  releases.push({ tag_name: "agent-v0.1.0" });
-  assert.equal(policy.selectRelease(releases, "0.1.0-alpha.10").tag_name, "agent-v0.1.0");
+  assert.equal(policy.selectRelease(releases, "0.1.0-alpha.1").tag_name, "agent-v0.2.0");
+  assert.equal(policy.selectRelease(releases, "0.1.0-alpha.1", false).tag_name, "agent-v0.2.0");
+  assert.equal(policy.selectRelease(releases, "0.1.0").tag_name, "agent-v0.2.0");
+  assert.equal(policy.selectRelease(releases, "0.2.0"), undefined);
   assert.equal(policy.releaseChannel("0.1.0-alpha.1"), "alpha");
   assert.equal(policy.releaseChannel("0.1.0"), "latest");
   assert.equal(
@@ -67,31 +68,43 @@ test("alpha updates stay ordered and graduate to stable without enrolling stable
   }
 });
 
-test("all release stages accept only forward versions and same-or-later stages", () => {
+test("the prerelease preference is the only channel gate", () => {
   const stages = ["alpha", "beta", "rc", "latest"];
   const version = (base, stage) => base + (stage === "latest" ? "" : "-" + stage + ".1");
-  for (const [fromIndex, from] of stages.entries()) {
-    for (const [toIndex, to] of stages.entries()) {
-      const current = version("1.0.0", from);
-      const next = version("2.0.0", to);
-      const release = { tag_name: "agent-v" + next, prerelease: to !== "latest" };
-      assert.equal(policy.releaseChannel(next), to);
+  for (const from of stages) {
+    const current = version("1.0.0", from);
+    for (const to of stages) {
+      const release = { tag_name: "agent-v" + version("2.0.0", to), prerelease: to !== "latest" };
+      assert.equal(policy.releaseChannel(version("2.0.0", to)), to);
+      // With prereleases accepted every newer build is offered, whatever the
+      // installed channel; without them only stable-versioned builds are.
       assert.equal(
-        Boolean(policy.selectRelease([release], current)),
-        toIndex >= fromIndex,
+        Boolean(policy.selectRelease([release], current, true)),
+        true,
         from + " -> " + to,
       );
       assert.equal(
-        policy.selectRelease([{ ...release, tag_name: "agent-v" + version("0.9.0", to) }], current),
+        Boolean(policy.selectRelease([release], current, false)),
+        to === "latest",
+        from + " -> " + to,
+      );
+      assert.equal(
+        policy.selectRelease(
+          [{ ...release, tag_name: "agent-v" + version("0.9.0", to) }],
+          current,
+          true,
+        ),
         undefined,
       );
     }
   }
-  const chain = stages.map((stage) => ({
-    tag_name: "agent-v" + version("1.0.0", stage),
-    prerelease: stage !== "latest",
-  }));
-  for (let i = 0; i < chain.length - 1; i++) {
-    assert.equal(policy.selectRelease([chain[i + 1]], version("1.0.0", stages[i])), chain[i + 1]);
-  }
+});
+
+test("an edited prerelease flag never hides a release from eligible updaters", () => {
+  const releases = [{ tag_name: "agent-v0.1.0-rc.4", prerelease: false }];
+  assert.equal(policy.selectRelease(releases, "0.1.0-rc.3").tag_name, "agent-v0.1.0-rc.4");
+  assert.equal(policy.selectRelease(releases, "0.1.0-alpha.11").tag_name, "agent-v0.1.0-rc.4");
+  assert.equal(policy.selectRelease(releases, "0.1.0-beta.9").tag_name, "agent-v0.1.0-rc.4");
+  assert.equal(policy.selectRelease(releases, "0.1.0-rc.4"), undefined);
+  assert.equal(policy.selectRelease(releases, "0.1.0"), undefined);
 });

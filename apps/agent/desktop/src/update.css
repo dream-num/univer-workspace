@@ -13,6 +13,8 @@ button:disabled { cursor: default; opacity: .55; }
 .secondary { background: #e7eaf6; color: #334155; }
 .link { padding-left: 0; background: transparent; color: #5263df; }
 details { margin-top: 20px; font-size: 14px; }
+.setting { display: flex; gap: 8px; align-items: center; margin-top: 20px; font-size: 14px; }
+.setting input { width: 16px; height: 16px; accent-color: #5263df; cursor: pointer; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.5; }
 [hidden] { display: none !important; }
 @media (prefers-color-scheme: dark) {

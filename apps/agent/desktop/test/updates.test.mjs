@@ -6,7 +6,8 @@ import { trustedFrame } from "../src/update-window.cjs";
 
 const digest = Buffer.alloc(64).toString('base64');
 function fixture({ version = "0.1.0-alpha.1", next = "0.1.0-alpha.2", enabled = true,
-  metadata = next, failDownload = false, download, stop } = {}) {
+  metadata = next, failDownload = false, download, stop, acceptPrerelease,
+  persistAcceptPrerelease } = {}) {
   const events = [], states = [];
   const extension = { linux: 'linux-x64.AppImage', win32: 'win-x64.exe', darwin: 'mac-arm64.zip' }[process.platform];
   const info = { version: metadata, files: [{ url: `Agent-${next}-${extension}`, size: 10, sha512: digest }] };
@@ -19,6 +20,7 @@ function fixture({ version = "0.1.0-alpha.1", next = "0.1.0-alpha.2", enabled = 
   const controller = updates.createUpdateController({
     app: { isPackaged: true, getVersion: () => version, getPath: () => '/test' }, autoUpdater: updater,
     updatesEnabled: enabled,
+    acceptPrerelease, persistAcceptPrerelease,
     net: { async fetch() { events.push('fetch'); return { ok: true, json: async () => [
       { tag_name: 'v99.0.0' }, { tag_name: `agent-v${next}`, prerelease: next.includes('-'), body: '<b>Release notes</b>' },
     ] }; } },
@@ -92,7 +94,8 @@ test('release promotions retain channel policy', async () => {
     const { controller: c, events } = fixture({ version, next }); await c.check();
     assert.equal(events.find(e => e[0] === 'feed')[1].channel, channel);
   }
-  const stable = fixture({ version: '0.1.0', next: '0.2.0-alpha.1' }); await stable.controller.check();
+  const stable = fixture({ version: '0.1.0', next: '0.2.0-alpha.1', acceptPrerelease: false });
+  await stable.controller.check();
   assert.equal(stable.controller.getState().phase, 'current');
 });
 test('failed shutdown keeps the verified update available for retry', async () => {
@@ -124,4 +127,38 @@ test('update IPC rejects subframes, OAuth windows and navigated contents', () =>
   assert.ok(!trustedFrame({ sender: {}, senderFrame: frame }, contents, allowed));
   frame.url = 'https://workspace.example/';
   assert.ok(!trustedFrame({ sender: contents, senderFrame: frame }, contents, allowed));
+});
+test('the prerelease preference gates availability and re-checks when enabled', async () => {
+  const { controller: c } = fixture({ next: '0.1.0-rc.2', version: '0.1.0-rc.1' });
+  assert.equal(c.getState().acceptPrerelease, true);
+  await c.check(false);
+  assert.equal(c.getState().phase, 'available');
+  await c.setAcceptPrerelease(false);
+  assert.equal(c.getState().acceptPrerelease, false);
+  assert.equal(c.getState().phase, 'idle');
+  await c.check(false);
+  assert.equal(c.getState().phase, 'current');
+  await c.setAcceptPrerelease(true);
+  assert.equal(c.getState().phase, 'available');
+});
+test('a stable-only preference still receives stable builds and persists its choice', async () => {
+  const persisted = [];
+  const { controller: c, updater } = fixture({
+    next: '0.2.0', version: '0.1.0', acceptPrerelease: false,
+    persistAcceptPrerelease: value => persisted.push(value),
+  });
+  assert.equal(updater.allowPrerelease, false);
+  await c.check(false);
+  assert.equal(c.getState().phase, 'available');
+  assert.equal(c.getState().version, '0.2.0');
+  await c.setAcceptPrerelease(true);
+  assert.deepEqual(persisted, [true]);
+});
+test('a stable install keeps its pending stable update when prereleases are declined', async () => {
+  const { controller: c } = fixture({ next: '0.2.0', version: '0.1.0' });
+  await c.check(false);
+  assert.equal(c.getState().phase, 'available');
+  await c.setAcceptPrerelease(false);
+  assert.equal(c.getState().phase, 'available');
+  assert.equal(c.getState().version, '0.2.0');
 });

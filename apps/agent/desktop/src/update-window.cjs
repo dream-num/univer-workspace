@@ -51,12 +51,13 @@ function createUpdateWindow({ BrowserWindow, ipcMain, shell, dialog, mainWindow,
     download: () => { void controller.download(); }, pause: () => controller.pause(),
     install: () => { void controller.install(); },
     releases: () => shell.openExternal(`https://github.com/${REPOSITORY}/releases`),
+    "accept-prerelease": value => controller.setAcceptPrerelease(value),
   };
   for (const [name, action] of Object.entries(actions)) {
-    ipcMain.handle(`uwa:update-${name}`, event => {
+    ipcMain.handle(`uwa:update-${name}`, (event, value) => {
       if (!trustedFrame(event, window?.webContents, url => url === pageUrl))
         throw new Error("Untrusted update caller");
-      return action();
+      return action(value);
     });
   }
   return { show, attach: (value, diagnosticService) => { controller = value; diagnostics = diagnosticService; },
