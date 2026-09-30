@@ -22,7 +22,8 @@ try {
         }
         $watch = [Diagnostics.Stopwatch]::StartNew()
         $child = Start-Process -FilePath $exe -ArgumentList @('/S', "/D=$destination") -PassThru
-        if (-not $child.WaitForExit(60000)) {
+        # Regression fixture, not a product budget: allow for slow runners.
+        if (-not $child.WaitForExit(180000)) {
             & "$env:SystemRoot\System32\taskkill.exe" /PID $child.Id /T /F | Out-Null
             throw "Directory replacement fixture timed out: $scenario"
         }

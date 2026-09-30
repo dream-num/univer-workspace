@@ -43,7 +43,14 @@ try {
   assert.equal(await page.getByRole('button', { name: 'Open logs', exact: true }).isVisible(), true);
   assert.equal(await headless(silentHome), 10, 'Installer must not migrate a profile owned by a running app');
   const exited = once(application.process(), 'exit');
-  await page.getByRole('button', { name: 'Exit', exact: true }).click();
+  await Promise.all([
+    page.getByRole('button', { name: 'Exit', exact: true }).click().catch(error => {
+      // Clicking Exit tears the window down; a slow runner can surface the
+      // closed page before the click promise settles even when it landed.
+      if (!/Target page|browser has been closed/i.test(String(error?.message ?? error))) throw error;
+    }),
+    exited,
+  ]);
   assert.equal((await exited)[0], 20);
   application = undefined;
 

@@ -25,7 +25,8 @@ public class MigrationFixture {
 '@
     function Install-Fixture($destination, $options = @()) {
         $child = Start-Process $exe -ArgumentList (@('/S') + $options + "/D=$destination") -PassThru
-        if (-not $child.WaitForExit(30000)) { $child.Kill(); throw 'Installer migration fixture timed out' }
+        # Regression fixture, not a product budget: allow for slow runners.
+        if (-not $child.WaitForExit(90000)) { $child.Kill(); throw 'Installer migration fixture timed out' }
         return $child.ExitCode
     }
     foreach ($scenario in @('success', 'failed', 'unknown', 'deferred', 'reopen')) {

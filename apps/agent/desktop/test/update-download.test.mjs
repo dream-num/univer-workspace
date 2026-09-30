@@ -48,8 +48,13 @@ test('pause then a new downloader reuses its on-disk partial after restart', asy
   const controller = new AbortController();
   await assert.rejects(downloadResumable({ ...f.options, signal: controller.signal,
     onProgress: p => { if (p.transferred) controller.abort(); } }));
+  // Aborting races the disk flush: whatever reached the partial file is the
+  // only legitimate resume offset, not the byte count the server sent.
+  const key = createHash('sha256').update(`${f.options.url}\n${f.options.sha512}`).digest('hex');
+  const reused = (await readFile(join(f.options.directory, `${key}.part`))).length;
   const path = await downloadResumable(f.options);
-  assert.equal(f.requests[1], 65536);
+  assert.equal(f.requests[1], reused);
+  assert.ok(reused > 0 && reused < f.body.length, `partial must be a strict prefix, got ${reused}`);
   assert.deepEqual(await readFile(path), f.body);
 });
 test('server ignoring Range replaces partial bytes instead of appending', async t => {
