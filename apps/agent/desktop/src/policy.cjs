@@ -42,23 +42,23 @@ function releaseChannel(version) {
   if (!validVersion(version)) throw new Error("Invalid Agent version");
   return semver.prerelease(version)?.[0] ?? "latest";
 }
-// Installations accept the same or a later stage: alpha -> beta -> rc -> stable.
-// Ignore unrelated CLI tags and require GitHub's prerelease flag to match the version.
-function selectRelease(releases, current) {
+// Accepting prereleases is one user preference, decoupled from the installed
+// version: on (the default) any newer build is eligible, off only stable
+// builds are. The version string is the channel authority; the GitHub
+// prerelease flag is display metadata and must never gate availability.
+// Ignore unrelated CLI tags and drafts.
+function selectRelease(releases, current, acceptPrerelease = true) {
   if (!Array.isArray(releases)) throw new Error("Invalid release response");
-  const stages = ["alpha", "beta", "rc", "latest"];
-  const currentStage = stages.indexOf(releaseChannel(current));
+  if (typeof acceptPrerelease !== "boolean")
+    throw new Error("Prerelease preference must be a boolean");
   return releases
     .filter((r) => {
       if (r.draft || typeof r.tag_name !== "string" || !r.tag_name.startsWith(TAG_PREFIX))
         return false;
       const version = r.tag_name.slice(TAG_PREFIX.length);
       if (!validVersion(version)) return false;
-      const channel = releaseChannel(version);
-      const prerelease = channel !== "latest";
       return (
-        Boolean(r.prerelease) === prerelease &&
-        stages.indexOf(channel) >= currentStage &&
+        (acceptPrerelease || releaseChannel(version) === "latest") &&
         semver.gt(version, current)
       );
     })

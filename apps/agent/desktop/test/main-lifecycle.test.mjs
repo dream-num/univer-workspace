@@ -53,6 +53,7 @@ async function fixture({ pauseHome = false, migrationOnly = false, headless = fa
     './browser-cache.cjs': { prepareBrowserCache: async () => undefined },
     './startup-log.cjs': { createStartupLog: () => ({ write() {} }) },
     './policy.cjs': require('../src/policy.cjs'),
+    './update-settings.cjs': require('../src/update-settings.cjs'),
     './login.cjs': { createLoginController(options) { loginOptions = options; return require('../src/login.cjs').createLoginController(options); } },
     './login-browser.cjs': require('../src/login-browser.cjs'),
     './updates.cjs': { createUpdateController(options) { update = options; return { check() {} }; } },

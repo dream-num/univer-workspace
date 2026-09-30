@@ -302,6 +302,8 @@ async function start() {
     BrowserWindow, ipcMain, shell, dialog, mainWindow: window, origin,
   });
   let diagnostics;
+  const updateSettings = require("./update-settings.cjs");
+  const updateSettingsFile = join(app.getPath("userData"), "update-settings.json");
   const updateController = createUpdateController({
     app,
     autoUpdater,
@@ -309,6 +311,8 @@ async function start() {
     show: updateWindow.show,
     changed: state => { updateWindow.changed(state); diagnostics?.recordUpdate(state); },
     updatesEnabled: release.updatesEnabled,
+    acceptPrerelease: updateSettings.loadSettingsSync(updateSettingsFile).acceptPrerelease,
+    persistAcceptPrerelease: value => updateSettings.saveSettings(updateSettingsFile, value),
     beforeInstall: async () => {
       try {
         await stopService();

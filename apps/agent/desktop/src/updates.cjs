@@ -26,10 +26,11 @@ function selectAsset(info, feed, platform = process.platform, arch = process.arc
 // One controller owns both UI/manual and background activity. Renderer messages
 // never supply versions, URLs, paths, or installer arguments.
 function createUpdateController({ app, autoUpdater, net, updatesEnabled, beforeInstall,
-  show = () => {}, changed = () => {}, download = downloadResumable, serve = serveUpdate }) {
-  let state = { phase: "idle", currentVersion: app.getVersion() };
-  let selected, active, controller;
-  const publish = (patch) => {
+  show = () => {}, changed = () => {}, download = downloadResumable, serve = serveUpdate,
+  acceptPrerelease: initialAcceptPrerelease = true, persistAcceptPrerelease = async () => {} }) {
+  let acceptPrerelease = initialAcceptPrerelease !== false;
+  let state = { phase: "idle", currentVersion: app.getVersion(), acceptPrerelease };
+  let selected, active, controller;  const publish = (patch) => {
     state = { ...state, ...(patch.phase !== state.phase ? { code: undefined, httpStatus: undefined } : {}), ...patch };
     changed(state);
   };
@@ -43,7 +44,7 @@ function createUpdateController({ app, autoUpdater, net, updatesEnabled, beforeI
   autoUpdater.disableDifferentialDownload = true;
   autoUpdater.disableWebInstaller = true;
   autoUpdater.allowDowngrade = false;
-  autoUpdater.allowPrerelease = releaseChannel(app.getVersion()) !== "latest";
+  autoUpdater.allowPrerelease = acceptPrerelease;
   // Do not expose signed redirect URLs, request headers or raw SDK errors.
   autoUpdater.on("error", error => {
     if (state.phase === "installing") publish({ phase: "install-error", failure: failureInfo(error) });
@@ -69,11 +70,12 @@ function createUpdateController({ app, autoUpdater, net, updatesEnabled, beforeI
           releases.push(...batch);
           if (batch.length < 100) break;
         }
-        const latest = selectRelease(releases, app.getVersion());
+        const latest = selectRelease(releases, app.getVersion(), acceptPrerelease);
         if (!latest) { publish({ phase: "current" }); return; }
         const feed = releaseFeed(latest);
         const version = latest.tag_name.slice(TAG_PREFIX.length);
         const channel = releaseChannel(version);
+        autoUpdater.allowPrerelease = acceptPrerelease;
         autoUpdater.setFeedURL({ provider: "generic", url: feed, channel });
         const result = await autoUpdater.checkForUpdates();
         if (!result?.isUpdateAvailable) { publish({ phase: "current" }); return; }
@@ -128,6 +130,31 @@ function createUpdateController({ app, autoUpdater, net, updatesEnabled, beforeI
       catch (error) { publish({ phase: "ready", installError: true, failure: failureInfo(error) }); }
     });
   };
-  return { check, download: startDownload, pause, install, getState: () => state };
+  // The preference is user state, not a property of the installed version:
+  // persist first, then re-evaluate what may be offered. Turning it off drops
+  // a pending prerelease offering; turning it on re-checks immediately.
+  const setAcceptPrerelease = (value) => {
+    if (typeof value !== "boolean") throw new Error("Invalid prerelease preference");
+    if (value === acceptPrerelease) return Promise.resolve(state);
+    const apply = async () => {
+      await persistAcceptPrerelease(value);
+      acceptPrerelease = value;
+      publish({ acceptPrerelease: value });
+      // Withdrawing the preference drops a pending offering only when the
+      // selected build is itself a prerelease; a staged stable update stays.
+      if (!value && ["available", "paused", "download-error"].includes(state.phase) &&
+          selected && releaseChannel(selected.version) !== "latest") {
+        selected = undefined;
+        publish({ phase: "idle" });
+      }
+    };
+    const followUp = () => {
+      if (acceptPrerelease && ["idle", "current", "check-error"].includes(state.phase))
+        return check(false);
+    };
+    if (active) return active.then(apply).then(followUp);
+    return apply().then(followUp);
+  };
+  return { check, download: startDownload, pause, install, setAcceptPrerelease, getState: () => state };
 }
 module.exports = { createUpdateController, selectAsset };

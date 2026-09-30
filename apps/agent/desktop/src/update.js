@@ -9,6 +9,8 @@ $("notes-title").textContent = text("What's new", "更新内容");
 $("releases").textContent = text("Download an installer from GitHub", "从 GitHub 下载安装包");
 $("pause").onclick = () => api.pause();
 $("releases").onclick = () => api.releases();
+$("accept-prerelease-label").textContent = text("Receive prerelease updates", "接收预发布更新");
+$("accept-prerelease").onchange = event => { void api.setAcceptPrerelease(event.target.checked); };
 const labels = {
   idle: ["Check for a new version", "检查新版本"],
   checking: ["Checking for updates…", "正在检查更新…"],
@@ -60,6 +62,7 @@ function render(state) {
     text("You can close this window and keep working. Downloading will continue without restarting the app.", "可以关闭此窗口继续工作，下载会在后台继续，不会自动重启应用。") : "";
   $("notes-panel").hidden = !state.notes;
   $("notes").textContent = state.notes ?? "";
+  $("accept-prerelease").checked = state.acceptPrerelease !== false;
 }
 api.subscribe(render);
 void api.getState().then(render);

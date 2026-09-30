@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("workspaceUpdates", {
   pause: () => ipcRenderer.invoke("uwa:update-pause"),
   install: () => ipcRenderer.invoke("uwa:update-install"),
   releases: () => ipcRenderer.invoke("uwa:update-releases"),
+  setAcceptPrerelease: (value) => ipcRenderer.invoke("uwa:update-accept-prerelease", value),
   subscribe: (callback) => {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on("uwa:update-state", listener);
