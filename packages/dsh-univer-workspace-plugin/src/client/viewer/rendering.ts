@@ -115,6 +115,7 @@ import {
 } from "@univerjs/engine-formula";
 import { UniverLicensePlugin } from "@univerjs-pro/license";
 import type { IEmbedResourceRefDataProviderRegistration } from "@univerjs-pro/embed";
+import { UniverChartEmbedPlugin } from "@univerjs-pro/chart-embed";
 import { IReferencedUnitManagerService, UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
 import type { ViewerUnitType } from "../viewer-types.ts";
@@ -219,6 +220,7 @@ export function registerViewerRendering(univer: Univer, options: ViewRenderingOp
   registerEmbedCorePlugin(univer, options.resourceRefDataProviderRegistrations ?? []);
   options.registerAfterEmbedCore?.();
   registerEmbedUIPlugin(univer);
+  registerChartEmbedPlugin(univer);
 }
 
 function registerBasePlugins(
@@ -453,4 +455,10 @@ function registerEmbedCorePlugin(
 
 function registerEmbedUIPlugin(univer: Univer): void {
   univer.registerPlugin(UniverEmbedUIPlugin);
+}
+
+// Referenced charts (cross-Unit data sources) run after UniverEmbedPlugin owns
+// the referenced-Unit policy and resolve through the Chart plugins above.
+function registerChartEmbedPlugin(univer: Univer): void {
+  univer.registerPlugin(UniverChartEmbedPlugin);
 }

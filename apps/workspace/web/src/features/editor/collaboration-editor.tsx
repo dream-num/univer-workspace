@@ -30,6 +30,7 @@ import CollaborationClientUIEnUS from "@univerjs-pro/collaboration-client-ui/loc
 import CollaborationClientUIZhCN from "@univerjs-pro/collaboration-client-ui/locale/zh-CN";
 import EditHistoryUIEnUS from "@univerjs-pro/edit-history-ui/locale/en-US";
 import EditHistoryUIZhCN from "@univerjs-pro/edit-history-ui/locale/zh-CN";
+import { UniverChartEmbedPlugin } from "@univerjs-pro/chart-embed";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
 import ExchangeClientEnUS from "@univerjs-pro/exchange-client/locale/en-US";
@@ -399,6 +400,9 @@ export function createCollaborationEditor(
               },
             ],
             UniverEmbedUIPlugin,
+            // Referenced charts (Docs/Slides/Boards cross-Unit data sources) need
+            // this runtime after the embed plugin owns the referenced-Unit policy.
+            UniverChartEmbedPlugin,
           ],
         });
         mountedUniver = univer;

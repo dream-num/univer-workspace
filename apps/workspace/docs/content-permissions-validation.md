@@ -1,6 +1,6 @@
 # Unit 内容编辑保护：验证与合入条件
 
-当前基线是 main 上的 SDK `1.0.2`。权限需求在 `commitChangeset` 上检查。
+当前基线是 main 上的 SDK `1.0.3`。权限需求在 `commitChangeset` 上检查。
 
 ## 范围
 
@@ -51,6 +51,6 @@ A3 普通输入成功并显示已同步。重启 Server、刷新浏览器后，�
 
 ## 本次执行结果
 
-变基到 main 的 SDK `1.0.2` 后，`collaboration-gateway`、`content-permission-migration` 和
+变基到 main 的 SDK `1.0.3` 后，`collaboration-gateway`、`content-permission-migration` 和
 `database-migration` 集成测试通过。标签颜色用例按正常断言执行。
 `pnpm typecheck`、`pnpm test`、`pnpm build` 和 `test:production-import` 仍需在合入前重跑。
