@@ -115,13 +115,41 @@ export function WorkspaceHeaderSearch({
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const activeSearch = value.length > 0;
+  const searchLabel = activeSearch ? t("searchWithQuery", { query: value }) : placeholder;
   if (!open) {
     return (
-      <Tooltip content={placeholder}>
-        <Button variant="ghost" size="icon" aria-label={placeholder} onClick={() => setOpen(true)}>
-          <Search />
-        </Button>
-      </Tooltip>
+      <div className="flex shrink-0 items-center gap-1">
+        <Tooltip content={searchLabel}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={searchLabel}
+            className={cn("relative", activeSearch && "bg-brand-50 text-brand-700")}
+            onClick={() => setOpen(true)}
+          >
+            <Search />
+            {activeSearch ? (
+              <span
+                aria-hidden="true"
+                className="absolute top-1 right-1 size-1.5 rounded-full bg-brand-700"
+              />
+            ) : null}
+          </Button>
+        </Tooltip>
+        {activeSearch ? (
+          <Tooltip content={t("clearSearch")}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("clearSearch")}
+              onClick={() => onChange("")}
+            >
+              <X />
+            </Button>
+          </Tooltip>
+        ) : null}
+      </div>
     );
   }
   return (

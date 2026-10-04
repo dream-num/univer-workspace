@@ -48,6 +48,8 @@ export function NodeBrowser(props: {
   readonly searchQuery?: string;
   /** Renders the search box in the card header when provided. */
   readonly onSearchChange?: (value: string) => void;
+  /** Clears a search controlled by the page header without adding a card search box. */
+  readonly onClearSearch?: () => void;
   readonly searchPlaceholder?: string;
   readonly showParentRow?: boolean;
   /** Display name of the Space for the parent row; defaults to the API name. */
@@ -88,6 +90,13 @@ export function NodeBrowser(props: {
       node.name.toLocaleLowerCase().includes(normalizedSearch);
     return matchesType && matchesSearch;
   });
+  const itemCount =
+    typeFilter !== "all" || normalizedSearch
+      ? t("filteredItemsCount", { count: visibleNodes.length, total: props.page.nodes.length })
+      : t("itemsCount", { count: props.page.nodes.length });
+  const canClearFilters =
+    typeFilter !== "all" ||
+    Boolean(normalizedSearch && (props.onClearSearch || props.onSearchChange));
 
   const updateNode = useMutation({
     mutationFn: async (values: {
@@ -154,7 +163,7 @@ export function NodeBrowser(props: {
                 />
               </div>
               <p className="m-0 text-[13px] text-muted-foreground">
-                {t("itemsCount", { count: props.page.nodes.length })}
+                {itemCount}
               </p>
             </div>
           ) : (
@@ -191,7 +200,7 @@ export function NodeBrowser(props: {
                 />
               ) : null}
               <p className="m-0 text-[13px] text-muted-foreground">
-                {t("itemsCount", { count: props.page.nodes.length })}
+                {itemCount}
               </p>
             </div>
           )}
@@ -223,7 +232,7 @@ export function NodeBrowser(props: {
               <Select<NodeFilter>
                 borderless
                 aria-label={t("allTypes")}
-                className="-ml-2 w-32"
+                className="-ml-2 w-max max-w-full justify-self-start"
                 value={typeFilter}
                 options={[
                   { label: t("allTypes"), value: "all" },
@@ -287,7 +296,22 @@ export function NodeBrowser(props: {
                 </div>
               ) : null}
               {visibleNodes.length === 0 ? (
-                <Empty className="mt-16" title={t("noMatchingNodes")} />
+                <Empty className="mt-16" title={t("noMatchingNodes")}>
+                  {canClearFilters ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => {
+                        setTypeFilter("all");
+                        if (props.onClearSearch) props.onClearSearch();
+                        else props.onSearchChange?.("");
+                      }}
+                    >
+                      {t("clearFilters")}
+                    </Button>
+                  ) : null}
+                </Empty>
               ) : (
                 visibleNodes.map((node) => (
                   <NodeActionsMenu

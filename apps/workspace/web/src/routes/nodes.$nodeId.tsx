@@ -207,7 +207,11 @@ function NodePage() {
             </div>
           </>
         ) : (
-          <NodeBrowser page={children.data} searchQuery={searchQuery} />
+          <NodeBrowser
+            page={children.data}
+            searchQuery={searchQuery}
+            onClearSearch={() => setSearchQuery("")}
+          />
         )
       ) : null}
     </WorkspaceLayout>
