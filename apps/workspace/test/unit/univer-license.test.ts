@@ -5,7 +5,7 @@ import { resolveUniverLicense } from "../../web/src/features/editor/features/uni
 describe("Workspace Univer license", () => {
   it("uses the Univer CLI default when no override is configured", () => {
     expect(resolveUniverLicense(undefined)).toBe(UNIVER_LICENSE);
-    expect(UNIVER_LICENSE).toMatch(/^2088168239728517120-/);
+    expect(UNIVER_LICENSE).toMatch(/^2101948364242481153-/);
   });
 
   it("uses a configured browser license first", () => {

@@ -64,7 +64,7 @@ describe("Workspace CLI Univer license", () => {
   it("uses the bundled license when the environment does not provide one", () => {
     expect(resolveUniverLicense({})).toBe(UNIVER_LICENSE);
     expect(resolveUniverLicense({ [UNIVER_LICENSE_ENV]: "  " })).toBe(UNIVER_LICENSE);
-    expect(UNIVER_LICENSE).toMatch(/^2088168239728517120-/u);
+    expect(UNIVER_LICENSE).toMatch(/^2101948364242481153-/u);
   });
 
   it("allows a non-empty environment value to override the bundled license", () => {
