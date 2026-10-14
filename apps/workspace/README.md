@@ -39,6 +39,8 @@ Sheet, Doc, Slide, Base, and Board remain in Unit snapshots and changesets;
 comment bodies, replies, and solved state use the Comment component in the same
 Collaboration SQLite file. Thread Comments are enabled only in Trunk editors
 because the Comment protocol does not define Worktree branch or merge semantics.
+Worktree and comparison Doc runtimes still register the comment model to restore
+existing anchors and replay persisted comment mutations without exposing comment UI.
 
 The same Collaboration SQLite file stores a persistent History segment index.
 SDK 1.0.0 owns automatic indexing from authoritative Core creation facts and

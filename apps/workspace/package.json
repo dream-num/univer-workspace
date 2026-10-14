@@ -133,6 +133,7 @@
     "@univerjs/design": "1.0.3",
     "@univerjs/docs": "1.0.3",
     "@univerjs/docs-drawing": "1.0.3",
+    "@univerjs/docs-thread-comment": "1.0.3",
     "@univerjs/docs-thread-comment-ui": "1.0.3",
     "@univerjs/docs-ui": "1.0.3",
     "@univerjs/drawing": "1.0.3",

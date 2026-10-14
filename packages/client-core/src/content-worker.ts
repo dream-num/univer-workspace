@@ -5,6 +5,7 @@ import {
 } from "@univer-cli/univer-collaboration-runtime";
 import { defineUniverCollaborationRuntimeWorker } from "@univer-cli/univer-collaboration-runtime-pool";
 import { createStandardHeadlessUniverFactory } from "@univer-cli/headless-univer";
+import { installDocCommentReplayCompatibility } from "./workarounds/doc-comment-replay.js";
 import { UniverInstanceType } from "@univerjs/core";
 import { workspaceError } from "./errors.js";
 import { WorkspaceHttp } from "./http.js";
@@ -40,7 +41,7 @@ export const workspaceContentRuntimeWorker = defineUniverCollaborationRuntimeWor
           "Workspace reference loading requires a SnapshotService resolver.",
         );
       }
-      return await createStandardHeadlessUniverFactory({
+      const univer = await createStandardHeadlessUniverFactory({
         embedPluginConfig: {
           resourceRefUnitProviderRegistrations: [
             createWorkspaceReferencedUnitProviderRegistration({
@@ -51,6 +52,13 @@ export const workspaceContentRuntimeWorker = defineUniverCollaborationRuntimeWor
         },
         license: init.license,
       })(context);
+      try {
+        installDocCommentReplayCompatibility(univer, context.unitType);
+        return univer;
+      } catch (error) {
+        univer.dispose();
+        throw error;
+      }
     };
     const prefix =
       target.scope.kind === "trunk"

@@ -1,3 +1,4 @@
+import { UniverDocsThreadCommentPlugin } from "@univerjs/docs-thread-comment";
 import type { IPresetPlugin } from "@univerjs/presets";
 import { UniverDocsCalloutPlugin } from "@univerjs-pro/docs-callout";
 import { UniverDocsCalloutUIPlugin } from "@univerjs-pro/docs-callout-ui";
@@ -26,6 +27,7 @@ export function getDocReplayCompatibilityPlugins(): IPresetPlugin[] {
     UniverDocsLatexPlugin,
     UniverDocsShapePlugin,
     UniverDocsTablePlugin,
+    UniverDocsThreadCommentPlugin,
   ];
 }
 

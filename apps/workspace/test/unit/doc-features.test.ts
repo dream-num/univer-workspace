@@ -13,6 +13,7 @@ describe("Workspace Doc feature plugins", () => {
         getDocsEmptySnapshot,
       },
       { UniverDocsPlugin },
+      { UniverDocsThreadCommentPlugin },
       { SetDocsCalloutConfigMutation, UniverDocsCalloutPlugin },
       { UniverDocsCalloutUIPlugin },
       { SetDocChartDataSourceMutation, UniverDocsChartPlugin },
@@ -33,6 +34,7 @@ describe("Workspace Doc feature plugins", () => {
     ] = await Promise.all([
       import("@univerjs/core"),
       import("@univerjs/docs"),
+      import("@univerjs/docs-thread-comment"),
       import("@univerjs-pro/docs-callout"),
       import("@univerjs-pro/docs-callout-ui"),
       import("@univerjs-pro/docs-chart"),
@@ -55,6 +57,7 @@ describe("Workspace Doc feature plugins", () => {
       UniverDocsLatexPlugin,
       UniverDocsShapePlugin,
       UniverDocsTablePlugin,
+      UniverDocsThreadCommentPlugin,
     ];
     expect(getDocReplayCompatibilityPlugins()).toEqual(expectedPlugins);
     expect(getDocAuthoringUIPlugins()).toEqual([
