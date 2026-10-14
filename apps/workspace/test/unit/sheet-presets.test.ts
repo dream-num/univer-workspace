@@ -138,7 +138,7 @@ describe("Workspace Sheet presets", () => {
       container,
       license,
       universerEndpoint: endpoint,
-      threadCommentsEnabled: false,
+      threadCommentUiEnabled: false,
     });
 
     expect(presetPluginKeys(presets)).not.toContain(
@@ -162,7 +162,7 @@ describe("Workspace Sheet presets", () => {
       license,
       universerEndpoint: endpoint,
       collaborationEnabled: false,
-      threadCommentsEnabled: false,
+      threadCommentUiEnabled: false,
       workbenchChrome: "hidden",
     });
 

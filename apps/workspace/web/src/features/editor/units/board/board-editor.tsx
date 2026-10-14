@@ -87,7 +87,7 @@ import {
   createCollaborationEditor,
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
-import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { getThreadCommentUiAndDataSourcePlugins } from "../../features/thread-comment-features";
 import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 
 export type BoardEditorProps = CollaborationEditorProps;
@@ -196,8 +196,8 @@ export default createCollaborationEditor({
   exchangeEnabled: false,
   hideCollaborationStatus: true,
   locales: boardEditorLocales,
-  collaborationFeaturePlugins: (collaborationScope) =>
-    getThreadCommentCollaborationPlugins(
+  commentUiAndDataSourcePlugins: (collaborationScope) =>
+    getThreadCommentUiAndDataSourcePlugins(
       collaborationScope.kind === "trunk",
       UniverBoardsThreadCommentUIPlugin
     ),

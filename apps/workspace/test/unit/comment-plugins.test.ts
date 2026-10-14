@@ -53,7 +53,7 @@ describe("Workspace standard Thread Comment plugins", () => {
     const [
       { UniverBasesThreadCommentUIPlugin },
       { UniverThreadCommentDataSourcePlugin },
-      { getThreadCommentCollaborationPlugins },
+      { getThreadCommentUiAndDataSourcePlugins },
     ] = await Promise.all([
       import("@univerjs-pro/bases-thread-comment-ui"),
       import("@univerjs-pro/thread-comment-datasource"),
@@ -61,7 +61,7 @@ describe("Workspace standard Thread Comment plugins", () => {
     ]);
 
     expect(
-      getThreadCommentCollaborationPlugins(
+      getThreadCommentUiAndDataSourcePlugins(
         true,
         UniverBasesThreadCommentUIPlugin
       )
@@ -70,7 +70,7 @@ describe("Workspace standard Thread Comment plugins", () => {
       UniverThreadCommentDataSourcePlugin,
     ]);
     expect(
-      getThreadCommentCollaborationPlugins(
+      getThreadCommentUiAndDataSourcePlugins(
         false,
         UniverBasesThreadCommentUIPlugin
       )

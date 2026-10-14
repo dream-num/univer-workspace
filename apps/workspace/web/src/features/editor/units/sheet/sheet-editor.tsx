@@ -27,7 +27,7 @@ import {
   createSheetEditorPresets,
   sheetEditorLocales,
 } from "./sheet-presets";
-import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { getThreadCommentUiAndDataSourcePlugins } from "../../features/thread-comment-features";
 
 export type SheetEditorProps = CollaborationEditorProps;
 
@@ -57,10 +57,10 @@ export default createCollaborationEditor({
       container,
       license,
       universerEndpoint: window.location.origin,
-      threadCommentsEnabled: collaborationScope.kind === "trunk",
+      threadCommentUiEnabled: collaborationScope.kind === "trunk",
     }),
-  collaborationFeaturePlugins: (collaborationScope) =>
-    getThreadCommentCollaborationPlugins(
+  commentUiAndDataSourcePlugins: (collaborationScope) =>
+    getThreadCommentUiAndDataSourcePlugins(
       collaborationScope.kind === "trunk"
     ),
   load: (univerAPI, unitId) =>

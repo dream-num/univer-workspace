@@ -73,7 +73,7 @@ describe("persisted comment models in Workspace review", () => {
           container,
           license: "",
           universerEndpoint: "",
-          threadCommentsEnabled: false,
+          threadCommentUiEnabled: false,
           collaborationEnabled: false,
           workbenchChrome: "hidden",
         });
@@ -81,7 +81,7 @@ describe("persisted comment models in Workspace review", () => {
           container,
           license: "",
           universerEndpoint: "",
-          threadCommentsEnabled: false,
+          threadCommentUiEnabled: false,
         });
       } else {
         const editor =

@@ -105,12 +105,12 @@ describe("Workspace Doc feature plugins", () => {
     const [
       { UniverThreadCommentDataSourcePlugin },
       {
-        getThreadCommentCollaborationPlugins,
+        getThreadCommentUiAndDataSourcePlugins,
       },
       {
         UniverWorkspaceDocsThreadCommentDataSourcePlugin,
         deleteDocRootCommentBody,
-        getDocThreadCommentCollaborationPlugins,
+        getDocThreadCommentDataSourcePlugins,
       },
       { DeleteDocCommentComment },
     ] = await Promise.all([
@@ -122,14 +122,14 @@ describe("Workspace Doc feature plugins", () => {
       import("@univerjs/docs-thread-comment-ui"),
     ]);
 
-    expect(getThreadCommentCollaborationPlugins()).toEqual([
+    expect(getThreadCommentUiAndDataSourcePlugins()).toEqual([
       UniverThreadCommentDataSourcePlugin,
     ]);
-    expect(getThreadCommentCollaborationPlugins(false)).toEqual([]);
-    expect(getDocThreadCommentCollaborationPlugins()).toEqual([
+    expect(getThreadCommentUiAndDataSourcePlugins(false)).toEqual([]);
+    expect(getDocThreadCommentDataSourcePlugins()).toEqual([
       UniverWorkspaceDocsThreadCommentDataSourcePlugin,
     ]);
-    expect(getDocThreadCommentCollaborationPlugins(false)).toEqual([]);
+    expect(getDocThreadCommentDataSourcePlugins(false)).toEqual([]);
 
     const deleteComment = vi.fn(async () => true);
     const rootComment = {

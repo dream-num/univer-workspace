@@ -104,8 +104,11 @@ export class UniverWorkspaceDocsThreadCommentDataSourcePlugin extends UniverThre
   }
 }
 
-/** Trunk-only registration entry; normal editors do not import this module. */
-export function getDocThreadCommentCollaborationPlugins(
+/**
+ * Trunk-only remote body integration with the isolated Doc deletion workaround.
+ * The Doc preset owns its model and UI; this hook supplies only the datasource.
+ */
+export function getDocThreadCommentDataSourcePlugins(
   enabled = true
 ): IPresetPlugin[] {
   return enabled

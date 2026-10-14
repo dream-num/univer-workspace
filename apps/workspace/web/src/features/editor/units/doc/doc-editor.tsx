@@ -73,7 +73,7 @@ import {
   getDocAuthoringUIPlugins,
   getDocReplayCompatibilityPlugins,
 } from "./doc-features";
-import { getDocThreadCommentCollaborationPlugins } from "../../workarounds/doc-thread-comment-delete";
+import { getDocThreadCommentDataSourcePlugins } from "../../workarounds/doc-thread-comment-delete";
 import { getReferencedSheetPlugins } from "../../features/referenced-sheet-plugins";
 
 export type DocEditorProps = CollaborationEditorProps;
@@ -161,8 +161,8 @@ export default createCollaborationEditor({
   },
   theme: defaultTheme,
   locales: docEditorLocales,
-  collaborationFeaturePlugins: (collaborationScope) =>
-    getDocThreadCommentCollaborationPlugins(
+  commentUiAndDataSourcePlugins: (collaborationScope) =>
+    getDocThreadCommentDataSourcePlugins(
       collaborationScope.kind === "trunk"
     ),
   exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin],

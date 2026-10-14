@@ -27,7 +27,7 @@ import {
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
 import { createWorkspaceExchangeClientConfig } from "../../features/exchange-plugins";
-import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { getThreadCommentUiAndDataSourcePlugins } from "../../features/thread-comment-features";
 import { createSheetMobilePresets } from "./sheet-mobile-presets";
 import { sheetEditorLocales } from "./sheet-presets";
 
@@ -56,14 +56,13 @@ export default createCollaborationEditor({
   // (trunk scope, signed-in user) via exchangeFeaturePlugins instead.
   exchangeProvidedByPreset: true,
   locales: sheetEditorLocales,
-  createPresets: (container, _license, collaborationScope) =>
+  createPresets: (container) =>
     createSheetMobilePresets({
       container,
-      threadCommentsEnabled: collaborationScope.kind === "trunk",
       collaborationEnabled: true,
     }),
-  collaborationFeaturePlugins: (collaborationScope) =>
-    getThreadCommentCollaborationPlugins(
+  commentUiAndDataSourcePlugins: (collaborationScope) =>
+    getThreadCommentUiAndDataSourcePlugins(
       collaborationScope.kind === "trunk",
       UniverSheetsThreadCommentMobileUIPlugin
     ),

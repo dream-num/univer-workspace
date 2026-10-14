@@ -52,7 +52,6 @@ import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 
 interface CreateSheetMobilePresetsOptions {
   readonly container: HTMLElement;
-  readonly threadCommentsEnabled?: boolean;
   readonly collaborationEnabled?: boolean;
 }
 
@@ -124,8 +123,10 @@ export function createSheetMobilePresets({
         UniverSheetsDrawingMobileUIPlugin,
       ],
     },
-    // The UI plugin is supplied through collaborationFeaturePlugins;
-    // registering it here as well would duplicate its pluginName.
+    // Keep the comment model available for trunk and Worktree replay.
+    // sheet-editor.mobile supplies the trunk-only UI and remote datasource
+    // through commentUiAndDataSourcePlugins. Adding UI here would duplicate
+    // its pluginName on trunk and expose comment UI in Worktree previews.
     { plugins: [UniverSheetsThreadCommentPlugin] },
     {
       plugins: [

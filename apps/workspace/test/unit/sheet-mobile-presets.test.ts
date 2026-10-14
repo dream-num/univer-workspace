@@ -130,22 +130,47 @@ describe("Workspace Sheet mobile presets", () => {
     );
   }, 20_000);
 
-  it("omits Thread Comment from non-trunk preset stacks", async () => {
+  it("keeps the comment model without UI in every mobile preset stack", async () => {
     Object.defineProperty(globalThis, "Path2D", {
       configurable: true,
       value: class Path2D {},
     });
-    const [{ createSheetMobilePresets }] = await Promise.all([
+    const [
+      { createSheetMobilePresets },
+      { UniverSheetsThreadCommentPlugin },
+      { UniverSheetsThreadCommentMobileUIPlugin },
+      { getThreadCommentUiAndDataSourcePlugins },
+      { UniverThreadCommentDataSourcePlugin },
+    ] = await Promise.all([
       import("../../web/src/features/editor/units/sheet/sheet-mobile-presets.js"),
+      import("@univerjs/sheets-thread-comment"),
+      import("@univerjs/sheets-thread-comment-ui"),
+      import("../../web/src/features/editor/features/thread-comment-features.js"),
+      import("@univerjs-pro/thread-comment-datasource"),
     ]);
-    const presets = createSheetMobilePresets({
-      container,
-      threadCommentsEnabled: false,
-    });
+    for (const collaborationEnabled of [true, false]) {
+      const presets = createSheetMobilePresets({ container, collaborationEnabled });
+      const constructors = presetPluginConstructors(presets);
+      expect(
+        constructors.filter((plugin) => plugin === UniverSheetsThreadCommentPlugin),
+      ).toHaveLength(1);
+      expect(constructors).not.toContain(UniverSheetsThreadCommentMobileUIPlugin);
+      expect(constructors).not.toContain(UniverThreadCommentDataSourcePlugin);
 
-    expect(presetPluginKeys(presets)).not.toContain(
-      "UNIVER_SHEETS_THREAD_COMMENT_PLUGIN"
-    );
+      const trunkPlugins = getThreadCommentUiAndDataSourcePlugins(
+        true,
+        UniverSheetsThreadCommentMobileUIPlugin,
+      );
+      expect(trunkPlugins).toEqual([
+        UniverSheetsThreadCommentMobileUIPlugin,
+        UniverThreadCommentDataSourcePlugin,
+      ]);
+      const presetKeys = presetPluginKeys(presets);
+      expect(trunkPlugins.map(pluginKey).filter((key) => presetKeys.includes(key))).toEqual([]);
+      expect(
+        getThreadCommentUiAndDataSourcePlugins(false, UniverSheetsThreadCommentMobileUIPlugin),
+      ).toEqual([]);
+    }
   }, 20_000);
 
   it("localizes Drawing when collaboration is disabled", async () => {
@@ -164,9 +189,6 @@ describe("Workspace Sheet mobile presets", () => {
     expect(pluginOptions(presets, "UNIVER_DRAWING_PLUGIN")).toMatchObject({
       override: [],
     });
-    expect(presetPluginKeys(presets)).not.toContain(
-      "UNIVER_SHEETS_THREAD_COMMENT_PLUGIN"
-    );
   }, 20_000);
 });
 

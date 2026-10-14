@@ -91,7 +91,8 @@ interface CreateSheetEditorPresetsOptions {
   readonly container: HTMLElement;
   readonly license?: string;
   readonly universerEndpoint: string;
-  readonly threadCommentsEnabled?: boolean;
+  // The comment model remains registered even when UI is disabled.
+  readonly threadCommentUiEnabled?: boolean;
   readonly collaborationEnabled?: boolean;
   readonly workbenchChrome?: "hidden" | "visible";
 }
@@ -106,7 +107,7 @@ export function createSheetEditorPresets({
   container,
   license,
   universerEndpoint,
-  threadCommentsEnabled = true,
+  threadCommentUiEnabled = true,
   collaborationEnabled = true,
   workbenchChrome = "visible",
 }: CreateSheetEditorPresetsOptions): IPreset[] {
@@ -140,7 +141,7 @@ export function createSheetEditorPresets({
     UniverSheetsNotePreset(),
     UniverSheetsSortPreset(),
     UniverSheetsTablePreset(),
-    ...(threadCommentsEnabled && collaborationEnabled
+    ...(threadCommentUiEnabled && collaborationEnabled
       ? [UniverSheetsThreadCommentPreset()]
       : [{ plugins: [UniverSheetsThreadCommentPlugin] }]),
     UniverSheetsAdvancedPreset({

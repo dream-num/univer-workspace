@@ -208,7 +208,12 @@ Collaboration Gateway 同时组合 Core、Comment、History 与 Worktree Endpoin
 Module 批量解析评论作者资料。五类 Unit 的评论读取、新增、回复、solved 和编辑都要求打开
 权限，不要求内容编辑权限；`UnitAction.Comment` 与 `View` 放在同一组。编辑正文由 Comment Service
 限定为作者本人，删除还要求评论作者或 Resource Owner/Admin。未登录请求只放行评论列表。Browser 只在 Trunk Scope
-按 Unit 类型注册标准 Thread Comment UI 和统一远程 datasource。
+按 Unit 类型注册标准 Thread Comment UI 和统一远程 datasource。各 Unit 的 preset 负责注册评论
+model，在 Trunk、Worktree 和 comparison 中均保留 mutation 重放与 anchor 序列化能力；
+共享编辑器的 `commentUiAndDataSourcePlugins` 回调只补充 Trunk 的 UI／远程正文集成。
+已经包含评论 UI 的 Sheet／Doc preset 不在回调中重复注册 UI；移动端 Sheet 及 Slide／Base／Board
+通过回调提供对应 UI。桌面 Sheet 的 `threadCommentUiEnabled` 仅控制 preset 的 UI，
+移动端 preset 无 UI 开关，始终提供 model。
 
 History Service 使用同一文件中由 History Adapter 独立拥有的派生索引，并通过 Identity Module
 批量解析版本作者。现有 Collaboration Runtime 统一装配 History Adapter、Service 和 lifecycle；SDK 1.0.0 的

@@ -168,7 +168,7 @@ async function loadComparisonRenderingDefinition(
           container,
           license,
           universerEndpoint: window.location.origin,
-          threadCommentsEnabled: false,
+          threadCommentUiEnabled: false,
           collaborationEnabled: false,
           workbenchChrome: "hidden",
         }),

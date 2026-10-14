@@ -146,7 +146,8 @@ interface ICollaborationEditorDefinition {
     compact: boolean
   ) => IPreset[];
   readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
-  readonly collaborationFeaturePlugins?: (
+  // Unit presets own comment models; this hook supplies trunk UI/body integration.
+  readonly commentUiAndDataSourcePlugins?: (
     collaborationScope: NonNullable<
       CollaborationEditorProps["collaborationScope"]
     >
@@ -332,8 +333,8 @@ export function createCollaborationEditor(
                   },
                 ],
               ];
-        const collaborationFeaturePlugins =
-          definition.collaborationFeaturePlugins?.(collaborationScope) ?? [];
+        const commentUiAndDataSourcePlugins =
+          definition.commentUiAndDataSourcePlugins?.(collaborationScope) ?? [];
         const historyFeaturePlugins = createWorkspaceHistoryPlugins(
           collaborationScope,
           definition.history,
@@ -388,7 +389,7 @@ export function createCollaborationEditor(
           presets,
           plugins: [
             ...collaborationPlugins,
-            ...collaborationFeaturePlugins,
+            ...commentUiAndDataSourcePlugins,
             ...historyFeaturePlugins,
             ...outputPlugins,
             [
