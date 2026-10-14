@@ -153,11 +153,22 @@ export function createCollaborationGateway(options: {
   const authorizeCommentWrite = async (
     context: {
       readonly userID: string;
+      readonly memberID: string;
       readonly request: { readonly unitID: string };
     },
     next: () => Promise<void>
   ) => {
     requireCommentAccess(access, context.userID, context.request.unitID);
+    // Comment writes belong to a joined trunk session, never a draft session.
+    if (
+      !endpoint.findJoinedSession({
+        unitID: context.request.unitID,
+        memberID: context.memberID,
+        authenticatedUserID: context.userID,
+      })
+    ) {
+      throw new CollabError("PERMISSION_DENIED", "Worktree comments are read-only.");
+    }
     await next();
   };
   commentService.use("addComment", authorizeCommentWrite);
@@ -166,7 +177,7 @@ export function createCollaborationGateway(options: {
   commentService.use("editComment", authorizeCommentWrite);
   commentService.use("deleteComment", async (context, next) => {
     authorizeCommentDelete(access, context);
-    await next();
+    await authorizeCommentWrite(context, next);
   });
 
   const authorizeHistoryRead = async (

@@ -358,6 +358,59 @@ describe("collaboration gateway", () => {
         ).toBe(200);
       }
 
+      const worktree = await application.worktrees.create(owner.view.user.id, crypto.randomUUID(), {
+        kind: "user",
+        name: `Read-only ${unitType} comments`,
+        summary: null,
+      });
+      await application.worktrees.addUnit(
+        owner.view.user.id,
+        worktree.body.id,
+        crypto.randomUUID(),
+        {
+          source: "trunk",
+          resourceId: opened.resource.id,
+        },
+      );
+      const draftConnection = await joinUnit(
+        origin,
+        ownerCookie,
+        opened.resource.unitId,
+        worktree.body.id,
+      );
+      for (const action of ["add", "reply", "edit", "solved", "delete"] as const) {
+        const rejected = await commentWrite(origin, ownerCookie, action, {
+          memberId: draftConnection.memberId,
+          unitId: opened.resource.unitId,
+          threadId: root.comment.threadId,
+          replyId: root.comment.replies[0].replyId,
+          content: "Must not change trunk",
+          mention: [],
+          solved: CommentSolvedStatus.Solved,
+        });
+        expect(rejected.status, `${unitType} ${action} from Worktree`).toBe(403);
+      }
+      const draftRead = await fetch(
+        `${origin}/universer-api/comment/unit/${opened.resource.unitId}/list`,
+        {
+          method: "POST",
+          headers: { cookie: ownerCookie, "content-type": "application/json" },
+          body: JSON.stringify({
+            unitId: opened.resource.unitId,
+            threadId: [root.comment.threadId],
+          }),
+        },
+      );
+      expect(draftRead.status).toBe(200);
+      await expect(draftRead.json()).resolves.toMatchObject({
+        comments: {
+          [root.comment.threadId]: {
+            solved: CommentSolvedStatus.OpenOrReOpen,
+            replies: [{ content: `${unitType} root` }, { content: `${unitType} reply edited` }],
+          },
+        },
+      });
+
       const collaboratorDeleteRoot = await commentWrite(
         origin,
         collaboratorCookie,
@@ -1430,7 +1483,8 @@ function commentWrite(
 async function joinUnit(
   origin: string,
   cookie: string,
-  unitId: string
+  unitId: string,
+  worktreeId?: string
 ) {
   const ticketResponse = await fetch(
     `${origin}/universer-api/user/session-ticket`,
@@ -1438,7 +1492,7 @@ async function joinUnit(
   );
   const ticket = (await ticketResponse.json()) as { readonly ticket: string };
   const socket = new WebSocket(
-    `${origin.replace(/^http/, "ws")}/universer-api/comb/connect?sessionTicket=${encodeURIComponent(ticket.ticket)}`
+    `${origin.replace(/^http/, "ws")}/universer-api${worktreeId ? `/worktrees/${worktreeId}` : ""}/comb/connect?sessionTicket=${encodeURIComponent(ticket.ticket)}`,
   );
   sockets.push(socket);
   await new Promise<void>((resolve, reject) => {

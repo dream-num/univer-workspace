@@ -74,7 +74,7 @@ describe("Workspace standard Thread Comment plugins", () => {
         false,
         UniverBasesThreadCommentUIPlugin
       )
-    ).toEqual([]);
+    ).toEqual([UniverBasesThreadCommentUIPlugin]);
   }, 20_000);
 
   it("keeps the Docs compatibility hook under workarounds", async () => {

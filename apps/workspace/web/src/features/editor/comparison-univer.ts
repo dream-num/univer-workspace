@@ -1,3 +1,5 @@
+import { ReadonlyCommentPlugin } from "./features/readonly-comments";
+import "./workarounds/readonly-comment-ui.css";
 import {
   CommandType,
   CustomCommandExecutionError,
@@ -49,8 +51,9 @@ export const createComparisonUniver: UnitComparisonUniverFactory = async (
   const definition = await loadComparisonRenderingDefinition(
     options.unitType,
     options.container,
-    license
+    license,
   );
+  const commentUi = await loadCommentUi(options.unitType);
   const licensePreset: IPreset[] = definition.licenseProvidedByPreset
     ? []
     : [
@@ -73,7 +76,19 @@ export const createComparisonUniver: UnitComparisonUniverFactory = async (
     theme: definition.theme,
     darkMode: options.darkMode,
     logLevel: LogLevel.WARN,
-    presets: [...licensePreset, ...definition.presets],
+    presets: [
+      ...licensePreset,
+      ...definition.presets,
+      {
+        plugins: [
+          commentUi.plugin,
+          [
+            ReadonlyCommentPlugin,
+            { endpoint: "/universer-api/comment", container: options.container, panelCommandId: commentUi.panelCommandId },
+          ],
+        ],
+      },
+    ],
   });
 
   try {
@@ -234,4 +249,29 @@ function blockComparisonEditingCommands(
       );
     }
   });
+}
+
+async function loadCommentUi(type: UniverInstanceType): Promise<{ plugin: IPresetPlugin; panelCommandId?: string }> {
+  switch (type) {
+    case UniverInstanceType.UNIVER_SHEET: {
+      const sdk = await import("@univerjs/sheets-thread-comment-ui");
+      return { plugin: sdk.UniverSheetsThreadCommentUIPlugin, panelCommandId: sdk.ToggleSheetCommentPanelOperation.id };
+    }
+    case UniverInstanceType.UNIVER_DOC: {
+      const sdk = await import("@univerjs/docs-thread-comment-ui");
+      return { plugin: sdk.UniverDocsThreadCommentUIPlugin, panelCommandId: sdk.ShowCommentPanelOperation.id };
+    }
+    case UniverInstanceType.UNIVER_SLIDE: {
+      const sdk = await import("@univerjs-pro/slides-thread-comment-ui");
+      return { plugin: sdk.UniverSlidesThreadCommentUIPlugin, panelCommandId: sdk.OpenSlideCommentPanelOperation.id };
+    }
+    case UniverInstanceType.UNIVER_BASE:
+      return { plugin: (await import("@univerjs-pro/bases-thread-comment-ui")).UniverBasesThreadCommentUIPlugin };
+    case UniverInstanceType.UNIVER_BOARD: {
+      const sdk = await import("@univerjs-pro/boards-thread-comment-ui");
+      return { plugin: sdk.UniverBoardsThreadCommentUIPlugin, panelCommandId: sdk.OpenBoardCommentPanelOperation.id };
+    }
+    default:
+      throw new Error("Unsupported comment Unit type.");
+  }
 }

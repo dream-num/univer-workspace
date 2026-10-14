@@ -1,3 +1,5 @@
+import { ReadonlyCommentPlugin } from "./features/readonly-comments";
+import "./workarounds/readonly-comment-ui.css";
 import type { ILanguagePack } from "@univerjs/core";
 import {
   CommandType,
@@ -146,7 +148,7 @@ interface ICollaborationEditorDefinition {
     compact: boolean
   ) => IPreset[];
   readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
-  // Unit presets own comment models; this hook supplies trunk UI/body integration.
+  // Unit presets own models; this hook supplies UI and trunk-only body writes.
   readonly commentUiAndDataSourcePlugins?: (
     collaborationScope: NonNullable<
       CollaborationEditorProps["collaborationScope"]
@@ -390,6 +392,17 @@ export function createCollaborationEditor(
           plugins: [
             ...collaborationPlugins,
             ...commentUiAndDataSourcePlugins,
+            ...(collaborationScope.kind === "trunk"
+              ? []
+              : [
+                  [
+                    ReadonlyCommentPlugin,
+                    {
+                      endpoint: "/universer-api/comment",
+                      container: element,
+                    },
+                  ] as IPresetPlugin,
+                ]),
             ...historyFeaturePlugins,
             ...outputPlugins,
             [

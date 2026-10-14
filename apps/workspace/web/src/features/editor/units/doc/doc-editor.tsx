@@ -178,9 +178,7 @@ export default createCollaborationEditor({
       collaboration: true,
     }),
     UniverDocsHyperLinkPreset(),
-    ...(collaborationScope.kind === "trunk"
-      ? [UniverDocsThreadCommentPreset()]
-      : []),
+    UniverDocsThreadCommentPreset(),
     {
       plugins: [
         ...getDocReplayCompatibilityPlugins(),

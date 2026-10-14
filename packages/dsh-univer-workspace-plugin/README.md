@@ -84,7 +84,12 @@ as a substitute for those explicit storage boundaries.
 
 Viewer, comparison and headless worker runtimes register the comment models for
 Sheet, Doc, Slide, Base and Board so existing anchors survive replay and export.
-This does not enable comment UI or remote body writes in Worktrees. The worker's
+Browser viewers and comparisons also register the matching comment UI and a
+read-only body datasource. Draft anchors follow content changes while bodies and
+replies come from the current shared Comment service, not a branch snapshot.
+The DSH collaboration proxy forwards comment lists with the server session and
+refuses add, reply, edit, resolve and delete requests. Comment bodies remain
+read-only even in an editable DSH document viewer. The worker's
 SDK 1.0.3 compatibility registration lives in `src/runtime/comment-models.ts`;
 remove it once the standard headless factory passes the five-type resource and
 replay regression without additional registration.

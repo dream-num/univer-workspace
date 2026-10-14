@@ -207,13 +207,18 @@ Collaboration Gateway 同时组合 Core、Comment、History 与 Worktree Endpoin
 同一 `COLLABORATION_DATABASE_FILE` 中由 Comment Adapter 独立拥有的表，并通过 Identity
 Module 批量解析评论作者资料。五类 Unit 的评论读取、新增、回复、solved 和编辑都要求打开
 权限，不要求内容编辑权限；`UnitAction.Comment` 与 `View` 放在同一组。编辑正文由 Comment Service
-限定为作者本人，删除还要求评论作者或 Resource Owner/Admin。未登录请求只放行评论列表。Browser 只在 Trunk Scope
-按 Unit 类型注册标准 Thread Comment UI 和统一远程 datasource。各 Unit 的 preset 负责注册评论
-model，在 Trunk、Worktree 和 comparison 中均保留 mutation 重放与 anchor 序列化能力；
-共享编辑器的 `commentUiAndDataSourcePlugins` 回调只补充 Trunk 的 UI／远程正文集成。
-已经包含评论 UI 的 Sheet／Doc preset 不在回调中重复注册 UI；移动端 Sheet 及 Slide／Base／Board
-通过回调提供对应 UI。桌面 Sheet 的 `threadCommentUiEnabled` 仅控制 preset 的 UI，
-移动端 preset 无 UI 开关，始终提供 model。
+限定为作者本人，删除还要求评论作者或 Resource Owner/Admin。未登录请求只放行评论列表。Browser 在五类 Unit 的 Trunk、Worktree 与 comparison 中均注册标准评论 model 和 UI，
+保留 mutation 重放与 anchor 序列化能力。Trunk 使用统一远程 datasource；Worktree 和
+comparison 使用 `ReadonlyCommentPlugin` 读取当前共享正文，拒绝所有正文写入，
+同时允许 anchor mutation 与内容编辑。服务端评论写策略独立校验 Trunk joined session。
+共享编辑器的 `commentUiAndDataSourcePlugins` 回调补充未由 preset 提供的 UI，并且仅在
+Trunk 提供远程正文 writer。Sheet／Doc preset 已含 UI，回调不会重复注册；移动端 Sheet
+及 Slide／Base／Board 通过回调提供对应 UI。移动端 preset 始终提供 model。
+SDK 1.0.3 未提供完全只读的评论树配置，集中样式 workaround 隐藏正文操作入口；
+当前 runtime 的公开 canvas popup service 将浮动窗保留在自己的 UI 树内，
+只读样式不影响其他编辑器。隐藏 Ribbon 的原生 comparison 提供公开 panel operation 的
+只读评论入口；Base 结构对比是静态表格，不创建 Univer runtime，评论通过“查看”中的
+原生记录预览读取。
 
 History Service 使用同一文件中由 History Adapter 独立拥有的派生索引，并通过 Identity Module
 批量解析版本作者。现有 Collaboration Runtime 统一装配 History Adapter、Service 和 lifecycle；SDK 1.0.0 的

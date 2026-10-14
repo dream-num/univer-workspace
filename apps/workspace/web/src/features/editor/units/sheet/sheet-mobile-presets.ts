@@ -124,9 +124,9 @@ export function createSheetMobilePresets({
       ],
     },
     // Keep the comment model available for trunk and Worktree replay.
-    // sheet-editor.mobile supplies the trunk-only UI and remote datasource
-    // through commentUiAndDataSourcePlugins. Adding UI here would duplicate
-    // its pluginName on trunk and expose comment UI in Worktree previews.
+    // sheet-editor.mobile supplies UI through commentUiAndDataSourcePlugins.
+    // Body reads are allowed in Worktrees; body writes remain trunk-only.
+    // Adding UI here would duplicate its pluginName.
     { plugins: [UniverSheetsThreadCommentPlugin] },
     {
       plugins: [

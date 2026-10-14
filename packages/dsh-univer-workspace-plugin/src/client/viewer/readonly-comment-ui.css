@@ -1,0 +1,23 @@
+/* SDK 1.0.3 has no read-only ThreadCommentTree configuration: showEdit=false
+ * still exposes solve/delete. Keep this scoped presentation workaround together;
+ * remove it when the public SDK UI supports fully read-only comment trees.
+ * Model/data-source guards, rather than CSS, enforce the write restriction. */
+[data-workspace-readonly-comment-write],
+[data-workspace-readonly-comments] :is([id^="PANEL-"], [id^="CELL-"]) button,
+[data-workspace-readonly-comments] :is([id^="PANEL-"], [id^="CELL-"]) > div:last-child:has(canvas) {
+  display: none !important;
+}
+
+.workspace-readonly-comment-open {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 50;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 12px;
+  cursor: pointer;
+}

@@ -46,7 +46,15 @@ const FORWARD_PREFIXES = [
 ] as const;
 
 function canForwardHttp(path: string): boolean {
-  return FORWARD_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  return (
+    /^\/universer-api\/comment\/unit\/[^/]+\/list$/.test(path) ||
+    FORWARD_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+  );
+}
+
+/** Viewer comments are read-only, including when the document itself is editable. */
+export function isCommentWritePath(path: string): boolean {
+  return /^\/universer-api\/comment\/unit\/[^/]+\/(add|reply|edit|solved|delete)$/.test(path);
 }
 
 /** The query parameter carrying the Workspace WS path for an upgrade. */
@@ -64,13 +72,18 @@ function stripPrefix(requestPath: string): string {
 }
 
 /** Build the HTTP forwarding handler. */
-function createHttpHandler(
+export function createHttpHandler(
   ctx: Context,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res): Promise<void> => {
     const url = new URL(req.url ?? "/", "http://x");
     const path = url.pathname;
     const workspacePath = stripPrefix(path);
+    if (isCommentWritePath(workspacePath)) {
+      res.writeHead(403, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "comments_read_only" }));
+      return;
+    }
     if (!canForwardHttp(workspacePath)) {
       res.writeHead(404, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ error: "not_forwarded" }));

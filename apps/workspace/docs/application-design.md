@@ -233,8 +233,10 @@ Slide、Base 和 Board。`UnitAction.Comment` 与 `View` 使用同一打开权�
 新增、回复和改变 solved 状态。编辑正文由 Comment Service 限定为作者本人，删除要求作者本人或
 Resource Owner/Admin。未登录请求只放行评论列表，写入在进入评论策略前被拒绝。评论 anchor 随
 Unit 协作数据变化，正文由 Comment Adapter 保存。
-由于 Comment 协议没有 Worktree ID、revision 或合并合同，Browser 仅在 Trunk Scope 注册
-Thread Comment，Worktree 与 Merge Preview 保持关闭。
+Comment 写入必须来自该用户加入的 Trunk Unit Room；Worktree Room 的 member ID 被拒绝。
+五类 Unit 的 Worktree 与 Merge Preview 注册标准评论 model 和 UI，读取当前共享正文，
+使用只读 datasource 和命令拦截拒绝正文写入，保留 anchor 随文档变化的 mutation 重放。
+Comment 协议没有 Worktree ID、revision 或正文合并合同，因此这里展示的正文不是历史快照。
 
 History Endpoint 同样复用 Login Session 与 Access Resolver，但服务五类 Trunk Unit。Viewer
 可以列出版本、作者并读取版本 changeset；恢复版本会生成标准 Collaboration changeset，因此仍

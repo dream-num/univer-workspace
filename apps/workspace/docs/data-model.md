@@ -17,8 +17,9 @@ Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一�
 五类 Unit 的 Thread Comment anchor 属于 Unit snapshot/changeset；评论正文、回复、solved
 状态与并发 generation 保存在同一文件的 `collaboration_comments` 表中，并由
 `collaboration_schema_versions` 的 `comment=1` 组件版本管理。Comment Adapter 首次启动时
-幂等创建该附加 Schema，不改变产品数据库 V8，也不要求执行产品迁移命令。评论当前只在
-Trunk 编辑器启用；Worktree 和 Merge Preview 不读取或写入 Trunk 评论。
+幂等创建该附加 Schema，不改变产品数据库 V8，也不要求执行产品迁移命令。Trunk 编辑器允许评论写入；Worktree 和 Merge Preview 只读取当前共享评论正文、回复和
+solved 状态，不保存历史正文或分支正文，也不向 Comment Service 写入。评论 anchor 随
+Worktree 文档修改和合并变化，正文不参与 Worktree 合并。
 
 SDK 1.0.0 的 Collaboration SQLite 组件版本为 `core=2`、`worktree=3`、`history=2`
 和 `comment=1`。Core 与 Worktree 保存 Unit 创建者、创建时间及 changeset 提交时间；

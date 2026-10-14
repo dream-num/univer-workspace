@@ -9,6 +9,13 @@
  * silently dropping a Unit type.
  */
 
+import { ReadonlyCommentPlugin } from "./readonly-comments.ts";
+import { PROXY_PREFIX } from "./proxy.ts";
+import { ToggleSheetCommentPanelOperation, UniverSheetsThreadCommentUIPlugin } from "@univerjs/sheets-thread-comment-ui";
+import { ShowCommentPanelOperation, UniverDocsThreadCommentUIPlugin } from "@univerjs/docs-thread-comment-ui";
+import { OpenSlideCommentPanelOperation, UniverSlidesThreadCommentUIPlugin } from "@univerjs-pro/slides-thread-comment-ui";
+import { UniverBasesThreadCommentUIPlugin } from "@univerjs-pro/bases-thread-comment-ui";
+import { OpenBoardCommentPanelOperation, UniverBoardsThreadCommentUIPlugin } from "@univerjs-pro/boards-thread-comment-ui";
 import { registerCommentModels } from "../../runtime/comment-models.js";
 import {
   ICommandService,
@@ -16,6 +23,8 @@ import {
   IUniverInstanceService,
   UniverInstanceType,
   type Univer,
+  type PluginCtor,
+  type Plugin,
 } from "@univerjs/core";
 import { IAttachmentIoService } from "@univerjs-pro/collaboration-client";
 import { BoardToolType, UniverBoardsPlugin } from "@univerjs-pro/boards";
@@ -207,7 +216,7 @@ export function registerViewerRendering(univer: Univer, options: ViewRenderingOp
     collaborationOwnsAssetIo,
     options.license,
     options.workbenchChrome === "hidden",
-    options.ribbonType,
+    options.ribbonType ?? (options.unitType === UniverInstanceType.UNIVER_BOARD ? "grid" : undefined),
   );
   registerDocPlugins(univer);
   registerSheetPlugins(univer);
@@ -215,6 +224,30 @@ export function registerViewerRendering(univer: Univer, options: ViewRenderingOp
   registerBaseUnitPlugins(univer, collaborationOwnsAssetIo, options.readOnly ?? false);
   registerBoardPlugins(univer);
   registerCommentModels(univer);
+  const commentUi = new Map<UniverInstanceType, PluginCtor<Plugin>>([
+    [UniverInstanceType.UNIVER_SHEET, UniverSheetsThreadCommentUIPlugin],
+    [UniverInstanceType.UNIVER_DOC, UniverDocsThreadCommentUIPlugin],
+    [UniverInstanceType.UNIVER_SLIDE, UniverSlidesThreadCommentUIPlugin],
+    [UniverInstanceType.UNIVER_BASE, UniverBasesThreadCommentUIPlugin],
+    [UniverInstanceType.UNIVER_BOARD, UniverBoardsThreadCommentUIPlugin],
+  ]);
+  const ui = options.unitType === undefined ? undefined : commentUi.get(options.unitType);
+  if (ui) {
+    univer.registerPlugin(ui);
+    const container = document.getElementById(options.container);
+    if (!container) throw new Error("Comment viewer container is missing.");
+    const panelCommandId = options.workbenchChrome === "hidden" ? new Map([
+      [UniverInstanceType.UNIVER_SHEET, ToggleSheetCommentPanelOperation.id],
+      [UniverInstanceType.UNIVER_DOC, ShowCommentPanelOperation.id],
+      [UniverInstanceType.UNIVER_SLIDE, OpenSlideCommentPanelOperation.id],
+      [UniverInstanceType.UNIVER_BOARD, OpenBoardCommentPanelOperation.id],
+    ]).get(options.unitType!) : undefined;
+    univer.registerPlugin(ReadonlyCommentPlugin, {
+      endpoint: `${PROXY_PREFIX}/universer-api/comment`,
+      container,
+      ...(panelCommandId === undefined ? {} : { panelCommandId }),
+    });
+  }
   options.registerBeforeEmbedCore?.();
   if (options.unitType !== undefined) {
     registerOutputPlugins(univer, options.unitType, options.exchangeClientConfig);

@@ -59,6 +59,10 @@ try {
     Object.defineProperty(globalThis, "Path2D", { configurable: true, value: class Path2D {} });
     const { registerViewerRendering, ViewAssetIoOwner } =
       await import("../../src/client/viewer/rendering.ts");
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: { getElementById: () => ({ id: "test" }) },
+    });
     const plugins: Array<Parameters<typeof runtime.registerPlugin>[0]> = [];
     registerViewerRendering(
       {

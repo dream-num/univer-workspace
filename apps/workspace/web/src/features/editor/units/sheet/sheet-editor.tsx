@@ -57,7 +57,7 @@ export default createCollaborationEditor({
       container,
       license,
       universerEndpoint: window.location.origin,
-      threadCommentUiEnabled: collaborationScope.kind === "trunk",
+      threadCommentUiEnabled: true,
     }),
   commentUiAndDataSourcePlugins: (collaborationScope) =>
     getThreadCommentUiAndDataSourcePlugins(

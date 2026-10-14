@@ -1,3 +1,9 @@
+import SlidesCommentZhCN from "@univerjs-pro/slides-thread-comment-ui/locale/zh-CN";
+import SlidesCommentEnUS from "@univerjs-pro/slides-thread-comment-ui/locale/en-US";
+import BoardsCommentZhCN from "@univerjs-pro/boards-thread-comment-ui/locale/zh-CN";
+import BoardsCommentEnUS from "@univerjs-pro/boards-thread-comment-ui/locale/en-US";
+import BasesCommentZhCN from "@univerjs-pro/bases-thread-comment-ui/locale/zh-CN";
+import BasesCommentEnUS from "@univerjs-pro/bases-thread-comment-ui/locale/en-US";
 /**
  * Static locale composition for the embedded Viewer.
  *
@@ -249,6 +255,9 @@ const zhCN = [
   UniverSheetsTableZhCN,
   UniverSheetsTableUIZhCN,
   UniverSheetsThreadCommentUIZhCN,
+  BasesCommentZhCN,
+  BoardsCommentZhCN,
+  SlidesCommentZhCN,
   UniverThreadCommentUIZhCN,
   UniverSlidesZhCN,
   UniverSlidesUIZhCN,
@@ -339,6 +348,9 @@ const enUS = [
   UniverSheetsTableEnUS,
   UniverSheetsTableUIEnUS,
   UniverSheetsThreadCommentUIEnUS,
+  BasesCommentEnUS,
+  BoardsCommentEnUS,
+  SlidesCommentEnUS,
   UniverThreadCommentUIEnUS,
   UniverSlidesEnUS,
   UniverSlidesUIEnUS,

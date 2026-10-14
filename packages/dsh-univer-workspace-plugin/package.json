@@ -35,7 +35,9 @@
   "dependencies": {
     "@univer-cli/content-execution": "1.0.3",
     "@univer-cli/content-inspection": "1.0.3",
+    "@univerjs-pro/bases-thread-comment-ui": "1.0.3",
     "@univerjs-pro/boards-print": "1.0.3",
+    "@univerjs-pro/boards-thread-comment-ui": "1.0.3",
     "@univerjs-pro/collaboration": "1.0.3",
     "@univerjs-pro/collaboration-embed": "1.0.3",
     "@univerjs-pro/docs-print": "1.0.3",
@@ -43,6 +45,8 @@
     "@univerjs-pro/exchange-node": "1.0.3",
     "@univerjs-pro/sheets-print": "1.0.3",
     "@univerjs-pro/slides-print": "1.0.3",
+    "@univerjs-pro/slides-thread-comment-ui": "1.0.3",
+    "@univerjs/thread-comment": "1.0.3",
     "ws": "8.21.3"
   },
   "devDependencies": {

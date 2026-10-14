@@ -169,7 +169,7 @@ describe("Workspace Sheet mobile presets", () => {
       expect(trunkPlugins.map(pluginKey).filter((key) => presetKeys.includes(key))).toEqual([]);
       expect(
         getThreadCommentUiAndDataSourcePlugins(false, UniverSheetsThreadCommentMobileUIPlugin),
-      ).toEqual([]);
+      ).toEqual([UniverSheetsThreadCommentMobileUIPlugin]);
     }
   }, 20_000);
 
@@ -194,9 +194,8 @@ describe("Workspace Sheet mobile presets", () => {
 
 function presetPluginConstructors(presets: IPreset[]): unknown[] {
   return presets.flatMap((preset) =>
-    (preset.plugins ?? []).map((plugin) =>
-      Array.isArray(plugin) ? plugin[0] : plugin
-    )
+    (preset.plugins ?? []).map((plugin) => (Array.isArray(plugin) ? plugin[0] : plugin
+    ))
   );
 }
 
