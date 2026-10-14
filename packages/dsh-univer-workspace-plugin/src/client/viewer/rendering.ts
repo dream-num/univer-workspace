@@ -9,6 +9,7 @@
  * silently dropping a Unit type.
  */
 
+import { registerCommentModels } from "../../runtime/comment-models.js";
 import {
   ICommandService,
   IImageIoService,
@@ -213,6 +214,7 @@ export function registerViewerRendering(univer: Univer, options: ViewRenderingOp
   registerSlidePlugins(univer);
   registerBaseUnitPlugins(univer, collaborationOwnsAssetIo, options.readOnly ?? false);
   registerBoardPlugins(univer);
+  registerCommentModels(univer);
   options.registerBeforeEmbedCore?.();
   if (options.unitType !== undefined) {
     registerOutputPlugins(univer, options.unitType, options.exchangeClientConfig);
@@ -278,9 +280,6 @@ function registerDocPlugins(univer: Univer): void {
   univer.registerPlugin(UniverDocsCodeUIPlugin);
   univer.registerPlugin(UniverDocsQuotePlugin);
   univer.registerPlugin(UniverDocsQuoteUIPlugin);
-  // Thread comment collaboration storage is not exposed by the Workspace
-  // adapter yet. The native UI remains available where the SDK supplies it;
-  // no client-side fake persistence is installed here.
 }
 
 function registerSheetPlugins(univer: Univer): void {

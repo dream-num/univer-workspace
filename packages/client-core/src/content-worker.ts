@@ -5,7 +5,7 @@ import {
 } from "@univer-cli/univer-collaboration-runtime";
 import { defineUniverCollaborationRuntimeWorker } from "@univer-cli/univer-collaboration-runtime-pool";
 import { createStandardHeadlessUniverFactory } from "@univer-cli/headless-univer";
-import { installDocCommentReplayCompatibility } from "./workarounds/doc-comment-replay.js";
+import { installCommentReplayCompatibility } from "./workarounds/comment-replay.js";
 import { UniverInstanceType } from "@univerjs/core";
 import { workspaceError } from "./errors.js";
 import { WorkspaceHttp } from "./http.js";
@@ -53,7 +53,7 @@ export const workspaceContentRuntimeWorker = defineUniverCollaborationRuntimeWor
         license: init.license,
       })(context);
       try {
-        installDocCommentReplayCompatibility(univer, context.unitType);
+        installCommentReplayCompatibility(univer, context.unitType);
         return univer;
       } catch (error) {
         univer.dispose();

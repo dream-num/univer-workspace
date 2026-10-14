@@ -1,3 +1,4 @@
+import { UniverSheetsThreadCommentPlugin } from "@univerjs/sheets-thread-comment";
 import type { ILanguagePack } from "@univerjs/core";
 import type { IPreset } from "@univerjs/presets";
 import ChartUIEnUS from "@univerjs-pro/chart-ui/locale/en-US";
@@ -141,7 +142,7 @@ export function createSheetEditorPresets({
     UniverSheetsTablePreset(),
     ...(threadCommentsEnabled && collaborationEnabled
       ? [UniverSheetsThreadCommentPreset()]
-      : []),
+      : [{ plugins: [UniverSheetsThreadCommentPlugin] }]),
     UniverSheetsAdvancedPreset({
       license: license ?? "",
       universerEndpoint,

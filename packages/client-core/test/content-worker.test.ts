@@ -28,7 +28,7 @@ describe("Workspace content runtime worker", () => {
     mocks.host.mockResolvedValue({ hostRevision: 7, membership: new Map() });
     mocks.load.mockResolvedValue({ unitId: "unit-1" });
     mocks.factory.mockReturnValue({ load: mocks.load });
-    mocks.headless.mockReturnValue(async () => ({ dispose: vi.fn() }));
+    mocks.headless.mockReturnValue(async () => ({ dispose: vi.fn(), registerPlugin: vi.fn() }));
   });
 
   it.each([
@@ -88,14 +88,44 @@ describe("Workspace content runtime worker", () => {
     );
   });
 
+  it.each([
+    UniverInstanceType.UNIVER_SHEET,
+    UniverInstanceType.UNIVER_DOC,
+    UniverInstanceType.UNIVER_SLIDE,
+    UniverInstanceType.UNIVER_BASE,
+    UniverInstanceType.UNIVER_BOARD,
+  ])("installs the missing comment model before loading Unit type %s", async (unitType) => {
+    const registerPlugin = vi.fn();
+    mocks.headless.mockReturnValue(async () => ({ dispose: vi.fn(), registerPlugin }));
+    await workspaceContentRuntimeWorker.createRuntime(
+      init({ kind: "worktree", worktreeId: "draft" }),
+    );
+    const options = mocks.factory.mock.calls[0]![0] as {
+      createUniver(context: {
+        unitId: string;
+        unitType: UniverInstanceType;
+        resolveSnapshotService: () => never;
+      }): Promise<unknown>;
+    };
+    await options.createUniver({
+      unitId: "unit-1",
+      unitType,
+      resolveSnapshotService: () => {
+        throw new Error("not used before loading");
+      },
+    });
+    expect(registerPlugin).toHaveBeenCalledTimes(
+      unitType === UniverInstanceType.UNIVER_SHEET ? 0 : 1,
+    );
+  });
+
   it("rejects malformed private init before host loading without disclosing secrets", async () => {
     const error = await Promise.resolve(
       workspaceContentRuntimeWorker.createRuntime({
         credential: "secret-cookie",
         license: "secret-license",
       }),
-    )
-      .catch((reason: unknown) => reason);
+    ).catch((reason: unknown) => reason);
 
     expect(error).toMatchObject({ code: "WORKSPACE_RUNTIME_INIT_INVALID" });
     expect(`${String(error)}${JSON.stringify(error)}`).not.toContain("secret-cookie");

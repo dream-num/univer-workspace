@@ -1,3 +1,4 @@
+import { UniverSlidesThreadCommentPlugin } from "@univerjs-pro/slides-thread-comment";
 import { SetSlideZoomRatioOperation, UniverSlidesPlugin } from "@univerjs-pro/slides";
 import ChartUIEnUS from "@univerjs-pro/chart-ui/locale/en-US";
 import ChartUIZhCN from "@univerjs-pro/chart-ui/locale/zh-CN";
@@ -147,6 +148,7 @@ export function createSlideComparisonPresets(
           },
         ],
         UniverSlidesPlugin,
+        UniverSlidesThreadCommentPlugin,
         UniverSlidesUIPlugin,
         UniverSlidesChartPlugin,
         UniverSlidesChartUIPlugin,
@@ -227,6 +229,7 @@ export default createCollaborationEditor({
           },
         ],
         UniverSlidesPlugin,
+        UniverSlidesThreadCommentPlugin,
         UniverSlidesUIPlugin,
         UniverSlidesChartPlugin,
         UniverSlidesChartUIPlugin,

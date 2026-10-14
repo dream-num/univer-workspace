@@ -1,3 +1,4 @@
+import { UniverBoardsThreadCommentPlugin } from "@univerjs-pro/boards-thread-comment";
 import { UniverBoardsPlugin } from "@univerjs-pro/boards";
 import ChartUIEnUS from "@univerjs-pro/chart-ui/locale/en-US";
 import ChartUIZhCN from "@univerjs-pro/chart-ui/locale/zh-CN";
@@ -161,6 +162,7 @@ export function createBoardComparisonPresets(
         UniverDocsLatexPlugin,
         UniverDocsLatexUIPlugin,
         UniverBoardsPlugin,
+        UniverBoardsThreadCommentPlugin,
         UniverInkPlugin,
         UniverInkUIPlugin,
         UniverBoardsUIPlugin,
@@ -228,6 +230,7 @@ export default createCollaborationEditor({
         UniverDocsLatexPlugin,
         UniverDocsLatexUIPlugin,
         UniverBoardsPlugin,
+        UniverBoardsThreadCommentPlugin,
         UniverInkPlugin,
         UniverInkUIPlugin,
         UniverBoardsUIPlugin,

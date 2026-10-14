@@ -576,6 +576,9 @@ importers:
       '@univerjs-pro/bases-history-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/bases-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/bases-thread-comment-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -612,6 +615,9 @@ importers:
       '@univerjs-pro/boards-table-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs-pro/boards-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/boards-thread-comment-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -834,6 +840,9 @@ importers:
       '@univerjs-pro/slides-table-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs-pro/slides-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/slides-thread-comment-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -1171,6 +1180,12 @@ importers:
       '@univer-cli/univer-render-runtime':
         specifier: 1.0.3
         version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/bases-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/boards-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-pro/collaboration':
         specifier: 1.0.3
         version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
@@ -1178,6 +1193,9 @@ importers:
         specifier: 1.0.3
         version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/slides-thread-comment':
         specifier: 1.0.3
         version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/core':
@@ -1416,6 +1434,9 @@ importers:
       '@univerjs-pro/bases-exchange-client':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/bases-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/bases-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
@@ -1440,6 +1461,9 @@ importers:
       '@univerjs-pro/boards-table-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@univerjs-pro/boards-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/boards-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
@@ -1605,6 +1629,9 @@ importers:
       '@univerjs-pro/slides-table-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@univerjs-pro/slides-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/slides-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
@@ -1632,6 +1659,9 @@ importers:
       '@univerjs/docs-hyper-link-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/docs-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/docs-thread-comment-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
@@ -12739,6 +12769,16 @@ snapshots:
       - react
       - rxjs
 
+  '@univerjs-pro/bases-thread-comment@1.0.3(react@19.3.0)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/bases': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/license': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/core': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/thread-comment': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - react
+      - rxjs
+
   '@univerjs-pro/bases-ui@1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/bases': 1.0.3(react@18.3.1)(rxjs@7.8.2)
@@ -13392,6 +13432,16 @@ snapshots:
       '@univerjs-pro/license': 1.0.3(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/core': 1.0.3(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/thread-comment': 1.0.3(react@19.2.8)(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - react
+      - rxjs
+
+  '@univerjs-pro/boards-thread-comment@1.0.3(react@19.3.0)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/boards': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/license': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/core': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/thread-comment': 1.0.3(react@19.3.0)(rxjs@7.8.2)
     transitivePeerDependencies:
       - react
       - rxjs
@@ -17733,6 +17783,17 @@ snapshots:
       '@univerjs/core': 1.0.3(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.3
       '@univerjs/thread-comment': 1.0.3(react@19.2.8)(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - react
+      - rxjs
+
+  '@univerjs-pro/slides-thread-comment@1.0.3(react@19.3.0)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/license': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/slides': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/core': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/protocol': 1.0.3
+      '@univerjs/thread-comment': 1.0.3(react@19.3.0)(rxjs@7.8.2)
     transitivePeerDependencies:
       - react
       - rxjs

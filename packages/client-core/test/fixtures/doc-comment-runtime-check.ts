@@ -11,14 +11,14 @@ import {
   UniverInstanceType,
   getDocsEmptySnapshot,
 } from "@univerjs/core";
-import { installDocCommentReplayCompatibility } from "../../src/workarounds/doc-comment-replay.js";
+import { installCommentReplayCompatibility } from "../../src/workarounds/comment-replay.js";
 
 const univer = await createStandardHeadlessUniverFactory({ license: "" })({
   unitId: "doc-comments",
   unitType: UniverInstanceType.UNIVER_DOC,
 });
 try {
-  installDocCommentReplayCompatibility(univer, UniverInstanceType.UNIVER_DOC);
+  installCommentReplayCompatibility(univer, UniverInstanceType.UNIVER_DOC);
   const data = getDocsEmptySnapshot("doc-comments");
   data.body = {
     dataStream: "Hello world\r\n",

@@ -65,7 +65,6 @@ interface CreateSheetMobilePresetsOptions {
  */
 export function createSheetMobilePresets({
   container,
-  threadCommentsEnabled = true,
   collaborationEnabled = true,
 }: CreateSheetMobilePresetsOptions): IPreset[] {
   return [
@@ -127,9 +126,7 @@ export function createSheetMobilePresets({
     },
     // The UI plugin is supplied through collaborationFeaturePlugins;
     // registering it here as well would duplicate its pluginName.
-    ...(threadCommentsEnabled && collaborationEnabled
-      ? [{ plugins: [UniverSheetsThreadCommentPlugin] }]
-      : []),
+    { plugins: [UniverSheetsThreadCommentPlugin] },
     {
       plugins: [
         UniverSheetsPivotTablePlugin,

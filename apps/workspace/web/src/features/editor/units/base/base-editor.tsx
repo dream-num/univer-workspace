@@ -1,3 +1,4 @@
+import { UniverBasesThreadCommentPlugin } from "@univerjs-pro/bases-thread-comment";
 import { UniverBasesPlugin } from "@univerjs-pro/bases";
 import UniverBasesEnUS from "@univerjs-pro/bases/locale/en-US";
 import UniverBasesZhCN from "@univerjs-pro/bases/locale/zh-CN";
@@ -115,6 +116,7 @@ export function createBaseComparisonPresets(
           },
         ],
         UniverBasesPlugin,
+        UniverBasesThreadCommentPlugin,
         [
           UniverBasesUIPlugin,
           {
@@ -191,6 +193,7 @@ export default createCollaborationEditor({
           },
         ],
         UniverBasesPlugin,
+        UniverBasesThreadCommentPlugin,
         [
           UniverBasesUIPlugin,
           {

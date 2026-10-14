@@ -80,6 +80,19 @@ custom name. See the [Agent storage guide](../../apps/agent/README.md#local-data
 for installation paths, shared state, and account data; do not use a profile name
 as a substitute for those explicit storage boundaries.
 
+## Persisted comment anchors
+
+Viewer, comparison and headless worker runtimes register the comment models for
+Sheet, Doc, Slide, Base and Board so existing anchors survive replay and export.
+This does not enable comment UI or remote body writes in Worktrees. The worker's
+SDK 1.0.3 compatibility registration lives in `src/runtime/comment-models.ts`;
+remove it once the standard headless factory passes the five-type resource and
+replay regression without additional registration.
+After building, run `pnpm --filter dsh-univer-workspace-plugin test:comment-worker`
+to relocate the emitted worker outside the checkout and verify all five Unit
+types restore comments, replay a later anchor changeset, and export both anchors.
+Only the external native binding packages accompany the relocated worker.
+
 ## Markdown file preview
 
 Remote `.md`/`.markdown` Blobs use the private
