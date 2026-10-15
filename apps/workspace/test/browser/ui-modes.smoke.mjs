@@ -16,6 +16,9 @@ const baseline = resolve(
   process.env.UI_MODES_BASELINE_DIR ?? join(tmpdir(), "univer-workspace-ui-modes"),
 );
 const update = process.env.UI_MODES_UPDATE === "1" || process.argv.includes("--update-baseline");
+// T4a 移动前补录打开态，保留已有页面基线不变。
+const updateOverlays = process.env.UI_MODES_UPDATE_OVERLAYS === "1";
+const updatesCapture = (slug) => update || (updateOverlays && ["account-open", "settings-open"].includes(slug));
 const session = `ui-modes-${process.pid}`;
 const fixturePath = join(baseline, "fixture.json");
 const actual = join(baseline, "actual");
@@ -97,12 +100,13 @@ function open(path) {
 function compareJson(mode, slug, value) {
   const name = `${slug}.json`;
   writeJson(join(actual, mode, name), value);
-  if (update) writeJson(join(baseline, mode, name), value);
+  if (updatesCapture(slug)) writeJson(join(baseline, mode, name), value);
   else assert.deepEqual(value, json(join(baseline, mode, name)), `${mode}/${name}`);
 }
 
-function capture(mode, slug, path, mobile = false) {
+function capture(mode, slug, path, mobile = false, prepare) {
   open(path);
+  prepare?.();
   const value = evaluate(`(() => {
     const visible = selector => [...document.querySelectorAll(selector)].filter(e => e.getClientRects().length > 0);
     return {
@@ -130,7 +134,7 @@ function capture(mode, slug, path, mobile = false) {
     document.activeElement?.blur();
   })()`);
   browser("mouse", "move", "0", "0");
-  if (update) browser("screenshot", join(baseline, mode, `${slug}.png`), "--full");
+  if (updatesCapture(slug)) browser("screenshot", join(baseline, mode, `${slug}.png`), "--full");
   else {
     browser("screenshot", join(actual, mode, `${slug}.png`), "--full");
     const diff = browser(
@@ -271,6 +275,18 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       // 先打开 Sheet，使第一次运行的 Recent 列表与后续运行相同。
       open(`/nodes/${fixture.sheetId}`);
       for (const [slug, path] of pages) capture(mode, slug, path);
+      capture(mode, "account-open", "/home", false, () => {
+        click("button", "Account");
+        browser("wait", "[role=menu]");
+      });
+      capture(mode, "settings-open", "/home", false, () => {
+        if (mode === "repository") {
+          click("button", "Account");
+          browser("wait", "[role=menu]");
+          click("menuitem", "Application settings");
+        } else click("button", "Application settings");
+        browser("wait", "[role=dialog]");
+      });
       browser("set", "viewport", "390", "844");
       for (const [slug, path] of pages.filter(([slug]) => ["home", "team"].includes(slug))) {
         capture(mode, `${slug}-mobile`, path, true);
