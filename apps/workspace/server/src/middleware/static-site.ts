@@ -14,10 +14,17 @@ export function createStaticSiteRouter(publicDirectory: string): Router {
       maxAge: "1y",
       immutable: true,
     }),
-    notFoundHandler
+    notFoundHandler,
   );
-  router.use(express.static(publicDirectory));
+  router.use(
+    express.static(publicDirectory, {
+      setHeaders: (response, path) => {
+        if (path.endsWith(".html")) response.setHeader("Cache-Control", "no-cache");
+      },
+    }),
+  );
   router.get("/{*path}", (_request, response) => {
+    response.setHeader("Cache-Control", "no-cache");
     response.sendFile(resolve(publicDirectory, "index.html"));
   });
 
