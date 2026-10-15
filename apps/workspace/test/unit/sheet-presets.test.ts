@@ -126,7 +126,7 @@ describe("Workspace Sheet presets", () => {
     });
   }, 20_000);
 
-  it("omits Thread Comment from non-trunk preset stacks", async () => {
+  it("omits Thread Comment when a caller disables it", async () => {
     Object.defineProperty(globalThis, "Path2D", {
       configurable: true,
       value: class Path2D {},

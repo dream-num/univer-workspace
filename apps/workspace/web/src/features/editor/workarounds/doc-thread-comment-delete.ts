@@ -104,11 +104,7 @@ export class UniverWorkspaceDocsThreadCommentDataSourcePlugin extends UniverThre
   }
 }
 
-/** Trunk-only registration entry; normal editors do not import this module. */
-export function getDocThreadCommentCollaborationPlugins(
-  enabled = true
-): IPresetPlugin[] {
-  return enabled
-    ? [UniverWorkspaceDocsThreadCommentDataSourcePlugin]
-    : [];
+/** Doc registration entry; normal editors do not import this module. */
+export function getDocThreadCommentCollaborationPlugins(): IPresetPlugin[] {
+  return [UniverWorkspaceDocsThreadCommentDataSourcePlugin];
 }

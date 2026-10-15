@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   backend: vi.fn((options: unknown) => ({ options })),
+  commentReplay: vi.fn(),
   factory: vi.fn(),
   headless: vi.fn(),
   host: vi.fn(),
@@ -18,6 +19,9 @@ vi.mock("@univer-cli/headless-univer", () => ({
 }));
 vi.mock("../src/reference-host.js", () => ({
   loadWorkspaceReferenceHostContext: mocks.host,
+}));
+vi.mock("../src/workarounds/comment-replay.js", () => ({
+  installCommentReplayCompatibility: mocks.commentReplay,
 }));
 
 import { workspaceContentRuntimeWorker } from "../src/content-worker.js";
@@ -68,12 +72,13 @@ describe("Workspace content runtime worker", () => {
     };
     const resolveSnapshotService = vi.fn();
 
-    await factoryOptions.createUniver({
+    const univer = await factoryOptions.createUniver({
       resolveSnapshotService,
       unitId: "unit-1",
       unitType: UniverInstanceType.UNIVER_SHEET,
     });
 
+    expect(mocks.commentReplay).toHaveBeenCalledWith(univer);
     expect(mocks.headless).toHaveBeenCalledWith(
       expect.objectContaining({
         embedPluginConfig: { resourceRefUnitProviderRegistrations: expect.any(Array) },
@@ -103,6 +108,27 @@ describe("Workspace content runtime worker", () => {
     expect(mocks.host).not.toHaveBeenCalled();
     expect(mocks.backend).not.toHaveBeenCalled();
     expect(mocks.load).not.toHaveBeenCalled();
+  });
+
+  it("disposes the runtime when comment model registration fails", async () => {
+    const dispose = vi.fn();
+    mocks.headless.mockReturnValue(async () => ({ dispose }));
+    mocks.commentReplay.mockImplementation(() => {
+      throw new Error("duplicated plugin name");
+    });
+    await workspaceContentRuntimeWorker.createRuntime(init({ kind: "trunk" }));
+    const factoryOptions = mocks.factory.mock.calls[0]![0] as {
+      readonly createUniver: (context: unknown) => Promise<unknown>;
+    };
+
+    await expect(
+      factoryOptions.createUniver({
+        resolveSnapshotService: vi.fn(),
+        unitId: "unit-1",
+        unitType: UniverInstanceType.UNIVER_DOC,
+      }),
+    ).rejects.toThrow("duplicated plugin name");
+    expect(dispose).toHaveBeenCalledTimes(1);
   });
 
   it("preserves the missing SnapshotService resolver failure", async () => {

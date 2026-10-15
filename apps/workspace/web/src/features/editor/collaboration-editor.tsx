@@ -146,11 +146,7 @@ interface ICollaborationEditorDefinition {
     compact: boolean
   ) => IPreset[];
   readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
-  readonly collaborationFeaturePlugins?: (
-    collaborationScope: NonNullable<
-      CollaborationEditorProps["collaborationScope"]
-    >
-  ) => IPresetPlugin[];
+  readonly collaborationFeaturePlugins?: () => IPresetPlugin[];
   readonly exchangeFeaturePlugins?: () => IPresetPlugin[];
   readonly printFeaturePlugins?: () => IPresetPlugin[];
   readonly previewDownload?: (api: FUniver, unitId: string) => Promise<void>;
@@ -333,7 +329,7 @@ export function createCollaborationEditor(
                 ],
               ];
         const collaborationFeaturePlugins =
-          definition.collaborationFeaturePlugins?.(collaborationScope) ?? [];
+          definition.collaborationFeaturePlugins?.() ?? [];
         const historyFeaturePlugins = createWorkspaceHistoryPlugins(
           collaborationScope,
           definition.history,

@@ -108,6 +108,7 @@ import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
 import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
 import { UniverSheetsTablePlugin } from "@univerjs/sheets-table";
 import { UniverSheetsTableUIPlugin } from "@univerjs/sheets-table-ui";
+import { UniverSheetsThreadCommentPlugin } from "@univerjs/sheets-thread-comment";
 import { UniverUIPlugin, type RibbonType } from "@univerjs/ui";
 import {
   FormulaCalculationSessionService,
@@ -118,6 +119,7 @@ import type { IEmbedResourceRefDataProviderRegistration } from "@univerjs-pro/em
 import { UniverChartEmbedPlugin } from "@univerjs-pro/chart-embed";
 import { IReferencedUnitManagerService, UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
+import { installCommentModelCompatibility } from "../../runtime/comment-models.js";
 import type { ViewerUnitType } from "../viewer-types.ts";
 import type { ViewerUrls } from "./proxy.ts";
 import { UniverSheetsImportRangeFormulaPlugin } from "./importrange-formula/index.ts";
@@ -213,6 +215,7 @@ export function registerViewerRendering(univer: Univer, options: ViewRenderingOp
   registerSlidePlugins(univer);
   registerBaseUnitPlugins(univer, collaborationOwnsAssetIo, options.readOnly ?? false);
   registerBoardPlugins(univer);
+  registerCommentModels(univer);
   options.registerBeforeEmbedCore?.();
   if (options.unitType !== undefined) {
     registerOutputPlugins(univer, options.unitType, options.exchangeClientConfig);
@@ -278,9 +281,14 @@ function registerDocPlugins(univer: Univer): void {
   univer.registerPlugin(UniverDocsCodeUIPlugin);
   univer.registerPlugin(UniverDocsQuotePlugin);
   univer.registerPlugin(UniverDocsQuoteUIPlugin);
-  // Thread comment collaboration storage is not exposed by the Workspace
-  // adapter yet. The native UI remains available where the SDK supplies it;
-  // no client-side fake persistence is installed here.
+}
+
+// Persisted comment anchors only. The Viewer shows no comment UI and installs
+// no body datasource; registering the models keeps anchor resources intact
+// when an editable Viewer saves a Unit.
+function registerCommentModels(univer: Univer): void {
+  univer.registerPlugin(UniverSheetsThreadCommentPlugin);
+  installCommentModelCompatibility(univer);
 }
 
 function registerSheetPlugins(univer: Univer): void {

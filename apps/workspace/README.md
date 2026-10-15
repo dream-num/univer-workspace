@@ -37,8 +37,11 @@ stored separately in `.data/univer-collaboration.sqlite`, and uploaded Blob
 bytes default to `.data/univer-workspace-blobs`. Thread Comment anchors for
 Sheet, Doc, Slide, Base, and Board remain in Unit snapshots and changesets;
 comment bodies, replies, and solved state use the Comment component in the same
-Collaboration SQLite file. Thread Comments are enabled only in Trunk editors
-because the Comment protocol does not define Worktree branch or merge semantics.
+Collaboration SQLite file. Comment bodies are shared across Trunk, Worktree,
+and Merge Preview editors; only anchors branch and merge with Unit data. The
+Comment protocol has no Worktree semantics, so a comment deleted from a
+Worktree disappears for Trunk as well. See `docs/application-design.md`
+("评论与 Worktree") for the known behaviors and follow-up directions.
 
 The same Collaboration SQLite file stores a persistent History segment index.
 SDK 1.0.0 owns automatic indexing from authoritative Core creation facts and

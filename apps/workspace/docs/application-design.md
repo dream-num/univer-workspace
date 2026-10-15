@@ -233,8 +233,29 @@ Slide、Base 和 Board。`UnitAction.Comment` 与 `View` 使用同一打开权�
 新增、回复和改变 solved 状态。编辑正文由 Comment Service 限定为作者本人，删除要求作者本人或
 Resource Owner/Admin。未登录请求只放行评论列表，写入在进入评论策略前被拒绝。评论 anchor 随
 Unit 协作数据变化，正文由 Comment Adapter 保存。
-由于 Comment 协议没有 Worktree ID、revision 或合并合同，Browser 仅在 Trunk Scope 注册
-Thread Comment，Worktree 与 Merge Preview 保持关闭。
+
+#### 评论与 Worktree
+
+评论是围绕 Unit 的对话，不是版本化内容。Comment 协议没有 Worktree ID、revision 或正文合并合同，
+Collaboration Worktree Client 也不感知评论。因此本仓库采取的策略是：正文全局共享、不分支；只有
+anchor 作为 Unit resource 随 snapshot/changeset 分支和合并。Browser 在 Trunk、Worktree 和 Merge
+Preview 三种 Scope 注册同一套标准 Thread Comment model、UI 和远程 datasource，服务端评论策略只看
+Resource 权限，不区分会话类型；Worktree 中读写评论与 Trunk 中读写是同一件事。
+
+这一不对称带来的已知行为，作为后续优化方向记录在此，当前不做额外限制：
+
+- 在 Worktree 中新增评论：正文立即进入共享 Comment 存储，anchor 只在 Worktree 快照中。Trunk 没有
+  该 anchor，不会拉取该 thread；Worktree 合并后评论随 anchor 出现在 Trunk。Worktree 丢弃后正文成为
+  不可见的孤儿记录，没有清理机制。
+- 在 Worktree 中编辑、回复或 resolve 已有评论：Trunk 立即可见，与对话语义一致。
+- 在 Worktree 中删除已有评论：正文全局消失，Trunk 保留指向空 thread 的 anchor，直到 Trunk 删除该
+  anchor 或 Worktree 合并。这是唯一可能令人困惑的情况；如需收紧，可在 Comment Service 写中间件中
+  校验请求来自该用户已加入的 Trunk Unit Room（`endpoint.findJoinedSession`），约 10 行。
+- 标准 datasource 会把正文缓存写入 Worktree 快照的 anchor resource。该缓存与 Trunk 现状相同，只是
+  读取加速，不产生分支或合并语义。
+
+可选的后续方向：只读的 Worktree 评论 UI（依赖上游 ThreadCommentUI 提供只读配置）、孤儿正文清理，
+以及 Comment 协议的 Worktree 感知。在上游提供合同之前，不在本仓库自建评论分支或只读 UI 变体。
 
 History Endpoint 同样复用 Login Session 与 Access Resolver，但服务五类 Trunk Unit。Viewer
 可以列出版本、作者并读取版本 changeset；恢复版本会生成标准 Collaboration changeset，因此仍

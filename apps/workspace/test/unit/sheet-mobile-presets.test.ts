@@ -130,24 +130,6 @@ describe("Workspace Sheet mobile presets", () => {
     );
   }, 20_000);
 
-  it("omits Thread Comment from non-trunk preset stacks", async () => {
-    Object.defineProperty(globalThis, "Path2D", {
-      configurable: true,
-      value: class Path2D {},
-    });
-    const [{ createSheetMobilePresets }] = await Promise.all([
-      import("../../web/src/features/editor/units/sheet/sheet-mobile-presets.js"),
-    ]);
-    const presets = createSheetMobilePresets({
-      container,
-      threadCommentsEnabled: false,
-    });
-
-    expect(presetPluginKeys(presets)).not.toContain(
-      "UNIVER_SHEETS_THREAD_COMMENT_PLUGIN"
-    );
-  }, 20_000);
-
   it("localizes Drawing when collaboration is disabled", async () => {
     Object.defineProperty(globalThis, "Path2D", {
       configurable: true,

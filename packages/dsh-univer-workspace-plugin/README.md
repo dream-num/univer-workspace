@@ -80,6 +80,16 @@ custom name. See the [Agent storage guide](../../apps/agent/README.md#local-data
 for installation paths, shared state, and account data; do not use a profile name
 as a substitute for those explicit storage boundaries.
 
+## Persisted comment anchors
+
+The headless worker and the browser Viewer register the Thread Comment models
+for Sheet, Doc, Slide, Base and Board so existing comment anchors survive
+replay, export and Viewer saves. Neither installs comment UI or a body
+datasource; comment bodies stay in the Workspace Comment service. The SDK 1.0.3
+headless factory registers only the Sheet model, so the missing four are added
+in `src/runtime/comment-models.ts`; remove it once the upstream factory covers
+all five types.
+
 ## Markdown file preview
 
 Remote `.md`/`.markdown` Blobs use the private

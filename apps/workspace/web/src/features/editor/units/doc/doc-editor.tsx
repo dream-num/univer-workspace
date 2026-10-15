@@ -161,13 +161,11 @@ export default createCollaborationEditor({
   },
   theme: defaultTheme,
   locales: docEditorLocales,
-  collaborationFeaturePlugins: (collaborationScope) =>
-    getDocThreadCommentCollaborationPlugins(
-      collaborationScope.kind === "trunk"
-    ),
+  collaborationFeaturePlugins: () =>
+    getDocThreadCommentCollaborationPlugins(),
   exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin],
   printFeaturePlugins: () => [UniverDocsPrintPlugin],
-  createPresets: (container, _license, collaborationScope, compact) => [
+  createPresets: (container, _license, _collaborationScope, compact) => [
     { plugins: getReferencedSheetPlugins() },
     UniverDocsCorePreset({
       container,
@@ -178,9 +176,7 @@ export default createCollaborationEditor({
       collaboration: true,
     }),
     UniverDocsHyperLinkPreset(),
-    ...(collaborationScope.kind === "trunk"
-      ? [UniverDocsThreadCommentPreset()]
-      : []),
+    UniverDocsThreadCommentPreset(),
     {
       plugins: [
         ...getDocReplayCompatibilityPlugins(),
