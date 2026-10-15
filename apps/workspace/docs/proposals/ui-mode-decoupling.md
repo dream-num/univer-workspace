@@ -768,3 +768,25 @@ Drive 是假想 mode，`modes/drive/**` 只用于走查；其余名称与第 6 �
 publicRead 独立保存、失败保留草稿及重试；新增 Star 乐观更新、失败回滚、成功重试、取消 Star，
 以及 repository 首页和 wiki 侧栏的团队空间创建检查。测试结束时将公开测试空间恢复为私有，
 避免影响其他账号的侧栏截图。
+
+### T3.2 命令与行为保留（PR 描述素材）
+
+节点写操作统一到 `nodes.commands.ts`；两份传输流程先移入 `node-transfers.ts`，再合并。
+新增 `useImportDocument` 承接原有导入流程，避免把上传链路留在组件中。
+
+- 创建资源的 Idempotency-Key、初始文档格式、完成轮询和提示保持一致。
+- Blob 上传保留「预留 → PUT 字节 → 完成」顺序；失败时尽力撤销，撤销失败不覆盖原错误。
+- 通用入口解析上传/导入响应中的服务端错误，导入完成要求 Unit ID；侧栏保留固定英文兜底，
+  task 为 done 即完成。显式参数保留这些既有差异，不按 mode 分支。
+- 删除命令在失效前等待调用方的 `beforeInvalidate`；当前节点页面先退出，再刷新列表。
+  这是本任务对通用成功回调约定的局部细化，导航实现仍在调用方。
+- ResourceTitle 保留资源详情、节点详情和 HTML 列表失效；普通改名/移动只刷新产品列表。
+
+| T0 写操作 | method / path | body 字段 | 成功后 URL |
+| --- | --- | --- | --- |
+| wiki / repository 创建文件夹 | POST /api/nodes | spaceId、parentNodeId、name | 保留当前 /spaces/{spaceId} |
+| wiki 设置改名（回归） | PATCH /api/spaces/{spaceId} | name、publicRead、description | /spaces/{spaceId} |
+| repository 设置改名（回归） | PATCH /api/spaces/{spaceId} | name | /spaces/{spaceId}/settings |
+
+传输单测覆盖错误策略、撤销失败、完成失败、缺少上传目标、Unit ID 等待条件与空错误消息。
+真实浏览器另验证创建 Sheet、文件夹移动与改名、Blob 上传、缺失空间校验和删除前后缓存顺序。

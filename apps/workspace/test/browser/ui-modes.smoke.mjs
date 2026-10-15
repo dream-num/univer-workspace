@@ -77,6 +77,8 @@ function settle() {
       quiet = setTimeout(done, 300);
     });
   })()`);
+  // 文件树还维护自己的分支状态；QueryClient 空闲时 React 可能尚未完成分支渲染。
+  browser("wait", "--fn", "document.querySelector('aside [class*=spinner]') === null");
 }
 
 function open(path) {

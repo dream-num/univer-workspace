@@ -1,11 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { FolderUp, Search } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
-import { invalidateProductLists } from "./nodes.commands";
+import { useUpdateNode } from "./nodes.commands";
 import type { components } from "../../../../generated/http/schema.js";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
 import { NodeIcon } from "./node-icon";
 import { CreateNodeDropdown } from "./create-node-dropdown";
 import { NodeActionsMenu } from "./node-actions-menu";
@@ -63,7 +60,6 @@ export function NodeBrowser(props: {
   const [typeFilter, setTypeFilter] = useState<NodeFilter>("all");
   const [editName, setEditName] = useState("");
   const [editParentNodeId, setEditParentNodeId] = useState("");
-  const queryClient = useQueryClient();
   const { language, t } = useI18n();
   const parentNodeId = props.page.parentNode?.id ?? null;
   const canCreate =
@@ -111,43 +107,27 @@ export function NodeBrowser(props: {
     typeFilter !== "all" ||
     Boolean(normalizedSearch && (props.onClearSearch || props.onSearchChange));
 
-  const updateNode = useMutation({
-    mutationFn: async (values: {
-      readonly name: string;
-      readonly parentNodeId?: string;
-    }) => {
-      if (!editNode) throw new Error("No node is selected.");
-      const { error } = await api.PATCH("/api/nodes/{nodeId}", {
-        params: { path: { nodeId: editNode.id } },
-        body: {
-          ...(editNode.capabilities.rename ? { name: values.name } : {}),
-          ...(editNode.capabilities.move
-            ? { parentNodeId: values.parentNodeId || null }
-            : {}),
-        },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: async () => {
-      await invalidateProductLists(queryClient);
-      setEditNode(null);
-      toast.success(t("itemUpdated"));
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : t("updateFailed")
-      );
-    },
-  });
+  const updateNode = useUpdateNode();
 
   const submitEdit = (event: FormEvent) => {
     event.preventDefault();
     if (!editName.trim()) return;
+    if (!editNode) {
+      toast.error("No node is selected.");
+      return;
+    }
     updateNode.mutate({
-      name: editName.trim(),
-      ...(editParentNodeId.trim()
-        ? { parentNodeId: editParentNodeId.trim() }
-        : {}),
+      nodeId: editNode.id,
+      body: {
+        ...(editNode.capabilities.rename ? { name: editName.trim() } : {}),
+        ...(editNode.capabilities.move ? { parentNodeId: editParentNodeId.trim() || null } : {}),
+      },
+    }, {
+      onSuccess: () => {
+        setEditNode(null);
+        toast.success(t("itemUpdated"));
+      },
+      onError: (error) => toast.error(error instanceof Error ? error.message : t("updateFailed")),
     });
   };
 

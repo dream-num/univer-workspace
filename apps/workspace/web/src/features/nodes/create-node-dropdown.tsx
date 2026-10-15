@@ -1,12 +1,7 @@
-import { waitForDocumentImportWithUnit as waitForDocumentImport } from "./node-transfers";
 import { ChevronDown, Plus, Upload } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { invalidateProductLists } from "./nodes.commands";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
-import { createIdempotencyKey } from "../../shared/idempotency-key";
+import { useCreateFolder, useCreateUniverResource, useUploadBlob, useImportDocument } from "./nodes.commands";
 import { useI18n } from "../../shared/i18n";
 import { cn } from "../../shared/utils/cn";
 import {
@@ -25,11 +20,7 @@ import {
   Segmented,
   toast,
 } from "../../shared/ui";
-import {
-  createDocumentInitialData,
-  type NewDocumentMode,
-} from "./create-document-initial-data";
-import { waitForCreatedResource } from "./wait-for-created-resource";
+import type { NewDocumentMode } from "./create-document-initial-data";
 import { NodeIcon } from "./node-icon";
 
 type UnitType = "sheet" | "doc" | "slide" | "board" | "base";
@@ -51,82 +42,32 @@ export function CreateNodeDropdown(props: {
     useState<NewDocumentMode>("modern");
   const [name, setName] = useState("");
   const [error, setError] = useState<string>();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { language, t } = useI18n();
   const nameInputId = useId();
   const fileInput = useRef<HTMLInputElement>(null);
   const parentNodeId = props.parentNodeId ?? null;
 
-  const createGroup = useMutation({
-    mutationFn: async (values: { readonly name: string }) => {
-      if (!props.spaceId) throw new Error(t("noWritableSpace"));
-      const { data, error: apiErr } = await api.POST("/api/nodes", {
-        body: {
-          spaceId: props.spaceId,
-          parentNodeId,
-          name: values.name,
-        },
-      });
-      if (apiErr) throw apiError(apiErr);
-      return data;
-    },
+  const createGroup = useCreateFolder(t("noWritableSpace"));
+  const createGroupCallbacks = {
     onSuccess: async () => {
-      await invalidateProductLists(queryClient);
       await props.onCreated?.();
       setGroupDialogOpen(false);
       setName("");
       toast.success(t("groupCreated"));
     },
-    onError: (mutationError) => {
+    onError: (mutationError: Error) => {
       toast.error(
         mutationError instanceof Error
           ? mutationError.message
           : t("groupCreationFailed")
       );
     },
-  });
+  };
 
-  const createResource = useMutation({
-    mutationFn: async (values: {
-      readonly documentMode: NewDocumentMode;
-      readonly name: string;
-      readonly unitType: UnitType;
-    }) => {
-      if (!props.spaceId) throw new Error(t("noWritableSpace"));
-      const initialData =
-        values.unitType === "doc"
-          ? await createDocumentInitialData({
-              language,
-              mode: values.documentMode,
-              title: values.name,
-            })
-          : undefined;
-      const { data, error: apiErr } = await api.POST("/api/resources", {
-        params: {
-          header: {
-            "Idempotency-Key": createIdempotencyKey(),
-          },
-        },
-        body: {
-          kind: "univer",
-          spaceId: props.spaceId,
-          parentNodeId,
-          name: values.name,
-          unitType: values.unitType,
-          ...(initialData === undefined
-            ? {}
-            : { initialData: { ...initialData } }),
-        },
-      });
-      if (apiErr) throw apiError(apiErr);
-      return waitForCreatedResource(data, {
-        failed: t("resourceCreationFailed"),
-        continuing: t("resourceCreationContinuing"),
-      });
-    },
-    onSuccess: async (nodeId) => {
-      await invalidateProductLists(queryClient);
+  const createResource = useCreateUniverResource(language, { noWritableSpace: t("noWritableSpace"), failed: t("resourceCreationFailed"), continuing: t("resourceCreationContinuing") });
+  const createResourceCallbacks = {
+    onSuccess: async (nodeId: string) => {
       await props.onCreated?.();
       setResourceDialogOpen(false);
       setSelectedDocumentMode("modern");
@@ -134,128 +75,44 @@ export function CreateNodeDropdown(props: {
       toast.success(t("resourceCreated"));
       await navigate({ to: "/nodes/$nodeId", params: { nodeId } });
     },
-    onError: (mutationError) => {
+    onError: (mutationError: Error) => {
       toast.error(
         mutationError instanceof Error
           ? mutationError.message
           : t("resourceCreationFailed")
       );
     },
-  });
+  };
 
-  const uploadBlob = useMutation({
-    mutationFn: async (file: File) => {
-      if (!props.spaceId) throw new Error(t("noWritableSpace"));
-      const { data: reserved, error: reserveError } = await api.POST(
-        "/api/blob-upload-sessions",
-        {
-          params: {
-            header: { "Idempotency-Key": createIdempotencyKey() },
-          },
-          body: {
-            spaceId: props.spaceId,
-            parentNodeId,
-            name: file.name,
-            originalFilename: file.name,
-            byteSize: file.size,
-            ...(file.type ? { declaredMediaType: file.type } : {}),
-          },
-        }
-      );
-      if (reserveError) throw apiError(reserveError);
-      if (!reserved.uploadTarget) {
-        throw new Error(t("fileUploadFailed"));
-      }
-      try {
-        const uploadResponse = await fetch(reserved.uploadTarget.contentUrl, {
-          method: "PUT",
-          credentials: "include",
-          headers: { "Content-Type": "application/octet-stream" },
-          body: file,
-        });
-        if (!uploadResponse.ok) {
-          const value = await uploadResponse.json().catch(() => null);
-          throw value ? apiError(value) : new Error(t("fileUploadFailed"));
-        }
-        const { data, error: completeError } = await api.POST(
-          "/api/blob-upload-sessions/{uploadId}/complete",
-          { params: { path: { uploadId: reserved.upload.id } } }
-        );
-        if (completeError) throw apiError(completeError);
-        return data;
-      } catch (error) {
-        try {
-          await api.DELETE("/api/blob-upload-sessions/{uploadId}", {
-            params: { path: { uploadId: reserved.upload.id } },
-          });
-        } catch {
-          // The expiry worker is the fallback when best-effort abort cannot run.
-        }
-        throw error;
-      }
-    },
+  const uploadBlob = useUploadBlob({ noWritableSpace: t("noWritableSpace"), failed: t("fileUploadFailed"), readResponseError: true });
+  const uploadBlobCallbacks = {
     onSuccess: async () => {
-      await invalidateProductLists(queryClient);
       await props.onCreated?.();
       toast.success(t("fileUploaded"));
     },
-    onError: (mutationError) => {
+    onError: (mutationError: Error) => {
       toast.error(
         mutationError instanceof Error
           ? mutationError.message
           : t("fileUploadFailed")
       );
     },
-  });
+  };
 
-  const importDocument = useMutation({
-    mutationFn: async (file: File) => {
-      if (!props.spaceId) throw new Error(t("noWritableSpace"));
-      const form = new FormData();
-      form.append("file", file);
-      const uploadedResponse = await fetch(
-        `/universer-api/stream/file/upload?size=${encodeURIComponent(file.size)}&source=1&flate=false`,
-        { method: "POST", credentials: "include", body: form }
-      );
-      const uploaded = (await uploadedResponse.json().catch(() => null)) as
-        | { readonly FileId?: string }
-        | null;
-      if (!uploadedResponse.ok || !uploaded?.FileId) {
-        throw uploaded ? apiError(uploaded) : new Error(t("fileImportFailed"));
-      }
-
-      const startedResponse = await fetch("/universer-api/exchange/import", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileID: uploaded.FileId,
-          outputType: 1,
-          spaceId: props.spaceId,
-          parentNodeId,
-        }),
-      });
-      const started = (await startedResponse.json().catch(() => null)) as
-        | { readonly taskID?: string }
-        | null;
-      if (!startedResponse.ok || !started?.taskID) {
-        throw started ? apiError(started) : new Error(t("fileImportFailed"));
-      }
-      return await waitForDocumentImport(started.taskID, t("fileImportFailed"));
-    },
+  const importDocument = useImportDocument({ noWritableSpace: t("noWritableSpace"), failed: t("fileImportFailed"), requireUnitId: true });
+  const importDocumentCallbacks = {
     onSuccess: async () => {
-      await invalidateProductLists(queryClient);
       await props.onCreated?.();
       toast.success(t("fileImported"));
     },
-    onError: (mutationError) => {
+    onError: (mutationError: Error) => {
       toast.error(
         mutationError instanceof Error
           ? mutationError.message
           : t("fileImportFailed")
       );
     },
-  });
+  };
 
   const placement = props.placement ?? "toolbar";
   const action = props.action ?? "all";
@@ -270,9 +127,9 @@ export function CreateNodeDropdown(props: {
     event.target.value = "";
     if (!file) return;
     if (IMPORTABLE_DOCUMENT_EXTENSION.test(file.name)) {
-      importDocument.mutate(file);
+      importDocument.mutate({ spaceId: props.spaceId ?? "", parentNodeId, file }, importDocumentCallbacks);
     } else {
-      uploadBlob.mutate(file);
+      uploadBlob.mutate({ spaceId: props.spaceId ?? "", parentNodeId, file }, uploadBlobCallbacks);
     }
   };
 
@@ -298,13 +155,15 @@ export function CreateNodeDropdown(props: {
       );
       return;
     }
-    if (groupDialogOpen) createGroup.mutate({ name: trimmed });
+    if (groupDialogOpen) createGroup.mutate({ spaceId: props.spaceId ?? "", parentNodeId, name: trimmed }, createGroupCallbacks);
     else {
       createResource.mutate({
+        spaceId: props.spaceId ?? "",
+        parentNodeId,
         documentMode: selectedDocumentMode,
         name: trimmed,
         unitType: selectedUnitType,
-      });
+      }, createResourceCallbacks);
     }
   };
 

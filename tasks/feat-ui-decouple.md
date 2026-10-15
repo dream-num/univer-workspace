@@ -161,7 +161,10 @@ T1、T2a、T3.0 之间互不依赖，可以并行。T3.x 各 feature 之间互�
   | T3.6 worktrees | `useWorktreeLifecycle(worktreeId)`（ready / merge / discard）、`useToggleUnitRemoval(worktreeId)` | `features/worktrees/worktree-review-panel.tsx` 的 `removal`、`action` 两个 mutation | `RepositoryPullRequestLayout` 收到的 `actions` 仍由 panel 组装，本任务不改 |
 
   - 已完成 T3.1：三个 Space 命令已抽出；386 项测试、typecheck、build、34 张基线截图及 settings 专项通过。
-    请求字段与导航对比见提案的「T3.1 请求与导航对比」。T3.2–T3.6 待实施。
+    请求字段与导航对比见提案的「T3.1 请求与导航对比」。
+  - 已完成 T3.2：节点、资源、Blob 上传与文档导入命令已抽出；394 项测试、typecheck、build、
+    34 张基线截图通过，传输兼容差异与删除刷新顺序见提案的「T3.2 命令与行为保留」。
+    T3.3–T3.6 待实施。
 
   - 不在范围：`auth-card.tsx`、`cli-login.tsx`，以及 `-workspace-layout.tsx` 中的登出、改资料、改密码、解绑 OAuth。
     它们与 mode 无关，T4a 只移动不改写。

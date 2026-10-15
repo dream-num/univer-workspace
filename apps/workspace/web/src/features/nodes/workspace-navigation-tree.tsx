@@ -1,4 +1,3 @@
-import { uploadBlob, importDocument } from "./node-transfers";
 import {
   WorkspaceFileBrowser,
   type WorkspaceFileBrowserDataSource,
@@ -14,12 +13,9 @@ import { useMemo } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
-import { createIdempotencyKey } from "../../shared/idempotency-key";
 import { useI18n } from "../../shared/i18n";
 import { useCreateTeamSpace } from "../spaces/spaces.commands";
-import { invalidateProductLists } from "./nodes.commands";
-import { waitForCreatedResource } from "./wait-for-created-resource";
-import { createDocumentInitialData } from "./create-document-initial-data";
+import { useCreateFolder, useCreateUniverResource, useUploadBlob, useImportDocument, useUpdateNode, useTrashNode } from "./nodes.commands";
 import { nodeChildrenQueryOptions, spaceNodesQueryOptions } from "./nodes.queries";
 
 type Space = components["schemas"]["SpaceView"];
@@ -38,6 +34,18 @@ export function WorkspaceNavigationTree(props: {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { mutateAsync: createTeamSpace } = useCreateTeamSpace();
+  const { mutateAsync: createFolder } = useCreateFolder(t("noWritableSpace"));
+  const { mutateAsync: createResource } = useCreateUniverResource(language, {
+    noWritableSpace: t("noWritableSpace"), failed: t("resourceCreationFailed"), continuing: t("resourceCreationContinuing"),
+  });
+  const { mutateAsync: uploadBlob } = useUploadBlob({
+    noWritableSpace: t("noWritableSpace"), failed: "File upload failed.", readResponseError: false,
+  });
+  const { mutateAsync: importDocument } = useImportDocument({
+    noWritableSpace: t("noWritableSpace"), failed: "File import failed.", requireUnitId: false,
+  });
+  const { mutateAsync: updateNode } = useUpdateNode();
+  const { mutateAsync: trashNode } = useTrashNode();
   const spaces = useMemo(
     () =>
       [
@@ -63,83 +71,39 @@ export function WorkspaceNavigationTree(props: {
         return toWorkspaceFileSpace(data);
       },
       async createNode(input) {
-        let createdNodeId: string | undefined;
         if (input.kind === "folder") {
-          const { error } = await api.POST("/api/nodes", {
-            body: {
-              spaceId: input.spaceId,
-              parentNodeId: input.parentNodeId,
-              name: input.name,
-            },
-          });
-          if (error) throw apiError(error);
+          await createFolder({ spaceId: input.spaceId, parentNodeId: input.parentNodeId, name: input.name });
         } else {
-          const initialData =
-            input.kind === "doc"
-              ? await createDocumentInitialData({
-                  language,
-                  mode: input.documentMode,
-                  title: input.name,
-                })
-              : undefined;
-          const { data, error } = await api.POST("/api/resources", {
-            params: { header: { "Idempotency-Key": createIdempotencyKey() } },
-            body: {
-              kind: "univer",
-              spaceId: input.spaceId,
-              parentNodeId: input.parentNodeId,
-              name: input.name,
-              unitType: input.kind,
-              ...(initialData === undefined ? {} : { initialData: { ...initialData } }),
-            },
+          const nodeId = await createResource({
+            spaceId: input.spaceId, parentNodeId: input.parentNodeId, name: input.name,
+            unitType: input.kind, documentMode: input.documentMode,
           });
-          if (error) throw apiError(error);
-          createdNodeId = await waitForCreatedResource(data, {
-            failed: t("resourceCreationFailed"),
-            continuing: t("resourceCreationContinuing"),
-          });
-        }
-        await invalidateProductLists(queryClient);
-        if (createdNodeId) {
-          await navigate({ to: "/nodes/$nodeId", params: { nodeId: createdNodeId } });
+          await navigate({ to: "/nodes/$nodeId", params: { nodeId } });
         }
       },
       async uploadFile(input) {
-        if (IMPORTABLE_DOCUMENT_EXTENSION.test(input.file.name)) {
-          await importDocument(input.spaceId, input.parentNodeId, input.file);
-        } else {
-          await uploadBlob(input.spaceId, input.parentNodeId, input.file);
-        }
-        await invalidateProductLists(queryClient);
+        if (IMPORTABLE_DOCUMENT_EXTENSION.test(input.file.name)) await importDocument(input);
+        else await uploadBlob(input);
       },
       async renameNode({ node, name }) {
-        const { error } = await api.PATCH("/api/nodes/{nodeId}", {
-          params: { path: { nodeId: node.id } },
-          body: { name },
-        });
-        if (error) throw apiError(error);
-        await invalidateProductLists(queryClient);
+        await updateNode({ nodeId: node.id, body: { name } });
       },
       async moveNode({ nodeId, parentNodeId }) {
-        const { error } = await api.PATCH("/api/nodes/{nodeId}", {
-          params: { path: { nodeId } },
-          body: { parentNodeId },
-        });
-        if (error) throw apiError(error);
-        await invalidateProductLists(queryClient);
+        await updateNode({ nodeId, body: { parentNodeId } });
       },
       async trashNode({ node }) {
-        const { error } = await api.POST("/api/nodes/{nodeId}/trash", {
-          params: { path: { nodeId: node.id } },
+        await trashNode({
+          nodeId: node.id,
+          spaceId: node.spaceId,
+          beforeInvalidate: async () => {
+            if (router.matchRoute(
+              { to: "/nodes/$nodeId", params: { nodeId: node.id } },
+              { includeSearch: false },
+            )) {
+              await navigate({ to: "/home", replace: true });
+            }
+          },
         });
-        if (error) throw apiError(error);
-        if (router.matchRoute(
-          { to: "/nodes/$nodeId", params: { nodeId: node.id } },
-          { includeSearch: false },
-        )) {
-          await navigate({ to: "/home", replace: true });
-        }
-        await invalidateProductLists(queryClient, { spaceId: node.spaceId });
       },
       nodeUrl(node) {
         return new URL(`/nodes/${encodeURIComponent(node.id)}`, window.location.origin).toString();
@@ -188,7 +152,7 @@ export function WorkspaceNavigationTree(props: {
         },
       },
     }),
-    [createTeamSpace, language, navigate, queryClient, router, t],
+    [createTeamSpace, createFolder, createResource, uploadBlob, importDocument, updateNode, trashNode, navigate, queryClient, router],
   );
 
   return (

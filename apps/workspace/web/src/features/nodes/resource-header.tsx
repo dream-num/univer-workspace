@@ -1,15 +1,12 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import { Download, Lock, Maximize, MoreHorizontal, Pencil, Share2 } from "lucide-react";
 import { useState } from "react";
 import type { IMember } from "@univerjs/protocol";
-import { invalidateProductLists } from "./nodes.commands";
+import { useUpdateNode } from "./nodes.commands";
 import type { components } from "../../../../generated/http/schema.js";
 import { CollaboratorAvatars } from "../editor";
 import { ShareDialog } from "../permissions";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
 import { useI18n } from "../../shared/i18n";
 import { useMediaQuery } from "../../shared/resizable-sidebar";
 import {
@@ -24,8 +21,6 @@ import {
   toast,
 } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
-import { nodeQueryOptions } from "./nodes.queries";
-import { resourceOpenQueryOptions } from "../resources";
 
 type Node = components["schemas"]["NodeSummary"];
 
@@ -38,38 +33,17 @@ export function ResourceTitle({
   readonly resourceId: string;
   readonly authenticated: boolean;
 }) {
-  const queryClient = useQueryClient();
   const { t } = useI18n();
-  const rename = useMutation({
-    mutationFn: async (name: string) => {
-      const { data: updated, error } = await api.PATCH("/api/nodes/{nodeId}", {
-        params: { path: { nodeId: node.id } },
-        body: { name },
-      });
-      if (error) throw apiError(error);
-      return updated;
-    },
-    onSuccess: async (updated) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: nodeQueryOptions(node.id).queryKey,
-        }),
-        queryClient.invalidateQueries({
-          queryKey: resourceOpenQueryOptions(resourceId).queryKey,
-        }),
-        invalidateProductLists(queryClient, { htmlViews: true }),
-      ]);
-      toast.success(t("resourceRenamed", { name: updated.name }));
-    },
-    onError: (error) =>
-      toast.error(error instanceof Error ? error.message : t("resourceRenameFailed")),
-  });
+  const rename = useUpdateNode();
   return (
     <EditableText
       value={node.name}
       canEdit={authenticated && node.capabilities.rename}
       editLabel={t("renameResource")}
-      onCommit={(name) => rename.mutate(name)}
+      onCommit={(name) => rename.mutate({ nodeId: node.id, body: { name }, resourceId }, {
+        onSuccess: (updated) => toast.success(t("resourceRenamed", { name: updated.name })),
+        onError: (error) => toast.error(error instanceof Error ? error.message : t("resourceRenameFailed")),
+      })}
     />
   );
 }
