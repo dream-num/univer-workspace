@@ -1,0 +1,22 @@
+import type { MessageKey, ModeMessages } from "../shared/i18n";
+import { parseUiMode, useUiMode } from "../shared/ui-mode";
+import { repositoryMode } from "./repository";
+import { wikiMode } from "./wiki";
+
+export interface ModeDefinition {
+  readonly label: MessageKey;
+  readonly messages: ModeMessages;
+}
+
+export const modes = {
+  wiki: wikiMode,
+  repository: repositoryMode,
+} as const satisfies Record<string, ModeDefinition>;
+
+export type WorkspaceMode = keyof typeof modes;
+export const MODE_IDS = Object.keys(modes) as readonly WorkspaceMode[];
+
+export function useModeDefinition() {
+  const { mode } = useUiMode();
+  return modes[parseUiMode(mode, MODE_IDS, "wiki")];
+}

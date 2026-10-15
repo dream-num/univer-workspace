@@ -1,4 +1,3 @@
-import { repositoryMessages } from "../modes/repository/messages";
 import {
   createContext,
   useCallback,
@@ -8,11 +7,10 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { useTheme } from "./theme";
 
 export type AppLanguage = "zh-CN" | "en-US";
 
-const messages = {
+export const messages = {
   "zh-CN": {
     htmlViewTitle: "HTML 绑定视图",
     nativePreviewTitle: "Office 预览",
@@ -31,6 +29,7 @@ const messages = {
     htmlViewSignInRequired: "当前为访客模式，请登录后再操作",
     htmlViewEditPermissionRequired: "你没有此表格的编辑权限，请联系所有者申请权限。",
     layoutTheme: "页面主题",
+    wikiTheme: "Wiki",
     repositoryTheme: "Repository（实验性）",
     repository: "Repository",
     repositories: "Repositories",
@@ -641,6 +640,7 @@ const messages = {
     htmlViewEditPermissionRequired:
       "You don’t have permission to edit this spreadsheet. Contact the owner to request access.",
     layoutTheme: "Page theme",
+    wikiTheme: "Wiki",
     repositoryTheme: "Repository (experimental)",
     repository: "Repository",
     repositories: "Repositories",
@@ -1254,14 +1254,7 @@ const messages = {
 } as const;
 
 export type MessageKey = keyof (typeof messages)["zh-CN"];
-
-/**
- * Copy that follows the repository theme. The repository view is organised like
- * a GitHub repository, where a Space reads as a repository and its members as
- * collaborators; the wiki theme keeps the original wording. Only the keys whose
- * text mentions a Space need an entry.
- */
-
+export type ModeMessages = Partial<Record<AppLanguage, Partial<Record<MessageKey, string>>>>;
 
 interface LanguageContextValue {
   readonly language: AppLanguage;
@@ -1291,9 +1284,11 @@ function initialLanguage(): AppLanguage {
   return browserLanguage(navigator.languages ?? [navigator.language]);
 }
 
-export function LanguageProvider({ children }: PropsWithChildren) {
+export function LanguageProvider({
+  children,
+  overrides,
+}: PropsWithChildren<{ readonly overrides?: ModeMessages }>) {
   const [language, setCurrentLanguage] = useState<AppLanguage>(initialLanguage);
-  const { workspaceTheme } = useTheme();
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -1313,7 +1308,7 @@ export function LanguageProvider({ children }: PropsWithChildren) {
       language,
       setLanguage,
       t(key, values) {
-        const override = workspaceTheme === "repository" ? repositoryMessages[language][key] : undefined;
+        const override = overrides?.[language]?.[key];
         let value: string = override ?? messages[language][key];
         for (const [name, replacement] of Object.entries(values ?? {})) {
           value = value.replaceAll(`{${name}}`, String(replacement));
@@ -1321,7 +1316,7 @@ export function LanguageProvider({ children }: PropsWithChildren) {
         return value;
       },
     }),
-    [language, setLanguage, workspaceTheme],
+    [language, setLanguage, overrides],
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;

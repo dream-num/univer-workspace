@@ -48,6 +48,7 @@ import { workspaceHarnessOrigin } from "../shared/app-links";
 import { apiError } from "../shared/api/errors";
 import { useI18n, type MessageKey } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
+import { MODE_IDS, modes } from "../modes/registry";
 import {
   SidebarResizeHandle,
   useMediaQuery,
@@ -901,10 +902,7 @@ function AuthenticatedWorkspaceLayout({
               size="sm"
               value={workspaceTheme}
               onValueChange={setWorkspaceTheme}
-              options={[
-                { label: "Wiki", value: "wiki" },
-                { label: t("repositoryTheme"), value: "repository" },
-              ]}
+              options={MODE_IDS.map((id) => ({ label: t(modes[id].label), value: id }))}
             />
             <p className="text-xs text-muted-foreground">{t("repositoryHint")}</p>
           </div>
