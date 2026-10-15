@@ -1,5 +1,8 @@
 import type { IPreset, IPresetPlugin } from "@univerjs/presets";
-import { UniverExchangeClientPlugin } from "@univerjs-pro/exchange-client";
+import {
+  UniverExchangeClientMobileUIPlugin,
+  UniverExchangeClientPlugin,
+} from "@univerjs-pro/exchange-client";
 
 export function createWorkspaceExchangeClientConfig(origin: string) {
   const endpoint = origin.replace(/\/+$/u, "");
@@ -11,6 +14,24 @@ export function createWorkspaceExchangeClientConfig(origin: string) {
     exportServerUrl: `${endpoint}/universer-api/exchange/{type}/export`,
     downloadEndpointUrl: `${endpoint}/`,
   } as const;
+}
+
+/**
+ * Mobile editors register the shared exchange client through their feature
+ * list. The Mobile variant shares pluginName with the desktop plugin the
+ * factory would add, so those editors set exchangeProvidedByPreset and keep
+ * the factory's trunk/sign-in gating through exchangeFeaturePlugins.
+ */
+export function createMobileExchangeFeaturePlugins(
+  unitPlugins: readonly IPresetPlugin[]
+): IPresetPlugin[] {
+  return [
+    [
+      UniverExchangeClientMobileUIPlugin,
+      createWorkspaceExchangeClientConfig(window.location.origin),
+    ],
+    ...unitPlugins,
+  ];
 }
 
 interface IWorkspaceOutputPluginOptions {

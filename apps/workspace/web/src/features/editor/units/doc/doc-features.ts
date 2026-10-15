@@ -1,16 +1,34 @@
 import type { IPresetPlugin } from "@univerjs/presets";
 import { UniverDocsCalloutPlugin } from "@univerjs-pro/docs-callout";
-import { UniverDocsCalloutUIPlugin } from "@univerjs-pro/docs-callout-ui";
+import {
+  UniverDocsCalloutMobileUIPlugin,
+  UniverDocsCalloutUIPlugin,
+} from "@univerjs-pro/docs-callout-ui";
 import { UniverDocsChartPlugin } from "@univerjs-pro/docs-chart";
-import { UniverDocsChartUIPlugin } from "@univerjs-pro/docs-chart-ui";
+import {
+  UniverDocsChartMobileUIPlugin,
+  UniverDocsChartUIPlugin,
+} from "@univerjs-pro/docs-chart-ui";
 import { UniverDocsCodePlugin } from "@univerjs-pro/docs-code";
-import { UniverDocsCodeUIPlugin } from "@univerjs-pro/docs-code-ui";
+import {
+  UniverDocsCodeMobileUIPlugin,
+  UniverDocsCodeUIPlugin,
+} from "@univerjs-pro/docs-code-ui";
 import { UniverDocsLatexPlugin } from "@univerjs-pro/docs-latex";
-import { UniverDocsLatexUIPlugin } from "@univerjs-pro/docs-latex-ui";
+import {
+  UniverDocsLatexMobileUIPlugin,
+  UniverDocsLatexUIPlugin,
+} from "@univerjs-pro/docs-latex-ui";
 import { UniverDocsShapePlugin } from "@univerjs-pro/docs-shape";
-import { UniverDocsShapeUIPlugin } from "@univerjs-pro/docs-shape-ui";
+import {
+  UniverDocsShapeMobileUIPlugin,
+  UniverDocsShapeUIPlugin,
+} from "@univerjs-pro/docs-shape-ui";
 import { UniverDocsTablePlugin } from "@univerjs-pro/docs-table";
-import { UniverDocsTableUIPlugin } from "@univerjs-pro/docs-table-ui";
+import {
+  UniverDocsTableMobileUIPlugin,
+  UniverDocsTableUIPlugin,
+} from "@univerjs-pro/docs-table-ui";
 import { UniverProFormulaEnginePlugin } from "@univerjs-pro/engine-formula";
 
 /**
@@ -43,5 +61,18 @@ export function getDocAuthoringUIPlugins(): IPresetPlugin[] {
     UniverDocsLatexUIPlugin,
     UniverDocsShapeUIPlugin,
     UniverDocsTableUIPlugin,
+  ];
+}
+
+/** Touch counterpart of getDocAuthoringUIPlugins for the mobile Doc editor. */
+export function getDocMobileAuthoringUIPlugins(): IPresetPlugin[] {
+  return [
+    UniverProFormulaEnginePlugin,
+    UniverDocsCalloutMobileUIPlugin,
+    UniverDocsChartMobileUIPlugin,
+    UniverDocsCodeMobileUIPlugin,
+    UniverDocsLatexMobileUIPlugin,
+    UniverDocsShapeMobileUIPlugin,
+    UniverDocsTableMobileUIPlugin,
   ];
 }

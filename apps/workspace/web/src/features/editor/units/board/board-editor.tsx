@@ -85,6 +85,7 @@ import "@univerjs/thread-comment-ui/lib/index.css";
 import {
   createCollaborationEditor,
   type CollaborationEditorProps,
+  type ICollaborationEditorDefinition,
 } from "../../collaboration-editor";
 import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
 import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
@@ -175,7 +176,7 @@ export function createBoardComparisonPresets(
   ];
 }
 
-export default createCollaborationEditor({
+export const boardEditorDefinition: ICollaborationEditorDefinition = {
   label: "board",
   history: {
     createPlugin: (containerId) => [
@@ -239,4 +240,6 @@ export default createCollaborationEditor({
   ],
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadBoardAsync(unitId),
-});
+};
+
+export default createCollaborationEditor(boardEditorDefinition);

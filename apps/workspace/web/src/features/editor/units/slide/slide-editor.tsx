@@ -72,6 +72,7 @@ import "@univerjs/thread-comment-ui/lib/index.css";
 import {
   createCollaborationEditor,
   type CollaborationEditorProps,
+  type ICollaborationEditorDefinition,
 } from "../../collaboration-editor";
 import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
 import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
@@ -157,7 +158,7 @@ export function createSlideComparisonPresets(
   ];
 }
 
-export default createCollaborationEditor({
+export const slideEditorDefinition: ICollaborationEditorDefinition = {
   liveSheetReferences: true,
   label: "presentation",
   previewDownload: downloadSlidePreview,
@@ -234,4 +235,6 @@ export default createCollaborationEditor({
   ],
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadSlideAsync(unitId),
-});
+};
+
+export default createCollaborationEditor(slideEditorDefinition);
