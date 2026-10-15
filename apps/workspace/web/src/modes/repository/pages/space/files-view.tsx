@@ -70,7 +70,7 @@ export function FilesView({
                       className={cn(
                         "max-w-52 truncate border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
                         selectedApp?.node.id === app.node.id
-                          ? "border-repository-selected text-foreground"
+                          ? "border-[color:var(--color-repository-selected)] text-foreground"
                           : "border-transparent text-muted-foreground hover:text-foreground",
                       )}
                     >

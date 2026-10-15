@@ -112,6 +112,7 @@ function compareJson(mode, slug, value) {
 function capture(mode, slug, path, mobile = false, prepare) {
   open(path);
   prepare?.();
+  assert.equal(evaluate("document.documentElement.classList.contains('dark')"), theme === "dark", `${mode}/${slug} 明暗主题`);
   const value = evaluate(`(() => {
     const visible = selector => [...document.querySelectorAll(selector)].filter(e => e.getClientRects().length > 0);
     return {
@@ -156,6 +157,38 @@ function capture(mode, slug, path, mobile = false, prepare) {
     assert.equal(diff.differentPixels, 0, `${mode}/${slug} 截图差异: ${JSON.stringify(diff)}`);
     assert.equal(diff.dimensionMismatch, null, `${mode}/${slug} 截图尺寸`);
   }
+}
+
+// 即使其他 mode 意外保留类名，也不能激活 repository 的局部配色。
+function assertModeStyles(mode) {
+  const result = evaluate(`(() => {
+    const root = document.documentElement;
+    const probe = document.createElement('div');
+    document.body.append(probe);
+    const read = () => [
+      ['repository-chrome', '--color-border'],
+      ['repository-pages', '--color-border'],
+      ['repository-settings', '--color-primary'],
+      ['repository-issues', '--color-primary'],
+      ['repository-pull-requests', '--color-primary'],
+    ].map(([className, token]) => {
+      probe.className = className;
+      return getComputedStyle(probe).getPropertyValue(token).trim() !== getComputedStyle(root).getPropertyValue(token).trim();
+    });
+    try {
+      const active = read();
+      const counter = getComputedStyle(root).getPropertyValue('--color-repository-counter').trim();
+      root.dataset.uiMode = 'scope-probe';
+      return { active, counter, unknown: read(), unknownCounter: getComputedStyle(root).getPropertyValue('--color-repository-counter').trim() };
+    } finally {
+      root.dataset.uiMode = ${JSON.stringify(mode)};
+      probe.remove();
+    }
+  })()`);
+  assert.deepEqual(result.active, Array(5).fill(mode === "repository"), `${mode} 样式作用域`);
+  assert.equal(Boolean(result.counter), mode === "repository", `${mode} 色彩令牌作用域`);
+  assert.deepEqual(result.unknown, Array(5).fill(false), "未知 mode 不继承 repository 样式");
+  assert.equal(result.unknownCounter, "", "未知 mode 不继承 repository 令牌");
 }
 
 function recordWrite(mode, slug, method, path, action, expectedUrl, expectedBody) {
@@ -279,6 +312,7 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       browser("set", "viewport", "1440", "900");
       // 先打开 Sheet，使第一次运行的 Recent 列表与后续运行相同。
       open(`/nodes/${fixture.sheetId}`);
+      assertModeStyles(mode);
       for (const [slug, path] of pages) capture(mode, slug, path);
       capture(mode, "account-open", "/home", false, () => {
         click("button", "Account");

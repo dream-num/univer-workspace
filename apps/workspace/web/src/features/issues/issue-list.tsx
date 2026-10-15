@@ -396,7 +396,7 @@ function StateToggle({
     >
       {icon}
       {label}
-      <span className="rounded-full bg-repository-counter px-1.5 text-xs font-semibold tabular-nums">
+      <span className="rounded-full bg-[var(--color-repository-counter,#818b981f)] dark:bg-[var(--color-repository-counter,#656c7633)] px-1.5 text-xs font-semibold tabular-nums">
         {count.toLocaleString()}
       </span>
     </button>

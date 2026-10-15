@@ -52,7 +52,7 @@ export function RepositoryPullRequestLayout({
     <nav aria-label={t("repositoryPrFiles")} className="min-w-0">
       <h2 className="m-0 mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground">
         {t("repositoryPrFiles")}
-        <span className="rounded-full bg-repository-counter px-2 tabular-nums">
+        <span className="rounded-full bg-[var(--color-repository-counter)] px-2 tabular-nums">
           {worktree.units.length}
         </span>
       </h2>
@@ -212,7 +212,7 @@ export function RepositoryPullRequestLayout({
                 <Icon className="size-4 shrink-0" aria-hidden="true" />
                 {t(value === "overview" ? "repositoryPrOverview" : "repositoryPrFiles")}
                 {value === "files" ? (
-                  <span className="rounded-full bg-repository-counter px-2 text-xs tabular-nums">
+                  <span className="rounded-full bg-[var(--color-repository-counter)] px-2 text-xs tabular-nums">
                     {worktree.units.length}
                   </span>
                 ) : null}

@@ -1003,3 +1003,25 @@ feature 保留权限、合并冲突检查、选中视图、文档运行时和写
 40 张基线截图零差异，Pages 和 PR 专项通过。PR 专项覆盖文档／版本选择、默认和失效文档、
 取消确认、删除／撤销、提交审阅、合并、丢弃、冲突／权限提示及响应式宽度，并核对写请求与 URL。
 生成文件无变化，未更新截图基线；feature → mode 和 wiki → repository 导入检查无结果。
+
+
+### T6c repository 样式作用域（PR 描述素材）
+
+`modes/repository/index.ts` 加载本 mode 的 styles.css，global.css 不再含 repository 样式或令牌。
+25 条局部规则限定到 `[data-ui-mode="repository"]`，暗色条件匹配同一 html 元素上的 `.dark`。
+原声明逐项保持不变；三个色彩令牌名和 `.repository-*` 类名保留，5 处亮暗令牌声明只在 repository 下生效。
+
+Tailwind 原 `@theme` 会注册全局令牌；调用方改用直接引用这些变量的工具类，因此无需全局注册。
+IssueList 的计数同时用于 Wiki，使用原亮／暗颜色作为 CSS 变量回退值，保留 Wiki 的现有呈现。
+这替换了 T6a / T6b 记录中的 `bg-repository-counter` 工具类，令牌名称仍为 `--color-repository-counter`。
+
+复制样式与接入分开提交；准备提交 `cec9ed9` 在改动前补录了独立暗色基线。
+冒烟脚本新增 `UI_MODES_THEME=dark`（默认目录为 `os.tmpdir()/univer-workspace-ui-modes-dark`），
+不改原亮色基线目录，并检查当前明暗主题、Wiki 及未知 mode 不继承 repository 样式和令牌。
+
+验证：Workspace typecheck、build 通过；产物 CSS 中 25 条 repository 规则和 5 处令牌声明均带 mode 作用域，
+去掉作用域前缀后与迁移前的局部 CSS 声明一致。亮暗各 40 张、共 80 张截图零差异，
+两种 mode 的写请求与往返切换检查通过，Wiki／未知 mode 样式隔离检查通过。
+亮色基线未修改；暗色基线在本次样式改动前补录，改动后只比较。生成文件无变化。
+
+全量 Workspace 测试：78 文件 / 394 测试通过。未推送或创建 PR，R7 保持原样。

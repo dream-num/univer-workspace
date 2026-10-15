@@ -88,7 +88,7 @@ export function PullRequestsView({
               )}
             >
               {t("repositoryPullRequestsOpen")}
-              <span className="rounded-full bg-repository-counter px-2 text-xs font-medium tabular-nums">
+              <span className="rounded-full bg-[var(--color-repository-counter)] px-2 text-xs font-medium tabular-nums">
                 {loading ? "…" : openCount}
               </span>
             </button>
@@ -104,7 +104,7 @@ export function PullRequestsView({
               )}
             >
               {t("repositoryPullRequestsClosed")}
-              <span className="rounded-full bg-repository-counter px-2 text-xs font-medium tabular-nums">
+              <span className="rounded-full bg-[var(--color-repository-counter)] px-2 text-xs font-medium tabular-nums">
                 {loading ? "…" : worktrees.length - openCount}
               </span>
             </button>

@@ -1,3 +1,4 @@
+import "./styles.css";
 import { RepositoryIssueLayout, RepositoryIssueListPage, RepositoryIssueDetailPage } from "./pages/issues";
 import { RepositoryWorktreesPage } from "./pages/worktrees";
 import { RepositorySpaceTrashPage } from "./pages/trash";

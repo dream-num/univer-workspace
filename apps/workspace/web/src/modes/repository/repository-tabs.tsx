@@ -103,7 +103,7 @@ export function RepositoryTabs({
                 <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
                 {label}
                 {count ? (
-                  <span className="min-w-5 rounded-full bg-repository-counter px-1.5 text-center text-xs leading-5 tabular-nums">
+                  <span className="min-w-5 rounded-full bg-[var(--color-repository-counter)] px-1.5 text-center text-xs leading-5 tabular-nums">
                     {count}
                   </span>
                 ) : null}
@@ -177,7 +177,7 @@ function RepositoryTabLink({
       {icon}
       {label}
       {count ? (
-        <span className="min-w-5 rounded-full bg-repository-counter px-1.5 text-center text-xs leading-5 tabular-nums">
+        <span className="min-w-5 rounded-full bg-[var(--color-repository-counter)] px-1.5 text-center text-xs leading-5 tabular-nums">
           {count}
         </span>
       ) : null}
@@ -188,6 +188,6 @@ function RepositoryTabLink({
 function repositoryTabClass(active: boolean): string {
   return [
     "relative flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm leading-5 text-foreground no-underline hover:bg-accent after:absolute after:-bottom-2 after:inset-x-0 after:h-0.5 after:rounded-full",
-    active ? "font-semibold after:bg-repository-selected" : "font-normal",
+    active ? "font-semibold after:bg-[var(--color-repository-selected)]" : "font-normal",
   ].join(" ");
 }

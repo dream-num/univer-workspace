@@ -344,7 +344,7 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
     未更新基线；生成文件无变化；feature → mode 和 wiki → repository 导入检查无结果。
   - 规模：M。依赖：T5.2、T5.5、T6a。
 
-- [ ] **T6c：样式按 `data-ui-mode` 作用域**（R4 样式部分；N7）
+- [x] **T6c：样式按 `data-ui-mode` 作用域**（R4 样式部分；N7）
   - 做什么：`app/styles/global.css:426-596` 的 `.repository-*` 规则和 `72-74`、`326-327` 的 `--color-repository-*` token 移到
     `modes/repository/styles.css`，选择器加 `[data-ui-mode="repository"]` 前缀（`data-ui-mode` 在 T2b 已挂在 `<html>` 上），由
     `modes/repository/index.ts` import。组件上的 `repository-chrome`、`repository-pages` 等 class **保留**，只是规则多了一层作用域。
@@ -352,6 +352,13 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
   - 验收：`rg -n 'repository' apps/workspace/web/src/app/styles/global.css` 无结果。
   - 验证：V-static；`build` 后在产物 CSS 中确认 `.repository-chrome` 规则都带 `[data-ui-mode=repository]` 前缀；V-smoke 截图零差异
     （明暗两种主题都截）。
+  - 实施：先原样复制 stylesheet 并补录独立暗色基线（`cec9ed9`），再从 registry 的 repository 入口加载。
+    25 条规则和 5 处令牌声明均限定到 `[data-ui-mode="repository"]`，暗色选择器与 mode 位于同一个 html 元素。
+    保留 `.repository-*` 类与令牌名；令牌工具类改为直接引用 CSS 变量，避免 Tailwind `@theme` 全局注册。
+    IssueList 在 Wiki 中仍显示计数，变量缺失时分别回退原亮／暗值 `#818b981f` / `#656c7633`。
+    `UI_MODES_THEME=dark` 使用独立基线目录，原亮色基线不变；浏览器检查主题和局部样式、令牌隔离（含未知 mode）。
+  - 结果：Workspace typecheck、build、78 文件 / 394 测试通过；亮暗各 40 张、共 80 张截图零差异。
+    构建 CSS 的规则与令牌作用域检查通过；生成文件无变化；亮色基线未修改，暗色基线在改动前补录后仅比较。
   - 规模：S。依赖：T2b。可以和 M3 并行。
 
 - [ ] **T7：边界测试与文档**（R1 收尾、N8）

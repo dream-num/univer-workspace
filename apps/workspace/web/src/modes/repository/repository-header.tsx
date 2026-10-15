@@ -64,13 +64,13 @@ function RepositoryStar({ spaceId, name }: { readonly spaceId: string; readonly 
     >
       <Star
         aria-hidden="true"
-        className={`size-4 ${starred ? "fill-repository-star text-repository-star" : "text-muted-foreground"}`}
+        className={`size-4 ${starred ? "fill-[var(--color-repository-star)] text-[color:var(--color-repository-star)]" : "text-muted-foreground"}`}
       />
       {label}
       <span
         aria-live="polite"
         aria-atomic="true"
-        className="ml-0.5 min-w-5 rounded-full bg-repository-counter px-1.5 text-center text-xs leading-[18px] tabular-nums"
+        className="ml-0.5 min-w-5 rounded-full bg-[var(--color-repository-counter)] px-1.5 text-center text-xs leading-[18px] tabular-nums"
       >
         {star.data ? star.data.starCount.toLocaleString(language) : "…"}
       </span>
