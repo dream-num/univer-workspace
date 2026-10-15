@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V10 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V11 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -41,14 +41,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V10；
-- V10：校验 Schema 指纹；
-- V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V10；
-- V0：一致性备份后直接迁移到 V10；
+- Fresh：创建 V11；
+- V11：校验 Schema 指纹；
+- V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V11；
+- V0：一致性备份后直接迁移到 V11；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V10 Query。
+Worktree 等业务模块只编译和运行 V11 Query。
 
 V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
@@ -58,6 +58,10 @@ Session 与 Access Resolver，公开读取者和已有成员均可 Star；收藏
 写入与读取最新计数在同一产品事务中完成，不使用 Operation 或协同库。计数从关系表计算。
 失去访问权时保留收藏记录，但三个接口均不可访问；重新获得访问权后仍能读取自己的状态。
 `SpaceView.owner` 只投影已有 Space Owner 的 ID、username，不增加 Repository 实体或改变所有权。
+
+V11 为 `spaces` 增加纯文本 `description`（至多 350 字符）。`SpaceView.description` 随 `GET /api/spaces`、
+`GET /api/spaces/{spaceId}` 返回，`PATCH /api/spaces/{spaceId}` 可修改，权限与重命名 Space 相同；空字符串清除。
+Browser 的 Code tab 在 About 区展示该简介，Settings 提供编辑入口。简介不替代 HTML 页面，也不进入协同库。
 Browser 的公共 Repository Header 与 Tabs 供 Code、Issues、PR、Pages 和 Settings 页面复用；
 不改 tab 内部内容，Watch/Fork 和没有对应能力的 GitHub tab 不渲染。
 
@@ -67,7 +71,7 @@ SDK 1.0.0 启动时先准备产品数据库，再运行隔离的 `prepareCollabo
 应用 Service。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 2、Worktree 3、History 2；
-Comment 1 不变。产品数据库先准备到 V10，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Comment 1 不变。产品数据库先准备到 V11，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 

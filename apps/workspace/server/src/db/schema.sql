@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS spaces (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   public_read INTEGER NOT NULL DEFAULT 0 CHECK (public_read IN (0, 1)),
+  description TEXT NOT NULL DEFAULT '',
   FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS spaces_personal_owner
@@ -645,4 +646,4 @@ CREATE TABLE IF NOT EXISTS space_stars (
   PRIMARY KEY (space_id, user_id)
 );
 
-PRAGMA user_version = 10;
+PRAGMA user_version = 11;

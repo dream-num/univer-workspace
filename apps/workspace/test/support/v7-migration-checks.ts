@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { withoutSpaceDescription } from "./space-description.js";
 
 /** The same preserved-data/rollback matrix runs against source and production startup. */
 export function verifyV7Migration(
@@ -39,14 +40,18 @@ export function verifyV7Migration(
         "blob_upload_sessions",
         "object_deletion_jobs",
       ];
-      const before = tables.map((table) => original.prepare(`SELECT * FROM ${table}`).all());
+      const before = tables.map((table) =>
+        withoutSpaceDescription(table, original.prepare(`SELECT * FROM ${table}`).all()),
+      );
       original.close();
       const migrated = open(filename);
       assert.deepEqual(
-        tables.map((table) => migrated.connection.prepare(`SELECT * FROM ${table}`).all()),
+        tables.map((table) =>
+          withoutSpaceDescription(table, migrated.connection.prepare(`SELECT * FROM ${table}`).all()),
+        ),
         before,
       );
-      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 10);
+      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 11);
       assert.deepEqual(migrated.connection.prepare("PRAGMA foreign_key_check").all(), []);
       assert.equal(
         migrated.connection.prepare("PRAGMA integrity_check").get()?.integrity_check,
@@ -59,7 +64,9 @@ export function verifyV7Migration(
       const backup = new DatabaseSync(join(root, backupNames()[0]!), { readOnly: true });
       assert.equal(backup.prepare("PRAGMA user_version").get()?.user_version, 7);
       assert.deepEqual(
-        tables.map((table) => backup.prepare(`SELECT * FROM ${table}`).all()),
+        tables.map((table) =>
+          withoutSpaceDescription(table, backup.prepare(`SELECT * FROM ${table}`).all()),
+        ),
         before,
       );
       backup.close();

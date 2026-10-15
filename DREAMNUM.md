@@ -109,7 +109,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - Space stars are protected product User-Space relations, not memberships or access grants. The authenticated
   `GET/PUT/DELETE /api/spaces/{spaceId}/star` contract returns only the caller's state and an aggregate count;
   `SpaceView.owner` projects the existing owner's ID and username. Product V10 adds stars through the backed-up
-  V9 → V10 startup migration; old and new writers must not share the product file.
+  V9 → V10 startup migration; V11 adds the plain-text `SpaceView.description` (at most 350 characters, editable by
+  users who can rename the Space) through a backed-up V10 → V11 startup migration. Old and new writers must not
+  share the product file.
 - Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), sharing state, and user-authored
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal

@@ -4,6 +4,7 @@ export { RepositoryPage, RepositoryTabs } from "./repository-tabs";
 export type { RepositoryTab } from "./repository-tabs";
 export { spaceDisplayName } from "./space-name";
 export {
+  spaceStarQueryOptions,
   spacesQueryKey,
   spacesQueryOptions,
 } from "./spaces.queries";

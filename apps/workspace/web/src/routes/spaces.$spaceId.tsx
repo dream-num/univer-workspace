@@ -7,6 +7,7 @@ import {
   GitPullRequestDraft,
   Link as LinkIcon,
   Settings,
+  Star,
   Users,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -23,7 +24,12 @@ import { BlobPreview } from "../features/blobs";
 import { htmlViewsQueryOptions } from "../features/views/html-views.queries";
 import { resourceOpenQueryOptions } from "../features/resources";
 import { resourceShareUrl } from "../features/resource-view/resource-view";
-import { RepositoryTabs, spaceDisplayName, spacesQueryOptions } from "../features/spaces";
+import {
+  RepositoryTabs,
+  spaceDisplayName,
+  spaceStarQueryOptions,
+  spacesQueryOptions,
+} from "../features/spaces";
 import { WorkspaceLayout } from "./-workspace-layout";
 import { formatRelativeDate } from "../shared/format-relative-date";
 import { useI18n, type MessageKey } from "../shared/i18n";
@@ -110,9 +116,6 @@ function SpaceNodePage() {
     ...(worktrees.data?.items ?? []),
     ...(processedWorktrees.data?.items ?? []),
   ].filter((item) => space !== undefined && worktreeBelongsToSpace(item, space));
-  const openWorktreeCount = spaceWorktrees.filter((item) =>
-    OPEN_WORKTREE_STATES.includes(item.state),
-  ).length;
   useEffect(() => {
     if (
       !landingNodeId ||
@@ -199,7 +202,6 @@ function SpaceNodePage() {
             onRetry={retryRepositoryPage}
             onSelectApp={setLandingApp}
             view={repositoryView}
-            openWorktreeCount={openWorktreeCount}
             worktrees={spaceWorktrees}
             onOpenWorktrees={() => navigate({ to: "/worktrees", search: { spaceId } })}
           />
@@ -228,7 +230,6 @@ function RepositoryOverview({
   onRetry,
   onSelectApp,
   view,
-  openWorktreeCount,
   worktrees,
   onOpenWorktrees,
 }: {
@@ -244,13 +245,17 @@ function RepositoryOverview({
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
   readonly view: RepositoryView;
-  readonly openWorktreeCount: number;
   readonly worktrees: readonly Worktree[];
   readonly onOpenWorktrees: () => void;
 }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto bg-background">
-      <div className="mx-auto max-w-6xl px-6 py-6 max-[720px]:px-4 max-[720px]:py-4">
+      <div
+        className={cn(
+          "mx-auto px-6 py-6 max-[720px]:px-4 max-[720px]:py-4",
+          view === "files" ? "max-w-7xl px-8 max-[720px]:px-4" : "max-w-6xl",
+        )}
+      >
         {view === "files" ? (
           <FilesView
             spaceId={spaceId}
@@ -264,8 +269,6 @@ function RepositoryOverview({
             error={error}
             onRetry={onRetry}
             onSelectApp={onSelectApp}
-            openWorktreeCount={openWorktreeCount}
-            fileCount={page.nodes.length}
           />
         ) : view === "apps" ? (
           <AppsView
@@ -292,8 +295,6 @@ function FilesView({
   error,
   onRetry,
   onSelectApp,
-  openWorktreeCount,
-  fileCount,
   space,
   spaceName,
 }: {
@@ -306,51 +307,28 @@ function FilesView({
   readonly error: boolean;
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
-  readonly openWorktreeCount: number;
-  readonly fileCount: number;
   readonly space: SpaceView | undefined;
   readonly spaceName: string | undefined;
 }) {
   const { t } = useI18n();
   const showDefaultApp = loading || error || apps.length > 0;
   const [searchQuery, setSearchQuery] = useState("");
-  const visibility = space
-    ? space.type === "personal"
-      ? t("repositoryVisibilityPersonal")
-      : space.publicRead
-        ? t("repositoryVisibilityPublic")
-        : t("repositoryVisibilityPrivate")
-    : undefined;
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-      <div className="grid min-w-0 content-start gap-6">
-        {space ? (
-          <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground lg:hidden">
-            {visibility ? <span>{visibility}</span> : null}
-            <span aria-hidden="true">·</span>
-            <span>{t(accessRoleKey(space.accessRole))}</span>
-            <span aria-hidden="true">·</span>
-            <span>{t("repositoryMetaFiles", { count: fileCount })}</span>
-            <span aria-hidden="true">·</span>
-            <span>{t("repositoryMetaPages", { count: apps.length })}</span>
-          </p>
-        ) : null}
-        <section className="min-w-0 rounded-lg border border-border bg-background">
-          <NodeBrowser
-            page={page}
-            canCreateAtRoot={space?.capabilities.createAtRoot ?? false}
-            showParentRow={page.parentNode !== null}
-            spaceName={spaceName}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            searchPlaceholder={t("repositoryGoToFile")}
-            compact
-            className="[&>div]:h-auto [&>div]:overflow-visible [&>div>div:last-child]:overflow-visible"
-          />
-        </section>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_296px]">
+      <div className="grid min-w-0 content-start gap-4">
+        <NodeBrowser
+          page={page}
+          canCreateAtRoot={space?.capabilities.createAtRoot ?? false}
+          showParentRow={page.parentNode !== null}
+          spaceName={spaceName}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder={t("repositoryGoToFile")}
+          compact
+        />
         {showDefaultApp ? (
-          <section className="min-w-0 rounded-lg border border-border bg-background">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2">
+          <section className="min-w-0 overflow-hidden rounded-md border border-border bg-background">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-4">
               {apps.length > 1 ? (
                 <div role="tablist" aria-label={t("repositoryAppPreview")} className="flex min-w-0 gap-1">
                   {apps.map((app) => (
@@ -361,9 +339,9 @@ function FilesView({
                       aria-selected={selectedApp?.node.id === app.node.id}
                       onClick={() => onSelectApp(app.node.id)}
                       className={cn(
-                        "max-w-52 truncate border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                        "max-w-52 truncate border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
                         selectedApp?.node.id === app.node.id
-                          ? "border-primary text-foreground"
+                          ? "border-repository-selected text-foreground"
                           : "border-transparent text-muted-foreground hover:text-foreground",
                       )}
                     >
@@ -372,7 +350,7 @@ function FilesView({
                   ))}
                 </div>
               ) : (
-                <h2 className="m-0 min-w-0 truncate py-1 text-base font-semibold">
+                <h2 className="m-0 min-w-0 truncate py-2.5 text-sm font-semibold">
                   {selectedApp ? displayAppName(selectedApp.node.name) : t("apps")}
                 </h2>
               )}
@@ -401,7 +379,7 @@ function FilesView({
                 </Button>
               </Empty>
             ) : resource?.kind === "blob" ? (
-              <div className="h-[calc(100dvh-8rem)] min-h-[640px] overflow-hidden rounded-b-lg">
+              <div className="h-[calc(100dvh-8rem)] min-h-[640px] overflow-hidden">
                 <BlobPreview resource={resource} actionsContainer={null} />
               </div>
             ) : (
@@ -419,62 +397,74 @@ function FilesView({
           </section>
         ) : null}
       </div>
-      <aside className="hidden min-w-0 self-start rounded-lg border border-border bg-background lg:block">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="m-0 text-base font-semibold">{t("repositoryAbout")}</h2>
-        </div>
-        {space ? (
-          <div className="grid gap-2 px-4 py-3 text-sm text-muted-foreground">
-            <p className="m-0">
-              {space.type === "personal"
-                ? t("repositoryVisibilityPersonal")
-                : space.publicRead
-                  ? t("repositoryVisibilityPublic")
-                  : t("repositoryVisibilityPrivate")}
-            </p>
-            <dl className="m-0 grid gap-1.5">
-              <AboutRow label={t("repositoryAboutRole")} value={t(accessRoleKey(space.accessRole))} />
-              <AboutRow
-                label={t("repositoryAboutFiles")}
-                value={String(fileCount)}
-              />
-              <AboutRow
-                label={t("repositoryAboutOpenPrs")}
-                value={String(openWorktreeCount)}
-              />
-            </dl>
-            {selectedApp ? (
-              <Link
-                to="/nodes/$nodeId"
-                params={{ nodeId: selectedApp.node.id }}
-                search={(previous) => ({ ...previous, view: "immersive" })}
-                className="flex min-w-0 items-center gap-1.5 text-brand-700 no-underline hover:underline dark:text-brand-400"
-              >
-                <LinkIcon className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{t("repositoryDefaultPage")}</span>
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
-      </aside>
+      {space ? <RepositoryAbout spaceId={spaceId} space={space} selectedApp={selectedApp} /> : null}
     </div>
   );
 }
 
-function AboutRow({ label, value }: { readonly label: string; readonly value: string }) {
+/** Mirrors GitHub's About sidebar; only fields Workspace stores are shown. */
+function RepositoryAbout({
+  spaceId,
+  space,
+  selectedApp,
+}: {
+  readonly spaceId: string;
+  readonly space: SpaceView;
+  readonly selectedApp: RepositoryApp | undefined;
+}) {
+  const { t, language } = useI18n();
+  const star = useQuery(spaceStarQueryOptions(spaceId));
+  const description = space.description.trim();
   return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="m-0">{label}</dt>
-      <dd className="m-0 font-medium text-foreground">{value}</dd>
-    </div>
+    <aside aria-labelledby="repository-about-heading" className="min-w-0 self-start">
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="repository-about-heading" className="m-0 text-base leading-6 font-semibold">
+          {t("repositoryAbout")}
+        </h2>
+        {space.capabilities.renameSpace ? (
+          <Link
+            to="/spaces/$spaceId/settings"
+            params={{ spaceId }}
+            aria-label={t("repositoryAboutEditDescription")}
+            title={t("repositoryAboutEditDescription")}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon-sm" }),
+              "shrink-0 text-muted-foreground no-underline",
+            )}
+          >
+            <Settings className="size-4" aria-hidden="true" />
+          </Link>
+        ) : null}
+      </div>
+      {description ? (
+        <p className="mt-2 mb-0 text-sm leading-6 break-words text-foreground">{description}</p>
+      ) : null}
+      <ul className="m-0 mt-4 grid list-none gap-2 p-0 text-sm text-muted-foreground">
+        {selectedApp ? (
+          <li className="min-w-0">
+            <Link
+              to="/nodes/$nodeId"
+              params={{ nodeId: selectedApp.node.id }}
+              search={(previous) => ({ ...previous, view: "immersive" })}
+              className="flex min-w-0 items-center gap-2 font-semibold text-brand-700 no-underline hover:underline dark:text-brand-400"
+            >
+              <LinkIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="truncate">{t("repositoryDefaultPage")}</span>
+            </Link>
+          </li>
+        ) : null}
+        <li className="flex items-center gap-2">
+          <Star className="size-4 shrink-0" aria-hidden="true" />
+          <span aria-live="polite">
+            <strong className="font-semibold text-foreground tabular-nums">
+              {star.data ? star.data.starCount.toLocaleString(language) : "…"}
+            </strong>{" "}
+            {t(star.data?.starCount === 1 ? "repositoryAboutStar" : "repositoryAboutStars")}
+          </span>
+        </li>
+      </ul>
+    </aside>
   );
-}
-
-function accessRoleKey(role: SpaceView["accessRole"]): MessageKey {
-  if (role === "owner") return "accessOwner";
-  if (role === "admin") return "accessAdmin";
-  if (role === "editor") return "accessEditor";
-  return "accessViewer";
 }
 
 function displayAppName(name: string): string {

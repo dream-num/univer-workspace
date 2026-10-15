@@ -15,7 +15,7 @@ import { api } from "../shared/api/client";
 import { apiError } from "../shared/api/errors";
 import { useI18n } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
-import { Button, Field, Input, toast } from "../shared/ui";
+import { Button, Field, Input, Textarea, toast } from "../shared/ui";
 
 export const Route = createFileRoute("/spaces_/$spaceId/settings")({
   loader: async ({ context, params, location }) => {
@@ -84,9 +84,14 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
   const space = spaces.data?.spaces.find((item) => item.id === spaceId);
   const [name, setName] = useState(space?.name ?? "");
   const [publicRead, setPublicRead] = useState(space?.publicRead ?? false);
+  const [description, setDescription] = useState(space?.description ?? "");
   const [error, setError] = useState<string>();
   const rename = useMutation({
-    mutationFn: async (values: { readonly name: string; readonly publicRead: boolean }) => {
+    mutationFn: async (values: {
+      readonly name: string;
+      readonly publicRead: boolean;
+      readonly description: string;
+    }) => {
       const { error: apiErr } = await api.PATCH("/api/spaces/{spaceId}", {
         params: { path: { spaceId } },
         body: values,
@@ -111,7 +116,7 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
       setError(t("enterSpaceName"));
       return;
     }
-    rename.mutate({ name: name.trim(), publicRead });
+    rename.mutate({ name: name.trim(), publicRead, description: description.trim() });
   };
   const copySpaceId = async () => {
     try {
@@ -153,6 +158,16 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
             </Button>
           </div>
         ) : null}
+      </Field>
+      <Field label={t("spaceDescription")} htmlFor="space-description" hint={t("spaceDescriptionHint")}>
+        <Textarea
+          id="space-description"
+          maxLength={350}
+          rows={3}
+          value={description}
+          disabled={!canEdit}
+          onChange={(event) => setDescription(event.target.value)}
+        />
       </Field>
       <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-border p-4">
         <span className="grid gap-1">

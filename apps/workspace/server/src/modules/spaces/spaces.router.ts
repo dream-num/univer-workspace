@@ -42,6 +42,7 @@ export function createSpacesRouter(options: {
         {
           name: request.body?.name,
           publicRead: request.body?.publicRead,
+          description: request.body?.description,
         }
       )
     );

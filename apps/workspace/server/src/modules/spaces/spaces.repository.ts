@@ -9,6 +9,7 @@ export interface DiscoverableSpaceRow {
   readonly owner_user_id: string;
   readonly owner_username: string;
   readonly public_read: 0 | 1;
+  readonly description: string;
   readonly member_role: Exclude<AccessRole, "owner"> | null;
 }
 
@@ -25,6 +26,7 @@ export class SpacesRepository {
            spaces.owner_user_id,
            users.username AS owner_username,
            spaces.public_read,
+           spaces.description,
            space_members.role AS member_role
          FROM spaces
          JOIN users ON users.id = spaces.owner_user_id
@@ -50,6 +52,14 @@ export class SpacesRepository {
     const row = this._database.connection.prepare("SELECT id, username FROM users WHERE id = ?").get(userId);
     if (!row) throw new Error("Space owner is missing");
     return row as unknown as SpaceView["owner"];
+  }
+
+  getDescription(spaceId: string): string {
+    const row = this._database.connection
+      .prepare("SELECT description FROM spaces WHERE id = ?")
+      .get(spaceId) as { description: string } | undefined;
+    if (!row) throw new Error("Space is missing");
+    return row.description;
   }
 
   getStar(userId: string, spaceId: string): SpaceStar {
@@ -100,6 +110,12 @@ export class SpacesRepository {
     this._database.connection
       .prepare("UPDATE spaces SET name = ?, updated_at = ? WHERE id = ?")
       .run(name, updatedAt, spaceId);
+  }
+
+  updateDescription(spaceId: string, description: string, updatedAt: number): void {
+    this._database.connection
+      .prepare("UPDATE spaces SET description = ?, updated_at = ? WHERE id = ?")
+      .run(description, updatedAt, spaceId);
   }
 
   updatePublicRead(spaceId: string, publicRead: boolean, updatedAt: number): void {

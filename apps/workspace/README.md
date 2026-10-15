@@ -298,19 +298,19 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V9 product databases to V10 automatically.
+backs up and migrates supported V0 through V10 product databases to V11 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` is unchanged. Product V10 adds Space stars; V9 added
+`history=2`; `comment=1` is unchanged. Product V11 adds the Space description; V10 added Space stars; V9 added
 Issue tables and V8 added content-permission tables. Before creating
 application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V10,
+2. Start a single new instance. Startup first prepares the product database to V11,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -345,12 +345,15 @@ V8 adds content permission objects and collaborators without rewriting existing 
 V9 adds Space-scoped Issues, comments, events, labels, assignees and file references
 without rewriting existing tables.
 V10 adds `space_stars` without changing existing Space, content, Blob or recovery rows.
-For a V10 rollout, stop every old Workspace instance, start one V10 instance and
+V11 adds `spaces.description TEXT NOT NULL DEFAULT ''`; existing Spaces get the empty
+description and no other row changes. The description is plain text of at most 350
+characters, trimmed on write, and editable by users who can rename the Space.
+For a V11 rollout, stop every old Workspace instance, start one V11 instance and
 wait for migration and health checks to succeed, then restore normal service;
-do not let V9 and V10 processes write the same SQLite file concurrently.
-Startup creates and validates a `.v9-backup-…sqlite` backup before the V9 → V10
+do not let V10 and V11 processes write the same SQLite file concurrently.
+Startup creates and validates a `.v10-backup-…sqlite` backup before the V10 → V11
 transaction. A failed step rolls back; subsequent successful startups do not
-repeat migration or backup. Rollback requires stopping V10 and restoring the
+repeat migration or backup. Rollback requires stopping V11 and restoring the
 pre-upgrade product backup, not just running the old application image.
 
 ### Repository stars

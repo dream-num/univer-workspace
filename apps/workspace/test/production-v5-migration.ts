@@ -16,6 +16,7 @@ try {
       (id, type, name, owner_user_id, created_at, updated_at)
     VALUES ('space', 'personal', 'Existing space', 'owner', 1, 1);
     ALTER TABLE spaces DROP COLUMN public_read;
+    ALTER TABLE spaces DROP COLUMN description;
     DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
     DROP TABLE IF EXISTS issue_assignees;
@@ -35,7 +36,7 @@ try {
     const version = migrated.connection.prepare("PRAGMA user_version").get() as {
       readonly user_version: number;
     };
-    assert.equal(version.user_version, 10);
+    assert.equal(version.user_version, 11);
     const space = migrated.connection
       .prepare("SELECT id, name, public_read FROM spaces")
       .get() as Record<string, unknown>;

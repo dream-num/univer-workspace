@@ -1441,6 +1441,8 @@ export interface components {
         PublicUser: components["schemas"]["User"];
         SessionView: components["schemas"]["AnonymousSession"] | components["schemas"]["AuthenticatedSession"];
         SpaceView: components["schemas"]["SpaceSummary"] & {
+            /** @description Short plain-text summary of the Space. Empty when none has been set. */
+            description: string;
             /** @description The authoritative Space owner, including when viewed by another User. */
             owner: {
                 id: string;
@@ -1700,6 +1702,8 @@ export interface components {
         PatchSpace: {
             name?: string;
             publicRead?: boolean;
+            /** @description Plain text. Surrounding whitespace is trimmed; an empty string clears the description. */
+            description?: string;
         };
         /** @enum {string} */
         UnitType: "sheet" | "doc" | "slide" | "board" | "base";

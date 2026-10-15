@@ -186,23 +186,20 @@ function NodePage() {
           <>
             <RepositoryTabs spaceId={query.data.space.id} active="files" />
             <div className="min-h-0 flex-1 overflow-y-auto bg-background">
-              <div className="mx-auto max-w-6xl px-6 py-6 max-[720px]:px-4 max-[720px]:py-4">
-                <section className="min-w-0 rounded-lg border border-border bg-background">
-                  <NodeBrowser
-                    page={children.data}
-                    searchQuery={searchQuery}
-                    showParentRow
-                    spaceName={spaceDisplayName(
-                      query.data.space,
-                      t,
-                      session.data.authenticated ? session.data.user.username : undefined,
-                    )}
-                    onSearchChange={setSearchQuery}
-                    searchPlaceholder={t("repositoryGoToFile")}
-                    compact
-                    className="[&>div]:h-auto [&>div]:overflow-visible [&>div>div:last-child]:overflow-visible"
-                  />
-                </section>
+              <div className="mx-auto max-w-7xl px-8 py-6 max-[720px]:px-4 max-[720px]:py-4">
+                <NodeBrowser
+                  page={children.data}
+                  searchQuery={searchQuery}
+                  showParentRow
+                  spaceName={spaceDisplayName(
+                    query.data.space,
+                    t,
+                    session.data.authenticated ? session.data.user.username : undefined,
+                  )}
+                  onSearchChange={setSearchQuery}
+                  searchPlaceholder={t("repositoryGoToFile")}
+                  compact
+                />
               </div>
             </div>
           </>

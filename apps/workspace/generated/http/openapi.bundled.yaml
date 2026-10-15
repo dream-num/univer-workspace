@@ -2661,7 +2661,12 @@ components:
             - accessRole
             - capabilities
             - owner
+            - description
           properties:
+            description:
+              type: string
+              maxLength: 350
+              description: Short plain-text summary of the Space. Empty when none has been set.
             owner:
               type: object
               additionalProperties: false
@@ -3433,6 +3438,10 @@ components:
           maxLength: 100
         publicRead:
           type: boolean
+        description:
+          type: string
+          maxLength: 350
+          description: Plain text. Surrounding whitespace is trimmed; an empty string clears the description.
     UnitType:
       type: string
       enum:

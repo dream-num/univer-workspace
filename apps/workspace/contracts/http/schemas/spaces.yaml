@@ -58,8 +58,12 @@ SpaceView:
   allOf:
     - $ref: "#/SpaceSummary"
     - type: object
-      required: [accessRole, capabilities, owner]
+      required: [accessRole, capabilities, owner, description]
       properties:
+        description:
+          type: string
+          maxLength: 350
+          description: Short plain-text summary of the Space. Empty when none has been set.
         owner:
           type: object
           additionalProperties: false
@@ -110,6 +114,10 @@ PatchSpace:
       maxLength: 100
     publicRead:
       type: boolean
+    description:
+      type: string
+      maxLength: 350
+      description: Plain text. Surrounding whitespace is trimmed; an empty string clears the description.
 
 SpaceStar:
   type: object
