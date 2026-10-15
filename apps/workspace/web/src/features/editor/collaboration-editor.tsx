@@ -1,5 +1,9 @@
 import type { ILanguagePack } from "@univerjs/core";
 import {
+  isReadOnlyBlockedMutation,
+  type ReadOnlyCommandEvent,
+} from "./features/read-only-guard";
+import {
   CommandType,
   LifecycleStages,
   LocaleType,
@@ -430,24 +434,12 @@ export function createCollaborationEditor(
         if (readOnly) {
           const installReadOnlyGuard = () => {
             if (disposed || readOnlyListener) return;
+            const guardedUnitIds = new Set([unitId, ...(mappedUnitIds ?? [])]);
             readOnlyListener = univerAPI.addEvent(
               univerAPI.Event.BeforeCommandExecute,
               (event) => {
-                const command = event as {
-                  readonly type: CommandType;
-                  readonly options?: {
-                    readonly fromCollab?: boolean;
-                    readonly fromChangeset?: boolean;
-                    readonly onlyLocal?: boolean;
-                  };
-                  cancel: boolean;
-                };
-                if (
-                  command.type === CommandType.MUTATION &&
-                  !command.options?.fromCollab &&
-                  !command.options?.fromChangeset &&
-                  !command.options?.onlyLocal
-                ) {
+                const command = event as ReadOnlyCommandEvent & { cancel: boolean };
+                if (isReadOnlyBlockedMutation(command, guardedUnitIds)) {
                   command.cancel = true;
                 }
               }

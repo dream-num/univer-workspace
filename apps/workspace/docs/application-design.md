@@ -253,6 +253,9 @@ Resource 权限，不区分会话类型；Worktree 中读写评论与 Trunk 中�
   校验请求来自该用户已加入的 Trunk Unit Room（`endpoint.findJoinedSession`），约 10 行。
 - 标准 datasource 会把正文缓存写入 Worktree 快照的 anchor resource。该缓存与 Trunk 现状相同，只是
   读取加速，不产生分支或合并语义。
+- 只读视图（Trunk 只读打开、Worktree 审阅页）的 Browser 只读守卫只取消当前 Unit 的本地内容 mutation，
+  评论 mutation 和评论输入框自身文档的 mutation 放行。评论能否真正写入由服务端权限决定：有 Comment
+  权限即可，不要求内容编辑权限。
 
 可选的后续方向：只读的 Worktree 评论 UI（依赖上游 ThreadCommentUI 提供只读配置）、孤儿正文清理，
 以及 Comment 协议的 Worktree 感知。在上游提供合同之前，不在本仓库自建评论分支或只读 UI 变体。
