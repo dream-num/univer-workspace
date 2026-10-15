@@ -5,7 +5,7 @@ import { formatRelativeDate } from "../../../../shared/format-relative-date";
 import { useI18n } from "../../../../shared/i18n";
 import { isOpenWorktree } from "../../../../features/worktrees";
 import { Button, Empty, Input, Skeleton } from "../../../../shared/ui";
-import { RepositoryPrState } from "../../../../features/worktrees/repository-pr-state";
+import { RepositoryPrState } from "../../repository-pr-state";
 import { cn } from "../../../../shared/utils/cn";
 import type { Worktree } from "./types";
 

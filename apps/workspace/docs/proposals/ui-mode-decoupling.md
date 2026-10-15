@@ -978,3 +978,28 @@ FilterMenu 的 MenuContent 使用 body Portal，因此由页面通过中性的 f
 wiki / repository 的 Issues 专项和 Settings 专项通过。Issues 专项新增全局／空间筛选弹层
 实际背景色与侧栏恢复断言。三个 Issue 路由的 Route 声明 AST 与 T5.6 一致，生成文件无变化，
 未更新截图基线。导航提取提交 `ff91df9`，后续提交接入页面和呈现参数；未推送或创建 PR。
+
+
+### T6b repository 专属组件归属 mode（PR 描述素材）
+
+tabs、header、settings-layout、settings-nav、space-name、PR 状态和 PR 布局迁入
+`modes/repository/`，空间名称测试随实现迁移；feature barrel 不再导出 Repository 组件和类型。
+先复制原实现（`7fe1370`），再切换调用并删除旧文件；七个专属实现除 import 外的 AST 保持一致，共用容器另行提取。
+`RepositoryTab` / `RepositoryBreadcrumb` 随 tabs 移动，路由既有类型导出通过 registry 转发。
+
+原 `RepositoryPage` 只有滚动、宽度和间距，被两种 mode 的 Issues 页面共用，提到
+`shared/ui/page-content.tsx` 并改名为 PageContent，结构和类名不变。wiki 没有导入 repository。
+WorktreeReviewPanel 改为接收 `layout({ review, actions })`，由 repository 页面组合 PR 外壳；
+feature 保留权限、合并冲突检查、选中视图、文档运行时和写操作。默认首文档、空任务和失效文档链接保持原语义。
+
+`features/**` 中的 repository 字样仅保留以下四处，没有 mode 判断或 mode 组件依赖：
+
+- IssueList 的 `repositoryPageRetry`：既有重试文案 key。
+- IssueDetail 的 `repositoryPageRetry`：同上。
+- NodeBrowser 的 `repositoryGoToParent`：既有返回上级文案 key。
+- IssueList 的 `bg-repository-counter`：T6c 明确保留的色彩令牌。
+
+验证：Workspace typecheck、build、78 文件 / 394 测试通过（含审阅视图和迁移后的空间名称测试）；
+40 张基线截图零差异，Pages 和 PR 专项通过。PR 专项覆盖文档／版本选择、默认和失效文档、
+取消确认、删除／撤销、提交审阅、合并、丢弃、冲突／权限提示及响应式宽度，并核对写请求与 URL。
+生成文件无变化，未更新截图基线；feature → mode 和 wiki → repository 导入检查无结果。

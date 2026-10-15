@@ -7,7 +7,9 @@ import { NodeBrowser, spaceNodesQueryOptions } from "../../../../features/nodes"
 import { sessionQueryOptions } from "../../../../features/auth";
 import { htmlViewsQueryOptions } from "../../../../features/views/html-views.queries";
 import { resourceOpenQueryOptions } from "../../../../features/resources";
-import { RepositoryTabs, spaceDisplayName, spacesQueryOptions } from "../../../../features/spaces";
+import { spacesQueryOptions } from "../../../../features/spaces";
+import { RepositoryTabs } from "../../repository-tabs";
+import { spaceDisplayName } from "../../space-name";
 import { WorkspaceLayout } from "../../../../routes/-workspace-layout";
 import { useI18n } from "../../../../shared/i18n";
 import { worktreeBelongsToSpace, worktreeListQueryOptions } from "../../../../features/worktrees";

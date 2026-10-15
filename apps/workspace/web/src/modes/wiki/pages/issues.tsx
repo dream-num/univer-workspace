@@ -1,7 +1,7 @@
 import { IssueList } from "../../../features/issues/issue-list";
 import { IssueDetail } from "../../../features/issues/issue-detail";
 import type { IssuePageProps, IssueListPageProps, IssueDetailPageProps } from "../../page.types";
-import { RepositoryPage } from "../../../features/spaces";
+import { PageContent } from "../../../shared/ui";
 import { useI18n } from "../../../shared/i18n";
 import { WorkspaceLayout } from "../../../routes/-workspace-layout";
 
@@ -17,7 +17,7 @@ export function WikiIssueLayout({ spaceId, crumb, children }: IssuePageProps) {
       selectedView="issues"
       headerTitle={crumb ? `${t("issues")} · ${crumb}` : t("issues")}
     >
-      <RepositoryPage>{children}</RepositoryPage>
+      <PageContent>{children}</PageContent>
     </WorkspaceLayout>
   );
 }

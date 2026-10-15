@@ -34,11 +34,11 @@ type NodeFilter =
 const nodeGrid =
   "grid items-center gap-5 grid-cols-[minmax(280px,1fr)_132px_180px_40px] max-[980px]:grid-cols-[minmax(220px,1fr)_160px_40px] max-[720px]:grid-cols-[minmax(160px,1fr)_40px] max-[720px]:gap-3";
 
-/** The repository shell drops the access column and shows denser rows. */
+/** The compact layout drops the access column and shows denser rows. */
 const compactNodeGrid =
   "grid items-center gap-5 grid-cols-[minmax(280px,1fr)_180px_40px] max-[720px]:grid-cols-[minmax(160px,1fr)_40px] max-[720px]:gap-3";
 
-/** Repository pages embed the browser in a naturally growing card instead of a fixed-height pane. */
+/** Growing layouts embed the browser in a naturally growing card instead of a fixed-height pane. */
 export function NodeBrowser(props: {
   readonly page: NodePage;
   readonly canCreateAtRoot?: boolean;
@@ -52,7 +52,7 @@ export function NodeBrowser(props: {
   readonly showParentRow?: boolean;
   /** Display name of the Space for the parent row; defaults to the API name. */
   readonly spaceName?: string | undefined;
-  /** Hides the access column and tightens rows for the repository view. */
+  /** Hides the access column and tightens rows for the compact layout. */
   readonly compact?: boolean;
   readonly className?: string;
 }) {

@@ -45,3 +45,5 @@ export function useModeDefinition() {
   const { mode } = useUiMode();
   return modes[parseUiMode(mode, MODE_IDS, "wiki")];
 }
+
+export type { RepositoryTab, RepositoryBreadcrumb } from "./repository/repository-tabs";

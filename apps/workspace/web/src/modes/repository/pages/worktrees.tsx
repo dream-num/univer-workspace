@@ -1,9 +1,11 @@
+import { RepositoryPullRequestLayout } from "../repository-pull-request-layout";
 import type { WorktreesPageProps } from "../../page.types";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { WorktreeDashboard, worktreeQueryOptions, worktreeBelongsToSpace } from "../../../features/worktrees";
-import { RepositoryTabs, spacesQueryOptions } from "../../../features/spaces";
+import { spacesQueryOptions } from "../../../features/spaces";
+import { RepositoryTabs } from "../repository-tabs";
 import { WorktreeReviewPanel } from "../../../features/worktrees/worktree-review-panel";
 import { Button, Empty, Skeleton } from "../../../shared/ui";
 import { useI18n } from "../../../shared/i18n";
@@ -132,7 +134,16 @@ function RepositoryPullRequestPage({
       {...(unitId ? { selectedUnitId: unitId } : {})}
       selectedView={view}
       onSelectedViewChange={onViewChange}
-      repository={{ spaceId, section }}
+      layout={({ review, actions }) => (
+        <RepositoryPullRequestLayout
+          worktree={query.data.worktree}
+          presentation={{ spaceId, section }}
+          selectedUnitId={unitId || query.data.worktree.units[0]?.unitId}
+          selectedView={view}
+          review={review}
+          actions={actions}
+        />
+      )}
     />
   );
 }

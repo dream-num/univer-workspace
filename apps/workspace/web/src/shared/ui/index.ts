@@ -22,3 +22,5 @@ export * from "./spinner";
 export * from "./textarea";
 export * from "./toaster";
 export * from "./tooltip";
+
+export { PageContent } from "./page-content";

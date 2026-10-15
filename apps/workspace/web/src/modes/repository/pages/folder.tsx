@@ -1,7 +1,8 @@
 import type { FolderPageProps } from "../../page.types";
 import { useQuery } from "@tanstack/react-query";
 import { NodeBrowser, nodeChildrenQueryOptions } from "../../../features/nodes";
-import { RepositoryTabs, spaceDisplayName } from "../../../features/spaces";
+import { RepositoryTabs } from "../repository-tabs";
+import { spaceDisplayName } from "../space-name";
 import { WorkspaceLayout } from "../../../routes/-workspace-layout";
 import { useI18n } from "../../../shared/i18n";
 

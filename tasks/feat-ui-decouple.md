@@ -321,7 +321,7 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
   - 验证：V-static；V-smoke（截图零差异）；`issues.smoke.mjs`、`repository-settings.mjs`。
   - 规模：M（`issue-list.tsx` 一个文件约 15 处替换）。依赖：T5.4、T5.6。
 
-- [ ] **T6b：repository 专属组件迁入 `modes/repository`**（R2、R5 收尾）
+- [x] **T6b：repository 专属组件迁入 `modes/repository`**（R2、R5 收尾）
   - 做什么：移动（不改代码）：`features/spaces/repository-{tabs,header,settings-layout}.tsx`、`features/spaces/settings-nav.tsx`（只被
     `repository-settings-layout.tsx` 使用）、`features/spaces/space-name.ts`（`spaceDisplayName` 注释写明是 GitHub 约定；wiki 不调用，
     `-workspace-layout` 的两处调用在 T4c 后只剩 repository shell）及 `test/unit/space-name.test.ts`、
@@ -333,6 +333,15 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
   - 验收：`rg -n 'repository' apps/workspace/web/src/features --glob '!*.queries.ts'` 只剩 HTTP schema 类型和 `issuesSidebar` 之类的
     非 mode 含义（逐条在 PR 描述里列出）；`features/*/index.ts` 不再导出 `Repository*`。
   - 验证：V-static（含 `test/unit/worktree-review-panel.test.ts`）；V-smoke；`pull-requests.smoke.mjs`、`repository-pages.mjs`。
+  - 实施：7 个组件先复制到 `modes/repository/`（`7fe1370`），再切换 import 并删除 feature 副本；
+    `space-name.test.ts` 随实现迁入 mode，原有断言保留。非 import AST 与迁移前一致。
+    `RepositoryPage` 实际由两种 mode 共用，仅含滚动和间距，提为 `shared/ui/page-content.tsx` 的 PageContent，避免 wiki 跨 mode 导入。
+    `RepositoryTab` / `RepositoryBreadcrumb` 随 tabs 移动，路由兼容导出经 registry 转发。
+    审阅面板接收 `layout({ review, actions })`；repository 页面组合 PR 外壳，并保留默认首文档、无文档及失效文档行为。
+    feature 的 repository 残留逐条为：IssueList / IssueDetail 各一处 `repositoryPageRetry` 文案 key、
+    NodeBrowser 一处 `repositoryGoToParent` 文案 key、IssueList 一处 `bg-repository-counter` 色彩令牌；均按既有决定保留。
+  - 结果：Workspace typecheck、build、78 文件 / 394 测试通过；40 张截图零差异，Pages 和 PR 专项通过。
+    未更新基线；生成文件无变化；feature → mode 和 wiki → repository 导入检查无结果。
   - 规模：M。依赖：T5.2、T5.5、T6a。
 
 - [ ] **T6c：样式按 `data-ui-mode` 作用域**（R4 样式部分；N7）

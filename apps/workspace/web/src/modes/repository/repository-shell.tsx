@@ -3,7 +3,8 @@ import { Link, Navigate, useLocation, useNavigate } from "@tanstack/react-router
 import { CircleDot, House, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Settings, Users, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../../features/auth";
-import { spaceDisplayName, spacesQueryOptions } from "../../features/spaces";
+import { spacesQueryOptions } from "../../features/spaces";
+import { spaceDisplayName } from "./space-name";
 import { useWorktreeChangeFeed, worktreeListQueryOptions } from "../../features/worktrees";
 import { api } from "../../shared/api/client";
 import { workspaceHarnessOrigin } from "../../shared/app-links";
@@ -22,7 +23,7 @@ import {
   TrialNoticeDialog,
 } from "../../features/account";
 import { BrandMark, NavLink, BreadcrumbSeparator } from "../../features/shell";
-import type { RepositoryBreadcrumb } from "../../features/spaces";
+import type { RepositoryBreadcrumb } from "./repository-tabs";
 import type { WorkspaceShellProps, WorkspaceView } from "../shell.types";
 
 type SpaceView = components["schemas"]["SpaceView"];

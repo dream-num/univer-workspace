@@ -11,7 +11,7 @@ import { cn } from "../shared/utils/cn";
 
 export { WorkspaceHeaderSearch } from "../features/shell";
 export { CreateTeamDialog } from "../features/spaces";
-export type { RepositoryTab, RepositoryBreadcrumb } from "../features/spaces";
+export type { RepositoryTab, RepositoryBreadcrumb } from "../modes/registry";
 
 export function WorkspaceLayout(props: WorkspaceLayoutProps) {
   const { mode } = useUiMode();

@@ -5,7 +5,8 @@ import { IssueViewsNav } from "./issues/views-nav";
 import { IssueList } from "../../../features/issues/issue-list";
 import { IssueDetail } from "../../../features/issues/issue-detail";
 import type { IssuePageProps, IssueListPageProps, IssueDetailPageProps } from "../../page.types";
-import { RepositoryPage, RepositoryTabs } from "../../../features/spaces";
+import { PageContent } from "../../../shared/ui";
+import { RepositoryTabs } from "../repository-tabs";
 import { useI18n } from "../../../shared/i18n";
 import { WorkspaceLayout } from "../../../routes/-workspace-layout";
 
@@ -33,7 +34,7 @@ export function RepositoryIssueLayout({ spaceId, crumb, children }: IssuePagePro
           <div className={crumb ? "mx-auto max-w-7xl px-6 py-6 max-[720px]:px-4" : "min-h-full"}>{children}</div>
         </div>
       ) : (
-        <RepositoryPage>{children}</RepositoryPage>
+        <PageContent>{children}</PageContent>
       )}
     </WorkspaceLayout>
   );

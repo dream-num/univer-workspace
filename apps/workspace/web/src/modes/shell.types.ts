@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import type { RepositoryTab, RepositoryBreadcrumb } from "../features/spaces";
+import type { RepositoryTab, RepositoryBreadcrumb } from "./repository/repository-tabs";
 
 export type WorkspaceView = "home" | "apps" | "trash" | "worktrees" | "members" | "issues";
 

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { LocaleType } from "@univerjs/core";
 import {
@@ -47,10 +48,6 @@ import {
 } from "./worktree-review-presentation";
 import { DEFAULT_WORKTREE_REVIEW_VIEW, type WorktreeReviewView } from "./worktree-review-search";
 import { WorktreeReviewHeader } from "./worktree-review-header";
-import {
-  RepositoryPullRequestLayout,
-  type RepositoryReviewPresentation,
-} from "./repository-pull-request-layout";
 
 type WorktreeDetailModel = components["schemas"]["WorktreeDetail"];
 type WorktreeState = components["schemas"]["WorktreeState"];
@@ -64,13 +61,13 @@ export function WorktreeReviewPanel({
   selectedUnitId,
   selectedView = DEFAULT_WORKTREE_REVIEW_VIEW,
   onSelectedViewChange,
-  repository,
+  layout,
 }: {
   readonly worktree: WorktreeDetailModel;
   readonly selectedUnitId?: string | null;
   readonly selectedView?: WorktreeReviewView;
   readonly onSelectedViewChange?: (view: WorktreeReviewView) => void;
-  readonly repository?: RepositoryReviewPresentation;
+  readonly layout?: (parts: { readonly review: ReactNode; readonly actions: ReactNode }) => ReactNode;
 }) {
   const { t } = useI18n();
   const selectedUnit =
@@ -205,7 +202,7 @@ export function WorktreeReviewPanel({
                 {t(selectedUnit.change === "deleted" ? "undoUnitRemoval" : "markUnitRemoved")}
               </Button>
             ) : null}
-            {repository ? null : lifecycleActions}
+            {layout ? null : lifecycleActions}
           </>
         }
       />
@@ -232,18 +229,7 @@ export function WorktreeReviewPanel({
       )}
     </article>
   );
-  return repository ? (
-    <RepositoryPullRequestLayout
-      worktree={worktree}
-      presentation={repository}
-      selectedUnitId={selectedUnitId ?? selectedUnit?.unitId}
-      selectedView={selectedView}
-      review={review}
-      actions={lifecycleActions}
-    />
-  ) : (
-    review
-  );
+  return layout ? layout({ review, actions: lifecycleActions }) : review;
 }
 
 function UnitReview({

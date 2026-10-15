@@ -9,7 +9,7 @@ type NodePage = components["schemas"]["NodePage"];
  */
 export type NodeParentRow = {
   readonly label: string;
-  /** Undefined means the repository root. */
+  /** Undefined means the space root. */
   readonly nodeId?: string | undefined;
 };
 
