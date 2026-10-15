@@ -31,6 +31,7 @@ import {
   createMetricsMiddleware,
 } from "./middleware/metrics.js";
 import { createRequestLoggingMiddleware } from "./middleware/logging.js";
+import { createStaticSiteRouter } from "./middleware/static-site.js";
 import {
   AccessRepository,
   createAccessResolver,
@@ -387,10 +388,7 @@ export function createWorkspaceApplication(
 
   const publicDirectory = resolve("dist/public");
   if (existsSync(publicDirectory)) {
-    app.use(express.static(publicDirectory));
-    app.get("/{*path}", (_request, response) => {
-      response.sendFile(resolve(publicDirectory, "index.html"));
-    });
+    app.use(createStaticSiteRouter(publicDirectory));
   }
 
   app.use(notFoundHandler);
