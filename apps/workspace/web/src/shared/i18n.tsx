@@ -1,3 +1,4 @@
+import { repositoryMessages } from "../modes/repository/messages";
 import {
   createContext,
   useCallback,
@@ -1260,79 +1261,7 @@ export type MessageKey = keyof (typeof messages)["zh-CN"];
  * collaborators; the wiki theme keeps the original wording. Only the keys whose
  * text mentions a Space need an entry.
  */
-const repositoryMessages: Record<AppLanguage, Partial<Record<MessageKey, string>>> = {
-  "zh-CN": {
-    repositoryHint: "仓库视图按 GitHub 的方式组织。主题设置仅保存在当前浏览器。",
-    apps: "Pages",
-    repositoryAppsSummary: "{count} 个页面，可选择一个作为默认页面。",
-    repositoryPageLoading: "正在打开页面…",
-    searchRepositories: "查找仓库…",
-    repositoriesEmpty: "还没有仓库",
-    personalSpace: "个人",
-    teamSpace: "团队",
-    createTeamSpace: "新建仓库",
-    spaceCreationFailed: "仓库创建失败。",
-    spaceSettings: "设置",
-    spaceName: "仓库名称",
-    spaceDescriptionHint: "简短说明此仓库的用途，最多 350 个字符。",
-    teamSpaceId: "仓库 ID",
-    copySpaceId: "复制仓库 ID",
-    spaceIdCopied: "仓库 ID 已复制。",
-    copySpaceIdFailed: "无法复制仓库 ID。",
-    enterSpaceName: "请输入仓库名称。",
-    spaceRenamed: "仓库设置已更新。",
-    publicReadDescription: "开启后，获得链接的任何人无需登录即可浏览并只读打开此仓库中的文件。",
-    noWritableSpace: "没有可用于新建文档的仓库。",
-    spaceEmpty: "此仓库为空",
-    openSpace: "打开仓库",
-    spaceRoot: "仓库根目录",
-    searchMembers: "搜索协作者",
-    members: "协作者",
-    allSpaces: "全部仓库",
-    belongingSpace: "所属仓库",
-    destinationParentNodeHint: "留空则移动到仓库根目录。",
-    linkSharingDisabledDescription: "按协作者授权或仓库公开只读设置访问。",
-    spaceMembersTitle: "{name}的协作者",
-    spaceMembersDescription: "协作者的角色适用于此仓库中的所有文件。",
-  },
-  "en-US": {
-    repositoryHint:
-      "The repository view follows GitHub conventions. This theme is saved only in this browser.",
-    apps: "Pages",
-    repositoryAppsSummary: "{count} pages. Choose one as the default page.",
-    repositoryPageLoading: "Opening page…",
-    searchRepositories: "Find a repository…",
-    repositoriesEmpty: "No repositories yet",
-    personalSpace: "Personal",
-    teamSpace: "Team",
-    createTeamSpace: "New repository",
-    spaceCreationFailed: "Repository creation failed.",
-    spaceSettings: "Settings",
-    spaceName: "Repository name",
-    spaceDescriptionHint: "A short summary of what this repository is for. Up to 350 characters.",
-    teamSpaceId: "Repository ID",
-    copySpaceId: "Copy repository ID",
-    spaceIdCopied: "Repository ID copied.",
-    copySpaceIdFailed: "Unable to copy the repository ID.",
-    enterSpaceName: "Enter a repository name.",
-    spaceRenamed: "Repository settings updated.",
-    publicReadDescription:
-      "When enabled, anyone with the link can browse and open files in this repository read-only without signing in.",
-    noWritableSpace: "There is no writable repository for a new document.",
-    spaceEmpty: "This repository is empty",
-    openSpace: "Open repository",
-    spaceRoot: "Repository root",
-    searchMembers: "Find a collaborator",
-    members: "Collaborators",
-    allSpaces: "All repositories",
-    belongingSpace: "Repository",
-    destinationParentNodeHint: "Leave empty to move the node to the repository root.",
-    linkSharingDisabledDescription:
-      "Access follows collaborator grants or the repository's public read-only setting.",
-    spaceMembersTitle: "{name} collaborators",
-    spaceMembersDescription: "Collaborator roles apply to every file in this repository.",
-  },
-};
+
 
 interface LanguageContextValue {
   readonly language: AppLanguage;
