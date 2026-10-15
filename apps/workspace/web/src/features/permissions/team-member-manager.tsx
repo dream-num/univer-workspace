@@ -4,18 +4,19 @@ import { useState } from "react";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { useI18n } from "../../shared/i18n";
+import { useTheme } from "../../shared/theme";
+import { cn } from "../../shared/utils/cn";
 import {
   Avatar,
   Button,
+  Dialog,
+  Empty,
   SearchSelect,
   Select,
   Tooltip,
   toast,
 } from "../../shared/ui";
-import {
-  teamMembersQueryOptions,
-  userSearchQueryOptions,
-} from "./permissions.queries";
+import { teamMembersQueryOptions, userSearchQueryOptions } from "./permissions.queries";
 import { RoleBadge } from "./role-badge";
 
 type TeamRole = "admin" | "editor" | "viewer";
@@ -36,48 +37,43 @@ export function TeamMemberManager(props: {
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserSummary | null>(null);
   const [role, setRole] = useState<TeamRole>("viewer");
+  const [adding, setAdding] = useState(false);
   const queryClient = useQueryClient();
   const { t } = useI18n();
+  const { workspaceTheme } = useTheme();
+  const repository = workspaceTheme === "repository";
   const members = useQuery(teamMembersQueryOptions(props.spaceId));
   const users = useQuery(userSearchQueryOptions(search));
 
   const update = useMutation({
-    mutationFn: async (values: {
-      readonly userId: string;
-      readonly role: TeamRole;
-    }) => {
-      const { error } = await api.PUT(
-        "/api/team-spaces/{spaceId}/members/{userId}",
-        {
-          params: {
-            path: {
-              spaceId: props.spaceId,
-              userId: values.userId,
-            },
+    mutationFn: async (values: { readonly userId: string; readonly role: TeamRole }) => {
+      const { error } = await api.PUT("/api/team-spaces/{spaceId}/members/{userId}", {
+        params: {
+          path: {
+            spaceId: props.spaceId,
+            userId: values.userId,
           },
-          body: { role: values.role },
-        }
-      );
+        },
+        body: { role: values.role },
+      });
       if (error) throw apiError(error);
     },
     onSuccess: async () => {
       await invalidate();
       setSelectedUser(null);
       setSearch("");
+      setAdding(false);
       toast.success(t("membershipUpdated"));
     },
     onError: showError,
   });
   const remove = useMutation({
     mutationFn: async (userId: string) => {
-      const { error } = await api.DELETE(
-        "/api/team-spaces/{spaceId}/members/{userId}",
-        {
-          params: {
-            path: { spaceId: props.spaceId, userId },
-          },
-        }
-      );
+      const { error } = await api.DELETE("/api/team-spaces/{spaceId}/members/{userId}", {
+        params: {
+          path: { spaceId: props.spaceId, userId },
+        },
+      });
       if (error) throw apiError(error);
     },
     onSuccess: async () => {
@@ -87,22 +83,16 @@ export function TeamMemberManager(props: {
     onError: showError,
   });
   const changeRole = useMutation({
-    mutationFn: async (input: {
-      readonly userId: string;
-      readonly role: TeamRole;
-    }) => {
-      const { error } = await api.PUT(
-        "/api/team-spaces/{spaceId}/members/{userId}",
-        {
-          params: {
-            path: {
-              spaceId: props.spaceId,
-              userId: input.userId,
-            },
+    mutationFn: async (input: { readonly userId: string; readonly role: TeamRole }) => {
+      const { error } = await api.PUT("/api/team-spaces/{spaceId}/members/{userId}", {
+        params: {
+          path: {
+            spaceId: props.spaceId,
+            userId: input.userId,
           },
-          body: { role: input.role },
-        }
-      );
+        },
+        body: { role: input.role },
+      });
       if (error) throw apiError(error);
     },
     onSuccess: async () => {
@@ -119,9 +109,7 @@ export function TeamMemberManager(props: {
   }
 
   function showError(error: unknown) {
-    toast.error(
-      error instanceof Error ? error.message : t("membershipUpdateFailed")
-    );
+    toast.error(error instanceof Error ? error.message : t("membershipUpdateFailed"));
   }
 
   const roleOptions: ReadonlyArray<{
@@ -133,13 +121,9 @@ export function TeamMemberManager(props: {
       { label: t("accessEditor"), value: "editor" },
       { label: t("accessViewer"), value: "viewer" },
     ] as const
-  ).filter(
-    (option) => props.actorRole === "owner" || option.value !== "admin"
-  );
+  ).filter((option) => props.actorRole === "owner" || option.value !== "admin");
 
-  const existing = new Set(
-    (members.data?.members ?? []).map((member) => member.user.id)
-  );
+  const existing = new Set((members.data?.members ?? []).map((member) => member.user.id));
   const allMembers = members.data
     ? [
         {
@@ -149,17 +133,11 @@ export function TeamMemberManager(props: {
         ...members.data.members,
       ]
     : [];
-  const normalizedSearch = (props.searchQuery ?? "")
-    .trim()
-    .toLocaleLowerCase();
+  const normalizedSearch = (props.searchQuery ?? "").trim().toLocaleLowerCase();
   const visibleMembers = allMembers.filter((member) => {
     if (!normalizedSearch) return true;
-    return [
-      member.user.displayName,
-      member.user.username,
-      member.role,
-    ].some((value) =>
-      value.toLocaleLowerCase().includes(normalizedSearch)
+    return [member.user.displayName, member.user.username, member.role].some((value) =>
+      value.toLocaleLowerCase().includes(normalizedSearch),
     );
   });
 
@@ -171,62 +149,96 @@ export function TeamMemberManager(props: {
     update.mutate({ userId: selectedUser.id, role });
   };
 
+  const addMemberForm = (
+    <div className="flex flex-wrap items-start gap-2">
+      <div className="min-w-0 basis-56 flex-1">
+        <SearchSelect<UserSummary>
+          items={(users.data?.users ?? []).filter((user) => !existing.has(user.id))}
+          value={selectedUser}
+          onValueChange={setSelectedUser}
+          onInputValueChange={(value, reason) => {
+            if (reason === "item-press") return;
+            setSearch(value);
+          }}
+          itemToStringLabel={(user) => `${user.displayName} (@${user.username})`}
+          itemKey={(user) => user.id}
+          placeholder={t("searchUsers")}
+          aria-label={t("searchUsers")}
+          renderItem={(user) => (
+            <span className="flex min-w-0 items-center gap-2">
+              <Avatar size="xs" src={user.avatarUrl} name={user.displayName} />
+              <span className="truncate">{user.displayName}</span>
+              <span className="truncate text-xs text-muted-foreground">@{user.username}</span>
+            </span>
+          )}
+        />
+      </div>
+      <Select<TeamRole>
+        className="w-32"
+        aria-label={t("access")}
+        value={role}
+        onValueChange={setRole}
+        options={roleOptions}
+      />
+      <Button onClick={submit} disabled={update.isPending}>
+        <UserPlus />
+        {t("addMember")}
+      </Button>
+    </div>
+  );
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 border-b border-border px-6 py-4 max-[720px]:px-4">
-        <p className="m-0 text-[13px] text-muted-foreground">
-          {t("spaceMembersDescription")}
-        </p>
+    <div
+      className={cn(
+        "flex min-h-0 flex-col",
+        repository ? "rounded-[6px] border border-border" : "h-full",
+      )}
+    >
+      <div
+        className={cn(
+          "shrink-0 border-b border-border",
+          repository
+            ? "flex flex-wrap items-center justify-between gap-3 rounded-t-[6px] bg-surface p-4"
+            : "px-6 py-4 max-[720px]:px-4",
+        )}
+      >
+        <div>
+          {repository ? (
+            <h3 className="mb-1 text-sm font-semibold">{t("settingsManageAccess")}</h3>
+          ) : null}
+          <p className="m-0 text-[13px] text-muted-foreground">{t("spaceMembersDescription")}</p>
+        </div>
         {props.canManage ? (
-          <div className="mt-3.5 flex flex-wrap items-start gap-2">
-            <div className="min-w-56 flex-1">
-              <SearchSelect<UserSummary>
-                items={(users.data?.users ?? []).filter(
-                  (user) => !existing.has(user.id)
-                )}
-                value={selectedUser}
-                onValueChange={setSelectedUser}
-                onInputValueChange={(value, reason) => {
-                  if (reason === "item-press") return;
-                  setSearch(value);
-                }}
-                itemToStringLabel={(user) =>
-                  `${user.displayName} (@${user.username})`
-                }
-                itemKey={(user) => user.id}
-                placeholder={t("searchUsers")}
-                aria-label={t("searchUsers")}
-                renderItem={(user) => (
-                  <span className="flex min-w-0 items-center gap-2">
-                    <Avatar
-                      size="xs"
-                      src={user.avatarUrl}
-                      name={user.displayName}
-                    />
-                    <span className="truncate">{user.displayName}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      @{user.username}
-                    </span>
-                  </span>
-                )}
-              />
-            </div>
-            <Select<TeamRole>
-              className="w-32"
-              aria-label={t("access")}
-              value={role}
-              onValueChange={setRole}
-              options={roleOptions}
-            />
-            <Button onClick={submit} disabled={update.isPending}>
-              <UserPlus />
-              {t("addMember")}
-            </Button>
-          </div>
+          repository ? (
+            <>
+              <Button size="sm" className="rounded-[6px]" onClick={() => setAdding(true)}>
+                <UserPlus />
+                {t("addMember")}
+              </Button>
+              <Dialog
+                open={adding}
+                onOpenChange={setAdding}
+                title={t("addMember")}
+                description={t("spaceMembersDescription")}
+              >
+                {addMemberForm}
+              </Dialog>
+            </>
+          ) : (
+            <div className="mt-3.5">{addMemberForm}</div>
+          )
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-2 max-[720px]:px-4">
+      <div
+        className={cn(
+          "min-h-0 flex-1",
+          repository ? "px-4" : "overflow-y-auto px-6 py-2 max-[720px]:px-4",
+        )}
+      >
+        {repository && visibleMembers.length === 0 ? (
+          <Empty className="py-8" title={t("settingsNoCollaborators")} />
+        ) : null}
         <ul className="m-0 grid p-0">
           {visibleMembers.map((item) => {
             const locked =
@@ -238,14 +250,9 @@ export function TeamMemberManager(props: {
                 key={item.user.id}
                 className="flex items-center gap-3 border-b border-border py-3 last:border-0"
               >
-                <Avatar
-                  src={item.user.avatarUrl}
-                  name={item.user.displayName}
-                />
+                <Avatar src={item.user.avatarUrl} name={item.user.displayName} />
                 <div className="grid min-w-0 flex-1">
-                  <span className="truncate text-sm font-medium">
-                    {item.user.displayName}
-                  </span>
+                  <span className="truncate text-sm font-medium">{item.user.displayName}</span>
                   <span className="truncate text-xs text-muted-foreground">
                     @{item.user.username}
                   </span>
@@ -261,8 +268,7 @@ export function TeamMemberManager(props: {
                         aria-label={t("access")}
                         value={item.role}
                         disabled={
-                          changeRole.isPending &&
-                          changeRole.variables?.userId === item.user.id
+                          changeRole.isPending && changeRole.variables?.userId === item.user.id
                         }
                         options={roleOptions}
                         onValueChange={(nextRole) =>
@@ -278,10 +284,7 @@ export function TeamMemberManager(props: {
                           size="icon-sm"
                           aria-label={`${t("remove")} ${item.user.displayName}`}
                           className="hover:bg-destructive-soft hover:text-destructive"
-                          disabled={
-                            remove.isPending &&
-                            remove.variables === item.user.id
-                          }
+                          disabled={remove.isPending && remove.variables === item.user.id}
                           onClick={() => remove.mutate(item.user.id)}
                         >
                           <Trash2 />

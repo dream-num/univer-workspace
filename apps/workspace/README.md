@@ -374,6 +374,11 @@ Wiki and the global Workbench retain their existing dashboard. No GitHub PR mode
 comments, branches or checks are introduced. See the
 [screenshots, feature mapping and verification](docs/proposals/repository-pull-requests-tab.md).
 
+Repository Settings uses grouped sidebar navigation and separate name/description saves,
+with confirmed public-read changes in Danger Zone. Collaborator management and Trash keep
+their existing permissions and APIs. See the
+[comparison, remaining differences and verification](docs/proposals/repository-settings-tab.md).
+
 The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
 repository tag. When provided, it checks out that tag and uses it for the container
 image. When omitted, it builds the workflow dispatch commit and tags the image as

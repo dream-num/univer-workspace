@@ -448,6 +448,37 @@
   --color-accent: #656c7633;
 }
 
+/* Settings is scoped separately so Wiki forms keep their existing appearance. */
+.repository-settings {
+  --color-input: var(--color-border);
+  --color-primary: #1f883d;
+  --color-primary-hover: #1a7f37;
+  --color-ring: #0969da;
+  --color-destructive: #d1242f;
+  --color-destructive-soft: #fff1f2;
+  --color-secondary-foreground: var(--color-foreground);
+}
+
+.dark .repository-settings {
+  --color-surface: #151b23;
+  --color-primary: #238636;
+  --color-primary-hover: #29903b;
+  --color-ring: #4493f8;
+  --color-destructive: #ff7b72;
+  --color-destructive-soft: #2d1214;
+}
+
+.repository-settings input:not([type="checkbox"]),
+.repository-settings textarea {
+  background: var(--color-surface);
+  box-shadow: inset 0 1px 0 rgb(31 35 40 / 4%);
+}
+
+.repository-settings label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
 /* Issue content uses GitHub's inset surface, rather than its darker global header. */
 .repository-issues,
 .repository-pull-requests {
