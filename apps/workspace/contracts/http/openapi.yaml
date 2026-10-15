@@ -90,6 +90,8 @@ paths:
     $ref: ./paths/spaces.yaml#/~1api~1team-spaces
   /api/spaces/{spaceId}:
     $ref: ./paths/spaces.yaml#/~1api~1spaces~1{spaceId}
+  /api/spaces/{spaceId}/star:
+    $ref: ./paths/spaces.yaml#/~1api~1spaces~1{spaceId}~1star
   /api/spaces/{spaceId}/nodes:
     $ref: ./paths/nodes.yaml#/~1api~1spaces~1{spaceId}~1nodes
   /api/nodes:
@@ -209,6 +211,8 @@ components:
       $ref: ./schemas/identity.yaml#/SessionView
     SpaceView:
       $ref: ./schemas/spaces.yaml#/SpaceView
+    SpaceStar:
+      $ref: ./schemas/spaces.yaml#/SpaceStar
     NodeSummary:
       $ref: ./schemas/nodes.yaml#/NodeSummary
     NodePage:

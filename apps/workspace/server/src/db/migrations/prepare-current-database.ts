@@ -13,8 +13,9 @@ import { migrateV5ToV6 } from "./v5-to-v6/migrate.js";
 
 import { migrateV7ToV8 } from "./v7-to-v8/migrate.js";
 import { migrateV8ToV9 } from "./v8-to-v9/migrate.js";
+import { migrateV9ToV10 } from "./v9-to-v10/migrate.js";
 
-const TARGET_VERSION = 9;
+const TARGET_VERSION = 10;
 const V1_TABLES = [
   "users",
   "password_credentials",
@@ -112,7 +113,7 @@ type DatabasePreparation =
  * Temporary rollout boundary for the supported legacy schemas.
  *
  * Delete this migrations directory and the calls from db/initialize.ts and
- * main.ts after every deployed database is on V9. Business repositories never
+ * main.ts after every deployed database is on V10. Business repositories never
  * import it.
  */
 export function prepareCurrentDatabase(filename: string): DatabasePreparation {
@@ -129,18 +130,31 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     database.exec("PRAGMA busy_timeout = 5000");
     const version = pragmaNumber(database, "user_version");
     if (version === TARGET_VERSION) {
-      assertV9Fingerprint(database);
+      assertV10Fingerprint(database);
       return { status: "current" };
+    }
+    if (version === 9) {
+      assertV9Fingerprint(database);
+      const backupFilename = createBackup(filename, database, 9);
+      try {
+        startupStage("product.v9-to-v10", () => migrateV9ToV10(database));
+        assertV10Fingerprint(database);
+        database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      } catch (error) {
+        throw new Error(`Workspace V9 to V10 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+      }
+      return { status: "migrated", backupFilename };
     }
     if (version === 8) {
       assertV8Fingerprint(database);
       const backupFilename = createBackup(filename, database, 8);
       try {
         startupStage("product.v8-to-v9", () => migrateV8ToV9(database));
-        assertV9Fingerprint(database);
+        startupStage("product.v9-to-v10", () => migrateV9ToV10(database));
+        assertV10Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V8 to V9 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V8 to V10 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -150,10 +164,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       try {
         startupStage("product.v7-to-v8", () => migrateV7ToV8(database));
         startupStage("product.v8-to-v9", () => migrateV8ToV9(database));
-        assertV9Fingerprint(database);
+        startupStage("product.v9-to-v10", () => migrateV9ToV10(database));
+        assertV10Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V7 to V9 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V7 to V10 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -167,10 +182,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         startupStage("product.v7-to-v8", () => migrateV7ToV8(database));
         startupStage("product.v8-to-v9", () => migrateV8ToV9(database));
-        assertV9Fingerprint(database);
+        startupStage("product.v9-to-v10", () => migrateV9ToV10(database));
+        assertV10Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V6 to V9 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V6 to V10 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -185,11 +201,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         startupStage("product.v7-to-v8", () => migrateV7ToV8(database));
         startupStage("product.v8-to-v9", () => migrateV8ToV9(database));
-        assertV9Fingerprint(database);
+        startupStage("product.v9-to-v10", () => migrateV9ToV10(database));
+        assertV10Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V5 to V9 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V5 to V10 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -216,11 +233,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         startupStage("product.v7-to-v8", () => migrateV7ToV8(database));
         startupStage("product.v8-to-v9", () => migrateV8ToV9(database));
-        assertV9Fingerprint(database);
+        startupStage("product.v9-to-v10", () => migrateV9ToV10(database));
+        assertV10Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V4 to V9 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V4 to V10 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -236,11 +254,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         startupStage("product.v7-to-v8", () => migrateV7ToV8(database));
         startupStage("product.v8-to-v9", () => migrateV8ToV9(database));
-        assertV9Fingerprint(database);
+        startupStage("product.v9-to-v10", () => migrateV9ToV10(database));
+        assertV10Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V3 to V9 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V3 to V10 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -257,11 +276,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         startupStage("product.v7-to-v8", () => migrateV7ToV8(database));
         startupStage("product.v8-to-v9", () => migrateV8ToV9(database));
-        assertV9Fingerprint(database);
+        startupStage("product.v9-to-v10", () => migrateV9ToV10(database));
+        assertV10Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V2 to V9 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V2 to V10 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -279,11 +299,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v6-to-v7", () => migrateV6ToV7(database));
         startupStage("product.v7-to-v8", () => migrateV7ToV8(database));
         startupStage("product.v8-to-v9", () => migrateV8ToV9(database));
-        assertV9Fingerprint(database);
+        startupStage("product.v9-to-v10", () => migrateV9ToV10(database));
+        assertV10Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V1 to V9 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V1 to V10 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -291,7 +312,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     }
     if (version !== 0) {
       throw new Error(
-        `Unsupported product database version ${version}; expected 0, 1, 2, 3, 4, 5, 6, 7, 8, or ${TARGET_VERSION}.`
+        `Unsupported product database version ${version}; expected 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, or ${TARGET_VERSION}.`
       );
     }
     if (!hasTable(database, "catalog_entries") && !hasTable(database, "files")) {
@@ -303,7 +324,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     const backupFilename = createBackup(filename, database, 0);
 
     try {
-      startupStage("product.v0-to-v9", () => migrateLegacyV0(database));
+      startupStage("product.v0-to-v10", () => migrateLegacyV0(database));
     } catch (error) {
       throw new Error(
         `Legacy Workspace database migration failed. The original V0 database was preserved by the transaction and its consistent backup is at ${backupFilename}.`,
@@ -311,7 +332,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       );
     }
     try {
-      assertV9Fingerprint(database);
+      assertV10Fingerprint(database);
       database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
     } catch (error) {
       throw new Error(
@@ -328,7 +349,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
 function createBackup(
   filename: string,
   database: DatabaseSync,
-  version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+  version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 ): string {
   const backupFilename = uniqueBackupFilename(filename, version);
   try {
@@ -343,7 +364,7 @@ function createBackup(
   }
 }
 
-function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8): string {
+function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9): string {
   const timestamp = new Date()
     .toISOString()
     .replaceAll(":", "")
@@ -357,7 +378,7 @@ function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 |
   );
 }
 
-function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8): void {
+function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9): void {
   const backup = new DatabaseSync(filename, { readOnly: true });
   try {
     const integrity = backup.prepare("PRAGMA integrity_check").get() as
@@ -379,6 +400,8 @@ function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
       assertV2Fingerprint(backup);
     } else if (version === 3) {
       assertV3Fingerprint(backup);
+    } else if (version === 9) {
+      assertV9Fingerprint(backup);
     } else if (version === 8) {
       assertV8Fingerprint(backup);
     } else if (version === 7) {
@@ -689,11 +712,20 @@ function assertV9Fingerprint(database: DatabaseSync): void {
   }
 }
 
+function assertV10Fingerprint(database: DatabaseSync): void {
+  assertV9Fingerprint(database);
+  assertColumns(database, "space_stars", ["space_id", "user_id", "created_at"], 10);
+  const sql = objectSql(database, "table", "space_stars");
+  if (!["PRIMARY KEY (space_id, user_id)", "REFERENCES spaces(id) ON DELETE CASCADE", "REFERENCES users(id) ON DELETE CASCADE"].every((constraint) => sql.includes(constraint))) {
+    throw new Error("Product database V10 fingerprint mismatch (Space stars constraints differ).");
+  }
+}
+
 function assertColumns(
   database: DatabaseSync,
   table: string,
   expected: readonly string[],
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 ): void {
   const actual = database.prepare(`PRAGMA table_info(${table})`).all() as unknown as Array<{
     readonly name: string;

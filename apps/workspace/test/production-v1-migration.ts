@@ -100,6 +100,7 @@ try {
       ON operations(state, next_attempt_at, lease_expires_at);
     CREATE INDEX operations_actor
       ON operations(actor_user_id, created_at DESC);
+    DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
     DROP TABLE IF EXISTS issue_assignees;
     DROP TABLE IF EXISTS issue_label_links;
@@ -120,7 +121,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 9);
+    assert.equal(version.user_version, 10);
     const resource = migrated.database.connection
       .prepare("SELECT id, kind FROM resources")
       .get() as { readonly id: string; readonly kind: string };

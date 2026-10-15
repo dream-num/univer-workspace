@@ -1,15 +1,15 @@
 # Univer Workspace 数据模型
 
-状态：V9，已实现
+状态：V10，已实现
 
 权威定义：`server/src/db/schema.sql`
 
 产品数据库使用 SQLite，开启 Foreign Key，Schema 版本为
-`PRAGMA user_version = 9`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+`PRAGMA user_version = 10`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿另存于
-`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V9
+`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V10
 Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
 `__record_id`，并把每条 Record ID 投影到该字段；Row/Column/Cell Map 是可从 Field 与 Record
 重建的派生数据。现有持久化 Base Snapshot 均使用该表示。
@@ -17,7 +17,7 @@ Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一�
 五类 Unit 的 Thread Comment anchor 属于 Unit snapshot/changeset；评论正文、回复、solved
 状态与并发 generation 保存在同一文件的 `collaboration_comments` 表中，并由
 `collaboration_schema_versions` 的 `comment=1` 组件版本管理。Comment Adapter 首次启动时
-幂等创建该附加 Schema，不改变产品数据库 V8，也不要求执行产品迁移命令。评论正文不分支：
+幂等创建该附加 Schema，不改变产品数据库，也不要求执行产品迁移命令。评论正文不分支：
 Trunk、Worktree 和 Merge Preview 读写同一份 `collaboration_comments` 数据；只有 anchor 作为 Unit
 resource 随 Worktree snapshot/changeset 分支与合并（见 application-design.md "评论与 Worktree"）。
 
@@ -28,7 +28,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-启动入口先将产品数据库准备到 V9，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+启动入口先将产品数据库准备到 V10，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份，在副本上按 Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件
@@ -36,7 +36,7 @@ Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V9，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V10，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -54,6 +54,7 @@ Space
        └── Trash Batch
 
 User ── Recent Resource ── Resource
+User ── Space Star ── Space
 Team Space ── Issue ─┬── Issue Comment / Issue Event
                      ├── Issue Label Link ── Issue Label
                      ├── Issue Assignee ── User
@@ -107,6 +108,16 @@ Server 进程内存，不进入产品数据库，进程重启后由用户重新�
 
 仅用于 Team Space，角色为 `admin | editor | viewer`。Space Owner 不重复写入成员表；
 Trigger 阻止向 Personal Space 写成员或把 Owner 写成成员。
+
+### `space_stars`
+
+用户对已有 Space 的收藏关系：`space_id`、`user_id`、`created_at`（Unix 毫秒）。
+联合主键 `(space_id, user_id)` 防止重复收藏，两条外键均 `ON DELETE CASCADE`。
+Star 不创建 Repository、成员、ACL、Unit 或 Operation，不改变 Space 的所有权和可见性。
+总数从关系表实时计算，不在 Space 中维护冗余计数。Personal 和 Team Space 均支持。
+用户取消 Star 时删除自己的关系；失去访问权时保留关系但不能再读取或操作，重新获得访问权后恢复可见。
+三个 Star HTTP 方法均要求登录及服务端 Access Resolver 确认的当前 Space 访问权。
+数据仅用于此收藏功能，记录属于受保护的产品用户行为数据；HTTP 只返回当前用户状态与汇总计数，不提供收藏者列表。
 
 ## Node 树
 
@@ -389,11 +400,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V9，不备份；
-2. 完整 V9：校验指纹后正常启动，不重复备份；
-3. 完整 V8/V7/V6/V5：先生成一致性备份，再迁移到 V9；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V9；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V9；
+1. 不存在或空文件：创建 V10，不备份；
+2. 完整 V10：校验指纹后正常启动，不重复备份；
+3. 完整 V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V10；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V10；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V10；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -415,12 +426,12 @@ Operation JSON。V0 迁移前要求没有 Pending/Failed Operation；后续版�
 - V2 删除任务完整映射到通用 Outbox；
 - V3 Asset Upload 的内容检测字段被无损移除；声明 MIME 缺失时用旧检测值回填；
 - V4 External Identity 被无损扩展为支持 Discord Provider；
-- 旧表全部删除且 `user_version = 9`。
+- 旧表全部删除且 `user_version = 10`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
 一致性备份始终保留，下一次启动可继续升级或由运维恢复。错误中会给出备份路径。
 迁移实现是唯一兼容边界；线上数据库全部完成升级后，可以删除 `migrations/`、
-`legacy-v0/` 及初始化函数中的一次调用，不影响 V9 Schema 或业务代码。
+`legacy-v0/` 及初始化函数中的一次调用，不影响 V10 Schema 或业务代码。
 
 V6 → V7 只重建 Operation 和删除任务表以扩展 CHECK 枚举，完整保留所有行和恢复字段；
 Blob 及上传会话表不变。升级前自动创建一致性备份；停旧实例后由单个新实例完成迁移。
@@ -448,3 +459,8 @@ V7 → V8 在单个事务内新增两表及索引，不删除或改写旧字段�
 V8 → V9 在单个事务内新增 Issue 相关的七张表及索引，不删除或改写旧字段、业务行、Blob 身份或恢复状态。
 启动前备份，校验 V8/V9 指纹、外键及完整性；失败回滚至 V8。已有未完成 Operation 可以保留。
 回滚应用版本须停新实例并恢复迁移前备份，不可让旧进程继续写 V9 文件。
+
+V9 → V10 在单个事务内仅新增 `space_stars`，不改写已有业务表和行；已有收藏初始为空。
+准备阶段在业务 Repository 初始化前校验 V9 指纹、生成并验证一致性备份；事务提交前检查外键与完整性，
+然后校验 V10 指纹。失败事务回滚至 V9，备份保留且启动失败。重复启动不重复迁移或备份。
+部署须先停全部旧实例，由单个 V10 实例完成迁移和健康检查后恢复服务；回退须停新实例并恢复 V9 备份。

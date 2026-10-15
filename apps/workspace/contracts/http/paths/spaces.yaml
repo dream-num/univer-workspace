@@ -36,6 +36,62 @@
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
 
+/api/spaces/{spaceId}/star:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Spaces]
+    operationId: getSpaceStar
+    summary: Read the current User's star state and the Space's total stars.
+    description: Requires login and existing Space access. A star never grants access.
+    responses:
+      "200":
+        description: Current star state and count.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpaceStar
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+  put:
+    tags: [Spaces]
+    operationId: starSpace
+    summary: Star a Space for the current User.
+    description: Idempotent and safe to retry. Requires login and existing Space access, including public-read access. Ignores client-supplied identities and counts.
+    responses:
+      "200":
+        description: Starred state and updated total count.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpaceStar
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+  delete:
+    tags: [Spaces]
+    operationId: unstarSpace
+    summary: Remove the current User's star from a Space.
+    description: Idempotent and safe to retry. Requires login and existing Space access. Removing an absent star leaves the count unchanged.
+    responses:
+      "200":
+        description: Unstarred state and updated total count.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpaceStar
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
 /api/spaces/{spaceId}:
   parameters:
     - name: spaceId

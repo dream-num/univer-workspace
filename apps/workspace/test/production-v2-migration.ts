@@ -81,6 +81,7 @@ try {
     DROP TABLE object_deletion_jobs_v3;
     CREATE INDEX blob_deletion_jobs_due
       ON blob_deletion_jobs(next_attempt_at, lease_expires_at, id);
+    DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
     DROP TABLE IF EXISTS issue_assignees;
     DROP TABLE IF EXISTS issue_label_links;
@@ -101,7 +102,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 9);
+    assert.equal(version.user_version, 10);
     const deletion = migrated.database.connection
       .prepare("SELECT reason FROM object_deletion_jobs")
       .get() as { readonly reason: string };

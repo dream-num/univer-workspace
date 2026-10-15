@@ -58,8 +58,18 @@ SpaceView:
   allOf:
     - $ref: "#/SpaceSummary"
     - type: object
-      required: [accessRole, capabilities]
+      required: [accessRole, capabilities, owner]
       properties:
+        owner:
+          type: object
+          additionalProperties: false
+          required: [id, username]
+          properties:
+            id:
+              type: string
+            username:
+              type: string
+          description: The authoritative Space owner, including when viewed by another User.
         accessRole:
           $ref: "#/SpaceRole"
         capabilities:
@@ -100,3 +110,16 @@ PatchSpace:
       maxLength: 100
     publicRead:
       type: boolean
+
+SpaceStar:
+  type: object
+  additionalProperties: false
+  required: [starred, starCount]
+  properties:
+    starred:
+      type: boolean
+      description: Whether the authenticated User has starred this Space.
+    starCount:
+      type: integer
+      minimum: 0
+      description: Total stars on the Space, calculated from unique User-Space relations.

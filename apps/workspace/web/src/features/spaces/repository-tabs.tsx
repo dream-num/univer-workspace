@@ -1,17 +1,14 @@
-import { AppWindow, CircleDot, FileText, GitPullRequest, Settings } from "lucide-react";
+import { AppWindow, CircleDot, CodeXml, GitPullRequest, Settings } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { useI18n } from "../../shared/i18n";
 import { worktreeBelongsToSpace, worktreeListQueryOptions } from "../worktrees";
 import { issueCountsQueryOptions } from "../issues/issues.queries";
 import { spacesQueryOptions } from "./spaces.queries";
+import { RepositoryHeader } from "./repository-header";
 
 export type RepositoryTab = "files" | "issues" | "prs" | "apps" | "settings";
-
-type RepositoryTabTarget =
-  | { readonly tab: "files" }
-  | { readonly tab: "prs"; readonly view: "prs" }
-  | { readonly tab: "apps"; readonly view: "apps" };
 
 const OPEN_WORKTREE_STATES = ["draft", "ready", "merging"];
 
@@ -28,29 +25,32 @@ export function RepositoryTabs({
   const activeWorktrees = useQuery(worktreeListQueryOptions("active"));
   const processedWorktrees = useQuery(worktreeListQueryOptions("processed"));
   const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const navigation = useRef<HTMLElement>(null);
   const hasIssues = space?.type === "team";
   const issueCounts = useQuery({ ...issueCountsQueryOptions(spaceId), enabled: hasIssues });
   const openWorktreeCount = space
-    ? [
-        ...(activeWorktrees.data?.items ?? []),
-        ...(processedWorktrees.data?.items ?? []),
-      ].filter(
+    ? [...(activeWorktrees.data?.items ?? []), ...(processedWorktrees.data?.items ?? [])].filter(
         (worktree) =>
-          worktreeBelongsToSpace(worktree, space) &&
-          OPEN_WORKTREE_STATES.includes(worktree.state),
+          worktreeBelongsToSpace(worktree, space) && OPEN_WORKTREE_STATES.includes(worktree.state),
       ).length
     : 0;
   const canOpenSettings =
     space?.capabilities.renameSpace ||
     space?.capabilities.manageMembers ||
     space?.capabilities.viewTrash;
+  useEffect(() => {
+    navigation.current?.querySelector('[aria-current="page"]')?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [active, space?.id, issueCounts.data?.open, openWorktreeCount, t]);
   const items: readonly {
     readonly tab: Exclude<RepositoryTab, "settings">;
     readonly label: string;
-    readonly icon: typeof FileText;
+    readonly icon: typeof CodeXml;
     readonly count?: number;
   }[] = [
-    { tab: "files", label: t("repositoryFiles"), icon: FileText },
+    { tab: "files", label: t("repositoryCode"), icon: CodeXml },
     ...(hasIssues
       ? [
           {
@@ -61,65 +61,76 @@ export function RepositoryTabs({
           },
         ]
       : []),
-    { tab: "prs", label: t("repositoryPullRequests"), icon: GitPullRequest, ...(openWorktreeCount ? { count: openWorktreeCount } : {}) },
+    {
+      tab: "prs",
+      label: t("repositoryPullRequests"),
+      icon: GitPullRequest,
+      ...(openWorktreeCount ? { count: openWorktreeCount } : {}),
+    },
     { tab: "apps", label: t("apps"), icon: AppWindow },
   ];
   return (
-    <div className="border-b border-border bg-surface">
-      <nav
-        aria-label={t("repository")}
-        className="mx-auto flex max-w-6xl items-end gap-1 overflow-x-auto px-6 max-[720px]:gap-0 max-[720px]:px-4"
-      >
-        {items.map(({ tab, label, icon: Icon, count }) =>
-          tab === "issues" ? (
+    <>
+      <div className="repository-chrome shrink-0 border-b border-border bg-surface">
+        <nav
+          ref={navigation}
+          aria-label={t("repository")}
+          className="flex h-11 items-start gap-2 overflow-x-auto px-4 pt-1"
+        >
+          {items.map(({ tab, label, icon: Icon, count }) =>
+            tab === "issues" ? (
+              <Link
+                key={tab}
+                to="/spaces/$spaceId/issues"
+                params={{ spaceId }}
+                search={{}}
+                aria-current={active === "issues" ? "page" : undefined}
+                className={repositoryTabClass(active === "issues")}
+              >
+                <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
+                {label}
+                {count ? (
+                  <span className="min-w-5 rounded-full bg-repository-counter px-1.5 text-center text-xs leading-5 tabular-nums">
+                    {count}
+                  </span>
+                ) : null}
+              </Link>
+            ) : tab === "files" ? (
+              <RepositoryTabLink
+                key={tab}
+                spaceId={spaceId}
+                to={{ tab }}
+                active={active === tab}
+                icon={<Icon aria-hidden="true" className="size-4 text-muted-foreground" />}
+                label={label}
+              />
+            ) : (
+              <RepositoryTabLink
+                key={tab}
+                spaceId={spaceId}
+                to={tab === "prs" ? { tab, view: "prs" } : { tab, view: "apps" }}
+                active={active === tab}
+                icon={<Icon aria-hidden="true" className="size-4 text-muted-foreground" />}
+                label={label}
+                {...(count === undefined ? {} : { count })}
+              />
+            ),
+          )}
+          {canOpenSettings ? (
             <Link
-              key={tab}
-              to="/spaces/$spaceId/issues"
+              to="/spaces/$spaceId/settings"
               params={{ spaceId }}
-              search={{}}
-              aria-current={active === "issues" ? "page" : undefined}
-              className={repositoryTabClass(active === "issues")}
+              aria-current={active === "settings" ? "page" : undefined}
+              className={repositoryTabClass(active === "settings")}
             >
-              <Icon className="size-4" />
-              {label}
-              {count ? (
-                <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{count}</span>
-              ) : null}
+              <Settings aria-hidden="true" className="size-4 text-muted-foreground" />
+              {t("spaceSettings")}
             </Link>
-          ) : tab === "files" ? (
-            <RepositoryTabLink
-              key={tab}
-              spaceId={spaceId}
-              to={{ tab }}
-              active={active === tab}
-              icon={<Icon className="size-4" />}
-              label={label}
-            />
-          ) : (
-            <RepositoryTabLink
-              key={tab}
-              spaceId={spaceId}
-              to={tab === "prs" ? { tab, view: "prs" } : { tab, view: "apps" }}
-              active={active === tab}
-              icon={<Icon className="size-4" />}
-              label={label}
-              {...(count === undefined ? {} : { count })}
-            />
-          ),
-        )}
-        {canOpenSettings ? (
-          <Link
-            to="/spaces/$spaceId/settings"
-            params={{ spaceId }}
-            aria-current={active === "settings" ? "page" : undefined}
-            className={repositoryTabClass(active === "settings", "ml-auto")}
-          >
-            <Settings className="size-4" />
-            <span className="max-[720px]:hidden">{t("spaceSettings")}</span>
-          </Link>
-        ) : null}
-      </nav>
-    </div>
+          ) : null}
+        </nav>
+      </div>
+      {space ? <RepositoryHeader key={space.id} space={space} /> : null}
+    </>
   );
 }
 
@@ -132,7 +143,10 @@ function RepositoryTabLink({
   count,
 }: {
   readonly spaceId: string;
-  readonly to: { readonly tab: "files" } | { readonly tab: "prs"; readonly view: "prs" } | { readonly tab: "apps"; readonly view: "apps" };
+  readonly to:
+    | { readonly tab: "files" }
+    | { readonly tab: "prs"; readonly view: "prs" }
+    | { readonly tab: "apps"; readonly view: "apps" };
   readonly active: boolean;
   readonly icon: React.ReactNode;
   readonly label: string;
@@ -150,23 +164,22 @@ function RepositoryTabLink({
       {icon}
       {label}
       {count ? (
-        <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{count}</span>
+        <span className="min-w-5 rounded-full bg-repository-counter px-1.5 text-center text-xs leading-5 tabular-nums">
+          {count}
+        </span>
       ) : null}
     </Link>
   );
 }
 
-function repositoryTabClass(active: boolean, extra?: string): string {
+function repositoryTabClass(active: boolean): string {
   return [
-    "flex min-h-12 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium no-underline transition-colors max-[720px]:px-2.5",
-    active
-      ? "border-primary text-foreground"
-      : "border-transparent text-muted-foreground hover:text-foreground",
-    extra ?? "",
+    "relative flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm leading-5 text-foreground no-underline hover:bg-accent after:absolute after:-bottom-2 after:inset-x-0 after:h-0.5 after:rounded-full",
+    active ? "font-semibold after:bg-repository-selected" : "font-normal",
   ].join(" ");
 }
 
-/** Shared page container so every repository page lines up with the tabs above. */
+/** Existing tab content keeps its own page container. */
 export function RepositoryPage({ children }: { readonly children: React.ReactNode }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto bg-background">

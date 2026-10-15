@@ -298,19 +298,19 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V8 product databases to V9 automatically.
+backs up and migrates supported V0 through V9 product databases to V10 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` is unchanged. The product schema moves from V8 to V9 by
-adding Issue tables (V8 added content-permission tables). Before creating
+`history=2`; `comment=1` is unchanged. Product V10 adds Space stars; V9 added
+Issue tables and V8 added content-permission tables. Before creating
 application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V9,
+2. Start a single new instance. Startup first prepares the product database to V10,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -344,9 +344,25 @@ Blob rows and upload sessions are preserved.
 V8 adds content permission objects and collaborators without rewriting existing tables.
 V9 adds Space-scoped Issues, comments, events, labels, assignees and file references
 without rewriting existing tables.
-For a V9 rollout, stop every old Workspace instance, start one V9 instance and
+V10 adds `space_stars` without changing existing Space, content, Blob or recovery rows.
+For a V10 rollout, stop every old Workspace instance, start one V10 instance and
 wait for migration and health checks to succeed, then restore normal service;
-do not let V8 and V9 processes write the same SQLite file concurrently.
+do not let V9 and V10 processes write the same SQLite file concurrently.
+Startup creates and validates a `.v9-backup-…sqlite` backup before the V9 → V10
+transaction. A failed step rolls back; subsequent successful startups do not
+repeat migration or backup. Rollback requires stopping V10 and restoring the
+pre-upgrade product backup, not just running the old application image.
+
+### Repository stars
+
+Repository view shares GitHub-style navigation and a Star / Unstar control across
+Space-scoped pages. Stars belong to the authenticated User and the existing Space,
+persist across refresh and restart, and never grant access. The product API exposes
+`GET`, `PUT` and `DELETE /api/spaces/{spaceId}/star`; writes are idempotent and all
+three return `{ starred, starCount }`. All require login and current Space access.
+`SpaceView.owner` supplies the existing owner's ID and username for the breadcrumb.
+Watch, Fork, star lists and GitHub-only tabs are not provided. See the
+[comparison and verification record](docs/proposals/repository-framework-star.md).
 
 The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
 repository tag. When provided, it checks out that tag and uses it for the container

@@ -638,4 +638,11 @@ CREATE TABLE IF NOT EXISTS issue_node_refs (
 );
 CREATE INDEX IF NOT EXISTS issue_node_refs_node ON issue_node_refs(node_id);
 
-PRAGMA user_version = 9;
+CREATE TABLE IF NOT EXISTS space_stars (
+  space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (space_id, user_id)
+);
+
+PRAGMA user_version = 10;
