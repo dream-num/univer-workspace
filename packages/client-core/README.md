@@ -15,7 +15,8 @@
 - 提供 Shell-neutral worker composition、content runtime pool、同步读取、UnitData export、Facade execution、
   embedded-image externalization 与 changeset commit workflow。worker 为五类 Unit 注册评论 model，使
   已有评论 anchor 在 replay 与 export 中保留；SDK 1.0.3 headless factory 只注册 Sheet model，Doc、Slide、
-  Base、Board 的补注册集中在 `src/workarounds/comment-replay.ts`，上游补齐后移除。
+  Base、Board 的补注册集中在 `src/workarounds/comment-replay.ts`；升级到修复
+[univer-cli-sdk#69](https://github.com/dream-num/univer-cli-sdk/issues/69) 的 SDK 版本后删除该模块及其调用。
 - 提供 Node-hosted Office import/export、格式与 Unit 类型校验、Worktree Unit/runtime 集成和默认 exchange adapter。
   导出通过当前 Worktree 的已认证 Asset 读取解析图片 ID，仅在导出副本中恢复内嵌图片；
   缺失、无权限或无效图片使导出失败，不静默丢图，也不写回 Unit 或产生新 revision。

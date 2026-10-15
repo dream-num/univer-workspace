@@ -11,8 +11,13 @@ import { UniverSlidesThreadCommentPlugin } from "@univerjs-pro/slides-thread-com
  * save, so replay and export lose existing comments. Register the missing
  * models unconditionally, matching how the factory registers every product
  * plugin regardless of Unit type. No comment UI or remote body datasource is
- * installed here. Remove once the upstream factory registers all five models
- * (https://github.com/dream-num/univer-cli-sdk/issues/69).
+ * installed here.
+ *
+ * REMOVE after upgrading to the SDK release that fixes
+ * https://github.com/dream-num/univer-cli-sdk/issues/69 (factory registers all
+ * five models): delete this module, its call in `content-worker.ts` and the
+ * four `*-thread-comment` dependencies in `package.json`. Keeping it on a fixed
+ * SDK throws "duplicated plugin name" at worker startup.
  */
 export function installCommentReplayCompatibility(univer: Univer): void {
   univer.registerPlugin(UniverDocsThreadCommentPlugin);

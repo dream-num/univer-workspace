@@ -85,10 +85,12 @@ as a substitute for those explicit storage boundaries.
 The headless worker and the browser Viewer register the Thread Comment models
 for Sheet, Doc, Slide, Base and Board so existing comment anchors survive
 replay, export and Viewer saves. Neither installs comment UI or a body
-datasource; comment bodies stay in the Workspace Comment service. The SDK 1.0.3
-headless factory registers only the Sheet model, so the missing four are added
-in `src/runtime/comment-models.ts`; remove it once the upstream factory covers
-all five types.
+datasource; comment bodies stay in the Workspace Comment service. The Viewer
+registers all five models in its own pipeline (`src/client/viewer/rendering.ts`).
+The worker relies on the SDK 1.0.3 headless factory, which registers only the
+Sheet model, so `src/runtime/comment-models.ts` adds the missing four; delete
+that module and its worker call after upgrading to the SDK release that fixes
+[univer-cli-sdk#69](https://github.com/dream-num/univer-cli-sdk/issues/69).
 
 ## Markdown file preview
 

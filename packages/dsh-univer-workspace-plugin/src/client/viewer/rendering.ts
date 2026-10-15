@@ -109,6 +109,10 @@ import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
 import { UniverSheetsTablePlugin } from "@univerjs/sheets-table";
 import { UniverSheetsTableUIPlugin } from "@univerjs/sheets-table-ui";
 import { UniverSheetsThreadCommentPlugin } from "@univerjs/sheets-thread-comment";
+import { UniverDocsThreadCommentPlugin } from "@univerjs/docs-thread-comment";
+import { UniverBasesThreadCommentPlugin } from "@univerjs-pro/bases-thread-comment";
+import { UniverBoardsThreadCommentPlugin } from "@univerjs-pro/boards-thread-comment";
+import { UniverSlidesThreadCommentPlugin } from "@univerjs-pro/slides-thread-comment";
 import { UniverUIPlugin, type RibbonType } from "@univerjs/ui";
 import {
   FormulaCalculationSessionService,
@@ -119,7 +123,6 @@ import type { IEmbedResourceRefDataProviderRegistration } from "@univerjs-pro/em
 import { UniverChartEmbedPlugin } from "@univerjs-pro/chart-embed";
 import { IReferencedUnitManagerService, UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
-import { installCommentModelCompatibility } from "../../runtime/comment-models.js";
 import type { ViewerUnitType } from "../viewer-types.ts";
 import type { ViewerUrls } from "./proxy.ts";
 import { UniverSheetsImportRangeFormulaPlugin } from "./importrange-formula/index.ts";
@@ -285,10 +288,15 @@ function registerDocPlugins(univer: Univer): void {
 
 // Persisted comment anchors only. The Viewer shows no comment UI and installs
 // no body datasource; registering the models keeps anchor resources intact
-// when an editable Viewer saves a Unit.
+// when an editable Viewer saves a Unit. This is part of the Viewer's own
+// registration pipeline, not the headless-factory workaround in
+// runtime/comment-models.ts, and stays after that workaround is removed.
 function registerCommentModels(univer: Univer): void {
   univer.registerPlugin(UniverSheetsThreadCommentPlugin);
-  installCommentModelCompatibility(univer);
+  univer.registerPlugin(UniverDocsThreadCommentPlugin);
+  univer.registerPlugin(UniverSlidesThreadCommentPlugin);
+  univer.registerPlugin(UniverBasesThreadCommentPlugin);
+  univer.registerPlugin(UniverBoardsThreadCommentPlugin);
 }
 
 function registerSheetPlugins(univer: Univer): void {
