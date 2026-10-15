@@ -1,19 +1,17 @@
 import type { FolderPageProps } from "../../page.types";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { NodeBrowser, nodeChildrenQueryOptions } from "../../../features/nodes";
 import { RepositoryTabs, spaceDisplayName } from "../../../features/spaces";
 import { WorkspaceLayout } from "../../../routes/-workspace-layout";
 import { useI18n } from "../../../shared/i18n";
 
-export function RepositoryFolderPage({ detail, username }: FolderPageProps) {
+export function RepositoryFolderPage({ detail, username, searchQuery, onSearchChange }: FolderPageProps) {
   const { node } = detail;
   const children = useQuery({
     ...nodeChildrenQueryOptions(node.id),
     enabled: node.capabilities.browseChildren,
   });
   const { t } = useI18n();
-  const [searchQuery, setSearchQuery] = useState("");
   const selectedNodePath = [...detail.breadcrumbs.map((item) => item.id), node.id];
   const repositoryBreadcrumbs = detail.breadcrumbs.map((item) => ({ label: item.name, nodeId: item.id }));
   return (
@@ -36,7 +34,7 @@ export function RepositoryFolderPage({ detail, username }: FolderPageProps) {
                 searchQuery={searchQuery}
                 showParentRow
                 spaceName={spaceDisplayName(detail.space, t, username)}
-                onSearchChange={setSearchQuery}
+                onSearchChange={onSearchChange}
                 searchPlaceholder={t("repositoryGoToFile")}
                 compact
               />

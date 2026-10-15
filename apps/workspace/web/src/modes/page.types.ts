@@ -13,6 +13,8 @@ export interface SpacePageProps {
 import type { components } from "../../../generated/http/schema.js";
 export interface FolderPageProps {
   readonly detail: components["schemas"]["NodeResponse"];
+  readonly searchQuery: string;
+  readonly onSearchChange: (value: string) => void;
   readonly username: string | undefined;
 }
 

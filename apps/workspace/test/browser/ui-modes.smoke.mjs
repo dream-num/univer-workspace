@@ -400,6 +400,16 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       ["worktrees", "/worktrees", "header input", "Search tasks, documents, or creators"],
       ["space-worktrees", `/worktrees?spaceId=${fixture.teamId}`, "header input", "Search tasks, documents, or creators"],
     ];
+    open(`/nodes/${fixture.folderId}`);
+    click("button", "Search content on this page");
+    browser("fill", "header input", "folder-navigation-probe");
+    // 通过侧栏节点在同一个 Node 路由内跳转，保留路由实例。
+    browser("find", "text", "Baseline sheet", "click", "--exact");
+    settle();
+    browser("back");
+    settle();
+    browser("click", 'header button[aria-label*="folder-navigation-probe"]');
+    assert.equal(evaluate("document.querySelector('header input').value"), "folder-navigation-probe");
     switchPageMode("repository");
     for (const [name, path, selector, searchLabel] of resetCases) {
       open(path);

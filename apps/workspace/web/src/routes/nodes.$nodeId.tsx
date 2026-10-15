@@ -18,7 +18,6 @@ import { WorkspaceLayout } from "./-workspace-layout";
 import { ResourceEditor } from "../features/editor";
 import { BlobPreview } from "../features/blobs";
 import { api } from "../shared/api/client";
-import { useI18n } from "../shared/i18n";
 import { parseResourceView } from "../features/resource-view/resource-view";
 export const Route = createFileRoute("/nodes/$nodeId")({
   validateSearch: (search: Readonly<Record<string, unknown>>): { unit?: string; view?: "immersive" | undefined } => ({
@@ -73,8 +72,11 @@ function NodePage() {
     enabled: resourceId !== undefined,
   });
   const session = useQuery(sessionQueryOptions);
-  const { t } = useI18n();
-  const { pages } = useModeDefinition();
+  const mode = useModeDefinition();
+  const { pages } = mode;
+  const [folderSearch, setFolderSearch] = useState({ mode, value: "" });
+  // 目录与文件共用此路由：跨 Node 导航保留搜索，切换 mode 时清空。
+  if (folderSearch.mode !== mode) setFolderSearch({ mode, value: "" });
   const [htmlActionsContainer, setHtmlActionsContainer] = useState<HTMLSpanElement | null>(null);
   const [collaboration, setCollaboration] = useState<{
     nodeId: string;
@@ -108,6 +110,8 @@ function NodePage() {
     return (
       <pages.folder
         detail={query.data}
+        searchQuery={folderSearch.value}
+        onSearchChange={(value) => setFolderSearch({ mode, value })}
         username={session.data.authenticated ? session.data.user.username : undefined}
       />
     );
