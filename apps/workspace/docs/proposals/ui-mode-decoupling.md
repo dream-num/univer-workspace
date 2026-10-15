@@ -810,3 +810,22 @@ publicRead 独立保存、失败保留草稿及重试；新增 Star 乐观更新
 核对上述请求、缓存范围、授权/撤销的持久化结果，以及 viewer 被拒绝后不失效缓存。
 两种 mode 均验证邀请/移除、链接开关、输入清空及 repository 添加成员后关闭弹窗。
 个人节点分享与团队成员管理分别使用对应空间夹具，不改变服务端授权规则。
+
+### T3.4 回收站命令与请求合同（PR 描述素材）
+
+恢复和永久删除迁入 `trash.commands.ts`，命令绑定当前 spaceId，mutation 变量仍为 trashBatchId。
+恢复等待当前回收站刷新后才失效 nodes、recent-resources、owned-by-me、shared-with-me；
+永久删除只失效当前回收站。失败传播 ApiError，不失效缓存。
+确认弹窗、权限禁用条件、pending 图标及成功/失败提示保留在 TrashList。
+
+| 操作 | method / path（保持原合同） | body | 成功后位置 |
+| --- | --- | --- | --- |
+| 恢复 | POST /api/trash-batches/{trashBatchId}/restore | 无 | 原页面 |
+| 永久删除 | DELETE /api/trash-batches/{trashBatchId} | 无 | 原页面 |
+
+`test/browser/trash-commands.mjs` 使用可丢弃本地数据库和真实浏览器，核对请求、缓存范围、
+恢复的刷新等待顺序、永久删除后恢复失败，以及两种 mode 的恢复、取消删除与确认删除交互。
+
+验证：typecheck、build、34 张基线截图及回收站专项通过。全量 394 项首轮 388 通过、6 项超时；
+超时集中于 collaboration-gateway、history-plugins、referenced-sheet-runtime，单独重跑对应
+3 文件的 37 项全部通过，未修改超时阈值或测试配置。

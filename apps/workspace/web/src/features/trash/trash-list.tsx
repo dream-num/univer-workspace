@@ -1,9 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { RotateCcw, Trash2 } from "lucide-react";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
-import { trashQueryKey, trashQueryOptions } from "./trash.queries";
-import { invalidateProductLists, NodeIcon } from "../nodes";
+import { trashQueryOptions } from "./trash.queries";
+import { useRestoreTrashBatch, usePurgeTrashBatch } from "./trash.commands";
+import { NodeIcon } from "../nodes";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import { useI18n } from "../../shared/i18n";
 import { useTheme } from "../../shared/theme";
@@ -21,44 +20,14 @@ export function TrashList({
   readonly searchQuery?: string;
 }) {
   const query = useQuery(trashQueryOptions(spaceId));
-  const queryClient = useQueryClient();
   const { language, t } = useI18n();
   const { workspaceTheme } = useTheme();
   const repository = workspaceTheme === "repository";
   const grid = repository
     ? "grid items-center gap-4 grid-cols-[minmax(0,1fr)_140px_80px] max-[1000px]:grid-cols-[minmax(0,1fr)_80px] [&>span:nth-child(2)]:hidden [&>span:nth-child(4)]:hidden max-[1000px]:[&>time]:hidden max-[1000px]:[&>span:nth-child(3)]:hidden"
     : trashGrid;
-  const restore = useMutation({
-    mutationFn: async (trashBatchId: string) => {
-      const { error } = await api.POST("/api/trash-batches/{trashBatchId}/restore", {
-        params: { path: { trashBatchId } },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: trashQueryKey(spaceId),
-      });
-      await invalidateProductLists(queryClient);
-      toast.success(t("itemRestored"));
-    },
-    onError: showError,
-  });
-  const remove = useMutation({
-    mutationFn: async (trashBatchId: string) => {
-      const { error } = await api.DELETE("/api/trash-batches/{trashBatchId}", {
-        params: { path: { trashBatchId } },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: trashQueryKey(spaceId),
-      });
-      toast.success(t("itemRemoved"));
-    },
-    onError: showError,
-  });
+  const restore = useRestoreTrashBatch(spaceId);
+  const remove = usePurgeTrashBatch(spaceId);
 
   function showError(error: Error) {
     toast.error(error.message || t("trashActionFailed"));
@@ -177,7 +146,12 @@ export function TrashList({
                           disabled={
                             !batch.capabilities.restore || restore.isPending || remove.isPending
                           }
-                          onClick={() => restore.mutate(batch.id)}
+                          onClick={() =>
+                            restore.mutate(batch.id, {
+                              onSuccess: () => toast.success(t("itemRestored")),
+                              onError: showError,
+                            })
+                          }
                         >
                           <RotateCcw
                             className={cn(
@@ -197,7 +171,12 @@ export function TrashList({
                           remove.isPending ||
                           restore.isPending
                         }
-                        onConfirm={() => remove.mutate(batch.id)}
+                        onConfirm={() =>
+                          remove.mutate(batch.id, {
+                            onSuccess: () => toast.success(t("itemRemoved")),
+                            onError: showError,
+                          })
+                        }
                         trigger={
                           <Button
                             variant="ghost"
