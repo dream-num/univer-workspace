@@ -7,3 +7,5 @@ export type { RepositoryTab } from "./repository-tabs";
 export { spaceDisplayName } from "./space-name";
 export { spaceSupportsIssues, spaceSupportsMembers } from "./space.rules";
 export { spaceStarQueryOptions, spacesQueryKey, spacesQueryOptions } from "./spaces.queries";
+export { CreateTeamDialog } from "./create-team-dialog";
+export type { RepositoryBreadcrumb } from "./repository-tabs";

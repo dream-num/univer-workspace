@@ -189,7 +189,7 @@ T1、T2a、T3.0 之间互不依赖，可以并行。T3.x 各 feature 之间互�
 `modes/` 不能导入 `routes/`，所以外壳里与 mode 无关的部件要先离开 `routes/-workspace-layout.tsx`。`shared/` 现在不依赖
 TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `features/`。
 
-- [ ] **T4a：抽出与 mode 无关的外壳部件（纯移动）**（N2 前置）
+- [x] **T4a：抽出与 mode 无关的外壳部件（纯移动）**（N2 前置）
   - 做什么：从 `routes/-workspace-layout.tsx` 移出，代码不改：
 
     | 部件 | 当前位置 | 目标位置 |
@@ -206,6 +206,9 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
     `workspaceViewTitle`；`features/account`、`features/shell` 不 import `routes/`。
   - 验证：V-static；V-smoke（截图零差异，含账号菜单、设置弹窗打开态：在冒烟脚本里为两种 mode 各补一张打开态截图）。
   - 规模：M（纯移动，约 600 行）。依赖：T2b（设置弹窗的选项来自注册表）、T3.1。
+  - 已完成：公共部件及现有 BreadcrumbSeparator 已移动，原入口保留 re-export；路由文件只剩五个函数。
+    账号菜单和设置打开态在移动前补录，38 张截图移动后零差异；394 项测试、typecheck、build 通过。
+    八个整段移动函数体与移动前逐字一致；详情见提案的「T4a 外壳公共部件移动」。
 
 - [ ] **T4b：把 `AuthenticatedWorkspaceLayout` 复制成两个 shell**（R2 外壳部分；N2）
   - 做什么：

@@ -877,3 +877,22 @@ Panel 继续通过 `reviewActionFeedback` 区分成功、待处理和合并未�
 验证：394 项测试、typecheck、build、34 张原基线截图、PR 浏览器专项，以及
 `test/unit/worktree-review-panel.test.ts` 全部通过。
 T3 全部子任务完成后，TSX 中的 api.POST/PATCH/PUT/DELETE 仅剩认证、账号资料和 CLI 登录操作。
+
+### T4a 外壳公共部件移动（PR 描述素材）
+
+先在移动前录制两种 mode 的账号菜单、应用设置打开态，共增加 4 张基线；已有 34 张基线未更新。
+通过 `UI_MODES_UPDATE_OVERLAYS=1` 可只补录这四张，常规验证仍比较全部 38 张。
+
+- `features/account` 承接账号菜单、应用设置、个人资料、密码和试用提示弹窗。
+  菜单的 mode 专有项通过 `extraItems` 传入，设置弹窗的 mode 选择区域通过 `layoutSettings` 传入。
+  注册表、mode 状态和选项文案仍由外壳提供；账号目录不依赖 modes 或 routes。
+- `features/shell` 承接 BrandMark、NavLink、WorkspaceHeaderSearch，以及现有的 BreadcrumbSeparator。
+  后者一并移动，使路由文件只保留计划列出的五个函数；没有新增导航或业务数据逻辑。
+- `features/spaces` 承接已使用 T3.1 命令的 CreateTeamDialog，统一 RepositoryTab、RepositoryBreadcrumb 类型。
+  原路由保留搜索框、建团队弹窗及类型的 re-export，页面调用方 import 不变。
+- ProfileDialog、PasswordDialog、TrialNoticeDialog 等八个整段移动函数的函数体与移动前逐字一致。
+  账号菜单和设置弹窗保持 JSX 结构、className、显示条件及回调行为，仅把外壳捕获值改为 props。
+
+验证：394 项测试、typecheck、build、38 张基线截图及原写操作对比全部通过。
+`-workspace-layout.tsx` 从 1487 行缩至 739 行，仅保留 WorkspaceLayout、VisitorLayout、
+AuthenticatedWorkspaceLayout、RepositoryBreadcrumbs 和 workspaceViewTitle 五个函数。
