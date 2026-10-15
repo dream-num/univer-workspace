@@ -5,7 +5,6 @@ export type WorkspaceView = "home" | "apps" | "trash" | "worktrees" | "members" 
 
 export type WorkspaceShellProps = PropsWithChildren<{
   readonly selectedSpaceId?: string;
-  readonly repositoryDataActive?: boolean;
   readonly repositoryTab?: RepositoryTab;
   readonly repositoryHome?: boolean;
   readonly repositoryBreadcrumbs?: readonly RepositoryBreadcrumb[];

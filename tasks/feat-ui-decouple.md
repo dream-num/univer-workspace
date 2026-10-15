@@ -226,7 +226,7 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
     typecheck、build、40 张截图及 mode 往返切换通过。全量 386 项通过，文案套件因导入浏览器 Shell 失败；
     隔离 Shell 后该套件 8 项重跑通过，合计 394 项。详情见提案的「T4b 注册表装配 Shell」。
 
-- [ ] **T4c：删除两个 shell 内部的 mode 分支**（R2、R7 可见化；N2）
+- [x] **T4c：删除两个 shell 内部的 mode 分支**（R2、R7 可见化；N2）
   - 做什么：
     - `wiki-shell.tsx`：删除所有 `workspaceTheme === "repository"` 为真的分支和 `repositoryShell` 相关代码，忽略 `repository*` props。
     - `repository-shell.tsx`：删除 wiki 分支；保留 `repositoryShell` 条件**原样**（这决定了 R7 的"半外壳"页面，修正属于行为
@@ -236,6 +236,9 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
     （HTTP schema 类型名除外）。
   - 验证：V-static；V-smoke（截图零差异；重点看 repository 下 `/apps`、`/worktrees`、`/nodes/<sheet>` 这三个"半外壳"页面与基线一致）。
   - 规模：M。依赖：T4b。
+  - 已完成：删除两个 shell 的 mode 分支与无调用方 prop；模式选择器由共享 ModeSettings 提供。
+    保留 R7 半外壳条件及后台查询，394 项测试、typecheck、build、40 张截图和 mode 往返切换通过。
+    详情见提案的「T4c 清理 Shell 的 mode 分支」。
 
 ## M3 页面由 mode 提供
 

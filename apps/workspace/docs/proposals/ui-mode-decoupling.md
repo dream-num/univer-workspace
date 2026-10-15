@@ -916,3 +916,18 @@ RepositoryBreadcrumbs 随副本进入 mode；wiki 中暂存的副本随 T4c 无�
 验证：typecheck、build、40 张截图及 mode 往返切换通过。全量运行中 386 项通过，
 文案套件因注册表现在加载浏览器 Shell 而在 Node 环境访问 window 失败；该单测改用 Shell
 占位组件，仍验证真实注册表和全部文案，8 项重跑通过。未增加 DOM 测试依赖或修改生产代码规避问题。
+
+### T4c 清理 Shell 的 mode 分支（PR 描述素材）
+
+WikiShell 仅保留 wiki 导航、标题和设置入口，删除仓库面包屑及 repository props 读取。
+RepositoryShell 仅保留仓库导航和账号菜单中的设置入口，删除无法打开的建团队弹窗。
+两种外壳通过 `modes/mode-settings.tsx` 渲染同一个模式选择器，沿用注册表文案、DOM 和 storage key；
+账号组件仍只接收 `layoutSettings`，不依赖 mode。无调用方的 `repositoryDataActive` 已删除。
+
+R7 半外壳条件仍为 `!immersive && (repositoryHome || repositoryTab !== undefined ||
+(selectedSpaceId !== undefined && selectedView === undefined))`：只去掉注册表已保证的 mode 判断
+及始终为假的 `repositoryDataActive`。`/apps`、不带空间的 `/worktrees`、文件编辑器
+继续使用现有半外壳，留待独立任务处理。保留 active worktree 查询和变更订阅，不改变后台请求行为。
+
+验证：394 项测试、typecheck、build、40 张基线截图、写操作对比及 mode 往返切换通过，未更新基线。
+`modes` 中不再出现 `workspaceTheme` 或 `useTheme()`，wiki shell 不再出现 `repository`。
