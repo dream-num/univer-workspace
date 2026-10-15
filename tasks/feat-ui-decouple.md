@@ -275,6 +275,10 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
 - [x] T5.1：首页拆为 `pages.home`，两种页面接收相同的 `view` 合同；loader 和 validateSearch 原样保留。
   typecheck、build、394 项测试、40 张零差异截图和搜索后 mode 切换通过；路由生成物无差异。
 
+- [x] T5.2：空间页拆为 `pages.space`，repository 视图拆至 `pages/space/`，访客回退和默认 Page 存储逻辑保持不变。
+  394 项测试、typecheck、build、40 张截图、模式切换与 repository-pages 专项通过；路由合同及生成物无变化。
+  主包 1,834.36 → 1,834.66 kB，gzip 564.88 → 564.87 kB；本次保留同步注册，不使用 lazy。
+
 ## M4 feature 去 mode 化、样式、边界检查
 
 - [ ] **T6a：通用 feature 组件不再读取 mode**（R2 feature 部分；N5）

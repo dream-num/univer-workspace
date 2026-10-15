@@ -379,6 +379,36 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       })()`), true, "切换 mode 不重建产品缓存");
     }
     console.log("mode 往返切换：shell 重挂载、弹窗关闭、URL、标题、storage 与缓存检查通过");
+    // 每类页面写入临时表单状态，再经设置往返切换，验证页面状态随 mode 重挂载。
+    const switchPageMode = (nextMode) => {
+      if (evaluate("document.documentElement.dataset.uiMode") === "repository") {
+        click("button", "Account");
+        browser("wait", "[role=menu]");
+        click("menuitem", "Application settings");
+      } else click("button", "Application settings");
+      browser("wait", "[role=dialog]");
+      click("button", nextMode === "wiki" ? "Wiki" : "Repository (experimental)");
+      browser("wait", "--fn", `document.documentElement.dataset.uiMode === '${nextMode}' && !document.querySelector('[role=dialog]')`);
+      settle();
+    };
+    const resetCases = [
+      ["space", team, 'main input[aria-label="Go to file"]'],
+    ];
+    switchPageMode("repository");
+    for (const [name, path, selector] of resetCases) {
+      open(path);
+      browser("wait", selector);
+      const initial = evaluate(`document.querySelector(${JSON.stringify(selector)}).value`);
+      browser("fill", selector, "mode-reset-probe");
+      switchPageMode("wiki");
+      assert.equal(browser("get", "url").url, `${origin}${path}`);
+      switchPageMode("repository");
+      assert.equal(browser("get", "url").url, `${origin}${path}`);
+      browser("wait", selector);
+      assert.equal(evaluate(`document.querySelector(${JSON.stringify(selector)}).value`), initial, `${name} 临时状态必须重置`);
+      console.log(`${name}: mode 往返切换保持 URL 并清理临时状态`);
+    }
+
   } finally {
     browser("close");
   }
