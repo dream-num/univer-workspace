@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { createRoot } from "react-dom/client";
 import { LanguageProvider, useI18n } from "../../web/src/shared/i18n";
 import { ThemeProvider } from "../../web/src/shared/theme";
+import { UiModeProvider } from "../../web/src/shared/ui-mode";
 import { WorktreeOnboarding } from "../../web/src/features/worktrees/worktree-onboarding";
 import "../../web/src/app/styles/global.css";
 
@@ -48,10 +49,14 @@ function Fixture() {
   );
 }
 
+const UI_MODES = ["wiki", "repository"] as const;
+
 createRoot(document.getElementById("root")!).render(
+  <UiModeProvider modes={UI_MODES} fallback="wiki">
   <ThemeProvider>
     <LanguageProvider>
       <Fixture />
     </LanguageProvider>
-  </ThemeProvider>,
+  </ThemeProvider>
+  </UiModeProvider>,
 );
