@@ -144,7 +144,7 @@ T1、T2a、T3.0 之间互不依赖，可以并行。T3.x 各 feature 之间互�
   - 验证：V-static；V-smoke（建文件夹、改名后列表刷新）。
   - 规模：S。依赖：无。
 
-- [ ] **T3.1–T3.6：写操作收敛为领域命令**（R3；引入 N1）
+- [x] **T3.1–T3.6：写操作收敛为领域命令**（R3；引入 N1）
 
   所有子任务都按同一个规则写：命令 hook 放在对应 feature 的 `*.commands.ts`，从 `index.ts` 导出；命令负责 API 调用、
   Idempotency-Key、`waitForCreatedResource`、缓存失效（用 T3.0 的 helper），返回 `useMutation` 的结果；
@@ -171,7 +171,9 @@ T1、T2a、T3.0 之间互不依赖，可以并行。T3.x 各 feature 之间互�
     请求合同和刷新顺序见提案的「T3.4 回收站命令与请求合同」。
   - 已完成 T3.5：八个 Issues 命令已抽出；394 项测试、typecheck、build、34 张基线截图、
     两种 mode 的 Issues 专项通过。请求合同及评论编辑时序见提案的「T3.5 Issues 命令与请求合同」。
-    T3.6 待实施。
+  - 已完成 T3.6：Worktree 生命周期及移除标记命令已抽出；394 项测试、typecheck、build、
+    34 张基线截图、PR 浏览器专项和 panel 专项单测通过。请求、幂等键及提示语义见提案的
+    「T3.6 Worktree 命令与请求合同」。T3 源码扫描仅剩计划排除的认证相关组件写请求。
 
   - 不在范围：`auth-card.tsx`、`cli-login.tsx`，以及 `-workspace-layout.tsx` 中的登出、改资料、改密码、解绑 OAuth。
     它们与 mode 无关，T4a 只移动不改写。

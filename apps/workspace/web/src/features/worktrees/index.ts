@@ -7,3 +7,4 @@ export {
   worktreeUnitOpenQueryOptions,
 } from "./worktrees.queries";
 export { useWorktreeChangeFeed } from "./worktree-change-feed";
+export { useWorktreeLifecycle, useToggleUnitRemoval } from "./worktrees.commands";

@@ -854,3 +854,26 @@ publicRead 独立保存、失败保留草稿及重试；新增 Star 乐观更新
 其余操作留在原页、评论清空/退出编辑、标签保存关闭弹窗，以及重名标签被拒绝后保留草稿并显示错误。
 原 repository 专有筛选侧栏检查仍保留；wiki 运行共有搜索及写操作检查。
 验证：394 项测试、typecheck、build、34 张原基线截图，以及两种 mode 的 Issues 专项全部通过。
+
+### T3.6 Worktree 命令与请求合同（PR 描述素材）
+
+`useWorktreeLifecycle(worktreeId)` 和 `useToggleUnitRemoval(worktreeId)` 收敛到
+`worktrees.commands.ts`，成功后仍只等待 `worktrees` 前缀缓存刷新。
+生命周期命令保留返回的 action/state；异步操作尚无 Worktree 结果时仍返回 state=null。
+Panel 继续通过 `reviewActionFeedback` 区分成功、待处理和合并未完成提示，失败保留原错误提示。
+权限、冲突阻止合并、pending 禁用、确认弹窗和 `RepositoryPullRequestLayout` 的 actions 组装不变。
+
+| 操作 | method / path（保持原合同） | body | Idempotency-Key | 成功后位置 |
+| --- | --- | --- | --- | --- |
+| 标记 / 撤销移除 | POST /api/worktrees/{worktreeId}/units/{unitId}/removal | removed: true / false | 无 | 原页面 |
+| 提交审核 | POST /api/worktrees/{worktreeId}/ready | 无 | 无 | 原页面 |
+| 合并 | POST /api/worktrees/{worktreeId}/merge | 无 | 每次调用生成 | 原页面 |
+| 丢弃 | POST /api/worktrees/{worktreeId}/discard | 无 | 每次调用生成 | 原页面 |
+
+`test/browser/pull-requests.smoke.mjs` 增加 method/path/body、幂等键和操作后位置的断言；
+取消确认不产生写请求。保留移除/撤销、生命周期、冲突、权限、加载失败重试和响应式检查，
+返回列表后先等待 Closed 计数加载完成再点击，避免匹配尚在加载的占位文案。
+
+验证：394 项测试、typecheck、build、34 张原基线截图、PR 浏览器专项，以及
+`test/unit/worktree-review-panel.test.ts` 全部通过。
+T3 全部子任务完成后，TSX 中的 api.POST/PATCH/PUT/DELETE 仅剩认证、账号资料和 CLI 登录操作。

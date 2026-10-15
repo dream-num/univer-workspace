@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { LocaleType } from "@univerjs/core";
 import {
   UnitComparisonViewer,
@@ -18,9 +18,6 @@ import {
   Trash2,
 } from "lucide-react";
 import type { components } from "../../../../generated/http/schema.js";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
-import { createIdempotencyKey } from "../../shared/idempotency-key";
 import { useI18n, type MessageKey } from "../../shared/i18n";
 import {
   Alert,
@@ -40,8 +37,8 @@ import { createComparisonUniver } from "../editor/comparison-univer";
 import {
   worktreeUnitComparisonQueryOptions,
   worktreeUnitMergeReviewQueryOptions,
-  worktreesQueryKey,
 } from "./worktrees.queries";
+import { useToggleUnitRemoval, useWorktreeLifecycle } from "./worktrees.commands";
 import { reviewActionFeedback } from "./worktree-action-feedback";
 import {
   resolveReviewView,
@@ -76,7 +73,6 @@ export function WorktreeReviewPanel({
   readonly repository?: RepositoryReviewPresentation;
 }) {
   const { t } = useI18n();
-  const queryClient = useQueryClient();
   const selectedUnit =
     selectedUnitId === undefined || selectedUnitId === null
       ? worktree.units[0]
@@ -105,63 +101,23 @@ export function WorktreeReviewPanel({
     : selectedView;
   const showReviewViewControl = worktree.capabilities.review && selectedUnit !== undefined;
 
-  const removal = useMutation({
-    mutationFn: async (unit: WorktreeUnit) => {
-      const result = await api.POST("/api/worktrees/{worktreeId}/units/{unitId}/removal", {
-        params: { path: { worktreeId: worktree.id, unitId: unit.unitId } },
-        body: { removed: unit.change !== "deleted" },
-      });
-      if (result.error) throw apiError(result.error);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: worktreesQueryKey });
-    },
-    onError: (error) => toast.error(error.message),
-  });
-
-  const action = useMutation({
-    mutationFn: async (value: ReviewAction) => {
-      const result =
-        value === "markReady"
-          ? await api.POST("/api/worktrees/{worktreeId}/ready", {
-              params: { path: { worktreeId: worktree.id } },
-            })
-          : value === "merge"
-            ? await api.POST("/api/worktrees/{worktreeId}/merge", {
-                params: {
-                  path: { worktreeId: worktree.id },
-                  header: {
-                    "Idempotency-Key": createIdempotencyKey(),
-                  },
-                },
-              })
-            : await api.POST("/api/worktrees/{worktreeId}/discard", {
-                params: {
-                  path: { worktreeId: worktree.id },
-                  header: {
-                    "Idempotency-Key": createIdempotencyKey(),
-                  },
-                },
-              });
-      if (result.error) throw apiError(result.error);
-      return {
-        action: value,
-        state: "worktree" in result.data ? result.data.worktree.state : null,
-      };
-    },
-    onSuccess: async ({ action: value, state }) => {
-      await queryClient.invalidateQueries({ queryKey: worktreesQueryKey });
-      const feedback = reviewActionFeedback(value, state);
-      if (feedback.kind === "success") {
-        toast.success(t(feedback.message));
-      } else if (feedback.kind === "info") {
-        toast.info(t(feedback.message));
-      } else {
-        toast.error(t(feedback.message));
-      }
-    },
-    onError: (error) => toast.error(error.message),
-  });
+  const removal = useToggleUnitRemoval(worktree.id);
+  const action = useWorktreeLifecycle(worktree.id);
+  const onError = (error: Error) => toast.error(error.message);
+  const runAction = (value: ReviewAction) =>
+    action.mutate(value, {
+      onSuccess: ({ action: value, state }) => {
+        const feedback = reviewActionFeedback(value, state);
+        if (feedback.kind === "success") {
+          toast.success(t(feedback.message));
+        } else if (feedback.kind === "info") {
+          toast.info(t(feedback.message));
+        } else {
+          toast.error(t(feedback.message));
+        }
+      },
+      onError,
+    });
 
   const lifecycleActions = (
     <>
@@ -171,7 +127,7 @@ export function WorktreeReviewPanel({
           description={t("submitForReviewDescription")}
           confirmText={t("submitForReview")}
           cancelText={t("cancel")}
-          onConfirm={() => action.mutate("markReady")}
+          onConfirm={() => runAction("markReady")}
           trigger={
             <Button size="sm" disabled={action.isPending}>
               <Send />
@@ -195,7 +151,7 @@ export function WorktreeReviewPanel({
           description={t("mergeDescription")}
           confirmText={t("confirmMerge")}
           cancelText={t("cancel")}
-          onConfirm={() => action.mutate("merge")}
+          onConfirm={() => runAction("merge")}
           trigger={
             <Button size="sm" disabled={action.isPending || mergeReviewPending}>
               <CheckCircle2 />
@@ -211,7 +167,7 @@ export function WorktreeReviewPanel({
           confirmText={t("discardChanges")}
           cancelText={t("cancel")}
           danger
-          onConfirm={() => action.mutate("discard")}
+          onConfirm={() => runAction("discard")}
           trigger={
             <Button variant="destructive-ghost" size="sm" disabled={action.isPending}>
               <Trash2 />
@@ -244,7 +200,7 @@ export function WorktreeReviewPanel({
                 size="sm"
                 variant="ghost"
                 disabled={removal.isPending || action.isPending}
-                onClick={() => removal.mutate(selectedUnit)}
+                onClick={() => removal.mutate(selectedUnit, { onError })}
               >
                 {t(selectedUnit.change === "deleted" ? "undoUnitRemoval" : "markUnitRemoved")}
               </Button>
