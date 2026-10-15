@@ -829,3 +829,28 @@ publicRead 独立保存、失败保留草稿及重试；新增 Star 乐观更新
 验证：typecheck、build、34 张基线截图及回收站专项通过。全量 394 项首轮 388 通过、6 项超时；
 超时集中于 collaboration-gateway、history-plugins、referenced-sheet-runtime，单独重跑对应
 3 文件的 37 项全部通过，未修改超时阈值或测试配置。
+
+### T3.5 Issues 命令与请求合同（PR 描述素材）
+
+八个写操作迁入 `issues.commands.ts`，请求类型直接使用生成的 HTTP schema。
+所有成功写操作仍等待 `issues` 前缀缓存刷新，不扩大到产品列表。创建表单保留标题 trim、
+空正文及空数组字段省略；编辑正文、评论与标签描述保持原值。
+导航、toast、表单错误和关闭弹窗留在组件，标签保存仍等待刷新后关闭。
+评论保存原先先退出编辑再刷新时间线；命令通过 `beforeInvalidate` 调用组件提供的回调保留
+该顺序，与 T3.2 的局部时序例外一致，命令本身不引用 UI 状态。
+
+| 操作 | method / path（保持原合同） | body 字段 | 成功后位置 |
+| --- | --- | --- | --- |
+| 新建 Issue | POST /api/spaces/{spaceId}/issues | title；可选 body、labelIds、assigneeUserIds、nodeIds | /spaces/{spaceId}/issues/{number} |
+| 更新 Issue | PATCH /api/spaces/{spaceId}/issues/{number} | 调用方指定的 title、body、state、stateReason、labelIds、assigneeUserIds 或 nodeIds | 原详情页 |
+| 添加评论 | POST /api/spaces/{spaceId}/issues/{number}/comments | body | 原详情页 |
+| 编辑评论 | PATCH /api/issue-comments/{commentId} | body | 原详情页 |
+| 删除评论 | DELETE /api/issue-comments/{commentId} | 无 | 原详情页 |
+| 新建标签 | POST /api/spaces/{spaceId}/issue-labels | name、color、description | 原标签页 |
+| 编辑标签 | PATCH /api/issue-labels/{labelId} | name、color、description | 原标签页 |
+| 删除标签 | DELETE /api/issue-labels/{labelId} | 无 | 原标签页 |
+
+扩充 `test/browser/issues.smoke.mjs`，两种 mode 均验证八类写操作的 method/path/body、创建后导航、
+其余操作留在原页、评论清空/退出编辑、标签保存关闭弹窗，以及重名标签被拒绝后保留草稿并显示错误。
+原 repository 专有筛选侧栏检查仍保留；wiki 运行共有搜索及写操作检查。
+验证：394 项测试、typecheck、build、34 张原基线截图，以及两种 mode 的 Issues 专项全部通过。

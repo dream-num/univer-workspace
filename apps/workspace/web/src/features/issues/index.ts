@@ -10,3 +10,13 @@ export {
   issuesQueryKey,
   type IssueFilters,
 } from "./issues.queries";
+export {
+  useCreateIssue,
+  useUpdateIssue,
+  useAddIssueComment,
+  useUpdateIssueComment,
+  useDeleteIssueComment,
+  useCreateIssueLabel,
+  useUpdateIssueLabel,
+  useDeleteIssueLabel,
+} from "./issues.commands";

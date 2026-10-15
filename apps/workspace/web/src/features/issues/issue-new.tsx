@@ -1,18 +1,17 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
 import { useI18n } from "../../shared/i18n";
 import { Avatar, Button, buttonVariants, Field, Input, toast } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { NodeIcon, nodeQueryOptions } from "../nodes";
 import { teamMembersQueryOptions } from "../permissions";
+import { useCreateIssue } from "./issues.commands";
 import { IssueComposer } from "./issue-composer";
 import { IssueLabelChip } from "./issue-label";
 import { IssueAssigneesDialog, IssueLabelsDialog, IssueReferencesDialog } from "./issue-pickers";
 import { Muted, SidebarSection } from "./issue-sidebar-section";
-import { issueLabelsQueryOptions, issuesQueryKey } from "./issues.queries";
+import { issueLabelsQueryOptions } from "./issues.queries";
 
 export function IssueNewForm({
   spaceId,
@@ -25,7 +24,6 @@ export function IssueNewForm({
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [titleError, setTitleError] = useState<string>();
@@ -41,37 +39,30 @@ export function IssueNewForm({
     ...(members.data ? [members.data.owner, ...members.data.members.map((member) => member.user)] : []),
   ];
 
-  const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/api/spaces/{spaceId}/issues", {
-        params: { path: { spaceId } },
-        body: {
-          title: title.trim(),
-          ...(body.trim() ? { body } : {}),
-          ...(labelIds.length ? { labelIds: [...labelIds] } : {}),
-          ...(assigneeIds.length ? { assigneeUserIds: [...assigneeIds] } : {}),
-          ...(nodeIds.length ? { nodeIds: [...nodeIds] } : {}),
-        },
-      });
-      if (error) throw apiError(error);
-      return data;
+  const create = useCreateIssue(spaceId);
+  const createIssue = () => create.mutate(
+    {
+      title: title.trim(),
+      ...(body.trim() ? { body } : {}),
+      ...(labelIds.length ? { labelIds: [...labelIds] } : {}),
+      ...(assigneeIds.length ? { assigneeUserIds: [...assigneeIds] } : {}),
+      ...(nodeIds.length ? { nodeIds: [...nodeIds] } : {}),
     },
-    onSuccess: async (issue) => {
-      await queryClient.invalidateQueries({ queryKey: issuesQueryKey });
-      await navigate({
+    {
+      onSuccess: (issue) => navigate({
         to: "/spaces/$spaceId/issues/$number",
         params: { spaceId, number: String(issue.number) },
-      });
+      }),
+      onError: (error) => toast.error(error.message),
     },
-    onError: (error) => toast.error(error.message),
-  });
+  );
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!title.trim()) {
       setTitleError(t("issueTitleRequired"));
       return;
     }
-    create.mutate();
+    createIssue();
   };
 
   return (
@@ -99,7 +90,7 @@ export function IssueNewForm({
             placeholder={t("issueBodyPlaceholder")}
             rows={10}
             onSubmit={() => {
-              if (title.trim()) create.mutate();
+              if (title.trim()) createIssue();
               else setTitleError(t("issueTitleRequired"));
             }}
           />

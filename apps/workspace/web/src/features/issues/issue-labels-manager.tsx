@@ -1,14 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { components } from "../../../../generated/http/schema.js";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
 import { useI18n, type MessageKey } from "../../shared/i18n";
 import { Button, ConfirmDialog, Dialog, Empty, Field, Input, Spinner, toast } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
+import { useCreateIssueLabel, useUpdateIssueLabel, useDeleteIssueLabel } from "./issues.commands";
 import { IssueLabelChip, IssueLabelSwatch, ISSUE_LABEL_COLORS } from "./issue-label";
-import { issueLabelsQueryOptions, issuesQueryKey } from "./issues.queries";
+import { issueLabelsQueryOptions } from "./issues.queries";
 
 type Label = components["schemas"]["IssueLabelUsage"];
 
@@ -31,23 +30,10 @@ export function IssueLabelsManager({
   readonly canManage: boolean;
 }) {
   const { t } = useI18n();
-  const queryClient = useQueryClient();
   const labels = useQuery(issueLabelsQueryOptions(spaceId));
   const [editing, setEditing] = useState<Label | "new" | null>(null);
   const [deleting, setDeleting] = useState<Label | null>(null);
-  const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: issuesQueryKey });
-  };
-  const remove = useMutation({
-    mutationFn: async (label: Label) => {
-      const { error } = await api.DELETE("/api/issue-labels/{labelId}", {
-        params: { path: { labelId: label.id } },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: refresh,
-    onError: (error) => toast.error(error.message),
-  });
+  const remove = useDeleteIssueLabel();
 
   return (
     <section className="rounded-lg border border-border bg-background">
@@ -113,7 +99,6 @@ export function IssueLabelsManager({
         spaceId={spaceId}
         label={editing}
         onClose={() => setEditing(null)}
-        onSaved={refresh}
       />
       <ConfirmDialog
         open={deleting !== null}
@@ -126,7 +111,7 @@ export function IssueLabelsManager({
         cancelText={t("cancel")}
         danger
         onConfirm={() => {
-          if (deleting) remove.mutate(deleting);
+          if (deleting) remove.mutate(deleting.id, { onError: (error) => toast.error(error.message) });
         }}
       />
     </section>
@@ -137,16 +122,14 @@ function LabelDialog({
   spaceId,
   label,
   onClose,
-  onSaved,
 }: {
   readonly spaceId: string;
   readonly label: Label | "new" | null;
   readonly onClose: () => void;
-  readonly onSaved: () => Promise<void>;
 }) {
   // Remount per target so the form starts from that label's values.
   return label === null ? null : (
-    <LabelForm key={label === "new" ? "new" : label.id} spaceId={spaceId} label={label} onClose={onClose} onSaved={onSaved} />
+    <LabelForm key={label === "new" ? "new" : label.id} spaceId={spaceId} label={label} onClose={onClose} />
   );
 }
 
@@ -154,12 +137,10 @@ function LabelForm({
   spaceId,
   label,
   onClose,
-  onSaved,
 }: {
   readonly spaceId: string;
   readonly label: Label | "new";
   readonly onClose: () => void;
-  readonly onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const existing = label === "new" ? null : label;
@@ -167,20 +148,15 @@ function LabelForm({
   const [color, setColor] = useState(existing?.color ?? "blue");
   const [description, setDescription] = useState(existing?.description ?? "");
   const [error, setError] = useState<string>();
-  const save = useMutation({
-    mutationFn: async () => {
-      const body = { name: name.trim(), color: color as components["schemas"]["IssueLabelColor"], description };
-      const { error: apiErr } = existing
-        ? await api.PATCH("/api/issue-labels/{labelId}", { params: { path: { labelId: existing.id } }, body })
-        : await api.POST("/api/spaces/{spaceId}/issue-labels", { params: { path: { spaceId } }, body });
-      if (apiErr) throw apiError(apiErr);
-    },
-    onSuccess: async () => {
-      await onSaved();
-      onClose();
-    },
-    onError: (mutationError) => setError(mutationError.message),
-  });
+  const create = useCreateIssueLabel(spaceId);
+  const update = useUpdateIssueLabel();
+  const saving = create.isPending || update.isPending;
+  const save = () => {
+    const body = { name: name.trim(), color: color as components["schemas"]["IssueLabelColor"], description };
+    const callbacks = { onSuccess: onClose, onError: (mutationError: Error) => setError(mutationError.message) };
+    if (existing) update.mutate({ labelId: existing.id, body }, callbacks);
+    else create.mutate(body, callbacks);
+  };
   return (
     <Dialog
       open
@@ -194,7 +170,7 @@ function LabelForm({
           <Button variant="secondary" onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button disabled={save.isPending || !name.trim()} onClick={() => save.mutate()}>
+          <Button disabled={saving || !name.trim()} onClick={save}>
             {t("save")}
           </Button>
         </>
@@ -204,7 +180,7 @@ function LabelForm({
         className="grid gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (name.trim()) save.mutate();
+          if (name.trim()) save();
         }}
       >
         <div className="rounded-md bg-surface p-3">
