@@ -1,41 +1,25 @@
-import { relative, resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import express, { type Router } from "express";
-
-// Vite emits content-hashed filenames under assets/, so a URL there never
-// changes content. Everything else, index.html first, must be revalidated so a
-// deploy is picked up and references the new hashes.
-const immutableCacheControl = "public, max-age=31536000, immutable";
-const revalidateCacheControl = "no-cache";
+import { notFoundHandler } from "./errors.js";
 
 export function createStaticSiteRouter(publicDirectory: string): Router {
-  const assetsDirectory = resolve(publicDirectory, "assets");
-  const indexFile = resolve(publicDirectory, "index.html");
   const router = express.Router();
 
+  // Vite emits content-hashed filenames under assets/, so a URL there never
+  // changes content. A missing hash is a stale client asking for a previous
+  // deploy's chunk; it gets a 404 instead of the SPA's index.html.
   router.use(
-    express.static(publicDirectory, {
-      cacheControl: false,
-      setHeaders: (response, filePath) => {
-        response.setHeader(
-          "Cache-Control",
-          isWithin(assetsDirectory, filePath)
-            ? immutableCacheControl
-            : revalidateCacheControl
-        );
-      },
-    })
+    "/assets",
+    express.static(resolve(publicDirectory, "assets"), {
+      maxAge: "1y",
+      immutable: true,
+    }),
+    notFoundHandler
   );
+  router.use(express.static(publicDirectory));
   router.get("/{*path}", (_request, response) => {
-    response.sendFile(indexFile, {
-      cacheControl: false,
-      headers: { "Cache-Control": revalidateCacheControl },
-    });
+    response.sendFile(resolve(publicDirectory, "index.html"));
   });
 
   return router;
-}
-
-function isWithin(directory: string, filePath: string): boolean {
-  const path = relative(directory, filePath);
-  return path !== "" && !path.startsWith(`..${sep}`) && path !== "..";
 }

@@ -41,6 +41,13 @@ describe("static site caching", () => {
     );
   });
 
+  it("answers a missing asset with 404 instead of the app shell", async () => {
+    const response = await fetch(`${origin}/assets/index-stale99.js`);
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toContain("application/json");
+  });
+
   it.each(["/", "/index.html", "/worktrees?view=agent"])(
     "revalidates the app shell at %s",
     async (path) => {
@@ -48,7 +55,7 @@ describe("static site caching", () => {
 
       expect(response.status).toBe(200);
       expect(await response.text()).toContain("<title>app</title>");
-      expect(response.headers.get("cache-control")).toBe("no-cache");
+      expect(response.headers.get("cache-control")).toBe("public, max-age=0");
     }
   );
 
@@ -56,6 +63,6 @@ describe("static site caching", () => {
     const response = await fetch(`${origin}/favicon.ico`);
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("no-cache");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=0");
   });
 });
