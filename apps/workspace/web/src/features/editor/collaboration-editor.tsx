@@ -129,7 +129,7 @@ export interface WorkspaceHistoryDefinition {
   readonly providedByPreset?: boolean;
 }
 
-interface ICollaborationEditorDefinition {
+export interface ICollaborationEditorDefinition {
   readonly label: string;
   readonly history: WorkspaceHistoryDefinition;
   readonly enableDocumentCollaborationUI?: boolean;
@@ -140,6 +140,12 @@ interface ICollaborationEditorDefinition {
   readonly licenseProvidedByPreset?: boolean;
   readonly hideCollaborationStatus?: boolean;
   readonly useCustomCollaborationStatus?: boolean;
+  /**
+   * Touch editors built on UniverMobileUIPlugin. Embed UI needs the desktop
+   * ribbon services, so mobile editors keep only the Embed runtime, as the
+   * official mobile compositions do.
+   */
+  readonly mobile?: boolean;
   readonly theme: Theme;
   readonly createPresets: (
     container: HTMLElement,
@@ -399,7 +405,7 @@ export function createCollaborationEditor(
                 ],
               },
             ],
-            UniverEmbedUIPlugin,
+            ...(definition.mobile ? [] : [UniverEmbedUIPlugin]),
             // Referenced charts (Docs/Slides/Boards cross-Unit data sources) need
             // this runtime after the embed plugin owns the referenced-Unit policy.
             UniverChartEmbedPlugin,

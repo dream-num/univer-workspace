@@ -124,6 +124,18 @@ describe("editor integration assets", () => {
     );
   });
 
+  it("marks every mobile editor so the factory skips desktop-only Embed UI", () => {
+    for (const product of ["sheet", "doc", "slide", "board", "base"]) {
+      expect(readEditorSource(product, ".mobile")).toContain("mobile: true");
+    }
+    // Exchange-enabled mobile editors pair the Mobile exchange client.
+    for (const product of ["doc", "slide", "base"]) {
+      const source = readEditorSource(product, ".mobile");
+      expect(source).toContain("exchangeProvidedByPreset: true");
+      expect(source).toContain("createMobileExchangeFeaturePlugins");
+    }
+  });
+
   it("loads shared Pro styles before Doc feature styles", () => {
     expectImportsInOrder(editorSources.doc, [
       "@univerjs/preset-docs-core/lib/index.css",
@@ -222,9 +234,9 @@ describe("editor integration assets", () => {
   });
 });
 
-function readEditorSource(product: string): string {
+function readEditorSource(product: string, variant = ""): string {
   return readFileSync(
-    new URL(`../../web/src/features/editor/units/${product}/${product}-editor.tsx`, import.meta.url),
+    new URL(`../../web/src/features/editor/units/${product}/${product}-editor${variant}.tsx`, import.meta.url),
     "utf8"
   );
 }

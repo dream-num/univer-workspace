@@ -858,6 +858,15 @@ importers:
       '@univerjs/docs-drawing':
         specifier: 1.0.3
         version: 1.0.3(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/docs-drawing-ui':
+        specifier: 1.0.3
+        version: 1.0.3(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/docs-hyper-link':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/docs-hyper-link-ui':
+        specifier: 1.0.3
+        version: 1.0.3(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/docs-thread-comment-ui':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)

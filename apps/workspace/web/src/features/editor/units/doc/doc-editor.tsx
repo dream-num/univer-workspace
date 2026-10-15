@@ -68,6 +68,7 @@ import "@univerjs-pro/docs-table-ui/lib/index.css";
 import {
   createCollaborationEditor,
   type CollaborationEditorProps,
+  type ICollaborationEditorDefinition,
 } from "../../collaboration-editor";
 import {
   getDocAuthoringUIPlugins,
@@ -143,7 +144,7 @@ export function createDocComparisonPresets(
   ];
 }
 
-export default createCollaborationEditor({
+export const docEditorDefinition: ICollaborationEditorDefinition = {
   liveSheetReferences: true,
   label: "document",
   history: {
@@ -186,4 +187,6 @@ export default createCollaborationEditor({
   ],
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadDocAsync(unitId),
-});
+};
+
+export default createCollaborationEditor(docEditorDefinition);

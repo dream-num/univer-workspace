@@ -169,6 +169,41 @@ matching the Workspace desktop stack), and registers the Mobile exchange
 variants through `exchangeFeaturePlugins` so the factory's trunk/sign-in
 gating still applies.
 
+### Doc, Slide, Board and Base mobile editors (added 2026-10-15, SDK 1.0.3)
+
+SDK 1.0.3 ships the Mobile UI plugins that rc.0 lacked, so the "wait for the next
+SDK release" item above is resolved. Each unit now has `<unit>-editor.mobile.tsx`
++ `<unit>-mobile-presets.ts`, selected in `resource-editor.tsx` exactly like Sheet.
+The mobile editors spread the desktop `<unit>EditorDefinition` and replace only
+presets, comment UI, exchange and print plugins, so history, theme, load and
+preview settings stay shared. Reference compositions are univer-pro dev
+`examples/src/{docs,slides,boards}/mobile-collaboration/setup.ts`; Base has no
+official mobile example, and follows the `mobile` switch in
+`examples/src/bases/fixtures/bases-demo/plugins.ts`.
+
+- Doc expands the Docs presets (core, drawing, hyper-link, thread-comment) into
+  plugins with Mobile variants, plus the Pro callout/chart/code/latex/shape/table
+  Mobile UI plugins.
+- Plugins without a Mobile variant keep their desktop plugin, as the official
+  examples do: Docs/Slides/Boards/Bases history UI, Docs and Boards print,
+  Ink UI and (on Board) Docs Latex UI, Bases thread-comment UI and
+  collaboration-client UI. Mobile and desktop UI plugins share pluginName for
+  ui-adjacent packages (`DOC_UI_PLUGIN`, `UNIVER_SLIDES_UI_PLUGIN`,
+  `BASES_UI_PLUGIN`, `UNIVER_THREAD_COMMENT_UI_PLUGIN`, ...), so those desktop
+  plugins' `DependentOn` declarations resolve to the registered Mobile ones. Base
+  registers the Mobile Docs and ThreadComment UI explicitly for that reason.
+- `UniverMobileUIPlugin` does **not** share pluginName with `UniverUIPlugin`, and
+  `UniverEmbedUIPlugin` injects the desktop ribbon override service. Every mobile
+  definition sets `mobile: true`, which makes the factory skip Embed UI (the
+  official mobile compositions register only the Embed runtime). Before this,
+  the mobile Sheet editor logged `Cannot find "univer.ribbon-override-service"`.
+
+Verified 2026-10-15 against a disposable real server (production build, mobile
+viewport emulation with a coarse pointer): all five unit types load their mobile
+chunk with no console errors, Doc text and a Base record created on mobile survive
+a reload and appear in the desktop editor, and desktop editors still load their
+desktop chunks without errors. Real-device validation listed above is still open.
+
 ## Native Office preview (real server)
 
 Build the Workspace web application, then from `apps/workspace` run:

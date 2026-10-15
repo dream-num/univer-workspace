@@ -1,4 +1,3 @@
-import { UniverExchangeClientMobileUIPlugin } from "@univerjs-pro/exchange-client";
 import { UniverSheetsExchangeClientMobileUIPlugin } from "@univerjs-pro/sheets-exchange-client";
 import { UniverSheetsHistoryMobileUIPlugin } from "@univerjs-pro/sheets-history-ui";
 import SheetsHistoryUIEnUS from "@univerjs-pro/sheets-history-ui/locale/en-US";
@@ -26,7 +25,7 @@ import {
   createCollaborationEditor,
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
-import { createWorkspaceExchangeClientConfig } from "../../features/exchange-plugins";
+import { createMobileExchangeFeaturePlugins } from "../../features/exchange-plugins";
 import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
 import { createSheetMobilePresets } from "./sheet-mobile-presets";
 import { sheetEditorLocales } from "./sheet-presets";
@@ -35,6 +34,7 @@ export type SheetEditorProps = CollaborationEditorProps;
 
 export default createCollaborationEditor({
   label: "spreadsheet",
+  mobile: true,
   history: {
     providedByPreset: false,
     createPlugin: (containerId) => [
@@ -50,10 +50,7 @@ export default createCollaborationEditor({
     },
   },
   theme: greenTheme,
-  // The Mobile exchange variants share pluginName with the desktop
-  // UniverExchangeClientPlugin the factory would register when this flag is
-  // false; duplicate names throw at startup. Keep the factory's gating
-  // (trunk scope, signed-in user) via exchangeFeaturePlugins instead.
+  // See createMobileExchangeFeaturePlugins.
   exchangeProvidedByPreset: true,
   locales: sheetEditorLocales,
   createPresets: (container) =>
@@ -65,16 +62,13 @@ export default createCollaborationEditor({
     getThreadCommentCollaborationPlugins(
       UniverSheetsThreadCommentMobileUIPlugin
     ),
-  exchangeFeaturePlugins: () => [
-    [
-      UniverExchangeClientMobileUIPlugin,
-      createWorkspaceExchangeClientConfig(window.location.origin),
-    ],
-    [
-      UniverSheetsExchangeClientMobileUIPlugin,
-      { minSheetRowCount: 100, minSheetColumnCount: 20 },
-    ],
-  ],
+  exchangeFeaturePlugins: () =>
+    createMobileExchangeFeaturePlugins([
+      [
+        UniverSheetsExchangeClientMobileUIPlugin,
+        { minSheetRowCount: 100, minSheetColumnCount: 20 },
+      ],
+    ]),
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadSheetAsync(unitId),
 });

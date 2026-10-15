@@ -4,13 +4,22 @@ import { isMobileDevice } from "../../shared/platform";
 import { Spinner } from "../../shared/ui";
 import type { CollaborationEditorProps } from "./collaboration-editor";
 
-const SheetEditor = isMobileDevice()
+const mobile = isMobileDevice();
+const SheetEditor = mobile
   ? lazy(() => import("./units/sheet/sheet-editor.mobile"))
   : lazy(() => import("./units/sheet/sheet-editor"));
-const DocEditor = lazy(() => import("./units/doc/doc-editor"));
-const SlideEditor = lazy(() => import("./units/slide/slide-editor"));
-const BoardEditor = lazy(() => import("./units/board/board-editor"));
-const BaseEditor = lazy(() => import("./units/base/base-editor"));
+const DocEditor = mobile
+  ? lazy(() => import("./units/doc/doc-editor.mobile"))
+  : lazy(() => import("./units/doc/doc-editor"));
+const SlideEditor = mobile
+  ? lazy(() => import("./units/slide/slide-editor.mobile"))
+  : lazy(() => import("./units/slide/slide-editor"));
+const BoardEditor = mobile
+  ? lazy(() => import("./units/board/board-editor.mobile"))
+  : lazy(() => import("./units/board/board-editor"));
+const BaseEditor = mobile
+  ? lazy(() => import("./units/base/base-editor.mobile"))
+  : lazy(() => import("./units/base/base-editor"));
 
 type UnitType = components["schemas"]["UnitType"];
 
