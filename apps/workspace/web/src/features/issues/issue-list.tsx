@@ -4,18 +4,13 @@ import {
   Check,
   ChevronDown,
   CircleDot,
-  Clock,
   MessageSquare,
-  PanelLeftClose,
-  PanelLeftOpen,
   Paperclip,
   Search,
   Tag,
-  User,
-  Users,
   X,
 } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type ReactNode, type FormEvent } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import { useI18n } from "../../shared/i18n";
@@ -31,7 +26,6 @@ import {
   MenuTrigger,
   Spinner,
 } from "../../shared/ui";
-import { useTheme } from "../../shared/theme";
 import { cn } from "../../shared/utils/cn";
 import { IssueLabelChip } from "./issue-label";
 import { IssueStateIcon } from "./issue-state";
@@ -51,21 +45,29 @@ const SORTS = ["created-desc", "created-asc", "updated-desc", "updated-asc"] as 
  * Filterable Issue list for one Space, or for every Team Space when `spaceId` is omitted.
  * Filters live in the URL, so the parent owns them.
  */
+export interface IssueListProps {
+  readonly spaceId?: string;
+  readonly filters: IssueFilters;
+  readonly onFiltersChange: (filters: IssueFilters) => void;
+  readonly canCreate?: boolean;
+  readonly presentation: "standard" | "compact";
+  readonly viewsNav?: ReactNode;
+  readonly viewsNavToggle?: ReactNode;
+  readonly filterMenuClassName?: string;
+}
+
 export function IssueList({
   spaceId,
   filters,
   onFiltersChange,
   canCreate,
-}: {
-  readonly spaceId?: string;
-  readonly filters: IssueFilters;
-  readonly onFiltersChange: (filters: IssueFilters) => void;
-  readonly canCreate?: boolean;
-}) {
+  presentation,
+  viewsNav,
+  viewsNavToggle,
+  filterMenuClassName,
+}: IssueListProps) {
   const { t } = useI18n();
-  const { workspaceTheme } = useTheme();
-  const repository = workspaceTheme === "repository" && Boolean(spaceId);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const compact = presentation === "compact";
   const query = useInfiniteQuery(issueListQueryOptions(spaceId, filters));
   const labels = useQuery({
     ...issueLabelsQueryOptions(spaceId ?? ""),
@@ -88,95 +90,18 @@ export function IssueList({
   };
 
   return (
-    <div className={cn("min-w-0", repository && "flex min-h-full")}>
-      {repository && spaceId && sidebarOpen ? (
-        <nav
-          aria-label={t("issueViews")}
-          className="w-64 shrink-0 border-r border-border p-4 max-[900px]:hidden"
-        >
-          {[
-            {
-              label: t("issues"),
-              icon: CircleDot,
-              search: {},
-              active: !filters.assignee && !filters.author && filters.sort === "created",
-            },
-            {
-              label: t("issueFilterAssigneeMe"),
-              icon: Users,
-              search: { assignee: "me" },
-              active: filters.assignee === "me" && !filters.author,
-            },
-            {
-              label: t("issueFilterAuthorMe"),
-              icon: User,
-              search: { author: "me" },
-              active: filters.author === "me" && !filters.assignee,
-            },
-            {
-              label: t("issueRecentActivity"),
-              icon: Clock,
-              search: { sort: "updated" as const },
-              active: !filters.assignee && !filters.author && filters.sort === "updated",
-            },
-          ].map(({ label, icon: Icon, search: view, active }) => (
-            <Link
-              key={label}
-              to="/spaces/$spaceId/issues"
-              params={{ spaceId }}
-              search={view}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "relative flex min-h-8 items-center gap-2 rounded-sm px-2 text-sm text-foreground no-underline hover:bg-accent",
-                active &&
-                  "bg-accent font-semibold before:absolute before:-left-2 before:h-6 before:w-1 before:rounded-full before:bg-info-soft-foreground",
-              )}
-            >
-              <Icon className="size-4 shrink-0 text-muted-foreground" />
-              {label}
-            </Link>
-          ))}
-          <div className="my-5 border-t border-border" />
-          <Link
-            to="/spaces/$spaceId/issues/labels"
-            params={{ spaceId }}
-            className="flex min-h-8 items-center gap-2 rounded-sm px-2 text-foreground no-underline hover:bg-accent"
-          >
-            <Tag className="size-4 text-muted-foreground" />
-            {t("issueLabels")}
-          </Link>
-          <Button
-            variant="ghost"
-            className="mt-6 w-full justify-start px-2"
-            onClick={() => setSidebarOpen(false)}
-            aria-expanded={sidebarOpen}
-          >
-            <PanelLeftClose />
-            {t("issueCollapseSidebar")}
-          </Button>
-        </nav>
-      ) : null}
+    <div className={cn("min-w-0", compact && "flex min-h-full")}>
+      {viewsNav}
       <div
         className={cn(
           "grid min-w-0 flex-1 content-start gap-4",
-          repository && "gap-6 p-6 max-[720px]:p-4",
+          compact && "gap-6 p-6 max-[720px]:p-4",
         )}
       >
-        {repository ? (
+        {compact ? (
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              {!sidebarOpen ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="max-[900px]:hidden"
-                  aria-label={t("issueExpandSidebar")}
-                  aria-expanded={false}
-                  onClick={() => setSidebarOpen(true)}
-                >
-                  <PanelLeftOpen />
-                </Button>
-              ) : null}
+              {viewsNavToggle}
               <h1 className="m-0 text-xl font-semibold">{t("issues")}</h1>
             </div>
             {spaceId && canCreate ? (
@@ -200,7 +125,7 @@ export function IssueList({
             <Input
               aria-label={t("issueSearch")}
               placeholder={t("issueSearch")}
-              className={cn("pl-9 pr-16", repository && "h-8 rounded-sm bg-background shadow-none")}
+              className={cn("pl-9 pr-16", compact && "h-8 rounded-sm bg-background shadow-none")}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -236,14 +161,14 @@ export function IssueList({
               className={cn(
                 buttonVariants({ variant: "secondary", size: "sm" }),
                 "no-underline",
-                repository && sidebarOpen && "min-[901px]:hidden",
+                compact && Boolean(viewsNav) && "min-[901px]:hidden",
               )}
             >
               <Tag />
               {t("issueLabels")}
             </Link>
           ) : null}
-          {spaceId && canCreate && !repository ? (
+          {spaceId && canCreate && !compact ? (
             <Link
               to="/spaces/$spaceId/issues/new"
               params={{ spaceId }}
@@ -296,13 +221,13 @@ export function IssueList({
           aria-label={t("issues")}
           className={cn(
             "overflow-hidden rounded-lg border border-border bg-background",
-            repository && "rounded-sm",
+            compact && "rounded-sm",
           )}
         >
           <div
             className={cn(
               "flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5",
-              repository && "gap-2 bg-surface py-2",
+              compact && "gap-2 bg-surface py-2",
             )}
           >
             <div
@@ -313,7 +238,7 @@ export function IssueList({
               <StateToggle
                 active={filters.state === "open"}
                 onClick={() => onFiltersChange({ ...filters, state: "open" })}
-                icon={repository ? undefined : <CircleDot className="size-4" />}
+                icon={compact ? undefined : <CircleDot className="size-4" />}
                 label={t("issueStateOpen")}
                 count={counts.open}
               />
@@ -326,6 +251,7 @@ export function IssueList({
             </div>
             <div className="flex flex-wrap items-center gap-2 max-[720px]:w-full">
               <FilterMenu
+                className={filterMenuClassName}
                 label={t("issueFilterAuthor")}
                 value={filters.author ?? ANY}
                 onValueChange={(value) =>
@@ -338,6 +264,7 @@ export function IssueList({
               />
               {spaceId ? (
                 <FilterMenu
+                  className={filterMenuClassName}
                   label={t("issueLabels")}
                   value={filters.labels[0] ?? ANY}
                   onValueChange={(value) =>
@@ -353,6 +280,7 @@ export function IssueList({
                 />
               ) : null}
               <FilterMenu
+                className={filterMenuClassName}
                 label={t("issueAssignees")}
                 value={filters.assignee ?? ANY}
                 onValueChange={(value) =>
@@ -365,6 +293,7 @@ export function IssueList({
                 ]}
               />
               <FilterMenu
+                className={filterMenuClassName}
                 label={t(SORT_LABELS[`${filters.sort}-${filters.order}`])}
                 value={`${filters.sort}-${filters.order}`}
                 onValueChange={(value) => {
@@ -412,7 +341,7 @@ export function IssueList({
                     key={issue.id}
                     issue={issue}
                     showSpace={spaceId === undefined}
-                    repository={repository}
+                    compact={compact}
                   />
                 ))}
               </ul>
@@ -518,11 +447,11 @@ function EmptyIssues({
 function IssueRow({
   issue,
   showSpace,
-  repository,
+  compact,
 }: {
   readonly issue: IssueSummary;
   readonly showSpace: boolean;
-  readonly repository: boolean;
+  readonly compact: boolean;
 }) {
   const { language, t } = useI18n();
   const closed = issue.state === "closed";
@@ -533,7 +462,7 @@ function IssueRow({
         params={{ spaceId: issue.space.id, number: String(issue.number) }}
         className={cn(
           "group flex items-start gap-2 px-4 py-3.5 no-underline hover:bg-accent/60",
-          repository && "py-2.5",
+          compact && "py-2.5",
         )}
       >
         <IssueStateIcon issue={issue} className="mt-0.5" />
@@ -542,7 +471,7 @@ function IssueRow({
             <span
               className={cn(
                 "font-medium text-foreground group-hover:underline",
-                repository && "text-base leading-6 font-semibold",
+                compact && "text-base leading-6 font-semibold",
               )}
             >
               {issue.title}
@@ -551,7 +480,7 @@ function IssueRow({
               <IssueLabelChip key={label.id} name={label.name} color={label.color} />
             ))}
           </p>
-          <p className={cn("mt-1 mb-0 text-sm text-muted-foreground", repository && "text-xs")}>
+          <p className={cn("mt-1 mb-0 text-sm text-muted-foreground", compact && "text-xs")}>
             {showSpace ? <span>{issue.space.name} · </span> : null}
             {closed && issue.closedAt
               ? t("issueClosedBy", {
@@ -613,17 +542,18 @@ function IssueRow({
 }
 
 function FilterMenu({
+  className,
   label,
   value,
   options,
   onValueChange,
 }: {
+  readonly className?: string | undefined;
   readonly label: string;
   readonly value: string;
   readonly options: readonly { readonly value: string; readonly label: string }[];
   readonly onValueChange: (value: string) => void;
 }) {
-  const { workspaceTheme } = useTheme();
   return (
     <MenuRoot>
       <MenuTrigger
@@ -643,7 +573,7 @@ function FilterMenu({
         align="end"
         className={cn(
           "max-h-72 overflow-y-auto",
-          workspaceTheme === "repository" && "repository-chrome repository-issues",
+          className,
         )}
       >
         {options.map((option) => (

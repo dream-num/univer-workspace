@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useSetMemberRole, useRemoveMember } from "./permissions.commands";
 import { useI18n } from "../../shared/i18n";
-import { useTheme } from "../../shared/theme";
 import { cn } from "../../shared/utils/cn";
 import {
   Avatar,
@@ -27,6 +26,7 @@ type UserSummary = {
 };
 
 export function TeamMemberManager(props: {
+  readonly presentation: "standard" | "compact";
   readonly spaceId: string;
   readonly spaceName: string;
   readonly canManage: boolean;
@@ -38,8 +38,7 @@ export function TeamMemberManager(props: {
   const [role, setRole] = useState<TeamRole>("viewer");
   const [adding, setAdding] = useState(false);
   const { t } = useI18n();
-  const { workspaceTheme } = useTheme();
-  const repository = workspaceTheme === "repository";
+  const compact = props.presentation === "compact";
   const members = useQuery(teamMembersQueryOptions(props.spaceId));
   const users = useQuery(userSearchQueryOptions(search));
 
@@ -151,25 +150,25 @@ export function TeamMemberManager(props: {
     <div
       className={cn(
         "flex min-h-0 flex-col",
-        repository ? "rounded-[6px] border border-border" : "h-full",
+        compact ? "rounded-[6px] border border-border" : "h-full",
       )}
     >
       <div
         className={cn(
           "shrink-0 border-b border-border",
-          repository
+          compact
             ? "flex flex-wrap items-center justify-between gap-3 rounded-t-[6px] bg-surface p-4"
             : "px-6 py-4 max-[720px]:px-4",
         )}
       >
         <div>
-          {repository ? (
+          {compact ? (
             <h3 className="mb-1 text-sm font-semibold">{t("settingsManageAccess")}</h3>
           ) : null}
           <p className="m-0 text-[13px] text-muted-foreground">{t("spaceMembersDescription")}</p>
         </div>
         {props.canManage ? (
-          repository ? (
+          compact ? (
             <>
               <Button size="sm" className="rounded-[6px]" onClick={() => setAdding(true)}>
                 <UserPlus />
@@ -193,10 +192,10 @@ export function TeamMemberManager(props: {
       <div
         className={cn(
           "min-h-0 flex-1",
-          repository ? "px-4" : "overflow-y-auto px-6 py-2 max-[720px]:px-4",
+          compact ? "px-4" : "overflow-y-auto px-6 py-2 max-[720px]:px-4",
         )}
       >
-        {repository && visibleMembers.length === 0 ? (
+        {compact && visibleMembers.length === 0 ? (
           <Empty className="py-8" title={t("settingsNoCollaborators")} />
         ) : null}
         <ul className="m-0 grid p-0">

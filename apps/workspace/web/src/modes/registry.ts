@@ -1,5 +1,7 @@
 import type {
   IssuePageProps,
+  IssueListPageProps,
+  IssueDetailPageProps,
   WorktreesPageProps,
   SpaceSettingsPageProps,
   FolderPageProps,
@@ -15,6 +17,8 @@ import { wikiMode } from "./wiki";
 
 export interface ModeDefinition {
   readonly pages: {
+    readonly issueList: ComponentType<IssueListPageProps>;
+    readonly issueDetail: ComponentType<IssueDetailPageProps>;
     readonly issues: ComponentType<IssuePageProps>;
     readonly worktrees: ComponentType<WorktreesPageProps>;
     readonly trash: ComponentType<SpaceSettingsPageProps>;

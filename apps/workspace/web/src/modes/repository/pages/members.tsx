@@ -15,6 +15,7 @@ export function RepositoryTeamMembersPage({ spaceId }: SpaceSettingsPageProps) {
   if (!space || space.type !== "team") return null;
   const manager = (
     <TeamMemberManager
+      presentation="compact"
       spaceId={spaceId}
       spaceName={space.name}
       canManage={space.capabilities.manageMembers}

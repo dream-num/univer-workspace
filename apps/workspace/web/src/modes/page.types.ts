@@ -1,3 +1,5 @@
+import type { IssueListProps } from "../features/issues/issue-list";
+import type { IssueDetailProps } from "../features/issues/issue-detail";
 import type { components } from "../../../generated/http/schema.js";
 import type { PropsWithChildren } from "react";
 
@@ -30,3 +32,9 @@ export type IssuePageProps = PropsWithChildren<{
   readonly spaceId?: string;
   readonly crumb?: string;
 }>;
+
+export type IssueListPageProps = Omit<
+  IssueListProps,
+  "presentation" | "viewsNav" | "viewsNavToggle" | "filterMenuClassName"
+>;
+export type IssueDetailPageProps = Omit<IssueDetailProps, "presentation">;

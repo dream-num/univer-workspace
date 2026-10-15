@@ -71,6 +71,14 @@ vi.mock("../modes/wiki/pages/worktrees", () => ({ WikiWorktreesPage: () => null 
 
 vi.mock("../modes/repository/pages/worktrees", () => ({ RepositoryWorktreesPage: () => null }));
 
-vi.mock("../modes/wiki/pages/issues", () => ({ WikiIssueLayout: () => null }));
+vi.mock("../modes/wiki/pages/issues", () => ({
+  WikiIssueLayout: () => null,
+  WikiIssueListPage: () => null,
+  WikiIssueDetailPage: () => null,
+}));
 
-vi.mock("../modes/repository/pages/issues", () => ({ RepositoryIssueLayout: () => null }));
+vi.mock("../modes/repository/pages/issues", () => ({
+  RepositoryIssueLayout: () => null,
+  RepositoryIssueListPage: () => null,
+  RepositoryIssueDetailPage: () => null,
+}));

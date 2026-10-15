@@ -26,6 +26,19 @@ browser("open", url.href);
 browser("wait", "--text", "New issue");
 const repository = evaluate("document.documentElement.dataset.uiMode === 'repository'");
 if (repository) {
+  // Portaled filters must keep the same palette on global and space lists.
+  for (const listUrl of [new URL("/issues", url).href, url.href]) {
+    browser("open", listUrl);
+    browser("wait", "--text", "Author");
+    click("button", "Author");
+    browser("wait", '[role="menuitemradio"]');
+    assert.equal(
+      evaluate(`getComputedStyle(document.querySelector('[role="menu"]')).backgroundColor`),
+      evaluate(`document.documentElement.classList.contains('dark') ? 'rgb(13, 17, 23)' : 'rgb(255, 255, 255)'`),
+    );
+    browser("press", "Escape");
+    browser("wait", "--fn", `!document.querySelector('[role="menu"]')`);
+  }
   assert.equal(evaluate(`document.querySelectorAll('nav[aria-label="Issue filters"]').length`), 1);
   click("link", "Assigned to me");
   browser("wait", "--url", "**assignee=me*");
@@ -46,6 +59,7 @@ if (repository) {
   click("button", "Collapse sidebar");
   assert.equal(evaluate(`document.querySelectorAll('nav[aria-label="Issue filters"]').length`), 0);
   click("button", "Expand sidebar");
+  assert.equal(evaluate(`document.querySelectorAll('nav[aria-label="Issue filters"]').length`), 1);
 }
 fill("Search issues", "no-matching-issue-" + Date.now());
 browser("press", "Enter");

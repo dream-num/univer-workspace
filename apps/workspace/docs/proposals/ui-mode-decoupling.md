@@ -959,3 +959,22 @@ T5.2 主包从 1,834.36 kB 到 1,834.66 kB，gzip 从 564.88 kB 到 564.87 kB；
 不增加 lazy 加载和 Suspense 生命周期。原有 SDK 大块警告仍存在。
 设置专项的等待条件改为表单自身的 aria-busy，并等待取消确认框的遮罩退出；专项暂时公开测试空间，
 因此该专项与截图串行执行，避免测试空间出现在另一用户侧栏。所有测试使用可丢弃的本地服务。
+
+
+### T6a 通用 feature 显式接收呈现参数（PR 描述素材）
+
+IssueList、IssueDetail、TrashList、TeamMemberManager 不再读取 mode，由对应页面必传
+`presentation: "standard" | "compact"`。注册表新增 issueList / issueDetail 页面入口；
+三个 Issue 路由继续持有 loader、搜索参数与权限查询，创建和标签页仍使用 IssueRouteLayout。
+repository 的全局列表保留 standard 呈现，空间列表使用 compact；两者弹层均保留原有配色。
+
+Issue 左侧视图导航与折叠状态归 repository 页面，feature 只接收导航、展开按钮插槽。
+FilterMenu 的 MenuContent 使用 body Portal，因此由页面通过中性的 filterMenuClassName
+传入原来的作用域类名，不能仅挂在页面外层。四个组件的结构、类名、请求和错误处理保持原样。
+保留 `bg-repository-counter`（T6c 已决定不改色彩令牌名）；issues.queries.ts 的 repository
+注释留在 T6b。这两处不是 mode 判断，也没有引入 feature → mode 依赖。
+
+验证：Workspace typecheck、build、78 文件 / 394 测试通过；40 张基线截图零差异，
+wiki / repository 的 Issues 专项和 Settings 专项通过。Issues 专项新增全局／空间筛选弹层
+实际背景色与侧栏恢复断言。三个 Issue 路由的 Route 声明 AST 与 T5.6 一致，生成文件无变化，
+未更新截图基线。导航提取提交 `ff91df9`，后续提交接入页面和呈现参数；未推送或创建 PR。

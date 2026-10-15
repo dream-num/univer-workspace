@@ -16,7 +16,7 @@ export function WikiSpaceTrashPage({ spaceId }: SpaceSettingsPageProps) {
         <WorkspaceHeaderSearch placeholder={t("searchTrash")} value={searchQuery} onChange={setSearchQuery} />
       }
     >
-      {<TrashList spaceId={spaceId} searchQuery={searchQuery} />}
+      {<TrashList presentation="standard" spaceId={spaceId} searchQuery={searchQuery} />}
     </WorkspaceLayout>
   );
 }

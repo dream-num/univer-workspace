@@ -1,4 +1,4 @@
-import { WikiIssueLayout } from "./pages/issues";
+import { WikiIssueLayout, WikiIssueListPage, WikiIssueDetailPage } from "./pages/issues";
 import { WikiWorktreesPage } from "./pages/worktrees";
 import { WikiSpaceTrashPage } from "./pages/trash";
 import { WikiTeamMembersPage } from "./pages/members";
@@ -10,7 +10,7 @@ import { WikiShell } from "./wiki-shell";
 import type { ModeDefinition } from "../registry";
 
 export const wikiMode = {
-  pages: { issues: WikiIssueLayout, worktrees: WikiWorktreesPage, trash: WikiSpaceTrashPage, members: WikiTeamMembersPage, settings: WikiSpaceSettingsPage, folder: WikiFolderPage, space: WikiSpacePage, home: WikiHomePage },
+  pages: { issueList: WikiIssueListPage, issueDetail: WikiIssueDetailPage, issues: WikiIssueLayout, worktrees: WikiWorktreesPage, trash: WikiSpaceTrashPage, members: WikiTeamMembersPage, settings: WikiSpaceSettingsPage, folder: WikiFolderPage, space: WikiSpacePage, home: WikiHomePage },
   label: "wikiTheme",
   Shell: WikiShell,
   messages: {},

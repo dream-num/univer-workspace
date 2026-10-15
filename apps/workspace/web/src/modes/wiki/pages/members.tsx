@@ -14,6 +14,7 @@ export function WikiTeamMembersPage({ spaceId }: SpaceSettingsPageProps) {
   if (!space || space.type !== "team") return null;
   const manager = (
     <TeamMemberManager
+      presentation="standard"
       spaceId={spaceId}
       spaceName={space.name}
       canManage={space.capabilities.manageMembers}

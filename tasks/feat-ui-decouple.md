@@ -295,7 +295,7 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
 
 ## M4 feature 去 mode 化、样式、边界检查
 
-- [ ] **T6a：通用 feature 组件不再读取 mode**（R2 feature 部分；N5）
+- [x] **T6a：通用 feature 组件不再读取 mode**（R2 feature 部分；N5）
   - 做什么：4 个组件各自删掉 `useTheme()`，改为接收一个由 mode 传入的 `presentation` prop，外加需要时的插槽。
     命名按样式家族，不按 mode 名，第三种 mode 可以复用其中一种或新增取值：
 
@@ -308,9 +308,16 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
 
     组件内部把 `repository &&` 替换成 `presentation === "compact" &&`，类名和结构不变。`features/nodes/node-browser.tsx` 已经用
     `compact` / `showParentRow` 两个 props 表达同样的差异（39-58 行），是现成的写法。`issue-list.tsx:646` 中挂
-    `repository-chrome repository-issues` 的位置改为由 repository 页面的外层容器挂（T6c 再统一）。
+    `repository-chrome repository-issues` 由 repository 页面通过 `filterMenuClassName` 传给弹层；
+    `MenuContent` 使用 body Portal，外层容器无法覆盖它，T6c 再统一样式。
   - 验收：`rg -n 'useTheme\(\)' apps/workspace/web/src/features` 中没有 `workspaceTheme`；`rg -n '\brepository\b' apps/workspace/web/src/features/{issues,trash,permissions}`
-    无结果。
+    仅保留 T6c 明确保留的 `bg-repository-counter` 色彩令牌，以及 T6b 待改的 `issues.queries.ts` 注释，无 mode 判断。
+  - 实施：新增 `pages.issueList` / `pages.issueDetail`，三个 Issue 路由保留 loader、搜索参数和权限查询；
+    两种 mode 页面显式选择呈现参数，repository 全局列表仍为 standard，空间列表为 compact。
+    侧栏导航与折叠状态移到 repository 页面，通过 `viewsNav` / `viewsNavToggle` 插槽传入。
+    导航提取与调用改写分开提交（提取：`ff91df9`）。
+    Workspace typecheck、build、78 文件 / 394 测试通过；40 张截图零差异；两种 mode 的 Issues 与 Settings 专项通过。
+    Issues 专项新增全局／空间弹层配色和侧栏恢复断言，三个 Issue 路由声明 AST 对比一致；未更新基线。
   - 验证：V-static；V-smoke（截图零差异）；`issues.smoke.mjs`、`repository-settings.mjs`。
   - 规模：M（`issue-list.tsx` 一个文件约 15 处替换）。依赖：T5.4、T5.6。
 

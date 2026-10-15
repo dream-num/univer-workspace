@@ -29,7 +29,7 @@ export function RepositorySpaceTrashPage({ spaceId }: SpaceSettingsPageProps) {
             onChange={(event) => setSearchQuery(event.target.value)}
             className="mb-4 h-8 max-w-sm rounded-[6px]"
           />
-          <TrashList spaceId={spaceId} searchQuery={searchQuery} />
+          <TrashList presentation="compact" spaceId={spaceId} searchQuery={searchQuery} />
         </RepositorySettingsLayout>
       }
     </WorkspaceLayout>

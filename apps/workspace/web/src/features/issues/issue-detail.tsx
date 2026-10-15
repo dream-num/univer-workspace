@@ -15,7 +15,6 @@ import { Fragment, useState, type ReactNode } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import { useI18n, type MessageKey } from "../../shared/i18n";
-import { useTheme } from "../../shared/theme";
 import {
   Avatar,
   Button,
@@ -48,18 +47,16 @@ type TimelineComment = components["schemas"]["IssueTimelineComment"];
 type TimelineEvent = components["schemas"]["IssueTimelineEvent"];
 type PublicUser = components["schemas"]["PublicUser"];
 
-export function IssueDetail({
-  spaceId,
-  number,
-  canCreate,
-}: {
+export interface IssueDetailProps {
+  readonly presentation: "standard" | "compact";
   readonly spaceId: string;
   readonly number: number;
   readonly canCreate: boolean;
-}) {
+}
+
+export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueDetailProps) {
   const { language, t } = useI18n();
-  const { workspaceTheme } = useTheme();
-  const repository = workspaceTheme === "repository";
+  const compact = presentation === "compact";
   const issueQuery = useQuery(issueQueryOptions(spaceId, number));
   const timeline = useQuery(issueTimelineQueryOptions(spaceId, number));
   const session = useQuery(sessionQueryOptions);
@@ -121,7 +118,7 @@ export function IssueDetail({
   return (
     <div className="grid gap-6">
       <header
-        className={cn("grid gap-3 border-b border-border pb-4", repository && "border-0 pb-0")}
+        className={cn("grid gap-3 border-b border-border pb-4", compact && "border-0 pb-0")}
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           {editingTitle ? (
@@ -152,7 +149,7 @@ export function IssueDetail({
             <h1
               className={cn(
                 "m-0 min-w-0 flex-1 text-2xl leading-tight font-semibold tracking-tight [overflow-wrap:anywhere]",
-                repository &&
+                compact &&
                   "text-[32px] leading-10 font-normal max-[720px]:order-last max-[720px]:basis-full max-[720px]:text-2xl max-[720px]:leading-8",
               )}
             >
@@ -164,7 +161,7 @@ export function IssueDetail({
             <div
               className={cn(
                 "flex shrink-0 gap-2",
-                repository && "max-[720px]:w-full max-[720px]:justify-end",
+                compact && "max-[720px]:w-full max-[720px]:justify-end",
               )}
             >
               {issue.capabilities.edit ? (
@@ -195,7 +192,7 @@ export function IssueDetail({
         </div>
         <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
           <IssueStateBadge issue={issue} />
-          {!repository ? (
+          {!compact ? (
             <span>
               {t("issueOpenedMeta", {
                 name: issue.author.displayName,
@@ -212,7 +209,7 @@ export function IssueDetail({
         <IssueSidebar
           issue={issue}
           onEdit={(kind) => setPicker(kind)}
-          className={repository ? "order-last" : "order-first lg:order-last"}
+          className={compact ? "order-last" : "order-first lg:order-last"}
         />
         <div className="grid min-w-0 gap-4">
           <h2 className="sr-only">{t("issueBody")}</h2>
@@ -301,7 +298,7 @@ export function IssueDetail({
               aria-label={t("issueAddComment")}
               className={cn(
                 "grid gap-3 rounded-lg border border-border p-4",
-                repository && "rounded-none border-x-0 border-b-0 px-0 pt-6",
+                compact && "rounded-none border-x-0 border-b-0 px-0 pt-6",
               )}
             >
               <h2 className="m-0 flex items-center gap-2 text-base font-semibold">

@@ -1,4 +1,6 @@
-import type { IssuePageProps } from "../../page.types";
+import { IssueList } from "../../../features/issues/issue-list";
+import { IssueDetail } from "../../../features/issues/issue-detail";
+import type { IssuePageProps, IssueListPageProps, IssueDetailPageProps } from "../../page.types";
 import { RepositoryPage } from "../../../features/spaces";
 import { useI18n } from "../../../shared/i18n";
 import { WorkspaceLayout } from "../../../routes/-workspace-layout";
@@ -17,5 +19,21 @@ export function WikiIssueLayout({ spaceId, crumb, children }: IssuePageProps) {
     >
       <RepositoryPage>{children}</RepositoryPage>
     </WorkspaceLayout>
+  );
+}
+
+export function WikiIssueListPage(props: IssueListPageProps) {
+  return (
+    <WikiIssueLayout {...(props.spaceId ? { spaceId: props.spaceId } : {})}>
+      <IssueList {...props} presentation="standard" />
+    </WikiIssueLayout>
+  );
+}
+
+export function WikiIssueDetailPage(props: IssueDetailPageProps) {
+  return (
+    <WikiIssueLayout spaceId={props.spaceId} crumb={`#${props.number}`}>
+      <IssueDetail {...props} presentation="standard" />
+    </WikiIssueLayout>
   );
 }

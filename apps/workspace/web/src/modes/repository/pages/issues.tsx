@@ -1,4 +1,10 @@
-import type { IssuePageProps } from "../../page.types";
+import { useState } from "react";
+import { PanelLeftOpen } from "lucide-react";
+import { Button } from "../../../shared/ui";
+import { IssueViewsNav } from "./issues/views-nav";
+import { IssueList } from "../../../features/issues/issue-list";
+import { IssueDetail } from "../../../features/issues/issue-detail";
+import type { IssuePageProps, IssueListPageProps, IssueDetailPageProps } from "../../page.types";
 import { RepositoryPage, RepositoryTabs } from "../../../features/spaces";
 import { useI18n } from "../../../shared/i18n";
 import { WorkspaceLayout } from "../../../routes/-workspace-layout";
@@ -30,5 +36,46 @@ export function RepositoryIssueLayout({ spaceId, crumb, children }: IssuePagePro
         <RepositoryPage>{children}</RepositoryPage>
       )}
     </WorkspaceLayout>
+  );
+}
+
+export function RepositoryIssueListPage(props: IssueListPageProps) {
+  const { t } = useI18n();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  return (
+    <RepositoryIssueLayout {...(props.spaceId ? { spaceId: props.spaceId } : {})}>
+      <IssueList
+        {...props}
+        presentation={props.spaceId ? "compact" : "standard"}
+        filterMenuClassName="repository-chrome repository-issues"
+        viewsNav={
+          props.spaceId && sidebarOpen ? (
+            <IssueViewsNav spaceId={props.spaceId} filters={props.filters} onCollapse={() => setSidebarOpen(false)} />
+          ) : null
+        }
+        viewsNavToggle={
+          !sidebarOpen ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="max-[900px]:hidden"
+              aria-label={t("issueExpandSidebar")}
+              aria-expanded={false}
+              onClick={() => setSidebarOpen(true)}
+            >
+              <PanelLeftOpen />
+            </Button>
+          ) : null
+        }
+      />
+    </RepositoryIssueLayout>
+  );
+}
+
+export function RepositoryIssueDetailPage(props: IssueDetailPageProps) {
+  return (
+    <RepositoryIssueLayout spaceId={props.spaceId} crumb={`#${props.number}`}>
+      <IssueDetail {...props} presentation="compact" />
+    </RepositoryIssueLayout>
   );
 }
