@@ -1,3 +1,4 @@
+import type { WorktreesPageProps } from "./page.types";
 import type { SpaceSettingsPageProps } from "./page.types";
 import type { FolderPageProps } from "./page.types";
 import type { SpacePageProps } from "./page.types";
@@ -11,6 +12,7 @@ import { wikiMode } from "./wiki";
 
 export interface ModeDefinition {
   readonly pages: {
+    readonly worktrees: ComponentType<WorktreesPageProps>;
     readonly trash: ComponentType<SpaceSettingsPageProps>;
     readonly members: ComponentType<SpaceSettingsPageProps>;
     readonly settings: ComponentType<SpaceSettingsPageProps>;

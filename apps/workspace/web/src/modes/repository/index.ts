@@ -1,3 +1,4 @@
+import { RepositoryWorktreesPage } from "./pages/worktrees";
 import { RepositorySpaceTrashPage } from "./pages/trash";
 import { RepositoryTeamMembersPage } from "./pages/members";
 import { RepositorySpaceSettingsPage } from "./pages/settings";
@@ -9,7 +10,7 @@ import type { ModeDefinition } from "../registry";
 import { repositoryMessages } from "./messages";
 
 export const repositoryMode = {
-  pages: { trash: RepositorySpaceTrashPage, members: RepositoryTeamMembersPage, settings: RepositorySpaceSettingsPage, folder: RepositoryFolderPage, space: RepositorySpacePage, home: RepositoryHomePage },
+  pages: { worktrees: RepositoryWorktreesPage, trash: RepositorySpaceTrashPage, members: RepositoryTeamMembersPage, settings: RepositorySpaceSettingsPage, folder: RepositoryFolderPage, space: RepositorySpacePage, home: RepositoryHomePage },
   label: "repositoryTheme",
   Shell: RepositoryShell,
   messages: repositoryMessages,

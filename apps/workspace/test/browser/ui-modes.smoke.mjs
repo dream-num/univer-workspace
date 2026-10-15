@@ -397,10 +397,13 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       ["settings", `${team}/settings`, "#space-name"],
       ["members", `${team}/members`, 'main input[aria-label="Find a collaborator"]'],
       ["trash", `${team}/trash`, 'main input[aria-label="Search items in Trash"]'],
+      ["worktrees", "/worktrees", "header input", "Search tasks, documents, or creators"],
+      ["space-worktrees", `/worktrees?spaceId=${fixture.teamId}`, "header input", "Search tasks, documents, or creators"],
     ];
     switchPageMode("repository");
-    for (const [name, path, selector] of resetCases) {
+    for (const [name, path, selector, searchLabel] of resetCases) {
       open(path);
+      if (searchLabel) click("button", searchLabel);
       browser("wait", selector);
       const initial = evaluate(`document.querySelector(${JSON.stringify(selector)}).value`);
       browser("fill", selector, "mode-reset-probe");
@@ -408,6 +411,7 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       assert.equal(browser("get", "url").url, `${origin}${path}`);
       switchPageMode("repository");
       assert.equal(browser("get", "url").url, `${origin}${path}`);
+      if (searchLabel) click("button", searchLabel);
       browser("wait", selector);
       assert.equal(evaluate(`document.querySelector(${JSON.stringify(selector)}).value`), initial, `${name} 临时状态必须重置`);
       assert.deepEqual(browser("errors").errors, [], `${name} 切换后无未捕获错误`);

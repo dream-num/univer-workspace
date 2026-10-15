@@ -1,69 +1,25 @@
-import { Route } from "../../../routes/worktrees";
+import type { WorktreesPageProps } from "../../page.types";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { WorktreeDashboard, worktreeQueryOptions, worktreeBelongsToSpace } from "../../../features/worktrees";
-
-import { RepositoryTabs, spacesQueryOptions } from "../../../features/spaces";
-import { WorktreeReviewPanel } from "../../../features/worktrees/worktree-review-panel";
-import { Button, Empty, Skeleton } from "../../../shared/ui";
+import { WorktreeDashboard } from "../../../features/worktrees";
 import { useI18n } from "../../../shared/i18n";
-import { useTheme } from "../../../shared/theme";
-import { DEFAULT_WORKTREE_REVIEW_VIEW, type WorktreeReviewView } from "../../../features/worktrees/worktree-review-search";
+import { DEFAULT_WORKTREE_REVIEW_VIEW } from "../../../features/worktrees/worktree-review-search";
 import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../../routes/-workspace-layout";
 
-export function WikiWorktreesPage() {
+export function WikiWorktreesPage(props: WorktreesPageProps) {
   const { t } = useI18n();
-  const { workspaceTheme } = useTheme();
-  const {
-    spaceId,
-    worktree,
-    unit,
-    section = unit ? "files" : "overview",
-    view = DEFAULT_WORKTREE_REVIEW_VIEW,
-  } = Route.useSearch();
+  const { spaceId, worktree, unit, view = DEFAULT_WORKTREE_REVIEW_VIEW } = props;
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  // A space-scoped review stays inside the repository shell, opened from the
-  // PRs tab; the global workbench keeps its own navigation.
-  const repository = workspaceTheme === "repository" && spaceId !== undefined;
-
   return (
     <WorkspaceLayout
       {...(spaceId ? { selectedSpaceId: spaceId } : {})}
-      {...(repository ? { repositoryTab: "prs" as const } : { selectedView: "worktrees" as const })}
+      selectedView="worktrees"
       headerContent={
-        repository && worktree ? undefined : (
-          <WorkspaceHeaderSearch
-            placeholder={t("searchTasks")}
-            value={searchQuery}
-            onChange={setSearchQuery}
-          />
-        )
+        <WorkspaceHeaderSearch placeholder={t("searchTasks")} value={searchQuery} onChange={setSearchQuery} />
       }
     >
-      {repository ? <RepositoryTabs spaceId={spaceId} active="prs" /> : null}
-      {repository && worktree ? (
-        <RepositoryPullRequestPage
-          spaceId={spaceId}
-          worktreeId={worktree}
-          unitId={unit}
-          view={view}
-          section={section}
-          onViewChange={(nextView) => {
-            void navigate({
-              to: "/worktrees",
-              search: {
-                spaceId,
-                worktree,
-                ...(unit ? { unit } : {}),
-                section: "files",
-                view: nextView,
-              },
-            });
-          }}
-        />
-      ) : (
+      {
         <WorktreeDashboard
           {...(spaceId ? { spaceId } : {})}
           searchQuery={searchQuery}
@@ -86,66 +42,7 @@ export function WikiWorktreesPage() {
             });
           }}
         />
-      )}
+      }
     </WorkspaceLayout>
-  );
-}
-
-function RepositoryPullRequestPage({
-  spaceId,
-  worktreeId,
-  unitId,
-  view,
-  section,
-  onViewChange,
-}: {
-  readonly spaceId: string;
-  readonly worktreeId: string;
-  readonly unitId: string | undefined;
-  readonly view: WorktreeReviewView;
-  readonly section: "overview" | "files";
-  readonly onViewChange: (view: WorktreeReviewView) => void;
-}) {
-  const { t } = useI18n();
-  const query = useQuery(worktreeQueryOptions(worktreeId));
-  const spaces = useQuery(spacesQueryOptions);
-  if (query.isPending || spaces.isPending)
-    return (
-      <div role="status" aria-label={t("onboardingLoading")} className="grid gap-4 p-8">
-        <Skeleton className="h-8 w-2/3" />
-        <Skeleton className="h-60" />
-      </div>
-    );
-  if (query.isError || spaces.isError)
-    return (
-      <Empty title={t("repositoryPullRequestsFailed")}>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            void query.refetch();
-            void spaces.refetch();
-          }}
-        >
-          {t("repositoryPageRetry")}
-        </Button>
-      </Empty>
-    );
-  const space = spaces.data?.spaces.find((item) => item.id === spaceId);
-  if (!space || !worktreeBelongsToSpace(query.data.worktree, space))
-    return (
-      <Empty
-        title={t("workbenchSelectionUnavailable")}
-        description={t("workbenchSelectionUnavailableDescription")}
-      />
-    );
-  return (
-    <WorktreeReviewPanel
-      key={worktreeId}
-      worktree={query.data.worktree}
-      {...(unitId ? { selectedUnitId: unitId } : {})}
-      selectedView={view}
-      onSelectedViewChange={onViewChange}
-      repository={{ spaceId, section }}
-    />
   );
 }

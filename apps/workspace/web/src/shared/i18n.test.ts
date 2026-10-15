@@ -66,3 +66,7 @@ vi.mock("../modes/repository/pages/members", () => ({ RepositoryTeamMembersPage:
 vi.mock("../modes/wiki/pages/trash", () => ({ WikiSpaceTrashPage: () => null }));
 
 vi.mock("../modes/repository/pages/trash", () => ({ RepositorySpaceTrashPage: () => null }));
+
+vi.mock("../modes/wiki/pages/worktrees", () => ({ WikiWorktreesPage: () => null }));
+
+vi.mock("../modes/repository/pages/worktrees", () => ({ RepositoryWorktreesPage: () => null }));

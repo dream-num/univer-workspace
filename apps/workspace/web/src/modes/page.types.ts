@@ -19,3 +19,5 @@ export interface FolderPageProps {
 export interface SpaceSettingsPageProps {
   readonly spaceId: string;
 }
+
+export type { WorktreeDashboardSearch as WorktreesPageProps } from "../features/worktrees/worktree-review-search";

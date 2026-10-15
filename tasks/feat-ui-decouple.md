@@ -286,6 +286,9 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
   394 项测试、typecheck、build、40 张截图、三类页面状态重置和 repository-settings 专项通过。
   专项等待改为表单自身 aria-busy，并等待取消确认框的遮罩退出；临时公开空间的测试与截图串行执行。
 
+- [x] T5.5：Workbench / PR 页拆为 `pages.worktrees`；无 spaceId 的 repository Workbench 保持不变。
+  394 项测试、typecheck、build、40 张截图、全局/空间工作台搜索状态重置及真实 PR 专项全部通过。
+
 ## M4 feature 去 mode 化、样式、边界检查
 
 - [ ] **T6a：通用 feature 组件不再读取 mode**（R2 feature 部分；N5）
