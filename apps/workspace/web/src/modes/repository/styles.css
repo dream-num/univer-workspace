@@ -1,0 +1,180 @@
+@theme {
+  --color-repository-selected: #fd8c73;
+  --color-repository-counter: #818b981f;
+  --color-repository-star: #9a6700;
+}
+
+.dark {
+  --color-repository-counter: #656c7633;
+  --color-repository-star: #e3b341;
+}
+
+/* Keep reference-specific typography and surfaces inside the shared chrome. */
+.repository-chrome {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --color-background: #ffffff;
+  --color-surface: #f6f8fa;
+  --color-foreground: #1f2328;
+  --color-muted-foreground: #59636e;
+  --color-border: #d1d9e0;
+  --color-border-strong: #d1d9e0;
+  --color-secondary: #f6f8fa;
+  --color-secondary-hover: #eff2f5;
+  --color-accent: #818b981a;
+}
+
+.dark .repository-chrome {
+  --color-background: #0d1117;
+  --color-surface: #010409;
+  --color-foreground: #f0f6fc;
+  --color-muted-foreground: #9198a1;
+  --color-border: #3d444d;
+  --color-border-strong: #3d444d;
+  --color-secondary: #212830;
+  --color-secondary-hover: #262c36;
+  --color-accent: #656c7633;
+}
+
+/* Published Primer theme: scoped to the Pages directory, never its HTML iframe. */
+.repository-pages {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-foreground);
+  --color-background: #fff;
+  --color-foreground: #24292e;
+  --color-muted-foreground: #586069;
+  --color-border: #eaecef;
+  --color-surface: #f6f8fa;
+  --color-primary: #0366d6;
+  --color-ring: #0366d6;
+}
+
+.dark .repository-pages {
+  --color-background: #0d1117;
+  --color-foreground: #f0f6fc;
+  --color-muted-foreground: #9198a1;
+  --color-border: #3d444d;
+  --color-surface: #151b23;
+  --color-primary: #58a6ff;
+  --color-ring: #58a6ff;
+}
+
+.repository-pages a,
+.repository-pages-action {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.repository-pages a:hover,
+.repository-pages-action:hover {
+  text-decoration: underline;
+}
+
+.repository-pages-action {
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+}
+
+.repository-pages :is(a, button):focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 3px;
+}
+
+/* Settings is scoped separately so Wiki forms keep their existing appearance. */
+.repository-settings {
+  --color-input: var(--color-border);
+  --color-primary: #1f883d;
+  --color-primary-hover: #1a7f37;
+  --color-ring: #0969da;
+  --color-destructive: #d1242f;
+  --color-destructive-soft: #fff1f2;
+  --color-secondary-foreground: var(--color-foreground);
+}
+
+.dark .repository-settings {
+  --color-surface: #151b23;
+  --color-primary: #238636;
+  --color-primary-hover: #29903b;
+  --color-ring: #4493f8;
+  --color-destructive: #ff7b72;
+  --color-destructive-soft: #2d1214;
+}
+
+.repository-settings input:not([type="checkbox"]),
+.repository-settings textarea {
+  background: var(--color-surface);
+  box-shadow: inset 0 1px 0 rgb(31 35 40 / 4%);
+}
+
+.repository-settings label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Issue content uses GitHub's inset surface, rather than its darker global header. */
+.repository-issues,
+.repository-pull-requests {
+  --color-primary: #1f883d;
+  --color-primary-hover: #1a7f37;
+  --color-input: var(--color-border);
+  --color-state-open: #1a7f37;
+  --color-state-merged: #8250df;
+}
+
+.dark .repository-issues,
+.dark .repository-pull-requests {
+  --color-surface: #151b23;
+  --color-primary: #238636;
+  --color-primary-hover: #29903b;
+  --color-state-open: #3fb950;
+  --color-state-merged: #ab7df8;
+}
+
+.repository-pull-requests {
+  --color-state-closed: #d1242f;
+  --color-state-merged-badge: #8250df;
+}
+
+.dark .repository-pull-requests {
+  --color-state-closed: #f85149;
+}
+
+/* Filled status pills need white-on-solid colors in both themes. */
+.repository-pull-requests [data-pr-state="draft"].rounded-full {
+  background: #59636e;
+}
+.repository-pull-requests [data-pr-state="merged"].rounded-full {
+  background: var(--color-state-merged-badge);
+}
+.repository-pull-requests [data-pr-state="discarded"].rounded-full {
+  background: #cf222e;
+}
+
+.repository-issues .issue-state-badge {
+  background: #1f883d;
+  color: #fff;
+}
+
+.repository-issues .issue-state-badge[data-state="closed"] {
+  background: #8250df;
+}
+
+.repository-issues .issue-state-badge[data-reason="not_planned"] {
+  background: #59636e;
+}
+
+.repository-issues .issue-comment {
+  border-radius: 6px;
+}
+
+.repository-issues .issue-markdown {
+  --color-primary: #0969da;
+}
+
+.dark .repository-issues .issue-markdown {
+  --color-primary: #4493f8;
+}

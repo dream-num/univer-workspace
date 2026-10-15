@@ -1,6 +1,7 @@
 // 仅连接可丢弃的本地 Server + Vite；夹具和基线需要一起保留。
 // WORKSPACE_TEST_ORIGIN=http://127.0.0.1:5173 UI_MODES_UPDATE=1 node --test test/browser/ui-modes.smoke.mjs
 // 去掉 UI_MODES_UPDATE 再运行即可比较；也支持直接 node 本文件 --update-baseline。
+// UI_MODES_THEME=dark 使用独立暗色基线；未指定时仍比较原有亮色基线。
 // UI_MODES_BASELINE_DIR 默认 os.tmpdir()/univer-workspace-ui-modes，自定义时也应放在仓库外。
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -12,8 +13,10 @@ import { test } from "node:test";
 const origin = process.env.WORKSPACE_TEST_ORIGIN;
 assert.ok(origin && new URL(origin).hostname === "127.0.0.1", "只允许可丢弃的 loopback 服务");
 const MODES = ["wiki", "repository"];
+const theme = process.env.UI_MODES_THEME ?? "light";
+assert.ok(["light", "dark"].includes(theme), "UI_MODES_THEME 只支持 light / dark");
 const baseline = resolve(
-  process.env.UI_MODES_BASELINE_DIR ?? join(tmpdir(), "univer-workspace-ui-modes"),
+  process.env.UI_MODES_BASELINE_DIR ?? join(tmpdir(), `univer-workspace-ui-modes${theme === "dark" ? "-dark" : ""}`),
 );
 const update = process.env.UI_MODES_UPDATE === "1" || process.argv.includes("--update-baseline");
 // T4a 移动前补录打开态，保留已有页面基线不变。
@@ -271,7 +274,7 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       mkdirSync(join(baseline, mode), { recursive: true, mode: 0o700 });
       mkdirSync(join(actual, mode), { recursive: true, mode: 0o700 });
       evaluate(
-        `localStorage.clear(); localStorage.setItem('univer-workspace-layout-theme', '${mode}'); localStorage.setItem('univer-workspace-language', 'en-US'); localStorage.setItem('univer-workspace-theme', 'light');`,
+        `localStorage.clear(); localStorage.setItem('univer-workspace-layout-theme', '${mode}'); localStorage.setItem('univer-workspace-language', 'en-US'); localStorage.setItem('univer-workspace-theme', '${theme}');`,
       );
       browser("set", "viewport", "1440", "900");
       // 先打开 Sheet，使第一次运行的 Recent 列表与后续运行相同。
