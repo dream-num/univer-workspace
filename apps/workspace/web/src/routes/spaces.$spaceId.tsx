@@ -33,10 +33,10 @@ import { WorkspaceLayout } from "./-workspace-layout";
 import { formatRelativeDate } from "../shared/format-relative-date";
 import { useI18n } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
-import { worktreeBelongsToSpace, worktreeListQueryOptions } from "../features/worktrees";
+import { isOpenWorktree, worktreeBelongsToSpace, worktreeListQueryOptions } from "../features/worktrees";
 import type { components } from "../../../generated/http/schema.js";
 import { Button, Empty, Input, Skeleton, buttonVariants, toast } from "../shared/ui";
-import { OPEN_WORKTREE_STATES, RepositoryPrState } from "../features/worktrees/repository-pr-state";
+import { RepositoryPrState } from "../features/worktrees/repository-pr-state";
 import { cn } from "../shared/utils/cn";
 
 type SpaceView = components["schemas"]["SpaceView"];
@@ -639,13 +639,13 @@ function PullRequestsView({
   const [search, setSearch] = useState("");
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const openCount = worktrees.filter((worktree) =>
-    OPEN_WORKTREE_STATES.includes(worktree.state),
+    isOpenWorktree(worktree.state),
   ).length;
   const visible = worktrees.filter(
     (worktree) =>
       (stateFilter === "open"
-        ? OPEN_WORKTREE_STATES.includes(worktree.state)
-        : !OPEN_WORKTREE_STATES.includes(worktree.state)) &&
+        ? isOpenWorktree(worktree.state)
+        : !isOpenWorktree(worktree.state)) &&
       [
         worktree.name,
         worktree.summary,

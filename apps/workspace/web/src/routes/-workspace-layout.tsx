@@ -38,6 +38,7 @@ import { IssuesSidebarSection } from "../features/issues";
 import { spaceDisplayName, spacesQueryKey, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceNavigationTree } from "../features/nodes";
 import {
+  isOpenWorktree,
   useWorktreeChangeFeed,
   worktreeBelongsToSpace,
   worktreeListQueryOptions,
@@ -482,7 +483,7 @@ function AuthenticatedWorkspaceLayout({
     : (headerTitle ?? spaceTitle ?? workspaceViewTitle(selectedView, t));
   const activeTaskCount =
     activeWorktrees.data?.items.filter((worktree) => {
-      if (!["draft", "ready", "merging"].includes(worktree.state)) return false;
+      if (!isOpenWorktree(worktree.state)) return false;
       if (workspaceTheme !== "repository" || selectedSpaceId === undefined) return true;
       return selectedSpace !== undefined && worktreeBelongsToSpace(worktree, selectedSpace);
     }).length ?? 0;

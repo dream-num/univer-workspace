@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { components } from "../../../../generated/http/schema.js";
-import { worktreeBelongsToSpace } from "./worktree.rules.js";
+import { isOpenWorktree, worktreeBelongsToSpace } from "./worktree.rules.js";
 
 type WorktreeSummary = components["schemas"]["WorktreeSummary"];
 type Worktree = Pick<WorktreeSummary, "kind" | "teamSpace">;
@@ -8,13 +8,22 @@ type Worktree = Pick<WorktreeSummary, "kind" | "teamSpace">;
 const personalSpace = { id: "personal-1", type: "personal" } as const;
 const teamSpace = { id: "team-1", type: "team" } as const;
 
+describe("isOpenWorktree", () => {
+  it.each([
+    { state: "draft", open: true },
+    { state: "ready", open: true },
+    { state: "merging", open: true },
+    { state: "merged", open: false },
+    { state: "discarded", open: false },
+  ] as const)("$state has open=$open", ({ state, open }) => {
+    expect(isOpenWorktree(state)).toBe(open);
+  });
+});
+
 function worktree(kind: Worktree["kind"], teamSpaceId: string | null): Worktree {
   return {
     kind,
-    teamSpace:
-      teamSpaceId === null
-        ? null
-        : ({ id: teamSpaceId } as WorktreeSummary["teamSpace"]),
+    teamSpace: teamSpaceId === null ? null : ({ id: teamSpaceId } as WorktreeSummary["teamSpace"]),
   };
 }
 

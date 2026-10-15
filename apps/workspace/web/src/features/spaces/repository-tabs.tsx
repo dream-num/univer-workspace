@@ -3,14 +3,13 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useI18n } from "../../shared/i18n";
-import { worktreeBelongsToSpace, worktreeListQueryOptions } from "../worktrees";
+import { isOpenWorktree, worktreeBelongsToSpace, worktreeListQueryOptions } from "../worktrees";
 import { issueCountsQueryOptions } from "../issues/issues.queries";
 import { spacesQueryOptions } from "./spaces.queries";
 import { RepositoryHeader } from "./repository-header";
+import { spaceSupportsIssues } from "./space.rules";
 
 export type RepositoryTab = "files" | "issues" | "prs" | "apps" | "settings";
-
-const OPEN_WORKTREE_STATES = ["draft", "ready", "merging"];
 
 /** GitHub-style repository tabs, shared by every repository page. */
 export function RepositoryTabs({
@@ -26,12 +25,12 @@ export function RepositoryTabs({
   const processedWorktrees = useQuery(worktreeListQueryOptions("processed"));
   const space = spaces.data?.spaces.find((item) => item.id === spaceId);
   const navigation = useRef<HTMLElement>(null);
-  const hasIssues = space?.type === "team";
+  const hasIssues = space !== undefined && spaceSupportsIssues(space);
   const issueCounts = useQuery({ ...issueCountsQueryOptions(spaceId), enabled: hasIssues });
   const openWorktreeCount = space
     ? [...(activeWorktrees.data?.items ?? []), ...(processedWorktrees.data?.items ?? [])].filter(
         (worktree) =>
-          worktreeBelongsToSpace(worktree, space) && OPEN_WORKTREE_STATES.includes(worktree.state),
+          worktreeBelongsToSpace(worktree, space) && isOpenWorktree(worktree.state),
       ).length
     : 0;
   const canOpenSettings =

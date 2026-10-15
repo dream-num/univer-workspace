@@ -1,5 +1,5 @@
 export { WorktreeDashboard } from "./worktree-dashboard";
-export { worktreeBelongsToSpace } from "./worktree.rules";
+export { OPEN_WORKTREE_STATES, isOpenWorktree, worktreeBelongsToSpace } from "./worktree.rules";
 export {
   worktreeListQueryOptions,
   worktreeQueryOptions,
