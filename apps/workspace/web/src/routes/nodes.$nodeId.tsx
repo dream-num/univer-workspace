@@ -1,10 +1,10 @@
+import { useModeDefinition } from "../modes/registry";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import type { IMember } from "@univerjs/protocol";
 import {
-  CreateNodeDropdown,
-  NodeBrowser,
+  invalidateProductLists,
   ResourceActions,
   ResourceUnavailablePage,
   isResourceUnavailableError,
@@ -13,18 +13,14 @@ import {
 } from "../features/nodes";
 import { anonymousUser, sessionQueryOptions } from "../features/auth";
 import { resourceOpenQueryOptions } from "../features/resources";
-import { RepositoryTabs, spaceDisplayName, spacesQueryOptions } from "../features/spaces";
-import { WorkspaceHeaderSearch, WorkspaceLayout } from "./-workspace-layout";
+import { spacesQueryOptions } from "../features/spaces";
+import { WorkspaceLayout } from "./-workspace-layout";
 import { ResourceEditor } from "../features/editor";
 import { BlobPreview } from "../features/blobs";
 import { api } from "../shared/api/client";
-import { useI18n } from "../shared/i18n";
-import { useTheme } from "../shared/theme";
 import { parseResourceView } from "../features/resource-view/resource-view";
 export const Route = createFileRoute("/nodes/$nodeId")({
-  validateSearch: (
-    search: Readonly<Record<string, unknown>>,
-  ): { unit?: string; view?: "immersive" | undefined } => ({
+  validateSearch: (search: Readonly<Record<string, unknown>>): { unit?: string; view?: "immersive" | undefined } => ({
     ...(parseResourceView(search.view) ? { view: "immersive" as const } : {}),
     ...(typeof search.unit === "string" && search.unit ? { unit: search.unit } : {}),
   }),
@@ -36,13 +32,7 @@ export const Route = createFileRoute("/nodes/$nodeId")({
         params: { path: { unitId: deps.unit } },
       });
       if (data) {
-        await Promise.all([
-          context.queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-          context.queryClient.invalidateQueries({
-            queryKey: ["recent-resources"],
-          }),
-          context.queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-        ]);
+        await invalidateProductLists(context.queryClient);
         throw redirect({
           to: "/nodes/$nodeId",
           params: { nodeId: data.node.id },
@@ -59,9 +49,7 @@ export const Route = createFileRoute("/nodes/$nodeId")({
         context.queryClient.ensureQueryData(nodeQueryOptions(params.nodeId)),
       ]);
       if (result.node.resource) {
-        await context.queryClient.ensureQueryData(
-          resourceOpenQueryOptions(result.node.resource.id),
-        );
+        await context.queryClient.ensureQueryData(resourceOpenQueryOptions(result.node.resource.id));
       } else if (result.node.capabilities.browseChildren) {
         await context.queryClient.ensureQueryData(nodeChildrenQueryOptions(params.nodeId));
       }
@@ -78,19 +66,17 @@ function NodePage() {
   const { nodeId } = Route.useParams();
   const { view } = Route.useSearch();
   const query = useQuery(nodeQueryOptions(nodeId));
-  const children = useQuery({
-    ...nodeChildrenQueryOptions(nodeId),
-    enabled: query.data?.node.resource === null && query.data.node.capabilities.browseChildren,
-  });
   const resourceId = query.data?.node.resource?.id;
   const resourceQuery = useQuery({
     ...resourceOpenQueryOptions(resourceId ?? ""),
     enabled: resourceId !== undefined,
   });
   const session = useQuery(sessionQueryOptions);
-  const { t } = useI18n();
-  const { workspaceTheme } = useTheme();
-  const [searchQuery, setSearchQuery] = useState("");
+  const mode = useModeDefinition();
+  const { pages } = mode;
+  const [folderSearch, setFolderSearch] = useState({ mode, value: "" });
+  // 目录与文件共用此路由：跨 Node 导航保留搜索，切换 mode 时清空。
+  if (folderSearch.mode !== mode) setFolderSearch({ mode, value: "" });
   const [htmlActionsContainer, setHtmlActionsContainer] = useState<HTMLSpanElement | null>(null);
   const [collaboration, setCollaboration] = useState<{
     nodeId: string;
@@ -112,38 +98,34 @@ function NodePage() {
   const resource = resourceQuery.data?.resource;
   const user = session.data.authenticated ? session.data.user : anonymousUser;
   const selectedNodePath = [...query.data.breadcrumbs.map((item) => item.id), node.id];
-  const repository = workspaceTheme === "repository";
   // `/nodes/{id}` already returns the full ancestor chain, including this Node;
   // the shell drops a trailing crumb that repeats the page title.
   const repositoryBreadcrumbs = query.data.breadcrumbs.map((item) => ({
     label: item.name,
     nodeId: item.id,
   }));
-  const isEditing =
-    session.data.authenticated && resource?.kind === "univer" && resource.editorMode === "edit";
+  const isEditing = session.data.authenticated && resource?.kind === "univer" && resource.editorMode === "edit";
 
-  // Keep one layout for folders, Blobs and Univer documents. Only the resource
-  // content and its header controls reset when their identity changes.
+  if (node.resource === null) {
+    return (
+      <pages.folder
+        detail={query.data}
+        searchQuery={folderSearch.value}
+        onSearchChange={(value) => setFolderSearch({ mode, value })}
+        username={session.data.authenticated ? session.data.user.username : undefined}
+      />
+    );
+  }
+  // Resource content and header controls reset when their identity changes.
   return (
     <WorkspaceLayout
       immersive={node.resource !== null && view === "immersive"}
       selectedSpaceId={query.data.space.id}
-      {...(node.resource === null
-        ? { repositoryTab: "files" as const, repositoryBreadcrumbs }
-        : { repositoryBreadcrumbs })}
+      repositoryBreadcrumbs={repositoryBreadcrumbs}
       selectedNodeId={node.id}
       selectedNodePath={selectedNodePath}
-      contentMode={node.resource ? "editor" : "default"}
+      contentMode="editor"
       headerTitle={node.name}
-      headerContent={
-        node.resource || repository ? undefined : (
-          <WorkspaceHeaderSearch
-            placeholder={t("searchNodes")}
-            value={searchQuery}
-            onChange={setSearchQuery}
-          />
-        )
-      }
       headerActions={
         node.resource && resource ? (
           <ResourceActions
@@ -158,58 +140,20 @@ function NodePage() {
         ) : undefined
       }
     >
-      {node.resource ? (
-        resource ? (
-          <section
-            key={resource.id}
-            className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background"
-          >
-            {resource.kind === "blob" ? (
-              <BlobPreview
-                resource={resource}
-                immersive={view === "immersive"}
-                actionsContainer={htmlActionsContainer}
-              />
-            ) : (
-              <ResourceEditor
-                unitId={resource.unitId}
-                unitType={resource.unitType}
-                user={user}
-                readOnly={!isEditing}
-                onCollaboratorsChange={onCollaboratorsChange}
-              />
-            )}
-          </section>
-        ) : null
-      ) : children.data ? (
-        repository ? (
-          <>
-            <RepositoryTabs spaceId={query.data.space.id} active="files" />
-            <div className="min-h-0 flex-1 overflow-y-auto bg-background">
-              <div className="mx-auto max-w-7xl px-8 py-6 max-[720px]:px-4 max-[720px]:py-4">
-                <NodeBrowser
-                  page={children.data}
-                  searchQuery={searchQuery}
-                  showParentRow
-                  spaceName={spaceDisplayName(
-                    query.data.space,
-                    t,
-                    session.data.authenticated ? session.data.user.username : undefined,
-                  )}
-                  onSearchChange={setSearchQuery}
-                  searchPlaceholder={t("repositoryGoToFile")}
-                  compact
-                />
-              </div>
-            </div>
-          </>
-        ) : (
-          <NodeBrowser
-            page={children.data}
-            searchQuery={searchQuery}
-            onClearSearch={() => setSearchQuery("")}
-          />
-        )
+      {resource ? (
+        <section key={resource.id} className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
+          {resource.kind === "blob" ? (
+            <BlobPreview resource={resource} immersive={view === "immersive"} actionsContainer={htmlActionsContainer} />
+          ) : (
+            <ResourceEditor
+              unitId={resource.unitId}
+              unitType={resource.unitType}
+              user={user}
+              readOnly={!isEditing}
+              onCollaboratorsChange={onCollaboratorsChange}
+            />
+          )}
+        </section>
       ) : null}
     </WorkspaceLayout>
   );

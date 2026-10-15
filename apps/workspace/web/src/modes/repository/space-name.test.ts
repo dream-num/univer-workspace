@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { spaceDisplayName } from "../../web/src/features/spaces/space-name";
+import { spaceDisplayName } from "./space-name";
 
 it("names personal repositories after their owner rather than the signed-in viewer", () => {
   const space = {

@@ -36,6 +36,10 @@ apps/workspace/
 │       │   └── styles/
 │       ├── routes/
 │       │   └── TanStack Router 文件路由
+│       ├── modes/
+│       │   ├── registry.ts / workspace-layout.tsx
+│       │   ├── wiki/
+│       │   └── repository/
 │       ├── features/
 │       │   ├── auth/
 │       │   ├── nodes/
@@ -128,15 +132,35 @@ apps/workspace/
 渲染 Markdown。共享包拥有 GFM、源码切换、链接策略和样式；宿主负责内容请求、认证、取消和下载。
 两端继续使用各自的 React runtime。Markdown 读取完整文件，预览与源码均展示全文，不设置预览大小截断。
 
-`routes` 对应 URL 和页面组合，`features` 按用户能力组织，`shared` 保存无业务归属的
-基础代码。依赖方向为：
+`routes` 解析 URL、查询参数与 loader 权限，页面呈现交给 `modes`；`features` 按用户能力组织，
+`shared` 保存无业务归属的基础代码。箭头表示高层可使用左侧低层能力：
 
 ```text
-shared → features → routes → app
+shared → features → modes → routes → app
 ```
 
-低层目录不能导入高层目录。Feature 通过 `index.ts` 暴露公开内容，其他 Feature 不导入
-其内部文件。
+`features/*/*.queries.ts` 拥有查询 key 与读取；`*.commands.ts` 拥有写请求、
+产品结果、缓存失效集合与执行；`*.rules.ts` 保存无 React 依赖的领域判断。mode 只能用来呈现，
+不能改变写操作的语义。通知、确认弹窗、表单状态和完成后的页面去向由调用页面控制。
+既有不同页面提交的字段保持原样，统一命令执行与缓存规则。
+
+`modes/registry.ts` 的静态 `ModeDefinition` 要求 `label`、`messages`、`Shell` 和 `pages`。
+`pages` 包含 home、space、folder、settings、members、trash、worktrees、issues（创建／标签页外壳）、
+issueList、issueDetail；两种 mode 实现同一组 props。`modes/workspace-layout.tsx` 负责 session、
+访客外壳与按 mode key 重挂载 Shell；路由中的旧布局入口仅转发，mode 页面不导入 routes。
+
+`shared` 不依赖 features、modes、routes、app；features 不依赖 modes、routes、app；
+mode 不依赖 routes 或 app，也不导入另一个 mode。routes 只通过 registry 使用 mode 的组件与类型。
+注册表和共用合同可组合各 mode，Feature 继续通过 `index.ts` 暴露供其他 Feature 使用的内容。
+这些边界由 `test/unit/web-architecture.test.ts` 扫描静态／动态 import、类型 import 和再导出验证。
+
+明暗主题仅由 `shared/theme.tsx` 管理，UI mode 由 `shared/ui-mode.tsx` 管理；后者接收注册表的合法值，
+沿用 localStorage `univer-workspace-layout-theme`。`app/providers.tsx` 注入 mode 文案覆盖并设置 html
+的 `data-ui-mode`，保持 QueryClient 与产品缓存跨 mode 复用。repository 样式和色彩令牌仅在该属性
+为 repository 时生效；Wiki／未知 mode 不继承其样式。两种 mode 的通用 feature 通过呈现参数或布局插槽复用。
+
+R7 的页面“半外壳”保持既有行为，列为独立后续任务；注册表目前同步加载，未加入 lazy / Suspense。
+实施与验证记录见 [UI Mode 解耦](proposals/ui-mode-decoupling.md)。
 
 应用 UI Primitive 提供工作台表单、菜单、弹窗和反馈组件。`shared/ui` 保存统一行为与
 视觉封装。Univer 编辑器相关的创建、销毁、协同 Scope 和只读状态全部封装在

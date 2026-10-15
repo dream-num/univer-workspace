@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ChevronDown,
@@ -13,11 +13,8 @@ import {
 } from "lucide-react";
 import { Fragment, useState, type ReactNode } from "react";
 import type { components } from "../../../../generated/http/schema.js";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import { useI18n, type MessageKey } from "../../shared/i18n";
-import { useTheme } from "../../shared/theme";
 import {
   Avatar,
   Button,
@@ -36,33 +33,30 @@ import { cn } from "../../shared/utils/cn";
 import { sessionQueryOptions } from "../auth";
 import { NodeIcon } from "../nodes";
 import { spacesQueryOptions } from "../spaces";
+import { useUpdateIssue, useAddIssueComment, useUpdateIssueComment, useDeleteIssueComment } from "./issues.commands";
 import { IssueComposer } from "./issue-composer";
 import { IssueLabelChip } from "./issue-label";
 import { IssueMarkdown } from "./issue-markdown";
 import { IssueAssigneesDialog, IssueLabelsDialog, IssueReferencesDialog } from "./issue-pickers";
 import { Muted, SidebarSection } from "./issue-sidebar-section";
 import { IssueStateBadge } from "./issue-state";
-import { issueQueryOptions, issueTimelineQueryOptions, issuesQueryKey } from "./issues.queries";
+import { issueQueryOptions, issueTimelineQueryOptions } from "./issues.queries";
 
 type Issue = components["schemas"]["Issue"];
 type TimelineComment = components["schemas"]["IssueTimelineComment"];
 type TimelineEvent = components["schemas"]["IssueTimelineEvent"];
 type PublicUser = components["schemas"]["PublicUser"];
-type UpdateIssue = components["schemas"]["UpdateIssue"];
 
-export function IssueDetail({
-  spaceId,
-  number,
-  canCreate,
-}: {
+export interface IssueDetailProps {
+  readonly presentation: "standard" | "compact";
   readonly spaceId: string;
   readonly number: number;
   readonly canCreate: boolean;
-}) {
+}
+
+export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueDetailProps) {
   const { language, t } = useI18n();
-  const { workspaceTheme } = useTheme();
-  const repository = workspaceTheme === "repository";
-  const queryClient = useQueryClient();
+  const compact = presentation === "compact";
   const issueQuery = useQuery(issueQueryOptions(spaceId, number));
   const timeline = useQuery(issueTimelineQueryOptions(spaceId, number));
   const session = useQuery(sessionQueryOptions);
@@ -74,31 +68,9 @@ export function IssueDetail({
   const [comment, setComment] = useState("");
   const [picker, setPicker] = useState<"labels" | "assignees" | "references" | null>(null);
 
-  const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: issuesQueryKey });
-  };
-  const patch = useMutation({
-    mutationFn: async (input: UpdateIssue) => {
-      const { error } = await api.PATCH("/api/spaces/{spaceId}/issues/{number}", {
-        params: { path: { spaceId, number } },
-        body: input,
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: refresh,
-    onError: (error) => toast.error(error.message),
-  });
-  const postComment = useMutation({
-    mutationFn: async (text: string) => {
-      const { error } = await api.POST("/api/spaces/{spaceId}/issues/{number}/comments", {
-        params: { path: { spaceId, number } },
-        body: { body: text },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: refresh,
-    onError: (error) => toast.error(error.message),
-  });
+  const patch = useUpdateIssue(spaceId, number);
+  const postComment = useAddIssueComment(spaceId, number);
+  const onError = (error: Error) => toast.error(error.message);
 
   if (issueQuery.isPending) {
     return (
@@ -125,10 +97,10 @@ export function IssueDetail({
   const closeIssue = async (reason: "completed" | "not_planned") => {
     try {
       if (comment.trim()) {
-        await postComment.mutateAsync(comment);
+        await postComment.mutateAsync(comment, { onError });
         setComment("");
       }
-      await patch.mutateAsync({ state: "closed", stateReason: reason });
+      await patch.mutateAsync({ state: "closed", stateReason: reason }, { onError });
     } catch {
       // Both mutations report their own error toast.
     }
@@ -136,7 +108,7 @@ export function IssueDetail({
   const submitComment = async () => {
     if (!comment.trim()) return;
     try {
-      await postComment.mutateAsync(comment);
+      await postComment.mutateAsync(comment, { onError });
       setComment("");
     } catch {
       // The mutation reports the error.
@@ -146,7 +118,7 @@ export function IssueDetail({
   return (
     <div className="grid gap-6">
       <header
-        className={cn("grid gap-3 border-b border-border pb-4", repository && "border-0 pb-0")}
+        className={cn("grid gap-3 border-b border-border pb-4", compact && "border-0 pb-0")}
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           {editingTitle ? (
@@ -155,7 +127,7 @@ export function IssueDetail({
               onSubmit={(event) => {
                 event.preventDefault();
                 if (!title.trim()) return;
-                patch.mutate({ title }, { onSuccess: () => setEditingTitle(false) });
+                patch.mutate({ title }, { onError, onSuccess: () => setEditingTitle(false) });
               }}
             >
               <Input
@@ -177,7 +149,7 @@ export function IssueDetail({
             <h1
               className={cn(
                 "m-0 min-w-0 flex-1 text-2xl leading-tight font-semibold tracking-tight [overflow-wrap:anywhere]",
-                repository &&
+                compact &&
                   "text-[32px] leading-10 font-normal max-[720px]:order-last max-[720px]:basis-full max-[720px]:text-2xl max-[720px]:leading-8",
               )}
             >
@@ -189,7 +161,7 @@ export function IssueDetail({
             <div
               className={cn(
                 "flex shrink-0 gap-2",
-                repository && "max-[720px]:w-full max-[720px]:justify-end",
+                compact && "max-[720px]:w-full max-[720px]:justify-end",
               )}
             >
               {issue.capabilities.edit ? (
@@ -220,7 +192,7 @@ export function IssueDetail({
         </div>
         <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
           <IssueStateBadge issue={issue} />
-          {!repository ? (
+          {!compact ? (
             <span>
               {t("issueOpenedMeta", {
                 name: issue.author.displayName,
@@ -237,7 +209,7 @@ export function IssueDetail({
         <IssueSidebar
           issue={issue}
           onEdit={(kind) => setPicker(kind)}
-          className={repository ? "order-last" : "order-first lg:order-last"}
+          className={compact ? "order-last" : "order-first lg:order-last"}
         />
         <div className="grid min-w-0 gap-4">
           <h2 className="sr-only">{t("issueBody")}</h2>
@@ -280,7 +252,7 @@ export function IssueDetail({
                   <Button
                     disabled={busy}
                     onClick={() =>
-                      patch.mutate({ body }, { onSuccess: () => setEditingBody(false) })
+                      patch.mutate({ body }, { onError, onSuccess: () => setEditingBody(false) })
                     }
                   >
                     {t("save")}
@@ -326,7 +298,7 @@ export function IssueDetail({
               aria-label={t("issueAddComment")}
               className={cn(
                 "grid gap-3 rounded-lg border border-border p-4",
-                repository && "rounded-none border-x-0 border-b-0 px-0 pt-6",
+                compact && "rounded-none border-x-0 border-b-0 px-0 pt-6",
               )}
             >
               <h2 className="m-0 flex items-center gap-2 text-base font-semibold">
@@ -390,7 +362,7 @@ export function IssueDetail({
                     <Button
                       variant="secondary"
                       disabled={busy}
-                      onClick={() => patch.mutate({ state: "open" })}
+                      onClick={() => patch.mutate({ state: "open" }, { onError })}
                     >
                       <CircleDot className="text-state-open" />
                       {t("issueReopen")}
@@ -416,7 +388,7 @@ export function IssueDetail({
         onOpenChange={(open) => setPicker(open ? "labels" : null)}
         selected={issue.labels.map((label) => label.id)}
         saving={patch.isPending}
-        onSave={(labelIds) => patch.mutate({ labelIds }, { onSuccess: () => setPicker(null) })}
+        onSave={(labelIds) => patch.mutate({ labelIds }, { onError, onSuccess: () => setPicker(null) })}
       />
       <IssueAssigneesDialog
         spaceId={spaceId}
@@ -425,7 +397,7 @@ export function IssueDetail({
         current={issue.assignees}
         saving={patch.isPending}
         onSave={(assigneeUserIds) =>
-          patch.mutate({ assigneeUserIds }, { onSuccess: () => setPicker(null) })
+          patch.mutate({ assigneeUserIds }, { onError, onSuccess: () => setPicker(null) })
         }
       />
       <IssueReferencesDialog
@@ -434,7 +406,7 @@ export function IssueDetail({
         onOpenChange={(open) => setPicker(open ? "references" : null)}
         selected={issue.references.map((reference) => reference.nodeId)}
         saving={patch.isPending}
-        onSave={(nodeIds) => patch.mutate({ nodeIds }, { onSuccess: () => setPicker(null) })}
+        onSave={(nodeIds) => patch.mutate({ nodeIds }, { onError, onSuccess: () => setPicker(null) })}
       />
     </div>
   );
@@ -482,37 +454,12 @@ function CommentCard({
   readonly canDelete: boolean;
 }) {
   const { language, t } = useI18n();
-  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(comment.body);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: issuesQueryKey });
-  };
-  const save = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.PATCH("/api/issue-comments/{commentId}", {
-        params: { path: { commentId: comment.id } },
-        body: { body: text },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: async () => {
-      setEditing(false);
-      await refresh();
-    },
-    onError: (error) => toast.error(error.message),
-  });
-  const remove = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.DELETE("/api/issue-comments/{commentId}", {
-        params: { path: { commentId: comment.id } },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: refresh,
-    onError: (error) => toast.error(error.message),
-  });
+  const save = useUpdateIssueComment(comment.id);
+  const remove = useDeleteIssueComment(comment.id);
+  const onError = (error: Error) => toast.error(error.message);
   const edited = Date.parse(comment.updatedAt) - Date.parse(comment.createdAt) > 1000;
   return (
     <>
@@ -562,7 +509,10 @@ function CommentCard({
               <Button variant="secondary" onClick={() => setEditing(false)}>
                 {t("cancel")}
               </Button>
-              <Button disabled={save.isPending || !text.trim()} onClick={() => save.mutate()}>
+              <Button
+                disabled={save.isPending || !text.trim()}
+                onClick={() => save.mutate({ body: text, beforeInvalidate: () => setEditing(false) }, { onError })}
+              >
                 {t("save")}
               </Button>
             </div>
@@ -579,7 +529,7 @@ function CommentCard({
         confirmText={t("remove")}
         cancelText={t("cancel")}
         danger
-        onConfirm={() => remove.mutate()}
+        onConfirm={() => remove.mutate(undefined, { onError })}
       />
     </>
   );

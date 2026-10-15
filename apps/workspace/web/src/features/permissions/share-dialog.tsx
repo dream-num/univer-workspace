@@ -1,8 +1,7 @@
 import { Copy, Globe2, LockKeyhole, Trash2 } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
+import { useSetNodeGrant, useRemoveNodeGrant, useSetLinkSharing } from "./permissions.commands";
 import { useI18n } from "../../shared/i18n";
 import {
   Avatar,
@@ -37,7 +36,6 @@ export function ShareDialog(props: {
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserSummary | null>(null);
   const [role, setRole] = useState<ShareRole>("viewer");
-  const queryClient = useQueryClient();
   const { t } = useI18n();
   const grants = useQuery({
     ...nodeGrantsQueryOptions(nodeId),
@@ -49,74 +47,29 @@ export function ShareDialog(props: {
   });
   const users = useQuery(userSearchQueryOptions(search));
 
-  const grant = useMutation({
-    mutationFn: async (values: {
-      readonly userId: string;
-      readonly role: ShareRole;
-    }) => {
-      const { data, error } = await api.PUT(
-        "/api/nodes/{nodeId}/grants/{userId}",
-        {
-          params: {
-            path: { nodeId, userId: values.userId },
-          },
-          body: { role: values.role },
-        }
-      );
-      if (error) throw apiError(error);
-      return data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: nodeGrantsQueryOptions(nodeId).queryKey,
-      });
+  const grant = useSetNodeGrant();
+  const grantCallbacks = {
+    onSuccess: () => {
       setSelectedUser(null);
       setSearch("");
       toast.success(t("accessUpdated"));
     },
     onError: showError,
-  });
-  const remove = useMutation({
-    mutationFn: async (userId: string) => {
-      const { error } = await api.DELETE(
-        "/api/nodes/{nodeId}/grants/{userId}",
-        {
-          params: { path: { nodeId, userId } },
-        }
-      );
-      if (error) throw apiError(error);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: nodeGrantsQueryOptions(nodeId).queryKey,
-      });
+  };
+  const remove = useRemoveNodeGrant();
+  const removeCallbacks = {
+    onSuccess: () => {
       toast.success(t("accessRemoved"));
     },
     onError: showError,
-  });
-  const updateLinkSharing = useMutation({
-    mutationFn: async (settings: {
-      readonly enabled: boolean;
-      readonly role: ShareRole;
-    }) => {
-      const { data, error } = await api.PUT(
-        "/api/nodes/{nodeId}/link-sharing",
-        {
-          params: { path: { nodeId } },
-          body: settings,
-        }
-      );
-      if (error) throw apiError(error);
-      return data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: nodeLinkSharingQueryOptions(nodeId).queryKey,
-      });
+  };
+  const updateLinkSharing = useSetLinkSharing();
+  const updateLinkSharingCallbacks = {
+    onSuccess: () => {
       toast.success(t("linkSharingUpdated"));
     },
     onError: showError,
-  });
+  };
 
   function showError(error: unknown) {
     toast.error(
@@ -129,7 +82,7 @@ export function ShareDialog(props: {
       toast.error(t("selectUser"));
       return;
     }
-    grant.mutate({ userId: selectedUser.id, role });
+    grant.mutate({ nodeId, userId: selectedUser.id, role }, grantCallbacks);
   };
 
   const grantList = grants.data?.grants ?? [];
@@ -251,9 +204,9 @@ export function ShareDialog(props: {
                     aria-label={`${t("remove")} ${item.user.displayName}`}
                     className="hover:bg-destructive-soft hover:text-destructive"
                     disabled={
-                      remove.isPending && remove.variables === item.user.id
+                      remove.isPending && remove.variables?.userId === item.user.id
                     }
-                    onClick={() => remove.mutate(item.user.id)}
+                    onClick={() => remove.mutate({ nodeId, userId: item.user.id }, removeCallbacks)}
                   >
                     <Trash2 />
                   </Button>
@@ -310,9 +263,10 @@ export function ShareDialog(props: {
               className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-2.5 text-[13px] font-medium text-secondary-foreground shadow-xs transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50"
               onClick={() =>
                 updateLinkSharing.mutate({
+                  nodeId,
                   enabled: !linkSharingEnabled,
                   role: linkSharingRole,
-                })
+                }, updateLinkSharingCallbacks)
               }
             >
               <span
@@ -346,9 +300,10 @@ export function ShareDialog(props: {
               }
               onValueChange={(nextRole) =>
                 updateLinkSharing.mutate({
+                  nodeId,
                   enabled: linkSharingEnabled,
                   role: nextRole,
-                })
+                }, updateLinkSharingCallbacks)
               }
               options={[
                 { label: t("accessViewer"), value: "viewer" },

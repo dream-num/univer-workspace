@@ -3,14 +3,27 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useI18n } from "../../shared/i18n";
-import { worktreeBelongsToSpace, worktreeListQueryOptions } from "../worktrees";
-import { issueCountsQueryOptions } from "../issues/issues.queries";
-import { spacesQueryOptions } from "./spaces.queries";
+import { isOpenWorktree, worktreeBelongsToSpace, worktreeListQueryOptions } from "../../features/worktrees";
+import { issueCountsQueryOptions } from "../../features/issues/issues.queries";
+import { spacesQueryOptions } from "../../features/spaces/spaces.queries";
 import { RepositoryHeader } from "./repository-header";
+import { spaceSupportsIssues } from "../../features/spaces/space.rules";
 
+/**
+ * Which repository tab a space-scoped route belongs to. Routes inside a
+ * repository pass this instead of `selectedView` so the shell keeps its
+ * repository chrome (breadcrumb, tabs) after leaving the repository root.
+ */
 export type RepositoryTab = "files" | "issues" | "prs" | "apps" | "settings";
 
-const OPEN_WORKTREE_STATES = ["draft", "ready", "merging"];
+export type RepositoryBreadcrumb = {
+  readonly label: string;
+  readonly nodeId?: string;
+  /** Set inside Settings so the segment links back to the settings page. */
+  readonly settingsSpaceId?: string;
+  /** Set inside an Issue page so the segment links back to that Space's Issue list. */
+  readonly issuesSpaceId?: string;
+};
 
 /** GitHub-style repository tabs, shared by every repository page. */
 export function RepositoryTabs({
@@ -26,12 +39,12 @@ export function RepositoryTabs({
   const processedWorktrees = useQuery(worktreeListQueryOptions("processed"));
   const space = spaces.data?.spaces.find((item) => item.id === spaceId);
   const navigation = useRef<HTMLElement>(null);
-  const hasIssues = space?.type === "team";
+  const hasIssues = space !== undefined && spaceSupportsIssues(space);
   const issueCounts = useQuery({ ...issueCountsQueryOptions(spaceId), enabled: hasIssues });
   const openWorktreeCount = space
     ? [...(activeWorktrees.data?.items ?? []), ...(processedWorktrees.data?.items ?? [])].filter(
         (worktree) =>
-          worktreeBelongsToSpace(worktree, space) && OPEN_WORKTREE_STATES.includes(worktree.state),
+          worktreeBelongsToSpace(worktree, space) && isOpenWorktree(worktree.state),
       ).length
     : 0;
   const canOpenSettings =
@@ -90,7 +103,7 @@ export function RepositoryTabs({
                 <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
                 {label}
                 {count ? (
-                  <span className="min-w-5 rounded-full bg-repository-counter px-1.5 text-center text-xs leading-5 tabular-nums">
+                  <span className="min-w-5 rounded-full bg-[var(--color-repository-counter)] px-1.5 text-center text-xs leading-5 tabular-nums">
                     {count}
                   </span>
                 ) : null}
@@ -164,7 +177,7 @@ function RepositoryTabLink({
       {icon}
       {label}
       {count ? (
-        <span className="min-w-5 rounded-full bg-repository-counter px-1.5 text-center text-xs leading-5 tabular-nums">
+        <span className="min-w-5 rounded-full bg-[var(--color-repository-counter)] px-1.5 text-center text-xs leading-5 tabular-nums">
           {count}
         </span>
       ) : null}
@@ -175,17 +188,6 @@ function RepositoryTabLink({
 function repositoryTabClass(active: boolean): string {
   return [
     "relative flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm leading-5 text-foreground no-underline hover:bg-accent after:absolute after:-bottom-2 after:inset-x-0 after:h-0.5 after:rounded-full",
-    active ? "font-semibold after:bg-repository-selected" : "font-normal",
+    active ? "font-semibold after:bg-[var(--color-repository-selected)]" : "font-normal",
   ].join(" ");
-}
-
-/** Existing tab content keeps its own page container. */
-export function RepositoryPage({ children }: { readonly children: React.ReactNode }) {
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto bg-background">
-      <div className="mx-auto max-w-6xl px-6 py-6 max-[720px]:px-4 max-[720px]:py-4">
-        {children}
-      </div>
-    </div>
-  );
 }

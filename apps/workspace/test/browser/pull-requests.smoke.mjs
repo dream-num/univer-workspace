@@ -1,5 +1,5 @@
 // Use ONLY test/fixtures/pull-requests-server.ts's disposable service and an
-// authenticated English repository browser session. Mutates fixture Worktrees.
+// local Vite server and authenticated English repository browser session. Mutates fixture Worktrees.
 // WORKSPACE_PR_FIXTURE=<session.json> AGENT_BROWSER_SESSION=<session> node test/browser/pull-requests.smoke.mjs
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -18,6 +18,17 @@ function browser(...args) {
 }
 const click = (role, name) => browser("find", "role", role, "click", "--name", name, "--exact");
 const evaluate = (code) => browser("eval", code).result;
+const recordWrites = () => evaluate(`(async () => {
+  const { api } = await import('/src/shared/api/client.ts');
+  window.worktreeWrites = [];
+  api.use({ onRequest: async ({ request }) => {
+    if (request.method !== 'GET') {
+      const text = await request.clone().text();
+      worktreeWrites.push({ method: request.method, path: new URL(request.url).pathname,
+        body: text ? JSON.parse(text) : null, key: request.headers.get('Idempotency-Key') });
+    }
+  }});
+})()`);
 const listUrl = `${info.origin}/spaces/${info.spaceId}?view=prs`;
 browser("set", "viewport", "1440", "1000");
 browser("open", listUrl);
@@ -59,6 +70,7 @@ browser(
   `${info.origin}/worktrees?spaceId=${info.spaceId}&worktree=${info.tasks.draft}&section=files`,
 );
 browser("wait", "--text", "Mark for deletion");
+recordWrites();
 click("button", "Mark for deletion");
 browser("wait", "--text", "Undo deletion");
 click("button", "Undo deletion");
@@ -76,9 +88,20 @@ browser("wait", "--fn", `document.querySelectorAll('[role="alertdialog"]').lengt
 click("button", "Confirm merge");
 browser("click", '[role="alertdialog"] button:last-child');
 browser("wait", "--fn", "document.querySelector('[data-pr-state]').dataset.prState === 'merged'");
+const draftWrites = evaluate("worktreeWrites");
+assert.equal(draftWrites.length, 4, "取消确认不发送写请求");
+assert.match(draftWrites[0].path, new RegExp('^/api/worktrees/' + info.tasks.draft + '/units/[^/]+/removal$'));
+assert.deepEqual(draftWrites[0], { method: "POST", path: draftWrites[0].path, body: { removed: true }, key: null });
+assert.deepEqual(draftWrites[1], { method: "POST", path: draftWrites[0].path, body: { removed: false }, key: null });
+assert.deepEqual(draftWrites[2], { method: "POST", path: '/api/worktrees/' + info.tasks.draft + '/ready', body: null, key: null });
+assert.ok(draftWrites[3].key);
+assert.deepEqual(draftWrites[3], { method: "POST", path: '/api/worktrees/' + info.tasks.draft + '/merge', body: null, key: draftWrites[3].key });
+assert.equal(new URL(browser("get", "url").url).searchParams.get("worktree"), info.tasks.draft);
 
 browser("open", `${info.origin}/worktrees?spaceId=${info.spaceId}&worktree=${info.tasks.long}`);
 browser("wait", "--text", "Discard changes");
+recordWrites();
+const discardUrl = browser("get", "url").url;
 click("button", "Discard changes");
 browser("click", '[role="alertdialog"] button:last-child');
 browser(
@@ -86,6 +109,12 @@ browser(
   "--fn",
   "document.querySelector('[data-pr-state]').dataset.prState === 'discarded'",
 );
+const discardWrites = evaluate("worktreeWrites");
+assert.equal(discardWrites.length, 1);
+assert.ok(discardWrites[0].key);
+assert.notEqual(discardWrites[0].key, draftWrites[3].key);
+assert.deepEqual(discardWrites[0], { method: "POST", path: '/api/worktrees/' + info.tasks.long + '/discard', body: null, key: discardWrites[0].key });
+assert.equal(browser("get", "url").url, discardUrl);
 browser("open", `${info.origin}/worktrees?spaceId=${info.spaceId}&worktree=${info.tasks.empty}`);
 browser("wait", "--text", "The agent has not produced any documents yet");
 
@@ -97,6 +126,7 @@ browser("wait", "--text", "The task document specified by this link could not be
 
 browser("open", listUrl);
 browser("wait", "--text", "All pull requests");
+browser("wait", "--fn", "Array.from(document.querySelectorAll('button')).some(b => b.textContent === 'Closed4')");
 click("button", "Closed 4");
 browser("wait", "--text", "Publish the approved quarterly plan");
 browser("find", "role", "textbox", "fill", "no-matching-pr", "--name", "Search pull requests");

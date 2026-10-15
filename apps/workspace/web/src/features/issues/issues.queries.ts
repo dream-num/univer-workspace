@@ -52,7 +52,7 @@ export function issueListQueryOptions(spaceId: string | undefined, filters: Issu
   });
 }
 
-/** One-row request used only for the open count badge on the repository tab. */
+/** One-row request used only for the open count badge in space navigation. */
 export function issueCountsQueryOptions(spaceId: string) {
   return queryOptions({
     queryKey: [...issuesQueryKey, "counts", spaceId] as const,

@@ -1,13 +1,12 @@
 import { useRouter } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { CircleDot, Ellipsis, ExternalLink, Link2, Pencil, Share2, Trash2 } from "lucide-react";
 import { useState, type ReactElement, type ReactNode } from "react";
+import { useUpdateNode, useTrashNode } from "./nodes.commands";
 import type { components } from "../../../../generated/http/schema.js";
 import { ShareDialog } from "../permissions";
 import { spacesQueryOptions } from "../spaces/spaces.queries";
-import { trashQueryKey } from "../trash";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
+import { spaceSupportsIssues } from "../spaces/space.rules";
 import { useI18n } from "../../shared/i18n";
 import {
   Button,
@@ -41,7 +40,6 @@ export function NodeActionsMenu(props: {
   readonly children: (actions: ReactNode) => ReactElement;
 }) {
   const { t } = useI18n();
-  const queryClient = useQueryClient();
   const router = useRouter();
   const [shareOpen, setShareOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -50,66 +48,33 @@ export function NodeActionsMenu(props: {
   const spaces = useQuery(spacesQueryOptions);
   const space = spaces.data?.spaces.find((item) => item.id === props.node.spaceId);
   // Referencing a file on an Issue is a triage action, so only Team Space editors and above see it.
-  const canReferenceInIssue = space?.type === "team" && space.capabilities.triageIssues;
+  const canReferenceInIssue =
+    space !== undefined && spaceSupportsIssues(space) && space.capabilities.triageIssues;
   const nodeUrl = new URL(
     `/nodes/${encodeURIComponent(props.node.id)}`,
     window.location.origin,
   ).toString();
 
-  const updateNode = useMutation({
-    mutationFn: async (name: string) => {
-      const { error } = await api.PATCH("/api/nodes/{nodeId}", {
-        params: { path: { nodeId: props.node.id } },
-        body: { name },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-        queryClient.invalidateQueries({ queryKey: ["recent-resources"] }),
-        queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-        queryClient.invalidateQueries({ queryKey: ["shared-with-me"] }),
-      ]);
-      setRenameOpen(false);
-      toast.success(t("itemUpdated"));
-      props.onMutated?.();
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : t("updateFailed"));
-    },
-  });
-
-  const trashNode = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.POST("/api/nodes/{nodeId}/trash", {
-        params: { path: { nodeId: props.node.id } },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: async () => {
+  const updateNode = useUpdateNode();
+  const trashNode = useTrashNode();
+  const trash = () => trashNode.mutate({
+    nodeId: props.node.id,
+    spaceId: props.node.spaceId,
+    beforeInvalidate: async () => {
       if (router.matchRoute(
         { to: "/nodes/$nodeId", params: { nodeId: props.node.id } },
         { includeSearch: false },
       )) {
         await router.navigate({ to: "/home", replace: true });
       }
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-        queryClient.invalidateQueries({ queryKey: ["recent-resources"] }),
-        queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-        queryClient.invalidateQueries({ queryKey: ["shared-with-me"] }),
-        queryClient.invalidateQueries({
-          queryKey: trashQueryKey(props.node.spaceId),
-        }),
-      ]);
+    },
+  }, {
+    onSuccess: () => {
       setTrashOpen(false);
       toast.success(t("movedToTrash"));
       props.onMutated?.();
     },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : t("trashActionFailed"));
-    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : t("trashActionFailed")),
   });
 
   const copyLink = async () => {
@@ -194,7 +159,14 @@ export function NodeActionsMenu(props: {
   const submitEdit = () => {
     const name = editName.trim();
     if (!name) return;
-    updateNode.mutate(name);
+    updateNode.mutate({ nodeId: props.node.id, body: { name } }, {
+      onSuccess: () => {
+        setRenameOpen(false);
+        toast.success(t("itemUpdated"));
+        props.onMutated?.();
+      },
+      onError: (error) => toast.error(error instanceof Error ? error.message : t("updateFailed")),
+    });
   };
 
   return (
@@ -253,7 +225,7 @@ export function NodeActionsMenu(props: {
         cancelText={t("cancel")}
         danger
         disabled={trashNode.isPending}
-        onConfirm={() => trashNode.mutate()}
+        onConfirm={trash}
       />
     </>
   );

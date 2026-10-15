@@ -7,16 +7,6 @@ import {
   type PropsWithChildren,
 } from "react";
 
-export type WorkspaceTheme = "wiki" | "repository";
-
-export function readWorkspaceTheme(): WorkspaceTheme {
-  try {
-    return window.localStorage.getItem("univer-workspace-layout-theme") === "repository" ? "repository" : "wiki";
-  } catch {
-    return "wiki";
-  }
-}
-
 export type ThemePreference = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
@@ -60,8 +50,6 @@ function applyTheme(resolved: ResolvedTheme) {
 }
 
 interface ThemeContextValue {
-  readonly workspaceTheme: WorkspaceTheme;
-  readonly setWorkspaceTheme: (theme: WorkspaceTheme) => void;
   readonly theme: ThemePreference;
   readonly resolvedTheme: ResolvedTheme;
   readonly setTheme: (theme: ThemePreference) => void;
@@ -70,14 +58,6 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: PropsWithChildren) {
-  const [workspaceTheme, setWorkspaceTheme] = useState(readWorkspaceTheme);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem("univer-workspace-layout-theme", workspaceTheme);
-    } catch {
-      // The in-memory selection still works when browser storage is unavailable.
-    }
-  }, [workspaceTheme]);
   const [theme, setThemeState] = useState<ThemePreference>(() =>
     readStoredPreference()
   );
@@ -107,13 +87,11 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<ThemeContextValue>(
     () => ({
-      workspaceTheme,
-      setWorkspaceTheme,
       theme,
       resolvedTheme,
       setTheme: setThemeState,
     }),
-    [theme, resolvedTheme, workspaceTheme]
+    [theme, resolvedTheme]
   );
 
   return (
@@ -121,7 +99,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   );
 }
 
-export function useTheme(): ThemeContextValue {
+export function useTheme() {
   const value = useContext(ThemeContext);
   if (!value) {
     throw new Error("useTheme must be used within ThemeProvider");

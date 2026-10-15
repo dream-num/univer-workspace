@@ -2,7 +2,8 @@ import { Settings, Trash2, Users } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "../../shared/i18n";
-import { spacesQueryOptions } from "./spaces.queries";
+import { spacesQueryOptions } from "../../features/spaces/spaces.queries";
+import { spaceSupportsMembers } from "../../features/spaces/space.rules";
 
 export type SpaceSettingsSection = "general" | "members" | "trash";
 
@@ -21,7 +22,8 @@ export function SpaceSettingsNav({
   const { t } = useI18n();
   const spaces = useQuery(spacesQueryOptions);
   const space = spaces.data?.spaces.find((item) => item.id === spaceId);
-  const canManageMembers = space?.type === "team" && space.capabilities.manageMembers;
+  const canManageMembers =
+    space !== undefined && spaceSupportsMembers(space) && space.capabilities.manageMembers;
   const canViewTrash = space?.capabilities.viewTrash ?? false;
   const items: readonly {
     readonly section: SpaceSettingsSection;

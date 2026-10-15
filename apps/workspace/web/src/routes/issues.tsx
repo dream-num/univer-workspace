@@ -1,14 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { requireAuthenticatedSession } from "../features/auth";
-import {
-  IssueList,
-  filtersFromSearch,
-  searchFromFilters,
-  validateIssueSearch,
-  type IssueFilters,
-} from "../features/issues";
+import { filtersFromSearch, searchFromFilters, validateIssueSearch, type IssueFilters } from "../features/issues";
 import { spacesQueryOptions } from "../features/spaces";
-import { IssueRouteLayout } from "./-issue-layout";
+import { useModeDefinition } from "../modes/registry";
 
 export const Route = createFileRoute("/issues")({
   validateSearch: validateIssueSearch,
@@ -20,16 +14,15 @@ export const Route = createFileRoute("/issues")({
 });
 
 function MyIssuesPage() {
+  const { pages } = useModeDefinition();
   const search = Route.useSearch();
   const navigate = useNavigate();
   return (
-    <IssueRouteLayout>
-      <IssueList
-        filters={filtersFromSearch(search)}
-        onFiltersChange={(filters: IssueFilters) =>
-          void navigate({ to: "/issues", search: searchFromFilters(filters), replace: true })
-        }
-      />
-    </IssueRouteLayout>
+    <pages.issueList
+      filters={filtersFromSearch(search)}
+      onFiltersChange={(filters: IssueFilters) =>
+        void navigate({ to: "/issues", search: searchFromFilters(filters), replace: true })
+      }
+    />
   );
 }

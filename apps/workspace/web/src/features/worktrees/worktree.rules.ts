@@ -2,11 +2,16 @@ import type { components } from "../../../../generated/http/schema.js";
 
 type SpaceView = components["schemas"]["SpaceView"];
 type WorktreeSummary = components["schemas"]["WorktreeSummary"];
+type WorktreeState = components["schemas"]["WorktreeState"];
+
+export const OPEN_WORKTREE_STATES: readonly WorktreeState[] = ["draft", "ready", "merging"];
+
+export function isOpenWorktree(state: WorktreeState): boolean {
+  return OPEN_WORKTREE_STATES.includes(state);
+}
 
 /**
- * GitHub-style repositories map 1:1 onto Spaces. A Team Worktree belongs to a
- * Space through its team space, while a personal Worktree has no `teamSpace`
- * and belongs to the signed-in User's personal Space.
+ * Team Worktree 归属其 Team Space；个人 Worktree 归属当前用户的个人 Space。
  */
 export function worktreeBelongsToSpace(
   worktree: Pick<WorktreeSummary, "kind" | "teamSpace">,

@@ -4,7 +4,6 @@ import { useI18n, type MessageKey } from "../../shared/i18n";
 import { cn } from "../../shared/utils/cn";
 
 type State = components["schemas"]["WorktreeState"];
-export const OPEN_WORKTREE_STATES: readonly State[] = ["draft", "ready", "merging"];
 const labels: Record<State, MessageKey> = {
   draft: "worktreeStateDraft",
   ready: "worktreeStateReady",

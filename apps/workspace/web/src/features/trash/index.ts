@@ -3,3 +3,4 @@ export {
   trashQueryKey,
   trashQueryOptions,
 } from "./trash.queries";
+export { useRestoreTrashBatch, usePurgeTrashBatch } from "./trash.commands";

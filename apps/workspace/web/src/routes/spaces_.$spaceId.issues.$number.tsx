@@ -1,10 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { requireAuthenticatedSession } from "../features/auth";
-import { IssueDetail } from "../features/issues";
 import { ResourceUnavailablePage } from "../features/nodes";
 import { spacesQueryOptions } from "../features/spaces";
-import { IssueRouteLayout } from "./-issue-layout";
+import { useModeDefinition } from "../modes/registry";
 
 export const Route = createFileRoute("/spaces_/$spaceId/issues/$number")({
   loader: async ({ context, params, location }) => {
@@ -22,16 +21,11 @@ export const Route = createFileRoute("/spaces_/$spaceId/issues/$number")({
 });
 
 function IssuePage() {
+  const { pages } = useModeDefinition();
   const { spaceId, number } = Route.useParams();
   const spaces = useQuery(spacesQueryOptions);
   const space = spaces.data?.spaces.find((item) => item.id === spaceId);
   return (
-    <IssueRouteLayout spaceId={spaceId} crumb={`#${number}`}>
-      <IssueDetail
-        spaceId={spaceId}
-        number={Number(number)}
-        canCreate={space?.capabilities.createIssue ?? false}
-      />
-    </IssueRouteLayout>
+    <pages.issueDetail spaceId={spaceId} number={Number(number)} canCreate={space?.capabilities.createIssue ?? false} />
   );
 }

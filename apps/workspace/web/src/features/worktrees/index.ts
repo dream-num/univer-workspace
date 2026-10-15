@@ -1,5 +1,5 @@
 export { WorktreeDashboard } from "./worktree-dashboard";
-export { worktreeBelongsToSpace } from "./worktree-space";
+export { OPEN_WORKTREE_STATES, isOpenWorktree, worktreeBelongsToSpace } from "./worktree.rules";
 export {
   worktreeListQueryOptions,
   worktreeQueryOptions,
@@ -7,3 +7,4 @@ export {
   worktreeUnitOpenQueryOptions,
 } from "./worktrees.queries";
 export { useWorktreeChangeFeed } from "./worktree-change-feed";
+export { useWorktreeLifecycle, useToggleUnitRemoval } from "./worktrees.commands";

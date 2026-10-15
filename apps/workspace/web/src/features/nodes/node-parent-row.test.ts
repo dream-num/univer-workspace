@@ -17,7 +17,7 @@ describe("nodeParentRow", () => {
     ).toEqual({ label: "data", nodeId: "data" });
   });
 
-  it("points at the repository root from a top-level folder", () => {
+  it("points at the space root from a top-level folder", () => {
     expect(
       nodeParentRow({
         space,
@@ -37,7 +37,7 @@ describe("nodeParentRow", () => {
     ).toBeUndefined();
   });
 
-  it("has no parent row at the repository root", () => {
+  it("has no parent row at the space root", () => {
     expect(
       nodeParentRow({ space, navigationRootNodeId: null, breadcrumbs: [] })
     ).toEqual({ label: "mini-crm" });
