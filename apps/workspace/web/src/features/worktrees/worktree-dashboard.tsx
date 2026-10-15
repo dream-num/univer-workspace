@@ -36,7 +36,7 @@ import {
   worktreeStateVariant,
 } from "./worktree-review-panel";
 import { formatWorktreeDateTime } from "./worktree-review-presentation";
-import { worktreeBelongsToSpace } from "./worktree-space";
+import { worktreeBelongsToSpace } from "./worktree.rules";
 import {
   worktreeListQueryOptions,
   worktreeQueryOptions,

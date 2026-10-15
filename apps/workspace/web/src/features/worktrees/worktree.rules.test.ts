@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { components } from "../../../../generated/http/schema.js";
-import { worktreeBelongsToSpace } from "./worktree-space.js";
+import { worktreeBelongsToSpace } from "./worktree.rules.js";
 
 type WorktreeSummary = components["schemas"]["WorktreeSummary"];
 type Worktree = Pick<WorktreeSummary, "kind" | "teamSpace">;
