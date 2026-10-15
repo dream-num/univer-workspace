@@ -350,6 +350,8 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
     open("/home");
     for (const nextMode of ["wiki", "repository", "wiki"]) {
       const currentMode = evaluate("document.documentElement.dataset.uiMode");
+      if (currentMode === "wiki" && !evaluate("document.querySelector('header input') !== null")) click("button", "Search content on this page");
+      browser("fill", currentMode === "repository" ? "main input" : "header input", "mode-reset-probe");
       if (currentMode === "repository") {
         click("button", "Account");
         browser("wait", "[role=menu]");
@@ -366,6 +368,8 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       browser("wait", "--fn", `document.documentElement.dataset.uiMode === '${nextMode}' && !document.querySelector('[role=dialog]')`);
       settle();
       assert.equal(evaluate("previousModeMain.isConnected"), false, "切换 mode 必须重新挂载 shell");
+      if (nextMode === "wiki") click("button", "Search content on this page");
+      assert.equal(evaluate(`document.querySelector('${nextMode === "repository" ? "main input" : "header input"}').value`), "", "首页搜索在切换后重置");
       assert.equal(evaluate("localStorage.getItem('univer-workspace-layout-theme')"), nextMode);
       assert.equal(browser("get", "url").url, `${origin}/home`);
       assert.equal(evaluate("document.title"), json(join(baseline, nextMode, "home.json")).title);

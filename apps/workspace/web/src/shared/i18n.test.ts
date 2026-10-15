@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { modes } from "../modes/registry";
 import { browserLanguage, messages, type ModeMessages } from "./i18n";
 
-// 文案合同在 Node 中验证；注册表中的浏览器 Shell 由真实浏览器冒烟覆盖。
+// 文案合同在 Node 中验证；注册表中的浏览器 Shell 和页面 由真实浏览器冒烟覆盖。
 vi.mock("../modes/wiki/wiki-shell", () => ({ WikiShell: () => null }));
 vi.mock("../modes/repository/repository-shell", () => ({ RepositoryShell: () => null }));
+vi.mock("../modes/wiki/pages/home", () => ({ WikiHomePage: () => null }));
+vi.mock("../modes/repository/pages/home", () => ({ RepositoryHomePage: () => null }));
 
 describe("browserLanguage", () => {
   it("uses Chinese for any Chinese browser locale", () => {

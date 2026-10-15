@@ -270,6 +270,11 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
   `repository-settings.mjs`；T5.5 额外跑 `pull-requests.smoke.mjs`；T5.6 额外跑 `issues.smoke.mjs`。
 - 规模：T5.2 为 L（约 650 行移动），其余 S–M。依赖：T4c；T5.4 依赖 T3.1；T5.x 之间按表格顺序（都会扩展 `pages` 类型）。
 
+### M3 执行记录
+
+- [x] T5.1：首页拆为 `pages.home`，两种页面接收相同的 `view` 合同；loader 和 validateSearch 原样保留。
+  typecheck、build、394 项测试、40 张零差异截图和搜索后 mode 切换通过；路由生成物无差异。
+
 ## M4 feature 去 mode 化、样式、边界检查
 
 - [ ] **T6a：通用 feature 组件不再读取 mode**（R2 feature 部分；N5）
