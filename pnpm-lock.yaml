@@ -1168,6 +1168,12 @@ importers:
       '@univer-cli/univer-render-runtime':
         specifier: 1.0.3
         version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/bases-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/boards-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-pro/collaboration':
         specifier: 1.0.3
         version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
@@ -1177,7 +1183,13 @@ importers:
       '@univerjs-pro/exchange-node':
         specifier: 1.0.3
         version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/slides-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/core':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/docs-thread-comment':
         specifier: 1.0.3
         version: 1.0.3(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/protocol':
@@ -1202,9 +1214,15 @@ importers:
       '@univer-cli/content-inspection':
         specifier: 1.0.3
         version: 1.0.3(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/bases-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/boards-print':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/boards-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/collaboration':
         specifier: 1.0.3
         version: 1.0.3(react@18.3.1)(rxjs@7.8.2)
@@ -1226,6 +1244,12 @@ importers:
       '@univerjs-pro/slides-print':
         specifier: 1.0.3
         version: 1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/slides-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/docs-thread-comment':
+        specifier: 1.0.3
+        version: 1.0.3(react@18.3.1)(rxjs@7.8.2)
       ws:
         specifier: 8.21.3
         version: 8.21.3
@@ -4907,8 +4931,8 @@ packages:
   '@univerjs-pro/boards-ui@1.0.3':
     resolution: {integrity: sha512-7X9YMSYuyyI/vYlatfZAVZASkBmdEexENmPwCsNmWaWF7W+tX3uQfsMouV5OS0iqrgKT4rzqhWIJz6o/JZ1O0g==, tarball: https://registry.npmjs.org/@univerjs-pro/boards-ui/-/boards-ui-1.0.3.tgz}
     peerDependencies:
-      react: 19.3.0
-      react-dom: 19.3.0
+      react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+      react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       rxjs: '>=7.0.0'
 
   '@univerjs-pro/boards@1.0.3':
@@ -5181,37 +5205,37 @@ packages:
       rxjs: '>=7.0.0'
 
   '@univerjs-pro/engine-formula-rust-binding-darwin-arm64@1.0.1':
-    resolution: {integrity: sha512-3pLDm6BxTIPUDDdA90MeqdQmtccCO9G0OH12rR+Ct+E8BYYywEkxCMf5Ra9e5RA5nKJCbuahuBMTumw718/q3w==}
+    resolution: {integrity: sha512-3pLDm6BxTIPUDDdA90MeqdQmtccCO9G0OH12rR+Ct+E8BYYywEkxCMf5Ra9e5RA5nKJCbuahuBMTumw718/q3w==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-darwin-arm64/-/engine-formula-rust-binding-darwin-arm64-1.0.1.tgz}
     cpu: [arm64]
     os: [darwin]
 
   '@univerjs-pro/engine-formula-rust-binding-darwin-x64@1.0.1':
-    resolution: {integrity: sha512-Bg+/CHJHaF27NFfMWDu7VFJYD7wBmxjH/Z1SWf6cZfguYWj4mjMa9XCTalHVlxIe5ODgQTgeFoYJ31Jy8Sq+6g==}
+    resolution: {integrity: sha512-Bg+/CHJHaF27NFfMWDu7VFJYD7wBmxjH/Z1SWf6cZfguYWj4mjMa9XCTalHVlxIe5ODgQTgeFoYJ31Jy8Sq+6g==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-darwin-x64/-/engine-formula-rust-binding-darwin-x64-1.0.1.tgz}
     cpu: [x64]
     os: [darwin]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu@1.0.1':
-    resolution: {integrity: sha512-sGR4HRtnE3r3EzXwzQ4SShGlk4AgVpVPgupMPQS2c5zlrhydq/VENGg8u7a0NNv0RCEqcjhsdKfhWerrI3ercQ==}
+    resolution: {integrity: sha512-sGR4HRtnE3r3EzXwzQ4SShGlk4AgVpVPgupMPQS2c5zlrhydq/VENGg8u7a0NNv0RCEqcjhsdKfhWerrI3ercQ==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu/-/engine-formula-rust-binding-linux-arm64-gnu-1.0.1.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu@1.0.1':
-    resolution: {integrity: sha512-kLsbpQK1aDES0Y80FgZgjzednSM41L07vgT/5cRBGMah8BxtF895/hhK9WFYOvWEcs8xyi7EUV75A25qBoG1kA==}
+    resolution: {integrity: sha512-kLsbpQK1aDES0Y80FgZgjzednSM41L07vgT/5cRBGMah8BxtF895/hhK9WFYOvWEcs8xyi7EUV75A25qBoG1kA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu/-/engine-formula-rust-binding-linux-x64-gnu-1.0.1.tgz}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc@1.0.1':
-    resolution: {integrity: sha512-wch5e5KUFwIRXkqeBGQJ8hDznvWizg58QVEZPW0qaReoW3SoUXCxDtbkzEolmYYcaC57q08zSYQPnXfGlc4DLw==}
+    resolution: {integrity: sha512-wch5e5KUFwIRXkqeBGQJ8hDznvWizg58QVEZPW0qaReoW3SoUXCxDtbkzEolmYYcaC57q08zSYQPnXfGlc4DLw==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc/-/engine-formula-rust-binding-win32-x64-msvc-1.0.1.tgz}
     cpu: [x64]
     os: [win32]
 
   '@univerjs-pro/engine-formula-rust-binding@1.0.1':
-    resolution: {integrity: sha512-b0jM8Snzlj99u68QnIasHD9YfPIHeV/CWqa7mng/1UpCXyxlyQLX0SunIDjhmpceXE9AM2HdmhdbZgBwpMyG/w==}
+    resolution: {integrity: sha512-b0jM8Snzlj99u68QnIasHD9YfPIHeV/CWqa7mng/1UpCXyxlyQLX0SunIDjhmpceXE9AM2HdmhdbZgBwpMyG/w==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding/-/engine-formula-rust-binding-1.0.1.tgz}
 
   '@univerjs-pro/engine-formula-rust@1.0.3':
-    resolution: {integrity: sha512-LdENNpVZlVb84ZNGNJGNFOcrJzE/7uFOoNFENFEuVq9ynSc7NfRSlBHZt6xqdJn161xJDZ++Iu4oBPbzpc161A==}
+    resolution: {integrity: sha512-LdENNpVZlVb84ZNGNJGNFOcrJzE/7uFOoNFENFEuVq9ynSc7NfRSlBHZt6xqdJn161xJDZ++Iu4oBPbzpc161A==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust/-/engine-formula-rust-1.0.3.tgz}
     peerDependencies:
       rxjs: '>=7.0.0'
 
@@ -12733,6 +12757,16 @@ snapshots:
       - react
       - rxjs
 
+  '@univerjs-pro/bases-thread-comment@1.0.3(react@19.3.0)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/bases': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/license': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/core': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/thread-comment': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - react
+      - rxjs
+
   '@univerjs-pro/bases-ui@1.0.3(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/bases': 1.0.3(react@18.3.1)(rxjs@7.8.2)
@@ -13386,6 +13420,16 @@ snapshots:
       '@univerjs-pro/license': 1.0.3(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/core': 1.0.3(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/thread-comment': 1.0.3(react@19.2.8)(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - react
+      - rxjs
+
+  '@univerjs-pro/boards-thread-comment@1.0.3(react@19.3.0)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/boards': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/license': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/core': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/thread-comment': 1.0.3(react@19.3.0)(rxjs@7.8.2)
     transitivePeerDependencies:
       - react
       - rxjs
@@ -17727,6 +17771,17 @@ snapshots:
       '@univerjs/core': 1.0.3(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/protocol': 1.0.3
       '@univerjs/thread-comment': 1.0.3(react@19.2.8)(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - react
+      - rxjs
+
+  '@univerjs-pro/slides-thread-comment@1.0.3(react@19.3.0)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/license': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/slides': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/core': 1.0.3(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/protocol': 1.0.3
+      '@univerjs/thread-comment': 1.0.3(react@19.3.0)(rxjs@7.8.2)
     transitivePeerDependencies:
       - react
       - rxjs

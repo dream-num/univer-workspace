@@ -56,15 +56,13 @@ export default createCollaborationEditor({
   // (trunk scope, signed-in user) via exchangeFeaturePlugins instead.
   exchangeProvidedByPreset: true,
   locales: sheetEditorLocales,
-  createPresets: (container, _license, collaborationScope) =>
+  createPresets: (container) =>
     createSheetMobilePresets({
       container,
-      threadCommentsEnabled: collaborationScope.kind === "trunk",
       collaborationEnabled: true,
     }),
-  collaborationFeaturePlugins: (collaborationScope) =>
+  collaborationFeaturePlugins: () =>
     getThreadCommentCollaborationPlugins(
-      collaborationScope.kind === "trunk",
       UniverSheetsThreadCommentMobileUIPlugin
     ),
   exchangeFeaturePlugins: () => [

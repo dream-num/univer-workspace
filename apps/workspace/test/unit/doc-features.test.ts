@@ -122,11 +122,9 @@ describe("Workspace Doc feature plugins", () => {
     expect(getThreadCommentCollaborationPlugins()).toEqual([
       UniverThreadCommentDataSourcePlugin,
     ]);
-    expect(getThreadCommentCollaborationPlugins(false)).toEqual([]);
     expect(getDocThreadCommentCollaborationPlugins()).toEqual([
       UniverWorkspaceDocsThreadCommentDataSourcePlugin,
     ]);
-    expect(getDocThreadCommentCollaborationPlugins(false)).toEqual([]);
 
     const deleteComment = vi.fn(async () => true);
     const rootComment = {

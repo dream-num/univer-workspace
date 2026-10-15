@@ -195,11 +195,8 @@ export default createCollaborationEditor({
   theme: purpleTheme,
   useCustomCollaborationStatus: true,
   locales: slideEditorLocales,
-  collaborationFeaturePlugins: (collaborationScope) =>
-    getThreadCommentCollaborationPlugins(
-      collaborationScope.kind === "trunk",
-      UniverSlidesThreadCommentUIPlugin
-    ),
+  collaborationFeaturePlugins: () =>
+    getThreadCommentCollaborationPlugins(UniverSlidesThreadCommentUIPlugin),
   exchangeFeaturePlugins: () => [UniverSlidesExchangeClientPlugin],
   printFeaturePlugins: () => [UniverSlidesPrintPlugin],
   createPresets: (container, _license, _scope, compact) => [

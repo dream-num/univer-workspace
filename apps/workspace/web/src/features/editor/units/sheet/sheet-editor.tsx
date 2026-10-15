@@ -52,17 +52,13 @@ export default createCollaborationEditor({
   exchangeProvidedByPreset: true,
   licenseProvidedByPreset: true,
   locales: sheetEditorLocales,
-  createPresets: (container, license, collaborationScope) =>
+  createPresets: (container, license) =>
     createSheetEditorPresets({
       container,
       license,
       universerEndpoint: window.location.origin,
-      threadCommentsEnabled: collaborationScope.kind === "trunk",
     }),
-  collaborationFeaturePlugins: (collaborationScope) =>
-    getThreadCommentCollaborationPlugins(
-      collaborationScope.kind === "trunk"
-    ),
+  collaborationFeaturePlugins: () => getThreadCommentCollaborationPlugins(),
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadSheetAsync(unitId),
 });

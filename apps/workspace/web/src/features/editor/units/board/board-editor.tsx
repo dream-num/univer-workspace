@@ -194,11 +194,8 @@ export default createCollaborationEditor({
   exchangeEnabled: false,
   hideCollaborationStatus: true,
   locales: boardEditorLocales,
-  collaborationFeaturePlugins: (collaborationScope) =>
-    getThreadCommentCollaborationPlugins(
-      collaborationScope.kind === "trunk",
-      UniverBoardsThreadCommentUIPlugin
-    ),
+  collaborationFeaturePlugins: () =>
+    getThreadCommentCollaborationPlugins(UniverBoardsThreadCommentUIPlugin),
   printFeaturePlugins: () => [UniverBoardsPrintPlugin],
   createPresets: (container) => [
     {

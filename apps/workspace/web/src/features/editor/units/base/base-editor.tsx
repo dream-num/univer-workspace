@@ -148,11 +148,8 @@ export default createCollaborationEditor({
   enableDocumentCollaborationUI: false,
   hideCollaborationStatus: true,
   locales: baseEditorLocales,
-  collaborationFeaturePlugins: (collaborationScope) =>
-    getThreadCommentCollaborationPlugins(
-      collaborationScope.kind === "trunk",
-      UniverBasesThreadCommentUIPlugin
-    ),
+  collaborationFeaturePlugins: () =>
+    getThreadCommentCollaborationPlugins(UniverBasesThreadCommentUIPlugin),
   exchangeFeaturePlugins: () => [UniverBasesExchangeClientPlugin],
   createPresets: (container) => [
     {

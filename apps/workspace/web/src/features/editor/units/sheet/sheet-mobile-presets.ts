@@ -52,7 +52,6 @@ import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 
 interface CreateSheetMobilePresetsOptions {
   readonly container: HTMLElement;
-  readonly threadCommentsEnabled?: boolean;
   readonly collaborationEnabled?: boolean;
 }
 
@@ -65,7 +64,6 @@ interface CreateSheetMobilePresetsOptions {
  */
 export function createSheetMobilePresets({
   container,
-  threadCommentsEnabled = true,
   collaborationEnabled = true,
 }: CreateSheetMobilePresetsOptions): IPreset[] {
   return [
@@ -127,7 +125,7 @@ export function createSheetMobilePresets({
     },
     // The UI plugin is supplied through collaborationFeaturePlugins;
     // registering it here as well would duplicate its pluginName.
-    ...(threadCommentsEnabled && collaborationEnabled
+    ...(collaborationEnabled
       ? [{ plugins: [UniverSheetsThreadCommentPlugin] }]
       : []),
     {

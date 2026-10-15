@@ -108,6 +108,11 @@ import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
 import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
 import { UniverSheetsTablePlugin } from "@univerjs/sheets-table";
 import { UniverSheetsTableUIPlugin } from "@univerjs/sheets-table-ui";
+import { UniverSheetsThreadCommentPlugin } from "@univerjs/sheets-thread-comment";
+import { UniverDocsThreadCommentPlugin } from "@univerjs/docs-thread-comment";
+import { UniverBasesThreadCommentPlugin } from "@univerjs-pro/bases-thread-comment";
+import { UniverBoardsThreadCommentPlugin } from "@univerjs-pro/boards-thread-comment";
+import { UniverSlidesThreadCommentPlugin } from "@univerjs-pro/slides-thread-comment";
 import { UniverUIPlugin, type RibbonType } from "@univerjs/ui";
 import {
   FormulaCalculationSessionService,
@@ -213,6 +218,7 @@ export function registerViewerRendering(univer: Univer, options: ViewRenderingOp
   registerSlidePlugins(univer);
   registerBaseUnitPlugins(univer, collaborationOwnsAssetIo, options.readOnly ?? false);
   registerBoardPlugins(univer);
+  registerCommentModels(univer);
   options.registerBeforeEmbedCore?.();
   if (options.unitType !== undefined) {
     registerOutputPlugins(univer, options.unitType, options.exchangeClientConfig);
@@ -278,9 +284,19 @@ function registerDocPlugins(univer: Univer): void {
   univer.registerPlugin(UniverDocsCodeUIPlugin);
   univer.registerPlugin(UniverDocsQuotePlugin);
   univer.registerPlugin(UniverDocsQuoteUIPlugin);
-  // Thread comment collaboration storage is not exposed by the Workspace
-  // adapter yet. The native UI remains available where the SDK supplies it;
-  // no client-side fake persistence is installed here.
+}
+
+// Persisted comment anchors only. The Viewer shows no comment UI and installs
+// no body datasource; registering the models keeps anchor resources intact
+// when an editable Viewer saves a Unit. This is part of the Viewer's own
+// registration pipeline, not the headless-factory workaround in
+// runtime/comment-models.ts, and stays after that workaround is removed.
+function registerCommentModels(univer: Univer): void {
+  univer.registerPlugin(UniverSheetsThreadCommentPlugin);
+  univer.registerPlugin(UniverDocsThreadCommentPlugin);
+  univer.registerPlugin(UniverSlidesThreadCommentPlugin);
+  univer.registerPlugin(UniverBasesThreadCommentPlugin);
+  univer.registerPlugin(UniverBoardsThreadCommentPlugin);
 }
 
 function registerSheetPlugins(univer: Univer): void {

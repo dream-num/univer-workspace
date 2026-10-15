@@ -3,28 +3,12 @@ import { describe, expect, it } from "vitest";
 
 describe("Workspace standard Thread Comment plugins", () => {
   it("keeps the standard UI integration in every Unit-specific lazy editor", async () => {
-    for (const [pluginFilename, scopeFilename, pluginName] of [
-      [
-        "units/sheet/sheet-presets.ts",
-        "units/sheet/sheet-editor.tsx",
-        "UniverSheetsThreadCommentPreset",
-      ],
-      ["units/doc/doc-editor.tsx", "units/doc/doc-editor.tsx", "UniverDocsThreadCommentPreset"],
-      [
-        "units/slide/slide-editor.tsx",
-        "units/slide/slide-editor.tsx",
-        "UniverSlidesThreadCommentUIPlugin",
-      ],
-      [
-        "units/base/base-editor.tsx",
-        "units/base/base-editor.tsx",
-        "UniverBasesThreadCommentUIPlugin",
-      ],
-      [
-        "units/board/board-editor.tsx",
-        "units/board/board-editor.tsx",
-        "UniverBoardsThreadCommentUIPlugin",
-      ],
+    for (const [pluginFilename, pluginName] of [
+      ["units/sheet/sheet-presets.ts", "UniverSheetsThreadCommentPreset"],
+      ["units/doc/doc-editor.tsx", "UniverDocsThreadCommentPreset"],
+      ["units/slide/slide-editor.tsx", "UniverSlidesThreadCommentUIPlugin"],
+      ["units/base/base-editor.tsx", "UniverBasesThreadCommentUIPlugin"],
+      ["units/board/board-editor.tsx", "UniverBoardsThreadCommentUIPlugin"],
     ] as const) {
       const pluginSource = await readFile(
         new URL(
@@ -33,15 +17,27 @@ describe("Workspace standard Thread Comment plugins", () => {
         ),
         "utf8"
       );
-      const scopeSource = await readFile(
-        new URL(
-          `../../web/src/features/editor/${scopeFilename}`,
-          import.meta.url
-        ),
+      expect(pluginSource).toContain(pluginName);
+    }
+  });
+
+  it("registers comments in every collaboration scope", async () => {
+    // Comments are Unit-level conversation, not versioned content: Worktree
+    // and Merge Preview editors use the same plugins as Trunk.
+    for (const filename of [
+      "units/sheet/sheet-editor.tsx",
+      "units/sheet/sheet-editor.mobile.tsx",
+      "units/doc/doc-editor.tsx",
+      "units/slide/slide-editor.tsx",
+      "units/base/base-editor.tsx",
+      "units/board/board-editor.tsx",
+    ]) {
+      const source = await readFile(
+        new URL(`../../web/src/features/editor/${filename}`, import.meta.url),
         "utf8"
       );
-      expect(pluginSource).toContain(pluginName);
-      expect(scopeSource).toContain('collaborationScope.kind === "trunk"');
+      expect(source, filename).toMatch(/collaborationFeaturePlugins: \(\) =>/);
+      expect(source, filename).not.toContain("threadCommentsEnabled");
     }
   });
 
@@ -61,20 +57,11 @@ describe("Workspace standard Thread Comment plugins", () => {
     ]);
 
     expect(
-      getThreadCommentCollaborationPlugins(
-        true,
-        UniverBasesThreadCommentUIPlugin
-      )
+      getThreadCommentCollaborationPlugins(UniverBasesThreadCommentUIPlugin)
     ).toEqual([
       UniverBasesThreadCommentUIPlugin,
       UniverThreadCommentDataSourcePlugin,
     ]);
-    expect(
-      getThreadCommentCollaborationPlugins(
-        false,
-        UniverBasesThreadCommentUIPlugin
-      )
-    ).toEqual([]);
   }, 20_000);
 
   it("keeps the Docs compatibility hook under workarounds", async () => {
