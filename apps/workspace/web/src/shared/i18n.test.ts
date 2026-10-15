@@ -70,3 +70,7 @@ vi.mock("../modes/repository/pages/trash", () => ({ RepositorySpaceTrashPage: ()
 vi.mock("../modes/wiki/pages/worktrees", () => ({ WikiWorktreesPage: () => null }));
 
 vi.mock("../modes/repository/pages/worktrees", () => ({ RepositoryWorktreesPage: () => null }));
+
+vi.mock("../modes/wiki/pages/issues", () => ({ WikiIssueLayout: () => null }));
+
+vi.mock("../modes/repository/pages/issues", () => ({ RepositoryIssueLayout: () => null }));

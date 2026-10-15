@@ -1,8 +1,11 @@
-import type { WorktreesPageProps } from "./page.types";
-import type { SpaceSettingsPageProps } from "./page.types";
-import type { FolderPageProps } from "./page.types";
-import type { SpacePageProps } from "./page.types";
-import type { HomePageProps } from "./page.types";
+import type {
+  IssuePageProps,
+  WorktreesPageProps,
+  SpaceSettingsPageProps,
+  FolderPageProps,
+  SpacePageProps,
+  HomePageProps,
+} from "./page.types";
 import type { ComponentType } from "react";
 import type { WorkspaceShellProps } from "./shell.types";
 import type { MessageKey, ModeMessages } from "../shared/i18n";
@@ -12,6 +15,7 @@ import { wikiMode } from "./wiki";
 
 export interface ModeDefinition {
   readonly pages: {
+    readonly issues: ComponentType<IssuePageProps>;
     readonly worktrees: ComponentType<WorktreesPageProps>;
     readonly trash: ComponentType<SpaceSettingsPageProps>;
     readonly members: ComponentType<SpaceSettingsPageProps>;

@@ -289,6 +289,10 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
 - [x] T5.5：Workbench / PR 页拆为 `pages.worktrees`；无 spaceId 的 repository Workbench 保持不变。
   394 项测试、typecheck、build、40 张截图、全局/空间工作台搜索状态重置及真实 PR 专项全部通过。
 
+- [x] T5.6：IssueRouteLayout 保持导出名与 props，通过 `pages.issues` 选择 mode 外壳；五个 Issue 路由无需改调用。
+  394 项测试、typecheck、build、40 张截图、空间/全局 Issue 搜索重置及两种 mode 的 Issues 专项通过。
+  M3 最终回归还覆盖目录 → 文件 → 返回目录保留搜索；所有 loader、validateSearch 与路由生成物保持不变。
+
 ## M4 feature 去 mode 化、样式、边界检查
 
 - [ ] **T6a：通用 feature 组件不再读取 mode**（R2 feature 部分；N5）

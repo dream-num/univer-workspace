@@ -931,3 +931,31 @@ R7 半外壳条件仍为 `!immersive && (repositoryHome || repositoryTab !== und
 
 验证：394 项测试、typecheck、build、40 张基线截图、写操作对比及 mode 往返切换通过，未更新基线。
 `modes` 中不再出现 `workspaceTheme` 或 `useTheme()`，wiki shell 不再出现 `repository`。
+
+### T5.1–T5.6 页面由 mode 提供（PR 描述素材）
+
+六项任务均先提交原样副本，再接入 `ModeDefinition.pages`。注册表要求两种 mode 都实现
+home、space、folder、settings、members、trash、worktrees、issues；共同 props 放在
+`modes/page.types.ts`。页面接收路由参数、搜索参数或已经查询的领域数据，不读取 Route 对象。
+对应路由不再读取 useTheme，也不再导入 repository 专属组件；两个 mode 目录没有互相导入。
+
+- 首页各自持有搜索状态，repository 忽略 `view`，wiki 保留 Recent / Owned / Shared URL。
+- 空间页的 repository 视图拆在 `modes/repository/pages/space/`；保留访客回退、查询失败重试、
+  默认 Page 的 localStorage key 和失效清理。六个视图辅助函数保留原函数体。
+- Node 路由只分发目录页，文件编辑器、Blob 预览和协作者状态仍在原路由。
+  目录搜索由路由保留跨 Node 的状态，mode 页面接收受控值；mode 改变时清空。
+  浏览器验证目录 → 文件 → 返回目录仍保留搜索，并验证 mode 往返切换后清空。
+- 两版设置表单继续调用 useUpdateSpace；wiki 合并保存后返回空间，repository 分别保存并停留原页。
+  成员和回收站组件内部的 mode 分支留给 T6a。
+- 无空间的 repository Workbench 保留原有半外壳，空间内 PR 页保留文档选择、审阅和写操作落点。
+- IssueRouteLayout 保持原导出名和 props，仅分发 mode 外壳；列表、详情内部的分支留给 T6a。
+
+每项均通过 Workspace typecheck、build、394 项测试和 40 张零差异截图；T5.2、T5.4、T5.5、
+T5.6 分别通过 Pages、Settings、PR 和两种 mode 的 Issues 专项。模式切换覆盖各页面的临时搜索／表单状态，
+保持 URL、storage、标题和产品缓存语义。七个文件路由的 loader / validateSearch 与迁移前做 AST 对比一致，
+routeTree.gen.ts 无变化；未更新截图基线。
+
+T5.2 主包从 1,834.36 kB 到 1,834.66 kB，gzip 从 564.88 kB 到 564.87 kB；这次保留同步注册，
+不增加 lazy 加载和 Suspense 生命周期。原有 SDK 大块警告仍存在。
+设置专项的等待条件改为表单自身的 aria-busy，并等待取消确认框的遮罩退出；专项暂时公开测试空间，
+因此该专项与截图串行执行，避免测试空间出现在另一用户侧栏。所有测试使用可丢弃的本地服务。

@@ -1,3 +1,6 @@
+import type { components } from "../../../generated/http/schema.js";
+import type { PropsWithChildren } from "react";
+
 export type HomeView = "recent" | "owned" | "shared";
 
 export interface HomePageProps {
@@ -10,7 +13,6 @@ export interface SpacePageProps {
   readonly view?: SpacePageView;
 }
 
-import type { components } from "../../../generated/http/schema.js";
 export interface FolderPageProps {
   readonly detail: components["schemas"]["NodeResponse"];
   readonly searchQuery: string;
@@ -23,3 +25,8 @@ export interface SpaceSettingsPageProps {
 }
 
 export type { WorktreeDashboardSearch as WorktreesPageProps } from "../features/worktrees/worktree-review-search";
+
+export type IssuePageProps = PropsWithChildren<{
+  readonly spaceId?: string;
+  readonly crumb?: string;
+}>;

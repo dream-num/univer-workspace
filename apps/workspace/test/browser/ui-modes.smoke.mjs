@@ -399,6 +399,8 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       ["trash", `${team}/trash`, 'main input[aria-label="Search items in Trash"]'],
       ["worktrees", "/worktrees", "header input", "Search tasks, documents, or creators"],
       ["space-worktrees", `/worktrees?spaceId=${fixture.teamId}`, "header input", "Search tasks, documents, or creators"],
+      ["issues", `${team}/issues`, 'main form[role="search"] input'],
+      ["global-issues", "/issues", 'main form[role="search"] input'],
     ];
     open(`/nodes/${fixture.folderId}`);
     click("button", "Search content on this page");
