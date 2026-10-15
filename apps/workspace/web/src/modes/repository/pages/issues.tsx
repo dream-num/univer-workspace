@@ -8,7 +8,7 @@ import type { IssuePageProps, IssueListPageProps, IssueDetailPageProps } from ".
 import { PageContent } from "../../../shared/ui";
 import { RepositoryTabs } from "../repository-tabs";
 import { useI18n } from "../../../shared/i18n";
-import { WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceLayout } from "../../workspace-layout";
 
 /**
  * Both themes render Issues at the same URLs. Repository shows the repository chrome with an

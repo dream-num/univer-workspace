@@ -6,7 +6,6 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { useUiMode } from "./ui-mode";
 
 export type ThemePreference = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
@@ -102,13 +101,8 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 
 export function useTheme() {
   const value = useContext(ThemeContext);
-  const { mode, setMode } = useUiMode();
   if (!value) {
     throw new Error("useTheme must be used within ThemeProvider");
   }
-  // 迁移期间保留旧字段，待调用方迁入 modes 后移除。
-  return useMemo(
-    () => ({ ...value, workspaceTheme: mode, setWorkspaceTheme: setMode }),
-    [value, mode, setMode],
-  );
+  return value;
 }

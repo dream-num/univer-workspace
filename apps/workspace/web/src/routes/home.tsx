@@ -1,5 +1,5 @@
 import { useModeDefinition } from "../modes/registry";
-import type { HomeView } from "../modes/page.types";
+import type { HomeView } from "../modes/registry";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireAuthenticatedSession } from "../features/auth";
 import { spacesQueryOptions } from "../features/spaces";

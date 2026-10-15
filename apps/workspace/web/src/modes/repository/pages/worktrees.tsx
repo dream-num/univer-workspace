@@ -13,7 +13,7 @@ import {
   DEFAULT_WORKTREE_REVIEW_VIEW,
   type WorktreeReviewView,
 } from "../../../features/worktrees/worktree-review-search";
-import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../workspace-layout";
 
 export function RepositoryWorktreesPage(props: WorktreesPageProps) {
   const { t } = useI18n();

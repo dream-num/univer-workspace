@@ -1,7 +1,7 @@
 import type { FolderPageProps } from "../../page.types";
 import { useQuery } from "@tanstack/react-query";
 import { NodeBrowser, nodeChildrenQueryOptions } from "../../../features/nodes";
-import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../workspace-layout";
 import { useI18n } from "../../../shared/i18n";
 
 export function WikiFolderPage({ detail, searchQuery, onSearchChange }: FolderPageProps) {

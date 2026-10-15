@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useUpdateSpace, spacesQueryOptions } from "../../../features/spaces";
-import { WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceLayout } from "../../workspace-layout";
 import { useI18n } from "../../../shared/i18n";
 import { Button, Field, Input, Textarea, toast } from "../../../shared/ui";
 

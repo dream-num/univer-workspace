@@ -4,7 +4,7 @@ import { useState } from "react";
 import { WorktreeDashboard } from "../../../features/worktrees";
 import { useI18n } from "../../../shared/i18n";
 import { DEFAULT_WORKTREE_REVIEW_VIEW } from "../../../features/worktrees/worktree-review-search";
-import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../workspace-layout";
 
 export function WikiWorktreesPage(props: WorktreesPageProps) {
   const { t } = useI18n();

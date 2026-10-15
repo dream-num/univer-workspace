@@ -7,7 +7,7 @@ import { sessionQueryOptions } from "../../../features/auth";
 import { spacesQueryOptions } from "../../../features/spaces";
 import { spaceDisplayName } from "../space-name";
 import { useI18n, type MessageKey } from "../../../shared/i18n";
-import { WorkspaceLayout, CreateTeamDialog } from "../../../routes/-workspace-layout";
+import { WorkspaceLayout, CreateTeamDialog } from "../../workspace-layout";
 import { Button, Input, Segmented } from "../../../shared/ui";
 import type { components } from "../../../../../generated/http/schema.js";
 

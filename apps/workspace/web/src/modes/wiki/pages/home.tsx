@@ -7,7 +7,7 @@ import { spacesQueryOptions } from "../../../features/spaces";
 import { OwnedByMe, RecentResources, SharedWithMe } from "../../../features/views";
 import { useI18n, type MessageKey } from "../../../shared/i18n";
 import { cn } from "../../../shared/utils/cn";
-import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../workspace-layout";
 
 export function WikiHomePage({ view = "recent" }: HomePageProps) {
   const { t } = useI18n();

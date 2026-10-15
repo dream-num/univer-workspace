@@ -1,10 +1,10 @@
 # UI Mode 解耦：调研、风险与迁移路线
 
-> 状态：提案（2026-10-15），未实施。本文只记录调研结论和推荐方案，不代表已接受的架构决策；
-> 方案被接受后，其中的边界规则再按约定写入 `docs/architecture.md` 或 ADR。
+> 状态：已实施（2026-10-15，T0–T7）；R7“半外壳”按决定保留为独立后续任务。
+> 第 0–12 节保留迁移前调研与方案；当前代码事实见后文实施记录及 `docs/architecture.md`。
 >
 > 调研基线：分支 `feat-ui-decouple`，commit `384eb3f`。下文所有路径相对 `apps/workspace/`，
-> 未注明的结论都来自代码阅读，没有运行浏览器实测。
+> 历史调研部分的未注明结论来自代码阅读；后续实施记录另列实测证据。
 
 ## 0. 结论摘要
 
@@ -1025,3 +1025,34 @@ IssueList 的计数同时用于 Wiki，使用原亮／暗颜色作为 CSS 变量
 亮色基线未修改；暗色基线在本次样式改动前补录，改动后只比较。生成文件无变化。
 
 全量 Workspace 测试：78 文件 / 394 测试通过。未推送或创建 PR，R7 保持原样。
+
+
+### T7 边界测试与最终架构（PR 描述素材）
+
+删除 useTheme 的旧 mode 字段，使明暗主题不再订阅 mode。架构测试用 TypeScript AST 识别静态／动态
+import、类型 import、require 与再导出，检查分层、跨 mode 导入、路由注册表入口及旧字段回流。
+曾临时在 IssueList 加入 `import "../../modes/registry"`，检查按预期失败，撤销后通过。
+仓库生产 TS/JS 扫描也未发现旧字段；本文的迁移前调研保留原名称供追溯。
+
+T5 页面仍导入路由布局的遗留依赖在本任务清理：先原样复制实现（`3cf5ce7`）到
+`modes/workspace-layout.tsx`，再切换 mode 页面 import；路由布局入口仅转发 registry 的组件和类型。
+session、访客外壳、`key={mode}`、URL 与搜索参数语义保持不变。
+语言解析测试仍在 shared，注册表文案合同测试归入 modes；没有用测试白名单绕过分层约束。
+`docs/architecture.md` 已记录依赖方向、查询／命令／规则职责、完整注册合同和样式作用域。
+
+仓库级 typecheck、build 通过。初次仓库测试被本机 Corepack 的版本选择阻断：仓库内使用 pnpm 11.24.0，
+Desktop 测试生成的无 packageManager 临时目录回退到 pnpm 8.9.2，导致 pnpm-workspace.yaml 配置读取为空。
+通过只对验证进程设置 PATH 中的临时入口、转发 `corepack pnpm@11.24.0` 固定版本；Desktop 失败用例随后通过。
+没有改 Desktop 源码、依赖、锁文件或机器全局配置。
+
+最终仓库 typecheck、test、build 全部通过（test 进程固定 pnpm 11.24.0）。Workspace 为 80 文件 / 396 测试，
+CLI、Agent、Desktop 与各 private package 测试亦通过；Desktop 的三个 Windows 专属用例按原配置在 macOS 跳过。
+最终亮暗各 40 张、共 80 张截图零差异，包含 mode 往返、临时状态清理、URL、storage 和写请求检查。
+WorkspaceLayout / VisitorLayout 函数 AST 与下移前一致；生成文件无变化，截图基线未更新。
+
+第三种 mode 走查：只新增临时 `modes/drive/index.tsx` 与 registry 条目，缺少页面入口时编译失败，
+补齐十个入口后通过。浏览器实际显示 Drive 占位页并保持 URL；原 wiki / repository 各 19 张、共 38 张
+可比截图零差异，原写操作和往返切换检查通过。设置弹窗新增了一个选项，所以两张弹窗截图改用选项存在性
+断言，不覆盖原基线。临时注册、模块与检查脚本已移除或留在仓库外，没有修改其他 mode 或领域代码。
+
+T0–T7 已完成；R7 仍按用户决定保留，后续单独处理。没有推送、创建 PR 或触发部署。

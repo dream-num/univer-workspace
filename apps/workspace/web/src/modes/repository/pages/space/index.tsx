@@ -10,7 +10,7 @@ import { resourceOpenQueryOptions } from "../../../../features/resources";
 import { spacesQueryOptions } from "../../../../features/spaces";
 import { RepositoryTabs } from "../../repository-tabs";
 import { spaceDisplayName } from "../../space-name";
-import { WorkspaceLayout } from "../../../../routes/-workspace-layout";
+import { WorkspaceLayout } from "../../../workspace-layout";
 import { useI18n } from "../../../../shared/i18n";
 import { worktreeBelongsToSpace, worktreeListQueryOptions } from "../../../../features/worktrees";
 

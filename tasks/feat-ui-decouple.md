@@ -361,7 +361,7 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
     构建 CSS 的规则与令牌作用域检查通过；生成文件无变化；亮色基线未修改，暗色基线在改动前补录后仅比较。
   - 规模：S。依赖：T2b。可以和 M3 并行。
 
-- [ ] **T7：边界测试与文档**（R1 收尾、N8）
+- [x] **T7：边界测试与文档**（R1 收尾、N8）
   - 做什么：
     - 删除 `useTheme()` 上的 `workspaceTheme` / `setWorkspaceTheme` 兼容字段（T2a 加的）。
     - 新增 `apps/workspace/test/unit/web-architecture.test.ts`：用 `node:fs` 扫描 `web/src/**/*.{ts,tsx}` 的 import 语句并断言
@@ -369,23 +369,33 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
       - `features/**` 不 import `modes/`、`routes/`、`app/`；
       - `modes/<a>/**` 不 import `modes/<b>/**` 和 `routes/`；
       - `routes/**` 只通过 `modes/registry` import mode；
-      - 全仓库不出现 `workspaceTheme`。
+      - Browser 不出现旧 mode 兼容字段，其他应用／包的生产 TS/JS 源码通过仓库扫描复核；历史调研文档保留旧名称。
     - `apps/workspace/docs/architecture.md`「Web 应用」：依赖方向改为 `shared → features → modes → routes → app`，写明
       `*.queries.ts` / `*.commands.ts` / `*.rules.ts` 的职责、`ModeDefinition` 的字段、"mode 只能用来呈现，不能改变写操作的语义"。
     - `apps/workspace/docs/proposals/ui-mode-decoupling.md`：状态改为"已实施"，附实施记录（与 `repository-view-github-alignment.md`
       第 7 节的写法一致）。
   - 验收：在 `features/issues/issue-list.tsx` 临时加一行 `import "../../modes/registry"`，架构测试失败；撤销后通过。
   - 验证：V-static；仓库级 `pnpm typecheck && pnpm test && pnpm build`；`git diff --check`；V-smoke 最后一次全量比较。
+  - 实施：新增 TypeScript AST 边界扫描，覆盖 import、类型 import、动态 import、require 与再导出；
+    shared 文案测试只保留语言解析，mode 文案合同测试移到 `modes/messages.test.ts`。
+    页面仍导入路由布局的遗留依赖已清理：原样复制布局实现（`3cf5ce7`）到 `modes/workspace-layout.tsx`，
+    mode 页面改用共用 mode 入口，路由保留兼容转发；路由使用的类型也经 registry 导出。
+    `useTheme()` 只返回明暗主题；没有改 URL、storage key、session 行为或 Shell 的重挂载 key。
+    临时加入 feature → registry 副作用 import 时测试失败，撤销后通过。
+    仓库 typecheck、test、build 通过，Workspace 为 80 文件 / 396 测试；亮暗 80 张截图零差异。
+    全仓 test 的进程 PATH 临时固定 pnpm 11.24.0，避免本机 Corepack 在无 packageManager 的 Desktop 夹具目录回退 8.9.2；
+    未改 Desktop 源码或全局配置，初次失败和复核证据见提案实施记录。
   - 规模：S。依赖：T6a、T6b、T6c。
 
 ## 检查点
 
-- [ ] M1 完成后：`shared/` 里没有任何 mode 名；`rg -n 'api\.(POST|PATCH|PUT|DELETE)' apps/workspace/web/src --glob '*.tsx'` 只剩认证。
+- [x] M1 复核：`shared/` 不含 mode 实现，保留既有文案 key；`rg -n 'api\.(POST|PATCH|PUT|DELETE)' apps/workspace/web/src --glob '*.tsx'` 只剩认证与账号资料操作。
   这时可以停下来评估：如果后面的工作要暂停，现状已经比开始时少了 R3、R5 和一半 R4。
-- [ ] M2 完成后：新 mode 已经可以只提供 `Shell` 和 `messages` 就跑起来（页面仍沿用 route 里的分支）。
-- [ ] M3 完成后：用 `modes/drive` 做一次走查验证：新建一个只渲染占位文字的 mode，把它加到注册表，确认 `typecheck` 按字段报错、
-  补全后两种原有 mode 的 V-smoke 不受影响，然后删掉它（不提交）。
-- [ ] M4 完成后：提案第 9.2 节"不需要碰的地方"由 T7 的架构测试保证。
+- [x] M2 注册基础已完成；当前最终合同还要求 `label` 与完整 `pages`，见 M3 走查。
+- [x] M3：临时 `modes/drive` 注册后，缺少页面入口时报错，补齐十个入口后编译通过；浏览器实际渲染占位页且 URL 不变。
+  两种原有 mode 各 19 张、共 38 张可比截图零差异，写操作与往返切换检查通过；设置弹窗因新增选项改用 DOM 断言，
+  未覆盖其原基线。临时模块、注册和走查脚本均未提交。
+- [x] M4：T7 架构测试保护分层及跨 mode 边界，负例验证有效；第三种 mode 不需修改领域层或其他 mode。
 
 ## 决定记录
 

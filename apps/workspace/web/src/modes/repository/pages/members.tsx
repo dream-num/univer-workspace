@@ -6,7 +6,7 @@ import { spacesQueryOptions } from "../../../features/spaces";
 import { RepositorySettingsLayout } from "../repository-settings-layout";
 import { useI18n } from "../../../shared/i18n";
 import { Input } from "../../../shared/ui";
-import { WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceLayout } from "../../workspace-layout";
 
 export function RepositoryTeamMembersPage({ spaceId }: SpaceSettingsPageProps) {
   const { t } = useI18n();

@@ -1,4 +1,4 @@
-import type { SpacePageView as RepositoryView } from "../modes/page.types";
+import type { SpacePageView as RepositoryView } from "../modes/registry";
 import { useModeDefinition } from "../modes/registry";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { ResourceUnavailablePage, isResourceUnavailableError, spaceNodesQueryOptions } from "../features/nodes";

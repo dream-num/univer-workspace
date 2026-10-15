@@ -2,7 +2,7 @@ import type { SpaceSettingsPageProps } from "../../page.types";
 import { useState } from "react";
 import { TrashList } from "../../../features/trash";
 import { useI18n } from "../../../shared/i18n";
-import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../workspace-layout";
 
 export function WikiSpaceTrashPage({ spaceId }: SpaceSettingsPageProps) {
   const { t } = useI18n();

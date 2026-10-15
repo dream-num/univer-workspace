@@ -4,7 +4,7 @@ import { useState } from "react";
 import { TeamMemberManager } from "../../../features/permissions";
 import { spacesQueryOptions } from "../../../features/spaces";
 import { useI18n } from "../../../shared/i18n";
-import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../workspace-layout";
 
 export function WikiTeamMembersPage({ spaceId }: SpaceSettingsPageProps) {
   const { t } = useI18n();

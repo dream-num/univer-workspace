@@ -5,7 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { NodeBrowser, spaceNodesQueryOptions } from "../../../features/nodes";
 import { sessionQueryOptions } from "../../../features/auth";
 import { spacesQueryOptions } from "../../../features/spaces";
-import { WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceLayout } from "../../workspace-layout";
 import { useI18n } from "../../../shared/i18n";
 import { Button } from "../../../shared/ui";
 

@@ -5,7 +5,7 @@ import { Copy, Globe, LockKeyhole } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { RepositorySettingsLayout } from "../repository-settings-layout";
 import { useUpdateSpace, spacesQueryOptions } from "../../../features/spaces";
-import { WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceLayout } from "../../workspace-layout";
 import { useI18n } from "../../../shared/i18n";
 import { Button, ConfirmDialog, Field, Input, Textarea, toast } from "../../../shared/ui";
 

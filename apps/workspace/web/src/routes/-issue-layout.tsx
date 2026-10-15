@@ -1,4 +1,4 @@
-import type { IssuePageProps } from "../modes/page.types";
+import type { IssuePageProps } from "../modes/registry";
 import { useModeDefinition } from "../modes/registry";
 
 export function IssueRouteLayout(props: IssuePageProps) {

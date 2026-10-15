@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { NodeBrowser, nodeChildrenQueryOptions } from "../../../features/nodes";
 import { RepositoryTabs } from "../repository-tabs";
 import { spaceDisplayName } from "../space-name";
-import { WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceLayout } from "../../workspace-layout";
 import { useI18n } from "../../../shared/i18n";
 
 export function RepositoryFolderPage({ detail, username, searchQuery, onSearchChange }: FolderPageProps) {

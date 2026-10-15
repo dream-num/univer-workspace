@@ -47,3 +47,7 @@ export function useModeDefinition() {
 }
 
 export type { RepositoryTab, RepositoryBreadcrumb } from "./repository/repository-tabs";
+
+export { WorkspaceLayout } from "./workspace-layout";
+export type { WorkspaceShellProps } from "./shell.types";
+export type { IssuePageProps, HomeView, SpacePageView } from "./page.types";
