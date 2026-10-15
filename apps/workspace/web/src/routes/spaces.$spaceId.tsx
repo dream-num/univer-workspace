@@ -1,12 +1,12 @@
 import {
-  AppWindow,
   ExternalLink,
-  GitMerge,
+  FileDiff,
   GitPullRequest,
-  GitPullRequestClosed,
-  GitPullRequestDraft,
+  Search,
+  X,
   Link as LinkIcon,
   Settings,
+  Star,
   Users,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -23,14 +23,20 @@ import { BlobPreview } from "../features/blobs";
 import { htmlViewsQueryOptions } from "../features/views/html-views.queries";
 import { resourceOpenQueryOptions } from "../features/resources";
 import { resourceShareUrl } from "../features/resource-view/resource-view";
-import { RepositoryTabs, spaceDisplayName, spacesQueryOptions } from "../features/spaces";
+import {
+  RepositoryTabs,
+  spaceDisplayName,
+  spaceStarQueryOptions,
+  spacesQueryOptions,
+} from "../features/spaces";
 import { WorkspaceLayout } from "./-workspace-layout";
 import { formatRelativeDate } from "../shared/format-relative-date";
-import { useI18n, type MessageKey } from "../shared/i18n";
+import { useI18n } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
 import { worktreeBelongsToSpace, worktreeListQueryOptions } from "../features/worktrees";
 import type { components } from "../../../generated/http/schema.js";
-import { Button, Empty, buttonVariants, toast } from "../shared/ui";
+import { Button, Empty, Input, Skeleton, buttonVariants, toast } from "../shared/ui";
+import { OPEN_WORKTREE_STATES, RepositoryPrState } from "../features/worktrees/repository-pr-state";
 import { cn } from "../shared/utils/cn";
 
 type SpaceView = components["schemas"]["SpaceView"];
@@ -40,8 +46,6 @@ type RepositoryApp = components["schemas"]["OwnedResourceItem"];
 type RepositoryBlob = components["schemas"]["OpenBlobResource"];
 type RepositoryView = "files" | "prs" | "apps";
 type Worktree = components["schemas"]["WorktreeSummary"];
-
-const OPEN_WORKTREE_STATES: readonly Worktree["state"][] = ["draft", "ready", "merging"];
 
 export const Route = createFileRoute("/spaces/$spaceId")({
   validateSearch: (search: Readonly<Record<string, unknown>>) => ({
@@ -110,9 +114,6 @@ function SpaceNodePage() {
     ...(worktrees.data?.items ?? []),
     ...(processedWorktrees.data?.items ?? []),
   ].filter((item) => space !== undefined && worktreeBelongsToSpace(item, space));
-  const openWorktreeCount = spaceWorktrees.filter((item) =>
-    OPEN_WORKTREE_STATES.includes(item.state),
-  ).length;
   useEffect(() => {
     if (
       !landingNodeId ||
@@ -152,9 +153,7 @@ function SpaceNodePage() {
         {space?.type === "team" ? (
           <Button
             variant="secondary"
-            onClick={() =>
-              void navigate({ to: "/spaces/$spaceId/members", params: { spaceId } })
-            }
+            onClick={() => void navigate({ to: "/spaces/$spaceId/members", params: { spaceId } })}
           >
             <Users />
             {t("members")}
@@ -163,9 +162,7 @@ function SpaceNodePage() {
         {space?.capabilities.renameSpace ? (
           <Button
             variant="secondary"
-            onClick={() =>
-              void navigate({ to: "/spaces/$spaceId/settings", params: { spaceId } })
-            }
+            onClick={() => void navigate({ to: "/spaces/$spaceId/settings", params: { spaceId } })}
           >
             <Settings />
             {t("spaceSettings")}
@@ -199,8 +196,13 @@ function SpaceNodePage() {
             onRetry={retryRepositoryPage}
             onSelectApp={setLandingApp}
             view={repositoryView}
-            openWorktreeCount={openWorktreeCount}
             worktrees={spaceWorktrees}
+            worktreesLoading={worktrees.isPending || processedWorktrees.isPending}
+            worktreesError={worktrees.isError || processedWorktrees.isError}
+            onRetryWorktrees={() => {
+              void worktrees.refetch();
+              void processedWorktrees.refetch();
+            }}
             onOpenWorktrees={() => navigate({ to: "/worktrees", search: { spaceId } })}
           />
         </>
@@ -228,8 +230,10 @@ function RepositoryOverview({
   onRetry,
   onSelectApp,
   view,
-  openWorktreeCount,
   worktrees,
+  worktreesLoading,
+  worktreesError,
+  onRetryWorktrees,
   onOpenWorktrees,
 }: {
   readonly spaceId: string;
@@ -244,13 +248,28 @@ function RepositoryOverview({
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
   readonly view: RepositoryView;
-  readonly openWorktreeCount: number;
   readonly worktrees: readonly Worktree[];
+  readonly worktreesLoading: boolean;
+  readonly worktreesError: boolean;
+  readonly onRetryWorktrees: () => void;
   readonly onOpenWorktrees: () => void;
 }) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto bg-background">
-      <div className="mx-auto max-w-6xl px-6 py-6 max-[720px]:px-4 max-[720px]:py-4">
+    <div
+      className={cn(
+        "min-h-0 flex-1 overflow-y-auto bg-background",
+        view === "prs" && "repository-chrome repository-pull-requests",
+        view === "apps" && "repository-pages",
+      )}
+    >
+      <div
+        className={cn(
+          "mx-auto px-6 py-6 max-[720px]:px-4 max-[720px]:py-4",
+          view === "apps"
+            ? "w-full max-w-[1012px] px-4 py-8 max-[720px]:py-8"
+            : "max-w-7xl px-8 max-[720px]:px-4",
+        )}
+      >
         {view === "files" ? (
           <FilesView
             spaceId={spaceId}
@@ -264,8 +283,6 @@ function RepositoryOverview({
             error={error}
             onRetry={onRetry}
             onSelectApp={onSelectApp}
-            openWorktreeCount={openWorktreeCount}
-            fileCount={page.nodes.length}
           />
         ) : view === "apps" ? (
           <AppsView
@@ -275,7 +292,14 @@ function RepositoryOverview({
             onSelectApp={onSelectApp}
           />
         ) : (
-          <PullRequestsView spaceId={spaceId} worktrees={worktrees} onOpenWorktrees={onOpenWorktrees} />
+          <PullRequestsView
+            spaceId={spaceId}
+            worktrees={worktrees}
+            loading={worktreesLoading}
+            error={worktreesError}
+            onRetry={onRetryWorktrees}
+            onOpenWorktrees={onOpenWorktrees}
+          />
         )}
       </div>
     </div>
@@ -292,8 +316,6 @@ function FilesView({
   error,
   onRetry,
   onSelectApp,
-  openWorktreeCount,
-  fileCount,
   space,
   spaceName,
 }: {
@@ -306,53 +328,34 @@ function FilesView({
   readonly error: boolean;
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
-  readonly openWorktreeCount: number;
-  readonly fileCount: number;
   readonly space: SpaceView | undefined;
   readonly spaceName: string | undefined;
 }) {
   const { t } = useI18n();
   const showDefaultApp = loading || error || apps.length > 0;
   const [searchQuery, setSearchQuery] = useState("");
-  const visibility = space
-    ? space.type === "personal"
-      ? t("repositoryVisibilityPersonal")
-      : space.publicRead
-        ? t("repositoryVisibilityPublic")
-        : t("repositoryVisibilityPrivate")
-    : undefined;
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-      <div className="grid min-w-0 content-start gap-6">
-        {space ? (
-          <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground lg:hidden">
-            {visibility ? <span>{visibility}</span> : null}
-            <span aria-hidden="true">·</span>
-            <span>{t(accessRoleKey(space.accessRole))}</span>
-            <span aria-hidden="true">·</span>
-            <span>{t("repositoryMetaFiles", { count: fileCount })}</span>
-            <span aria-hidden="true">·</span>
-            <span>{t("repositoryMetaPages", { count: apps.length })}</span>
-          </p>
-        ) : null}
-        <section className="min-w-0 rounded-lg border border-border bg-background">
-          <NodeBrowser
-            page={page}
-            canCreateAtRoot={space?.capabilities.createAtRoot ?? false}
-            showParentRow={page.parentNode !== null}
-            spaceName={spaceName}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            searchPlaceholder={t("repositoryGoToFile")}
-            compact
-            className="[&>div]:h-auto [&>div]:overflow-visible [&>div>div:last-child]:overflow-visible"
-          />
-        </section>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_296px]">
+      <div className="grid min-w-0 content-start gap-4">
+        <NodeBrowser
+          page={page}
+          canCreateAtRoot={space?.capabilities.createAtRoot ?? false}
+          showParentRow={page.parentNode !== null}
+          spaceName={spaceName}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder={t("repositoryGoToFile")}
+          compact
+        />
         {showDefaultApp ? (
-          <section className="min-w-0 rounded-lg border border-border bg-background">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2">
+          <section className="min-w-0 overflow-hidden rounded-md border border-border bg-background">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-4">
               {apps.length > 1 ? (
-                <div role="tablist" aria-label={t("repositoryAppPreview")} className="flex min-w-0 gap-1">
+                <div
+                  role="tablist"
+                  aria-label={t("repositoryAppPreview")}
+                  className="flex min-w-0 gap-1"
+                >
                   {apps.map((app) => (
                     <button
                       key={app.node.id}
@@ -361,9 +364,9 @@ function FilesView({
                       aria-selected={selectedApp?.node.id === app.node.id}
                       onClick={() => onSelectApp(app.node.id)}
                       className={cn(
-                        "max-w-52 truncate border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                        "max-w-52 truncate border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
                         selectedApp?.node.id === app.node.id
-                          ? "border-primary text-foreground"
+                          ? "border-repository-selected text-foreground"
                           : "border-transparent text-muted-foreground hover:text-foreground",
                       )}
                     >
@@ -372,7 +375,7 @@ function FilesView({
                   ))}
                 </div>
               ) : (
-                <h2 className="m-0 min-w-0 truncate py-1 text-base font-semibold">
+                <h2 className="m-0 min-w-0 truncate py-2.5 text-sm font-semibold">
                   {selectedApp ? displayAppName(selectedApp.node.name) : t("apps")}
                 </h2>
               )}
@@ -401,7 +404,7 @@ function FilesView({
                 </Button>
               </Empty>
             ) : resource?.kind === "blob" ? (
-              <div className="h-[calc(100dvh-8rem)] min-h-[640px] overflow-hidden rounded-b-lg">
+              <div className="h-[calc(100dvh-8rem)] min-h-[640px] overflow-hidden">
                 <BlobPreview resource={resource} actionsContainer={null} />
               </div>
             ) : (
@@ -419,62 +422,74 @@ function FilesView({
           </section>
         ) : null}
       </div>
-      <aside className="hidden min-w-0 self-start rounded-lg border border-border bg-background lg:block">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="m-0 text-base font-semibold">{t("repositoryAbout")}</h2>
-        </div>
-        {space ? (
-          <div className="grid gap-2 px-4 py-3 text-sm text-muted-foreground">
-            <p className="m-0">
-              {space.type === "personal"
-                ? t("repositoryVisibilityPersonal")
-                : space.publicRead
-                  ? t("repositoryVisibilityPublic")
-                  : t("repositoryVisibilityPrivate")}
-            </p>
-            <dl className="m-0 grid gap-1.5">
-              <AboutRow label={t("repositoryAboutRole")} value={t(accessRoleKey(space.accessRole))} />
-              <AboutRow
-                label={t("repositoryAboutFiles")}
-                value={String(fileCount)}
-              />
-              <AboutRow
-                label={t("repositoryAboutOpenPrs")}
-                value={String(openWorktreeCount)}
-              />
-            </dl>
-            {selectedApp ? (
-              <Link
-                to="/nodes/$nodeId"
-                params={{ nodeId: selectedApp.node.id }}
-                search={(previous) => ({ ...previous, view: "immersive" })}
-                className="flex min-w-0 items-center gap-1.5 text-brand-700 no-underline hover:underline dark:text-brand-400"
-              >
-                <LinkIcon className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{t("repositoryDefaultPage")}</span>
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
-      </aside>
+      {space ? <RepositoryAbout spaceId={spaceId} space={space} selectedApp={selectedApp} /> : null}
     </div>
   );
 }
 
-function AboutRow({ label, value }: { readonly label: string; readonly value: string }) {
+/** Mirrors GitHub's About sidebar; only fields Workspace stores are shown. */
+function RepositoryAbout({
+  spaceId,
+  space,
+  selectedApp,
+}: {
+  readonly spaceId: string;
+  readonly space: SpaceView;
+  readonly selectedApp: RepositoryApp | undefined;
+}) {
+  const { t, language } = useI18n();
+  const star = useQuery(spaceStarQueryOptions(spaceId));
+  const description = space.description.trim();
   return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="m-0">{label}</dt>
-      <dd className="m-0 font-medium text-foreground">{value}</dd>
-    </div>
+    <aside aria-labelledby="repository-about-heading" className="min-w-0 self-start">
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="repository-about-heading" className="m-0 text-base leading-6 font-semibold">
+          {t("repositoryAbout")}
+        </h2>
+        {space.capabilities.renameSpace ? (
+          <Link
+            to="/spaces/$spaceId/settings"
+            params={{ spaceId }}
+            aria-label={t("repositoryAboutEditDescription")}
+            title={t("repositoryAboutEditDescription")}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon-sm" }),
+              "shrink-0 text-muted-foreground no-underline",
+            )}
+          >
+            <Settings className="size-4" aria-hidden="true" />
+          </Link>
+        ) : null}
+      </div>
+      {description ? (
+        <p className="mt-2 mb-0 text-sm leading-6 break-words text-foreground">{description}</p>
+      ) : null}
+      <ul className="m-0 mt-4 grid list-none gap-2 p-0 text-sm text-muted-foreground">
+        {selectedApp ? (
+          <li className="min-w-0">
+            <Link
+              to="/nodes/$nodeId"
+              params={{ nodeId: selectedApp.node.id }}
+              search={(previous) => ({ ...previous, view: "immersive" })}
+              className="flex min-w-0 items-center gap-2 font-semibold text-brand-700 no-underline hover:underline dark:text-brand-400"
+            >
+              <LinkIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="truncate">{t("repositoryDefaultPage")}</span>
+            </Link>
+          </li>
+        ) : null}
+        <li className="flex items-center gap-2">
+          <Star className="size-4 shrink-0" aria-hidden="true" />
+          <span aria-live="polite">
+            <strong className="font-semibold text-foreground tabular-nums">
+              {star.data ? star.data.starCount.toLocaleString(language) : "…"}
+            </strong>{" "}
+            {t(star.data?.starCount === 1 ? "repositoryAboutStar" : "repositoryAboutStars")}
+          </span>
+        </li>
+      </ul>
+    </aside>
   );
-}
-
-function accessRoleKey(role: SpaceView["accessRole"]): MessageKey {
-  if (role === "owner") return "accessOwner";
-  if (role === "admin") return "accessAdmin";
-  if (role === "editor") return "accessEditor";
-  return "accessViewer";
 }
 
 function displayAppName(name: string): string {
@@ -506,53 +521,47 @@ function AppsView({
     }
   };
   return (
-    <section className="rounded-lg border border-border bg-background">
-      <div className="border-b border-border px-4 py-3">
-        <h2 className="m-0 text-base font-semibold">{t("apps")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t("repositoryAppsSummary", { count: apps.length })}
-        </p>
+    <section aria-labelledby="repository-pages-heading">
+      <div>
+        <h1
+          id="repository-pages-heading"
+          className="m-0 mb-4 border-b border-border pb-[0.3em] text-[2em] leading-[1.25] font-semibold"
+        >
+          <Link to="/spaces/$spaceId" params={{ spaceId }} search={{ view: "apps" }}>
+            {t("apps")}
+          </Link>
+        </h1>
+        <p className="m-0 mb-4">{t("repositoryAppsSummary", { count: apps.length })}</p>
       </div>
       {selectedApp ? (
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-surface/50 px-4 py-3">
+        <div className="my-6">
           <div className="min-w-0">
-            <p className="m-0 flex min-w-0 items-center gap-2 text-sm">
-              <span
-                className="size-2 shrink-0 rounded-full bg-state-open"
-                aria-hidden="true"
-              />
-              <span className="shrink-0 text-muted-foreground">
-                {t("repositoryDefaultPage")}:
-              </span>
-              <Link
-                to="/nodes/$nodeId"
-                params={{ nodeId: selectedApp.node.id }}
-                className="min-w-0 truncate font-medium text-foreground no-underline hover:underline"
-              >
+            <h2 className="m-0 mb-4 border-b border-border pb-[0.3em] text-2xl leading-[1.25] font-semibold break-words">
+              {t("repositoryDefaultPage")}:{" "}
+              <Link to="/nodes/$nodeId" params={{ nodeId: selectedApp.node.id }}>
                 {displayAppName(selectedApp.node.name)}
               </Link>
-            </p>
-            <p className="mt-1 mb-0 flex min-w-0 items-center gap-1.5 pl-4">
-              <code
-                className="min-w-0 truncate text-xs text-muted-foreground"
-                title={defaultPageUrl}
-              >
+            </h2>
+            <p className="m-0 mb-4 min-w-0">
+              <code className="rounded-[3px] bg-surface px-[0.4em] py-[0.2em] text-[85%] break-all">
                 {defaultPageUrl}
               </code>
             </p>
-            <p className="mt-1 mb-0 pl-4 text-xs text-subtle-foreground">
-              {t("repositoryDefaultPageLocalOnly")}
-            </p>
+            <p className="m-0 mb-4 text-muted-foreground">{t("repositoryDefaultPageLocalOnly")}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => void copyDefaultPageUrl()}>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button
+              type="button"
+              className="repository-pages-action"
+              onClick={() => void copyDefaultPageUrl()}
+            >
               {t("repositoryCopyPageLink")}
-            </Button>
+            </button>
             <Link
               to="/nodes/$nodeId"
               params={{ nodeId: selectedApp.node.id }}
               search={(previous) => ({ ...previous, view: "immersive" })}
-              className={cn(buttonVariants({ size: "sm" }), "no-underline")}
+              className="inline-flex items-center gap-1"
             >
               {t("repositoryVisitPage")}
               <ExternalLink className="size-3.5" />
@@ -561,48 +570,50 @@ function AppsView({
         </div>
       ) : null}
       {apps.length ? (
-        <ul className="m-0 list-none divide-y divide-border p-0">
+        <ul className="m-0 mb-4 list-disc pl-8">
           {apps.map((app) => {
             const isDefault = selectedApp?.node.id === app.node.id;
             return (
-              <li key={app.node.id} className="flex items-center gap-3 px-4 py-3">
-                <AppWindow className="size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to="/nodes/$nodeId"
-                    params={{ nodeId: app.node.id }}
-                    className="block truncate font-medium text-foreground no-underline hover:underline"
-                  >
-                    {displayAppName(app.node.name)}
-                  </Link>
-                  <p className="m-0 mt-0.5 truncate text-xs text-muted-foreground">
-                    {app.node.name} · {formatRelativeDate(app.node.updatedAt, language)}
-                  </p>
+              <li key={app.node.id} className="mt-4">
+                <div className="flex flex-col items-start justify-between gap-x-4 gap-y-1 sm:flex-row">
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to="/nodes/$nodeId"
+                      params={{ nodeId: app.node.id }}
+                      className="break-words"
+                    >
+                      {displayAppName(app.node.name)}
+                    </Link>
+                    <p className="m-0 mt-1 text-sm break-words text-muted-foreground">
+                      {app.node.name} · {formatRelativeDate(app.node.updatedAt, language)}
+                    </p>
+                  </div>
+                  {isDefault ? (
+                    <span className="text-sm leading-6 text-muted-foreground">
+                      {t("repositoryIsDefaultPage")}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="repository-pages-action"
+                      onClick={() => onSelectApp(app.node.id)}
+                    >
+                      {t("repositorySetDefaultPage")}
+                    </button>
+                  )}
                 </div>
-                {isDefault ? (
-                  <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                    {t("repositoryIsDefaultPage")}
-                  </span>
-                ) : (
-                  <Button variant="ghost" size="sm" onClick={() => onSelectApp(app.node.id)}>
-                    {t("repositorySetDefaultPage")}
-                  </Button>
-                )}
               </li>
             );
           })}
         </ul>
       ) : (
-        <Empty
-          title={t("repositoryNoApps")}
-          description={
-            <>
-              {t("appsEmptyDescription")}
-              <br />
-              {t("appsEmptyHint")}
-            </>
-          }
-        />
+        <div>
+          <h2 className="mt-6 mb-4 border-b border-border pb-[0.3em] text-2xl leading-[1.25] font-semibold">
+            {t("repositoryNoApps")}
+          </h2>
+          <p className="m-0 mb-4">{t("appsEmptyDescription")}</p>
+          <p className="m-0 mb-4">{t("appsEmptyHint")}</p>
+        </div>
       )}
     </section>
   );
@@ -612,154 +623,192 @@ function PullRequestsView({
   spaceId,
   worktrees,
   onOpenWorktrees,
+  loading,
+  error,
+  onRetry,
 }: {
   readonly spaceId: string;
   readonly worktrees: readonly Worktree[];
   readonly onOpenWorktrees: () => void;
+  readonly loading: boolean;
+  readonly error: boolean;
+  readonly onRetry: () => void;
 }) {
   const { language, t } = useI18n();
-  const [stateFilter, setStateFilter] = useState<"open" | "closed">(() =>
-    worktrees.some((worktree) => OPEN_WORKTREE_STATES.includes(worktree.state))
-      ? "open"
-      : "closed",
-  );
+  const [stateFilter, setStateFilter] = useState<"open" | "closed">("open");
+  const [search, setSearch] = useState("");
+  const normalizedSearch = search.trim().toLocaleLowerCase();
   const openCount = worktrees.filter((worktree) =>
     OPEN_WORKTREE_STATES.includes(worktree.state),
   ).length;
-  const visible = worktrees.filter((worktree) =>
-    stateFilter === "open"
-      ? OPEN_WORKTREE_STATES.includes(worktree.state)
-      : !OPEN_WORKTREE_STATES.includes(worktree.state),
+  const visible = worktrees.filter(
+    (worktree) =>
+      (stateFilter === "open"
+        ? OPEN_WORKTREE_STATES.includes(worktree.state)
+        : !OPEN_WORKTREE_STATES.includes(worktree.state)) &&
+      [
+        worktree.name,
+        worktree.summary,
+        worktree.creator.displayName,
+        worktree.creator.username,
+      ].some((value) => value?.toLocaleLowerCase().includes(normalizedSearch)),
   );
   return (
-    <section className="rounded-lg border border-border bg-background">
-      <div className="flex flex-wrap items-center gap-4 border-b border-border px-4 py-3">
-        <div className="flex items-center gap-4 text-sm">
-          <button
-            type="button"
-            onClick={() => setStateFilter("open")}
-            aria-pressed={stateFilter === "open"}
-            className={cn(
-              "flex items-center gap-1.5 font-medium",
-              stateFilter === "open" ? "text-foreground" : "text-muted-foreground",
-            )}
-          >
-            <GitPullRequest className="size-4" />
-            {t("repositoryPullRequestsOpen")}
-            <span className="tabular-nums">{openCount}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setStateFilter("closed")}
-            aria-pressed={stateFilter === "closed"}
-            className={cn(
-              "flex items-center gap-1.5 font-medium",
-              stateFilter === "closed" ? "text-foreground" : "text-muted-foreground",
-            )}
-          >
-            {t("repositoryPullRequestsClosed")}
-            <span className="tabular-nums">{worktrees.length - openCount}</span>
-          </button>
-        </div>
+    <section className="repository-pull-requests grid gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="m-0 text-xl font-semibold">{t("repositoryAllPullRequests")}</h1>
+        <Button size="sm" onClick={onOpenWorktrees}>
+          {t("repositoryOpenWorkbench")}
+        </Button>
       </div>
-      {visible.length ? (
-        <ul className="m-0 list-none p-0">
-          {visible.map((worktree) => (
-            <li key={worktree.id} className="border-b border-border last:border-b-0">
-              <Link
-                to="/worktrees"
-                search={{ spaceId, worktree: worktree.id }}
-                className="flex items-start gap-3 px-4 py-4 no-underline hover:bg-accent/60"
-              >
-                <WorktreeStateIcon state={worktree.state} />
-                <div className="min-w-0 flex-1">
-                  <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="truncate font-medium text-foreground">{worktree.name}</span>
-                    <span className="shrink-0 text-sm text-muted-foreground">
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute top-2 left-3 size-4 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <Input
+          aria-label={t("repositorySearchPullRequests")}
+          placeholder={t("repositorySearchPullRequests")}
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="h-8 rounded-md pl-9 pr-9 shadow-none"
+        />
+        {search ? (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t("clearSearch")}
+            className="absolute top-0 right-0"
+            onClick={() => setSearch("")}
+          >
+            <X />
+          </Button>
+        ) : null}
+      </div>
+      <div className="overflow-hidden rounded-md border border-border bg-background">
+        <div className="flex flex-wrap items-center gap-4 border-b border-border bg-surface px-4 py-3">
+          <div className="flex items-center gap-4 text-sm">
+            <button
+              type="button"
+              onClick={() => setStateFilter("open")}
+              aria-pressed={stateFilter === "open"}
+              className={cn(
+                "flex cursor-pointer items-center gap-2 hover:text-foreground",
+                stateFilter === "open" ? "font-semibold text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {t("repositoryPullRequestsOpen")}
+              <span className="rounded-full bg-repository-counter px-2 text-xs font-medium tabular-nums">
+                {loading ? "…" : openCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStateFilter("closed")}
+              aria-pressed={stateFilter === "closed"}
+              className={cn(
+                "flex cursor-pointer items-center gap-2 hover:text-foreground",
+                stateFilter === "closed"
+                  ? "font-semibold text-foreground"
+                  : "text-muted-foreground",
+              )}
+            >
+              {t("repositoryPullRequestsClosed")}
+              <span className="rounded-full bg-repository-counter px-2 text-xs font-medium tabular-nums">
+                {loading ? "…" : worktrees.length - openCount}
+              </span>
+            </button>
+          </div>
+        </div>
+        {error ? (
+          <Empty title={t("repositoryPullRequestsFailed")}>
+            <Button variant="secondary" onClick={onRetry}>
+              {t("repositoryPageRetry")}
+            </Button>
+          </Empty>
+        ) : loading ? (
+          <div role="status" aria-label={t("onboardingLoading")} className="grid gap-4 p-4">
+            <Skeleton className="h-5 w-2/3" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+        ) : visible.length ? (
+          <ul className="m-0 list-none p-0">
+            {visible.map((worktree) => (
+              <li key={worktree.id} className="relative border-b border-border last:border-b-0">
+                <div className="flex items-start gap-2 px-4 py-3 hover:bg-accent/60">
+                  <RepositoryPrState state={worktree.state} />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to="/worktrees"
+                      search={{ spaceId, worktree: worktree.id }}
+                      className="text-base leading-5 font-semibold break-words text-foreground no-underline after:absolute after:inset-0 hover:text-brand-700 dark:hover:text-brand-400"
+                    >
+                      {worktree.name}
+                    </Link>
+                    <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <FileDiff className="size-3.5" aria-hidden="true" />
                       {worktree.unitCount === 1
                         ? t("repositoryWorktreeUnit")
                         : t("repositoryWorktreeUnits", { count: worktree.unitCount })}
                     </span>
-                  </p>
-                  <p className="mt-1 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                    <span>
-                      {t("repositoryWorktreeCreatedBy", {
-                        name: worktree.creator.displayName,
-                        date: formatRelativeDate(worktree.createdAt, language),
-                      })}
-                    </span>
-                    {worktree.processedAt ? (
+                    <p className="mt-1 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                       <span>
-                        {t("repositoryWorktreeProcessedAt", {
-                          state: t(WORKTREE_STATE_LABELS[worktree.state]),
-                          date: formatRelativeDate(worktree.processedAt, language),
+                        {t("repositoryWorktreeCreatedBy", {
+                          name: worktree.creator.displayName,
+                          date: formatRelativeDate(worktree.createdAt, language),
                         })}
                       </span>
-                    ) : (
-                      <WorktreeStateLabel state={worktree.state} />
-                    )}
-                  </p>
-                  {worktree.summary ? (
-                    <p className="mt-1.5 mb-0 line-clamp-2 text-sm text-muted-foreground">
-                      {worktree.summary}
+                      {worktree.processedAt ? (
+                        <span>
+                          {t("repositoryWorktreeProcessedAt", {
+                            state: t(
+                              worktree.state === "merged"
+                                ? "worktreeStateMerged"
+                                : "worktreeStateDiscarded",
+                            ),
+                            date: formatRelativeDate(worktree.processedAt, language),
+                          })}
+                        </span>
+                      ) : (
+                        <span>
+                          {t(
+                            worktree.state === "draft"
+                              ? "worktreeStateDraft"
+                              : worktree.state === "merging"
+                                ? "worktreeStateMerging"
+                                : "worktreeStateReady",
+                          )}
+                        </span>
+                      )}
                     </p>
-                  ) : null}
+                    {worktree.summary ? (
+                      <p className="mt-1 mb-0 line-clamp-2 text-xs text-muted-foreground">
+                        {worktree.summary}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <Empty
-          title={t("repositoryNoPullRequests")}
-          description={t("repositoryNoPullRequestsDescription")}
-        >
-          <Button variant="secondary" onClick={onOpenWorktrees}>
-            {t("repositoryOpenWorkbench")}
-          </Button>
-        </Empty>
-      )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Empty
+            icon={GitPullRequest}
+            title={t(
+              normalizedSearch ? "repositoryNoMatchingPullRequests" : "repositoryNoPullRequests",
+            )}
+            description={t("repositoryNoPullRequestsDescription")}
+          >
+            <Button variant="secondary" onClick={onOpenWorktrees}>
+              {t("repositoryOpenWorkbench")}
+            </Button>
+          </Empty>
+        )}
+      </div>
     </section>
-  );
-}
-
-function WorktreeStateIcon({ state }: { readonly state: Worktree["state"] }) {
-  if (state === "merged") return <GitMerge className="mt-1 size-4 shrink-0 text-state-merged" />;
-  if (state === "discarded")
-    return <GitPullRequestClosed className="mt-1 size-4 shrink-0 text-state-closed" />;
-  if (state === "draft")
-    return <GitPullRequestDraft className="mt-1 size-4 shrink-0 text-muted-foreground" />;
-  return <GitPullRequest className="mt-1 size-4 shrink-0 text-state-open" />;
-}
-
-const WORKTREE_STATE_LABELS: Record<Worktree["state"], MessageKey> = {
-  draft: "worktreeStateDraft",
-  ready: "worktreeStateReady",
-  merging: "worktreeStateMerging",
-  merged: "worktreeStateMerged",
-  discarded: "worktreeStateDiscarded",
-};
-
-function WorktreeStateLabel({ state }: { readonly state: Worktree["state"] }) {
-  const { t } = useI18n();
-  const open = OPEN_WORKTREE_STATES.includes(state);
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-        open
-          ? "bg-state-open-soft text-state-open"
-          : state === "merged"
-            ? "bg-state-merged-soft text-state-merged"
-            : "bg-state-closed-soft text-state-closed",
-      )}
-    >
-      {t(WORKTREE_STATE_LABELS[state])}
-    </span>
   );
 }
 
 function isRepositoryView(value: unknown): value is RepositoryView {
   return value === "files" || value === "prs" || value === "apps";
 }
-

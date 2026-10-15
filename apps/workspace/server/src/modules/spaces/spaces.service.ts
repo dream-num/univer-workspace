@@ -6,7 +6,7 @@ import {
   type AccessRole,
 } from "../access/index.js";
 import { SpacesRepository } from "./spaces.repository.js";
-import type { SpaceView } from "./spaces.types.js";
+import type { SpaceStar, SpaceView } from "./spaces.types.js";
 
 export interface SpacesModule {
   list(userId: string): { readonly spaces: readonly SpaceView[] };
@@ -15,10 +15,16 @@ export interface SpacesModule {
     input: { readonly name: unknown; readonly publicRead?: unknown }
   ): SpaceView;
   get(userId: string, spaceId: string): SpaceView;
+  getStar(userId: string, spaceId: string): SpaceStar;
+  setStar(userId: string, spaceId: string, starred: boolean): SpaceStar;
   update(
     userId: string,
     spaceId: string,
-    input: { readonly name?: unknown; readonly publicRead?: unknown }
+    input: {
+      readonly name?: unknown;
+      readonly publicRead?: unknown;
+      readonly description?: unknown;
+    }
   ): SpaceView;
 }
 
@@ -42,6 +48,8 @@ export function createSpacesModule(options: {
             type: row.type,
             name: row.name,
             publicRead: Boolean(row.public_read),
+            description: row.description,
+            owner: { id: row.owner_user_id, username: row.owner_username },
             accessRole: role,
             capabilities: spaceCapabilities(role, {
               type: row.type,
@@ -70,13 +78,25 @@ export function createSpacesModule(options: {
         type: "team",
         name,
         publicRead,
+        description: "",
+        owner: options.repository.getOwner(userId),
         accessRole: "owner",
         capabilities: spaceCapabilities("owner", { type: "team", member: true }),
       };
     },
 
     get(userId, spaceId) {
-      return resolveSpace(options.access, userId, spaceId);
+      return resolveSpace(options.access, options.repository, userId, spaceId);
+    },
+
+    getStar(userId, spaceId) {
+      if (!options.access.resolveSpace(userId, spaceId)) throw notFound();
+      return options.repository.getStar(userId, spaceId);
+    },
+
+    setStar(userId, spaceId, starred) {
+      if (!options.access.resolveSpace(userId, spaceId)) throw notFound();
+      return options.repository.setStar(userId, spaceId, starred, now());
     },
 
     update(userId, spaceId, input) {
@@ -89,7 +109,11 @@ export function createSpacesModule(options: {
           "The current user cannot update this space."
         );
       }
-      if (input.name === undefined && input.publicRead === undefined) {
+      if (
+        input.name === undefined &&
+        input.publicRead === undefined &&
+        input.description === undefined
+      ) {
         throw new ApplicationError(
           "INVALID_INPUT",
           400,
@@ -101,17 +125,25 @@ export function createSpacesModule(options: {
       const publicRead = input.publicRead === undefined
         ? access.publicRead
         : validBoolean(input.publicRead, "publicRead");
+      const description = input.description === undefined
+        ? options.repository.getDescription(spaceId)
+        : validDescription(input.description);
       if (input.name !== undefined) {
         options.repository.updateName(spaceId, name, updatedAt);
       }
       if (input.publicRead !== undefined) {
         options.repository.updatePublicRead(spaceId, publicRead, updatedAt);
       }
+      if (input.description !== undefined) {
+        options.repository.updateDescription(spaceId, description, updatedAt);
+      }
       return {
         id: access.id,
         type: access.type,
         name,
         publicRead,
+        description,
+        owner: options.repository.getOwner(access.ownerUserId),
         accessRole: access.role,
         capabilities: access.capabilities,
       };
@@ -121,6 +153,7 @@ export function createSpacesModule(options: {
 
 function resolveSpace(
   resolver: AccessResolver,
+  repository: SpacesRepository,
   userId: string,
   spaceId: string
 ): SpaceView {
@@ -131,6 +164,8 @@ function resolveSpace(
     type: access.type,
     name: access.name,
     publicRead: access.publicRead,
+    description: repository.getDescription(access.id),
+    owner: repository.getOwner(access.ownerUserId),
     accessRole: access.role,
     capabilities: access.capabilities,
   };
@@ -167,6 +202,27 @@ function validName(value: unknown): string {
     );
   }
   return name;
+}
+
+function validDescription(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new ApplicationError(
+      "INVALID_INPUT",
+      400,
+      "Space description must be a string.",
+      "description"
+    );
+  }
+  const description = value.trim();
+  if (description.length > 350) {
+    throw new ApplicationError(
+      "INVALID_INPUT",
+      400,
+      "Space description must contain at most 350 characters.",
+      "description"
+    );
+  }
+  return description;
 }
 
 function notFound(): ApplicationError {

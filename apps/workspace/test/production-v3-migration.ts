@@ -124,6 +124,8 @@ try {
     BEGIN
       SELECT RAISE(ABORT, 'asset upload scope is immutable');
     END;
+    ALTER TABLE spaces DROP COLUMN description;
+    DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
     DROP TABLE IF EXISTS issue_assignees;
     DROP TABLE IF EXISTS issue_label_links;
@@ -144,7 +146,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 9);
+    assert.equal(version.user_version, 11);
     const columns = migrated.database.connection
       .prepare("PRAGMA table_info(univer_asset_uploads)")
       .all() as unknown as Array<{ readonly name: string }>;

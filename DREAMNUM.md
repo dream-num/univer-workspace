@@ -10,7 +10,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 ### Owns
 
 - The Workspace product model for identity, Spaces, Nodes, Resources, access, sharing, Trash, recent activity,
-  Blobs, Univer Assets, product-level Worktrees, Team Space Issues, and recoverable cross-system operations. See the
+  Blobs, Univer Assets, product-level Worktrees, Team Space Issues, Space stars, and recoverable cross-system operations. See the
   [application design](apps/workspace/docs/application-design.md).
 - The deployable Workspace Browser and Server composition, including the product HTTP contract, authenticated and anonymous read-only
   Collaboration Endpoint integration, local persistence layout, and deployment lifecycle. See the
@@ -106,6 +106,12 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   and publishes directly; it does not use Worktree review.
 - Link Sharing and Space public read admit anonymous viewers without creating Users or Login Sessions.
   Product writes and Worktree access still require authentication; HTML source permissions remain independent.
+- Space stars are protected product User-Space relations, not memberships or access grants. The authenticated
+  `GET/PUT/DELETE /api/spaces/{spaceId}/star` contract returns only the caller's state and an aggregate count;
+  `SpaceView.owner` projects the existing owner's ID and username. Product V10 adds stars through the backed-up
+  V9 → V10 startup migration; V11 adds the plain-text `SpaceView.description` (at most 350 characters, editable by
+  users who can rename the Space) through a backed-up V10 → V11 startup migration. Old and new writers must not
+  share the product file.
 - Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), sharing state, and user-authored
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal

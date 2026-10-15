@@ -199,22 +199,16 @@ function RepositoryBreadcrumbs({
   readonly breadcrumbs: readonly RepositoryBreadcrumb[] | undefined;
   readonly current: ReactNode | undefined;
 }) {
-  const { t } = useI18n();
   const trail = [...(breadcrumbs ?? [])];
+  const CurrentHeading = spaceId === undefined ? "h1" : "span";
   // The current page is rendered from `current`; a matching last crumb would only repeat it.
   if (typeof current === "string" && trail[trail.length - 1]?.label === current) trail.pop();
-  const visibility = space
-    ? space.type === "personal"
-      ? "repositoryVisibilityPersonal"
-      : space.publicRead
-        ? "repositoryVisibilityPublic"
-        : "repositoryVisibilityPrivate"
-    : undefined;
   const ancestorItems: ReactNode[] = [];
   if (spaceId !== undefined) {
     ancestorItems.push(
       <li key={`space-${spaceId}`} className="flex min-w-0 items-center gap-2">
-        <BreadcrumbSeparator className="hidden sm:inline" />
+        {space?.owner ? <span className="max-w-24 truncate sm:max-w-40">{space.owner.username}</span> : null}
+        <BreadcrumbSeparator className={undefined} />
         <Link
           to="/spaces/$spaceId"
           params={{ spaceId }}
@@ -222,17 +216,12 @@ function RepositoryBreadcrumbs({
           activeOptions={{ exact: true }}
           className={cn(
             breadcrumbLinkClass,
-            "max-w-24 sm:max-w-52",
+            "max-w-40 shrink sm:max-w-52",
             current === undefined ? "truncate" : undefined,
           )}
         >
           {spaceName}
         </Link>
-        {visibility ? (
-          <span className="hidden shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground sm:inline">
-            {t(visibility)}
-          </span>
-        ) : null}
       </li>,
     );
   }
@@ -282,19 +271,20 @@ function RepositoryBreadcrumbs({
         <li className="flex min-w-0 items-center gap-2">
           <Link
             to="/home"
+            aria-label="OfficeLab"
             className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <BrandMark />
-            <span className="hidden font-semibold tracking-tight sm:inline">OfficeLab</span>
+            {spaceId === undefined ? <span className="hidden font-semibold tracking-tight sm:inline">OfficeLab</span> : null}
           </Link>
         </li>
         {ancestorItems}
         {current !== undefined ? (
           <li className="flex min-w-0 items-center gap-2">
             <BreadcrumbSeparator className={undefined} />
-            <h1 className="m-0 min-w-0 truncate text-[18px] font-semibold tracking-tight max-[720px]:text-[15px]">
+            <CurrentHeading className="m-0 min-w-0 truncate text-sm font-semibold">
               {current}
-            </h1>
+            </CurrentHeading>
           </li>
         ) : null}
       </ol>
@@ -705,7 +695,7 @@ function AuthenticatedWorkspaceLayout({
             style={{ display: immersive ? "none" : undefined }}
             className={cn(
               "flex shrink-0 items-center justify-between gap-4 border-b border-border pr-4.5 pl-6 max-[720px]:px-3",
-              repositoryShell ? "h-16 bg-surface" : "h-15",
+              repositoryShell ? "repository-chrome h-14 border-b-0 bg-surface px-4" : "h-15",
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-1">

@@ -94,6 +94,18 @@ export function NodeBrowser(props: {
     typeFilter !== "all" || normalizedSearch
       ? t("filteredItemsCount", { count: visibleNodes.length, total: props.page.nodes.length })
       : t("itemsCount", { count: props.page.nodes.length });
+  const filtering = typeFilter !== "all" || Boolean(normalizedSearch);
+  const compact = props.compact === true;
+  const rowClass = compact
+    ? "group relative border-t border-border px-4 text-muted-foreground transition-colors first:border-t-0 focus-within:z-10"
+    : "group relative rounded-lg px-3 text-muted-foreground transition-colors max-[720px]:px-2.5 focus-within:z-10";
+  const rowHoverClass = compact
+    ? "hover:bg-accent data-popup-open:bg-accent"
+    : "hover:bg-muted/70 data-popup-open:bg-muted/70";
+  const rowLinkClass = cn(
+    "absolute inset-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+    compact ? "focus-visible:ring-inset" : "rounded-lg",
+  );
   const canClearFilters =
     typeFilter !== "all" ||
     Boolean(normalizedSearch && (props.onClearSearch || props.onSearchChange));
@@ -145,24 +157,29 @@ export function NodeBrowser(props: {
 
   return (
     <>
-      <div className={cn("flex h-full min-h-0 flex-col", props.className)}>
-        <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border px-6 py-2.5 max-[720px]:px-4">
+      <div className={cn(compact ? "grid gap-3" : "flex h-full min-h-0 flex-col", props.className)}>
+        <div
+          className={cn(
+            "flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2",
+            !compact && "min-h-14 border-b border-border px-6 py-2.5 max-[720px]:px-4",
+          )}
+        >
           {props.onSearchChange ? (
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
-              <div className="relative w-full max-w-sm min-w-0">
+              <div className={cn("relative w-full min-w-0", compact ? "max-w-xs" : "max-w-sm")}>
                 <Search
                   className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
                   aria-hidden="true"
                 />
                 <Input
                   aria-label={searchLabel}
-                  className="h-9 pl-9"
+                  className={cn("pl-9", compact ? "h-8" : "h-9")}
                   placeholder={searchLabel}
                   value={props.searchQuery ?? ""}
                   onChange={(event) => props.onSearchChange?.(event.target.value)}
                 />
               </div>
-              <p className="m-0 text-[13px] text-muted-foreground">
+              <p className={cn("m-0 text-[13px] text-muted-foreground", compact && !filtering && "hidden")}>
                 {itemCount}
               </p>
             </div>
@@ -199,7 +216,7 @@ export function NodeBrowser(props: {
                   ]}
                 />
               ) : null}
-              <p className="m-0 text-[13px] text-muted-foreground">
+              <p className={cn("m-0 text-[13px] text-muted-foreground", compact && !filtering && "hidden")}>
                 {itemCount}
               </p>
             </div>
@@ -216,6 +233,11 @@ export function NodeBrowser(props: {
             </div>
           ) : null}
         </div>
+        <div
+          className={cn(
+            compact ? "overflow-hidden rounded-md border border-border bg-background" : "contents",
+          )}
+        >
         {props.page.nodes.length === 0 ? (
           <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-6">
             <Empty title={t("groupEmpty")} />
@@ -225,8 +247,8 @@ export function NodeBrowser(props: {
             <div
               className={cn(
                 nodeGridClass,
-                "shrink-0 border-b border-border px-6 text-[13px] font-medium text-muted-foreground max-[720px]:px-4",
-                props.compact ? "h-10" : "h-11"
+                "shrink-0 border-b border-border text-[13px] font-medium text-muted-foreground",
+                compact ? "h-10 bg-surface px-4" : "h-11 px-6 max-[720px]:px-4"
               )}
             >
               <Select<NodeFilter>
@@ -254,14 +276,14 @@ export function NodeBrowser(props: {
               </span>
               <span aria-hidden="true" />
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 max-[720px]:px-1.5">
+            <div className={cn(!compact && "min-h-0 flex-1 overflow-y-auto px-3 py-2 max-[720px]:px-1.5")}>
               {parentRow ? (
                 <div
                   className={cn(
                     nodeGridClass,
                     rowHeightClass,
-                    "group relative rounded-lg px-3 text-muted-foreground transition-colors max-[720px]:px-2.5",
-                    "hover:bg-muted/70 focus-within:z-10"
+                    rowClass,
+                    compact ? "hover:bg-accent" : "hover:bg-muted/70"
                   )}
                 >
                   <Link
@@ -276,7 +298,7 @@ export function NodeBrowser(props: {
                           params: { nodeId: parentRow.nodeId },
                         })}
                     aria-label={t("repositoryGoToParent", { name: parentRow.label })}
-                    className="absolute inset-0 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                    className={rowLinkClass}
                   />
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="grid size-5 shrink-0 place-items-center">
@@ -328,15 +350,15 @@ export function NodeBrowser(props: {
                         className={cn(
                           nodeGridClass,
                           rowHeightClass,
-                          "group relative rounded-lg px-3 text-muted-foreground transition-colors max-[720px]:px-2.5",
-                          "hover:bg-muted/70 data-popup-open:bg-muted/70 focus-within:z-10"
+                          rowClass,
+                          rowHoverClass
                         )}
                       >
                         <Link
                           to="/nodes/$nodeId"
                           params={{ nodeId: node.id }}
                           aria-label={node.name}
-                          className="absolute inset-0 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                          className={rowLinkClass}
                         />
                         <div className="flex min-w-0 items-center gap-3">
                           <NodeIcon
@@ -356,7 +378,10 @@ export function NodeBrowser(props: {
                             variant="list"
                           />
                           <span
-                            className="truncate text-sm font-medium text-foreground"
+                            className={cn(
+                              "truncate text-sm text-foreground",
+                              compact ? "font-normal group-hover:underline" : "font-medium",
+                            )}
                             title={node.name}
                           >
                             {node.name}
@@ -387,6 +412,7 @@ export function NodeBrowser(props: {
             </div>
           </>
         )}
+        </div>
       </div>
 
       <Dialog

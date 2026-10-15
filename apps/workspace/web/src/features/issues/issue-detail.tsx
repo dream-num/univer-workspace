@@ -17,6 +17,7 @@ import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import { useI18n, type MessageKey } from "../../shared/i18n";
+import { useTheme } from "../../shared/theme";
 import {
   Avatar,
   Button,
@@ -59,6 +60,8 @@ export function IssueDetail({
   readonly canCreate: boolean;
 }) {
   const { language, t } = useI18n();
+  const { workspaceTheme } = useTheme();
+  const repository = workspaceTheme === "repository";
   const queryClient = useQueryClient();
   const issueQuery = useQuery(issueQueryOptions(spaceId, number));
   const timeline = useQuery(issueTimelineQueryOptions(spaceId, number));
@@ -142,7 +145,9 @@ export function IssueDetail({
 
   return (
     <div className="grid gap-6">
-      <header className="grid gap-3 border-b border-border pb-4">
+      <header
+        className={cn("grid gap-3 border-b border-border pb-4", repository && "border-0 pb-0")}
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           {editingTitle ? (
             <form
@@ -169,15 +174,28 @@ export function IssueDetail({
               </Button>
             </form>
           ) : (
-            <h2 className="m-0 min-w-0 flex-1 text-2xl leading-tight font-semibold tracking-tight [overflow-wrap:anywhere]">
-              {issue.title} <span className="font-normal text-muted-foreground">#{issue.number}</span>
-            </h2>
+            <h1
+              className={cn(
+                "m-0 min-w-0 flex-1 text-2xl leading-tight font-semibold tracking-tight [overflow-wrap:anywhere]",
+                repository &&
+                  "text-[32px] leading-10 font-normal max-[720px]:order-last max-[720px]:basis-full max-[720px]:text-2xl max-[720px]:leading-8",
+              )}
+            >
+              {issue.title}{" "}
+              <span className="font-normal text-muted-foreground">#{issue.number}</span>
+            </h1>
           )}
           {!editingTitle ? (
-            <div className="flex shrink-0 gap-2">
+            <div
+              className={cn(
+                "flex shrink-0 gap-2",
+                repository && "max-[720px]:w-full max-[720px]:justify-end",
+              )}
+            >
               {issue.capabilities.edit ? (
                 <Button
                   variant="secondary"
+                  size="sm"
                   onClick={() => {
                     setTitle(issue.title);
                     setEditingTitle(true);
@@ -192,7 +210,7 @@ export function IssueDetail({
                   to="/spaces/$spaceId/issues/new"
                   params={{ spaceId }}
                   search={{}}
-                  className={cn(buttonVariants(), "no-underline")}
+                  className={cn(buttonVariants({ size: "sm" }), "no-underline")}
                 >
                   {t("issueNew")}
                 </Link>
@@ -202,27 +220,31 @@ export function IssueDetail({
         </div>
         <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
           <IssueStateBadge issue={issue} />
-          <span>
-            {t("issueOpenedMeta", {
-              name: issue.author.displayName,
-              date: formatRelativeDate(issue.createdAt, language),
-            })}
-            {" · "}
-            {t("issueCommentCount", { count: issue.commentCount })}
-          </span>
+          {!repository ? (
+            <span>
+              {t("issueOpenedMeta", {
+                name: issue.author.displayName,
+                date: formatRelativeDate(issue.createdAt, language),
+              })}
+              {" · "}
+              {t("issueCommentCount", { count: issue.commentCount })}
+            </span>
+          ) : null}
         </p>
       </header>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
         <IssueSidebar
           issue={issue}
           onEdit={(kind) => setPicker(kind)}
-          className="order-first lg:order-last"
+          className={repository ? "order-last" : "order-first lg:order-last"}
         />
         <div className="grid min-w-0 gap-4">
+          <h2 className="sr-only">{t("issueBody")}</h2>
           <Card
             author={issue.author}
             date={formatRelativeDate(issue.createdAt, language)}
+            opened
             actions={
               issue.capabilities.edit && !editingBody ? (
                 <MenuRoot>
@@ -257,7 +279,9 @@ export function IssueDetail({
                   </Button>
                   <Button
                     disabled={busy}
-                    onClick={() => patch.mutate({ body }, { onSuccess: () => setEditingBody(false) })}
+                    onClick={() =>
+                      patch.mutate({ body }, { onSuccess: () => setEditingBody(false) })
+                    }
                   >
                     {t("save")}
                   </Button>
@@ -270,31 +294,51 @@ export function IssueDetail({
             )}
           </Card>
 
-          {timeline.isPending ? (
-            <div className="grid place-items-center py-6">
-              <Spinner />
-            </div>
-          ) : timeline.error ? (
-            <p role="alert" className="m-0 text-sm text-destructive">
-              {timeline.error.message}
-            </p>
-          ) : (
-            timeline.data.map((item) =>
-              item.type === "comment" ? (
-                <CommentCard
-                  key={item.id}
-                  comment={item}
-                  canEdit={me === item.author.id && issue.capabilities.comment}
-                  canDelete={(me === item.author.id && issue.capabilities.comment) || canManageComments}
-                />
-              ) : (
-                <EventLine key={item.id} event={item} />
-              ),
-            )
-          )}
+          <section aria-label={t("issueActivity")} className="grid gap-4">
+            {timeline.isPending ? (
+              <div className="grid place-items-center py-6">
+                <Spinner />
+              </div>
+            ) : timeline.error ? (
+              <p role="alert" className="m-0 text-sm text-destructive">
+                {timeline.error.message}
+              </p>
+            ) : (
+              timeline.data.map((item) =>
+                item.type === "comment" ? (
+                  <CommentCard
+                    key={item.id}
+                    comment={item}
+                    canEdit={me === item.author.id && issue.capabilities.comment}
+                    canDelete={
+                      (me === item.author.id && issue.capabilities.comment) || canManageComments
+                    }
+                  />
+                ) : (
+                  <EventLine key={item.id} event={item} />
+                ),
+              )
+            )}
+          </section>
 
           {issue.capabilities.comment ? (
-            <section aria-label={t("issueAddComment")} className="grid gap-3 rounded-lg border border-border p-4">
+            <section
+              aria-label={t("issueAddComment")}
+              className={cn(
+                "grid gap-3 rounded-lg border border-border p-4",
+                repository && "rounded-none border-x-0 border-b-0 px-0 pt-6",
+              )}
+            >
+              <h2 className="m-0 flex items-center gap-2 text-base font-semibold">
+                {session.data?.authenticated ? (
+                  <Avatar
+                    src={session.data.user.avatarUrl}
+                    name={session.data.user.displayName}
+                    size="xs"
+                  />
+                ) : null}
+                {t("issueAddComment")}
+              </h2>
               <IssueComposer
                 value={comment}
                 onChange={setComment}
@@ -343,7 +387,11 @@ export function IssueDetail({
                       </MenuRoot>
                     </div>
                   ) : (
-                    <Button variant="secondary" disabled={busy} onClick={() => patch.mutate({ state: "open" })}>
+                    <Button
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => patch.mutate({ state: "open" })}
+                    >
                       <CircleDot className="text-state-open" />
                       {t("issueReopen")}
                     </Button>
@@ -376,7 +424,9 @@ export function IssueDetail({
         onOpenChange={(open) => setPicker(open ? "assignees" : null)}
         current={issue.assignees}
         saving={patch.isPending}
-        onSave={(assigneeUserIds) => patch.mutate({ assigneeUserIds }, { onSuccess: () => setPicker(null) })}
+        onSave={(assigneeUserIds) =>
+          patch.mutate({ assigneeUserIds }, { onSuccess: () => setPicker(null) })
+        }
       />
       <IssueReferencesDialog
         spaceId={spaceId}
@@ -395,25 +445,29 @@ function Card({
   date,
   actions,
   edited,
+  opened,
   children,
 }: {
   readonly author: PublicUser;
   readonly date: string;
   readonly actions?: ReactNode;
   readonly edited?: boolean;
+  readonly opened?: boolean;
   readonly children: ReactNode;
 }) {
   const { t } = useI18n();
   return (
-    <article className="min-w-0 overflow-hidden rounded-lg border border-border bg-background">
-      <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-2 text-sm">
+    <article className="issue-comment min-w-0 overflow-hidden rounded-lg border border-border bg-background">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-surface px-3 py-2 text-sm">
         <Avatar src={author.avatarUrl} name={author.displayName} size="xs" />
         <span className="font-semibold text-foreground">{author.displayName}</span>
-        <span className="text-muted-foreground">{date}</span>
+        <span className="text-muted-foreground">
+          {t(opened ? "issueOpenedOn" : "issueCommentedOn", { date })}
+        </span>
         {edited ? <span className="text-muted-foreground">· {t("issueEdited")}</span> : null}
         <span className="ml-auto">{actions}</span>
       </div>
-      <div className="px-4 py-3">{children}</div>
+      <div className="px-4 py-4">{children}</div>
     </article>
   );
 }
@@ -560,7 +614,9 @@ function EventLine({ event }: { readonly event: TimelineEvent }) {
   const payload = event.payload;
   const notPlanned = event.kind === "closed" && payload["reason"] === "not_planned";
   const key = notPlanned ? "issueEventClosedNotPlanned" : EVENT_MESSAGES[event.kind];
-  const strong = (value: string) => <strong className="font-semibold text-foreground">{value || "?"}</strong>;
+  const strong = (value: string) => (
+    <strong className="font-semibold text-foreground">{value || "?"}</strong>
+  );
   const nodes: Record<string, ReactNode> = {
     actor: strong(event.actor.displayName),
     from: strong(text(payload["from"])),
@@ -592,12 +648,22 @@ function EventLine({ event }: { readonly event: TimelineEvent }) {
         ? "text-state-open"
         : "text-subtle-foreground";
   return (
-    <p className="m-0 flex flex-wrap items-center gap-x-1.5 gap-y-1 pl-4 text-sm text-muted-foreground">
-      <Icon className={cn("size-4 shrink-0", tone)} aria-hidden="true" />
-      <span className="flex flex-wrap items-center gap-x-1.5">{interpolate(t(key), nodes)}</span>
-      <span aria-hidden="true">·</span>
-      <span>{formatRelativeDate(event.createdAt, language)}</span>
-    </p>
+    <div className="issue-event relative flex min-h-10 items-center gap-3 py-2 pl-4 text-sm text-muted-foreground before:absolute before:inset-y-[-16px] before:left-[31px] before:w-0.5 before:bg-border">
+      <span
+        className={cn(
+          "relative grid size-8 shrink-0 place-items-center rounded-full bg-surface ring-4 ring-background",
+          tone,
+        )}
+      >
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <p className="relative m-0 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 [overflow-wrap:anywhere]">
+          {interpolate(t(key), nodes)}
+        </span>
+        <span>{formatRelativeDate(event.createdAt, language)}</span>
+      </p>
+    </div>
   );
 }
 
@@ -613,8 +679,14 @@ function IssueSidebar({
   const { t } = useI18n();
   const triage = issue.capabilities.triage;
   return (
-    <aside className={cn("grid min-w-0 gap-4 max-lg:grid-cols-2 max-[560px]:grid-cols-1", className)}>
-      <SidebarSection title={t("issueAssignees")} onEdit={triage ? () => onEdit("assignees") : undefined}>
+    <aside
+      className={cn("grid min-w-0 gap-4 max-lg:grid-cols-2 max-[560px]:grid-cols-1", className)}
+    >
+      <h2 className="sr-only">{t("issueMetadata")}</h2>
+      <SidebarSection
+        title={t("issueAssignees")}
+        onEdit={triage ? () => onEdit("assignees") : undefined}
+      >
         {issue.assignees.length ? (
           <ul className="m-0 grid list-none gap-1.5 p-0">
             {issue.assignees.map((user) => (
@@ -653,8 +725,12 @@ function IssueSidebar({
                     <NodeIcon
                       kind={reference.resource ? "resource" : "group"}
                       resourceKind={reference.resource?.kind}
-                      unitType={reference.resource?.kind === "univer" ? reference.resource.unitType : null}
-                      mediaType={reference.resource?.kind === "blob" ? reference.resource.mediaType : null}
+                      unitType={
+                        reference.resource?.kind === "univer" ? reference.resource.unitType : null
+                      }
+                      mediaType={
+                        reference.resource?.kind === "blob" ? reference.resource.mediaType : null
+                      }
                       name={reference.name}
                     />
                     <Link
@@ -666,7 +742,9 @@ function IssueSidebar({
                     </Link>
                   </>
                 ) : (
-                  <span className="text-muted-foreground italic">{t("issueReferenceUnavailable")}</span>
+                  <span className="text-muted-foreground italic">
+                    {t("issueReferenceUnavailable")}
+                  </span>
                 )}
               </li>
             ))}

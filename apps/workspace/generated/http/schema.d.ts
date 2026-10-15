@@ -426,6 +426,36 @@ export interface paths {
         patch: operations["updateSpace"];
         trace?: never;
     };
+    "/api/spaces/{spaceId}/star": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the current User's star state and the Space's total stars.
+         * @description Requires login and existing Space access. A star never grants access.
+         */
+        get: operations["getSpaceStar"];
+        /**
+         * Star a Space for the current User.
+         * @description Idempotent and safe to retry. Requires login and existing Space access, including public-read access. Ignores client-supplied identities and counts.
+         */
+        put: operations["starSpace"];
+        post?: never;
+        /**
+         * Remove the current User's star from a Space.
+         * @description Idempotent and safe to retry. Requires login and existing Space access. Removing an absent star leaves the count unchanged.
+         */
+        delete: operations["unstarSpace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spaces/{spaceId}/nodes": {
         parameters: {
             query?: never;
@@ -1411,8 +1441,21 @@ export interface components {
         PublicUser: components["schemas"]["User"];
         SessionView: components["schemas"]["AnonymousSession"] | components["schemas"]["AuthenticatedSession"];
         SpaceView: components["schemas"]["SpaceSummary"] & {
+            /** @description Short plain-text summary of the Space. Empty when none has been set. */
+            description: string;
+            /** @description The authoritative Space owner, including when viewed by another User. */
+            owner: {
+                id: string;
+                username: string;
+            };
             accessRole: components["schemas"]["SpaceRole"];
             capabilities: components["schemas"]["SpaceCapabilities"];
+        };
+        SpaceStar: {
+            /** @description Whether the authenticated User has starred this Space. */
+            starred: boolean;
+            /** @description Total stars on the Space, calculated from unique User-Space relations. */
+            starCount: number;
         };
         NodeSummary: {
             id: string;
@@ -1659,6 +1702,8 @@ export interface components {
         PatchSpace: {
             name?: string;
             publicRead?: boolean;
+            /** @description Plain text. Surrounding whitespace is trimmed; an empty string clears the description. */
+            description?: string;
         };
         /** @enum {string} */
         UnitType: "sheet" | "doc" | "slide" | "board" | "base";
@@ -3046,6 +3091,78 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSpaceStar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current star state and count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceStar"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    starSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Starred state and updated total count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceStar"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    unstarSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unstarred state and updated total count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceStar"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };

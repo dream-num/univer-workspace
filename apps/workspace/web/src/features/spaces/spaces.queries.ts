@@ -12,3 +12,16 @@ export const spacesQueryOptions = queryOptions({
     return data;
   },
 });
+
+export function spaceStarQueryOptions(spaceId: string) {
+  return queryOptions({
+    queryKey: ["spaces", spaceId, "star"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/spaces/{spaceId}/star", {
+        params: { path: { spaceId } },
+      });
+      if (error) throw apiError(error);
+      return data;
+    },
+  });
+}

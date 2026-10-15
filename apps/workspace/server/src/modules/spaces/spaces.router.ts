@@ -42,9 +42,25 @@ export function createSpacesRouter(options: {
         {
           name: request.body?.name,
           publicRead: request.body?.publicRead,
+          description: request.body?.description,
         }
       )
     );
+  });
+
+  router.get("/spaces/:spaceId/star", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(options.spaces.getStar(session.user.id, requiredParameter(request.params.spaceId)));
+  });
+
+  router.put("/spaces/:spaceId/star", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(options.spaces.setStar(session.user.id, requiredParameter(request.params.spaceId), true));
+  });
+
+  router.delete("/spaces/:spaceId/star", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(options.spaces.setStar(session.user.id, requiredParameter(request.params.spaceId), false));
   });
 
   return router;

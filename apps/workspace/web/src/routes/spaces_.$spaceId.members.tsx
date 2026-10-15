@@ -1,27 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  TeamMemberManager,
-  teamMembersQueryOptions,
-} from "../features/permissions";
+import { TeamMemberManager, teamMembersQueryOptions } from "../features/permissions";
 import { requireAuthenticatedSession } from "../features/auth";
-import { RepositoryTabs, SpaceSettingsNav, spacesQueryOptions } from "../features/spaces";
+import { RepositorySettingsLayout, spacesQueryOptions } from "../features/spaces";
 import { useI18n } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
-import {
-  WorkspaceHeaderSearch,
-  WorkspaceLayout,
-} from "./-workspace-layout";
+import { Input } from "../shared/ui";
+import { WorkspaceHeaderSearch, WorkspaceLayout } from "./-workspace-layout";
 
 export const Route = createFileRoute("/spaces_/$spaceId/members")({
   loader: async ({ context, params, location }) => {
     await requireAuthenticatedSession(context.queryClient, location.href);
     await Promise.all([
       context.queryClient.ensureQueryData(spacesQueryOptions),
-      context.queryClient.ensureQueryData(
-        teamMembersQueryOptions(params.spaceId)
-      ),
+      context.queryClient.ensureQueryData(teamMembersQueryOptions(params.spaceId)),
     ]);
   },
   component: TeamMembersPage,
@@ -59,23 +52,27 @@ function TeamMembersPage() {
         : { selectedView: "members" as const })}
       headerTitle={t("members")}
       headerContent={
-        <WorkspaceHeaderSearch
-          placeholder={t("searchMembers")}
-          value={searchQuery}
-          onChange={setSearchQuery}
-        />
+        !repository ? (
+          <WorkspaceHeaderSearch
+            placeholder={t("searchMembers")}
+            value={searchQuery}
+            onChange={setSearchQuery}
+          />
+        ) : undefined
       }
     >
       {repository ? (
-        <>
-          <RepositoryTabs spaceId={spaceId} active="settings" />
-          <div className="min-h-0 flex-1 overflow-y-auto bg-background">
-            <div className="mx-auto flex max-w-6xl gap-8 px-6 py-6 max-[720px]:flex-col max-[720px]:gap-4 max-[720px]:px-4 max-[720px]:py-4">
-              <SpaceSettingsNav spaceId={spaceId} current="members" />
-              <div className="min-w-0 flex-1">{manager}</div>
-            </div>
-          </div>
-        </>
+        <RepositorySettingsLayout spaceId={spaceId} current="members" title={t("members")}>
+          <Input
+            type="search"
+            aria-label={t("searchMembers")}
+            placeholder={t("searchMembers")}
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="mb-4 h-8 max-w-sm rounded-[6px]"
+          />
+          {manager}
+        </RepositorySettingsLayout>
       ) : (
         manager
       )}

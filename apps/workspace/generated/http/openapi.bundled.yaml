@@ -727,6 +727,64 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/spaces/{spaceId}/star:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Spaces
+      operationId: getSpaceStar
+      summary: Read the current User's star state and the Space's total stars.
+      description: Requires login and existing Space access. A star never grants access.
+      responses:
+        '200':
+          description: Current star state and count.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceStar'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Spaces
+      operationId: starSpace
+      summary: Star a Space for the current User.
+      description: Idempotent and safe to retry. Requires login and existing Space access, including public-read access. Ignores client-supplied identities and counts.
+      responses:
+        '200':
+          description: Starred state and updated total count.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceStar'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Spaces
+      operationId: unstarSpace
+      summary: Remove the current User's star from a Space.
+      description: Idempotent and safe to retry. Requires login and existing Space access. Removing an absent star leaves the count unchanged.
+      responses:
+        '200':
+          description: Unstarred state and updated total count.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceStar'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/spaces/{spaceId}/nodes:
     parameters:
       - name: spaceId
@@ -2602,12 +2660,44 @@ components:
           required:
             - accessRole
             - capabilities
+            - owner
+            - description
           properties:
+            description:
+              type: string
+              maxLength: 350
+              description: Short plain-text summary of the Space. Empty when none has been set.
+            owner:
+              type: object
+              additionalProperties: false
+              required:
+                - id
+                - username
+              properties:
+                id:
+                  type: string
+                username:
+                  type: string
+              description: The authoritative Space owner, including when viewed by another User.
             accessRole:
               $ref: '#/components/schemas/SpaceRole'
             capabilities:
               $ref: '#/components/schemas/SpaceCapabilities'
       unevaluatedProperties: false
+    SpaceStar:
+      type: object
+      additionalProperties: false
+      required:
+        - starred
+        - starCount
+      properties:
+        starred:
+          type: boolean
+          description: Whether the authenticated User has starred this Space.
+        starCount:
+          type: integer
+          minimum: 0
+          description: Total stars on the Space, calculated from unique User-Space relations.
     NodeSummary:
       type: object
       additionalProperties: false
@@ -3348,6 +3438,10 @@ components:
           maxLength: 100
         publicRead:
           type: boolean
+        description:
+          type: string
+          maxLength: 350
+          description: Plain text. Surrounding whitespace is trimmed; an empty string clears the description.
     UnitType:
       type: string
       enum:
