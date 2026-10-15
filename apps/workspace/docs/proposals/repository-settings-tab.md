@@ -37,7 +37,9 @@
 | 永久删除 | Content → Trash → Remove | Escape 取消保留条目；确认删除后列表为空，Node GET 返回 404。 |
 | 权限 | 直接进入 Settings | viewer 的表单和可见性操作禁用，显示只读原因，管理导航隐藏；个人仓库仍可编辑 General。 |
 
-## 截图对比
+## 参考与对比记录
+
+实施时已完成截图对比；按要求不在仓库保留图片，以下保留参考来源、对比方法和结论。
 
 参考为当前线上、已登录的 [dream-num/univer-workspace Settings](https://github.com/dream-num/univer-workspace/settings)。
 只读查看，未修改任何 GitHub 仓库设置或账号主题。Workspace 为临时测试仓库。
@@ -46,24 +48,9 @@
 桌面视口均为 1440×900。下面为内容对齐裁剪：GitHub 从 y=100、Workspace 从 y=170 开始，
 各保留 1440×700，区别来自既有公共仓库标题行。没有缩放任一侧。
 
-![General：左 GitHub、右 Workspace](../../../../docs/images/repository-settings/comparison-general.png)
-
 可见性比较各截取同类区域 920×118；GitHub 从 (408,432)，Workspace 从 (408,603) 开始。
 
-![可见性区域：左 GitHub、右 Workspace](../../../../docs/images/repository-settings/comparison-visibility.png)
-
 移动端视口均为 390×844，保留完整首屏，没有裁剪。
-
-![移动端：左 GitHub、右 Workspace](../../../../docs/images/repository-settings/comparison-mobile.png)
-
-原图：[GitHub General](../../../../docs/images/repository-settings/github-general.png) ·
-[GitHub Danger Zone](../../../../docs/images/repository-settings/github-danger-zone.png) ·
-[Workspace General](../../../../docs/images/repository-settings/workspace-general.png) ·
-[协作者](../../../../docs/images/repository-settings/workspace-collaborators.png) ·
-[回收站](../../../../docs/images/repository-settings/workspace-trash.png) ·
-[暗色](../../../../docs/images/repository-settings/workspace-dark.png) ·
-[中文](../../../../docs/images/repository-settings/workspace-chinese.png) ·
-[只读](../../../../docs/images/repository-settings/workspace-readonly.png)。
 
 ### 剩余差异
 

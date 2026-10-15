@@ -20,11 +20,6 @@
 | 保留 | Workspace 有关联文件，GitHub 没有完全对应项 | 保留 Linked files，不伪装成 Development |
 | 不显示 | Projects、Milestones、Type、Relationships、reactions、订阅缺少模型或接口支持 | 不新增假控件、数据或接口 |
 
-改动前原图：[列表](../../../../docs/images/repository-issues-tab/before-list.png)、
-[详情](../../../../docs/images/repository-issues-tab/before-detail.png)。
-GitHub 原图：[列表](../../../../docs/images/repository-issues-tab/github-list.png)、
-[详情](../../../../docs/images/repository-issues-tab/github-detail.png)。
-
 ## 实现
 
 - Repository 列表有 256px 左侧导航，支持 Issues、Assigned to me、Created by me、Recent activity、Labels
@@ -42,19 +37,15 @@ GitHub 原图：[列表](../../../../docs/images/repository-issues-tab/github-li
 - 创建、评论、编辑、状态变更、标签、指派和关联文件继续调用原有 mutation；权限判断、Markdown 安全策略、
   分页和实时失效保持不变。共享的 IssueComposer、状态徽标和侧栏标题也供 Wiki / 新建页使用。
 
-## 并排对比
+## 参考与对比记录
+
+实施时已完成截图对比；按要求不在仓库保留图片，以下保留对比方法和结论。
 
 以下每张图均为**左 GitHub、右 Workspace**，1440×1000 原图各缩放至 50%，不裁剪公共页头。
 红色数字对应下表。两侧使用不同的真实/测试内容，不作为逐像素差分。
 浏览器回归另外创建了一个 Issue，最终截图为 9 个 Issue（7 open / 2 closed）；标签与指派回归也追加了时间线事件。
 
-### 列表：改动前
-
-![列表改动前：左 GitHub，右 Workspace](../../../../docs/images/repository-issues-tab/comparison-before-list.png)
-
-### 列表：改动后
-
-![列表改动后：左 GitHub，右 Workspace；数字标注已对齐区域](../../../../docs/images/repository-issues-tab/comparison-after-list.png)
+### 列表
 
 | 标注 | 已对齐 | 尚有差异 |
 | --- | --- | --- |
@@ -63,13 +54,7 @@ GitHub 原图：[列表](../../../../docs/images/repository-issues-tab/github-li
 | 3 | 标题/元数据层级、约 65px 行高、分隔线、计数徽标、行悬停 | 图标仍为 Lucide；标签/作者/头像仍随整行打开详情，不像 GitHub 可直接点击筛选；无密度切换 |
 | 4 | 绿色主按钮、紧凑尺寸 | 沿用 Workspace 的按钮与焦点样式，未做逐像素对齐 |
 
-### 详情：改动前
-
-![详情改动前：左 GitHub，右 Workspace](../../../../docs/images/repository-issues-tab/comparison-before-detail.png)
-
-### 详情：改动后
-
-![详情改动后：左 GitHub，右 Workspace；数字标注已对齐区域](../../../../docs/images/repository-issues-tab/comparison-after-detail.png)
+### 详情
 
 | 标注 | 已对齐 | 尚有差异 |
 | --- | --- | --- |
@@ -77,11 +62,6 @@ GitHub 原图：[列表](../../../../docs/images/repository-issues-tab/github-li
 | 2 | Open / Completed / Not planned 的实心状态徽标 | 没有 Type 和关联 PR 汇总，因为模型不支持 |
 | 3 | 正文/评论卡片的边框和表头、opened/commented、时间线连接与图标 | 日期沿用共享格式（例如 `Today 11:35 AM`），没有 GitHub 的 `1w ago`；Markdown 字号/行距、事件间距仍有差异 |
 | 4 | 280px 元数据栏、句式标题、分组分隔线 | 标签/指派/文件继续使用现有对话框，不是 GitHub 的行内 popover；保留 Linked files |
-
-其他截图：[窄屏列表](../../../../docs/images/repository-issues-tab/mobile-list.png)、
-[窄屏详情](../../../../docs/images/repository-issues-tab/mobile-detail.png)、
-[亮色列表](../../../../docs/images/repository-issues-tab/light-list.png)、
-[亮色详情](../../../../docs/images/repository-issues-tab/light-detail.png)。
 
 ### 剩余差异
 

@@ -372,7 +372,7 @@ filters and adds local text search; details place the summary and review actions
 Overview, with document selection, draft viewing and comparison in Files changed.
 Wiki and the global Workbench retain their existing dashboard. No GitHub PR model,
 comments, branches or checks are introduced. See the
-[screenshots, feature mapping and verification](docs/proposals/repository-pull-requests-tab.md).
+[reference, feature mapping and verification](docs/proposals/repository-pull-requests-tab.md).
 
 Repository Settings uses grouped sidebar navigation and separate name/description saves,
 with confirmed public-read changes in Danger Zone. Collaborator management and Trash keep
@@ -382,7 +382,7 @@ their existing permissions and APIs. See the
 Repository Pages keeps its existing page directory, browser-local default selection, copy and
 visit actions, styled after the published Jekyll Primer theme rather than Pages settings.
 The repository header and tab order stay unchanged. See the
-[reference screenshots, differences and verification](docs/proposals/repository-pages-tab.md).
+[reference, differences and verification](docs/proposals/repository-pages-tab.md).
 
 The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
 repository tag. When provided, it checks out that tag and uses it for the container

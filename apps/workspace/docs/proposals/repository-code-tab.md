@@ -26,20 +26,14 @@ V10 → V11 沿用启动迁移边界：校验 V10 指纹、一致性备份、事
 V11 指纹校验。V1–V9 的升级链和 V0 迁移都落到 V11；V6–V10 的指纹校验函数新增 `spaceColumns` 参数，
 使旧版本仍按各自的列集合校验。部署须停全部旧实例，由单个 V11 实例完成迁移；回退须停新实例并恢复 V10 备份。
 
-## 截图对比
+## 参考与对比记录
+
+实施时已完成截图对比；按要求不在仓库保留图片，以下保留参考来源、测量和结论。
 
 参考：2026-10-15 的 [GitHub cli/cli](https://github.com/cli/cli)，未登录。本地：独立临时数据库中的
 `octo / hello-world`（公开仓库，含 2 个目录、1 个文本文件、1 个 `.univer.html` 页面，有简介）。
 视口 1440×900，取页面顶部同一区域，各缩放 50%；**左 GitHub，右 Workspace**。GitHub 一侧包含全站导航，
 Workspace 一侧包含自己的顶栏，两者没有裁剪对齐。
-
-![改动后：左 GitHub，右 Workspace](../../../../docs/images/repository-code-tab/comparison-light.png)
-
-![改动前：左 GitHub，右 Workspace](../../../../docs/images/repository-code-tab/comparison-before.png)
-
-HTML 内容区改动前后（左前右后，各缩放 50%）：[html-before-after.png](../../../../docs/images/repository-code-tab/html-before-after.png)。
-暗色主题：[workspace-dark.png](../../../../docs/images/repository-code-tab/workspace-dark.png)；
-清空简介后的 About：[workspace-empty-description.png](../../../../docs/images/repository-code-tab/workspace-empty-description.png)。
 
 实测几何（1440×900）：
 

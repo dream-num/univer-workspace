@@ -40,30 +40,18 @@ Wiki、HTML 文件本身、HTTP contract、权限或数据模型，也不新增�
 | 响应式 | 320/768/1024/1440px 自动检查内容区和整页无横向溢出；另检查 390px 截图。 |
 | 中英文、暗色 | 实际切换并截图；明暗和中文页面的 axe 检查均通过。 |
 
-## 并排截图
+## 参考与对比记录
+
+实施时已完成截图对比；按要求不在仓库保留图片，以下保留对比方法和结论。
 
 以下均为**左 Primer 参考站点、右 Workspace**。未更改页面文字或拼造不存在的内容。
 
-桌面原始视口均为 1440×900，整屏直接拼接：
-
-![桌面：左 Primer、右 Workspace](../../../../docs/images/repository-pages/comparison-desktop.png)
+桌面原始视口均为 1440×900，整屏直接拼接。
 
 正文对齐图：左从 y=0、右从 y=170 开始，各裁剪 1440×700，无缩放；右侧排除了保留的公共框架，
 两边标题距正文顶端均为 32px，正文左右边界和标题分隔线可直接比较。
 
-![正文：左 Primer、右 Workspace](../../../../docs/images/repository-pages/comparison-content.png)
-
-移动端均为 390×844，完整首屏直接拼接：
-
-![移动端：左 Primer、右 Workspace](../../../../docs/images/repository-pages/comparison-mobile.png)
-
-原图：[改动前](../../../../docs/images/repository-pages/workspace-before.png) ·
-[Primer 桌面](../../../../docs/images/repository-pages/primer-desktop.png) ·
-[Workspace 桌面](../../../../docs/images/repository-pages/workspace-desktop.png) ·
-[Primer 移动端](../../../../docs/images/repository-pages/primer-mobile.png) ·
-[Workspace 移动端](../../../../docs/images/repository-pages/workspace-mobile.png) ·
-[Workspace 暗色](../../../../docs/images/repository-pages/workspace-dark.png) ·
-[Workspace 中文](../../../../docs/images/repository-pages/workspace-chinese.png)。
+移动端均为 390×844，完整首屏直接拼接。
 
 ### 剩余差异
 

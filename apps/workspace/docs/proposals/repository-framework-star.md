@@ -32,7 +32,9 @@ V9 → V10 沿用启动迁移边界：校验旧指纹、一致性备份、事务
 失败回滚并保留备份，成功后重复启动不再迁移/备份。部署前停全部旧实例，由一个新实例完成升级；
 回退需停止新实例并恢复备份，不能让 V9/V10 同时写入。
 
-## 截图对比
+## 参考与对比记录
+
+实施时已完成截图对比；按要求不在仓库保留图片，以下保留参考来源、对比方法和结论。
 
 参考：2026-10-15 线上 [GitHub cli/cli](https://github.com/cli/cli)，未登录浏览。
 本地：独立临时数据库中的 `repo-review / repository-demo`，已登录、英文界面。
@@ -42,15 +44,6 @@ V9 → V10 沿用启动迁移边界：校验旧指纹、一致性备份、事务
 两边均保留 1440×170px 的仓库面包屑、tab 和标题/操作行。
 移动视口 390×844，GitHub 去掉 64px 全站导航，再各截取 390×220px；
 两边真实的标题行高差异保留在图中。
-
-![桌面暗色：左 GitHub，右 Workspace](../../../../docs/images/repository-framework/comparison-dark.png)
-
-![桌面浅色：左 GitHub，右 Workspace](../../../../docs/images/repository-framework/comparison-light.png)
-
-![移动端：左 GitHub，右 Workspace](../../../../docs/images/repository-framework/comparison-mobile.png)
-
-[刷新后保留 Unstar / 1](../../../../docs/images/repository-framework/workspace-starred.png) ·
-[Settings 复用公共框架](../../../../docs/images/repository-framework/workspace-settings.png)
 
 ### 剩余差异
 

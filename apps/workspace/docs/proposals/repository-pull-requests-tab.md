@@ -18,7 +18,9 @@
   `worktree-review-panel.tsx` 执行。新 layout 只接收展示数据、审阅内容和操作节点。
 - Wiki 和全局 Workbench 保留原任务分组、筛选、可调整侧栏和原有预览布局。
 
-## 截图
+## 参考与对比记录
+
+实施时已完成截图对比；按要求不在仓库保留图片，以下保留参考来源、对比方法和结论。
 
 参考为当日线上 [dream-num/univer 的 PR 列表](https://github.com/dream-num/univer/pulls) 和
 [PR #7858](https://github.com/dream-num/univer/pull/7858)，未登录 GitHub。
@@ -28,23 +30,6 @@ Workspace 使用独立临时数据库中的 `repo-review / quarterly-planning`�
 桌面两侧视口均为 1440×1000。为比较本任务的内容区，GitHub 去掉顶部 172px，
 Workspace 去掉已有公共框架的顶部 170px，各保留 1440×828；没有缩放某一侧来对齐。
 移动端为 390×844 完整视口，因此公共框架的高度差也在图内。
-
-### PR 列表
-
-![列表浅色并排对照](../../../../docs/images/repository-pull-requests/comparison-list-light.png)
-
-[暗色对照](../../../../docs/images/repository-pull-requests/comparison-list-dark.png) ·
-[移动端对照](../../../../docs/images/repository-pull-requests/comparison-list-mobile.png) ·
-[改动前列表](../../../../docs/images/repository-pull-requests/before-list.png)
-
-### PR 详情
-
-![详情浅色并排对照](../../../../docs/images/repository-pull-requests/comparison-detail-light.png)
-
-[暗色对照](../../../../docs/images/repository-pull-requests/comparison-detail-dark.png) ·
-[移动端对照](../../../../docs/images/repository-pull-requests/comparison-detail-mobile.png) ·
-[Files changed 原生文档审阅](../../../../docs/images/repository-pull-requests/workspace-files.png) ·
-[改动前详情](../../../../docs/images/repository-pull-requests/before-detail.png)
 
 ## 改动前后功能对照
 
