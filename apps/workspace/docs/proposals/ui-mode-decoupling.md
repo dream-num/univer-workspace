@@ -790,3 +790,23 @@ publicRead 独立保存、失败保留草稿及重试；新增 Star 乐观更新
 
 传输单测覆盖错误策略、撤销失败、完成失败、缺少上传目标、Unit ID 等待条件与空错误消息。
 真实浏览器另验证创建 Sheet、文件夹移动与改名、Blob 上传、缺失空间校验和删除前后缓存顺序。
+
+### T3.3 权限命令与请求合同（PR 描述素材）
+
+五个权限命令迁入 `permissions.commands.ts`。添加成员和修改角色共用命令，但保留两个 mutation
+实例及原有 pending 状态；toast、清空输入和关闭添加弹窗仍在调用方。
+侧栏数据源等待命令完成后按原流程重新读取分享信息，包接口不变。
+缓存仅失效对应 node-grants、node-link-sharing 或 team-members，不扩大到产品列表。
+
+| 操作 | method / path（保持原合同） | body 字段 | 成功后位置 |
+| --- | --- | --- | --- |
+| 授予节点权限 | PUT /api/nodes/{nodeId}/grants/{userId} | role | 原页面 |
+| 移除节点权限 | DELETE /api/nodes/{nodeId}/grants/{userId} | 无 | 原页面 |
+| 修改链接分享 | PUT /api/nodes/{nodeId}/link-sharing | enabled、role | 原页面 |
+| 添加成员 / 修改角色 | PUT /api/team-spaces/{spaceId}/members/{userId} | role | 原页面 |
+| 移除成员 | DELETE /api/team-spaces/{spaceId}/members/{userId} | 无 | 原页面 |
+
+`test/browser/permissions-commands.mjs` 使用真实服务端与浏览器挂载命令、分享弹窗和成员组件，
+核对上述请求、缓存范围、授权/撤销的持久化结果，以及 viewer 被拒绝后不失效缓存。
+两种 mode 均验证邀请/移除、链接开关、输入清空及 repository 添加成员后关闭弹窗。
+个人节点分享与团队成员管理分别使用对应空间夹具，不改变服务端授权规则。

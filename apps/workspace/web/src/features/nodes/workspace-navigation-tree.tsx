@@ -13,6 +13,7 @@ import { useMemo } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
+import { useSetNodeGrant, useRemoveNodeGrant, useSetLinkSharing } from "../permissions/permissions.commands";
 import { useI18n } from "../../shared/i18n";
 import { useCreateTeamSpace } from "../spaces/spaces.commands";
 import { useCreateFolder, useCreateUniverResource, useUploadBlob, useImportDocument, useUpdateNode, useTrashNode } from "./nodes.commands";
@@ -46,6 +47,9 @@ export function WorkspaceNavigationTree(props: {
   });
   const { mutateAsync: updateNode } = useUpdateNode();
   const { mutateAsync: trashNode } = useTrashNode();
+  const { mutateAsync: setGrant } = useSetNodeGrant();
+  const { mutateAsync: removeGrant } = useRemoveNodeGrant();
+  const { mutateAsync: setLinkSharing } = useSetLinkSharing();
   const spaces = useMemo(
     () =>
       [
@@ -130,29 +134,18 @@ export function WorkspaceNavigationTree(props: {
           if (error) throw apiError(error);
           return data as WorkspaceFileLinkSharing;
         },
-        async setGrant({ nodeId, userId, role }) {
-          const { error } = await api.PUT("/api/nodes/{nodeId}/grants/{userId}", {
-            params: { path: { nodeId, userId } },
-            body: { role },
-          });
-          if (error) throw apiError(error);
+        async setGrant(input) {
+          await setGrant(input);
         },
-        async removeGrant({ nodeId, userId }) {
-          const { error } = await api.DELETE("/api/nodes/{nodeId}/grants/{userId}", {
-            params: { path: { nodeId, userId } },
-          });
-          if (error) throw apiError(error);
+        async removeGrant(input) {
+          await removeGrant(input);
         },
-        async setLinkSharing({ nodeId, enabled, role }) {
-          const { error } = await api.PUT("/api/nodes/{nodeId}/link-sharing", {
-            params: { path: { nodeId } },
-            body: { enabled, role },
-          });
-          if (error) throw apiError(error);
+        async setLinkSharing(input) {
+          await setLinkSharing(input);
         },
       },
     }),
-    [createTeamSpace, createFolder, createResource, uploadBlob, importDocument, updateNode, trashNode, navigate, queryClient, router],
+    [createTeamSpace, createFolder, createResource, uploadBlob, importDocument, updateNode, trashNode, setGrant, removeGrant, setLinkSharing, navigate, queryClient, router],
   );
 
   return (

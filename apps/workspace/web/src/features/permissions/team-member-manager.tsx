@@ -1,8 +1,7 @@
 import { Trash2, UserPlus } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { api } from "../../shared/api/client";
-import { apiError } from "../../shared/api/errors";
+import { useSetMemberRole, useRemoveMember } from "./permissions.commands";
 import { useI18n } from "../../shared/i18n";
 import { useTheme } from "../../shared/theme";
 import { cn } from "../../shared/utils/cn";
@@ -38,75 +37,36 @@ export function TeamMemberManager(props: {
   const [selectedUser, setSelectedUser] = useState<UserSummary | null>(null);
   const [role, setRole] = useState<TeamRole>("viewer");
   const [adding, setAdding] = useState(false);
-  const queryClient = useQueryClient();
   const { t } = useI18n();
   const { workspaceTheme } = useTheme();
   const repository = workspaceTheme === "repository";
   const members = useQuery(teamMembersQueryOptions(props.spaceId));
   const users = useQuery(userSearchQueryOptions(search));
 
-  const update = useMutation({
-    mutationFn: async (values: { readonly userId: string; readonly role: TeamRole }) => {
-      const { error } = await api.PUT("/api/team-spaces/{spaceId}/members/{userId}", {
-        params: {
-          path: {
-            spaceId: props.spaceId,
-            userId: values.userId,
-          },
-        },
-        body: { role: values.role },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: async () => {
-      await invalidate();
+  const update = useSetMemberRole();
+  const updateCallbacks = {
+    onSuccess: () => {
       setSelectedUser(null);
       setSearch("");
       setAdding(false);
       toast.success(t("membershipUpdated"));
     },
     onError: showError,
-  });
-  const remove = useMutation({
-    mutationFn: async (userId: string) => {
-      const { error } = await api.DELETE("/api/team-spaces/{spaceId}/members/{userId}", {
-        params: {
-          path: { spaceId: props.spaceId, userId },
-        },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: async () => {
-      await invalidate();
+  };
+  const remove = useRemoveMember();
+  const removeCallbacks = {
+    onSuccess: () => {
       toast.success(t("memberRemoved"));
     },
     onError: showError,
-  });
-  const changeRole = useMutation({
-    mutationFn: async (input: { readonly userId: string; readonly role: TeamRole }) => {
-      const { error } = await api.PUT("/api/team-spaces/{spaceId}/members/{userId}", {
-        params: {
-          path: {
-            spaceId: props.spaceId,
-            userId: input.userId,
-          },
-        },
-        body: { role: input.role },
-      });
-      if (error) throw apiError(error);
-    },
-    onSuccess: async () => {
-      await invalidate();
+  };
+  const changeRole = useSetMemberRole();
+  const changeRoleCallbacks = {
+    onSuccess: () => {
       toast.success(t("roleUpdated"));
     },
     onError: showError,
-  });
-
-  async function invalidate() {
-    await queryClient.invalidateQueries({
-      queryKey: teamMembersQueryOptions(props.spaceId).queryKey,
-    });
-  }
+  };
 
   function showError(error: unknown) {
     toast.error(error instanceof Error ? error.message : t("membershipUpdateFailed"));
@@ -146,7 +106,7 @@ export function TeamMemberManager(props: {
       toast.error(t("selectUser"));
       return;
     }
-    update.mutate({ userId: selectedUser.id, role });
+    update.mutate({ spaceId: props.spaceId, userId: selectedUser.id, role }, updateCallbacks);
   };
 
   const addMemberForm = (
@@ -273,9 +233,10 @@ export function TeamMemberManager(props: {
                         options={roleOptions}
                         onValueChange={(nextRole) =>
                           changeRole.mutate({
+                            spaceId: props.spaceId,
                             userId: item.user.id,
                             role: nextRole,
-                          })
+                          }, changeRoleCallbacks)
                         }
                       />
                       <Tooltip content={t("remove")}>
@@ -284,8 +245,8 @@ export function TeamMemberManager(props: {
                           size="icon-sm"
                           aria-label={`${t("remove")} ${item.user.displayName}`}
                           className="hover:bg-destructive-soft hover:text-destructive"
-                          disabled={remove.isPending && remove.variables === item.user.id}
-                          onClick={() => remove.mutate(item.user.id)}
+                          disabled={remove.isPending && remove.variables?.userId === item.user.id}
+                          onClick={() => remove.mutate({ spaceId: props.spaceId, userId: item.user.id }, removeCallbacks)}
                         >
                           <Trash2 />
                         </Button>
