@@ -36,9 +36,7 @@ describe("static site caching", () => {
     const response = await fetch(`${origin}/assets/index-abc123.js`);
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe(
-      "public, max-age=31536000, immutable"
-    );
+    expect(response.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
   });
 
   it("answers a missing asset with 404 instead of the app shell", async () => {
@@ -55,8 +53,8 @@ describe("static site caching", () => {
 
       expect(response.status).toBe(200);
       expect(await response.text()).toContain("<title>app</title>");
-      expect(response.headers.get("cache-control")).toBe("public, max-age=0");
-    }
+      expect(response.headers.get("cache-control")).toBe("no-cache");
+    },
   );
 
   it("revalidates unhashed public files", async () => {
