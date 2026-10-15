@@ -2,13 +2,10 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { routeTree } from "../routeTree.gen";
-import { installChunkLoadRecovery } from "./chunk-load-recovery";
 import { Providers, queryClient } from "./providers";
 
 import "@fontsource-variable/inter";
 import "./styles/global.css";
-
-installChunkLoadRecovery(import.meta.url);
 
 const router = createRouter({
   routeTree,
@@ -30,5 +27,5 @@ createRoot(root).render(
     <Providers>
       <RouterProvider router={router} />
     </Providers>
-  </StrictMode>,
+  </StrictMode>
 );

@@ -1,14 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { installChunkLoadRecovery } from "./chunk-load-recovery";
 
 let browser: EventTarget;
-let storage: Map<string, string>;
+let notify: Mock<() => void>;
 let reload: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   browser = new EventTarget();
-  storage = new Map();
+  notify = vi.fn();
   reload = vi.fn();
+  const storage = new Map<string, string>();
   vi.stubGlobal(
     "window",
     Object.assign(browser, {
@@ -32,77 +33,71 @@ function failImport(message = "Failed to fetch dynamically imported module: /ass
 }
 
 describe("chunk load recovery", () => {
-  it("reloads a stale page once and suppresses its import failure", () => {
-    installChunkLoadRecovery("/assets/index-old.js");
-
-    expect(failImport().defaultPrevented).toBe(true);
-    failImport();
-    expect(reload).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not loop when the same build still fails after a reload", () => {
-    installChunkLoadRecovery("/assets/index-old.js");
-    failImport();
-    installChunkLoadRecovery("/assets/index-old.js");
-
+  it("offers recovery without refreshing or swallowing the original error", () => {
+    installChunkLoadRecovery(notify);
     expect(failImport().defaultPrevented).toBe(false);
-    expect(reload).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
   });
 
-  it("allows a later build to recover in the same tab", () => {
-    installChunkLoadRecovery("/assets/index-old.js");
-    failImport();
-    installChunkLoadRecovery("/assets/index-new.js");
-    failImport();
+  it("does not refresh when failures repeat across reloads or builds", () => {
+    for (const build of ["A", "B", "A", "B"]) {
+      const dispose = installChunkLoadRecovery(notify);
+      failImport(`Failed to fetch dynamically imported module: /assets/editor-${build}.js`);
+      dispose();
+    }
+    expect(notify).toHaveBeenCalledTimes(4);
+    expect(reload).not.toHaveBeenCalled();
+  });
 
-    expect(reload).toHaveBeenCalledTimes(2);
+  it("still offers recovery after an earlier temporary network failure", () => {
+    installChunkLoadRecovery(notify);
+    failImport();
+    failImport();
+    expect(notify).toHaveBeenCalledTimes(2);
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it.each([
     "Importing a module script failed.",
     "error loading dynamically imported module: /assets/sheet-old.js",
     "Unable to preload CSS for /assets/sheet-old.css",
-  ])("recovers from the browser load failure %s", (message) => {
-    installChunkLoadRecovery("/assets/index-old.js");
-    expect(failImport(message).defaultPrevented).toBe(true);
-    expect(reload).toHaveBeenCalledOnce();
+  ])("offers recovery from %s", (message) => {
+    installChunkLoadRecovery(notify);
+    expect(failImport(message).defaultPrevented).toBe(false);
+    expect(notify).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
   });
 
-  it("preserves application errors for the error boundary", () => {
-    installChunkLoadRecovery("/assets/index-old.js");
+  it("leaves application errors to the existing error boundary", () => {
+    installChunkLoadRecovery(notify);
     expect(failImport("[LocaleService]: Locale not initialized").defaultPrevented).toBe(false);
-    expect(reload).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("ignores preload events without an error payload", () => {
-    installChunkLoadRecovery("/assets/index-old.js");
-    const event = new Event("vite:preloadError", { cancelable: true });
-    browser.dispatchEvent(event);
-
-    expect(event.defaultPrevented).toBe(false);
-    expect(reload).not.toHaveBeenCalled();
+    installChunkLoadRecovery(notify);
+    browser.dispatchEvent(new Event("vite:preloadError", { cancelable: true }));
+    expect(notify).not.toHaveBeenCalled();
   });
 
-  it("keeps the original error when the reload marker cannot be saved", () => {
-    window.sessionStorage.setItem = () => {
-      throw new Error("Storage quota exceeded");
-    };
-    installChunkLoadRecovery("/assets/index-old.js");
-
-    expect(failImport().defaultPrevented).toBe(false);
-    expect(reload).not.toHaveBeenCalled();
-    expect(storage.size).toBe(0);
-  });
-
-  it("keeps the original error when storage is unavailable", () => {
+  it("works when session storage is disabled", () => {
     Object.defineProperty(window, "sessionStorage", {
       configurable: true,
       get: () => {
         throw new Error("Storage is disabled");
       },
     });
-    installChunkLoadRecovery("/assets/index-old.js");
-    expect(failImport().defaultPrevented).toBe(false);
+    installChunkLoadRecovery(notify);
+    failImport();
+    expect(notify).toHaveBeenCalledOnce();
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("removes the listener when its owner unmounts", () => {
+    const dispose = installChunkLoadRecovery(notify);
+    dispose();
+    failImport();
+    expect(notify).not.toHaveBeenCalled();
   });
 });

@@ -13,6 +13,9 @@ export type AppLanguage = "zh-CN" | "en-US";
 
 const messages = {
   "zh-CN": {
+    pageLoadFailed: "页面内容加载失败，请检查网络后重试。",
+    pageReloadWarning: "刷新会清除尚未提交的输入，请确认后再刷新。",
+    reloadPage: "刷新页面",
     htmlViewTitle: "HTML 绑定视图",
     nativePreviewTitle: "Office 预览",
     nativePreviewReadOnly: "实时 · 只读",
@@ -622,6 +625,9 @@ const messages = {
     issueReferenceFromNode: "在 Issue 中引用",
   },
   "en-US": {
+    pageLoadFailed: "Page content failed to load. Check your connection and try again.",
+    pageReloadWarning: "Refreshing clears unsaved input. Review it before refreshing.",
+    reloadPage: "Refresh page",
     htmlViewTitle: "HTML binding view",
     nativePreviewTitle: "Office preview",
     nativePreviewReadOnly: "Live · Read only",
