@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { BookMarked, Plus, Search } from "lucide-react";
 import { useTheme } from "../shared/theme";
@@ -17,7 +17,6 @@ import {
 import { useI18n, type MessageKey } from "../shared/i18n";
 import { cn } from "../shared/utils/cn";
 import { WorkspaceHeaderSearch, WorkspaceLayout, CreateTeamDialog } from "./-workspace-layout";
-import { spacesQueryKey } from "../features/spaces";
 import { Button, Input, Segmented } from "../shared/ui";
 import type { components } from "../../../generated/http/schema.js";
 
@@ -44,7 +43,6 @@ function HomePage() {
   const navigate = useNavigate();
   const { workspaceTheme } = useTheme();
   const spaces = useQuery(spacesQueryOptions);
-  const queryClient = useQueryClient();
   const { view = "recent" } = Route.useSearch();
   const [searchQuery, setSearchQuery] = useState("");
   const session = useQuery(sessionQueryOptions);
@@ -165,7 +163,6 @@ function HomePage() {
               open={createTeamOpen}
               onOpenChange={setCreateTeamOpen}
               onCreated={async (space) => {
-                await queryClient.invalidateQueries({ queryKey: spacesQueryKey });
                 await navigate({ to: "/spaces/$spaceId", params: { spaceId: space.id } });
               }}
             />

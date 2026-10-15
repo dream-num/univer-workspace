@@ -753,3 +753,18 @@ Drive 是假想 mode，`modes/drive/**` 只用于走查；其余名称与第 6 �
 
 保留 resource-header 的资源详情与 HTML 列表失效、移入回收站的空间限定失效，
 以及 worktree-change-feed 的 worktrees 失效。恢复操作仍先刷新回收站，再刷新产品列表。
+
+### T3.1 请求与导航对比（PR 描述素材）
+
+空间写操作迁入 `features/spaces/spaces.commands.ts`；表单字段组合、导航、toast 和关闭弹窗留在调用方。
+首页的创建回调也移除了重复失效操作，与外壳和侧栏共用创建命令。
+
+| 冒烟操作 | 重构前后 method / path | body 字段 | 成功后 URL |
+| --- | --- | --- | --- |
+| wiki 设置改名 | PATCH /api/spaces/{spaceId} | name、publicRead、description | /spaces/{spaceId} |
+| repository 设置改名 | PATCH /api/spaces/{spaceId} | name | /spaces/{spaceId}/settings |
+
+以上两项由 T0 的 HAR 摘要与最终 URL 基线进行对比。设置专项脚本另覆盖 description、
+publicRead 独立保存、失败保留草稿及重试；新增 Star 乐观更新、失败回滚、成功重试、取消 Star，
+以及 repository 首页和 wiki 侧栏的团队空间创建检查。测试结束时将公开测试空间恢复为私有，
+避免影响其他账号的侧栏截图。

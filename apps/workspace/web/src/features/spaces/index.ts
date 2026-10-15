@@ -1,3 +1,4 @@
+export { useCreateTeamSpace, useToggleSpaceStar, useUpdateSpace } from "./spaces.commands";
 export { SpaceSettingsNav } from "./settings-nav";
 export { RepositorySettingsLayout } from "./repository-settings-layout";
 export type { SpaceSettingsSection } from "./settings-nav";

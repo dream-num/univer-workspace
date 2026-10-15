@@ -28,6 +28,7 @@ const waitForSave = () =>
   );
 
 test("Repository settings save independently, stay on Settings, and persist after reload", () => {
+  let createdSpaceId;
   try {
     browser("open", origin);
     browser("wait", "--fn", "document.querySelector('input') !== null");
@@ -41,6 +42,7 @@ test("Repository settings save independently, stay on Settings, and persist afte
       localStorage.setItem('univer-workspace-theme', 'light');
       return response.json();
     })()`);
+    createdSpaceId = space.id;
     const settingsUrl = `${origin}/spaces/${space.id}/settings`;
     browser("open", settingsUrl);
     browser("wait", "--text", "Danger Zone");
@@ -132,6 +134,54 @@ test("Repository settings save independently, stay on Settings, and persist afte
       evaluate("document.querySelector('#space-description').value"),
       "Retry this description",
     );
+    // 领域命令保留 Star 乐观更新、失败回滚和重试。
+    const starSelector = 'button[aria-label$=" settings-renamed"][aria-pressed]';
+    browser("wait", "--fn", `document.querySelector('${starSelector}')?.getAttribute('aria-busy') === 'false'`);
+    evaluate(`(async () => {
+      const { api } = await import('/src/shared/api/client.ts');
+      window.originalStarPut = api.PUT;
+      api.PUT = () => new Promise((_, reject) => {
+        window.rejectStar = () => reject(new Error('Star test failure'));
+      });
+    })()`);
+    click("Star settings-renamed");
+    browser("wait", "--fn", `document.querySelector('${starSelector}')?.getAttribute('aria-pressed') === 'true'`);
+    assert.equal(evaluate(`document.querySelector('${starSelector}').getAttribute('aria-busy')`), "true");
+    evaluate("window.rejectStar()");
+    browser("wait", "--fn", `document.querySelector('${starSelector}')?.getAttribute('aria-busy') === 'false'`);
+    assert.equal(evaluate(`document.querySelector('${starSelector}').getAttribute('aria-pressed')`), "false");
+    evaluate(`(async () => {
+      const { api } = await import('/src/shared/api/client.ts');
+      api.PUT = window.originalStarPut;
+      delete window.originalStarPut;
+      delete window.rejectStar;
+    })()`);
+    click("Star settings-renamed");
+    browser("wait", "--fn", `document.querySelector('${starSelector}')?.getAttribute('aria-busy') === 'false'`);
+    assert.equal(evaluate(`fetch('/api/spaces/${space.id}/star').then(r => r.json()).then(s => s.starred)`), true);
+    click("Unstar settings-renamed");
+    browser("wait", "--fn", `document.querySelector('${starSelector}')?.getAttribute('aria-busy') === 'false'`);
+    assert.equal(evaluate(`fetch('/api/spaces/${space.id}/star').then(r => r.json()).then(s => s.starred)`), false);
+
+    // 首页与 wiki 外壳共用创建命令，创建后关闭弹窗并进入新空间。
+    for (const mode of ["repository", "wiki"]) {
+      evaluate(`localStorage.setItem('univer-workspace-layout-theme', '${mode}')`);
+      browser("open", `${origin}/home`);
+      browser("wait", "--fn", mode === "repository"
+        ? "document.querySelector('main')?.textContent.includes('New repository')"
+        : "document.querySelector('button[aria-label=\"Create team space\"]') !== null");
+      click(mode === "repository" ? "New repository" : "Create team space");
+      browser("wait", "[role=dialog] input");
+      const name = `created-via-${mode}`;
+      fill(mode === "repository" ? "Repository name" : "Space name", name);
+      click("Create");
+      browser("wait", "--fn", "document.querySelector('[role=dialog]') === null && location.pathname.startsWith('/spaces/')");
+      const created = evaluate(`fetch('/api/spaces').then(r => r.json()).then(p => p.spaces.find(s => s.name === '${name}'))`);
+      assert.ok(created, "创建后空间列表刷新");
+      assert.equal(browser("get", "url").url, `${origin}/spaces/${created.id}`);
+      assert.equal(created.publicRead, false);
+    }
+    evaluate("localStorage.setItem('univer-workspace-layout-theme', 'repository')");
     const personalId = evaluate(
       "fetch('/api/spaces').then(r => r.json()).then(p => p.spaces.find(s => s.type === 'personal').id)",
     );
@@ -143,6 +193,17 @@ test("Repository settings save independently, stay on Settings, and persist afte
       "Personal repositories have no team membership page",
     );
   } finally {
-    browser("close");
+    try {
+      if (createdSpaceId) {
+        browser("network", "unroute", "**/api/spaces/*");
+        evaluate(`fetch('/api/spaces/${createdSpaceId}', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ publicRead: false }),
+        }).then(r => { if (!r.ok) throw new Error('测试空间清理失败'); })`);
+      }
+    } finally {
+      browser("close");
+    }
   }
 });

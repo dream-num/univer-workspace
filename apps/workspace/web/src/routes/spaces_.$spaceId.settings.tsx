@@ -1,18 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { Copy, Globe, LockKeyhole } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { requireAuthenticatedSession } from "../features/auth";
 import { RepositorySettingsLayout } from "../features/spaces";
-import { spacesQueryKey, spacesQueryOptions } from "../features/spaces";
+import { useUpdateSpace, spacesQueryOptions } from "../features/spaces";
 import {
   ResourceUnavailablePage,
   isResourceUnavailableError,
   spaceNodesQueryOptions,
 } from "../features/nodes";
 import { WorkspaceLayout } from "./-workspace-layout";
-import { api } from "../shared/api/client";
-import { apiError } from "../shared/api/errors";
 import { useI18n } from "../shared/i18n";
 import { useTheme } from "../shared/theme";
 import { Button, ConfirmDialog, Field, Input, Textarea, toast } from "../shared/ui";
@@ -73,7 +71,6 @@ function SpaceGeneralSettings({
   readonly spaceId: string;
   readonly repository?: boolean;
 }) {
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const spaces = useQuery(spacesQueryOptions);
   const { t } = useI18n();
@@ -82,33 +79,21 @@ function SpaceGeneralSettings({
   const [publicRead, setPublicRead] = useState(space?.publicRead ?? false);
   const [description, setDescription] = useState(space?.description ?? "");
   const [error, setError] = useState<string>();
-  const rename = useMutation({
-    mutationFn: async (values: {
-      readonly name?: string;
-      readonly publicRead?: boolean;
-      readonly description?: string;
-    }) => {
-      const { error: apiErr } = await api.PATCH("/api/spaces/{spaceId}", {
-        params: { path: { spaceId } },
-        body: values,
-      });
-      if (apiErr) throw apiError(apiErr);
-    },
-    onSuccess: async (_, values) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: spacesQueryKey }),
-        queryClient.invalidateQueries({ queryKey: spaceNodesQueryOptions(spaceId).queryKey }),
-      ]);
-      toast.success(t("spaceRenamed"));
-      if (repository) {
-        if (values.name !== undefined) setName(values.name);
-        if (values.description !== undefined) setDescription(values.description);
-      } else {
-        void navigate({ to: "/spaces/$spaceId", params: { spaceId } });
-      }
-    },
-    onError: (mutationError) => toast.error(mutationError.message),
-  });
+  const rename = useUpdateSpace(spaceId);
+  function update(values: Parameters<typeof rename.mutate>[0]) {
+    rename.mutate(values, {
+      onSuccess: () => {
+        toast.success(t("spaceRenamed"));
+        if (repository) {
+          if (values.name !== undefined) setName(values.name);
+          if (values.description !== undefined) setDescription(values.description);
+        } else {
+          void navigate({ to: "/spaces/$spaceId", params: { spaceId } });
+        }
+      },
+      onError: (mutationError) => toast.error(mutationError.message),
+    });
+  }
   if (!space) return null;
   const canEdit = space.capabilities.renameSpace;
   const submit = (event: FormEvent) => {
@@ -117,7 +102,7 @@ function SpaceGeneralSettings({
       setError(t("enterSpaceName"));
       return;
     }
-    rename.mutate(
+    update(
       repository
         ? { name: name.trim() }
         : { name: name.trim(), publicRead, description: description.trim() },
@@ -190,7 +175,7 @@ function SpaceGeneralSettings({
           aria-label={t("spaceDescription")}
           onSubmit={(event) => {
             event.preventDefault();
-            rename.mutate({ description: description.trim() });
+            update({ description: description.trim() });
           }}
         >
           <Field label={t("spaceDescription")} htmlFor="space-description">
@@ -237,7 +222,7 @@ function SpaceGeneralSettings({
               cancelText={t("cancel")}
               danger
               disabled={!canEdit || rename.isPending}
-              onConfirm={() => rename.mutate({ publicRead: !space.publicRead })}
+              onConfirm={() => update({ publicRead: !space.publicRead })}
               trigger={
                 <Button
                   size="sm"

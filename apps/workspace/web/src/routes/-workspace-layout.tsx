@@ -35,7 +35,7 @@ import {
 import { sessionQueryKey, sessionQueryOptions } from "../features/auth";
 import { AppsSidebarSection } from "../features/html-views/apps-sidebar";
 import { IssuesSidebarSection } from "../features/issues";
-import { spaceDisplayName, spacesQueryKey, spacesQueryOptions } from "../features/spaces";
+import { spaceDisplayName, useCreateTeamSpace, spacesQueryOptions } from "../features/spaces";
 import { WorkspaceNavigationTree } from "../features/nodes";
 import {
   isOpenWorktree,
@@ -872,7 +872,6 @@ function AuthenticatedWorkspaceLayout({
         open={teamDialogOpen}
         onOpenChange={setTeamDialogOpen}
         onCreated={async (space) => {
-          await queryClient.invalidateQueries({ queryKey: spacesQueryKey });
           await navigate({
             to: "/spaces/$spaceId",
             params: { spaceId: space.id },
@@ -1051,26 +1050,7 @@ export function CreateTeamDialog({
   const [name, setName] = useState("");
   const [publicRead, setPublicRead] = useState(false);
   const [error, setError] = useState<string>();
-  const createTeam = useMutation({
-    mutationFn: async (values: { readonly name: string; readonly publicRead: boolean }) => {
-      const { data, error: apiErr } = await api.POST("/api/team-spaces", {
-        body: values,
-      });
-      if (apiErr) throw apiError(apiErr);
-      return data;
-    },
-    onSuccess: async (space) => {
-      onOpenChange(false);
-      setName("");
-      setPublicRead(false);
-      await onCreated(space);
-    },
-    onError: (mutationError) => {
-      toast.error(
-        mutationError instanceof Error ? mutationError.message : t("spaceCreationFailed"),
-      );
-    },
-  });
+  const createTeam = useCreateTeamSpace();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -1078,7 +1058,19 @@ export function CreateTeamDialog({
       setError(t("enterSpaceName"));
       return;
     }
-    createTeam.mutate({ name: name.trim(), publicRead });
+    createTeam.mutate({ name: name.trim(), publicRead }, {
+      onSuccess: async (space) => {
+        onOpenChange(false);
+        setName("");
+        setPublicRead(false);
+        await onCreated(space);
+      },
+      onError: (mutationError) => {
+        toast.error(
+          mutationError instanceof Error ? mutationError.message : t("spaceCreationFailed"),
+        );
+      },
+    });
   };
 
   return (

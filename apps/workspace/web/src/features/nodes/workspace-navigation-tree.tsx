@@ -15,7 +15,7 @@ import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { createIdempotencyKey } from "../../shared/idempotency-key";
 import { useI18n } from "../../shared/i18n";
-import { spacesQueryKey } from "../spaces";
+import { useCreateTeamSpace } from "../spaces/spaces.commands";
 import { invalidateProductLists } from "./nodes.commands";
 import { waitForCreatedResource } from "./wait-for-created-resource";
 import { createDocumentInitialData } from "./create-document-initial-data";
@@ -36,6 +36,7 @@ export function WorkspaceNavigationTree(props: {
   const navigate = useNavigate();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { mutateAsync: createTeamSpace } = useCreateTeamSpace();
   const spaces = useMemo(
     () =>
       [
@@ -57,9 +58,7 @@ export function WorkspaceNavigationTree(props: {
         return page.nodes.map(toWorkspaceFileNode);
       },
       async createTeamSpace(input) {
-        const { data, error } = await api.POST("/api/team-spaces", { body: input });
-        if (error) throw apiError(error);
-        await queryClient.invalidateQueries({ queryKey: spacesQueryKey });
+        const data = await createTeamSpace(input);
         return toWorkspaceFileSpace(data);
       },
       async createNode(input) {
@@ -188,7 +187,7 @@ export function WorkspaceNavigationTree(props: {
         },
       },
     }),
-    [language, navigate, queryClient, router, t],
+    [createTeamSpace, language, navigate, queryClient, router, t],
   );
 
   return (

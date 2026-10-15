@@ -56,7 +56,7 @@ T1、T2a、T3.0 之间互不依赖，可以并行。T3.x 各 feature 之间互�
 
 ## M0 安全网
 
-- [ ] **T0：两种 mode 的冒烟脚本和行为基线**（关闭 R8 的验证缺口；为 N1、N2、N4、N7 提供检查手段）
+- [x] **T0：两种 mode 的冒烟脚本和行为基线**（关闭 R8 的验证缺口；为 N1、N2、N4、N7 提供检查手段）
   - 做什么：新增 `apps/workspace/test/browser/ui-modes.smoke.mjs`，写法沿用 `repository-settings.mjs`：
     - 用页面内 `fetch` 注册一个用户，建 Team Space、一个文件夹（`POST /api/nodes`）和一个 Sheet
       （`POST /api/resources` 后轮询 `/api/operations/{id}` 直到 `completed`）。
@@ -78,7 +78,7 @@ T1、T2a、T3.0 之间互不依赖，可以并行。T3.x 各 feature 之间互�
 
 ## M1 下沉共享部分
 
-- [ ] **T1：领域规则改为纯函数**（R5）
+- [x] **T1：领域规则改为纯函数**（R5）
   - 做什么：
     - 新增 `features/worktrees/worktree.rules.ts`：`OPEN_WORKTREE_STATES`、`isOpenWorktree(state)`；把
       `worktree-space.ts` 的 `worktreeBelongsToSpace` 移入，注释改为领域描述（个人 Worktree 属于个人 Space），
@@ -96,7 +96,7 @@ T1、T2a、T3.0 之间互不依赖，可以并行。T3.x 各 feature 之间互�
     Workbench 徽标、Issues tab 在个人 Space 下不出现）。
   - 规模：S。依赖：无。
 
-- [ ] **T2a：mode 状态从 ThemeProvider 中拆出**（R1 前置、R8）
+- [x] **T2a：mode 状态从 ThemeProvider 中拆出**（R1 前置、R8）
   - 做什么：
     - 新增 `shared/ui-mode.tsx`：`parseUiMode(raw: unknown, known: readonly M[], fallback: M): M`、
       `UiModeProvider<M>`、`useUiMode()`。存储 key 仍是 `univer-workspace-layout-theme`，读写失败时的处理照抄
@@ -109,7 +109,7 @@ T1、T2a、T3.0 之间互不依赖，可以并行。T3.x 各 feature 之间互�
     手动：切换 mode 后刷新，选择保留；隐私模式禁用 storage 时页面不报错。
   - 规模：S。依赖：无。
 
-- [ ] **T2b：注册表骨架；文案覆盖随 mode 注册**（R1、R4 文案部分；引入 N3、N6）
+- [x] **T2b：注册表骨架；文案覆盖随 mode 注册**（R1、R4 文案部分；引入 N3、N6）
   - 做什么：
     - 新增 `modes/registry.ts`，`ModeDefinition` 此时只有 `label: MessageKey` 和 `messages: ModeMessages`；
       `modes = { wiki, repository } as const satisfies Record<string, ModeDefinition>`；导出
@@ -129,7 +129,7 @@ T1、T2a、T3.0 之间互不依赖，可以并行。T3.x 各 feature 之间互�
     key 集合相等（N6）。V-static；V-smoke（重点：repository 下"仓库""协作者"等文案、设置弹窗选项）。
   - 规模：M。依赖：T2a。
 
-- [ ] **T3.0：产品列表缓存失效收敛为一个函数**（R3 前置）
+- [x] **T3.0：产品列表缓存失效收敛为一个函数**（R3 前置）
   - 做什么：在 `features/nodes/` 新增 `nodes.commands.ts`，导出
     `invalidateProductLists(client, { spaceId?, htmlViews? })`，统一失效 `["nodes"]`、`recentResourcesQueryKey`、
     `ownedByMeQueryKey`、`sharedWithMeQueryKey`，可选 `trashQueryKey(spaceId)` 和 `htmlViewsQueryKey`。替换这些
@@ -159,6 +159,9 @@ T1、T2a、T3.0 之间互不依赖，可以并行。T3.x 各 feature 之间互�
   | T3.4 trash | `useRestoreTrashBatch()`、`usePurgeTrashBatch()` | `features/trash/trash-list.tsx:33,50` | — |
   | T3.5 issues | `useCreateIssue()`、`useUpdateIssue()`、`useAddIssueComment()`、`useUpdateIssueComment()`、`useDeleteIssueComment()`、`useCreateIssueLabel()`、`useUpdateIssueLabel()`、`useDeleteIssueLabel()` | `features/issues/issue-new.tsx:46`；`issue-detail.tsx:82,93,494,508`；`issue-labels-manager.tsx:43,174,175` | — |
   | T3.6 worktrees | `useWorktreeLifecycle(worktreeId)`（ready / merge / discard）、`useToggleUnitRemoval(worktreeId)` | `features/worktrees/worktree-review-panel.tsx` 的 `removal`、`action` 两个 mutation | `RepositoryPullRequestLayout` 收到的 `actions` 仍由 panel 组装，本任务不改 |
+
+  - 已完成 T3.1：三个 Space 命令已抽出；386 项测试、typecheck、build、34 张基线截图及 settings 专项通过。
+    请求字段与导航对比见提案的「T3.1 请求与导航对比」。T3.2–T3.6 待实施。
 
   - 不在范围：`auth-card.tsx`、`cli-login.tsx`，以及 `-workspace-layout.tsx` 中的登出、改资料、改密码、解绑 OAuth。
     它们与 mode 无关，T4a 只移动不改写。
