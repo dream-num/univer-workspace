@@ -379,6 +379,11 @@ with confirmed public-read changes in Danger Zone. Collaborator management and T
 their existing permissions and APIs. See the
 [comparison, remaining differences and verification](docs/proposals/repository-settings-tab.md).
 
+Repository Pages keeps its existing page directory, browser-local default selection, copy and
+visit actions, styled after the published Jekyll Primer theme rather than Pages settings.
+The repository header and tab order stay unchanged. See the
+[reference screenshots, differences and verification](docs/proposals/repository-pages-tab.md).
+
 The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
 repository tag. When provided, it checks out that tag and uses it for the container
 image. When omitted, it builds the workflow dispatch commit and tags the image as

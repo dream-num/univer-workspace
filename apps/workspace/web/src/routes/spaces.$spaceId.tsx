@@ -1,5 +1,4 @@
 import {
-  AppWindow,
   ExternalLink,
   FileDiff,
   GitPullRequest,
@@ -260,12 +259,15 @@ function RepositoryOverview({
       className={cn(
         "min-h-0 flex-1 overflow-y-auto bg-background",
         view === "prs" && "repository-chrome repository-pull-requests",
+        view === "apps" && "repository-pages",
       )}
     >
       <div
         className={cn(
           "mx-auto px-6 py-6 max-[720px]:px-4 max-[720px]:py-4",
-          view === "files" || view === "prs" ? "max-w-7xl px-8 max-[720px]:px-4" : "max-w-6xl",
+          view === "apps"
+            ? "w-full max-w-[1012px] px-4 py-8 max-[720px]:py-8"
+            : "max-w-7xl px-8 max-[720px]:px-4",
         )}
       >
         {view === "files" ? (
@@ -519,48 +521,47 @@ function AppsView({
     }
   };
   return (
-    <section className="rounded-lg border border-border bg-background">
-      <div className="border-b border-border px-4 py-3">
-        <h2 className="m-0 text-base font-semibold">{t("apps")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t("repositoryAppsSummary", { count: apps.length })}
-        </p>
+    <section aria-labelledby="repository-pages-heading">
+      <div>
+        <h1
+          id="repository-pages-heading"
+          className="m-0 mb-4 border-b border-border pb-[0.3em] text-[2em] leading-[1.25] font-semibold"
+        >
+          <Link to="/spaces/$spaceId" params={{ spaceId }} search={{ view: "apps" }}>
+            {t("apps")}
+          </Link>
+        </h1>
+        <p className="m-0 mb-4">{t("repositoryAppsSummary", { count: apps.length })}</p>
       </div>
       {selectedApp ? (
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-surface/50 px-4 py-3">
+        <div className="my-6">
           <div className="min-w-0">
-            <p className="m-0 flex min-w-0 items-center gap-2 text-sm">
-              <span className="size-2 shrink-0 rounded-full bg-state-open" aria-hidden="true" />
-              <span className="shrink-0 text-muted-foreground">{t("repositoryDefaultPage")}:</span>
-              <Link
-                to="/nodes/$nodeId"
-                params={{ nodeId: selectedApp.node.id }}
-                className="min-w-0 truncate font-medium text-foreground no-underline hover:underline"
-              >
+            <h2 className="m-0 mb-4 border-b border-border pb-[0.3em] text-2xl leading-[1.25] font-semibold break-words">
+              {t("repositoryDefaultPage")}:{" "}
+              <Link to="/nodes/$nodeId" params={{ nodeId: selectedApp.node.id }}>
                 {displayAppName(selectedApp.node.name)}
               </Link>
-            </p>
-            <p className="mt-1 mb-0 flex min-w-0 items-center gap-1.5 pl-4">
-              <code
-                className="min-w-0 truncate text-xs text-muted-foreground"
-                title={defaultPageUrl}
-              >
+            </h2>
+            <p className="m-0 mb-4 min-w-0">
+              <code className="rounded-[3px] bg-surface px-[0.4em] py-[0.2em] text-[85%] break-all">
                 {defaultPageUrl}
               </code>
             </p>
-            <p className="mt-1 mb-0 pl-4 text-xs text-subtle-foreground">
-              {t("repositoryDefaultPageLocalOnly")}
-            </p>
+            <p className="m-0 mb-4 text-muted-foreground">{t("repositoryDefaultPageLocalOnly")}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => void copyDefaultPageUrl()}>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button
+              type="button"
+              className="repository-pages-action"
+              onClick={() => void copyDefaultPageUrl()}
+            >
               {t("repositoryCopyPageLink")}
-            </Button>
+            </button>
             <Link
               to="/nodes/$nodeId"
               params={{ nodeId: selectedApp.node.id }}
               search={(previous) => ({ ...previous, view: "immersive" })}
-              className={cn(buttonVariants({ size: "sm" }), "no-underline")}
+              className="inline-flex items-center gap-1"
             >
               {t("repositoryVisitPage")}
               <ExternalLink className="size-3.5" />
@@ -569,48 +570,50 @@ function AppsView({
         </div>
       ) : null}
       {apps.length ? (
-        <ul className="m-0 list-none divide-y divide-border p-0">
+        <ul className="m-0 mb-4 list-disc pl-8">
           {apps.map((app) => {
             const isDefault = selectedApp?.node.id === app.node.id;
             return (
-              <li key={app.node.id} className="flex items-center gap-3 px-4 py-3">
-                <AppWindow className="size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to="/nodes/$nodeId"
-                    params={{ nodeId: app.node.id }}
-                    className="block truncate font-medium text-foreground no-underline hover:underline"
-                  >
-                    {displayAppName(app.node.name)}
-                  </Link>
-                  <p className="m-0 mt-0.5 truncate text-xs text-muted-foreground">
-                    {app.node.name} · {formatRelativeDate(app.node.updatedAt, language)}
-                  </p>
+              <li key={app.node.id} className="mt-4">
+                <div className="flex flex-col items-start justify-between gap-x-4 gap-y-1 sm:flex-row">
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to="/nodes/$nodeId"
+                      params={{ nodeId: app.node.id }}
+                      className="break-words"
+                    >
+                      {displayAppName(app.node.name)}
+                    </Link>
+                    <p className="m-0 mt-1 text-sm break-words text-muted-foreground">
+                      {app.node.name} · {formatRelativeDate(app.node.updatedAt, language)}
+                    </p>
+                  </div>
+                  {isDefault ? (
+                    <span className="text-sm leading-6 text-muted-foreground">
+                      {t("repositoryIsDefaultPage")}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="repository-pages-action"
+                      onClick={() => onSelectApp(app.node.id)}
+                    >
+                      {t("repositorySetDefaultPage")}
+                    </button>
+                  )}
                 </div>
-                {isDefault ? (
-                  <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                    {t("repositoryIsDefaultPage")}
-                  </span>
-                ) : (
-                  <Button variant="ghost" size="sm" onClick={() => onSelectApp(app.node.id)}>
-                    {t("repositorySetDefaultPage")}
-                  </Button>
-                )}
               </li>
             );
           })}
         </ul>
       ) : (
-        <Empty
-          title={t("repositoryNoApps")}
-          description={
-            <>
-              {t("appsEmptyDescription")}
-              <br />
-              {t("appsEmptyHint")}
-            </>
-          }
-        />
+        <div>
+          <h2 className="mt-6 mb-4 border-b border-border pb-[0.3em] text-2xl leading-[1.25] font-semibold">
+            {t("repositoryNoApps")}
+          </h2>
+          <p className="m-0 mb-4">{t("appsEmptyDescription")}</p>
+          <p className="m-0 mb-4">{t("appsEmptyHint")}</p>
+        </div>
       )}
     </section>
   );
