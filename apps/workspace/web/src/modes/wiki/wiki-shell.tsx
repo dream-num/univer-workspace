@@ -5,7 +5,6 @@ import {
   CircleDot,
   House,
   LayoutGrid,
-  Lock,
   Menu,
   MessageCircle,
   PanelLeftClose,
@@ -17,7 +16,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState, type PropsWithChildren, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../../features/auth";
 import { AppsSidebarSection } from "../../features/html-views/apps-sidebar";
 import { IssuesSidebarSection } from "../../features/issues";
@@ -47,11 +46,10 @@ import {
   TrialNoticeDialog,
 } from "../../features/account";
 import { BrandMark, NavLink, BreadcrumbSeparator } from "../../features/shell";
-import { CreateTeamDialog, type RepositoryTab, type RepositoryBreadcrumb } from "../../features/spaces";
+import { CreateTeamDialog, type RepositoryBreadcrumb } from "../../features/spaces";
+import type { WorkspaceShellProps, WorkspaceView } from "../shell.types";
 
 type SpaceView = components["schemas"]["SpaceView"];
-
-type WorkspaceView = "home" | "apps" | "trash" | "worktrees" | "members" | "issues";
 
 function RepositoryBreadcrumbs({
   spaceId,
@@ -162,22 +160,6 @@ function RepositoryBreadcrumbs({
 const breadcrumbLinkClass =
   "min-w-0 shrink-0 truncate text-muted-foreground no-underline outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm";
 
-type WorkspaceLayoutProps = PropsWithChildren<{
-  readonly selectedSpaceId?: string;
-  readonly repositoryDataActive?: boolean;
-  readonly repositoryTab?: RepositoryTab;
-  readonly repositoryHome?: boolean;
-  readonly repositoryBreadcrumbs?: readonly RepositoryBreadcrumb[];
-  readonly selectedNodeId?: string;
-  readonly selectedNodePath?: readonly string[];
-  readonly selectedView?: WorkspaceView;
-  readonly immersive?: boolean;
-  readonly contentMode?: "default" | "editor";
-  readonly headerTitle?: ReactNode;
-  readonly headerContent?: ReactNode;
-  readonly headerActions?: ReactNode;
-}>;
-
 export function WikiShell({
   children,
   selectedSpaceId,
@@ -193,7 +175,7 @@ export function WikiShell({
   headerActions,
   selectedNodeId,
   selectedNodePath,
-}: WorkspaceLayoutProps) {
+}: WorkspaceShellProps) {
   const session = useQuery(sessionQueryOptions);
   const spaces = useQuery(spacesQueryOptions);
   const activeWorktrees = useQuery({

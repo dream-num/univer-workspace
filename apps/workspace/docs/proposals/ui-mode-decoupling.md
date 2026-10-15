@@ -896,3 +896,23 @@ T3 全部子任务完成后，TSX 中的 api.POST/PATCH/PUT/DELETE 仅剩认证�
 验证：394 项测试、typecheck、build、38 张基线截图及原写操作对比全部通过。
 `-workspace-layout.tsx` 从 1487 行缩至 739 行，仅保留 WorkspaceLayout、VisitorLayout、
 AuthenticatedWorkspaceLayout、RepositoryBreadcrumbs 和 workspaceViewTitle 五个函数。
+
+### T4b 注册表装配 Shell（PR 描述素材）
+
+先以独立 commit 原样复制 AuthenticatedWorkspaceLayout 及其辅助函数到两个 mode；
+随后新增 `WorkspaceShellProps`（保持原 props 字段）、为 `ModeDefinition` 增加必需的 Shell，
+并由两个 mode 分别注册 WikiShell、RepositoryShell。外壳和辅助函数的函数体与复制前一致。
+`routes/-workspace-layout.tsx` 缩至 64 行，只保留认证入口、原样 VisitorLayout 和兼容 re-export，
+不再读取 workspaceTheme。已登录入口渲染 `<Shell key={mode} {...props} />`。
+
+按 N4，切换 mode 会重新挂载外壳及其子树，关闭临时弹窗；产品 QueryClient 保持不变。
+两个 shell 的内部 mode 分支和 repositoryShell 条件留待 T4c 清理，R7 半外壳行为本次不调整。
+RepositoryBreadcrumbs 随副本进入 mode；wiki 中暂存的副本随 T4c 无用分支一并删除。
+
+切换入口前，使用 `UI_MODES_UPDATE_COLLAPSED=1` 仅补录两种 mode 的折叠侧栏截图，
+原有 38 张基线未更新。扩充冒烟脚本，验证共 40 张截图及设置界面的 wiki/repository 往返切换，
+检查旧 main 卸载、弹窗关闭、URL、document.title、原 localStorage key 和 QueryClient 缓存保留。
+
+验证：typecheck、build、40 张截图及 mode 往返切换通过。全量运行中 386 项通过，
+文案套件因注册表现在加载浏览器 Shell 而在 Node 环境访问 window 失败；该单测改用 Shell
+占位组件，仍验证真实注册表和全部文案，8 项重跑通过。未增加 DOM 测试依赖或修改生产代码规避问题。

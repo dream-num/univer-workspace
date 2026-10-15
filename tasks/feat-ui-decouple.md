@@ -210,7 +210,7 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
     账号菜单和设置打开态在移动前补录，38 张截图移动后零差异；394 项测试、typecheck、build 通过。
     八个整段移动函数体与移动前逐字一致；详情见提案的「T4a 外壳公共部件移动」。
 
-- [ ] **T4b：把 `AuthenticatedWorkspaceLayout` 复制成两个 shell**（R2 外壳部分；N2）
+- [x] **T4b：把 `AuthenticatedWorkspaceLayout` 复制成两个 shell**（R2 外壳部分；N2）
   - 做什么：
     - `modes/wiki/wiki-shell.tsx`、`modes/repository/repository-shell.tsx`：各自是 `AuthenticatedWorkspaceLayout` 的完整拷贝
       （第一个 commit 只复制，第二个 commit 起才删代码）。`RepositoryBreadcrumbs` 随 repository shell 移动。
@@ -222,6 +222,9 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
   - 验收：两个 shell 文件各自能独立编译；`-workspace-layout.tsx` 不再出现 `workspaceTheme`。
   - 验证：V-static；V-smoke（截图零差异，包括 390×844 视口、折叠侧栏、`document.title`）。
   - 规模：M（复制约 600 行，PR 评审时只看 `WorkspaceLayout` 的改动和复制是否完整）。依赖：T4a。
+  - 已完成：先提交原样副本，再接入注册表 Shell 和 mode key；路由入口缩至 64 行，不再读取 workspaceTheme。
+    typecheck、build、40 张截图及 mode 往返切换通过。全量 386 项通过，文案套件因导入浏览器 Shell 失败；
+    隔离 Shell 后该套件 8 项重跑通过，合计 394 项。详情见提案的「T4b 注册表装配 Shell」。
 
 - [ ] **T4c：删除两个 shell 内部的 mode 分支**（R2、R7 可见化；N2）
   - 做什么：

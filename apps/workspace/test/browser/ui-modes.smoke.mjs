@@ -18,7 +18,9 @@ const baseline = resolve(
 const update = process.env.UI_MODES_UPDATE === "1" || process.argv.includes("--update-baseline");
 // T4a 移动前补录打开态，保留已有页面基线不变。
 const updateOverlays = process.env.UI_MODES_UPDATE_OVERLAYS === "1";
-const updatesCapture = (slug) => update || (updateOverlays && ["account-open", "settings-open"].includes(slug));
+const updatesCapture = (slug) => update
+  || (updateOverlays && ["account-open", "settings-open"].includes(slug))
+  || (process.env.UI_MODES_UPDATE_COLLAPSED === "1" && slug === "sidebar-collapsed");
 const session = `ui-modes-${process.pid}`;
 const fixturePath = join(baseline, "fixture.json");
 const actual = join(baseline, "actual");
@@ -287,6 +289,11 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
         } else click("button", "Application settings");
         browser("wait", "[role=dialog]");
       });
+      capture(mode, "sidebar-collapsed", "/apps", false, () => {
+        click("button", "Collapse main navigation");
+        browser("wait", "button[aria-label='Expand main navigation']");
+      });
+      click("button", "Expand main navigation");
       browser("set", "viewport", "390", "844");
       for (const [slug, path] of pages.filter(([slug]) => ["home", "team"].includes(slug))) {
         capture(mode, `${slug}-mobile`, path, true);
@@ -338,8 +345,36 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       } finally {
         cleanupFolder();
       }
-      console.log(`${mode}: 15 个页面、2 个移动端截图、2 个写操作通过`);
+      console.log(`${mode}: 20 张截图、2 个写操作通过`);
     }
+    open("/home");
+    for (const nextMode of ["wiki", "repository", "wiki"]) {
+      const currentMode = evaluate("document.documentElement.dataset.uiMode");
+      if (currentMode === "repository") {
+        click("button", "Account");
+        browser("wait", "[role=menu]");
+        click("menuitem", "Application settings");
+      } else click("button", "Application settings");
+      browser("wait", "[role=dialog]");
+      evaluate(`(async () => {
+        const { queryClient } = await import('/src/app/providers.tsx');
+        window.modeSwitchClient = queryClient;
+        queryClient.setQueryData(['mode-switch-probe'], 'retained');
+        window.previousModeMain = document.querySelector('main');
+      })()`);
+      click("button", nextMode === "wiki" ? "Wiki" : "Repository (experimental)");
+      browser("wait", "--fn", `document.documentElement.dataset.uiMode === '${nextMode}' && !document.querySelector('[role=dialog]')`);
+      settle();
+      assert.equal(evaluate("previousModeMain.isConnected"), false, "切换 mode 必须重新挂载 shell");
+      assert.equal(evaluate("localStorage.getItem('univer-workspace-layout-theme')"), nextMode);
+      assert.equal(browser("get", "url").url, `${origin}/home`);
+      assert.equal(evaluate("document.title"), json(join(baseline, nextMode, "home.json")).title);
+      assert.equal(evaluate(`(async () => {
+        const { queryClient } = await import('/src/app/providers.tsx');
+        return queryClient === modeSwitchClient && queryClient.getQueryData(['mode-switch-probe']) === 'retained';
+      })()`), true, "切换 mode 不重建产品缓存");
+    }
+    console.log("mode 往返切换：shell 重挂载、弹窗关闭、URL、标题、storage 与缓存检查通过");
   } finally {
     browser("close");
   }

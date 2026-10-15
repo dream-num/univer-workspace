@@ -1,9 +1,12 @@
+import type { ComponentType } from "react";
+import type { WorkspaceShellProps } from "./shell.types";
 import type { MessageKey, ModeMessages } from "../shared/i18n";
 import { parseUiMode, useUiMode } from "../shared/ui-mode";
 import { repositoryMode } from "./repository";
 import { wikiMode } from "./wiki";
 
 export interface ModeDefinition {
+  readonly Shell: ComponentType<WorkspaceShellProps>;
   readonly label: MessageKey;
   readonly messages: ModeMessages;
 }
