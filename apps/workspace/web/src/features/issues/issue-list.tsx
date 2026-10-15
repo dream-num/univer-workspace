@@ -1,15 +1,46 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CircleDot, MessageSquare, Paperclip, Search, Tag } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  CircleDot,
+  Clock,
+  MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Paperclip,
+  Search,
+  Tag,
+  User,
+  Users,
+  X,
+} from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import { useI18n } from "../../shared/i18n";
-import { Avatar, Button, buttonVariants, Empty, Input, Select, Spinner } from "../../shared/ui";
+import {
+  Avatar,
+  Button,
+  buttonVariants,
+  Empty,
+  Input,
+  MenuContent,
+  MenuItem,
+  MenuRoot,
+  MenuTrigger,
+  Spinner,
+} from "../../shared/ui";
+import { useTheme } from "../../shared/theme";
 import { cn } from "../../shared/utils/cn";
 import { IssueLabelChip } from "./issue-label";
 import { IssueStateIcon } from "./issue-state";
-import { issueLabelsQueryOptions, issueListQueryOptions, type IssueFilters } from "./issues.queries";
+import {
+  DEFAULT_ISSUE_FILTERS,
+  issueLabelsQueryOptions,
+  issueListQueryOptions,
+  type IssueFilters,
+} from "./issues.queries";
 
 type IssueSummary = components["schemas"]["IssueSummary"];
 
@@ -32,8 +63,14 @@ export function IssueList({
   readonly canCreate?: boolean;
 }) {
   const { t } = useI18n();
+  const { workspaceTheme } = useTheme();
+  const repository = workspaceTheme === "repository" && Boolean(spaceId);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const query = useInfiniteQuery(issueListQueryOptions(spaceId, filters));
-  const labels = useQuery({ ...issueLabelsQueryOptions(spaceId ?? ""), enabled: spaceId !== undefined });
+  const labels = useQuery({
+    ...issueLabelsQueryOptions(spaceId ?? ""),
+    enabled: spaceId !== undefined,
+  });
   const [search, setSearch] = useState(filters.q ?? "");
   useEffect(() => setSearch(filters.q ?? ""), [filters.q]);
 
@@ -41,168 +78,359 @@ export function IssueList({
   const issues = pages.flatMap((page) => page.items);
   const counts = pages[0]?.counts ?? { open: 0, closed: 0 };
   const narrowed =
-    filters.labels.length > 0 || Boolean(filters.assignee) || Boolean(filters.author) || Boolean(filters.q);
+    filters.labels.length > 0 ||
+    Boolean(filters.assignee) ||
+    Boolean(filters.author) ||
+    Boolean(filters.q);
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
     onFiltersChange({ ...filters, q: search.trim() || undefined });
   };
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <form role="search" onSubmit={submitSearch} className="relative min-w-52 flex-1">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            aria-label={t("issueSearch")}
-            placeholder={t("issueSearch")}
-            className="pl-9"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </form>
-        {spaceId ? (
+    <div className={cn("min-w-0", repository && "flex min-h-full")}>
+      {repository && spaceId && sidebarOpen ? (
+        <nav
+          aria-label={t("issueViews")}
+          className="w-64 shrink-0 border-r border-border p-4 max-[900px]:hidden"
+        >
+          {[
+            {
+              label: t("issues"),
+              icon: CircleDot,
+              search: {},
+              active: !filters.assignee && !filters.author && filters.sort === "created",
+            },
+            {
+              label: t("issueFilterAssigneeMe"),
+              icon: Users,
+              search: { assignee: "me" },
+              active: filters.assignee === "me" && !filters.author,
+            },
+            {
+              label: t("issueFilterAuthorMe"),
+              icon: User,
+              search: { author: "me" },
+              active: filters.author === "me" && !filters.assignee,
+            },
+            {
+              label: t("issueRecentActivity"),
+              icon: Clock,
+              search: { sort: "updated" as const },
+              active: !filters.assignee && !filters.author && filters.sort === "updated",
+            },
+          ].map(({ label, icon: Icon, search: view, active }) => (
+            <Link
+              key={label}
+              to="/spaces/$spaceId/issues"
+              params={{ spaceId }}
+              search={view}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "relative flex min-h-8 items-center gap-2 rounded-sm px-2 text-sm text-foreground no-underline hover:bg-accent",
+                active &&
+                  "bg-accent font-semibold before:absolute before:-left-2 before:h-6 before:w-1 before:rounded-full before:bg-info-soft-foreground",
+              )}
+            >
+              <Icon className="size-4 shrink-0 text-muted-foreground" />
+              {label}
+            </Link>
+          ))}
+          <div className="my-5 border-t border-border" />
           <Link
             to="/spaces/$spaceId/issues/labels"
             params={{ spaceId }}
-            className={cn(buttonVariants({ variant: "secondary" }), "no-underline")}
+            className="flex min-h-8 items-center gap-2 rounded-sm px-2 text-foreground no-underline hover:bg-accent"
           >
-            <Tag />
+            <Tag className="size-4 text-muted-foreground" />
             {t("issueLabels")}
           </Link>
-        ) : null}
-        {spaceId && canCreate ? (
-          <Link
-            to="/spaces/$spaceId/issues/new"
-            params={{ spaceId }}
-            search={{}}
-            className={cn(buttonVariants(), "no-underline")}
+          <Button
+            variant="ghost"
+            className="mt-6 w-full justify-start px-2"
+            onClick={() => setSidebarOpen(false)}
+            aria-expanded={sidebarOpen}
           >
-            {t("issueNew")}
-          </Link>
-        ) : null}
-      </div>
-
-      <section className="rounded-lg border border-border bg-background">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-          <div className="flex items-center gap-4 text-sm" role="group" aria-label={t("issueState")}>
-            <StateToggle
-              active={filters.state === "open"}
-              onClick={() => onFiltersChange({ ...filters, state: "open" })}
-              icon={<CircleDot className="size-4" />}
-              label={t("issueStateOpen")}
-              count={counts.open}
-            />
-            <StateToggle
-              active={filters.state === "closed"}
-              onClick={() => onFiltersChange({ ...filters, state: "closed" })}
-              label={t("issueStateClosed")}
-              count={counts.closed}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2 max-[720px]:w-full">
-            {spaceId ? (
-              <Select
-                size="sm"
-                borderless
-                className="w-auto"
-                aria-label={t("issueFilterLabel")}
-                value={filters.labels[0] ?? ANY}
-                onValueChange={(value) =>
-                  onFiltersChange({ ...filters, labels: value === ANY ? [] : [value] })
-                }
-                options={[
-                  { value: ANY, label: t("issueFilterLabelAny") },
-                  ...(labels.data ?? []).map((label) => ({ value: label.name, label: label.name })),
-                ]}
-              />
+            <PanelLeftClose />
+            {t("issueCollapseSidebar")}
+          </Button>
+        </nav>
+      ) : null}
+      <div
+        className={cn(
+          "grid min-w-0 flex-1 content-start gap-4",
+          repository && "gap-6 p-6 max-[720px]:p-4",
+        )}
+      >
+        {repository ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              {!sidebarOpen ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="max-[900px]:hidden"
+                  aria-label={t("issueExpandSidebar")}
+                  aria-expanded={false}
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  <PanelLeftOpen />
+                </Button>
+              ) : null}
+              <h1 className="m-0 text-xl font-semibold">{t("issues")}</h1>
+            </div>
+            {spaceId && canCreate ? (
+              <Link
+                to="/spaces/$spaceId/issues/new"
+                params={{ spaceId }}
+                search={{}}
+                className={cn(buttonVariants({ size: "sm" }), "no-underline")}
+              >
+                {t("issueNew")}
+              </Link>
             ) : null}
-            <Select
-              size="sm"
-              borderless
-              className="w-auto"
-              aria-label={t("issueFilterAssignee")}
-              value={filters.assignee ?? ANY}
-              onValueChange={(value) =>
-                onFiltersChange({ ...filters, assignee: value === ANY ? undefined : value })
-              }
-              options={[
-                { value: ANY, label: t("issueFilterAssigneeAny") },
-                { value: "me", label: t("issueFilterAssigneeMe") },
-                { value: "none", label: t("issueFilterAssigneeNone") },
-              ]}
-            />
-            <Select
-              size="sm"
-              borderless
-              className="w-auto"
-              aria-label={t("issueFilterAuthor")}
-              value={filters.author ?? ANY}
-              onValueChange={(value) =>
-                onFiltersChange({ ...filters, author: value === ANY ? undefined : value })
-              }
-              options={[
-                { value: ANY, label: t("issueFilterAuthorAny") },
-                { value: "me", label: t("issueFilterAuthorMe") },
-              ]}
-            />
-            <Select
-              size="sm"
-              borderless
-              className="w-auto"
-              aria-label={t("issueSort")}
-              value={`${filters.sort}-${filters.order}`}
-              onValueChange={(value) => {
-                const [sort, order] = value.split("-") as [IssueFilters["sort"], IssueFilters["order"]];
-                onFiltersChange({ ...filters, sort, order });
-              }}
-              options={SORTS.map((value) => ({ value, label: t(SORT_LABELS[value]) }))}
-            />
           </div>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <form role="search" onSubmit={submitSearch} className="relative min-w-52 flex-1">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              aria-label={t("issueSearch")}
+              placeholder={t("issueSearch")}
+              className={cn("pl-9 pr-16", repository && "h-8 rounded-sm bg-background shadow-none")}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center">
+              {search ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t("issueClearSearch")}
+                  onClick={() => {
+                    setSearch("");
+                    onFiltersChange({ ...filters, q: undefined });
+                  }}
+                >
+                  <X />
+                </Button>
+              ) : null}
+              <Button
+                type="submit"
+                variant="ghost"
+                size="icon-sm"
+                className="h-full rounded-l-none border-l border-border"
+                aria-label={t("issueSearch")}
+              >
+                <Search />
+              </Button>
+            </div>
+          </form>
+          {spaceId ? (
+            <Link
+              to="/spaces/$spaceId/issues/labels"
+              params={{ spaceId }}
+              className={cn(
+                buttonVariants({ variant: "secondary", size: "sm" }),
+                "no-underline",
+                repository && sidebarOpen && "min-[901px]:hidden",
+              )}
+            >
+              <Tag />
+              {t("issueLabels")}
+            </Link>
+          ) : null}
+          {spaceId && canCreate && !repository ? (
+            <Link
+              to="/spaces/$spaceId/issues/new"
+              params={{ spaceId }}
+              search={{}}
+              className={cn(buttonVariants(), "no-underline")}
+            >
+              {t("issueNew")}
+            </Link>
+          ) : null}
         </div>
 
-        {query.isPending ? (
-          <div className="grid place-items-center py-14">
-            <Spinner />
-          </div>
-        ) : query.error ? (
-          <Empty title={t("issueLoadFailed")} description={query.error.message}>
-            <Button variant="secondary" onClick={() => void query.refetch()}>
-              {t("repositoryPageRetry")}
-            </Button>
-          </Empty>
-        ) : issues.length === 0 ? (
-          <EmptyIssues
-            everything={!narrowed && counts.open + counts.closed === 0}
-            canCreate={Boolean(spaceId && canCreate)}
-            {...(spaceId ? { spaceId } : {})}
-            onClear={() =>
-              onFiltersChange({ ...filters, labels: [], assignee: undefined, author: undefined, q: undefined })
-            }
-          />
-        ) : (
-          <>
-            <ul className="m-0 list-none p-0">
-              {issues.map((issue) => (
-                <IssueRow key={issue.id} issue={issue} showSpace={spaceId === undefined} />
-              ))}
-            </ul>
-            {query.hasNextPage ? (
-              <div className="grid place-items-center border-t border-border p-3">
-                <Button
-                  variant="secondary"
-                  disabled={query.isFetchingNextPage}
-                  onClick={() => void query.fetchNextPage()}
-                >
-                  {query.isFetchingNextPage ? t("issueLoading") : t("issueLoadMore")}
-                </Button>
-              </div>
+        {narrowed && issues.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {filters.labels.map((label) => (
+              <span key={label} className="rounded-sm border border-border px-2 py-1">
+                {t("issueFilterLabel")}: {label}
+              </span>
+            ))}
+            {filters.assignee ? (
+              <span>
+                {t("issueAssignees")}:{" "}
+                {filters.assignee === "me"
+                  ? t("issueFilterAssigneeMe")
+                  : filters.assignee === "none"
+                    ? t("issueFilterAssigneeNone")
+                    : filters.assignee}
+              </span>
             ) : null}
-          </>
-        )}
-      </section>
+            {filters.author ? (
+              <span>
+                {t("issueFilterAuthor")}:{" "}
+                {filters.author === "me" ? t("issueFilterAuthorMe") : filters.author}
+              </span>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-fit justify-start text-muted-foreground"
+              onClick={() => {
+                setSearch("");
+                onFiltersChange({ ...DEFAULT_ISSUE_FILTERS, state: filters.state });
+              }}
+            >
+              <X />
+              {t("issueClearFilters")}
+            </Button>
+          </div>
+        ) : null}
+        <section
+          aria-label={t("issues")}
+          className={cn(
+            "overflow-hidden rounded-lg border border-border bg-background",
+            repository && "rounded-sm",
+          )}
+        >
+          <div
+            className={cn(
+              "flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5",
+              repository && "gap-2 bg-surface py-2",
+            )}
+          >
+            <div
+              className="flex items-center gap-4 text-sm"
+              role="group"
+              aria-label={t("issueState")}
+            >
+              <StateToggle
+                active={filters.state === "open"}
+                onClick={() => onFiltersChange({ ...filters, state: "open" })}
+                icon={repository ? undefined : <CircleDot className="size-4" />}
+                label={t("issueStateOpen")}
+                count={counts.open}
+              />
+              <StateToggle
+                active={filters.state === "closed"}
+                onClick={() => onFiltersChange({ ...filters, state: "closed" })}
+                label={t("issueStateClosed")}
+                count={counts.closed}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 max-[720px]:w-full">
+              <FilterMenu
+                label={t("issueFilterAuthor")}
+                value={filters.author ?? ANY}
+                onValueChange={(value) =>
+                  onFiltersChange({ ...filters, author: value === ANY ? undefined : value })
+                }
+                options={[
+                  { value: ANY, label: t("issueFilterAuthorAny") },
+                  { value: "me", label: t("issueFilterAuthorMe") },
+                ]}
+              />
+              {spaceId ? (
+                <FilterMenu
+                  label={t("issueLabels")}
+                  value={filters.labels[0] ?? ANY}
+                  onValueChange={(value) =>
+                    onFiltersChange({ ...filters, labels: value === ANY ? [] : [value] })
+                  }
+                  options={[
+                    { value: ANY, label: t("issueFilterLabelAny") },
+                    ...(labels.data ?? []).map((label) => ({
+                      value: label.name,
+                      label: label.name,
+                    })),
+                  ]}
+                />
+              ) : null}
+              <FilterMenu
+                label={t("issueAssignees")}
+                value={filters.assignee ?? ANY}
+                onValueChange={(value) =>
+                  onFiltersChange({ ...filters, assignee: value === ANY ? undefined : value })
+                }
+                options={[
+                  { value: ANY, label: t("issueFilterAssigneeAny") },
+                  { value: "me", label: t("issueFilterAssigneeMe") },
+                  { value: "none", label: t("issueFilterAssigneeNone") },
+                ]}
+              />
+              <FilterMenu
+                label={t(SORT_LABELS[`${filters.sort}-${filters.order}`])}
+                value={`${filters.sort}-${filters.order}`}
+                onValueChange={(value) => {
+                  const [sort, order] = value.split("-") as [
+                    IssueFilters["sort"],
+                    IssueFilters["order"],
+                  ];
+                  onFiltersChange({ ...filters, sort, order });
+                }}
+                options={SORTS.map((value) => ({ value, label: t(SORT_LABELS[value]) }))}
+              />
+            </div>
+          </div>
+
+          {query.isPending ? (
+            <div className="grid place-items-center py-14">
+              <Spinner />
+            </div>
+          ) : query.error ? (
+            <Empty title={t("issueLoadFailed")} description={query.error.message}>
+              <Button variant="secondary" onClick={() => void query.refetch()}>
+                {t("repositoryPageRetry")}
+              </Button>
+            </Empty>
+          ) : issues.length === 0 ? (
+            <EmptyIssues
+              everything={!narrowed && counts.open + counts.closed === 0}
+              canCreate={Boolean(spaceId && canCreate)}
+              {...(spaceId ? { spaceId } : {})}
+              onClear={() =>
+                onFiltersChange({
+                  ...filters,
+                  labels: [],
+                  assignee: undefined,
+                  author: undefined,
+                  q: undefined,
+                })
+              }
+            />
+          ) : (
+            <>
+              <ul className="m-0 list-none p-0">
+                {issues.map((issue) => (
+                  <IssueRow
+                    key={issue.id}
+                    issue={issue}
+                    showSpace={spaceId === undefined}
+                    repository={repository}
+                  />
+                ))}
+              </ul>
+              {query.hasNextPage ? (
+                <div className="grid place-items-center border-t border-border p-3">
+                  <Button
+                    variant="secondary"
+                    disabled={query.isFetchingNextPage}
+                    onClick={() => void query.fetchNextPage()}
+                  >
+                    {query.isFetchingNextPage ? t("issueLoading") : t("issueLoadMore")}
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
@@ -233,13 +461,15 @@ function StateToggle({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex items-center gap-1.5 font-medium transition-colors",
+        "flex min-h-8 items-center gap-1.5 font-medium transition-colors",
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >
       {icon}
       {label}
-      <span className="tabular-nums">{count}</span>
+      <span className="rounded-full bg-repository-counter px-1.5 text-xs font-semibold tabular-nums">
+        {count.toLocaleString()}
+      </span>
     </button>
   );
 }
@@ -285,7 +515,15 @@ function EmptyIssues({
   );
 }
 
-function IssueRow({ issue, showSpace }: { readonly issue: IssueSummary; readonly showSpace: boolean }) {
+function IssueRow({
+  issue,
+  showSpace,
+  repository,
+}: {
+  readonly issue: IssueSummary;
+  readonly showSpace: boolean;
+  readonly repository: boolean;
+}) {
   const { language, t } = useI18n();
   const closed = issue.state === "closed";
   return (
@@ -293,17 +531,27 @@ function IssueRow({ issue, showSpace }: { readonly issue: IssueSummary; readonly
       <Link
         to="/spaces/$spaceId/issues/$number"
         params={{ spaceId: issue.space.id, number: String(issue.number) }}
-        className="flex items-start gap-3 px-4 py-3.5 no-underline hover:bg-accent/60"
+        className={cn(
+          "group flex items-start gap-2 px-4 py-3.5 no-underline hover:bg-accent/60",
+          repository && "py-2.5",
+        )}
       >
         <IssueStateIcon issue={issue} className="mt-0.5" />
         <div className="min-w-0 flex-1">
           <p className="m-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-medium text-foreground">{issue.title}</span>
+            <span
+              className={cn(
+                "font-medium text-foreground group-hover:underline",
+                repository && "text-base leading-6 font-semibold",
+              )}
+            >
+              {issue.title}
+            </span>
             {issue.labels.map((label) => (
               <IssueLabelChip key={label.id} name={label.name} color={label.color} />
             ))}
           </p>
-          <p className="mt-1 mb-0 text-sm text-muted-foreground">
+          <p className={cn("mt-1 mb-0 text-sm text-muted-foreground", repository && "text-xs")}>
             {showSpace ? <span>{issue.space.name} · </span> : null}
             {closed && issue.closedAt
               ? t("issueClosedBy", {
@@ -320,9 +568,18 @@ function IssueRow({ issue, showSpace }: { readonly issue: IssueSummary; readonly
         </div>
         <div className="flex shrink-0 items-center gap-3 text-sm text-muted-foreground max-[720px]:hidden">
           {issue.assignees.length ? (
-            <span className="flex -space-x-1.5" title={issue.assignees.map((user) => user.displayName).join(", ")}>
+            <span
+              className="flex -space-x-1.5"
+              title={issue.assignees.map((user) => user.displayName).join(", ")}
+            >
               {issue.assignees.slice(0, 3).map((user) => (
-                <Avatar key={user.id} src={user.avatarUrl} name={user.displayName} size="xs" className="ring-2 ring-background" />
+                <Avatar
+                  key={user.id}
+                  src={user.avatarUrl}
+                  name={user.displayName}
+                  size="xs"
+                  className="ring-2 ring-background"
+                />
               ))}
               {issue.assignees.length > 3 ? (
                 <span className="grid size-6 place-items-center rounded-full bg-muted text-[10px] ring-2 ring-background">
@@ -332,13 +589,19 @@ function IssueRow({ issue, showSpace }: { readonly issue: IssueSummary; readonly
             </span>
           ) : null}
           {issue.referenceCount ? (
-            <span className="flex items-center gap-1 tabular-nums" title={t("issueReferenceCount", { count: issue.referenceCount })}>
+            <span
+              className="flex items-center gap-1 tabular-nums"
+              title={t("issueReferenceCount", { count: issue.referenceCount })}
+            >
               <Paperclip className="size-3.5" />
               {issue.referenceCount}
             </span>
           ) : null}
           {issue.commentCount ? (
-            <span className="flex items-center gap-1 tabular-nums" title={t("issueCommentCount", { count: issue.commentCount })}>
+            <span
+              className="flex items-center gap-1 tabular-nums"
+              title={t("issueCommentCount", { count: issue.commentCount })}
+            >
               <MessageSquare className="size-3.5" />
               {issue.commentCount}
             </span>
@@ -346,5 +609,55 @@ function IssueRow({ issue, showSpace }: { readonly issue: IssueSummary; readonly
         </div>
       </Link>
     </li>
+  );
+}
+
+function FilterMenu({
+  label,
+  value,
+  options,
+  onValueChange,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly options: readonly { readonly value: string; readonly label: string }[];
+  readonly onValueChange: (value: string) => void;
+}) {
+  const { workspaceTheme } = useTheme();
+  return (
+    <MenuRoot>
+      <MenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-2 text-muted-foreground"
+            aria-label={label}
+          >
+            {label}
+            <ChevronDown className="size-3" />
+          </Button>
+        }
+      />
+      <MenuContent
+        align="end"
+        className={cn(
+          "max-h-72 overflow-y-auto",
+          workspaceTheme === "repository" && "repository-chrome repository-issues",
+        )}
+      >
+        {options.map((option) => (
+          <MenuItem
+            key={option.value}
+            role="menuitemradio"
+            aria-checked={option.value === value}
+            onClick={() => onValueChange(option.value)}
+          >
+            <Check className={cn("size-4", option.value !== value && "invisible")} />
+            {option.label}
+          </MenuItem>
+        ))}
+      </MenuContent>
+    </MenuRoot>
   );
 }

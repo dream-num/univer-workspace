@@ -16,12 +16,23 @@ export function IssueStateIcon({
 }) {
   const { t } = useI18n();
   if (issue.state === "open") {
-    return <CircleDot aria-label={t("issueStateOpen")} className={cn("size-4 text-state-open", className)} />;
+    return (
+      <CircleDot
+        aria-label={t("issueStateOpen")}
+        className={cn("size-4 text-state-open", className)}
+      />
+    );
   }
   return issue.stateReason === "not_planned" ? (
-    <CircleSlash aria-label={t("issueStateNotPlanned")} className={cn("size-4 text-muted-foreground", className)} />
+    <CircleSlash
+      aria-label={t("issueStateNotPlanned")}
+      className={cn("size-4 text-muted-foreground", className)}
+    />
   ) : (
-    <CircleCheck aria-label={t("issueStateCompleted")} className={cn("size-4 text-state-merged", className)} />
+    <CircleCheck
+      aria-label={t("issueStateCompleted")}
+      className={cn("size-4 text-state-merged", className)}
+    />
   );
 }
 
@@ -40,7 +51,14 @@ export function IssueStateBadge({ issue }: { readonly issue: IssueStateValue }) 
         ? t("issueStateNotPlanned")
         : t("issueStateCompleted");
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium", tone)}>
+    <span
+      data-state={issue.state}
+      data-reason={issue.stateReason}
+      className={cn(
+        "issue-state-badge inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium",
+        tone,
+      )}
+    >
       <IssueStateIcon issue={issue} className="size-4 text-current" />
       {label}
     </span>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { Textarea } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
@@ -29,20 +29,36 @@ export function IssueComposer({
 }) {
   const { t } = useI18n();
   const [preview, setPreview] = useState(false);
+  const tabId = useId();
   return (
     <div className="grid gap-2">
-      <div role="tablist" aria-label={t("issueComposerMode")} className="flex gap-1 border-b border-border">
+      <div
+        role="tablist"
+        aria-label={t("issueComposerMode")}
+        className="flex gap-1 rounded-t-sm border border-border bg-surface px-2 pt-2"
+      >
         {([false, true] as const).map((isPreview) => (
           <button
             key={String(isPreview)}
             type="button"
             role="tab"
+            id={`${tabId}-${isPreview}`}
+            aria-controls={`${tabId}-panel`}
             aria-selected={preview === isPreview}
+            tabIndex={preview === isPreview ? 0 : -1}
             onClick={() => setPreview(isPreview)}
+            onKeyDown={(event) => {
+              if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+                event.preventDefault();
+                const next = event.key === "Home" ? false : event.key === "End" ? true : !preview;
+                setPreview(next);
+                document.getElementById(`${tabId}-${next}`)?.focus();
+              }
+            }}
             className={cn(
-              "-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition-colors",
+              "-mb-px rounded-t-sm border px-4 py-2 text-sm transition-colors",
               preview === isPreview
-                ? "border-primary text-foreground"
+                ? "border-border border-b-background bg-background text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
@@ -50,32 +66,35 @@ export function IssueComposer({
           </button>
         ))}
       </div>
-      {preview ? (
-        <div className="min-h-24 rounded-md border border-border px-3 py-2">
-          {value.trim() ? (
-            <IssueMarkdown text={value} />
-          ) : (
-            <p className="m-0 text-sm text-muted-foreground">{t("issueNothingToPreview")}</p>
-          )}
-        </div>
-      ) : (
-        <Textarea
-          {...(id ? { id } : {})}
-          aria-label={ariaLabel ?? t("issueWrite")}
-          rows={rows}
-          value={value}
-          {...(placeholder ? { placeholder } : {})}
-          {...(disabled ? { disabled } : {})}
-          {...(invalid ? { invalid } : {})}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (onSubmit && event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              onSubmit();
-            }
-          }}
-        />
-      )}
+      <div id={`${tabId}-panel`} role="tabpanel" aria-labelledby={`${tabId}-${preview}`}>
+        {preview ? (
+          <div className="min-h-24 rounded-md border border-border px-3 py-2">
+            {value.trim() ? (
+              <IssueMarkdown text={value} />
+            ) : (
+              <p className="m-0 text-sm text-muted-foreground">{t("issueNothingToPreview")}</p>
+            )}
+          </div>
+        ) : (
+          <Textarea
+            {...(id ? { id } : {})}
+            aria-label={ariaLabel ?? t("issueWrite")}
+            className="rounded-sm bg-background"
+            rows={rows}
+            value={value}
+            {...(placeholder ? { placeholder } : {})}
+            {...(disabled ? { disabled } : {})}
+            {...(invalid ? { invalid } : {})}
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (onSubmit && event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                onSubmit();
+              }
+            }}
+          />
+        )}
+      </div>
       <p className="m-0 text-xs text-subtle-foreground">{t("issueMarkdownHint")}</p>
     </div>
   );

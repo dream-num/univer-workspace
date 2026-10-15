@@ -36,7 +36,15 @@ export function IssueRouteLayout({
       headerTitle={repository ? title : crumb ? `${t("issues")} · ${crumb}` : t("issues")}
     >
       {repository && spaceId ? <RepositoryTabs spaceId={spaceId} active="issues" /> : null}
-      <RepositoryPage>{children}</RepositoryPage>
+      {repository && spaceId ? (
+        <div className="repository-chrome repository-issues min-h-0 flex-1 overflow-y-auto bg-background">
+          <div className={crumb ? "mx-auto max-w-7xl px-6 py-6 max-[720px]:px-4" : "min-h-full"}>
+            {children}
+          </div>
+        </div>
+      ) : (
+        <RepositoryPage>{children}</RepositoryPage>
+      )}
     </WorkspaceLayout>
   );
 }

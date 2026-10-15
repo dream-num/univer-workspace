@@ -448,6 +448,48 @@
   --color-accent: #656c7633;
 }
 
+/* Issue content uses GitHub's inset surface, rather than its darker global header. */
+.repository-issues {
+  --color-primary: #1f883d;
+  --color-primary-hover: #1a7f37;
+  --color-input: var(--color-border);
+  --color-state-open: #1a7f37;
+  --color-state-merged: #8250df;
+}
+
+.dark .repository-issues {
+  --color-surface: #151b23;
+  --color-primary: #238636;
+  --color-primary-hover: #29903b;
+  --color-state-open: #3fb950;
+  --color-state-merged: #ab7df8;
+}
+
+.repository-issues .issue-state-badge {
+  background: #1f883d;
+  color: #fff;
+}
+
+.repository-issues .issue-state-badge[data-state="closed"] {
+  background: #8250df;
+}
+
+.repository-issues .issue-state-badge[data-reason="not_planned"] {
+  background: #59636e;
+}
+
+.repository-issues .issue-comment {
+  border-radius: 6px;
+}
+
+.repository-issues .issue-markdown {
+  --color-primary: #0969da;
+}
+
+.dark .repository-issues .issue-markdown {
+  --color-primary: #4493f8;
+}
+
 /* Scrollbars flip to light-on-dark */
 .dark * {
   scrollbar-color: rgb(255 255 255 / 20%) transparent;
