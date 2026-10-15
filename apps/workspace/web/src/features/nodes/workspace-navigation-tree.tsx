@@ -9,14 +9,14 @@ import {
 } from "@univerjs/univer-workspace-file-browser";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { createIdempotencyKey } from "../../shared/idempotency-key";
 import { useI18n } from "../../shared/i18n";
 import { spacesQueryKey } from "../spaces";
-import { trashQueryKey } from "../trash";
+import { invalidateProductLists } from "./nodes.commands";
 import { waitForCreatedResource } from "./wait-for-created-resource";
 import { createDocumentInitialData } from "./create-document-initial-data";
 import { nodeChildrenQueryOptions, spaceNodesQueryOptions } from "./nodes.queries";
@@ -43,21 +43,6 @@ export function WorkspaceNavigationTree(props: {
         ...props.teamSpaces,
       ].map(toWorkspaceFileSpace),
     [props.personalSpace, props.teamSpaces],
-  );
-
-  const refreshProductLists = useCallback(
-    async (spaceId?: string) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-        queryClient.invalidateQueries({ queryKey: ["recent-resources"] }),
-        queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-        queryClient.invalidateQueries({ queryKey: ["shared-with-me"] }),
-        ...(spaceId === undefined
-          ? []
-          : [queryClient.invalidateQueries({ queryKey: trashQueryKey(spaceId) })]),
-      ]);
-    },
-    [queryClient],
   );
 
   const dataSource = useMemo<WorkspaceFileBrowserDataSource>(
@@ -114,7 +99,7 @@ export function WorkspaceNavigationTree(props: {
             continuing: t("resourceCreationContinuing"),
           });
         }
-        await refreshProductLists();
+        await invalidateProductLists(queryClient);
         if (createdNodeId) {
           await navigate({ to: "/nodes/$nodeId", params: { nodeId: createdNodeId } });
         }
@@ -125,7 +110,7 @@ export function WorkspaceNavigationTree(props: {
         } else {
           await uploadBlob(input.spaceId, input.parentNodeId, input.file);
         }
-        await refreshProductLists();
+        await invalidateProductLists(queryClient);
       },
       async renameNode({ node, name }) {
         const { error } = await api.PATCH("/api/nodes/{nodeId}", {
@@ -133,7 +118,7 @@ export function WorkspaceNavigationTree(props: {
           body: { name },
         });
         if (error) throw apiError(error);
-        await refreshProductLists();
+        await invalidateProductLists(queryClient);
       },
       async moveNode({ nodeId, parentNodeId }) {
         const { error } = await api.PATCH("/api/nodes/{nodeId}", {
@@ -141,7 +126,7 @@ export function WorkspaceNavigationTree(props: {
           body: { parentNodeId },
         });
         if (error) throw apiError(error);
-        await refreshProductLists();
+        await invalidateProductLists(queryClient);
       },
       async trashNode({ node }) {
         const { error } = await api.POST("/api/nodes/{nodeId}/trash", {
@@ -154,7 +139,7 @@ export function WorkspaceNavigationTree(props: {
         )) {
           await navigate({ to: "/home", replace: true });
         }
-        await refreshProductLists(node.spaceId);
+        await invalidateProductLists(queryClient, { spaceId: node.spaceId });
       },
       nodeUrl(node) {
         return new URL(`/nodes/${encodeURIComponent(node.id)}`, window.location.origin).toString();
@@ -203,7 +188,7 @@ export function WorkspaceNavigationTree(props: {
         },
       },
     }),
-    [language, navigate, queryClient, refreshProductLists, router, t],
+    [language, navigate, queryClient, router, t],
   );
 
   return (

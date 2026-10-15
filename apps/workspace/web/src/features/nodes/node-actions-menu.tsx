@@ -2,11 +2,11 @@ import { useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleDot, Ellipsis, ExternalLink, Link2, Pencil, Share2, Trash2 } from "lucide-react";
 import { useState, type ReactElement, type ReactNode } from "react";
+import { invalidateProductLists } from "./nodes.commands";
 import type { components } from "../../../../generated/http/schema.js";
 import { ShareDialog } from "../permissions";
 import { spacesQueryOptions } from "../spaces/spaces.queries";
 import { spaceSupportsIssues } from "../spaces/space.rules";
-import { trashQueryKey } from "../trash";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { useI18n } from "../../shared/i18n";
@@ -51,7 +51,8 @@ export function NodeActionsMenu(props: {
   const spaces = useQuery(spacesQueryOptions);
   const space = spaces.data?.spaces.find((item) => item.id === props.node.spaceId);
   // Referencing a file on an Issue is a triage action, so only Team Space editors and above see it.
-  const canReferenceInIssue = space !== undefined && spaceSupportsIssues(space) && space.capabilities.triageIssues;
+  const canReferenceInIssue =
+    space !== undefined && spaceSupportsIssues(space) && space.capabilities.triageIssues;
   const nodeUrl = new URL(
     `/nodes/${encodeURIComponent(props.node.id)}`,
     window.location.origin,
@@ -66,12 +67,7 @@ export function NodeActionsMenu(props: {
       if (error) throw apiError(error);
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-        queryClient.invalidateQueries({ queryKey: ["recent-resources"] }),
-        queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-        queryClient.invalidateQueries({ queryKey: ["shared-with-me"] }),
-      ]);
+      await invalidateProductLists(queryClient);
       setRenameOpen(false);
       toast.success(t("itemUpdated"));
       props.onMutated?.();
@@ -95,15 +91,7 @@ export function NodeActionsMenu(props: {
       )) {
         await router.navigate({ to: "/home", replace: true });
       }
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-        queryClient.invalidateQueries({ queryKey: ["recent-resources"] }),
-        queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-        queryClient.invalidateQueries({ queryKey: ["shared-with-me"] }),
-        queryClient.invalidateQueries({
-          queryKey: trashQueryKey(props.node.spaceId),
-        }),
-      ]);
+      await invalidateProductLists(queryClient, { spaceId: props.node.spaceId });
       setTrashOpen(false);
       toast.success(t("movedToTrash"));
       props.onMutated?.();

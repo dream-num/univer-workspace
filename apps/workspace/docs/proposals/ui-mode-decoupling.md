@@ -734,3 +734,22 @@ Drive 是假想 mode，`modes/drive/**` 只用于走查；其余名称与第 6 �
   "半外壳"是否修正、mode 是否持久化到服务端，都是行为变更，不在本路线内。
 - 没有大范围重写：步骤 4 和 5 是移动代码，每个 PR 都限定在一个外壳或一个 route；最大的单次移动是
   `-workspace-layout.tsx`（1496 行），按 N2 的缓解拆成两个 PR。
+
+### T3.0 调用点失效集合变更（PR 描述素材）
+
+按已确认的 A 方案，产品列表统一失效 nodes、recent-resources、owned-by-me、shared-with-me。
+仅活跃查询会立即重新请求；非活跃缓存标记为失效。各调用点相对原实现新增的 key 如下：
+
+| 调用点 | 新增 key |
+| --- | --- |
+| create-node-dropdown：建文件夹、建文档、导入、上传 | shared-with-me |
+| routes/nodes.$nodeId：Unit 解析后跳转 | shared-with-me |
+| trash-list：恢复 | recent-resources、shared-with-me |
+| node-actions-menu：改名、移入回收站 | 无 |
+| node-browser：编辑名称或位置 | 无 |
+| resource-header：改名 | 无 |
+| workspace-navigation-tree：创建、上传、改名、移动、移入回收站 | 无 |
+| worktree-change-feed：ready / changed 事件 | 无 |
+
+保留 resource-header 的资源详情与 HTML 列表失效、移入回收站的空间限定失效，
+以及 worktree-change-feed 的 worktrees 失效。恢复操作仍先刷新回收站，再刷新产品列表。

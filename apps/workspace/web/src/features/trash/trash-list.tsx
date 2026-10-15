@@ -3,7 +3,7 @@ import { RotateCcw, Trash2 } from "lucide-react";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { trashQueryKey, trashQueryOptions } from "./trash.queries";
-import { NodeIcon } from "../nodes";
+import { invalidateProductLists, NodeIcon } from "../nodes";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import { useI18n } from "../../shared/i18n";
 import { useTheme } from "../../shared/theme";
@@ -39,8 +39,7 @@ export function TrashList({
       await queryClient.invalidateQueries({
         queryKey: trashQueryKey(spaceId),
       });
-      await queryClient.invalidateQueries({ queryKey: ["nodes"] });
-      await queryClient.invalidateQueries({ queryKey: ["owned-by-me"] });
+      await invalidateProductLists(queryClient);
       toast.success(t("itemRestored"));
     },
     onError: showError,

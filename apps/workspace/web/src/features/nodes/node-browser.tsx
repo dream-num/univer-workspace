@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { FolderUp, Search } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
+import { invalidateProductLists } from "./nodes.commands";
 import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
@@ -128,12 +129,7 @@ export function NodeBrowser(props: {
       if (error) throw apiError(error);
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-        queryClient.invalidateQueries({ queryKey: ["recent-resources"] }),
-        queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-        queryClient.invalidateQueries({ queryKey: ["shared-with-me"] }),
-      ]);
+      await invalidateProductLists(queryClient);
       setEditNode(null);
       toast.success(t("itemUpdated"));
     },

@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import type { IMember } from "@univerjs/protocol";
 import {
   CreateNodeDropdown,
+  invalidateProductLists,
   NodeBrowser,
   ResourceActions,
   ResourceUnavailablePage,
@@ -36,13 +37,7 @@ export const Route = createFileRoute("/nodes/$nodeId")({
         params: { path: { unitId: deps.unit } },
       });
       if (data) {
-        await Promise.all([
-          context.queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-          context.queryClient.invalidateQueries({
-            queryKey: ["recent-resources"],
-          }),
-          context.queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-        ]);
+        await invalidateProductLists(context.queryClient);
         throw redirect({
           to: "/nodes/$nodeId",
           params: { nodeId: data.node.id },

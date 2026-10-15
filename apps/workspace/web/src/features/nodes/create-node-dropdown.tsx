@@ -2,6 +2,7 @@ import { ChevronDown, Plus, Upload } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { invalidateProductLists } from "./nodes.commands";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { createIdempotencyKey } from "../../shared/idempotency-key";
@@ -56,14 +57,6 @@ export function CreateNodeDropdown(props: {
   const fileInput = useRef<HTMLInputElement>(null);
   const parentNodeId = props.parentNodeId ?? null;
 
-  async function refreshCreatedNodes() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-      queryClient.invalidateQueries({ queryKey: ["recent-resources"] }),
-      queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-    ]);
-  }
-
   const createGroup = useMutation({
     mutationFn: async (values: { readonly name: string }) => {
       if (!props.spaceId) throw new Error(t("noWritableSpace"));
@@ -78,7 +71,7 @@ export function CreateNodeDropdown(props: {
       return data;
     },
     onSuccess: async () => {
-      await refreshCreatedNodes();
+      await invalidateProductLists(queryClient);
       await props.onCreated?.();
       setGroupDialogOpen(false);
       setName("");
@@ -132,7 +125,7 @@ export function CreateNodeDropdown(props: {
       });
     },
     onSuccess: async (nodeId) => {
-      await refreshCreatedNodes();
+      await invalidateProductLists(queryClient);
       await props.onCreated?.();
       setResourceDialogOpen(false);
       setSelectedDocumentMode("modern");
@@ -201,7 +194,7 @@ export function CreateNodeDropdown(props: {
       }
     },
     onSuccess: async () => {
-      await refreshCreatedNodes();
+      await invalidateProductLists(queryClient);
       await props.onCreated?.();
       toast.success(t("fileUploaded"));
     },
@@ -250,7 +243,7 @@ export function CreateNodeDropdown(props: {
       return await waitForDocumentImport(started.taskID, t("fileImportFailed"));
     },
     onSuccess: async () => {
-      await refreshCreatedNodes();
+      await invalidateProductLists(queryClient);
       await props.onCreated?.();
       toast.success(t("fileImported"));
     },

@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { invalidateProductLists } from "../nodes/nodes.commands";
 import { issuesQueryKey } from "../issues/issues.queries";
 import { worktreesQueryKey } from "./worktrees.queries";
 
@@ -52,10 +53,7 @@ export function useWorktreeChangeFeed(enabled: boolean): void {
           }
           void Promise.all([
             queryClient.invalidateQueries({ queryKey: worktreesQueryKey }),
-            queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-            queryClient.invalidateQueries({ queryKey: ["recent-resources"] }),
-            queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-            queryClient.invalidateQueries({ queryKey: ["shared-with-me"] }),
+            invalidateProductLists(queryClient),
           ]);
         });
         socket.addEventListener("close", scheduleReconnect);

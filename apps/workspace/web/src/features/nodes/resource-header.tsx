@@ -4,10 +4,10 @@ import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import { Download, Lock, Maximize, MoreHorizontal, Pencil, Share2 } from "lucide-react";
 import { useState } from "react";
 import type { IMember } from "@univerjs/protocol";
+import { invalidateProductLists } from "./nodes.commands";
 import type { components } from "../../../../generated/http/schema.js";
 import { CollaboratorAvatars } from "../editor";
 import { ShareDialog } from "../permissions";
-import { htmlViewsQueryKey } from "../views/html-views.queries";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { useI18n } from "../../shared/i18n";
@@ -57,11 +57,7 @@ export function ResourceTitle({
         queryClient.invalidateQueries({
           queryKey: resourceOpenQueryOptions(resourceId).queryKey,
         }),
-        queryClient.invalidateQueries({ queryKey: ["nodes"] }),
-        queryClient.invalidateQueries({ queryKey: ["recent-resources"] }),
-        queryClient.invalidateQueries({ queryKey: ["owned-by-me"] }),
-        queryClient.invalidateQueries({ queryKey: ["shared-with-me"] }),
-        queryClient.invalidateQueries({ queryKey: htmlViewsQueryKey }),
+        invalidateProductLists(queryClient, { htmlViews: true }),
       ]);
       toast.success(t("resourceRenamed", { name: updated.name }));
     },
