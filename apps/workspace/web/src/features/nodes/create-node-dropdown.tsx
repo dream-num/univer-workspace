@@ -1,3 +1,4 @@
+import { waitForDocumentImportWithUnit as waitForDocumentImport } from "./node-transfers";
 import { ChevronDown, Plus, Upload } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -484,32 +485,4 @@ export function CreateNodeDropdown(props: {
       </Dialog>
     </>
   );
-}
-
-async function waitForDocumentImport(
-  taskId: string,
-  fallbackMessage: string
-): Promise<string> {
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    const response = await fetch(
-      `/universer-api/exchange/task/${encodeURIComponent(taskId)}`,
-      { credentials: "include" }
-    );
-    const task = (await response.json().catch(() => null)) as
-      | {
-          readonly status?: string;
-          readonly error?: { readonly message?: string };
-          readonly import?: { readonly unitID?: string };
-        }
-      | null;
-    if (!response.ok) throw new Error(task?.error?.message || fallbackMessage);
-    if (task?.status === "done" && task.import?.unitID) {
-      return task.import.unitID;
-    }
-    if (task?.status === "failed") {
-      throw new Error(task.error?.message || fallbackMessage);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-  }
-  throw new Error(fallbackMessage);
 }
