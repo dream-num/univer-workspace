@@ -393,6 +393,7 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
     };
     const resetCases = [
       ["space", team, 'main input[aria-label="Go to file"]'],
+      ["folder", `/nodes/${fixture.folderId}`, 'main input[aria-label="Go to file"]'],
     ];
     switchPageMode("repository");
     for (const [name, path, selector] of resetCases) {
@@ -406,6 +407,7 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       assert.equal(browser("get", "url").url, `${origin}${path}`);
       browser("wait", selector);
       assert.equal(evaluate(`document.querySelector(${JSON.stringify(selector)}).value`), initial, `${name} 临时状态必须重置`);
+      assert.deepEqual(browser("errors").errors, [], `${name} 切换后无未捕获错误`);
       console.log(`${name}: mode 往返切换保持 URL 并清理临时状态`);
     }
 

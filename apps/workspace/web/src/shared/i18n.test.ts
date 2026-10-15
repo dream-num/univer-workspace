@@ -50,3 +50,7 @@ describe.each(Object.entries(modes))("%s mode messages", (_, definition) => {
 vi.mock("../modes/wiki/pages/space", () => ({ WikiSpacePage: () => null }));
 
 vi.mock("../modes/repository/pages/space", () => ({ RepositorySpacePage: () => null }));
+
+vi.mock("../modes/wiki/pages/folder", () => ({ WikiFolderPage: () => null }));
+
+vi.mock("../modes/repository/pages/folder", () => ({ RepositoryFolderPage: () => null }));

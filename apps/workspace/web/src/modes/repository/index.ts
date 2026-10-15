@@ -1,3 +1,4 @@
+import { RepositoryFolderPage } from "./pages/folder";
 import { RepositorySpacePage } from "./pages/space";
 import { RepositoryHomePage } from "./pages/home";
 import { RepositoryShell } from "./repository-shell";
@@ -5,7 +6,7 @@ import type { ModeDefinition } from "../registry";
 import { repositoryMessages } from "./messages";
 
 export const repositoryMode = {
-  pages: { space: RepositorySpacePage, home: RepositoryHomePage },
+  pages: { folder: RepositoryFolderPage, space: RepositorySpacePage, home: RepositoryHomePage },
   label: "repositoryTheme",
   Shell: RepositoryShell,
   messages: repositoryMessages,

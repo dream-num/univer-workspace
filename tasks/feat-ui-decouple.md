@@ -279,6 +279,9 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
   394 项测试、typecheck、build、40 张截图、模式切换与 repository-pages 专项通过；路由合同及生成物无变化。
   主包 1,834.36 → 1,834.66 kB，gzip 564.88 → 564.87 kB；本次保留同步注册，不使用 lazy。
 
+- [x] T5.3：目录页拆为 `pages.folder`，文件编辑器与预览保留在原路由；目录搜索由 mode 页面持有。
+  394 项测试、typecheck、build、40 张截图、目录搜索后往返切换及无未捕获错误检查通过；路由合同与生成物无变化。
+
 ## M4 feature 去 mode 化、样式、边界检查
 
 - [ ] **T6a：通用 feature 组件不再读取 mode**（R2 feature 部分；N5）
