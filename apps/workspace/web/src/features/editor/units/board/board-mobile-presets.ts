@@ -36,7 +36,8 @@ export function createBoardMobilePresets(container: HTMLElement): IPreset[] {
             container,
             header: false,
             toolbar: false,
-            footer: false,
+            // The SDK mounts mobile shape text/style editors in the footer.
+            footer: true,
           },
         ],
         UniverDocsPlugin,

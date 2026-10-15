@@ -164,7 +164,8 @@ describe("Workspace mobile unit presets", () => {
     expect(pluginOptions(presets, "UNIVER_MOBILE_UI_PLUGIN")).toMatchObject({
       header: false,
       toolbar: false,
-      footer: false,
+      // MobileShapeEditorController mounts the text/style editor here.
+      footer: true,
     });
   }, 30_000);
 
