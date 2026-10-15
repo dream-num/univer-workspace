@@ -391,6 +391,14 @@ image. When omitted, it builds the workflow dispatch commit and tags the image a
 not deploy Workspace automatically, and the deployment workflow does not publish the
 CLI.
 
+HTML responses use `Cache-Control: no-cache` so browsers revalidate the application
+entry after a deployment. If an open page later fails to load a dynamically
+imported module or its preloaded CSS, it reloads at most once per build in that tab
+when session storage is available, avoiding repeated reloads for the same build.
+Reloading can discard unsaved local form input. This recovery does not retain old
+build assets; deployments must keep older hashed assets available to prevent old
+pages from requesting files that a newer deployment has removed.
+
 ### Startup diagnostics
 
 Startup emits synchronous JSON lines to stdout with `event: "workspace.startup"`,
