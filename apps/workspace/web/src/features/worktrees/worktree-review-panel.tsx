@@ -1,9 +1,4 @@
-import {
-  useMutation,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LocaleType } from "@univerjs/core";
 import {
   UnitComparisonViewer,
@@ -26,10 +21,7 @@ import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { createIdempotencyKey } from "../../shared/idempotency-key";
-import {
-  useI18n,
-  type MessageKey,
-} from "../../shared/i18n";
+import { useI18n, type MessageKey } from "../../shared/i18n";
 import {
   Alert,
   Badge,
@@ -56,36 +48,32 @@ import {
   reviewModeForView,
   reviewViewForMode,
 } from "./worktree-review-presentation";
-import {
-  DEFAULT_WORKTREE_REVIEW_VIEW,
-  type WorktreeReviewView,
-} from "./worktree-review-search";
+import { DEFAULT_WORKTREE_REVIEW_VIEW, type WorktreeReviewView } from "./worktree-review-search";
 import { WorktreeReviewHeader } from "./worktree-review-header";
+import {
+  RepositoryPullRequestLayout,
+  type RepositoryReviewPresentation,
+} from "./repository-pull-request-layout";
 
 type WorktreeDetailModel = components["schemas"]["WorktreeDetail"];
 type WorktreeState = components["schemas"]["WorktreeState"];
 type WorktreeUnit = components["schemas"]["WorktreeUnit"];
 type UnitChange = WorktreeUnit["change"];
 type ReviewAction = "markReady" | "merge" | "discard";
-type BadgeVariant =
-  | "default"
-  | "brand"
-  | "success"
-  | "warning"
-  | "danger"
-  | "violet"
-  | "outline";
+type BadgeVariant = "default" | "brand" | "success" | "warning" | "danger" | "violet" | "outline";
 
 export function WorktreeReviewPanel({
   worktree,
   selectedUnitId,
   selectedView = DEFAULT_WORKTREE_REVIEW_VIEW,
   onSelectedViewChange,
+  repository,
 }: {
   readonly worktree: WorktreeDetailModel;
   readonly selectedUnitId?: string | null;
   readonly selectedView?: WorktreeReviewView;
   readonly onSelectedViewChange?: (view: WorktreeReviewView) => void;
+  readonly repository?: RepositoryReviewPresentation;
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
@@ -94,46 +82,28 @@ export function WorktreeReviewPanel({
       ? worktree.units[0]
       : worktree.units.find((unit) => unit.unitId === selectedUnitId);
   const selectedUnitMissing =
-    selectedUnitId !== undefined &&
-    selectedUnitId !== null &&
-    !selectedUnit;
+    selectedUnitId !== undefined && selectedUnitId !== null && !selectedUnit;
   const mergeReviewUnits =
     worktree.state === "ready" && worktree.capabilities.review
-      ? worktree.units.filter(
-          (unit) =>
-            unit.source === "trunk" && unit.change === "modified"
-        )
+      ? worktree.units.filter((unit) => unit.source === "trunk" && unit.change === "modified")
       : [];
   const mergeReviewQueries = useQueries({
     queries: mergeReviewUnits.map((unit) =>
-      worktreeUnitMergeReviewQueryOptions(worktree.id, unit.unitId)
+      worktreeUnitMergeReviewQueryOptions(worktree.id, unit.unitId),
     ),
   });
   const mergeReviewByUnitId = new Map(
-    mergeReviewUnits.map((unit, index) => [
-      unit.unitId,
-      mergeReviewQueries[index],
-    ])
+    mergeReviewUnits.map((unit, index) => [unit.unitId, mergeReviewQueries[index]]),
   );
-  const mergeReviewPending = mergeReviewQueries.some(
-    (query) => query.isPending
-  );
-  const hasMergeConflict = mergeReviewQueries.some(
-    (query) => query.data === "conflict"
-  );
+  const mergeReviewPending = mergeReviewQueries.some((query) => query.isPending);
+  const hasMergeConflict = mergeReviewQueries.some((query) => query.data === "conflict");
   const selectedMergeReviewQuery = selectedUnit
     ? mergeReviewByUnitId.get(selectedUnit.unitId)
     : undefined;
   const activeView = selectedUnit
-    ? resolveReviewView(
-        worktree,
-        selectedUnit,
-        selectedView,
-        selectedMergeReviewQuery?.data
-      )
+    ? resolveReviewView(worktree, selectedUnit, selectedView, selectedMergeReviewQuery?.data)
     : selectedView;
-  const showReviewViewControl =
-    worktree.capabilities.review && selectedUnit !== undefined;
+  const showReviewViewControl = worktree.capabilities.review && selectedUnit !== undefined;
 
   const removal = useMutation({
     mutationFn: async (unit: WorktreeUnit) => {
@@ -176,8 +146,7 @@ export function WorktreeReviewPanel({
       if (result.error) throw apiError(result.error);
       return {
         action: value,
-        state:
-          "worktree" in result.data ? result.data.worktree.state : null,
+        state: "worktree" in result.data ? result.data.worktree.state : null,
       };
     },
     onSuccess: async ({ action: value, state }) => {
@@ -194,23 +163,77 @@ export function WorktreeReviewPanel({
     onError: (error) => toast.error(error.message),
   });
 
-  return (
+  const lifecycleActions = (
+    <>
+      {worktree.capabilities.markReady ? (
+        <ConfirmDialog
+          title={t("submitForReviewConfirm")}
+          description={t("submitForReviewDescription")}
+          confirmText={t("submitForReview")}
+          cancelText={t("cancel")}
+          onConfirm={() => action.mutate("markReady")}
+          trigger={
+            <Button size="sm" disabled={action.isPending}>
+              <Send />
+              {t("submitForReview")}
+            </Button>
+          }
+        />
+      ) : null}
+      {worktree.capabilities.merge && hasMergeConflict ? (
+        <Tooltip content={t("mergeConflictBlocksMerge")}>
+          <span className="inline-flex max-w-full">
+            <Button size="sm" disabled>
+              <CheckCircle2 />
+              {t("confirmMerge")}
+            </Button>
+          </span>
+        </Tooltip>
+      ) : worktree.capabilities.merge ? (
+        <ConfirmDialog
+          title={t("mergeConfirm")}
+          description={t("mergeDescription")}
+          confirmText={t("confirmMerge")}
+          cancelText={t("cancel")}
+          onConfirm={() => action.mutate("merge")}
+          trigger={
+            <Button size="sm" disabled={action.isPending || mergeReviewPending}>
+              <CheckCircle2 />
+              {t("confirmMerge")}
+            </Button>
+          }
+        />
+      ) : null}
+      {worktree.capabilities.discard ? (
+        <ConfirmDialog
+          title={t("discardChangesConfirm")}
+          description={t("discardChangesDescription")}
+          confirmText={t("discardChanges")}
+          cancelText={t("cancel")}
+          danger
+          onConfirm={() => action.mutate("discard")}
+          trigger={
+            <Button variant="destructive-ghost" size="sm" disabled={action.isPending}>
+              <Trash2 />
+              {t("discardChanges")}
+            </Button>
+          }
+        />
+      ) : null}
+    </>
+  );
+  const review = (
     <article className="flex h-full min-h-0 flex-col">
       <WorktreeReviewHeader
-        documentName={
-          selectedUnit?.name || selectedUnit?.unitId || t("noAgentDocuments")
-        }
+        documentName={selectedUnit?.name || selectedUnit?.unitId || t("noAgentDocuments")}
         icon={selectedUnit ? <UnitTypeIcon type={selectedUnit.unitType} /> : null}
         badge={<ReviewBadge state={worktree.state} unit={selectedUnit} />}
-        resultBadge={
-          selectedUnit ? <ReviewMergeResultBadge unit={selectedUnit} /> : null
-        }
+        resultBadge={selectedUnit ? <ReviewMergeResultBadge unit={selectedUnit} /> : null}
         view={
           showReviewViewControl
             ? {
                 value: reviewModeForView(activeView),
-                onChange: (value) =>
-                  onSelectedViewChange?.(reviewViewForMode(value)),
+                onChange: (value) => onSelectedViewChange?.(reviewViewForMode(value)),
               }
             : undefined
         }
@@ -226,68 +249,7 @@ export function WorktreeReviewPanel({
                 {t(selectedUnit.change === "deleted" ? "undoUnitRemoval" : "markUnitRemoved")}
               </Button>
             ) : null}
-            {worktree.capabilities.markReady ? (
-              <ConfirmDialog
-                title={t("submitForReviewConfirm")}
-                description={t("submitForReviewDescription")}
-                confirmText={t("submitForReview")}
-                cancelText={t("cancel")}
-                onConfirm={() => action.mutate("markReady")}
-                trigger={
-                  <Button size="sm" disabled={action.isPending}>
-                    <Send />
-                    {t("submitForReview")}
-                  </Button>
-                }
-              />
-            ) : null}
-            {worktree.capabilities.merge && hasMergeConflict ? (
-              <Tooltip content={t("mergeConflictBlocksMerge")}>
-                <span className="inline-flex max-w-full">
-                  <Button size="sm" disabled>
-                    <CheckCircle2 />
-                    {t("confirmMerge")}
-                  </Button>
-                </span>
-              </Tooltip>
-            ) : worktree.capabilities.merge ? (
-              <ConfirmDialog
-                title={t("mergeConfirm")}
-                description={t("mergeDescription")}
-                confirmText={t("confirmMerge")}
-                cancelText={t("cancel")}
-                onConfirm={() => action.mutate("merge")}
-                trigger={
-                  <Button
-                    size="sm"
-                    disabled={action.isPending || mergeReviewPending}
-                  >
-                    <CheckCircle2 />
-                    {t("confirmMerge")}
-                  </Button>
-                }
-              />
-            ) : null}
-            {worktree.capabilities.discard ? (
-              <ConfirmDialog
-                title={t("discardChangesConfirm")}
-                description={t("discardChangesDescription")}
-                confirmText={t("discardChanges")}
-                cancelText={t("cancel")}
-                danger
-                onConfirm={() => action.mutate("discard")}
-                trigger={
-                  <Button
-                    variant="destructive-ghost"
-                    size="sm"
-                    disabled={action.isPending}
-                  >
-                    <Trash2 />
-                    {t("discardChanges")}
-                  </Button>
-                }
-              />
-            ) : null}
+            {repository ? null : lifecycleActions}
           </>
         }
       />
@@ -309,12 +271,22 @@ export function WorktreeReviewPanel({
           mergeReviewStatus={selectedMergeReviewQuery?.data}
           mergeReviewPending={selectedMergeReviewQuery?.isPending ?? false}
           mergeReviewFailed={selectedMergeReviewQuery?.isError ?? false}
-          {...(onSelectedViewChange === undefined
-            ? {}
-            : { onSelectedViewChange })}
+          {...(onSelectedViewChange === undefined ? {} : { onSelectedViewChange })}
         />
       )}
     </article>
+  );
+  return repository ? (
+    <RepositoryPullRequestLayout
+      worktree={worktree}
+      presentation={repository}
+      selectedUnitId={selectedUnitId ?? selectedUnit?.unitId}
+      selectedView={selectedView}
+      review={review}
+      actions={lifecycleActions}
+    />
+  ) : (
+    review
   );
 }
 
@@ -355,17 +327,11 @@ function UnitReview({
       } as UnitComparisonViewerValue)
     : null;
   const canPreview =
-    activeView === "comparison" ||
-    activeView === "trunk" ||
-    unit.change !== "deleted";
+    activeView === "comparison" || activeView === "trunk" || unit.change !== "deleted";
   const previewMode =
-    activeView === "trunk"
-      ? "trunk"
-      : activeView === "preview"
-        ? "mergePreview"
-        : "draft";
+    activeView === "trunk" ? "trunk" : activeView === "preview" ? "mergePreview" : "draft";
   const previewUrl = `/worktrees/${encodeURIComponent(
-    worktree.id
+    worktree.id,
   )}/units/${encodeURIComponent(unit.unitId)}/${previewMode}?embedded=true`;
 
   return (
@@ -418,30 +384,19 @@ function UnitReview({
               <Spinner />
             </div>
           ) : comparisonQuery.isError || comparison === null ? (
-            <Empty
-              className="my-auto"
-              title={t("comparisonFailed")}
-            />
+            <Empty className="my-auto" title={t("comparisonFailed")} />
           ) : (
             <UnitComparisonViewer
               key={`${comparison.result.comparisonId}:${unit.unitId}`}
               comparison={comparison}
               createUniver={createComparisonUniver}
-              locale={
-                language === "zh-CN"
-                  ? LocaleType.ZH_CN
-                  : LocaleType.EN_US
-              }
+              locale={language === "zh-CN" ? LocaleType.ZH_CN : LocaleType.EN_US}
               darkMode={resolvedTheme === "dark"}
             />
           )}
         </div>
       ) : !canPreview ? (
-        <Empty
-          className="mt-[min(18vh,160px)]"
-          icon={Trash2}
-          title={t("deletedDocumentPreview")}
-        />
+        <Empty className="mt-[min(18vh,160px)]" icon={Trash2} title={t("deletedDocumentPreview")} />
       ) : (
         <div className="flex min-h-[480px] flex-1 flex-col overflow-hidden">
           <iframe
@@ -483,7 +438,8 @@ function ReviewMergeResultBadge({ unit }: { readonly unit: WorktreeUnit }) {
   return unit.mergeResult !== "pending" ? (
     <Badge
       variant={
-        unit.mergeResult === "merged" || unit.mergeResult === "unchanged" ||
+        unit.mergeResult === "merged" ||
+        unit.mergeResult === "unchanged" ||
         unit.mergeResult === "removed"
           ? "success"
           : "danger"
@@ -494,11 +450,7 @@ function ReviewMergeResultBadge({ unit }: { readonly unit: WorktreeUnit }) {
   ) : null;
 }
 
-export function UnitChangeIcon({
-  change,
-}: {
-  readonly change: UnitChange;
-}) {
+export function UnitChangeIcon({ change }: { readonly change: UnitChange }) {
   const { t } = useI18n();
   const label = unitChangeLabel(change, t);
   const Icon =
@@ -516,11 +468,9 @@ export function UnitChangeIcon({
         className={cn(
           "inline-flex size-5 items-center justify-center rounded-md [&_svg]:size-3",
           change === "modified" && "bg-info-soft text-info-soft-foreground",
-          change === "added" &&
-            "bg-success-soft text-success-soft-foreground",
-          change === "deleted" &&
-            "bg-destructive-soft text-destructive-soft-foreground",
-          change === "unchanged" && "bg-muted text-muted-foreground"
+          change === "added" && "bg-success-soft text-success-soft-foreground",
+          change === "deleted" && "bg-destructive-soft text-destructive-soft-foreground",
+          change === "unchanged" && "bg-muted text-muted-foreground",
         )}
       >
         <Icon />
@@ -557,7 +507,7 @@ export function UnitTypeIcon({
         type === "doc" && "bg-doc-soft text-doc",
         type === "slide" && "bg-slide-soft text-slide",
         type === "board" && "bg-board-soft text-board",
-        type === "base" && "bg-baseunit-soft text-baseunit"
+        type === "base" && "bg-baseunit-soft text-baseunit",
       )}
     >
       <Icon />
@@ -566,10 +516,7 @@ export function UnitTypeIcon({
   return showTooltip ? <Tooltip content={label}>{icon}</Tooltip> : icon;
 }
 
-export function worktreeStateLabel(
-  state: WorktreeState,
-  t: Translator
-): string {
+export function worktreeStateLabel(state: WorktreeState, t: Translator): string {
   if (state === "draft") return t("stateDraft");
   if (state === "ready") return t("stateReady");
   if (state === "merging") return t("stateMerging");
@@ -599,14 +546,8 @@ function unitChangeLabel(change: UnitChange, t: Translator): string {
   return t("documentUnchanged");
 }
 
-function unitTypeLabel(
-  type: WorktreeUnit["unitType"],
-  t: Translator
-): string {
+function unitTypeLabel(type: WorktreeUnit["unitType"], t: Translator): string {
   return t(type);
 }
 
-type Translator = (
-  key: MessageKey,
-  values?: Readonly<Record<string, string | number>>
-) => string;
+type Translator = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;

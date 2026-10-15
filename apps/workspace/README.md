@@ -367,6 +367,13 @@ three return `{ starred, starCount }`. All require login and current Space acces
 Watch, Fork, star lists and GitHub-only tabs are not provided. See the
 [comparison and verification record](docs/proposals/repository-framework-star.md).
 
+Repository Pull requests use the existing Worktree workflow. The list keeps Open/Closed
+filters and adds local text search; details place the summary and review actions in
+Overview, with document selection, draft viewing and comparison in Files changed.
+Wiki and the global Workbench retain their existing dashboard. No GitHub PR model,
+comments, branches or checks are introduced. See the
+[screenshots, feature mapping and verification](docs/proposals/repository-pull-requests-tab.md).
+
 The manual `Deploy Workspace` workflow accepts an optional existing stable `vX.Y.Z`
 repository tag. When provided, it checks out that tag and uses it for the container
 image. When omitted, it builds the workflow dispatch commit and tags the image as

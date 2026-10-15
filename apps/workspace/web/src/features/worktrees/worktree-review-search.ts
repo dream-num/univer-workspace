@@ -1,8 +1,4 @@
-export type WorktreeReviewView =
-  | "comparison"
-  | "trunk"
-  | "agent"
-  | "preview";
+export type WorktreeReviewView = "comparison" | "trunk" | "agent" | "preview";
 
 export const DEFAULT_WORKTREE_REVIEW_VIEW: WorktreeReviewView = "agent";
 
@@ -11,45 +7,34 @@ export interface WorktreeDashboardSearch {
   readonly worktree?: string;
   readonly unit?: string;
   readonly view?: WorktreeReviewView;
+  readonly section?: "overview" | "files";
 }
 
 export function parseWorktreeDashboardSearch(
-  search: Readonly<Record<string, unknown>>
+  search: Readonly<Record<string, unknown>>,
 ): WorktreeDashboardSearch {
-  const spaceId =
-    typeof search.spaceId === "string" && search.spaceId
-      ? search.spaceId
-      : undefined;
+  const spaceId = typeof search.spaceId === "string" && search.spaceId ? search.spaceId : undefined;
   const worktree =
-    typeof search.worktree === "string" && search.worktree
-      ? search.worktree
-      : undefined;
-  const unit =
-    typeof search.unit === "string" && search.unit
-      ? search.unit
-      : undefined;
+    typeof search.worktree === "string" && search.worktree ? search.worktree : undefined;
+  const unit = typeof search.unit === "string" && search.unit ? search.unit : undefined;
   return {
     ...(spaceId === undefined ? {} : { spaceId }),
     ...(worktree === undefined ? {} : { worktree }),
     ...(unit === undefined ? {} : { unit }),
     ...optionalReviewView(search.view),
+    ...(search.section === "overview" || search.section === "files"
+      ? { section: search.section }
+      : {}),
   };
 }
 
-export function reviewViewForOpenMode(
-  mode: string
-): WorktreeReviewView {
+export function reviewViewForOpenMode(mode: string): WorktreeReviewView {
   if (mode === "trunk") return "trunk";
   return mode === "mergePreview" ? "preview" : "agent";
 }
 
-function optionalReviewView(
-  value: unknown
-): Readonly<{ view?: WorktreeReviewView }> {
-  return value === "agent" ||
-    value === "comparison" ||
-    value === "trunk" ||
-    value === "preview"
+function optionalReviewView(value: unknown): Readonly<{ view?: WorktreeReviewView }> {
+  return value === "agent" || value === "comparison" || value === "trunk" || value === "preview"
     ? { view: value }
     : {};
 }

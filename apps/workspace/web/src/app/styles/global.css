@@ -449,7 +449,8 @@
 }
 
 /* Issue content uses GitHub's inset surface, rather than its darker global header. */
-.repository-issues {
+.repository-issues,
+.repository-pull-requests {
   --color-primary: #1f883d;
   --color-primary-hover: #1a7f37;
   --color-input: var(--color-border);
@@ -457,12 +458,33 @@
   --color-state-merged: #8250df;
 }
 
-.dark .repository-issues {
+.dark .repository-issues,
+.dark .repository-pull-requests {
   --color-surface: #151b23;
   --color-primary: #238636;
   --color-primary-hover: #29903b;
   --color-state-open: #3fb950;
   --color-state-merged: #ab7df8;
+}
+
+.repository-pull-requests {
+  --color-state-closed: #d1242f;
+  --color-state-merged-badge: #8250df;
+}
+
+.dark .repository-pull-requests {
+  --color-state-closed: #f85149;
+}
+
+/* Filled status pills need white-on-solid colors in both themes. */
+.repository-pull-requests [data-pr-state="draft"].rounded-full {
+  background: #59636e;
+}
+.repository-pull-requests [data-pr-state="merged"].rounded-full {
+  background: var(--color-state-merged-badge);
+}
+.repository-pull-requests [data-pr-state="discarded"].rounded-full {
+  background: #cf222e;
 }
 
 .repository-issues .issue-state-badge {

@@ -1,5 +1,30 @@
 # Header fixture
 
+## Repository pull requests (real server)
+
+From `apps/workspace`, run `node --import tsx test/fixtures/pull-requests-server.ts`,
+then start `pnpm workspace:dev:web` from the repository root. Port 3020 must be free.
+This fixture creates its own temporary product/Collaboration databases and Blob directory;
+it does not open `.data`. SIGINT/SIGTERM closes the service and removes its own directory.
+
+The console prints a `session.json` path (mode 0600), containing the test-only login,
+repository URL and Worktree IDs. In an isolated browser session, sign in with those
+credentials, choose English and Repository view, then run:
+
+```bash
+WORKSPACE_PR_FIXTURE=<printed-session.json-path> \
+AGENT_BROWSER_SESSION=<your-authenticated-session> \
+node test/browser/pull-requests.smoke.mjs
+```
+
+Run once per fresh fixture: the check submits, merges and discards fixture Worktrees.
+It also checks document/compare navigation, reload, missing documents, search, narrow widths,
+and injects conflict/preview/permission/error responses to exercise UI states. Those injected
+states do not certify the SDK merge algorithm or a real concurrent-edit merge preview.
+The only dependency beyond the existing workspace is `agent-browser` on PATH.
+
+## Header
+
 Run `pnpm --filter @univerjs/univer-workspace exec vite --config test/vite.header.config.ts` from the repository root, then open `http://127.0.0.1:5182/test/fixtures/header.html`.
 
 This development entry renders the application Header with inert callbacks and no product data access. Check both languages, long document names, lifecycle states, and frame widths 1440, 1300, 1130, 960, 720, and 480 px. The fixture sidebar stays 256 px wide. Merge preview controls preserve the content-area placement and disappear in comparison mode.
