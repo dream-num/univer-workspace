@@ -15,3 +15,7 @@ export interface FolderPageProps {
   readonly detail: components["schemas"]["NodeResponse"];
   readonly username: string | undefined;
 }
+
+export interface SpaceSettingsPageProps {
+  readonly spaceId: string;
+}

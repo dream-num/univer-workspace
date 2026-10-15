@@ -1,3 +1,6 @@
+import { RepositorySpaceTrashPage } from "./pages/trash";
+import { RepositoryTeamMembersPage } from "./pages/members";
+import { RepositorySpaceSettingsPage } from "./pages/settings";
 import { RepositoryFolderPage } from "./pages/folder";
 import { RepositorySpacePage } from "./pages/space";
 import { RepositoryHomePage } from "./pages/home";
@@ -6,7 +9,7 @@ import type { ModeDefinition } from "../registry";
 import { repositoryMessages } from "./messages";
 
 export const repositoryMode = {
-  pages: { folder: RepositoryFolderPage, space: RepositorySpacePage, home: RepositoryHomePage },
+  pages: { trash: RepositorySpaceTrashPage, members: RepositoryTeamMembersPage, settings: RepositorySpaceSettingsPage, folder: RepositoryFolderPage, space: RepositorySpacePage, home: RepositoryHomePage },
   label: "repositoryTheme",
   Shell: RepositoryShell,
   messages: repositoryMessages,

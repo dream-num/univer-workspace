@@ -1,3 +1,4 @@
+import type { SpaceSettingsPageProps } from "./page.types";
 import type { FolderPageProps } from "./page.types";
 import type { SpacePageProps } from "./page.types";
 import type { HomePageProps } from "./page.types";
@@ -10,6 +11,9 @@ import { wikiMode } from "./wiki";
 
 export interface ModeDefinition {
   readonly pages: {
+    readonly trash: ComponentType<SpaceSettingsPageProps>;
+    readonly members: ComponentType<SpaceSettingsPageProps>;
+    readonly settings: ComponentType<SpaceSettingsPageProps>;
     readonly folder: ComponentType<FolderPageProps>;
     readonly space: ComponentType<SpacePageProps>;
     readonly home: ComponentType<HomePageProps>;

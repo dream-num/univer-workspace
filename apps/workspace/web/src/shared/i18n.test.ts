@@ -54,3 +54,15 @@ vi.mock("../modes/repository/pages/space", () => ({ RepositorySpacePage: () => n
 vi.mock("../modes/wiki/pages/folder", () => ({ WikiFolderPage: () => null }));
 
 vi.mock("../modes/repository/pages/folder", () => ({ RepositoryFolderPage: () => null }));
+
+vi.mock("../modes/wiki/pages/settings", () => ({ WikiSpaceSettingsPage: () => null }));
+
+vi.mock("../modes/repository/pages/settings", () => ({ RepositorySpaceSettingsPage: () => null }));
+
+vi.mock("../modes/wiki/pages/members", () => ({ WikiTeamMembersPage: () => null }));
+
+vi.mock("../modes/repository/pages/members", () => ({ RepositoryTeamMembersPage: () => null }));
+
+vi.mock("../modes/wiki/pages/trash", () => ({ WikiSpaceTrashPage: () => null }));
+
+vi.mock("../modes/repository/pages/trash", () => ({ RepositorySpaceTrashPage: () => null }));

@@ -394,6 +394,9 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
     const resetCases = [
       ["space", team, 'main input[aria-label="Go to file"]'],
       ["folder", `/nodes/${fixture.folderId}`, 'main input[aria-label="Go to file"]'],
+      ["settings", `${team}/settings`, "#space-name"],
+      ["members", `${team}/members`, 'main input[aria-label="Find a collaborator"]'],
+      ["trash", `${team}/trash`, 'main input[aria-label="Search items in Trash"]'],
     ];
     switchPageMode("repository");
     for (const [name, path, selector] of resetCases) {

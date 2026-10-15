@@ -1,44 +1,25 @@
-import { Route } from "../../../routes/spaces_.$spaceId.trash";
-
+import type { SpaceSettingsPageProps } from "../../page.types";
 import { useState } from "react";
 import { TrashList } from "../../../features/trash";
-
 import { RepositorySettingsLayout } from "../../../features/spaces";
 import { useI18n } from "../../../shared/i18n";
-import { useTheme } from "../../../shared/theme";
 import { Input } from "../../../shared/ui";
-import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceLayout } from "../../../routes/-workspace-layout";
 
-export function RepositorySpaceTrashPage() {
-  const { spaceId } = Route.useParams();
+export function RepositorySpaceTrashPage({ spaceId }: SpaceSettingsPageProps) {
   const { t } = useI18n();
-  const { workspaceTheme } = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
-  const repository = workspaceTheme === "repository";
   return (
     <WorkspaceLayout
       selectedSpaceId={spaceId}
-      {...(repository
-        ? {
-            repositoryTab: "settings" as const,
-            repositoryBreadcrumbs: [
-              { label: t("spaceSettings"), settingsSpaceId: spaceId },
-              { label: t("trash") },
-            ],
-          }
-        : { selectedView: "trash" as const })}
+      {...{
+        repositoryTab: "settings" as const,
+        repositoryBreadcrumbs: [{ label: t("spaceSettings"), settingsSpaceId: spaceId }, { label: t("trash") }],
+      }}
       headerTitle={t("trash")}
-      headerContent={
-        !repository ? (
-          <WorkspaceHeaderSearch
-            placeholder={t("searchTrash")}
-            value={searchQuery}
-            onChange={setSearchQuery}
-          />
-        ) : undefined
-      }
+      headerContent={undefined}
     >
-      {repository ? (
+      {
         <RepositorySettingsLayout spaceId={spaceId} current="trash" title={t("trash")}>
           <Input
             type="search"
@@ -50,9 +31,7 @@ export function RepositorySpaceTrashPage() {
           />
           <TrashList spaceId={spaceId} searchQuery={searchQuery} />
         </RepositorySettingsLayout>
-      ) : (
-        <TrashList spaceId={spaceId} searchQuery={searchQuery} />
-      )}
+      }
     </WorkspaceLayout>
   );
 }

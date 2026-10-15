@@ -1,24 +1,18 @@
-import { Route } from "../../../routes/spaces_.$spaceId.members";
+import type { SpaceSettingsPageProps } from "../../page.types";
 import { useQuery } from "@tanstack/react-query";
-
 import { useState } from "react";
 import { TeamMemberManager } from "../../../features/permissions";
-
 import { RepositorySettingsLayout, spacesQueryOptions } from "../../../features/spaces";
 import { useI18n } from "../../../shared/i18n";
-import { useTheme } from "../../../shared/theme";
 import { Input } from "../../../shared/ui";
-import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../../routes/-workspace-layout";
+import { WorkspaceLayout } from "../../../routes/-workspace-layout";
 
-export function RepositoryTeamMembersPage() {
-  const { spaceId } = Route.useParams();
+export function RepositoryTeamMembersPage({ spaceId }: SpaceSettingsPageProps) {
   const { t } = useI18n();
-  const { workspaceTheme } = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
   const spaces = useQuery(spacesQueryOptions);
   const space = spaces.data?.spaces.find((item) => item.id === spaceId);
   if (!space || space.type !== "team") return null;
-  const repository = workspaceTheme === "repository";
   const manager = (
     <TeamMemberManager
       spaceId={spaceId}
@@ -31,27 +25,14 @@ export function RepositoryTeamMembersPage() {
   return (
     <WorkspaceLayout
       selectedSpaceId={spaceId}
-      {...(repository
-        ? {
-            repositoryTab: "settings" as const,
-            repositoryBreadcrumbs: [
-              { label: t("spaceSettings"), settingsSpaceId: spaceId },
-              { label: t("members") },
-            ],
-          }
-        : { selectedView: "members" as const })}
+      {...{
+        repositoryTab: "settings" as const,
+        repositoryBreadcrumbs: [{ label: t("spaceSettings"), settingsSpaceId: spaceId }, { label: t("members") }],
+      }}
       headerTitle={t("members")}
-      headerContent={
-        !repository ? (
-          <WorkspaceHeaderSearch
-            placeholder={t("searchMembers")}
-            value={searchQuery}
-            onChange={setSearchQuery}
-          />
-        ) : undefined
-      }
+      headerContent={undefined}
     >
-      {repository ? (
+      {
         <RepositorySettingsLayout spaceId={spaceId} current="members" title={t("members")}>
           <Input
             type="search"
@@ -63,9 +44,7 @@ export function RepositoryTeamMembersPage() {
           />
           {manager}
         </RepositorySettingsLayout>
-      ) : (
-        manager
-      )}
+      }
     </WorkspaceLayout>
   );
 }

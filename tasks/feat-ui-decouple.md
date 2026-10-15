@@ -282,6 +282,10 @@ TanStack Router，这一点保持不变，用到 `Link` 的部件放进 `feature
 - [x] T5.3：目录页拆为 `pages.folder`，文件编辑器与预览保留在原路由；目录搜索由 mode 页面持有。
   394 项测试、typecheck、build、40 张截图、目录搜索后往返切换及无未捕获错误检查通过；路由合同与生成物无变化。
 
+- [x] T5.4：设置、成员和回收站分别由 mode 提供；两版设置表单继续共用 useUpdateSpace，保存与落点不变。
+  394 项测试、typecheck、build、40 张截图、三类页面状态重置和 repository-settings 专项通过。
+  专项等待改为表单自身 aria-busy，并等待取消确认框的遮罩退出；临时公开空间的测试与截图串行执行。
+
 ## M4 feature 去 mode 化、样式、边界检查
 
 - [ ] **T6a：通用 feature 组件不再读取 mode**（R2 feature 部分；N5）

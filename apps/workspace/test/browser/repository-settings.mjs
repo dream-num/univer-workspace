@@ -24,7 +24,7 @@ const waitForSave = () =>
   browser(
     "wait",
     "--fn",
-    "document.querySelector('[aria-busy]').getAttribute('aria-busy') === 'false'",
+    "document.querySelector('#space-name').closest('[aria-busy]').getAttribute('aria-busy') === 'false'",
   );
 
 test("Repository settings save independently, stay on Settings, and persist after reload", () => {
@@ -87,11 +87,13 @@ test("Repository settings save independently, stay on Settings, and persist afte
     click("Change visibility");
     browser("wait", "--text", "Make publicly readable");
     click("Cancel");
+    browser("wait", "--fn", "document.querySelector('[role=alertdialog]') === null");
     assert.equal(
       evaluate(`fetch('/api/spaces/${space.id}').then(r => r.json()).then(s => s.publicRead)`),
       false,
     );
     click("Change visibility");
+    browser("wait", '[role="alertdialog"]');
     click("Make publicly readable");
     browser("wait", "--text", "This repository currently allows public read-only access.");
     browser("reload");
