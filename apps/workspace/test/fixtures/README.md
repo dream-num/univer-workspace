@@ -45,13 +45,6 @@ The HTML instance identifier and typed notes should survive presentation changes
 must not react to Escape. Share view selection must change only the generated link;
 HTML defaults to immersive and text to standard. Actual live Sheet writes require a configured backend.
 
-The HTML fixture also prints the host entry delivered through the sandbox bridge.
-Open `/nodes/html?view=immersive`, type a note, then navigate to the same URL with
-`#refundFaq`: the entry text should update while the instance identifier and note stay
-unchanged. The Entry 13 / Entry 15 controls perform query-only navigation through
-the production TanStack router; confirm both entries arrive without replacing the
-HTML instance or clearing the note.
-
 The sidebar also includes a folder with a second text resource. Expand it, then switch
 between HTML, text, the folder and its child. The sidebar should retain its rows,
 expansion and scroll position while only the content changes. Switching to immersive

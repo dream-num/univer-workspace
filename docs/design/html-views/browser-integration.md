@@ -83,19 +83,3 @@ Workspace Browser 在模板中增加独立的 `window.univerWorkspace` 导航接
 [预览导航入口](../../../apps/workspace/web/src/features/editor/preview.ts)约束。
 
 参见[页面接口、权限与生命周期](native-preview.md)。Agent Sidecar 当前不提供此接口。
-
-## App 入口定位
-
-Browser 将当前网址的 search、hash 传递给已经挂载的 HTML 页面。握手校验当前 iframe
-Window 和页面代次 nonce，注入的客户端同时校验父窗口 origin；不传递父窗口存储、凭据、
-任意执行代码或外部跳转地址。客户端在 DOMContentLoaded 后发送 ready，确保模板已注册
-事件处理器；宿主握手成功后发送当前入口，并在路由变化及浏览器前进后退时同步。
-
-模板可监听可取消的 `workspace-location-change` 事件，`detail` 仅包含 `{ search, hash }`
-两个字符串。模板路由处理后调用 `preventDefault()`；旧版委托式 hash 路由在 hash 改变时
-收到锚点点击。使用 query 场景参数的应用必须处理该事件，不能依赖 srcdoc 创建时继承的
-base URI 随父页面更新。
-
-同一个 HTML Resource 内改变入口保留当前页面实例和状态，不暂停其绑定写入。切换 Node、
-所选 App、Unit 或 Space 仍经过既有保存保护。验收需要覆盖已有 iframe、重复链接、query 场景、
-浏览器前进后退及从 Workspace 文档实际点击；不能只将模板作为顶层 HTML 测试。
