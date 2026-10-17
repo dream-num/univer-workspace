@@ -16,10 +16,9 @@ button,input{font:inherit;border:1px solid #d8deea;border-radius:8px;padding:10p
 .note{background:white;border:1px solid #e5e9f1;border-radius:16px;padding:26px}dialog{border:1px solid #e5e9f1;border-radius:16px;padding:28px}dialog::backdrop{background:#17223855}@media(max-width:640px){.cards{grid-template-columns:1fr}h1{font-size:30px}}
 </style></head><body><main><small>UNIVER · WORKSPACE PREVIEW</small><h1>业务概览</h1><p>直接查看内容，保持专注。使用浏览器后退返回标准视图。</p>
 <div class="cards"><section class="card">本月收入<div class="value">¥128,600</div><p>较上月增长 12.8%</p></section><section class="card">活跃客户<div class="value">2,418</div><p>较上月新增 186 位</p></section><section class="card">完成率<div class="value">94.2%</div><p>团队目标进展顺利</p></section></div>
-<section class="note"><strong>会议备注</strong><input aria-label="会议备注" placeholder="输入内容，切换视图后仍保留"><button id="open">打开详情</button><p id="identity"></p><p id="entry" aria-live="polite"></p></section>
+<section class="note"><strong>会议备注</strong><input aria-label="会议备注" placeholder="输入内容，切换视图后仍保留"><button id="open">打开详情</button><p id="identity"></p></section>
 <dialog><h2>本月详情</h2><p>详细数据可在这里继续查看。</p><button id="close">关闭</button></dialog>
 </main><script>
-window.addEventListener('workspace-location-change',event=>{event.preventDefault();document.getElementById('entry').textContent='Entry: '+event.detail.search+event.detail.hash;});
 document.getElementById('identity').textContent='页面实例：'+Math.random().toString(36).slice(2,8);
 document.getElementById('open').onclick=()=>document.querySelector('dialog').showModal();
 document.getElementById('close').onclick=()=>document.querySelector('dialog').close();
@@ -69,25 +68,4 @@ window.fetch = async (input, init) => {
   return Response.json(result);
 };
 if (!location.pathname.startsWith("/nodes/")) history.replaceState(null, "", "/nodes/html" + location.search);
-// Same production route/provider/renderer composition, with public router navigation controls.
-const { createRouter, RouterProvider } = await import("@tanstack/react-router");
-const { createRoot } = await import("react-dom/client");
-const { StrictMode } = await import("react");
-const { routeTree } = await import("../../web/src/routeTree.gen");
-const { Providers, queryClient } = await import("../../web/src/app/providers");
-await import("../../web/src/app/styles/global.css");
-await import("@fontsource-variable/inter");
-const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent" });
-const controls = document.createElement("nav");
-controls.setAttribute("aria-label", "Entry navigation fixture");
-controls.style.cssText = "position:fixed;right:12px;top:12px;z-index:1000;display:flex;gap:8px;background:white;padding:8px";
-for (const scene of ["13", "15"]) {
-  const button = document.createElement("button");
-  button.textContent = `Entry ${scene}`;
-  button.onclick = () => void router.navigate({ href: `/nodes/html?view=immersive&prd=${scene}` });
-  controls.append(button);
-}
-document.body.append(controls);
-createRoot(document.getElementById("root")!).render(
-  <StrictMode><Providers><RouterProvider router={router} /></Providers></StrictMode>,
-);
+await import("../../web/src/app/entry");

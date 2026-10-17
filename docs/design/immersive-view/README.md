@@ -29,9 +29,7 @@
 HTML 不安装按键监听或 iframe 按键桥接，使用原有 Renderer runtime。
 StrictMode 重放时只由存活的 effect 设置 srcdoc，避免旧连接消息与新宿主不匹配。
 
-HTML 离开保护豁免同一页面的视图切换，以及同一 HTML 入口的 search、hash 定位变更；
-后者要求路径、所选 Node、Unit 和 Space 保持一致。切换这些身份仍执行既有保存保护。
-入口同步与页面事件见 [Browser 集成](../html-views/browser-integration.md#app-入口定位)。
+HTML 离开保护仅豁免同一路径、仅切换视图参数的导航；变更 Unit 或其他搜索条件仍执行 flush。
 HTML 不显示独立的加载、保存或同步状态提示；加载失败、解析错误和运行时错误仍通过错误提示呈现。
 所有资源的退出方式均由浏览器导航承担。
 

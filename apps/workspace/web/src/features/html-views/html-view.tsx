@@ -1,7 +1,7 @@
 import { ScanSearch } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useBlocker, useLocation } from "@tanstack/react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useBlocker } from "@tanstack/react-router";
 import { CollaborationStatus } from "@univerjs-pro/collaboration-client";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -14,8 +14,6 @@ import { anonymousUser, sessionQueryOptions } from "../auth";
 import { createWorkspaceBindingEngine } from "./workspace-binding-engine";
 import { useNativeUnitPreview } from "./native-unit-preview";
 import { isResourceViewChange } from "../resource-view/resource-view";
-import { connectEntryNavigation, isSameHtmlEntry, withEntryNavigation } from "./entry-navigation";
-import { findHtmlFrame } from "./native-preview-protocol";
 
 const HTML_VIEW_ALLOWED_ORIGINS = ["https://cdn.jsdelivr.net"] as const;
 
@@ -39,29 +37,7 @@ export function HtmlView({
     : session.data
       ? anonymousUser
       : null;
-  const entryNonce = useMemo(() => crypto.randomUUID(), [source, user?.id]);
-  const entrySource = useMemo(
-    () => withEntryNavigation(source, entryNonce, window.location.origin),
-    [source, entryNonce],
-  );
-  const native = useNativeUnitPreview(entrySource, user?.id ?? "pending");
-  const entry = useRef<ReturnType<typeof connectEntryNavigation>>(undefined);
-  const route = useLocation({ select: (location) => location.href });
-  useEffect(() => {
-    const connection = connectEntryNavigation(
-      window,
-      () => findHtmlFrame(native.viewerRoot.current),
-      entryNonce,
-    );
-    entry.current = connection;
-    return () => {
-      connection.dispose();
-      if (entry.current === connection) entry.current = undefined;
-    };
-  }, [entryNonce]);
-  useEffect(() => {
-    entry.current?.send();
-  }, [route]);
+  const native = useNativeUnitPreview(source, user?.id ?? "pending");
   const viewer = useRef<WorkspaceHtmlViewerHandle>(null);
   const unsynced = useRef(false);
   const [error, setError] = useState("");
@@ -87,7 +63,7 @@ export function HtmlView({
   }, [immersive, inspecting]);
   useBlocker({
     shouldBlockFn: async ({ current, next }) => {
-      if (isSameHtmlEntry(current, next) || isResourceViewChange(current, next)) return false;
+      if (isResourceViewChange(current, next)) return false;
       try {
         await viewer.current?.prepareToLeave();
         return false;

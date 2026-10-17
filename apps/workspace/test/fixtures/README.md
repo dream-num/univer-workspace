@@ -45,13 +45,6 @@ The HTML instance identifier and typed notes should survive presentation changes
 must not react to Escape. Share view selection must change only the generated link;
 HTML defaults to immersive and text to standard. Actual live Sheet writes require a configured backend.
 
-The HTML fixture also prints the host entry delivered through the sandbox bridge.
-Open `/nodes/html?view=immersive`, type a note, then navigate to the same URL with
-`#refundFaq`: the entry text should update while the instance identifier and note stay
-unchanged. The Entry 13 / Entry 15 controls perform query-only navigation through
-the production TanStack router; confirm both entries arrive without replacing the
-HTML instance or clearing the note.
-
 The sidebar also includes a folder with a second text resource. Expand it, then switch
 between HTML, text, the folder and its child. The sidebar should retain its rows,
 expansion and scroll position while only the content changes. Switching to immersive
@@ -243,3 +236,17 @@ This renders the production onboarding component without accessing product data.
 Check both languages, light/dark themes, the compact team hint, narrow widths, and
 copying the two installation commands or the example service origin. Download and
 installation-guide links open the real public GitHub pages.
+
+## Standalone HTML App (real HTTP sandbox)
+
+From `apps/workspace`, run `node --import tsx test/fixtures/standalone-app-server.ts`
+(optionally append a self-contained `.univer.html` path). This starts one loopback-only
+server on 3092 with disposable databases and prints public probe/App and private entry URLs.
+`/fixture-login` sets only the disposable fixture session and returns to the probe.
+SIGINT/SIGTERM removes only the fixture's temporary data.
+
+Open the probe in a real browser: `topLevel` must be true, `iframes` zero, and cookie,
+storage and API fetch all blocked. Click its hash link and Replace URL button; both must
+update the top-level URL. Repeat after `/fixture-login` to check isolation while signed in.
+Open the private entry before signing in: login `returnTo` must retain its query and fragment.
+The optional App should support its own direct FAQ/modal parameters without any host bridge.

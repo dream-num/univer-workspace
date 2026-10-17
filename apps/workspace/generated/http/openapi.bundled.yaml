@@ -42,6 +42,59 @@ tags:
   - name: Worktrees
     description: Isolated collaborative draft and merge workflows.
 paths:
+  /apps/{nodeId}/run:
+    get:
+      tags:
+        - Views
+      operationId: runStandaloneHtmlApp
+      summary: Open an authorized HTML App as a sandboxed top-level document, without an iframe.
+      description: |
+        Resolves the existing Node and Blob ACL on every request. Anonymous readers may
+        open link-shared Apps. Other anonymous requests receive a trusted login handoff
+        that preserves the full pathname, query and fragment. Signed-in unauthorized
+        readers receive 404. Only ready .univer.html Blobs up to 5 MiB are supported.
+        Declarative Sheet bindings require the embedded Workspace viewer; standalone
+        Apps have no Binding Host, cookies, storage or Workspace API access. Query and
+        fragment belong to the App and are not interpreted by Workspace.
+      security:
+        - sessionCookie: []
+        - {}
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Sandboxed HTML App or trusted login handoff.
+          headers:
+            Content-Security-Policy:
+              description: App sandbox excludes allow-same-origin; login handoff allows only its hashed script.
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Invalid bindings return JSON; live Sheet bindings return HTML with the embedded Node entry.
+          content:
+            text/html:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
   /api/session:
     get:
       tags:

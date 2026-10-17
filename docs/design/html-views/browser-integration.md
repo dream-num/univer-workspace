@@ -84,18 +84,21 @@ Workspace Browser 在模板中增加独立的 `window.univerWorkspace` 导航接
 
 参见[页面接口、权限与生命周期](native-preview.md)。Agent Sidecar 当前不提供此接口。
 
-## App 入口定位
+## 独立打开（无 iframe）
 
-Browser 将当前网址的 search、hash 传递给已经挂载的 HTML 页面。握手校验当前 iframe
-Window 和页面代次 nonce，注入的客户端同时校验父窗口 origin；不传递父窗口存储、凭据、
-任意执行代码或外部跳转地址。客户端在 DOMContentLoaded 后发送 ready，确保模板已注册
-事件处理器；宿主握手成功后发送当前入口，并在路由变化及浏览器前进后退时同步。
+工具栏的“独立打开”在新标签页以顶层文档打开 `/apps/{nodeId}/run`。该地址读取原有 Blob，
+不复制 App、不改变 Node、Resource 或共享权限。页面自己的 query 与 fragment 直接交给 App；
+例如 `/apps/{nodeId}/run?prd=checkout#refundFaq`。刷新及浏览器前进/后退遵循页面自己的路由。
+未登录且无匿名读取权限时，可信登录交接页面保留完整入口（包括 fragment），登录后返回。
+每次打开重新校验 ACL；取消共享后不能通过旧地址继续获取文件。
 
-模板可监听可取消的 `workspace-location-change` 事件，`detail` 仅包含 `{ search, hash }`
-两个字符串。模板路由处理后调用 `preventDefault()`；旧版委托式 hash 路由在 hash 改变时
-收到锚点点击。使用 query 场景参数的应用必须处理该事件，不能依赖 srcdoc 创建时继承的
-base URI 随父页面更新。
+这条入口面向不依赖 Workspace 数据绑定的自包含 HTML App，最大 5 MiB。
+服务端通过 HTTP CSP `sandbox`（不含 `allow-same-origin`）隔离上传脚本，禁止访问
+Workspace cookie、localStorage、API、iframe 与 worker；内联脚本/样式和 jsDelivr
+资源可使用。原生表单提交和自定义 base URL 被阻止，外部链接需用户点击。
+这些限制同样适用于登录用户；不得将该入口改成以 Workspace 同源权限执行任意上传脚本。
 
-同一个 HTML Resource 内改变入口保留当前页面实例和状态，不暂停其绑定写入。切换 Node、
-所选 App、Unit 或 Space 仍经过既有保存保护。验收需要覆盖已有 iframe、重复链接、query 场景、
-浏览器前进后退及从 Workspace 文档实际点击；不能只将模板作为顶层 HTML 测试。
+独立页面没有 Binding Host，也没有 `window.univerBinding` / `univerWorkspace` 桥接能力。
+包含声明式 Sheet 绑定的页面会提示使用原有内嵌入口；使用这些 JS 桥接 API 的页面也必须继续
+使用内嵌视图。嵌入式 SDK 页面及其引擎、检查绑定、授权读取和保存行为保持不变。
+独立模式不注入导航消息桥，App 自行实现 hash/query 路由。

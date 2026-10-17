@@ -35,6 +35,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   It owns sandbox rendering and Binding Host lifecycle; applications own source authorization,
   runtime assembly, and leave/save behavior.
 
+- The standalone HTML App HTTP entry at `/apps/{nodeId}/run`, authorized through existing Node/Blob ACLs. It serves self-contained HTML in an opaque-origin CSP sandbox without a Binding Host; live-bound Apps use the existing embedded viewer.
+
 - The private Markdown viewer under `packages/workspace-markdown-viewer`, shared by Browser and Agent.
   It owns read-only GFM rendering and URL presentation policy; applications own authenticated
   content loading and downloads. Markdown remains a Blob Resource, not a new Unit type.

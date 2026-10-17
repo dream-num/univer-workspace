@@ -50,6 +50,7 @@ export default defineConfig({
           target,
           ws: true,
         },
+        "^/apps/[^/]+/run(?:[?]|$)": target,
         "/api-docs": target,
         "/openapi.yaml": target,
         "/universer-api": {
