@@ -37,3 +37,14 @@ export function isReadOnlyBlockedMutation(
   if (typeof unitId === "string" && !guardedUnitIds.has(unitId)) return false;
   return true;
 }
+
+/** Referenced sources stay read-only while the host remains editable. */
+export function isReferencedSourceBlockedMutation(
+  event: ReadOnlyCommandEvent,
+  referencedUnitIds: ReadonlySet<string>,
+): boolean {
+  const unitId = (event.params as { readonly unitId?: unknown } | undefined)?.unitId;
+  return event.type === CommandType.MUTATION &&
+    typeof unitId === "string" && referencedUnitIds.has(unitId) &&
+    !event.options?.fromCollab && !event.options?.fromChangeset && !event.options?.onlyLocal;
+}

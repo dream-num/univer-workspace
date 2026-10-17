@@ -1,6 +1,9 @@
 import { CommandType } from "@univerjs/core";
 import { describe, expect, it } from "vitest";
-import { isReadOnlyBlockedMutation } from "../../web/src/features/editor/features/read-only-guard.js";
+import {
+  isReadOnlyBlockedMutation,
+  isReferencedSourceBlockedMutation,
+} from "../../web/src/features/editor/features/read-only-guard.js";
 
 const guarded = new Set(["unit-1", "mapped-1"]);
 const mutation = (id: string, params?: unknown, options?: Record<string, boolean>) => ({
@@ -8,6 +11,34 @@ const mutation = (id: string, params?: unknown, options?: Record<string, boolean
   type: CommandType.MUTATION,
   params,
   ...(options ? { options } : {}),
+});
+
+describe("referenced source guard", () => {
+  const sourceTypes = ["base", "doc", "slide", "board"];
+  const referenced = new Set(sourceTypes.map((type) => `${type}-source`));
+
+  it.each(sourceTypes)("blocks local edits of a referenced %s without blocking its host", (type) => {
+    const id = `${type}.mutation.edit-content`;
+    expect(isReferencedSourceBlockedMutation(mutation(id, { unitId: `${type}-source` }), referenced)).toBe(true);
+    expect(isReferencedSourceBlockedMutation(mutation(id, { unitId: "editable-host" }), referenced)).toBe(false);
+    expect(isReferencedSourceBlockedMutation(mutation(id), referenced)).toBe(false);
+  });
+
+  it.each(sourceTypes)("allows collaboration and replay to update a referenced %s", (type) => {
+    for (const options of [{ fromCollab: true }, { fromChangeset: true }, { onlyLocal: true }]) {
+      expect(isReferencedSourceBlockedMutation(
+        mutation(`${type}.mutation.edit-content`, { unitId: `${type}-source` }, options), referenced,
+      )).toBe(false);
+    }
+  });
+
+  it("leaves source commands and operations enabled", () => {
+    for (const type of [CommandType.COMMAND, CommandType.OPERATION]) {
+      expect(isReferencedSourceBlockedMutation({
+        id: "base.command.select-view", type, params: { unitId: "base-source" },
+      }, referenced)).toBe(false);
+    }
+  });
 });
 
 describe("read-only editor guard", () => {

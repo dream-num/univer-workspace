@@ -16,6 +16,24 @@ const ref: IResourceRef = {
 };
 
 describe("Workspace Referenced Unit Provider", () => {
+  it("awaits product preparation and stops an aborted request before snapshot loading", async () => {
+    let finish!: () => void;
+    const prepareUnit = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const fake = loader();
+    const controller = new AbortController();
+    const registration = createWorkspaceReferencedUnitProviderRegistration({
+      hostContext: { view: { kind: "trunk" } }, prepareUnit,
+      resolveSnapshotService: () => fake.service,
+    });
+    const pending = registration.provider.ensureUnit({ createOptions: {}, ref, unitType: UniverInstanceType.UNIVER_SHEET, signal: controller.signal });
+    expect(prepareUnit).toHaveBeenCalledWith(UniverInstanceType.UNIVER_SHEET);
+    expect(fake.calls).toHaveLength(0);
+    controller.abort();
+    finish();
+    await expect(pending).rejects.toMatchObject({ code: "aborted" });
+    expect(fake.calls).toHaveLength(0);
+  });
+
   it("registers one higher-priority self provider for the five supported Unit types", () => {
     const registration = createWorkspaceReferencedUnitProviderRegistration({
       hostContext: { view: { kind: "trunk" } },

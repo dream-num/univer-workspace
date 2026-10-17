@@ -33,6 +33,7 @@ const registration = createWorkspaceReferencedUnitProviderRegistration({
     view: { kind: "worktree", worktreeId: "worktree-1" },
     mappedUnitIds: ["host-unit", "source-unit"],
   },
+  prepareUnit: (unitType) => embedProducts.ensure(unitType),
   resolveSnapshotService: () => snapshotService,
 });
 ```
@@ -40,3 +41,13 @@ const registration = createWorkspaceReferencedUnitProviderRegistration({
 `apps/workspace` 提供 package peerDependencies 声明的同一 Univer SDK cohort，并在 Browser composition
 中注入 `ISnapshotServerService` adapter。不得为跨 repository 复用增加 publish workflow、公开版本合同或
 外部 consumer dependency。
+
+## 按需产品运行时
+
+可选 `prepareUnit` 由 Browser 宿主注入。Provider 完成 ResourceRef/type 校验和 scope 选择后，先等待
+产品模型与 UI 注册，再调用对应 `SnapshotService.load*`。准备失败直接返回错误，不发起 snapshot
+请求；等待中取消的调用不再加载数据。没有该回调的调用方维持原行为。
+
+回调不拥有数据权限、Worktree membership 或写入会话；这些仍由既有 Provider policy 和服务端校验。
+产品 chunk、语言包、插件去重和 Worker 生命周期由 Browser editor 拥有，见
+[嵌入运行时说明](../../apps/workspace/docs/embed-runtime.md)。

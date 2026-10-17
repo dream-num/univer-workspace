@@ -122,7 +122,8 @@ export const slideEditorLocales: Readonly<
 };
 
 export function createSlideComparisonPresets(
-  container: HTMLElement
+  container: HTMLElement,
+  collaboration = false,
 ): IPreset[] {
   return [
     {
@@ -145,6 +146,7 @@ export function createSlideComparisonPresets(
           UniverDrawingPlugin,
           {
             allowImageSize: MAX_UNIVER_IMAGE_BYTES,
+            ...(collaboration ? { override: [[IImageIoService, null]] } : {}),
           },
         ],
         UniverSlidesPlugin,
