@@ -86,7 +86,7 @@ Workspace Browser 在模板中增加独立的 `window.univerWorkspace` 导航接
 
 ## 独立打开（无 iframe）
 
-工具栏的“独立打开”使用完整页面导航访问 `/apps/{nodeId}/run`。该地址读取原有 Blob，
+工具栏的“独立打开”在新标签页以顶层文档打开 `/apps/{nodeId}/run`。该地址读取原有 Blob，
 不复制 App、不改变 Node、Resource 或共享权限。页面自己的 query 与 fragment 直接交给 App；
 例如 `/apps/{nodeId}/run?prd=checkout#refundFaq`。刷新及浏览器前进/后退遵循页面自己的路由。
 未登录且无匿名读取权限时，可信登录交接页面保留完整入口（包括 fragment），登录后返回。
