@@ -4,6 +4,32 @@
  */
 
 export interface paths {
+    "/apps/{nodeId}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open an authorized HTML App as a sandboxed top-level document, without an iframe.
+         * @description Resolves the existing Node and Blob ACL on every request. Anonymous readers may
+         *     open link-shared Apps. Other anonymous requests receive a trusted login handoff
+         *     that preserves the full pathname, query and fragment. Signed-in unauthorized
+         *     readers receive 404. Only ready .univer.html Blobs up to 5 MiB are supported.
+         *     Declarative Sheet bindings require the embedded Workspace viewer; standalone
+         *     Apps have no Binding Host, cookies, storage or Workspace API access. Query and
+         *     fragment belong to the App and are not interpreted by Workspace.
+         */
+        get: operations["runStandaloneHtmlApp"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -2393,6 +2419,43 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    runStandaloneHtmlApp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nodeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sandboxed HTML App or trusted login handoff. */
+            200: {
+                headers: {
+                    /** @description App sandbox excludes allow-same-origin; login handoff allows only its hashed script. */
+                    "Content-Security-Policy"?: string;
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Invalid bindings return JSON; live Sheet bindings return HTML with the embedded Node entry. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+        };
+    };
     getSession: {
         parameters: {
             query?: never;

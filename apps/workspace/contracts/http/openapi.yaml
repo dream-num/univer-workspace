@@ -42,6 +42,8 @@ tags:
 security:
   - sessionCookie: []
 paths:
+  /apps/{nodeId}/run:
+    $ref: ./paths/views.yaml#/~1apps~1{nodeId}~1run
   /api/session:
     $ref: ./paths/auth.yaml#/~1api~1session
   /api/auth/authorize:

@@ -1,3 +1,4 @@
+import { createStandaloneAppRouter } from "./modules/views/standalone-app.router.js";
 import { existsSync } from "node:fs";
 import type { Server } from "node:http";
 import { resolve } from "node:path";
@@ -384,6 +385,7 @@ export function createWorkspaceApplication(
   if (collaborationGateway) {
     app.use("/universer-api", collaborationGateway.router);
   }
+  app.use(createStandaloneAppRouter({ identity, access, blobs }));
   app.use("/api", notFoundHandler);
 
   const publicDirectory = resolve("dist/public");

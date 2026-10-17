@@ -236,3 +236,17 @@ This renders the production onboarding component without accessing product data.
 Check both languages, light/dark themes, the compact team hint, narrow widths, and
 copying the two installation commands or the example service origin. Download and
 installation-guide links open the real public GitHub pages.
+
+## Standalone HTML App (real HTTP sandbox)
+
+From `apps/workspace`, run `node --import tsx test/fixtures/standalone-app-server.ts`
+(optionally append a self-contained `.univer.html` path). This starts one loopback-only
+server on 3092 with disposable databases and prints public probe/App and private entry URLs.
+`/fixture-login` sets only the disposable fixture session and returns to the probe.
+SIGINT/SIGTERM removes only the fixture's temporary data.
+
+Open the probe in a real browser: `topLevel` must be true, `iframes` zero, and cookie,
+storage and API fetch all blocked. Click its hash link and Replace URL button; both must
+update the top-level URL. Repeat after `/fixture-login` to check isolation while signed in.
+Open the private entry before signing in: login `returnTo` must retain its query and fragment.
+The optional App should support its own direct FAQ/modal parameters without any host bridge.

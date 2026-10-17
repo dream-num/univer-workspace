@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { isHtmlViewFilename } from "@univerjs-labs/html-view";
-import { Download, Lock, Maximize, MoreHorizontal, Pencil, Share2 } from "lucide-react";
+import { ExternalLink, Download, Lock, Maximize, MoreHorizontal, Pencil, Share2 } from "lucide-react";
 import { useState } from "react";
 import type { IMember } from "@univerjs/protocol";
 import { useUpdateNode } from "./nodes.commands";
@@ -71,7 +71,18 @@ export function ResourceActions({
   return (
     <>
       {resource.kind === "blob" && isHtmlViewFilename(resource.originalFilename) ? (
-        <span ref={htmlActionsRef} className="contents" />
+        <>
+          <span ref={htmlActionsRef} className="contents" />
+          <a
+            className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "no-underline")}
+            href={`/apps/${encodeURIComponent(node.id)}/run`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ExternalLink />
+            {t("openStandaloneApp")}
+          </a>
+        </>
       ) : null}
       {resource.kind === "blob" ? (
         <a
