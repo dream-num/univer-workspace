@@ -22,7 +22,7 @@ import { UniverDrawingPlugin } from "@univerjs/drawing";
 import UniverEngineFormulaEnUS from "@univerjs/engine-formula/locale/en-US";
 import UniverEngineFormulaZhCN from "@univerjs/engine-formula/locale/zh-CN";
 import { UniverRenderEnginePlugin } from "@univerjs/engine-render";
-import { mergeLocales, type IPreset } from "@univerjs/presets";
+import { mergeLocales, type IPreset, type IPresetPlugin } from "@univerjs/presets";
 import { UniverRPCMainThreadPlugin } from "@univerjs/rpc";
 import { UniverUIPlugin } from "@univerjs/ui";
 import UniverUIEnUS from "@univerjs/ui/locale/en-US";
@@ -78,8 +78,13 @@ export const baseEditorLocales: Readonly<
 };
 
 export function createBaseComparisonPresets(
-  container: HTMLElement
+  container: HTMLElement,
+  options: { collaboration?: boolean; worker?: boolean; onWorker?: (worker: Worker) => void } = {},
 ): IPreset[] {
+  const worker = options.worker === false ? undefined : new Worker(
+    new URL("./base-worker.ts", import.meta.url), { type: "module" },
+  );
+  if (worker) options.onWorker?.(worker);
   return [
     {
       plugins: [
@@ -101,24 +106,19 @@ export function createBaseComparisonPresets(
             disableAutoFocus: true,
           },
         ],
-        [
-          UniverRPCMainThreadPlugin,
-          {
-            workerURL: new Worker(new URL("./base-worker.ts", import.meta.url), {
-              type: "module",
-            }),
-          },
-        ],
+        ...(worker ? [[UniverRPCMainThreadPlugin, { workerURL: worker }] satisfies IPresetPlugin] : []),
         [
           UniverDrawingPlugin,
           {
             allowImageSize: MAX_UNIVER_IMAGE_BYTES,
+            ...(options.collaboration ? { override: [[IImageIoService, null]] } : {}),
           },
         ],
         UniverBasesPlugin,
         [
           UniverBasesUIPlugin,
           {
+            ...(options.collaboration ? { override: [[IAttachmentIoService, null]] } : {}),
             workbench: {
               collaborationStatus: false,
               footer: false,
@@ -146,7 +146,6 @@ export const baseEditorDefinition: ICollaborationEditorDefinition = {
     },
   },
   theme: yellowTheme,
-  enableDocumentCollaborationUI: false,
   hideCollaborationStatus: true,
   locales: baseEditorLocales,
   collaborationFeaturePlugins: () =>

@@ -61,6 +61,7 @@ export interface WorkspaceSnapshotLoader {
 export interface CreateWorkspaceReferencedUnitProviderInput {
   readonly hostContext: WorkspaceReferenceHostContext;
   readonly resolveSnapshotService: () => WorkspaceSnapshotLoader;
+  readonly prepareUnit?: (unitType: UniverInstanceType) => Promise<void>;
 }
 
 export function createWorkspaceReferencedUnitProviderRegistration(
@@ -110,6 +111,8 @@ async function ensureWorkspaceReferencedUnit(
   }
 
   const context = createWorkspaceReferenceLoadContext(scopePolicy.select(unitId));
+  if (input.prepareUnit) await input.prepareUnit(ensureInput.unitType);
+  if (ensureInput.signal?.aborted) throw aborted();
   const snapshotService = input.resolveSnapshotService();
   const options = { createOptions: ensureInput.createOptions };
   let loaded: WorkspaceLoadedUnit;

@@ -362,3 +362,13 @@ Snapshot、history 和 export 不按对象范围过滤。权限始终与文件�
 
 从未创建过 Worktree 的用户可在智能工作台获取 Workspace Agent 下载和 CLI/Skill 安装引导。
 已有可见任务时，以简洁提示提供入口，保留任务列表和审核界面。
+
+## 按需嵌入产品运行时
+
+原生 Embed 与公式引用共用 Workspace referenced-Unit Provider。Browser 在加载引用 snapshot 前，
+按实际 Unit 类型准备产品依赖，而不把 Base 等所有产品运行时预装进每个编辑器。正式编辑器、
+Worktree draft/trunk 审阅和 merge-preview 编辑器通过同一 composition root 接入。引用仍按既有
+Trunk / Worktree mapping / merge-preview policy 选择数据，Source 本地内容 mutation 被阻止，
+不会因为显示嵌入而加入新的 Source 写入房间。
+
+支持范围、生命周期、SDK 边界及复验方法见 [嵌入运行时说明](embed-runtime.md)。

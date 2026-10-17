@@ -1,10 +1,10 @@
-import type { ILanguagePack } from "@univerjs/core";
+import type { ILanguagePack, UniverInstanceType } from "@univerjs/core";
 import {
   isReadOnlyBlockedMutation,
+  isReferencedSourceBlockedMutation,
   type ReadOnlyCommandEvent,
 } from "./features/read-only-guard";
 import {
-  CommandType,
   LifecycleStages,
   LocaleType,
   LogLevel,
@@ -37,6 +37,8 @@ import EditHistoryUIZhCN from "@univerjs-pro/edit-history-ui/locale/zh-CN";
 import { UniverChartEmbedPlugin } from "@univerjs-pro/chart-embed";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
+import EmbedUIEnUS from "@univerjs-pro/embed-ui/locale/en-US";
+import EmbedUIZhCN from "@univerjs-pro/embed-ui/locale/zh-CN";
 import ExchangeClientEnUS from "@univerjs-pro/exchange-client/locale/en-US";
 import ExchangeClientZhCN from "@univerjs-pro/exchange-client/locale/zh-CN";
 import { UniverLicensePlugin } from "@univerjs-pro/license";
@@ -77,6 +79,7 @@ import {
   resolveMergeReview,
 } from "./merge-review";
 import { withLiveSheetReferences } from "./live-sheet-references";
+import { createEmbedProductRuntime } from "./embed-product-runtime";
 import { subscribeWorkspaceCollaborators } from "./workarounds/collaboration-members";
 import { installHistoryShapeFormulaSdkWorkaround } from "./workarounds/history-shape-formula-model";
 import { resolveUniverLicense } from "./features/univer-license";
@@ -214,11 +217,12 @@ export function createCollaborationEditor(
       let previewNavigation: { dispose(): void } | undefined;
       let mountedUniver: ReturnType<typeof createUniver>["univer"] | null =
         null;
+      let embedProducts: ReturnType<typeof createEmbedProductRuntime> | undefined;
+      const referencedUnitIds = new Set<string>();
       let statusListener: { dispose(): void } | null = null;
       let collaboratorsListener: { dispose(): void } | null = null;
       let collaborators: readonly IMember[] = [];
       let collaborationUIEventListener: { unsubscribe(): void } | null = null;
-      const liveSheetIds = new Set<string>();
       let referenceWriteGuard: { dispose(): void } | null = null;
       let readOnlyListener: { dispose(): void } | null = null;
       let readOnlyLifecycleListener: { dispose(): void } | null = null;
@@ -258,6 +262,10 @@ export function createCollaborationEditor(
         const snapshotReferenceProvider =
           createWorkspaceReferencedUnitProviderRegistration({
             hostContext: referenceHostContext,
+            ...(definition.mobile ? {} : { prepareUnit: async (unitType: UniverInstanceType) => {
+              if (!embedProducts) throw new Error("The embed runtime is not ready.");
+              await embedProducts.ensure(unitType);
+            } }),
             resolveSnapshotService: () => {
               if (!mountedUniver) {
                 throw new Error(
@@ -267,17 +275,26 @@ export function createCollaborationEditor(
               return mountedUniver.__getInjector().get(SnapshotService);
             },
           });
+        const preparedReferenceProvider = {
+          ...snapshotReferenceProvider,
+          provider: {
+            async ensureUnit(input: Parameters<typeof snapshotReferenceProvider.provider.ensureUnit>[0]) {
+              const result = await snapshotReferenceProvider.provider.ensureUnit(input);
+              if (result.unitId !== unitId) referencedUnitIds.add(result.unitId);
+              return result;
+            },
+          },
+        };
         const referenceProvider = definition.liveSheetReferences ? withLiveSheetReferences(
-          snapshotReferenceProvider,
+          preparedReferenceProvider,
           referenceHostContext,
           async (sourceUnitId) => {
             if (disposed || !mountedUniver) throw new Error("Editor was disposed.");
             if (sourceUnitId === unitId) return;
-            liveSheetIds.add(sourceUnitId);
             await mountedUniver.__getInjector()
               .get(CollaborationController).readyForCollab(sourceUnitId);
           },
-        ) : snapshotReferenceProvider;
+        ) : preparedReferenceProvider;
         const license = resolveUniverLicense();
         const licensePlugins: IPresetPlugin[] =
           definition.licenseProvidedByPreset
@@ -371,6 +388,7 @@ export function createCollaborationEditor(
           locales: {
             [univerLocale]: mergeLocales(
               definition.locales[language],
+              language === "zh-CN" ? EmbedUIZhCN : EmbedUIEnUS,
               language === "zh-CN"
                 ? CollaborationClientZhCN
                 : CollaborationClientEnUS,
@@ -412,18 +430,23 @@ export function createCollaborationEditor(
           ],
         });
         mountedUniver = univer;
+        // Mobile keeps its existing model-only reference path; desktop presets
+        // cannot share the mobile workbench's dependency registrations.
+        if (!definition.mobile) embedProducts = createEmbedProductRuntime({
+          univer, container: element, license,
+          plugins: [
+            ...presets.flatMap((preset) => preset.plugins),
+            ...collaborationPlugins, ...collaborationFeaturePlugins,
+            ...historyFeaturePlugins, ...outputPlugins,
+            UniverEmbedPlugin, UniverEmbedUIPlugin, UniverChartEmbedPlugin,
+          ],
+        });
         univerAPIRef.current = univerAPI;
-        // Source Sheets are observed through SDK OT, never edited by this host.
+        // Referenced sources are read-only; live Sheet observers may still receive OT.
         referenceWriteGuard = univerAPI.addEvent(
           univerAPI.Event.BeforeCommandExecute,
           (event) => {
-            if (
-              event.type === CommandType.MUTATION &&
-              liveSheetIds.has(event.params?.unitId) &&
-              !event.options?.fromCollab &&
-              !event.options?.fromChangeset &&
-              !event.options?.onlyLocal
-            ) event.cancel = true;
+            if (isReferencedSourceBlockedMutation(event, referencedUnitIds)) event.cancel = true;
           },
         );
         collaborationUIEventListener = univer
@@ -566,6 +589,7 @@ export function createCollaborationEditor(
         referenceWriteGuard?.dispose();
         readOnlyListener?.dispose();
         readOnlyLifecycleListener?.dispose();
+        embedProducts?.dispose();
         mountedUniver?.dispose();
         univerAPIRef.current = null;
       };

@@ -134,7 +134,8 @@ export const boardEditorLocales: Readonly<
 };
 
 export function createBoardComparisonPresets(
-  container: HTMLElement
+  container: HTMLElement,
+  collaboration = false,
 ): IPreset[] {
   return [
     {
@@ -157,6 +158,7 @@ export function createBoardComparisonPresets(
           UniverDrawingPlugin,
           {
             allowImageSize: MAX_UNIVER_IMAGE_BYTES,
+            ...(collaboration ? { override: [[IImageIoService, null]] } : {}),
           },
         ],
         UniverDocsLatexPlugin,
