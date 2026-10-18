@@ -35,6 +35,10 @@ import {
   type IUnitComparisonViewerMessages,
 } from "../i18n/messages.js";
 import { ComparisonPageTabs } from "../shared/scope-tabs.js";
+import {
+  DiffSidebarCollapseButton,
+  DiffSidebarRail,
+} from "../shared/diff-sidebar-rail.js";
 import { formatComparisonValue } from "../shared/comparison-value.js";
 import { shouldClearDiffSidebarSelection } from "../shared/sidebar-selection.js";
 import { structuralDiffItemsFromContext } from "../comparison-presentation.js";
@@ -103,6 +107,7 @@ export function WorkbookDiffViewer(input: {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const sidebarScrollRef = useEnsureSelectedDiffVisible<HTMLDivElement>(selectedItemId);
   const [selectionSync, setSelectionSync] = useState<ReadonlyWorkbookControlledSelection | null>(
     null,
@@ -336,56 +341,82 @@ export function WorkbookDiffViewer(input: {
           </div>
         ) : null}
       </header>
-      <div className="grid min-h-0 grid-cols-[268px_minmax(0,1fr)_minmax(0,1fr)] gap-px overflow-hidden bg-border max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-2">
-        <aside
-          className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-[color-mix(in_srgb,var(--color-muted)_52%,var(--color-card))] max-[1023px]:hidden"
-          onClick={(event) => {
-            if (shouldClearDiffSidebarSelection(event.target)) setSelectedItemId(null);
-          }}
-        >
-          <header className="grid gap-2 border-b border-border px-3 py-2.5">
-            <CompactSegmentedControl
-              ariaLabel={messages.scopeLabel}
-              fullWidth
-              options={[
-                { label: messages.worksheet, value: "worksheet" },
-                { label: messages.workbook, value: "workbook" },
-              ]}
-              value={sidebarTab}
-              onChange={(value) => setSidebarTab(value as SidebarTab)}
-            />
-            <input
-              aria-label={messages.searchChanges}
-              className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[12px] text-foreground shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
-              placeholder={messages.searchChanges}
-              type="search"
-              value={searchQuery}
-              onChange={(event) => {
-                setSearchQuery(event.target.value);
-              }}
-            />
-          </header>
-          <div className="min-h-0 overflow-auto overscroll-contain px-3 py-3" ref={sidebarScrollRef}>
-            {sidebarTree.length === 0 ? (
-              <div className="grid content-center gap-2 rounded-lg border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-                <span>{messages.noItems}</span>
-              </div>
-            ) : (
-              <div className="grid gap-1">
-                {sidebarTree.map((node) => (
-                  <SidebarTreeNode
-                    key={node.id}
-                    forceOpen={searchQuery.trim().length > 0}
-                    itemById={localizedItemById}
-                    node={node}
-                    onSelectItem={setSelectedItemId}
-                    selectedItemId={selectedItemId}
+      <div
+        className={cn(
+          "grid min-h-0 gap-px overflow-hidden bg-border max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-2",
+          sidebarCollapsed
+            ? "grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)]"
+            : "grid-cols-[268px_minmax(0,1fr)_minmax(0,1fr)]",
+        )}
+      >
+        {sidebarCollapsed ? (
+          <DiffSidebarRail
+            count={diffModel.items.length}
+            label={messages.changes}
+            onExpand={() => setSidebarCollapsed(false)}
+          />
+        ) : (
+          <aside
+            className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-[color-mix(in_srgb,var(--color-muted)_52%,var(--color-card))] max-[1023px]:hidden"
+            onClick={(event) => {
+              if (shouldClearDiffSidebarSelection(event.target)) setSelectedItemId(null);
+            }}
+          >
+            <header className="grid gap-2 border-b border-border px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <CompactSegmentedControl
+                    ariaLabel={messages.scopeLabel}
+                    fullWidth
+                    options={[
+                      { label: messages.worksheet, value: "worksheet" },
+                      { label: messages.workbook, value: "workbook" },
+                    ]}
+                    value={sidebarTab}
+                    onChange={(value) => setSidebarTab(value as SidebarTab)}
                   />
-                ))}
+                </div>
+                <DiffSidebarCollapseButton
+                  label={messages.structuralDiff}
+                  onCollapse={() => setSidebarCollapsed(true)}
+                />
               </div>
-            )}
-          </div>
-        </aside>
+              <input
+                aria-label={messages.searchChanges}
+                className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[12px] text-foreground shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
+                placeholder={messages.searchChanges}
+                type="search"
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                }}
+              />
+            </header>
+            <div
+              className="min-h-0 overflow-auto overscroll-contain px-3 py-3"
+              ref={sidebarScrollRef}
+            >
+              {sidebarTree.length === 0 ? (
+                <div className="grid content-center gap-2 rounded-lg border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+                  <span>{messages.noItems}</span>
+                </div>
+              ) : (
+                <div className="grid gap-1">
+                  {sidebarTree.map((node) => (
+                    <SidebarTreeNode
+                      key={node.id}
+                      forceOpen={searchQuery.trim().length > 0}
+                      itemById={localizedItemById}
+                      node={node}
+                      onSelectItem={setSelectedItemId}
+                      selectedItemId={selectedItemId}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
         <DiffPane
           activeSheetId={selectedSheetId}
           createUniver={input.createUniver}

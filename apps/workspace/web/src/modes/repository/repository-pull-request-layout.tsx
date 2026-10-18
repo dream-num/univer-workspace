@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Database,
   FileDiff,
   FileText,
@@ -9,11 +11,11 @@ import {
   Shapes,
   Table2,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import { useI18n } from "../../shared/i18n";
-import { Avatar, buttonVariants } from "../../shared/ui";
+import { Avatar, buttonVariants, Tooltip } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { RepositoryPrState } from "./repository-pr-state";
 import type { WorktreeReviewView } from "../../features/worktrees/worktree-review-search";
@@ -41,6 +43,7 @@ export function RepositoryPullRequestLayout({
 }) {
   const { t, language } = useI18n();
   const { spaceId, section } = presentation;
+  const [filesCollapsed, setFilesCollapsed] = useState(false);
   const search = {
     spaceId,
     worktree: worktree.id,
@@ -48,12 +51,27 @@ export function RepositoryPullRequestLayout({
     view: selectedView,
   };
   const filesLink = { ...search, section: "files" as const };
-  const documents = (
+  const documents = (onCollapse?: () => void) => (
     <nav aria-label={t("repositoryPrFiles")} className="min-w-0">
       <h2 className="m-0 mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground">
         {t("repositoryPrFiles")}
-        <span className="rounded-full bg-[var(--color-repository-counter)] px-2 tabular-nums">
-          {worktree.units.length}
+        <span className="flex shrink-0 items-center gap-1">
+          <span className="rounded-full bg-[var(--color-repository-counter)] px-2 tabular-nums">
+            {worktree.units.length}
+          </span>
+          {onCollapse ? (
+            <Tooltip content={t("repositoryPrFiles")}>
+              <button
+                type="button"
+                aria-expanded
+                aria-label={t("repositoryPrFiles")}
+                className="inline-flex size-5 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={onCollapse}
+              >
+                <ChevronLeft aria-hidden="true" className="size-3.5" />
+              </button>
+            </Tooltip>
+          ) : null}
         </span>
       </h2>
       {worktree.units.length ? (
@@ -168,7 +186,12 @@ export function RepositoryPullRequestLayout({
 
   return (
     <div className="repository-chrome repository-pull-requests min-h-0 flex-1 overflow-y-auto bg-background">
-      <div className="mx-auto grid max-w-7xl gap-4 px-8 py-6 max-[720px]:px-4">
+      <div
+        className={cn(
+          "mx-auto grid gap-4 px-8 py-6 max-[720px]:px-4",
+          section === "overview" ? "max-w-7xl" : "w-full",
+        )}
+      >
         <Link
           to="/spaces/$spaceId"
           params={{ spaceId }}
@@ -269,7 +292,7 @@ export function RepositoryPullRequestLayout({
                   <strong className="break-words">{worktree.creator.displayName}</strong>
                 </div>
               </section>
-              <section>{documents}</section>
+              <section>{documents()}</section>
               <section>
                 <h2 className="m-0 mb-2 text-xs font-semibold text-muted-foreground">
                   {t("repositoryPrUpdated")}
@@ -285,8 +308,40 @@ export function RepositoryPullRequestLayout({
             </aside>
           </div>
         ) : (
-          <div className="grid items-start gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-            <aside className="min-w-0 rounded-md border border-border p-3">{documents}</aside>
+          <div
+            className={cn(
+              "grid items-start gap-4",
+              filesCollapsed
+                ? "lg:grid-cols-[44px_minmax(0,1fr)]"
+                : "lg:grid-cols-[240px_minmax(0,1fr)]",
+            )}
+          >
+            <aside
+              className={cn(
+                "min-w-0 rounded-md border border-border p-3",
+                filesCollapsed && "lg:hidden",
+              )}
+            >
+              {documents(filesCollapsed ? undefined : () => setFilesCollapsed(true))}
+            </aside>
+            {filesCollapsed ? (
+              <button
+                type="button"
+                aria-expanded={false}
+                aria-label={t("repositoryPrFiles")}
+                title={t("repositoryPrFiles")}
+                className="hidden min-w-0 flex-col items-center gap-2 self-stretch rounded-md border border-border bg-card py-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring lg:flex"
+                onClick={() => setFilesCollapsed(false)}
+              >
+                <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
+                <span className="[writing-mode:vertical-rl] text-xs font-semibold tracking-[0.08em]">
+                  {t("repositoryPrFiles")}
+                </span>
+                <span className="rounded-full bg-[var(--color-repository-counter)] px-2 text-xs tabular-nums">
+                  {worktree.units.length}
+                </span>
+              </button>
+            ) : null}
             <div className="grid min-w-0 gap-4">
               <div className="@container/review flex h-[max(640px,75dvh)] min-w-0 flex-col overflow-hidden rounded-md border border-border">
                 {review}
