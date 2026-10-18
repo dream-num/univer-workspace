@@ -31,7 +31,7 @@ export function RepositoryIssueLayout({ spaceId, crumb, children }: IssuePagePro
       {spaceId ? <RepositoryTabs spaceId={spaceId} active="issues" /> : null}
       {spaceId ? (
         <div className="repository-chrome repository-issues min-h-0 flex-1 overflow-y-auto bg-background">
-          <div className={crumb ? "mx-auto max-w-7xl px-6 py-6 max-[720px]:px-4" : "min-h-full"}>{children}</div>
+          <div className={crumb ? "mx-auto max-w-7xl px-6 py-6 max-[720px]:px-4" : "h-full min-h-0"}>{children}</div>
         </div>
       ) : (
         <PageContent>{children}</PageContent>

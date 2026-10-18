@@ -16,7 +16,10 @@ export function IssueViewsNav({
 }) {
   const { t } = useI18n();
   return (
-    <nav aria-label={t("issueViews")} className="w-64 shrink-0 border-r border-border p-4 max-[900px]:hidden">
+    <nav
+      aria-label={t("issueViews")}
+      className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-border p-4 max-[900px]:hidden"
+    >
       {[
         {
           label: t("issues"),
@@ -68,7 +71,12 @@ export function IssueViewsNav({
         <Tag className="size-4 text-muted-foreground" />
         {t("issueLabels")}
       </Link>
-      <Button variant="ghost" className="mt-6 w-full justify-start px-2" onClick={onCollapse} aria-expanded={true}>
+      <Button
+        variant="ghost"
+        className="mt-auto w-full justify-start px-2"
+        onClick={onCollapse}
+        aria-expanded={true}
+      >
         <PanelLeftClose />
         {t("issueCollapseSidebar")}
       </Button>
