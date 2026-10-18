@@ -170,7 +170,7 @@ key 保留既有失效前缀并与 infinite 列表 key 分开，避免返回首�
 完整列表保留服务端 cursor；没有服务端全文搜索的 Recent / Pages 明示仅搜索已加载内容。
 PR 摘要仅依据 `capabilities.review` 提供审阅链接；直接 Worktree 深链按 ID 读取，不依赖首屏列表中
 是否存在该任务，再解析仓库上下文并保留返回筛选参数。
-实施背景见 [UI Mode 解耦](proposals/ui-mode-decoupling.md) 与 [Repository Dashboard](proposals/repository-dashboard.md)。
+模式分层背景见 [UI Mode 解耦](proposals/ui-mode-decoupling.md)。
 
 应用 UI Primitive 提供工作台表单、菜单、弹窗和反馈组件。`shared/ui` 保存统一行为与
 视觉封装。Univer 编辑器相关的创建、销毁、协同 Scope 和只读状态全部封装在
