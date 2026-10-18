@@ -142,7 +142,9 @@ export function RepositoryTabs({
           ) : null}
         </nav>
       </div>
-      {space ? <RepositoryHeader key={space.id} space={space} /> : null}
+      {/* GitHub keeps the repository header — name, visibility, Star — on the Code tab only;
+          Issues, Pull requests, Pages and Settings start with their own page heading. */}
+      {space && active === "files" ? <RepositoryHeader key={space.id} space={space} /> : null}
     </>
   );
 }
