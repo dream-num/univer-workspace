@@ -370,16 +370,19 @@ export function RepositoryShell({
             <div className="flex shrink-0 items-center gap-1.5">
               {headerContent}
               {headerActions}
-              <Tooltip content={t("issues")}>
-                <Link
-                  to="/issues"
-                  search={{}}
-                  aria-label={t("issues")}
-                  className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "no-underline")}
-                >
-                  <CircleDot />
-                </Link>
-              </Tooltip>
+              {/* Repository chrome already carries an Issues tab; the global inbox entry stays outside it. */}
+              {repositoryShell ? null : (
+                <Tooltip content={t("issues")}>
+                  <Link
+                    to="/issues"
+                    search={{}}
+                    aria-label={t("issues")}
+                    className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "no-underline")}
+                  >
+                    <CircleDot />
+                  </Link>
+                </Tooltip>
+              )}
               {workspaceHarnessOrigin() ? (
                 <Tooltip content={t("openChat")}>
                   <Button
