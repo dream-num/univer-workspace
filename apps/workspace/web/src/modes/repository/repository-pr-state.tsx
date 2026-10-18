@@ -4,7 +4,7 @@ import { useI18n, type MessageKey } from "../../shared/i18n";
 import { cn } from "../../shared/utils/cn";
 
 type State = components["schemas"]["WorktreeState"];
-const labels: Record<State, MessageKey> = {
+export const repositoryPrStateLabels: Record<State, MessageKey> = {
   draft: "worktreeStateDraft",
   ready: "worktreeStateReady",
   merging: "worktreeStateMerging",
@@ -32,8 +32,8 @@ export function RepositoryPrState({
     <span
       data-pr-state={state}
       role={badge ? undefined : "img"}
-      aria-label={badge ? undefined : t(labels[state])}
-      title={t(labels[state])}
+      aria-label={badge ? undefined : t(repositoryPrStateLabels[state])}
+      title={t(repositoryPrStateLabels[state])}
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5",
         badge ? "rounded-full px-3 py-1.5 text-sm font-medium text-white" : "mt-0.5",
@@ -55,7 +55,7 @@ export function RepositoryPrState({
       )}
     >
       <Icon className="size-4" aria-hidden="true" />
-      {badge ? t(labels[state]) : null}
+      {badge ? t(repositoryPrStateLabels[state]) : null}
     </span>
   );
 }

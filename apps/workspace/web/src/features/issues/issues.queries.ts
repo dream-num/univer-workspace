@@ -4,6 +4,17 @@ import { apiError } from "../../shared/api/errors";
 
 export const issuesQueryKey = ["issues"] as const;
 
+export const issueSummaryQueryOptions = queryOptions({
+  queryKey: [...issuesQueryKey, "summary"] as const,
+  queryFn: async () => {
+    const { data, error } = await api.GET("/api/issues", {
+      params: { query: { state: "open", sort: "updated", order: "desc", limit: 5 } },
+    });
+    if (error) throw apiError(error);
+    return data;
+  },
+});
+
 export interface IssueFilters {
   readonly state: "open" | "closed" | "all";
   readonly labels: readonly string[];
@@ -103,7 +114,10 @@ export function issueTimelineQueryOptions(spaceId: string, number: number) {
       let cursor: string | undefined;
       for (let page = 0; page < MAX_TIMELINE_PAGES; page += 1) {
         const { data, error } = await api.GET("/api/spaces/{spaceId}/issues/{number}/timeline", {
-          params: { path: { spaceId, number }, query: { limit: 200, ...(cursor ? { cursor } : {}) } },
+          params: {
+            path: { spaceId, number },
+            query: { limit: 200, ...(cursor ? { cursor } : {}) },
+          },
         });
         if (error) throw apiError(error);
         items.push(...data.items);

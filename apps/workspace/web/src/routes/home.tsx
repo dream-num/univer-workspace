@@ -3,7 +3,6 @@ import type { HomeView } from "../modes/registry";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireAuthenticatedSession } from "../features/auth";
 import { spacesQueryOptions } from "../features/spaces";
-import { ownedByMeQueryOptions, recentResourcesQueryOptions, sharedWithMeQueryOptions } from "../features/views";
 
 export const Route = createFileRoute("/home")({
   validateSearch: (search: Readonly<Record<string, unknown>>) => ({
@@ -11,12 +10,7 @@ export const Route = createFileRoute("/home")({
   }),
   loader: async ({ context, location }) => {
     await requireAuthenticatedSession(context.queryClient, location.href);
-    await Promise.all([
-      context.queryClient.ensureQueryData(recentResourcesQueryOptions),
-      context.queryClient.ensureQueryData(ownedByMeQueryOptions),
-      context.queryClient.ensureQueryData(sharedWithMeQueryOptions),
-      context.queryClient.ensureQueryData(spacesQueryOptions),
-    ]);
+    await context.queryClient.ensureQueryData(spacesQueryOptions);
   },
   component: HomePage,
 });

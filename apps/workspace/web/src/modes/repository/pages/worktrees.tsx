@@ -1,9 +1,17 @@
 import { RepositoryPullRequestLayout } from "../repository-pull-request-layout";
 import type { WorktreesPageProps } from "../../page.types";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
+import { RepositoryPullRequestsPage } from "./pull-requests";
+import { RepositoryDirectPullRequest } from "./direct-pull-request";
+import type { WorktreeListFilters } from "../../../features/worktrees/worktrees.queries";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { WorktreeDashboard, worktreeQueryOptions, worktreeBelongsToSpace } from "../../../features/worktrees";
+import {
+  WorktreeDashboard,
+  worktreeQueryOptions,
+  worktreeBelongsToSpace,
+} from "../../../features/worktrees";
 import { spacesQueryOptions } from "../../../features/spaces";
 import { RepositoryTabs } from "../repository-tabs";
 import { WorktreeReviewPanel } from "../../../features/worktrees/worktree-review-panel";
@@ -17,28 +25,67 @@ import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../workspace-layout";
 
 export function RepositoryWorktreesPage(props: WorktreesPageProps) {
   const { t } = useI18n();
-  const { spaceId, worktree, unit, section = unit ? "files" : "overview", view = DEFAULT_WORKTREE_REVIEW_VIEW } = props;
+  const {
+    spaceId,
+    worktree,
+    unit,
+    section = unit ? "files" : "overview",
+    view = DEFAULT_WORKTREE_REVIEW_VIEW,
+  } = props;
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   // A space-scoped review stays inside the repository shell, opened from the
   // PRs tab; the global workbench keeps its own navigation.
   const repository = spaceId !== undefined;
+  const listFilters: WorktreeListFilters = {
+    ...(props.q ? { q: props.q } : {}),
+    ...(props.scope ? { scope: props.scope } : {}),
+    ...(props.kind ? { kind: props.kind } : {}),
+    ...(props.teamSpaceId ? { teamSpaceId: props.teamSpaceId } : {}),
+  };
+
+  if (!spaceId && !worktree) return <RepositoryPullRequestsPage {...props} />;
+  if (!spaceId && worktree) return <RepositoryDirectPullRequest {...props} worktree={worktree} />;
 
   return (
     <WorkspaceLayout
       {...(spaceId ? { selectedSpaceId: spaceId } : {})}
-      {...(repository ? { repositoryTab: "prs" as const } : { selectedView: "worktrees" as const })}
+      {...(repository
+        ? { repositoryTab: "prs" as const }
+        : { repositoryView: "worktrees" as const })}
       headerContent={
         repository && worktree ? undefined : (
-          <WorkspaceHeaderSearch placeholder={t("searchTasks")} value={searchQuery} onChange={setSearchQuery} />
+          <WorkspaceHeaderSearch
+            placeholder={t("searchTasks")}
+            value={searchQuery}
+            onChange={setSearchQuery}
+          />
         )
       }
     >
       {repository ? <RepositoryTabs spaceId={spaceId} active="prs" /> : null}
+      {worktree ? (
+        <div className="repository-chrome border-b border-border px-6 py-3">
+          <Link
+            to="/worktrees"
+            search={{
+              ...(props.q ? { q: props.q } : {}),
+              ...(props.scope ? { scope: props.scope } : {}),
+              ...(props.kind ? { kind: props.kind } : {}),
+              ...(props.teamSpaceId ? { teamSpaceId: props.teamSpaceId } : {}),
+            }}
+            className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+          >
+            <ArrowLeft aria-hidden="true" className="size-4" />
+            {t("repositoryAllPullRequests")}
+          </Link>
+        </div>
+      ) : null}
       {repository && worktree ? (
         <RepositoryPullRequestPage
           spaceId={spaceId}
           worktreeId={worktree}
+          listFilters={listFilters}
           unitId={unit}
           view={view}
           section={section}
@@ -46,6 +93,7 @@ export function RepositoryWorktreesPage(props: WorktreesPageProps) {
             void navigate({
               to: "/worktrees",
               search: {
+                ...listFilters,
                 spaceId,
                 worktree,
                 ...(unit ? { unit } : {}),
@@ -67,14 +115,15 @@ export function RepositoryWorktreesPage(props: WorktreesPageProps) {
               to: "/worktrees",
               search: selection
                 ? {
+                    ...listFilters,
                     ...(spaceId ? { spaceId } : {}),
                     worktree: selection.worktreeId,
                     unit: selection.unitId,
                     view: selection.view,
                   }
                 : spaceId
-                  ? { spaceId }
-                  : {},
+                  ? { ...listFilters, spaceId }
+                  : listFilters,
             });
           }}
         />
@@ -90,6 +139,7 @@ function RepositoryPullRequestPage({
   view,
   section,
   onViewChange,
+  listFilters,
 }: {
   readonly spaceId: string;
   readonly worktreeId: string;
@@ -97,6 +147,7 @@ function RepositoryPullRequestPage({
   readonly view: WorktreeReviewView;
   readonly section: "overview" | "files";
   readonly onViewChange: (view: WorktreeReviewView) => void;
+  readonly listFilters: WorktreeListFilters;
 }) {
   const { t } = useI18n();
   const query = useQuery(worktreeQueryOptions(worktreeId));
@@ -125,7 +176,10 @@ function RepositoryPullRequestPage({
   const space = spaces.data?.spaces.find((item) => item.id === spaceId);
   if (!space || !worktreeBelongsToSpace(query.data.worktree, space))
     return (
-      <Empty title={t("workbenchSelectionUnavailable")} description={t("workbenchSelectionUnavailableDescription")} />
+      <Empty
+        title={t("workbenchSelectionUnavailable")}
+        description={t("workbenchSelectionUnavailableDescription")}
+      />
     );
   return (
     <WorktreeReviewPanel
@@ -137,7 +191,7 @@ function RepositoryPullRequestPage({
       layout={({ review, actions }) => (
         <RepositoryPullRequestLayout
           worktree={query.data.worktree}
-          presentation={{ spaceId, section }}
+          presentation={{ spaceId, section, listFilters }}
           selectedUnitId={unitId || query.data.worktree.units[0]?.unitId}
           selectedView={view}
           review={review}

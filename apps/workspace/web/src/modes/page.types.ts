@@ -9,6 +9,15 @@ export interface HomePageProps {
   readonly view?: HomeView;
 }
 
+export interface RecentPageProps {
+  readonly q?: string;
+}
+
+export interface AppsPageProps extends RecentPageProps {
+  readonly node?: string;
+  readonly spaceId?: string;
+}
+
 export type SpacePageView = "files" | "prs" | "apps";
 export interface SpacePageProps {
   readonly spaceId: string;

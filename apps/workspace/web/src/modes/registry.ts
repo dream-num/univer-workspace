@@ -7,8 +7,11 @@ import type {
   FolderPageProps,
   SpacePageProps,
   HomePageProps,
+  RecentPageProps,
+  AppsPageProps,
 } from "./page.types";
 import type { ComponentType } from "react";
+import type { RepositorySearch } from "./repository/repository-directory";
 import type { WorkspaceShellProps } from "./shell.types";
 import type { MessageKey, ModeMessages } from "../shared/i18n";
 import { parseUiMode, useUiMode } from "../shared/ui-mode";
@@ -17,6 +20,9 @@ import { wikiMode } from "./wiki";
 
 export interface ModeDefinition {
   readonly pages: {
+    readonly repositories: ComponentType<RepositorySearch>;
+    readonly recent: ComponentType<RecentPageProps>;
+    readonly apps: ComponentType<AppsPageProps>;
     readonly issueList: ComponentType<IssueListPageProps>;
     readonly issueDetail: ComponentType<IssueDetailPageProps>;
     readonly issues: ComponentType<IssuePageProps>;
@@ -47,6 +53,7 @@ export function useModeDefinition() {
 }
 
 export type { RepositoryTab, RepositoryBreadcrumb } from "./repository/repository-tabs";
+export { parseRepositorySearch } from "./repository/repository-directory";
 
 export { WorkspaceLayout } from "./workspace-layout";
 export type { WorkspaceShellProps } from "./shell.types";

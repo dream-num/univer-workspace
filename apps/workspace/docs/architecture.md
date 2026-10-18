@@ -146,7 +146,7 @@ shared → features → modes → routes → app
 
 `modes/registry.ts` 的静态 `ModeDefinition` 要求 `label`、`messages`、`Shell` 和 `pages`。
 `pages` 包含 home、space、folder、settings、members、trash、worktrees、issues（创建／标签页外壳）、
-issueList、issueDetail；两种 mode 实现同一组 props。`modes/workspace-layout.tsx` 负责 session、
+issueList、issueDetail、repositories、recent、apps；两种 mode 实现同一组 props。`modes/workspace-layout.tsx` 负责 session、
 访客外壳与按 mode key 重挂载 Shell；路由中的旧布局入口仅转发，mode 页面不导入 routes。
 
 `shared` 不依赖 features、modes、routes、app；features 不依赖 modes、routes、app；
@@ -159,8 +159,18 @@ mode 不依赖 routes 或 app，也不导入另一个 mode。routes 只通过 re
 的 `data-ui-mode`，保持 QueryClient 与产品缓存跨 mode 复用。repository 样式和色彩令牌仅在该属性
 为 repository 时生效；Wiki／未知 mode 不继承其样式。两种 mode 的通用 feature 通过呈现参数或布局插槽复用。
 
-R7 的页面“半外壳”保持既有行为，列为独立后续任务；注册表目前同步加载，未加入 lazy / Suspense。
-实施与验证记录见 [UI Mode 解耦](proposals/ui-mode-decoupling.md)。
+Repository 的全局页面通过 `repositoryView` 显式选择 Dashboard 导航外壳；仓库内页面使用
+现有 Header / Tabs。`/repositories` 是 Repository 目录入口，Wiki 将其导向首页；`/recent`
+按 mode 分派，Wiki 保留到首页的跳转。`/apps` 在 Repository 中默认展示目录，显式选中 Node
+后才挂载 `modes/html-app-page.tsx` 的嵌入查看器组合。该组合位于 modes 层，features 不反向依赖布局。
+文件编辑器与嵌入查看器保留既有运行时和外壳语义。注册表仍同步加载。
+
+首页 Recent、Worktree、Issue 使用各 Feature 的独立有限摘要 query（上限分别为 12、5、5），
+key 保留既有失效前缀并与 infinite 列表 key 分开，避免返回首页或变更订阅触发已加载多页的顺序重取。
+完整列表保留服务端 cursor；没有服务端全文搜索的 Recent / Pages 明示仅搜索已加载内容。
+PR 摘要仅依据 `capabilities.review` 提供审阅链接；直接 Worktree 深链按 ID 读取，不依赖首屏列表中
+是否存在该任务，再解析仓库上下文并保留返回筛选参数。
+模式分层背景见 [UI Mode 解耦](proposals/ui-mode-decoupling.md)。
 
 应用 UI Primitive 提供工作台表单、菜单、弹窗和反馈组件。`shared/ui` 保存统一行为与
 视觉封装。Univer 编辑器相关的创建、销毁、协同 Scope 和只读状态全部封装在
