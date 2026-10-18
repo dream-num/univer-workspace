@@ -49,7 +49,14 @@ function RepositoryBreadcrumbs({
   if (spaceId !== undefined) {
     ancestorItems.push(
       <li key={`space-${spaceId}`} className="flex min-w-0 items-center gap-2">
-        {space?.owner ? <span className="max-w-24 truncate sm:max-w-40">{space.owner.username}</span> : null}
+        {space?.owner ? (
+          <Link
+            to="/home"
+            className={cn(breadcrumbLinkClass, "max-w-24 sm:max-w-40")}
+          >
+            {space.owner.username}
+          </Link>
+        ) : null}
         <BreadcrumbSeparator className={undefined} />
         <Link
           to="/spaces/$spaceId"
