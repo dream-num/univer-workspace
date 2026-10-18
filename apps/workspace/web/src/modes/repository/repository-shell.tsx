@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useLocation, useNavigate } from "@tanstack/react-router";
-import { CircleDot, House, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Settings, Users, X } from "lucide-react";
+import {
+  CircleDot,
+  GitPullRequest,
+  House,
+  Menu,
+  MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings,
+  Users,
+  X,
+} from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../../features/auth";
 import { spacesQueryOptions } from "../../features/spaces";
@@ -11,7 +22,11 @@ import { workspaceHarnessOrigin } from "../../shared/app-links";
 import { apiError } from "../../shared/api/errors";
 import { useI18n, type MessageKey } from "../../shared/i18n";
 import { ModeSettings } from "../mode-settings";
-import { SidebarResizeHandle, useMediaQuery, useResizableSidebar } from "../../shared/resizable-sidebar";
+import {
+  SidebarResizeHandle,
+  useMediaQuery,
+  useResizableSidebar,
+} from "../../shared/resizable-sidebar";
 import { Button, buttonVariants, Drawer, LoadingScreen, MenuItem, Tooltip } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import type { components } from "../../../../generated/http/schema.js";
@@ -25,6 +40,7 @@ import {
 import { BrandMark, NavLink, BreadcrumbSeparator } from "../../features/shell";
 import type { RepositoryBreadcrumb } from "./repository-tabs";
 import type { WorkspaceShellProps, WorkspaceView } from "../shell.types";
+import { RepositoryGlobalNavigation, RepositoryHeaderSearch } from "./repository-global-navigation";
 
 type SpaceView = components["schemas"]["SpaceView"];
 
@@ -34,15 +50,17 @@ function RepositoryBreadcrumbs({
   space,
   breadcrumbs,
   current,
+  heading = true,
 }: {
   readonly spaceId: string | undefined;
   readonly spaceName: string;
   readonly space: SpaceView | undefined;
   readonly breadcrumbs: readonly RepositoryBreadcrumb[] | undefined;
   readonly current: ReactNode | undefined;
+  readonly heading?: boolean;
 }) {
   const trail = [...(breadcrumbs ?? [])];
-  const CurrentHeading = spaceId === undefined ? "h1" : "span";
+  const CurrentHeading = spaceId === undefined && heading ? "h1" : "span";
   // The current page is rendered from `current`; a matching last crumb would only repeat it.
   if (typeof current === "string" && trail[trail.length - 1]?.label === current) trail.pop();
   const ancestorItems: ReactNode[] = [];
@@ -50,10 +68,7 @@ function RepositoryBreadcrumbs({
     ancestorItems.push(
       <li key={`space-${spaceId}`} className="flex min-w-0 items-center gap-2">
         {space?.owner ? (
-          <Link
-            to="/home"
-            className={cn(breadcrumbLinkClass, "max-w-24 sm:max-w-40")}
-          >
+          <Link to="/home" className={cn(breadcrumbLinkClass, "max-w-24 sm:max-w-40")}>
             {space.owner.username}
           </Link>
         ) : null}
@@ -79,7 +94,9 @@ function RepositoryBreadcrumbs({
     ancestorItems.push(
       <li key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-2">
         <BreadcrumbSeparator className={isLastAncestor ? undefined : "hidden sm:inline"} />
-        {item.nodeId === undefined && item.settingsSpaceId === undefined && item.issuesSpaceId === undefined ? (
+        {item.nodeId === undefined &&
+        item.settingsSpaceId === undefined &&
+        item.issuesSpaceId === undefined ? (
           <span
             className={cn(
               "max-w-40 truncate text-muted-foreground sm:max-w-52",
@@ -133,7 +150,9 @@ function RepositoryBreadcrumbs({
         {current !== undefined ? (
           <li className="flex min-w-0 items-center gap-2">
             <BreadcrumbSeparator className={undefined} />
-            <CurrentHeading className="m-0 min-w-0 truncate text-sm font-semibold">{current}</CurrentHeading>
+            <CurrentHeading className="m-0 min-w-0 truncate text-sm font-semibold">
+              {current}
+            </CurrentHeading>
           </li>
         ) : null}
       </ol>
@@ -149,6 +168,7 @@ export function RepositoryShell({
   selectedSpaceId,
   repositoryTab,
   repositoryHome = false,
+  repositoryView,
   repositoryBreadcrumbs,
   selectedView,
   contentMode = "default",
@@ -196,7 +216,10 @@ export function RepositoryShell({
   // 保留 R7 半外壳：apps、无空间的 worktrees 和文件编辑器沿用现有外壳。
   const repositoryShell =
     !immersive &&
-    (repositoryHome || repositoryTab !== undefined || (selectedSpaceId !== undefined && selectedView === undefined));
+    (repositoryView !== undefined ||
+      repositoryHome ||
+      repositoryTab !== undefined ||
+      (selectedSpaceId !== undefined && selectedView === undefined));
   useEffect(() => {
     if (!repositoryShell) return;
     const previous = document.title;
@@ -238,7 +261,9 @@ export function RepositoryShell({
   if (spaces.error) throw spaces.error;
 
   const currentSession = session.data;
-  const personalSpaces = allSpaces.filter((space) => space.type === "personal" && space.accessRole === "owner");
+  const personalSpaces = allSpaces.filter(
+    (space) => space.type === "personal" && space.accessRole === "owner",
+  );
   const teamSpaces = allSpaces.filter((space) => space.type === "team");
   const pageTitle = repositoryShell
     ? typeof headerTitle === "string"
@@ -254,7 +279,9 @@ export function RepositoryShell({
         icon={<House />}
         label={t("repositories")}
       />
-      {!collapsed && <p className="px-3 py-2 text-xs text-muted-foreground">{t("repositoryTheme")}</p>}
+      {!collapsed && (
+        <p className="px-3 py-2 text-xs text-muted-foreground">{t("repositoryTheme")}</p>
+      )}
       {[...personalSpaces, ...teamSpaces].map((space) => (
         <NavLink
           key={space.id}
@@ -271,7 +298,12 @@ export function RepositoryShell({
 
   return (
     <>
-      <div className="workspace-shell flex h-dvh overflow-hidden bg-background">
+      <div
+        className={cn(
+          "workspace-shell flex h-dvh overflow-hidden bg-background",
+          repositoryView && "repository-chrome repository-global",
+        )}
+      >
         {/* ---------------------------------------------------------- */}
         {/* Sidebar                                                    */}
         {/* ---------------------------------------------------------- */}
@@ -302,12 +334,16 @@ export function RepositoryShell({
               )}
               <Tooltip
                 side="right"
-                content={navigationSidebar.collapsed ? t("expandNavigation") : t("collapseNavigation")}
+                content={
+                  navigationSidebar.collapsed ? t("expandNavigation") : t("collapseNavigation")
+                }
               >
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label={navigationSidebar.collapsed ? t("expandNavigation") : t("collapseNavigation")}
+                  aria-label={
+                    navigationSidebar.collapsed ? t("expandNavigation") : t("collapseNavigation")
+                  }
                   onClick={navigationSidebar.toggleCollapsed}
                 >
                   {navigationSidebar.collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
@@ -346,10 +382,11 @@ export function RepositoryShell({
             className={cn(
               "flex shrink-0 items-center justify-between gap-4 border-b border-border pr-4.5 pl-6 max-[720px]:px-3",
               repositoryShell ? "repository-chrome h-14 border-b-0 bg-surface px-4" : "h-15",
+              repositoryView && "repository-global-header",
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-1">
-              {compactViewport && !repositoryShell ? (
+              {compactViewport && (!repositoryShell || repositoryView) ? (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -367,6 +404,7 @@ export function RepositoryShell({
                   space={selectedSpace}
                   breadcrumbs={repositoryBreadcrumbs}
                   current={headerTitle}
+                  heading={!repositoryView}
                 />
               ) : (
                 <h1 className="m-0 min-w-0 truncate text-[18px] font-semibold tracking-tight max-[720px]:text-[15px]">
@@ -375,6 +413,21 @@ export function RepositoryShell({
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
+              {repositoryView ? <RepositoryHeaderSearch /> : null}
+              {repositoryView ? (
+                <div className="repository-header-shortcuts">
+                  <Tooltip content={t("issues")}>
+                    <Link to="/issues" search={{}} aria-label={t("issues")}>
+                      <CircleDot aria-hidden="true" />
+                    </Link>
+                  </Tooltip>
+                  <Tooltip content={t("repositoryPullRequests")}>
+                    <Link to="/worktrees" search={{}} aria-label={t("repositoryPullRequests")}>
+                      <GitPullRequest aria-hidden="true" />
+                    </Link>
+                  </Tooltip>
+                </div>
+              ) : null}
               {headerContent}
               {headerActions}
               {/* Repository chrome already carries an Issues tab; the global inbox entry stays outside it. */}
@@ -384,7 +437,10 @@ export function RepositoryShell({
                     to="/issues"
                     search={{}}
                     aria-label={t("issues")}
-                    className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "no-underline")}
+                    className={cn(
+                      buttonVariants({ variant: "ghost", size: "icon" }),
+                      "no-underline",
+                    )}
                   >
                     <CircleDot />
                   </Link>
@@ -398,7 +454,8 @@ export function RepositoryShell({
                     aria-label={t("openChat")}
                     onClick={() => {
                       const origin = workspaceHarnessOrigin();
-                      if (origin !== undefined) window.open(origin, "_blank", "noopener,noreferrer");
+                      if (origin !== undefined)
+                        window.open(origin, "_blank", "noopener,noreferrer");
                     }}
                   >
                     <MessageCircle />
@@ -421,30 +478,68 @@ export function RepositoryShell({
             </div>
           </header>
           <main
-            className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", contentMode === "editor" && "bg-background")}
+            className={cn(
+              "flex min-h-0 flex-1 overflow-hidden",
+              repositoryView ? "flex-row" : "flex-col",
+              contentMode === "editor" && "bg-background",
+            )}
           >
-            {children}
+            {repositoryView ? (
+              <>
+                {!compactViewport ? (
+                  <aside className="repository-global-sidebar">
+                    <RepositoryGlobalNavigation view={repositoryView} />
+                  </aside>
+                ) : null}
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+              </>
+            ) : (
+              children
+            )}
           </main>
         </div>
       </div>
 
-      {compactViewport && !repositoryShell ? (
-        <Drawer open={navDrawerOpen} onOpenChange={setNavDrawerOpen} label={t("mainNavigation")}>
+      {compactViewport && (!repositoryShell || repositoryView) ? (
+        <Drawer
+          open={navDrawerOpen}
+          onOpenChange={setNavDrawerOpen}
+          label={t("mainNavigation")}
+          {...(repositoryView
+            ? { className: "repository-chrome repository-global bg-background" }
+            : {})}
+        >
           <div className="flex h-16 shrink-0 items-center justify-between pr-2 pl-4.5">
             <Link
               to="/home"
               className="flex min-w-0 items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <BrandMark />
-              <span className="truncate text-[15px] font-bold tracking-tight text-foreground">Univer Workspace</span>
+              <span className="truncate text-[15px] font-bold tracking-tight text-foreground">
+                {repositoryView ? "OfficeLab" : "Univer Workspace"}
+              </span>
             </Link>
-            <Button variant="ghost" size="icon" aria-label={t("close")} onClick={() => setNavDrawerOpen(false)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("close")}
+              onClick={() => setNavDrawerOpen(false)}
+            >
               <X />
             </Button>
           </div>
-          <nav aria-label={t("mainNavigation")} className="mt-3 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3">
-            {renderNavigation(false)}
-          </nav>
+          {repositoryView ? (
+            <div className="repository-chrome repository-global min-h-0 flex-1 overflow-y-auto">
+              <RepositoryGlobalNavigation view={repositoryView} />
+            </div>
+          ) : (
+            <nav
+              aria-label={t("mainNavigation")}
+              className="mt-3 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3"
+            >
+              {renderNavigation(false)}
+            </nav>
+          )}
         </Drawer>
       ) : null}
 
@@ -452,14 +547,23 @@ export function RepositoryShell({
 
       <PasswordDialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen} />
 
-      {currentSession.trialDeployment ? <TrialNoticeDialog userId={currentSession.user.id} /> : null}
+      {currentSession.trialDeployment ? (
+        <TrialNoticeDialog userId={currentSession.user.id} />
+      ) : null}
 
-      <AppSettingsDialog open={appSettingsOpen} onOpenChange={setAppSettingsOpen} layoutSettings={<ModeSettings />} />
+      <AppSettingsDialog
+        open={appSettingsOpen}
+        onOpenChange={setAppSettingsOpen}
+        layoutSettings={<ModeSettings />}
+      />
     </>
   );
 }
 
-function workspaceViewTitle(view: WorkspaceView | undefined, t: (key: MessageKey) => string): string {
+function workspaceViewTitle(
+  view: WorkspaceView | undefined,
+  t: (key: MessageKey) => string,
+): string {
   if (view === "home") return t("home");
   if (view === "apps") return t("apps");
   if (view === "worktrees") return t("workbench");

@@ -5,6 +5,12 @@ import { useState } from "react";
 import { CreateNodeDropdown } from "../../../features/nodes";
 import { spacesQueryOptions } from "../../../features/spaces";
 import { OwnedByMe, RecentResources, SharedWithMe } from "../../../features/views";
+import {
+  ownedByMeQueryOptions,
+  recentResourcesQueryOptions,
+  sharedWithMeQueryOptions,
+} from "../../../features/views";
+import { Button, Empty, Skeleton } from "../../../shared/ui";
 import { useI18n, type MessageKey } from "../../../shared/i18n";
 import { cn } from "../../../shared/utils/cn";
 import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../workspace-layout";
@@ -14,8 +20,14 @@ export function WikiHomePage({ view = "recent" }: HomePageProps) {
   const navigate = useNavigate();
   const spaces = useQuery(spacesQueryOptions);
   const [searchQuery, setSearchQuery] = useState("");
+  const recent = useQuery({ ...recentResourcesQueryOptions, enabled: view === "recent" });
+  const owned = useQuery({ ...ownedByMeQueryOptions, enabled: view === "owned" });
+  const shared = useQuery({ ...sharedWithMeQueryOptions, enabled: view === "shared" });
+  const selected = view === "recent" ? recent : view === "owned" ? owned : shared;
 
-  const personalSpace = spaces.data?.spaces.find((space) => space.type === "personal" && space.accessRole === "owner");
+  const personalSpace = spaces.data?.spaces.find(
+    (space) => space.type === "personal" && space.accessRole === "owner",
+  );
 
   const tabs: readonly { readonly value: HomeView; readonly label: MessageKey }[] = [
     { value: "recent", label: "recent" },
@@ -27,7 +39,11 @@ export function WikiHomePage({ view = "recent" }: HomePageProps) {
     <WorkspaceLayout
       selectedView="home"
       headerContent={
-        <WorkspaceHeaderSearch placeholder={t("searchNodes")} value={searchQuery} onChange={setSearchQuery} />
+        <WorkspaceHeaderSearch
+          placeholder={t("searchNodes")}
+          value={searchQuery}
+          onChange={setSearchQuery}
+        />
       }
     >
       {
@@ -76,7 +92,18 @@ export function WikiHomePage({ view = "recent" }: HomePageProps) {
             ))}
           </div>
           <div role="tabpanel" className="min-h-0 flex-1">
-            {view === "recent" ? (
+            {selected.isPending ? (
+              <div role="status" aria-label={t("dashboardLoading")} className="space-y-4 p-6">
+                <Skeleton className="h-6 w-2/3" />
+                <Skeleton className="h-6 w-1/2" />
+              </div>
+            ) : selected.isError ? (
+              <Empty title={t("dashboardLoadFailed")}>
+                <Button variant="secondary" onClick={() => void selected.refetch()}>
+                  {t("repositoryPageRetry")}
+                </Button>
+              </Empty>
+            ) : view === "recent" ? (
               <RecentResources searchQuery={searchQuery} />
             ) : view === "owned" ? (
               <OwnedByMe searchQuery={searchQuery} />

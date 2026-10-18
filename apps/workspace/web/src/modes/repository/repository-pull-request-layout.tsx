@@ -19,10 +19,12 @@ import { Avatar, buttonVariants, Tooltip } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { RepositoryPrState } from "./repository-pr-state";
 import type { WorktreeReviewView } from "../../features/worktrees/worktree-review-search";
+import type { WorktreeListFilters } from "../../features/worktrees/worktrees.queries";
 
 export interface RepositoryReviewPresentation {
   readonly spaceId: string;
   readonly section: "overview" | "files";
+  readonly listFilters?: WorktreeListFilters;
 }
 
 /** Only presentation: mutations, permissions and document runtimes stay in the review panel. */
@@ -45,6 +47,7 @@ export function RepositoryPullRequestLayout({
   const { spaceId, section } = presentation;
   const [filesCollapsed, setFilesCollapsed] = useState(false);
   const search = {
+    ...presentation.listFilters,
     spaceId,
     worktree: worktree.id,
     ...(selectedUnitId ? { unit: selectedUnitId } : {}),

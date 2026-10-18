@@ -7,6 +7,11 @@ vi.mock("./wiki/wiki-shell", () => ({ WikiShell: () => null }));
 vi.mock("./repository/repository-shell", () => ({ RepositoryShell: () => null }));
 vi.mock("./wiki/pages/home", () => ({ WikiHomePage: () => null }));
 vi.mock("./repository/pages/home", () => ({ RepositoryHomePage: () => null }));
+vi.mock("./repository/pages/repositories", () => ({ RepositoryDirectoryPage: () => null }));
+vi.mock("./repository/pages/recent", () => ({ RepositoryRecentPage: () => null }));
+vi.mock("./repository/pages/apps", () => ({ RepositoryAppsPage: () => null }));
+vi.mock("./wiki/pages/repositories", () => ({ WikiRepositoriesPage: () => null }));
+vi.mock("./html-app-page", () => ({ HtmlAppPage: () => null }));
 
 describe.each(Object.entries(modes))("%s mode messages", (_, definition) => {
   const overrides: ModeMessages = definition.messages;
@@ -20,7 +25,9 @@ describe.each(Object.entries(modes))("%s mode messages", (_, definition) => {
   });
 
   it("overrides the same keys in both languages", () => {
-    expect(Object.keys(overrides["zh-CN"] ?? {}).sort()).toEqual(Object.keys(overrides["en-US"] ?? {}).sort());
+    expect(Object.keys(overrides["zh-CN"] ?? {}).sort()).toEqual(
+      Object.keys(overrides["en-US"] ?? {}).sort(),
+    );
   });
 });
 

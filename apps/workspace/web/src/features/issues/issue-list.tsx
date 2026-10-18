@@ -321,6 +321,8 @@ export function IssueList({
           ) : issues.length === 0 ? (
             <EmptyIssues
               everything={!narrowed && counts.open + counts.closed === 0}
+              narrowed={narrowed}
+              state={filters.state}
               canCreate={Boolean(spaceId && canCreate)}
               {...(spaceId ? { spaceId } : {})}
               onClear={() =>
@@ -405,17 +407,26 @@ function StateToggle({
 
 function EmptyIssues({
   everything,
+  narrowed,
+  state,
   canCreate,
   spaceId,
   onClear,
 }: {
   readonly everything: boolean;
+  readonly narrowed: boolean;
+  readonly state: IssueFilters["state"];
   readonly canCreate: boolean;
   readonly spaceId?: string;
   readonly onClear: () => void;
 }) {
   const { t } = useI18n();
-  if (!everything) {
+  if (!everything && !narrowed) {
+    return (
+      <Empty icon={CircleDot} title={t(state === "closed" ? "issueNoClosed" : "issueNoOpen")} />
+    );
+  }
+  if (narrowed) {
     return (
       <Empty icon={Search} title={t("issueNoMatch")} description={t("issueNoMatchDescription")}>
         <Button variant="secondary" onClick={onClear}>
@@ -569,13 +580,7 @@ function FilterMenu({
           </Button>
         }
       />
-      <MenuContent
-        align="end"
-        className={cn(
-          "max-h-72 overflow-y-auto",
-          className,
-        )}
-      >
+      <MenuContent align="end" className={cn("max-h-72 overflow-y-auto", className)}>
         {options.map((option) => (
           <MenuItem
             key={option.value}
