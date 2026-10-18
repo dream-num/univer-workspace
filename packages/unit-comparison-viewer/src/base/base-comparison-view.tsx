@@ -28,6 +28,10 @@ import {
 import { cn } from "../ui/cn.js";
 import { useUnitComparisonViewerMessages } from "../i18n/messages.js";
 import { ComparisonPageTabs } from "../shared/scope-tabs.js";
+import {
+  DiffSidebarCollapseButton,
+  DiffSidebarRail,
+} from "../shared/diff-sidebar-rail.js";
 import { shouldClearDiffSidebarSelection } from "../shared/sidebar-selection.js";
 import { useEnsureSelectedDiffVisible } from "../shared/use-ensure-selected-diff-visible.js";
 import { structuralDiffItemLabel } from "../shared/structural-diff-item-label.js";
@@ -51,6 +55,8 @@ export function BaseTableDiffViewer(input: {
   );
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | undefined>(undefined);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const messages = useUnitComparisonViewerMessages();
   const activeTable = tables.find((table) => table.id === activeTableId) ?? tables[0] ?? null;
   const scopedItems = useMemo(
     () => (activeTable === null ? [] : filterBaseTableDiffItems(visibleItems, activeTable.id)),
@@ -79,15 +85,29 @@ export function BaseTableDiffViewer(input: {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/30 p-2">
-      <div className="grid h-full min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-border shadow-[0_12px_32px_rgb(15_23_42/0.08),0_1px_2px_rgb(15_23_42/0.06)] max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-1">
-        <BaseDiffSidebar
-          fidelity={input.fidelity}
-          items={scopedItems}
-          selectedItemId={selectedItem?.id}
-          tables={tables}
-          onClear={() => setSelectedItemId(undefined)}
-          onSelect={selectItem}
-        />
+      <div
+        className={cn(
+          "grid h-full min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-border shadow-[0_12px_32px_rgb(15_23_42/0.08),0_1px_2px_rgb(15_23_42/0.06)] max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-1",
+          sidebarCollapsed ? "grid-cols-[44px_minmax(0,1fr)]" : "grid-cols-[220px_minmax(0,1fr)]",
+        )}
+      >
+        {sidebarCollapsed ? (
+          <DiffSidebarRail
+            count={scopedItems.length}
+            label={messages.changes}
+            onExpand={() => setSidebarCollapsed(false)}
+          />
+        ) : (
+          <BaseDiffSidebar
+            fidelity={input.fidelity}
+            items={scopedItems}
+            selectedItemId={selectedItem?.id}
+            tables={tables}
+            onClear={() => setSelectedItemId(undefined)}
+            onCollapse={() => setSidebarCollapsed(true)}
+            onSelect={selectItem}
+          />
+        )}
         <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] bg-card">
           <BaseDiffPanes
             activeTable={activeTable}
@@ -490,6 +510,7 @@ function BaseDiffSidebar(input: {
   readonly selectedItemId: string | undefined;
   readonly tables: readonly BaseTableDiff[];
   readonly onClear: () => void;
+  readonly onCollapse: () => void;
   readonly onSelect: (item: UnitStructuralDiffItem) => void;
 }): ReactElement {
   const messages = useUnitComparisonViewerMessages();
@@ -502,14 +523,17 @@ function BaseDiffSidebar(input: {
         if (shouldClearDiffSidebarSelection(event.target)) input.onClear();
       }}
     >
-      <div className="mb-3 flex items-center justify-between border-b border-border pb-3 text-xs font-semibold">
+      <div className="mb-3 flex items-center justify-between gap-2 border-b border-border pb-3 text-xs font-semibold">
         <div className="grid gap-0.5">
           <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
             {messages.changes}
           </span>
           <span className="text-[13px] text-foreground">{messages.rawTableData}</span>
         </div>
-        <Badge>{input.items.length}</Badge>
+        <div className="flex shrink-0 items-center gap-1">
+          <Badge>{input.items.length}</Badge>
+          <DiffSidebarCollapseButton label={messages.rawTableData} onCollapse={input.onCollapse} />
+        </div>
       </div>
       <p className="mb-3 mt-0 text-[10px] leading-4 text-muted-foreground">
         {messages.baseAlignmentHint}

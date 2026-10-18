@@ -38,9 +38,7 @@ export function AppsView({
           id="repository-pages-heading"
           className="m-0 mb-4 border-b border-border pb-[0.3em] text-[2em] leading-[1.25] font-semibold"
         >
-          <Link to="/spaces/$spaceId" params={{ spaceId }} search={{ view: "apps" }}>
-            {t("apps")}
-          </Link>
+          {t("apps")}
         </h1>
         <p className="m-0 mb-4">{t("repositoryAppsSummary", { count: apps.length })}</p>
       </div>

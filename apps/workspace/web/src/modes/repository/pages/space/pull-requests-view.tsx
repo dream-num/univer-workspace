@@ -188,11 +188,7 @@ export function PullRequestsView({
               normalizedSearch ? "repositoryNoMatchingPullRequests" : "repositoryNoPullRequests",
             )}
             description={t("repositoryNoPullRequestsDescription")}
-          >
-            <Button variant="secondary" onClick={onOpenWorktrees}>
-              {t("repositoryOpenWorkbench")}
-            </Button>
-          </Empty>
+          />
         )}
       </div>
     </section>

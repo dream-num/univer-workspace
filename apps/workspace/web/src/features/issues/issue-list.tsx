@@ -90,12 +90,12 @@ export function IssueList({
   };
 
   return (
-    <div className={cn("min-w-0", compact && "flex min-h-full")}>
+    <div className={cn("min-w-0", compact && "flex h-full min-h-0")}>
       {viewsNav}
       <div
         className={cn(
           "grid min-w-0 flex-1 content-start gap-4",
-          compact && "gap-6 p-6 max-[720px]:p-4",
+          compact && "min-h-0 auto-rows-max gap-6 overflow-y-auto p-6 max-[720px]:p-4",
         )}
       >
         {compact ? (

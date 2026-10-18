@@ -49,7 +49,14 @@ function RepositoryBreadcrumbs({
   if (spaceId !== undefined) {
     ancestorItems.push(
       <li key={`space-${spaceId}`} className="flex min-w-0 items-center gap-2">
-        {space?.owner ? <span className="max-w-24 truncate sm:max-w-40">{space.owner.username}</span> : null}
+        {space?.owner ? (
+          <Link
+            to="/home"
+            className={cn(breadcrumbLinkClass, "max-w-24 sm:max-w-40")}
+          >
+            {space.owner.username}
+          </Link>
+        ) : null}
         <BreadcrumbSeparator className={undefined} />
         <Link
           to="/spaces/$spaceId"
@@ -370,16 +377,19 @@ export function RepositoryShell({
             <div className="flex shrink-0 items-center gap-1.5">
               {headerContent}
               {headerActions}
-              <Tooltip content={t("issues")}>
-                <Link
-                  to="/issues"
-                  search={{}}
-                  aria-label={t("issues")}
-                  className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "no-underline")}
-                >
-                  <CircleDot />
-                </Link>
-              </Tooltip>
+              {/* Repository chrome already carries an Issues tab; the global inbox entry stays outside it. */}
+              {repositoryShell ? null : (
+                <Tooltip content={t("issues")}>
+                  <Link
+                    to="/issues"
+                    search={{}}
+                    aria-label={t("issues")}
+                    className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "no-underline")}
+                  >
+                    <CircleDot />
+                  </Link>
+                </Tooltip>
+              )}
               {workspaceHarnessOrigin() ? (
                 <Tooltip content={t("openChat")}>
                   <Button

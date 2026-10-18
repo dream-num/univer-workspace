@@ -20,6 +20,10 @@ import { structuralDiffItemsFromContext } from "../comparison-presentation.js";
 import { structuralDiffFocusTarget } from "./comparison-focus.js";
 import { useUnitComparisonViewerMessages } from "../i18n/messages.js";
 import { cn } from "../ui/cn.js";
+import {
+  DiffSidebarCollapseButton,
+  DiffSidebarRail,
+} from "../shared/diff-sidebar-rail.js";
 import { ComparisonPageTabs, type ComparisonPageTabOption } from "../shared/scope-tabs.js";
 import { shouldClearDiffSidebarSelection } from "../shared/sidebar-selection.js";
 import {
@@ -49,6 +53,7 @@ export function NativeComparisonView(input: {
   const rightHandleRef = useRef<ComparisonPaneHandle | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | undefined>(undefined);
   const [activePageId, setActivePageId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const selectedItemIdRef = useRef<string | undefined>(selectedItemId);
   const selectedPageIdRef = useRef<string | null>(activePageId);
   const [nativePanesReady, setNativePanesReady] = useState(unitType !== UNIT_TYPE_BOARD);
@@ -299,14 +304,30 @@ export function NativeComparisonView(input: {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/30 p-2">
-      <div className="grid h-full min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-border shadow-[0_12px_32px_rgb(15_23_42/0.08),0_1px_2px_rgb(15_23_42/0.06)] max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-1">
-        <NativeDiffSidebar
-          items={scopedItems}
-          fidelity={result.fidelity}
-          selectedItemId={selectedItem?.id}
-          onClear={clearFocusedItem}
-          onSelect={focusItem}
-        />
+      <div
+        className={cn(
+          "grid h-full min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-border shadow-[0_12px_32px_rgb(15_23_42/0.08),0_1px_2px_rgb(15_23_42/0.06)] max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-1",
+          sidebarCollapsed
+            ? "grid-cols-[44px_minmax(0,1fr)]"
+            : "grid-cols-[220px_minmax(0,1fr)]",
+        )}
+      >
+        {sidebarCollapsed ? (
+          <DiffSidebarRail
+            count={scopedItems.length}
+            label={messages.changes}
+            onExpand={() => setSidebarCollapsed(false)}
+          />
+        ) : (
+          <NativeDiffSidebar
+            items={scopedItems}
+            fidelity={result.fidelity}
+            selectedItemId={selectedItem?.id}
+            onClear={clearFocusedItem}
+            onCollapse={() => setSidebarCollapsed(true)}
+            onSelect={focusItem}
+          />
+        )}
         <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] bg-card">
           <div
             className="grid min-h-0 min-w-0 grid-cols-2 gap-px bg-border max-[1023px]:h-full max-[1023px]:grid-cols-1 max-[1023px]:grid-rows-2"
@@ -431,6 +452,7 @@ function NativeDiffSidebar(input: {
   readonly fidelity: "history" | "snapshot";
   readonly items: readonly UnitStructuralDiffItem[];
   readonly onClear: () => void;
+  readonly onCollapse: () => void;
   readonly onSelect: (item: UnitStructuralDiffItem) => void;
   readonly selectedItemId: string | undefined;
 }): ReactElement {
@@ -444,14 +466,20 @@ function NativeDiffSidebar(input: {
         if (shouldClearDiffSidebarSelection(event.target)) input.onClear();
       }}
     >
-      <div className="mb-3 flex items-center justify-between border-b border-border pb-3 text-xs font-semibold">
+      <div className="mb-3 flex items-center justify-between gap-2 border-b border-border pb-3 text-xs font-semibold">
         <div className="grid gap-0.5">
           <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
             {messages.changes}
           </span>
           <span className="text-[13px] text-foreground">{messages.structuralDiff}</span>
         </div>
-        <Badge>{input.items.length}</Badge>
+        <div className="flex shrink-0 items-center gap-1">
+          <Badge>{input.items.length}</Badge>
+          <DiffSidebarCollapseButton
+            label={messages.structuralDiff}
+            onCollapse={input.onCollapse}
+          />
+        </div>
       </div>
       {input.fidelity === "snapshot" && (
         <div className="mb-2 rounded-md border border-warning/35 bg-warning-muted p-2 text-[11px] leading-4 text-warning">
