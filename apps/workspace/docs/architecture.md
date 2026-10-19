@@ -237,9 +237,10 @@ Cookie、OAuth callback 和产品 API 保持原有行为；外部 client 只通�
 跨产品数据库和 Collaboration Service 的写入由 `operations` Module 持久化和恢复，不用
 一次 SQLite transaction 假装覆盖两个系统。
 
-Collaboration、Worktree、导出与对比共用的 Unit runtime 显式使用 SDK 1.1.0 的 `in-process` 执行模式
-（`UNIT_RUNTIME`）：SDK 默认的 worker 线程池在首次使用时为每个 worker 启动一套 SDK（约一秒），而当前
-部署规模不需要把 changeset 应用和快照物化移出主线程；切换到 worker 模式是独立的部署决策。
+Collaboration、Worktree、导出与对比共用的 Unit runtime 使用 SDK 1.1.0 的 `worker` 执行模式：changeset
+应用与快照物化在 worker 线程池中执行，不占用 HTTP/WebSocket 事件循环。线程池在首次使用时为每个 worker
+启动一套 SDK（约一秒），因此 `UnitSnapshotMaterializer` 由 `createCollaborationRuntime` 按需创建一次、
+随 runtime 释放，导出与对比共用它，不按请求创建；每个进程只付一次启动成本。
 Collaboration Gateway 同时组合 Core、Comment、History 与 Worktree Endpoint。Comment Service 使用
 同一 `COLLABORATION_DATABASE_FILE` 中由 Comment Adapter 独立拥有的表，并通过 Identity
 Module 批量解析评论作者资料。五类 Unit 的评论读取、新增、回复、solved 和编辑都要求打开

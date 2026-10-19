@@ -45,14 +45,15 @@ const { UniverCollabWorktreeService } = moduleRequire(
 ) as typeof WorktreeServiceModule;
 
 /**
- * SDK 1.1.0 runs the server-side Unit runtime in a worker-thread pool unless
- * told otherwise, and boots one SDK instance per worker on first use (about a
- * second each). Keep the 1.0.3 in-process execution for every runtime consumer
- * so Collaboration, Worktree, export and comparison keep their latency; moving
- * to worker execution is a separate deployment decision.
+ * SDK 1.1.0 runs the server-side Unit runtime (changeset application and
+ * snapshot materialization) in a worker-thread pool that boots one SDK
+ * instance per worker on first use, about a second each. Every runtime
+ * consumer shares this configuration and the pools live as long as the
+ * runtime: the materializer below is created once and reused, never per
+ * request, so the boot cost is paid once per process.
  */
-export const UNIT_RUNTIME: CollaborationServiceModule.UnitRuntimeConfig = {
-  execution: { mode: "in-process" },
+const UNIT_RUNTIME: CollaborationServiceModule.UnitRuntimeConfig = {
+  execution: { mode: "worker" },
 };
 const { SQLiteWorktreeDatabaseAdapter } = moduleRequire(
   "@univerjs-pro/collaboration-worktree-database-sqlite"
@@ -108,6 +109,8 @@ export interface UnitSnapshotStore {
 export interface CollaborationRuntime {
   readonly unitStore: UnitStore;
   readonly unitSnapshotStore: UnitSnapshotStore;
+  /** Shared, lazily started materializer; disposed with the runtime. */
+  readonly snapshotMaterializer: CollaborationServiceModule.IUnitSnapshotMaterializer;
   readonly service: CollaborationServiceModule.UniverCollabService;
   readonly commentService: CommentServiceModule.UniverCommentService;
   readonly historyService: HistoryServiceModule.UniverHistoryService;
@@ -194,6 +197,16 @@ export function createCollaborationRuntime(
       }
     },
   };
+  let materializer: CollaborationServiceModule.UnitSnapshotMaterializer | undefined;
+  const snapshotMaterializer: CollaborationServiceModule.IUnitSnapshotMaterializer = {
+    materializeSnapshot: (input) =>
+      (materializer ??= new UnitSnapshotMaterializer(UNIT_RUNTIME)).materializeSnapshot(input),
+    async dispose() {
+      const current = materializer;
+      materializer = undefined;
+      await current?.dispose();
+    },
+  };
   const unitSnapshotStore: UnitSnapshotStore = {
     async materialize(input) {
       const loadData = await service.getUnitLoadDataWithBlocks(
@@ -207,23 +220,20 @@ export function createCollaborationRuntime(
           customData: { source: "workspace-exchange" },
         }
       );
-      const materializer = new UnitSnapshotMaterializer(UNIT_RUNTIME);
-      try {
-        return await materializer.materializeSnapshot(loadData);
-      } finally {
-        await materializer.dispose();
-      }
+      return snapshotMaterializer.materializeSnapshot(loadData);
     },
   };
 
   return {
     unitStore,
     unitSnapshotStore,
+    snapshotMaterializer,
     service,
     commentService,
     historyService,
     worktreeService,
     async dispose() {
+      await snapshotMaterializer.dispose();
       await worktreeService.dispose();
       await worktreeDatabase.dispose();
       await commentService.dispose();
