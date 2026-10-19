@@ -7,7 +7,6 @@ import UniverPresetDocsDrawingZhCN from "@univerjs/preset-docs-drawing/locales/z
 import { UniverDocsHyperLinkPreset } from "@univerjs/preset-docs-hyper-link";
 import UniverPresetDocsHyperLinkEnUS from "@univerjs/preset-docs-hyper-link/locales/en-US";
 import UniverPresetDocsHyperLinkZhCN from "@univerjs/preset-docs-hyper-link/locales/zh-CN";
-import { UniverDocsThreadCommentPreset } from "@univerjs/preset-docs-thread-comment";
 import UniverPresetDocsThreadCommentEnUS from "@univerjs/preset-docs-thread-comment/locales/en-US";
 import UniverPresetDocsThreadCommentZhCN from "@univerjs/preset-docs-thread-comment/locales/zh-CN";
 import ChartUIEnUS from "@univerjs-pro/chart-ui/locale/en-US";
@@ -74,7 +73,7 @@ import {
   getDocAuthoringUIPlugins,
   getDocReplayCompatibilityPlugins,
 } from "./doc-features";
-import { getDocThreadCommentCollaborationPlugins } from "../../workarounds/doc-thread-comment-delete";
+import { threadCommentComposition } from "../../features/thread-comments";
 import { getReferencedSheetPlugins } from "../../features/referenced-sheet-plugins";
 
 export type DocEditorProps = CollaborationEditorProps;
@@ -141,8 +140,11 @@ export function createDocComparisonPresets(
         ...getDocAuthoringUIPlugins(),
       ],
     },
+    ...threadCommentComposition("doc", "comparison").presets,
   ];
 }
+
+const threadComments = threadCommentComposition("doc", "desktop");
 
 export const docEditorDefinition: ICollaborationEditorDefinition = {
   liveSheetReferences: true,
@@ -162,8 +164,7 @@ export const docEditorDefinition: ICollaborationEditorDefinition = {
   },
   theme: defaultTheme,
   locales: docEditorLocales,
-  collaborationFeaturePlugins: () =>
-    getDocThreadCommentCollaborationPlugins(),
+  collaborationDependentPlugins: () => threadComments.collaborationPlugins,
   exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin],
   printFeaturePlugins: () => [UniverDocsPrintPlugin],
   createPresets: (container, _license, _collaborationScope, compact) => [
@@ -177,7 +178,7 @@ export const docEditorDefinition: ICollaborationEditorDefinition = {
       collaboration: true,
     }),
     UniverDocsHyperLinkPreset(),
-    UniverDocsThreadCommentPreset(),
+    ...threadComments.presets,
     {
       plugins: [
         ...getDocReplayCompatibilityPlugins(),

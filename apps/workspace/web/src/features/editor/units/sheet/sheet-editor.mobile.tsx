@@ -2,7 +2,6 @@ import { UniverSheetsExchangeClientMobileUIPlugin } from "@univerjs-pro/sheets-e
 import { UniverSheetsHistoryMobileUIPlugin } from "@univerjs-pro/sheets-history-ui";
 import SheetsHistoryUIEnUS from "@univerjs-pro/sheets-history-ui/locale/en-US";
 import SheetsHistoryUIZhCN from "@univerjs-pro/sheets-history-ui/locale/zh-CN";
-import { UniverSheetsThreadCommentMobileUIPlugin } from "@univerjs/sheets-thread-comment-ui";
 
 import "@univerjs-pro/sheets-history-ui/lib/index.css";
 import "@univerjs/preset-sheets-core/lib/index.css";
@@ -26,11 +25,13 @@ import {
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
 import { createMobileExchangeFeaturePlugins } from "../../features/exchange-plugins";
-import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { threadCommentComposition } from "../../features/thread-comments";
 import { createSheetMobilePresets } from "./sheet-mobile-presets";
 import { sheetEditorLocales } from "./sheet-presets";
 
 export type SheetEditorProps = CollaborationEditorProps;
+
+const threadComments = threadCommentComposition("sheet", "mobile");
 
 export default createCollaborationEditor({
   label: "spreadsheet",
@@ -53,15 +54,11 @@ export default createCollaborationEditor({
   // See createMobileExchangeFeaturePlugins.
   exchangeProvidedByPreset: true,
   locales: sheetEditorLocales,
-  createPresets: (container) =>
-    createSheetMobilePresets({
-      container,
-      collaborationEnabled: true,
-    }),
-  collaborationFeaturePlugins: () =>
-    getThreadCommentCollaborationPlugins(
-      UniverSheetsThreadCommentMobileUIPlugin
-    ),
+  createPresets: (container) => [
+    ...createSheetMobilePresets({ container, collaborationEnabled: true }),
+    ...threadComments.presets,
+  ],
+  collaborationDependentPlugins: () => threadComments.collaborationPlugins,
   exchangeFeaturePlugins: () =>
     createMobileExchangeFeaturePlugins([
       [

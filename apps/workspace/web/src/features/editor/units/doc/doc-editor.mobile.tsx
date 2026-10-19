@@ -5,6 +5,7 @@ import {
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
 import { createMobileExchangeFeaturePlugins } from "../../features/exchange-plugins";
+import { threadCommentComposition } from "../../features/thread-comments";
 import { docEditorDefinition } from "./doc-editor";
 import { createDocMobilePresets } from "./doc-mobile-presets";
 
@@ -21,6 +22,8 @@ export default createCollaborationEditor({
   exchangeProvidedByPreset: true,
   exchangeFeaturePlugins: () =>
     createMobileExchangeFeaturePlugins([UniverDocsExchangeClientPlugin]),
-  createPresets: (container, _license, _collaborationScope, compact) =>
-    createDocMobilePresets({ container, compact }),
+  createPresets: (container, _license, _collaborationScope, compact) => [
+    ...createDocMobilePresets({ container, compact }),
+    ...threadCommentComposition("doc", "mobile").presets,
+  ],
 });

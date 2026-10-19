@@ -159,7 +159,12 @@ export interface ICollaborationEditorDefinition {
     compact: boolean
   ) => IPreset[];
   readonly locales: Readonly<Record<AppLanguage, ILanguagePack>>;
-  readonly collaborationFeaturePlugins?: () => IPresetPlugin[];
+  /**
+   * Plugins that depend on the collaboration client (DependentOn): they are
+   * registered after it, in `plugins`, never inside `createPresets`, or the
+   * client would be registered implicitly without its configuration.
+   */
+  readonly collaborationDependentPlugins?: () => readonly IPresetPlugin[];
   readonly exchangeFeaturePlugins?: () => IPresetPlugin[];
   readonly printFeaturePlugins?: () => IPresetPlugin[];
   readonly previewDownload?: (api: FUniver, unitId: string) => Promise<void>;
@@ -355,8 +360,8 @@ export function createCollaborationEditor(
                   },
                 ],
               ];
-        const collaborationFeaturePlugins =
-          definition.collaborationFeaturePlugins?.() ?? [];
+        const collaborationDependentPlugins =
+          definition.collaborationDependentPlugins?.() ?? [];
         const historyFeaturePlugins = createWorkspaceHistoryPlugins(
           collaborationScope,
           definition.history,
@@ -412,7 +417,7 @@ export function createCollaborationEditor(
           presets,
           plugins: [
             ...collaborationPlugins,
-            ...collaborationFeaturePlugins,
+            ...collaborationDependentPlugins,
             ...historyFeaturePlugins,
             ...outputPlugins,
             [
@@ -436,7 +441,7 @@ export function createCollaborationEditor(
           univer, container: element, license,
           plugins: [
             ...presets.flatMap((preset) => preset.plugins),
-            ...collaborationPlugins, ...collaborationFeaturePlugins,
+            ...collaborationPlugins, ...collaborationDependentPlugins,
             ...historyFeaturePlugins, ...outputPlugins,
             UniverEmbedPlugin, UniverEmbedUIPlugin, UniverChartEmbedPlugin,
           ],

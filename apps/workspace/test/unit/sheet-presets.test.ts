@@ -24,7 +24,6 @@ describe("Workspace Sheet presets", () => {
       { UniverSheetsNotePreset },
       { UniverSheetsSortPreset },
       { UniverSheetsTablePreset },
-      { UniverSheetsThreadCommentPreset },
       { createSheetEditorPresets },
       {
         configureExchangePresetPlugins,
@@ -43,7 +42,6 @@ describe("Workspace Sheet presets", () => {
       import("@univerjs/preset-sheets-note"),
       import("@univerjs/preset-sheets-sort"),
       import("@univerjs/preset-sheets-table"),
-      import("@univerjs/preset-sheets-thread-comment"),
       import("../../web/src/features/editor/units/sheet/sheet-presets.js"),
       import("../../web/src/features/editor/features/exchange-plugins.js"),
     ]);
@@ -75,7 +73,6 @@ describe("Workspace Sheet presets", () => {
       UniverSheetsNotePreset(),
       UniverSheetsSortPreset(),
       UniverSheetsTablePreset(),
-      UniverSheetsThreadCommentPreset(),
       UniverSheetsAdvancedPreset({
         license,
         universerEndpoint: endpoint,
@@ -126,29 +123,6 @@ describe("Workspace Sheet presets", () => {
     });
   }, 20_000);
 
-  it("omits Thread Comment when a caller disables it", async () => {
-    Object.defineProperty(globalThis, "Path2D", {
-      configurable: true,
-      value: class Path2D {},
-    });
-    const [{ createSheetEditorPresets }] = await Promise.all([
-      import("../../web/src/features/editor/units/sheet/sheet-presets.js"),
-    ]);
-    const presets = createSheetEditorPresets({
-      container,
-      license,
-      universerEndpoint: endpoint,
-      threadCommentsEnabled: false,
-    });
-
-    expect(presetPluginKeys(presets)).not.toContain(
-      "UNIVER_SHEETS_THREAD_COMMENT_PLUGIN"
-    );
-    expect(presetPluginKeys(presets)).not.toContain(
-      "UNIVER_SHEETS_THREAD_COMMENT_UI_PLUGIN"
-    );
-  }, 20_000);
-
   it("creates a local hidden-chrome stack for comparison panes", async () => {
     Object.defineProperty(globalThis, "Path2D", {
       configurable: true,
@@ -162,7 +136,6 @@ describe("Workspace Sheet presets", () => {
       license,
       universerEndpoint: endpoint,
       collaborationEnabled: false,
-      threadCommentsEnabled: false,
       workbenchChrome: "hidden",
     });
 

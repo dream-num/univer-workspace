@@ -576,6 +576,9 @@ importers:
       '@univerjs-pro/bases-history-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/bases-thread-comment':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/bases-thread-comment-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -612,6 +615,9 @@ importers:
       '@univerjs-pro/boards-table-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs-pro/boards-thread-comment':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/boards-thread-comment-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -834,6 +840,9 @@ importers:
       '@univerjs-pro/slides-table-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs-pro/slides-thread-comment':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/slides-thread-comment-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -867,6 +876,9 @@ importers:
       '@univerjs/docs-hyper-link-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/docs-thread-comment':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/docs-thread-comment-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)

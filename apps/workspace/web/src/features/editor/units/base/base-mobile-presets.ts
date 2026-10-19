@@ -9,7 +9,6 @@ import { UniverDrawingPlugin } from "@univerjs/drawing";
 import { UniverRenderEnginePlugin } from "@univerjs/engine-render";
 import type { IPreset } from "@univerjs/presets";
 import { UniverRPCMainThreadPlugin } from "@univerjs/rpc";
-import { UniverThreadCommentMobileUIPlugin } from "@univerjs/thread-comment-ui";
 import { UniverMobileUIPlugin } from "@univerjs/ui";
 
 import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
@@ -17,9 +16,8 @@ import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 /**
  * Mobile counterpart of the Base editor presets. The SDK has no official
  * mobile Base composition, so this mirrors the desktop stack with
- * UniverBasesMobileUIPlugin. bases-thread-comment-ui has no Mobile variant;
- * registering the Mobile Docs and ThreadComment UI here satisfies its
- * dependencies so the desktop counterparts are not pulled in implicitly.
+ * UniverBasesMobileUIPlugin. Thread Comments are composed separately in
+ * features/thread-comments.ts.
  */
 export function createBaseMobilePresets(container: HTMLElement): IPreset[] {
   return [
@@ -58,7 +56,6 @@ export function createBaseMobilePresets(container: HTMLElement): IPreset[] {
         ],
         UniverDocsPlugin,
         UniverDocsMobileUIPlugin,
-        UniverThreadCommentMobileUIPlugin,
         UniverBasesPlugin,
         [
           UniverBasesMobileUIPlugin,

@@ -1,10 +1,9 @@
-import { UniverBoardsThreadCommentMobileUIPlugin } from "@univerjs-pro/boards-thread-comment-ui";
 
 import {
   createCollaborationEditor,
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
-import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { threadCommentComposition } from "../../features/thread-comments";
 import { boardEditorDefinition } from "./board-editor";
 import { createBoardMobilePresets } from "./board-mobile-presets";
 
@@ -17,9 +16,8 @@ export type BoardEditorProps = CollaborationEditorProps;
 export default createCollaborationEditor({
   ...boardEditorDefinition,
   mobile: true,
-  collaborationFeaturePlugins: () =>
-    getThreadCommentCollaborationPlugins(
-      UniverBoardsThreadCommentMobileUIPlugin
-    ),
-  createPresets: (container) => createBoardMobilePresets(container),
+  createPresets: (container) => [
+    ...createBoardMobilePresets(container),
+    ...threadCommentComposition("board", "mobile").presets,
+  ],
 });

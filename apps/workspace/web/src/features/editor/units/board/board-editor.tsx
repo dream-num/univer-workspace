@@ -21,7 +21,6 @@ import { UniverBoardsTablePlugin } from "@univerjs-pro/boards-table";
 import { UniverBoardsTableUIPlugin } from "@univerjs-pro/boards-table-ui";
 import UniverBoardsTableUIEnUS from "@univerjs-pro/boards-table-ui/locale/en-US";
 import UniverBoardsTableUIZhCN from "@univerjs-pro/boards-table-ui/locale/zh-CN";
-import { UniverBoardsThreadCommentUIPlugin } from "@univerjs-pro/boards-thread-comment-ui";
 import BoardsThreadCommentUIEnUS from "@univerjs-pro/boards-thread-comment-ui/locale/en-US";
 import BoardsThreadCommentUIZhCN from "@univerjs-pro/boards-thread-comment-ui/locale/zh-CN";
 import { UniverBoardsUIPlugin } from "@univerjs-pro/boards-ui";
@@ -87,7 +86,7 @@ import {
   type CollaborationEditorProps,
   type ICollaborationEditorDefinition,
 } from "../../collaboration-editor";
-import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { threadCommentComposition } from "../../features/thread-comments";
 import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 
 export type BoardEditorProps = CollaborationEditorProps;
@@ -175,8 +174,11 @@ export function createBoardComparisonPresets(
         UniverBoardsTableUIPlugin,
       ],
     },
+    ...threadCommentComposition("board", "comparison").presets,
   ];
 }
+
+const threadComments = threadCommentComposition("board", "desktop");
 
 export const boardEditorDefinition: ICollaborationEditorDefinition = {
   label: "board",
@@ -197,8 +199,7 @@ export const boardEditorDefinition: ICollaborationEditorDefinition = {
   exchangeEnabled: false,
   hideCollaborationStatus: true,
   locales: boardEditorLocales,
-  collaborationFeaturePlugins: () =>
-    getThreadCommentCollaborationPlugins(UniverBoardsThreadCommentUIPlugin),
+  collaborationDependentPlugins: () => threadComments.collaborationPlugins,
   printFeaturePlugins: () => [UniverBoardsPrintPlugin],
   createPresets: (container) => [
     {
@@ -239,6 +240,7 @@ export const boardEditorDefinition: ICollaborationEditorDefinition = {
         UniverBoardsTableUIPlugin,
       ],
     },
+    ...threadComments.presets,
   ],
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadBoardAsync(unitId),

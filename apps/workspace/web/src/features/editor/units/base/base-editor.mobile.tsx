@@ -5,12 +5,13 @@ import {
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
 import { createMobileExchangeFeaturePlugins } from "../../features/exchange-plugins";
+import { threadCommentComposition } from "../../features/thread-comments";
 import { baseEditorDefinition } from "./base-editor";
 import { createBaseMobilePresets } from "./base-mobile-presets";
 
 export type BaseEditorProps = CollaborationEditorProps;
 
-/** History and comments keep their desktop plugins; neither has a Mobile variant. */
+/** History keeps its desktop plugin; it has no Mobile variant. */
 export default createCollaborationEditor({
   ...baseEditorDefinition,
   mobile: true,
@@ -18,5 +19,8 @@ export default createCollaborationEditor({
   exchangeProvidedByPreset: true,
   exchangeFeaturePlugins: () =>
     createMobileExchangeFeaturePlugins([UniverBasesExchangeClientPlugin]),
-  createPresets: (container) => createBaseMobilePresets(container),
+  createPresets: (container) => [
+    ...createBaseMobilePresets(container),
+    ...threadCommentComposition("base", "mobile").presets,
+  ],
 });

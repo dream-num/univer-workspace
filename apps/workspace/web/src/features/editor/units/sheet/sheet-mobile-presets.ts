@@ -31,7 +31,6 @@ import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
 import { UniverSheetsSortMobileUIPlugin } from "@univerjs/sheets-sort-ui";
 import { UniverSheetsTablePlugin } from "@univerjs/sheets-table";
 import { UniverSheetsTableMobileUIPlugin } from "@univerjs/sheets-table-ui";
-import { UniverSheetsThreadCommentPlugin } from "@univerjs/sheets-thread-comment";
 import { UniverSheetsMobileUIPlugin } from "@univerjs/sheets-ui";
 import { UniverMobileUIPlugin } from "@univerjs/ui";
 import { UniverChartMobileUIPlugin } from "@univerjs-pro/chart-ui";
@@ -123,11 +122,6 @@ export function createSheetMobilePresets({
         UniverSheetsDrawingMobileUIPlugin,
       ],
     },
-    // The UI plugin is supplied through collaborationFeaturePlugins;
-    // registering it here as well would duplicate its pluginName.
-    ...(collaborationEnabled
-      ? [{ plugins: [UniverSheetsThreadCommentPlugin] }]
-      : []),
     {
       plugins: [
         UniverSheetsPivotTablePlugin,

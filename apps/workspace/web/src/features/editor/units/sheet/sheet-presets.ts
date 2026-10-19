@@ -40,7 +40,6 @@ import UniverPresetSheetsSortZhCN from "@univerjs/preset-sheets-sort/locales/zh-
 import { UniverSheetsTablePreset } from "@univerjs/preset-sheets-table";
 import UniverPresetSheetsTableEnUS from "@univerjs/preset-sheets-table/locales/en-US";
 import UniverPresetSheetsTableZhCN from "@univerjs/preset-sheets-table/locales/zh-CN";
-import { UniverSheetsThreadCommentPreset } from "@univerjs/preset-sheets-thread-comment";
 import UniverPresetSheetsThreadCommentEnUS from "@univerjs/preset-sheets-thread-comment/locales/en-US";
 import UniverPresetSheetsThreadCommentZhCN from "@univerjs/preset-sheets-thread-comment/locales/zh-CN";
 import { mergeLocales } from "@univerjs/presets";
@@ -90,7 +89,6 @@ interface CreateSheetEditorPresetsOptions {
   readonly container: HTMLElement;
   readonly license?: string;
   readonly universerEndpoint: string;
-  readonly threadCommentsEnabled?: boolean;
   readonly collaborationEnabled?: boolean;
   readonly workbenchChrome?: "hidden" | "visible";
 }
@@ -100,12 +98,12 @@ interface CreateSheetEditorPresetsOptions {
  * univer-pro/examples/src/preset-sheets-collaboration.
  * CollaborationEditor replaces the collaboration preset's endpoint config at
  * runtime so the same stack also works for Workspace worktree scopes.
+ * Thread Comments are composed separately in features/thread-comments.ts.
  */
 export function createSheetEditorPresets({
   container,
   license,
   universerEndpoint,
-  threadCommentsEnabled = true,
   collaborationEnabled = true,
   workbenchChrome = "visible",
 }: CreateSheetEditorPresetsOptions): IPreset[] {
@@ -139,9 +137,6 @@ export function createSheetEditorPresets({
     UniverSheetsNotePreset(),
     UniverSheetsSortPreset(),
     UniverSheetsTablePreset(),
-    ...(threadCommentsEnabled && collaborationEnabled
-      ? [UniverSheetsThreadCommentPreset()]
-      : []),
     UniverSheetsAdvancedPreset({
       license: license ?? "",
       universerEndpoint,

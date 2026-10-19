@@ -97,8 +97,8 @@ describe("editor integration assets", () => {
       "@univerjs/preset-sheets-advanced/lib/index.css",
     ]);
     expect(sheetComparisonPresetSource).not.toContain("history-ui");
-    expect(sheetComparisonPresetSource).not.toContain("thread-comment");
-    expect(sheetComparisonPresetSource).not.toContain("collaboration");
+    expect(sheetComparisonPresetSource).not.toContain("thread-comment/lib/index.css");
+    expect(sheetComparisonPresetSource).not.toContain("preset-sheets-collaboration");
   });
 
   it("mirrors the desktop Sheet styles and output wiring in the mobile editor", () => {
