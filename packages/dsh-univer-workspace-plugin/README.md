@@ -82,15 +82,11 @@ as a substitute for those explicit storage boundaries.
 
 ## Persisted comment anchors
 
-The headless worker and the browser Viewer register the Thread Comment models
-for Sheet, Doc, Slide, Base and Board so existing comment anchors survive
-replay, export and Viewer saves. Neither installs comment UI or a body
-datasource; comment bodies stay in the Workspace Comment service. The Viewer
-registers all five models in its own pipeline (`src/client/viewer/rendering.ts`).
-The worker relies on the SDK 1.0.3 headless factory, which registers only the
-Sheet model, so `src/runtime/comment-models.ts` adds the missing four; delete
-that module and its worker call after upgrading to the SDK release that fixes
-[univer-cli-sdk#69](https://github.com/dream-num/univer-cli-sdk/issues/69).
+The headless worker (through the SDK 1.1.0 headless factory) and the browser
+Viewer (in its own pipeline, `src/client/viewer/rendering.ts`) register the
+Thread Comment models for Sheet, Doc, Slide, Base and Board so existing comment
+anchors survive replay, export and Viewer saves. Neither installs comment UI or
+a body datasource; comment bodies stay in the Workspace Comment service.
 
 ## Markdown file preview
 

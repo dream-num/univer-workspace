@@ -9,10 +9,13 @@ import {
   UniverInstanceType,
   type UnitModel,
 } from "@univerjs/core";
-import { installCommentModelCompatibility as install } from "../../src/runtime/comment-models.js";
 
-// Runs in a plain Node ESM process: Vitest-inlined and external SDK modules
-// would otherwise split DI decorator metadata across module instances.
+// SDK contract the content worker relies on: the standard headless factory
+// registers the Thread Comment model for every Unit type, so existing comment
+// anchor resources survive replay and export (fixed upstream in 1.1.0,
+// https://github.com/dream-num/univer-cli-sdk/issues/69). Runs in a plain Node
+// ESM process: Vitest-inlined and external SDK modules would otherwise split DI
+// decorator metadata across module instances.
 for (const type of [
   UniverInstanceType.UNIVER_SHEET,
   UniverInstanceType.UNIVER_DOC,
@@ -26,7 +29,6 @@ for (const type of [
     unitType: type,
   });
   try {
-    install(univer);
     const api = createStandardHeadlessUniverFacade(univer);
     const input = { id, name: "Before" };
     const unit =
@@ -73,7 +75,6 @@ for (const type of [
       unitType: type,
     });
     try {
-      install(restored);
       restored.createUnit<{ id: string; resources: typeof resources }, UnitModel>(type, {
         ...data,
         resources,
