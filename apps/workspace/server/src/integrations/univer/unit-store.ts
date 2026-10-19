@@ -43,6 +43,17 @@ const {
 const { UniverCollabWorktreeService } = moduleRequire(
   "@univerjs-pro/collaboration-worktree-service"
 ) as typeof WorktreeServiceModule;
+
+/**
+ * SDK 1.1.0 runs the server-side Unit runtime in a worker-thread pool unless
+ * told otherwise, and boots one SDK instance per worker on first use (about a
+ * second each). Keep the 1.0.3 in-process execution for every runtime consumer
+ * so Collaboration, Worktree, export and comparison keep their latency; moving
+ * to worker execution is a separate deployment decision.
+ */
+export const UNIT_RUNTIME: CollaborationServiceModule.UnitRuntimeConfig = {
+  execution: { mode: "in-process" },
+};
 const { SQLiteWorktreeDatabaseAdapter } = moduleRequire(
   "@univerjs-pro/collaboration-worktree-database-sqlite"
 ) as typeof WorktreeDatabaseModule;
@@ -112,7 +123,11 @@ export function createCollaborationRuntime(
   } = {}
 ): CollaborationRuntime {
   const database = new SQLiteDatabaseAdapter({ filename });
-  const service = new UniverCollabService({ dbAdapter: database, enableUnitPermissionAnalysis: true });
+  const service = new UniverCollabService({
+    dbAdapter: database,
+    enableUnitPermissionAnalysis: true,
+    runtime: UNIT_RUNTIME,
+  });
   const historyDatabase = new SQLiteHistoryDatabaseAdapter({ filename });
   const historyService = new UniverHistoryService({
     collabService: service,
@@ -137,6 +152,7 @@ export function createCollaborationRuntime(
       dbAdapter: database,
     },
     dbAdapter: worktreeDatabase,
+    runtime: UNIT_RUNTIME,
   });
   const unitStore: UnitStore = {
     async createUnit(input) {
@@ -191,7 +207,7 @@ export function createCollaborationRuntime(
           customData: { source: "workspace-exchange" },
         }
       );
-      const materializer = new UnitSnapshotMaterializer();
+      const materializer = new UnitSnapshotMaterializer(UNIT_RUNTIME);
       try {
         return await materializer.materializeSnapshot(loadData);
       } finally {

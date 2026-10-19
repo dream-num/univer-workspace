@@ -237,6 +237,9 @@ Cookie、OAuth callback 和产品 API 保持原有行为；外部 client 只通�
 跨产品数据库和 Collaboration Service 的写入由 `operations` Module 持久化和恢复，不用
 一次 SQLite transaction 假装覆盖两个系统。
 
+Collaboration、Worktree、导出与对比共用的 Unit runtime 显式使用 SDK 1.1.0 的 `in-process` 执行模式
+（`UNIT_RUNTIME`）：SDK 默认的 worker 线程池在首次使用时为每个 worker 启动一套 SDK（约一秒），而当前
+部署规模不需要把 changeset 应用和快照物化移出主线程；切换到 worker 模式是独立的部署决策。
 Collaboration Gateway 同时组合 Core、Comment、History 与 Worktree Endpoint。Comment Service 使用
 同一 `COLLABORATION_DATABASE_FILE` 中由 Comment Adapter 独立拥有的表，并通过 Identity
 Module 批量解析评论作者资料。五类 Unit 的评论读取、新增、回复、solved 和编辑都要求打开
@@ -245,8 +248,7 @@ Module 批量解析评论作者资料。五类 Unit 的评论读取、新增、�
 与 Merge Preview Scope 按 Unit 类型注册同一套标准 Thread Comment model、UI 和统一远程 datasource；评论正文
 全局共享、不分支，只有 anchor 随 Unit 数据分支与合并（见 application-design.md "评论与 Worktree"）。
 无 UI 的 headless runtime（Client Core content worker、DSH worker 与 Viewer）只注册五类 Unit 的评论 model，
-使 anchor resource 在 replay 与 export 中保留；SDK 1.0.3 headless factory 只注册 Sheet model，补注册集中在
-各 package 的 workaround 模块中。
+使 anchor resource 在 replay 与 export 中保留；SDK 1.1.0 的 headless factory 自带五类 model。
 
 History Service 使用同一文件中由 History Adapter 独立拥有的派生索引，并通过 Identity Module
 批量解析版本作者。现有 Collaboration Runtime 统一装配 History Adapter、Service 和 lifecycle；SDK 1.0.0 的

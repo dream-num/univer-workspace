@@ -288,9 +288,7 @@ function registerDocPlugins(univer: Univer): void {
 
 // Persisted comment anchors only. The Viewer shows no comment UI and installs
 // no body datasource; registering the models keeps anchor resources intact
-// when an editable Viewer saves a Unit. This is part of the Viewer's own
-// registration pipeline, not the headless-factory workaround in
-// runtime/comment-models.ts, and stays after that workaround is removed.
+// when an editable Viewer saves a Unit.
 function registerCommentModels(univer: Univer): void {
   univer.registerPlugin(UniverSheetsThreadCommentPlugin);
   univer.registerPlugin(UniverDocsThreadCommentPlugin);

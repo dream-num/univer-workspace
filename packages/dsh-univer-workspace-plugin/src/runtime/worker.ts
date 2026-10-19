@@ -16,7 +16,6 @@ import {
 } from "@univer-cli/univer-collaboration-runtime";
 import { defineUniverCollaborationRuntimeWorker } from "@univer-cli/univer-collaboration-runtime-pool";
 import { createStandardHeadlessUniverFactory } from "@univer-cli/headless-univer";
-import { installCommentModelCompatibility } from "./comment-models.js";
 import { toUniverType, type WorkspaceRuntimeTarget } from "./target.js";
 import { WorkerHttp } from "./worker-http.js";
 import { WorkspaceSnapshotServerAdapter } from "./snapshot-adapter.js";
@@ -34,16 +33,9 @@ export default defineUniverCollaborationRuntimeWorker<WorkspaceRuntimeTarget>({
       if (context.resolveSnapshotService === undefined) {
         throw new Error("workspace reference loading requires a SnapshotService resolver");
       }
-      const univer = await createStandardHeadlessUniverFactory({
+      return await createStandardHeadlessUniverFactory({
         license: target.license,
       })({ unitId: context.unitId, unitType: context.unitType });
-      try {
-        installCommentModelCompatibility(univer);
-      } catch (error) {
-        univer.dispose();
-        throw error;
-      }
-      return univer;
     };
 
     const prefix =

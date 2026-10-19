@@ -19,60 +19,184 @@ allowBuilds:
   esbuild: true
   protobufjs: true
 
-# Published 1.0.3 declarations still emit direct Redi type imports without declaring the
+# Published 1.1.0 declarations still emit direct Redi type imports without declaring the
 # dependency. Keep service identifiers in their host's React peer graph instead
-# of resolving the workspace's hoisted copy. Prefer upstream declaration output
+# of resolving the workspace's hoisted copy, whose React peer variant depends on
+# install order. Every SDK package whose declarations import Redi is listed. Prefer upstream declaration output
 # that references DI types through @univerjs/core. Remove each extension once
 # published declarations no longer leak an undeclared direct Redi import, and
 # clean installs/typechecks pass in both host React peer graphs. Redi 1.1.3
-# matches the exact dependency published by @univerjs/core@1.0.3.
+# matches the exact dependency published by @univerjs/core@1.1.0.
 packageExtensions:
-  "@univerjs/network@1.0.3":
+  "@univerjs/network@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs/engine-render@1.0.3":
+  "@univerjs/engine-render@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs/sheets-ui@1.0.3":
+  "@univerjs/sheets-ui@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs/thread-comment@1.0.3":
+  "@univerjs/thread-comment@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs-pro/boards-ui@1.0.3":
+  "@univerjs-pro/boards-ui@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs-pro/slides-ui@1.0.3":
+  "@univerjs-pro/slides-ui@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs-pro/collaboration@1.0.3":
+  "@univerjs-pro/collaboration@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs-pro/bases@1.0.3":
+  "@univerjs-pro/bases@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs-pro/boards@1.0.3":
+  "@univerjs-pro/boards@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs-pro/slides@1.0.3":
+  "@univerjs-pro/slides@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs/docs-ui@1.0.3":
+  "@univerjs/docs-ui@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs/drawing@1.0.3":
+  "@univerjs/drawing@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs/engine-formula@1.0.3":
+  "@univerjs/engine-formula@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs/sheets@1.0.3":
+  "@univerjs/sheets@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs/sheets-formula@1.0.3":
+  "@univerjs/sheets-formula@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
-  "@univerjs/sheets-numfmt@1.0.3":
+  "@univerjs/sheets-numfmt@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/bases-exchange-client@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/bases-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/boards-chart@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/boards-chart-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/boards-mind@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/chart-embed@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/chart-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/collaboration-client@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/collaboration-client-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/docs-chart-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/docs-exchange-client@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/embed@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/embed-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/embed-unit-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/engine-chart@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/engine-formula@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/engine-formula-rust@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/engine-shape@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/exchange-client@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/ink@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/ink-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/pivot-cache@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/print@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/sheets-chart-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/sheets-exchange-client@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/sheets-print@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/slides-chart@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/slides-chart-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/slides-exchange-client@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs-pro/slides-print@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/data-validation@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/docs@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/docs-drawing@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/find-replace@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/rpc@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/sheets-drawing@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/sheets-drawing-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/sheets-filter-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/sheets-formula-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/sheets-hyper-link-ui@1.1.0":
+    dependencies:
+      "@wendellhu/redi": "1.1.3"
+  "@univerjs/telemetry@1.1.0":
     dependencies:
       "@wendellhu/redi": "1.1.3"
   # Router declarations import React types but omit the type peer. Bind them to

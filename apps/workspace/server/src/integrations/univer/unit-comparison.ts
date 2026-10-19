@@ -32,6 +32,7 @@ import {
 import { SheetsUnitComparisonAdapter } from "@univerjs-pro/sheets-history";
 import { SlidesUnitComparisonAdapter } from "@univerjs-pro/slides-history";
 import { UniverInstanceType } from "@univerjs/core";
+import { UNIT_RUNTIME } from "./unit-store.js";
 import type {
   IChangeset,
   ISheetBlock,
@@ -257,7 +258,7 @@ async function materializeSide(
   loadData: UnitLoadDataWithBlocks,
   type: UniverType,
 ): Promise<ComparisonSide> {
-  const materializer = new UnitSnapshotMaterializer();
+  const materializer = new UnitSnapshotMaterializer(UNIT_RUNTIME);
   try {
     const materialized = await materializer.materializeSnapshot(loadData);
     return {

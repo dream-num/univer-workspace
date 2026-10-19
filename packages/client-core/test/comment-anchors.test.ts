@@ -10,7 +10,7 @@ it("keeps comment anchor resources for all five Unit types in the headless runti
     [
       "--import",
       "tsx",
-      fileURLToPath(new URL("./fixtures/comment-models-check.ts", import.meta.url)),
+      fileURLToPath(new URL("./fixtures/comment-anchors-check.ts", import.meta.url)),
     ],
     { cwd: fileURLToPath(new URL("..", import.meta.url)) },
   );
