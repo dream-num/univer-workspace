@@ -12,6 +12,7 @@ import type {
 } from "@univerjs-pro/collaboration-comment-service";
 import type { IUniverHistoryService } from "@univerjs-pro/collaboration-history-service";
 import {
+  type IUnitSnapshotMaterializer,
   CollabError,
   type UniverCollabService,
 } from "@univerjs-pro/collaboration-service";
@@ -75,6 +76,7 @@ export function createCollaborationGateway(options: {
   readonly identity: IdentityModule;
   readonly access: AccessResolver;
   readonly worktreeService: UniverCollabWorktreeService;
+  readonly snapshotMaterializer: Pick<IUnitSnapshotMaterializer, "materializeSnapshot">;
   readonly worktrees: WorktreesModule;
   readonly worktreeChangeFeed: WorktreeChangeFeed;
 }): CollaborationGateway {
@@ -377,6 +379,7 @@ export function createCollaborationGateway(options: {
         await createWorkspaceUnitComparison({
           service,
           worktreeService,
+          materializer: options.snapshotMaterializer,
           userId,
           worktreeId: request.params.worktreeId,
           unitId: unit.unitId,

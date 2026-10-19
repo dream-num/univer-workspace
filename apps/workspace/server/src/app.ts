@@ -297,6 +297,7 @@ export function createWorkspaceApplication(
         identity,
         access,
         worktreeService: collaboration.worktreeService,
+        snapshotMaterializer: collaboration.snapshotMaterializer,
         worktrees,
         worktreeChangeFeed,
       })

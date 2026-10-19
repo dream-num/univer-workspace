@@ -524,7 +524,9 @@ async function waitForTask(
   cookie: string,
   taskId: string
 ): Promise<TaskResponse> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  // The first export in a process boots the runtime worker pool.
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
     const response = await fetch(
       `${origin}/universer-api/exchange/task/${taskId}`,
       { headers: { cookie } }

@@ -9,10 +9,10 @@ import {
   transformSnapshotToSlideData,
   transformSnapshotToWorkbookData,
 } from "@univerjs-pro/collaboration";
-import {
-  UnitSnapshotMaterializer,
-  type UniverCollabService,
-  type UnitLoadDataWithBlocks,
+import type {
+  IUnitSnapshotMaterializer,
+  UniverCollabService,
+  UnitLoadDataWithBlocks,
 } from "@univerjs-pro/collaboration-service";
 import type {
   UniverCollabWorktreeService,
@@ -32,7 +32,6 @@ import {
 import { SheetsUnitComparisonAdapter } from "@univerjs-pro/sheets-history";
 import { SlidesUnitComparisonAdapter } from "@univerjs-pro/slides-history";
 import { UniverInstanceType } from "@univerjs/core";
-import { UNIT_RUNTIME } from "./unit-store.js";
 import type {
   IChangeset,
   ISheetBlock,
@@ -68,9 +67,13 @@ export interface WorkspaceUnitComparisonPayload {
   readonly right: ComparisonSide;
 }
 
+/** The runtime's shared materializer; comparison never creates its own. */
+type Materializer = Pick<IUnitSnapshotMaterializer, "materializeSnapshot">;
+
 export async function createWorkspaceUnitComparison(input: {
   readonly service: UniverCollabService;
   readonly worktreeService: UniverCollabWorktreeService;
+  readonly materializer: Materializer;
   readonly userId: string;
   readonly worktreeId: string;
   readonly unitId: string;
@@ -113,16 +116,16 @@ export async function createWorkspaceUnitComparison(input: {
     throw new ApplicationError("CONFLICT", 409, "The Worktree base revision is unavailable.");
   }
   const leftPromise = input.source === "trunk"
-    ? loadTrunkSide(input.service, input.unitId, type, context,
+    ? loadTrunkSide(input.materializer, input.service, input.unitId, type, context,
         baseMode === "base" ? unit.baselineTrunkRevision : undefined)
     : Promise.resolve(null);
   const rightPromise = input.change === "deleted"
     ? Promise.resolve(null)
     : view === "merged"
-      ? loadMergedSide(input.service, unit, type, context)
+      ? loadMergedSide(input.materializer, input.service, unit, type, context)
       : view === "preview"
-        ? loadPreviewSide(input.worktreeService, input.worktreeId, unit, type, context)
-        : loadWorktreeSide(input.worktreeService, input.worktreeId, unit, type, context);
+        ? loadPreviewSide(input.materializer, input.worktreeService, input.worktreeId, unit, type, context)
+        : loadWorktreeSide(input.materializer, input.worktreeService, input.worktreeId, unit, type, context);
   const [left, right] = await Promise.all([leftPromise, rightPromise]);
   const history = view === "draft" ? await loadComparisonHistory({
     service: input.service,
@@ -161,6 +164,7 @@ export async function createWorkspaceUnitComparison(input: {
 }
 
 async function loadTrunkSide(
+  materializer: Materializer,
   service: UniverCollabService,
   unitId: string,
   type: UniverType,
@@ -186,10 +190,11 @@ async function loadTrunkSide(
       ),
     };
   }
-  return materializeSide(loadData, type);
+  return materializeSide(materializer, loadData, type);
 }
 
 async function loadMergedSide(
+  materializer: Materializer,
   service: UniverCollabService,
   unit: WorktreeUnitData,
   type: UniverType,
@@ -200,10 +205,11 @@ async function loadMergedSide(
     // A current trunk read would misrepresent it as an immutable merge result.
     throw new ApplicationError("CONFLICT", 409, "This Unit has no recorded merge-result revision.");
   }
-  return loadTrunkSide(service, unit.unitID, type, context, unit.mergeResult.trunkRevision);
+  return loadTrunkSide(materializer, service, unit.unitID, type, context, unit.mergeResult.trunkRevision);
 }
 
 async function loadPreviewSide(
+  materializer: Materializer,
   service: UniverCollabWorktreeService,
   worktreeId: string,
   unit: WorktreeUnitData,
@@ -215,7 +221,7 @@ async function loadPreviewSide(
   );
   if (evaluation.status === "not-behind" ||
       (evaluation.status === "not-applicable" && evaluation.reason === "worktree-created-unit")) {
-    return loadWorktreeSide(service, worktreeId, unit, type, context);
+    return loadWorktreeSide(materializer, service, worktreeId, unit, type, context);
   }
   if (evaluation.status !== "preview") {
     throw new ApplicationError("CONFLICT", 409, `Merge preview is unavailable: ${evaluation.status}.`);
@@ -226,6 +232,7 @@ async function loadPreviewSide(
 }
 
 async function loadWorktreeSide(
+  materializer: Materializer,
   service: UniverCollabWorktreeService,
   worktreeId: string,
   unit: WorktreeUnitData,
@@ -251,27 +258,23 @@ async function loadWorktreeSide(
         context,
       )
     : [];
-  return materializeSide({ ...loadData, sheetBlocks }, type);
+  return materializeSide(materializer, { ...loadData, sheetBlocks }, type);
 }
 
 async function materializeSide(
+  materializer: Materializer,
   loadData: UnitLoadDataWithBlocks,
   type: UniverType,
 ): Promise<ComparisonSide> {
-  const materializer = new UnitSnapshotMaterializer(UNIT_RUNTIME);
-  try {
-    const materialized = await materializer.materializeSnapshot(loadData);
-    return {
-      revision: loadData.targetRevision,
-      unitData: await decodeUnitData(
-        type,
-        materialized.snapshot,
-        materialized.sheetBlocks,
-      ),
-    };
-  } finally {
-    await materializer.dispose();
-  }
+  const materialized = await materializer.materializeSnapshot(loadData);
+  return {
+    revision: loadData.targetRevision,
+    unitData: await decodeUnitData(
+      type,
+      materialized.snapshot,
+      materialized.sheetBlocks,
+    ),
+  };
 }
 
 async function readTrunkSheetBlocks(
