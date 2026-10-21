@@ -7,6 +7,31 @@ import { WorkspaceBlobFeature, WorkspaceHttp } from "../src/index.js";
 const directories: string[] = [];
 const intent = { resourceId: "resource/1", etag: '"v1"', idempotencyKey: "replace/1" };
 const result = { resourceId: intent.resourceId, operationId: intent.idempotencyKey, etag: '"v2"' };
+const resource = {
+  availability: "ready",
+  byteSize: 3,
+  capabilities: { downloadContent: true, editContent: true, openContent: true },
+  id: intent.resourceId,
+  kind: "blob",
+  mediaType: "text/plain",
+};
+const node = {
+  accessRole: "owner",
+  capabilities: {
+    browseChildren: false,
+    createChildren: false,
+    move: true,
+    rename: true,
+    share: false,
+    trash: true,
+  },
+  hasChildren: false,
+  id: "node/1",
+  name: "page.univer.html",
+  parentNodeId: null,
+  spaceId: "space/1",
+  updatedAt: "2026-09-15T00:00:00Z",
+};
 
 afterEach(async () => {
   await Promise.all(
@@ -48,6 +73,46 @@ function operation(overrides: Record<string, unknown> = {}): Record<string, unkn
 }
 
 describe("Blob content replacement", () => {
+  it("replaces with the ETag downloaded through a compressing proxy", async () => {
+    // Mimics Envoy in front of Workspace: a gzip-capable download loses its strong ETag
+    // and Content-Length, so the client must ask for identity encoding to get them back.
+    const directory = await mkdtemp(join(tmpdir(), "blob-replace-"));
+    directories.push(directory);
+    const outputPath = join(directory, "downloaded.bin");
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (path === "/api/resources/resource%2F1") {
+        const owningNode = { ...node, resource };
+        return Response.json({ node: owningNode, resource });
+      }
+      if (path === "/api/blob-resources/resource%2F1/download") {
+        return request.headers.get("accept-encoding") === "identity"
+          ? new Response("old", {
+              headers: { "content-length": "3", "content-type": "text/plain", etag: intent.etag },
+            })
+          : new Response("old", {
+              headers: { "content-encoding": "gzip", "content-type": "text/plain" },
+            });
+      }
+      expect(path).toBe("/api/blob-resources/resource%2F1/content");
+      expect(request.method).toBe("PUT");
+      expect(request.headers.get("if-match")).toBe(intent.etag);
+      return Response.json(result);
+    });
+
+    const downloaded = await feature(fetcher).download({ outputPath, resourceId: intent.resourceId });
+    expect(downloaded["etag"]).toBe(intent.etag);
+    await expect(
+      feature(fetcher).replace({
+        ...intent,
+        etag: downloaded["etag"] as string,
+        filePath: await source(),
+      }),
+    ).resolves.toEqual(result);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
   it.each(["new bytes", ""])("streams exact bytes with the downloaded ETag (%j)", async (bytes) => {
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const request = new Request(input, init);

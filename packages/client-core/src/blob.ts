@@ -267,7 +267,9 @@ export class WorkspaceBlobFeature {
     try {
       const response = await (
         await this.authenticatedHttp()
-      ).request(`/api/blob-resources/${encodeURIComponent(view.resource.resourceId)}/download`);
+      ).request(`/api/blob-resources/${encodeURIComponent(view.resource.resourceId)}/download`, {
+        acceptEncoding: "identity",
+      });
       const mediaType = response.headers.get("content-type");
       const etag = response.headers.get("etag");
       if (

@@ -355,13 +355,15 @@ describe("Workspace application feature parity", () => {
   it("downloads Blob bytes only when HTTP metadata matches Resource metadata", async () => {
     const directory = await temporaryDirectory();
     const outputPath = join(directory, "blob.bin");
+    let downloadEncoding: string | null = "not-called";
     const feature = new WorkspaceBlobFeature(
-      authFor(async (input) => {
+      authFor(async (input, init) => {
         const url = new URL(input instanceof Request ? input.url : input.toString());
         if (url.pathname === "/api/resources/resource-1") {
           const owningNode = node({ id: "node-1", name: "payload.bin", resource: blobResource() });
           return jsonResponse({ node: owningNode, resource: owningNode.resource });
         }
+        downloadEncoding = new Headers(init?.headers).get("accept-encoding");
         return new Response("abc", {
           headers: {
             "content-length": "3",
@@ -383,6 +385,7 @@ describe("Workspace application feature parity", () => {
       },
     );
     expect(await readFile(outputPath, "utf8")).toBe("abc");
+    expect(downloadEncoding).toBe("identity");
 
     const missingMetadata = new WorkspaceBlobFeature(
       authFor(async (input) => {
@@ -460,6 +463,7 @@ describe("Workspace application feature parity", () => {
     const directory = await temporaryDirectory();
     const outputPath = join(directory, "asset.bin");
     let contentCookie: string | null = "not-called";
+    let contentEncoding: string | null = "not-called";
     const feature = new WorkspaceAssetFeature(
       authFor(async (input, init) => {
         const url = new URL(input instanceof Request ? input.url : input.toString());
@@ -467,6 +471,7 @@ describe("Workspace application feature parity", () => {
           return jsonResponse({ error: { code: 1, message: "" }, url: "https://cdn.test/file-1" });
         }
         contentCookie = new Headers(init?.headers).get("cookie");
+        contentEncoding = new Headers(init?.headers).get("accept-encoding");
         return new Response("asset", {
           headers: {
             "content-length": "5",
@@ -489,6 +494,7 @@ describe("Workspace application feature parity", () => {
     expect(await readFile(outputPath, "utf8")).toBe("asset");
     expect((await stat(outputPath)).mode & 0o777).toBe(0o600);
     expect(contentCookie).toBeNull();
+    expect(contentEncoding).toBe("identity");
 
     const invalid = new WorkspaceAssetFeature(
       authFor(async () => jsonResponse({ error: { code: true, message: "invalid" } })),
