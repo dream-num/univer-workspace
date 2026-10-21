@@ -3,4 +3,4 @@ export {
   WorkspaceHttp,
   type WorkspaceHttpOptions,
   type WorkspaceRequestOptions,
-} from "@univerjs/univer-workspace-client-core";
+} from "@univerjs/univer-workspace-client-core/product";

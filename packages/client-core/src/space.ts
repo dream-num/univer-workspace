@@ -3,6 +3,7 @@ import {
   WorkspaceApplicationError,
   workspaceError,
 } from "./errors.js";
+import { isWorkspaceRecord } from "./http.js";
 import {
   parseDetachedNode,
   parseNodePage,
@@ -35,6 +36,60 @@ export class WorkspaceSpaceFeature {
     if (!Array.isArray(body["spaces"]))
       throw invalidResponse("Workspace response is missing Spaces");
     return body["spaces"].map(parseSpace);
+  }
+
+  public async get(spaceId: string): Promise<WorkspaceSpace> {
+    const body = await (await this.authenticatedHttp()).json(`/api/spaces/${encodeURIComponent(spaceId)}`);
+    return parseSpace(body);
+  }
+
+  /** Resolves `<owner>/<slug>`; `slug` `personal` addresses the owner's Personal Space. */
+  public async lookup(owner: string, slug: string): Promise<WorkspaceSpace> {
+    const http = await this.authenticatedHttp();
+    const query = new URLSearchParams({ owner, slug });
+    try {
+      return parseSpace(await http.json(`/api/spaces/lookup?${query.toString()}`));
+    } catch (error) {
+      return await rethrowUnlessServerOutdated(http, error);
+    }
+  }
+
+  /** Creates a Team Space. Without `slug` the server derives one from the name. */
+  public async create(input: {
+    readonly name: string;
+    readonly publicRead?: boolean;
+    readonly slug?: string;
+  }): Promise<WorkspaceSpace> {
+    return parseSpace(
+      await (await this.authenticatedHttp()).json("/api/team-spaces", { body: input, method: "POST" }),
+    );
+  }
+
+  public async update(
+    spaceId: string,
+    input: {
+      readonly description?: string;
+      readonly name?: string;
+      readonly publicRead?: boolean;
+      readonly slug?: string;
+    },
+  ): Promise<WorkspaceSpace> {
+    return parseSpace(
+      await (await this.authenticatedHttp()).json(`/api/spaces/${encodeURIComponent(spaceId)}`, {
+        body: input,
+        method: "PATCH",
+      }),
+    );
+  }
+
+  public async getStar(spaceId: string): Promise<{ readonly starCount: number; readonly starred: boolean }> {
+    const body = await (await this.authenticatedHttp()).json(
+      `/api/spaces/${encodeURIComponent(spaceId)}/star`,
+    );
+    if (typeof body["starred"] !== "boolean" || !Number.isSafeInteger(body["starCount"])) {
+      throw invalidResponse("Workspace response contains an invalid Space star");
+    }
+    return { starCount: body["starCount"] as number, starred: body["starred"] };
   }
 
   public async browse(input: BrowseSpaceInput): Promise<readonly WorkspaceNode[]> {
@@ -207,6 +262,35 @@ export class WorkspaceSpaceFeature {
       );
     }
   }
+}
+
+/**
+ * An unknown path and a hidden product object both answer `404 NOT_FOUND` with the same body, so a
+ * 404 on a V12-only request is ambiguous. A server that supports repository addressing always
+ * includes `fullName` in Space views; when `GET /api/spaces` shows Spaces without it, the 404 means
+ * the server predates the endpoint.
+ */
+export async function rethrowUnlessServerOutdated(http: WorkspaceHttp, error: unknown): Promise<never> {
+  if (!(error instanceof WorkspaceApplicationError) || (error.detail as { status?: unknown } | undefined)?.status !== 404) {
+    throw error;
+  }
+  let first: unknown;
+  try {
+    const body = await http.json("/api/spaces");
+    first = Array.isArray(body["spaces"]) ? body["spaces"][0] : undefined;
+  } catch (probeError) {
+    if (probeError instanceof WorkspaceApplicationError && probeError.code === "workspace-authentication-required") {
+      throw probeError;
+    }
+    throw error;
+  }
+  if (isWorkspaceRecord(first) && !("fullName" in first)) {
+    throw workspaceError(
+      "workspace-server-capability-missing",
+      "This Workspace server does not support owner/slug or numbered addressing yet; upgrade the server, or address by ID.",
+    );
+  }
+  throw error;
 }
 
 async function listDirectory(

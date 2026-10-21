@@ -20,6 +20,7 @@ export function createWorktreesRouter(options: {
         order: request.query.order,
         kind: request.query.kind,
         teamSpaceId: request.query.teamSpaceId,
+        state: request.query.state,
         cursor: request.query.cursor,
         limit: request.query.limit,
       })
@@ -42,6 +43,18 @@ export function createWorktreesRouter(options: {
     ).user;
     response.json(
       await options.worktrees.get(user.id, request.params.worktreeId)
+    );
+  });
+  router.get("/spaces/:spaceId/worktrees/:number", async (request, response) => {
+    const user = options.identity.requireSession(
+      request.headers.cookie
+    ).user;
+    response.json(
+      await options.worktrees.getByNumber(
+        user.id,
+        request.params.spaceId,
+        request.params.number
+      )
     );
   });
   router.patch(

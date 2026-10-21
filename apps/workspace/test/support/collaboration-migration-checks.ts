@@ -252,7 +252,7 @@ export async function verifyCollaborationMigration(
     needsProduct.db.close();
     await assert.rejects(
       prepare(needsProduct.filename, unpreparedProduct),
-      /Prepare the product database to V11/,
+      /Prepare the product database to V12/,
     );
     assert.equal(
       readdirSync(directory).some((name) => name.startsWith("needs-product.sqlite.pre-")),

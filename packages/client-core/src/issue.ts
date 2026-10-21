@@ -12,6 +12,7 @@ import {
   type WorkspaceIssuePage,
   type WorkspaceIssueTimelineItem,
 } from "./issue-model.js";
+import { usernameKey } from "./username.js";
 
 export interface WorkspaceIssueLabelUsage extends WorkspaceIssueLabel {
   readonly openIssueCount: number;
@@ -52,11 +53,18 @@ export class WorkspaceIssueFeature {
   public constructor(private readonly authenticatedHttp: AuthenticatedWorkspaceHttp) {}
 
   public async list(input: ListIssuesInput): Promise<WorkspaceIssuePage> {
+    const http = await this.authenticatedHttp();
     const query = new URLSearchParams();
     if (input.state !== undefined) query.set("state", input.state);
     for (const label of input.labels ?? []) query.append("label", label);
-    if (input.assignee !== undefined) query.set("assignee", input.assignee);
-    if (input.author !== undefined) query.set("author", input.author);
+    if (input.assignee !== undefined) {
+      const value = input.assignee === "@me" ? "me" : input.assignee;
+      query.set("assignee", value === "me" || value === "none" ? value : (await resolveUsers(http, [value]))[0]!);
+    }
+    if (input.author !== undefined) {
+      const value = input.author === "@me" ? "me" : input.author;
+      query.set("author", value === "me" ? value : (await resolveUsers(http, [value]))[0]!);
+    }
     if (input.search !== undefined) query.set("q", input.search);
     if (input.sort !== undefined) query.set("sort", input.sort);
     if (input.order !== undefined) query.set("order", input.order);
@@ -65,7 +73,7 @@ export class WorkspaceIssueFeature {
     const base =
       input.spaceId === undefined ? "/api/issues" : `${spacePath(input.spaceId)}/issues`;
     const suffix = query.size === 0 ? "" : `?${query.toString()}`;
-    return parseIssuePage(await (await this.authenticatedHttp()).json(`${base}${suffix}`));
+    return parseIssuePage(await http.json(`${base}${suffix}`));
   }
 
   public async get(spaceId: string, number: number): Promise<WorkspaceIssue> {
@@ -295,14 +303,39 @@ async function resolveLabelIds(
 }
 
 async function resolveUsers(http: WorkspaceHttp, users: readonly string[]): Promise<string[]> {
-  if (!users.includes("me")) return [...users];
-  const session = await http.json("/api/session");
-  const user = session["user"];
-  if (session["authenticated"] !== true || !isWorkspaceRecord(user) || typeof user["id"] !== "string") {
-    throw workspaceError("workspace-authentication-required", "Workspace Session is missing or expired.");
+  const resolved: string[] = [];
+  let me: { readonly id: string; readonly username: string } | undefined;
+  for (const value of users) {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+      resolved.push(value);
+      continue;
+    }
+    if (me === undefined) {
+      const session = await http.json("/api/session");
+      const user = session["user"];
+      if (session["authenticated"] !== true || !isWorkspaceRecord(user) || typeof user["id"] !== "string" || typeof user["username"] !== "string") {
+        throw workspaceError("workspace-authentication-required", "Workspace Session is missing or expired.");
+      }
+      me = { id: user["id"], username: user["username"] };
+    }
+    if (value === "me" || value === "@me" || value === me.id || usernameKey(value) === usernameKey(me.username)) {
+      resolved.push(me.id);
+      continue;
+    }
+    const body = await http.json(`/api/users/search?${new URLSearchParams({ query: value }).toString()}`);
+    const candidates = body["users"];
+    if (!Array.isArray(candidates) || candidates.some((candidate) =>
+      !isWorkspaceRecord(candidate) || typeof candidate["id"] !== "string" || typeof candidate["username"] !== "string")) {
+      throw workspaceError("workspace-invalid-response", "Workspace User search response is malformed.");
+    }
+    const match = candidates.find((candidate) => candidate["id"] === value) ??
+      candidates.find((candidate) => usernameKey(candidate["username"] as string) === usernameKey(value));
+    if (match === undefined) {
+      throw workspaceError("issue-user-not-found", `Workspace has no user named or identified by "${value}".`);
+    }
+    resolved.push(match["id"] as string);
   }
-  const me = user["id"];
-  return users.map((value) => (value === "me" ? me : value));
+  return resolved;
 }
 
 function parseLabelUsages(body: Record<string, unknown>): WorkspaceIssueLabelUsage[] {

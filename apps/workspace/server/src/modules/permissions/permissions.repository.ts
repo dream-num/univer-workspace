@@ -71,13 +71,15 @@ export class PermissionsRepository {
            FROM users
            WHERE id <> ?
              AND (
-               username LIKE ? ESCAPE '\\' COLLATE NOCASE
+               id = ?
+               OR username LIKE ? ESCAPE '\\' COLLATE NOCASE
                OR display_name LIKE ? ESCAPE '\\' COLLATE NOCASE
              )
-           ORDER BY username COLLATE NOCASE, id
+           ORDER BY id = ? DESC, username = ? COLLATE NOCASE DESC,
+             username COLLATE NOCASE, id
            LIMIT 20`
         )
-        .all(excludedUserId, pattern, pattern) as unknown as UserRow[]
+        .all(excludedUserId, query, pattern, pattern, query, query) as unknown as UserRow[]
     ).map(publicUser);
   }
 

@@ -1,163 +1,224 @@
-import { readFile } from "node:fs/promises";
 import { Command } from "commander";
-import { workspaceError, type WorkspaceIssueFeature } from "@univerjs/univer-workspace-client-core";
-import { executeCommand, oneOf, present, type JsonOption } from "../../command.js";
+import {
+  workspaceError,
+  type WorkspaceIssue,
+  type WorkspaceIssueFeature,
+  type WorkspaceIssueSummary,
+  type WorkspaceIssueTimelineItem,
+} from "@univerjs/univer-workspace-client-core/product";
+import {
+  collect,
+  emit,
+  executeCommand,
+  jsonFieldsOption,
+  limitOf,
+  oneOf,
+  readText,
+  table,
+  type JsonFieldsOption,
+} from "../../command.js";
+import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
+import { issueUrl } from "../../urls.js";
 
-const LABEL_COLORS = ["gray", "blue", "green", "yellow", "orange", "red", "purple", "pink"] as const;
+export const ISSUE_LIST_JSON_FIELDS = [
+  "assignees", "author", "closedAt", "closedBy", "commentCount", "createdAt", "id", "labels", "number",
+  "referenceCount", "space", "state", "stateReason", "title", "updatedAt",
+] as const satisfies readonly (keyof WorkspaceIssueSummary)[];
+export const ISSUE_JSON_FIELDS = [
+  ...ISSUE_LIST_JSON_FIELDS, "body", "capabilities", "references",
+] as const satisfies readonly (keyof WorkspaceIssue)[];
+const COMMENT_JSON_FIELDS = ["author", "body", "createdAt", "id", "type", "updatedAt"] as const satisfies
+  readonly (keyof Extract<WorkspaceIssueTimelineItem, { type: "comment" }>)[];
+
+interface RepoOption {
+  readonly repo?: string;
+}
 
 interface TextOptions {
   readonly body?: string;
   readonly bodyFile?: string;
 }
 
-function collect(value: string, previous: readonly string[] = []): string[] {
-  return [...previous, value];
+export interface IssueCommandDependencies {
+  readonly context: RepoContext;
+  readonly feature: WorkspaceIssueFeature;
+  readonly origin: () => Promise<string>;
 }
 
-function issueNumber(value: string): number {
-  const number = /^#?([1-9]\d{0,9})$/.exec(value.trim())?.[1];
-  if (number === undefined) {
-    throw workspaceError("workspace-argument-invalid", `Issue number must look like 12 or #12, got "${value}".`);
-  }
-  return Number(number);
+/** `@me` is gh's spelling; the Issue API says `me`. */
+export function userSpelling(value: string): string {
+  return value === "@me" ? "me" : value;
 }
 
-/** `-` reads stdin so agents can pass multi-line Markdown without shell escaping. */
-async function readText(inline: string | undefined, file: string | undefined, names: string): Promise<string | undefined> {
-  if (inline !== undefined && file !== undefined) {
-    throw workspaceError("workspace-argument-invalid", `Use either ${names}, not both.`);
-  }
-  if (file === undefined) return inline;
-  if (file !== "-") return await readFile(file, "utf8");
-  let text = "";
-  for await (const chunk of process.stdin) {
-    text += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
-  }
-  return text;
+/** Follows cursors until `limit` Issues are collected or the list ends. */
+export async function listIssues(
+  feature: WorkspaceIssueFeature,
+  input: Parameters<WorkspaceIssueFeature["list"]>[0],
+  limit: number,
+): Promise<readonly WorkspaceIssueSummary[]> {
+  const issues: WorkspaceIssueSummary[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await feature.list({
+      ...input,
+      limit: Math.min(limit - issues.length, 100),
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    issues.push(...page.issues);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor !== undefined && issues.length < limit);
+  return issues;
 }
 
-export function createIssueCommand(feature: WorkspaceIssueFeature): Command {
+export function issueRows(issues: readonly WorkspaceIssueSummary[], showRepo = false): string {
+  return table(
+    issues.map((issue) => [
+      showRepo ? `${issue.space.name}#${String(issue.number)}` : `#${String(issue.number)}`,
+      issue.state,
+      issue.title,
+      issue.labels.map((label) => label.name).join(", "),
+      issue.updatedAt,
+    ]),
+  );
+}
+
+export function createIssueCommand({ context, feature, origin }: IssueCommandDependencies): Command {
   const root = new Command("issue").description(
-    "Read and operate Team Space Issues. Issues are addressed by Space and number (#12).",
+    "Work with Issues of a repository. Issues share their #N numbers with pull requests.",
   );
 
   const list = new Command("list")
-    .description("List Issues in one Space, or across every Team Space when --space is omitted")
-    .option("--space <id>", "Space ID")
-    .option("--state <state>", "open, closed or all", "open")
-    .option("--label <name>", "require a label; repeat for several", collect)
-    .option("--assignee <user>", "user ID, me, or none")
-    .option("--author <user>", "user ID or me")
-    .option("--search <text>", "match title and body")
-    .option("--sort <field>", "created or updated")
-    .option("--order <order>", "asc or desc")
-    .option("--limit <n>", "page size, 1-200")
-    .option("--cursor <cursor>", "cursor from a previous page")
-    .option("--json", "write structured JSON")
+    .description("List Issues in a repository")
+    .option(...REPO_OPTION)
+    .option("-s, --state <state>", "open, closed or all", "open")
+    .option("-l, --label <name>", "require a label; repeat for several", collect)
+    .option("-a, --assignee <user>", "username, @me, or none")
+    .option("-A, --author <user>", "username or @me")
+    .option("-S, --search <text>", "match title and body")
+    .option("-L, --limit <n>", "maximum number of Issues", "30")
+    .addOption(jsonFieldsOption(ISSUE_LIST_JSON_FIELDS))
     .action(
       async (
-        options: JsonOption & {
-          readonly assignee?: string;
-          readonly author?: string;
-          readonly cursor?: string;
-          readonly label?: readonly string[];
-          readonly limit?: string;
-          readonly order?: string;
-          readonly search?: string;
-          readonly sort?: string;
-          readonly space?: string;
-          readonly state: string;
-        },
+        options: JsonFieldsOption &
+          RepoOption & {
+            readonly assignee?: string;
+            readonly author?: string;
+            readonly label?: readonly string[];
+            readonly limit: string;
+            readonly search?: string;
+            readonly state: string;
+          },
       ) => {
-        const page = await executeCommand(list, async () =>
-          await feature.list({
-            state: oneOf(options.state, ["open", "closed", "all"], "--state"),
-            ...(options.space === undefined ? {} : { spaceId: options.space }),
-            ...(options.label === undefined ? {} : { labels: options.label }),
-            ...(options.assignee === undefined ? {} : { assignee: options.assignee }),
-            ...(options.author === undefined ? {} : { author: options.author }),
-            ...(options.search === undefined ? {} : { search: options.search }),
-            ...(options.sort === undefined ? {} : { sort: oneOf(options.sort, ["created", "updated"], "--sort") }),
-            ...(options.order === undefined ? {} : { order: oneOf(options.order, ["asc", "desc"], "--order") }),
-            ...(options.limit === undefined ? {} : { limit: Number(options.limit) }),
-            ...(options.cursor === undefined ? {} : { cursor: options.cursor }),
-          }),
-        );
-        present(list, options, page);
+        const issues = await executeCommand(list, async () => {
+          const { spaceId } = await context.repo(options.repo);
+          return await listIssues(
+            feature,
+            {
+              spaceId,
+              state: oneOf(options.state, ["open", "closed", "all"], "--state"),
+              ...(options.label === undefined ? {} : { labels: options.label }),
+              ...(options.assignee === undefined ? {} : { assignee: userSpelling(options.assignee) }),
+              ...(options.author === undefined ? {} : { author: userSpelling(options.author) }),
+              ...(options.search === undefined ? {} : { search: options.search }),
+            },
+            limitOf(options.limit),
+          );
+        });
+        emit(list, options, issues, issueRows(issues));
       },
     );
 
-  const get = new Command("get")
-    .description("Read an Issue with its body, labels, assignees and referenced files")
-    .argument("<number>", "Issue number, e.g. 12 or #12")
-    .requiredOption("--space <id>", "Space ID")
-    .option("--timeline", "include every comment and event")
-    .option("--json", "write structured JSON")
-    .action(async (number: string, options: JsonOption & { readonly space: string; readonly timeline?: boolean }) => {
-      const value = await executeCommand(get, async () => {
-        const id = issueNumber(number);
-        const issue = await feature.get(options.space, id);
-        return options.timeline === true
-          ? { issue, timeline: await feature.timeline(options.space, id) }
-          : { issue };
-      });
-      present(get, options, value);
-    });
+  const view = new Command("view")
+    .description("Show an Issue with its body, labels, assignees and referenced files")
+    .argument("<number>", "Issue number (12 or #12) or Issue URL")
+    .option(...REPO_OPTION)
+    .option("-c, --comments", "include every comment and event")
+    .addOption(jsonFieldsOption([...ISSUE_JSON_FIELDS, "timeline"]))
+    .action(
+      async (number: string, options: JsonFieldsOption & RepoOption & { readonly comments?: boolean }) => {
+        const { issue, timeline } = await executeCommand(view, async () => {
+          const target = await issueTarget(context, number, options.repo);
+          const found = await feature.get(target.spaceId, target.number);
+          return options.comments === true
+            ? { issue: found, timeline: await feature.timeline(target.spaceId, target.number) }
+            : { issue: found, timeline: undefined };
+        });
+        const value = timeline === undefined ? issue : { ...issue, timeline };
+        emit(
+          view,
+          options,
+          value,
+          [
+            `#${String(issue.number)} ${issue.title} [${issue.state}]`,
+            `${issue.author.username} opened ${issue.createdAt}${issue.labels.length ? ` · ${issue.labels.map((label) => label.name).join(", ")}` : ""}`,
+            ...(issue.assignees.length ? [`assignees: ${issue.assignees.map((user) => user.username).join(", ")}`] : []),
+            ...(issue.references.length ? [`files: ${issue.references.map((ref) => ref.name ?? ref.nodeId).join(", ")}`] : []),
+            "",
+            issue.body,
+            ...(timeline === undefined ? [] : ["", JSON.stringify(timeline, null, 2)]),
+            "",
+            issueUrl(await origin(), issue.space.id, issue.number),
+          ].join("\n"),
+        );
+      },
+    );
 
   const create = new Command("create")
     .description("Open an Issue")
-    .requiredOption("--space <id>", "Space ID")
-    .requiredOption("--title <title>")
-    .option("--body <markdown>")
-    .option("--body-file <path>", "read the body from a file, or - for stdin")
-    .option("--label <name>", "label name; repeat for several", collect)
-    .option("--assignee <user>", "user ID or me; repeat for several", collect)
-    .option("--node <id>", "reference a Node; repeat for several", collect)
-    .option("--json")
+    .option(...REPO_OPTION)
+    .requiredOption("-t, --title <title>")
+    .option("-b, --body <markdown>")
+    .option("-F, --body-file <path>", "read the body from a file, or - for stdin")
+    .option("-l, --label <name>", "label name; repeat for several", collect)
+    .option("-a, --assignee <user>", "username or @me; repeat for several", collect)
+    .option("--node <id>", "reference a file (Node); repeat for several", collect)
+    .addOption(jsonFieldsOption(ISSUE_JSON_FIELDS))
     .action(
       async (
-        options: JsonOption &
+        options: JsonFieldsOption &
+          RepoOption &
           TextOptions & {
             readonly assignee?: readonly string[];
             readonly label?: readonly string[];
             readonly node?: readonly string[];
-            readonly space: string;
             readonly title: string;
           },
       ) => {
         const issue = await executeCommand(create, async () => {
+          const { spaceId } = await context.repo(options.repo);
           const body = await readText(options.body, options.bodyFile, "--body or --body-file");
           return await feature.create({
-            spaceId: options.space,
+            spaceId,
             title: options.title,
             ...(body === undefined ? {} : { body }),
             ...(options.label === undefined ? {} : { labels: options.label }),
-            ...(options.assignee === undefined ? {} : { assignees: options.assignee }),
+            ...(options.assignee === undefined ? {} : { assignees: options.assignee.map(userSpelling) }),
             ...(options.node === undefined ? {} : { nodeIds: options.node }),
           });
         });
-        present(create, options, { issue });
+        emit(create, options, issue, await issueLine(origin, issue));
       },
     );
 
-  const update = new Command("update")
-    .description("Change an Issue's text or its labels, assignees and referenced files")
+  const edit = new Command("edit")
+    .description("Change an Issue's text, labels, assignees or referenced files")
     .argument("<number>")
-    .requiredOption("--space <id>", "Space ID")
-    .option("--title <title>")
-    .option("--body <markdown>")
-    .option("--body-file <path>", "read the body from a file, or - for stdin")
+    .option(...REPO_OPTION)
+    .option("-t, --title <title>")
+    .option("-b, --body <markdown>")
+    .option("-F, --body-file <path>", "read the body from a file, or - for stdin")
     .option("--add-label <name>", "repeatable", collect)
     .option("--remove-label <name>", "repeatable", collect)
-    .option("--add-assignee <user>", "user ID or me; repeatable", collect)
+    .option("--add-assignee <user>", "username or @me; repeatable", collect)
     .option("--remove-assignee <user>", "repeatable", collect)
     .option("--add-node <id>", "repeatable", collect)
     .option("--remove-node <id>", "repeatable", collect)
-    .option("--json")
+    .addOption(jsonFieldsOption(ISSUE_JSON_FIELDS))
     .action(
       async (
         number: string,
-        options: JsonOption &
+        options: JsonFieldsOption &
+          RepoOption &
           TextOptions & {
             readonly addAssignee?: readonly string[];
             readonly addLabel?: readonly string[];
@@ -165,149 +226,105 @@ export function createIssueCommand(feature: WorkspaceIssueFeature): Command {
             readonly removeAssignee?: readonly string[];
             readonly removeLabel?: readonly string[];
             readonly removeNode?: readonly string[];
-            readonly space: string;
             readonly title?: string;
           },
       ) => {
-        const issue = await executeCommand(update, async () => {
+        const issue = await executeCommand(edit, async () => {
+          const target = await issueTarget(context, number, options.repo);
           const body = await readText(options.body, options.bodyFile, "--body or --body-file");
-          return await feature.update(options.space, issueNumber(number), {
+          return await feature.update(target.spaceId, target.number, {
             ...(options.title === undefined ? {} : { title: options.title }),
             ...(body === undefined ? {} : { body }),
             ...(options.addLabel === undefined ? {} : { addLabels: options.addLabel }),
             ...(options.removeLabel === undefined ? {} : { removeLabels: options.removeLabel }),
-            ...(options.addAssignee === undefined ? {} : { addAssignees: options.addAssignee }),
-            ...(options.removeAssignee === undefined ? {} : { removeAssignees: options.removeAssignee }),
+            ...(options.addAssignee === undefined ? {} : { addAssignees: options.addAssignee.map(userSpelling) }),
+            ...(options.removeAssignee === undefined ? {} : { removeAssignees: options.removeAssignee.map(userSpelling) }),
             ...(options.addNode === undefined ? {} : { addNodes: options.addNode }),
             ...(options.removeNode === undefined ? {} : { removeNodes: options.removeNode }),
           });
         });
-        present(update, options, { issue });
+        emit(edit, options, issue, await issueLine(origin, issue));
       },
     );
 
   const close = new Command("close")
     .description("Close an Issue, optionally with a final comment")
     .argument("<number>")
-    .requiredOption("--space <id>", "Space ID")
-    .option("--reason <reason>", "completed or not-planned", "completed")
-    .option("--comment <markdown>")
+    .option(...REPO_OPTION)
+    .option("-r, --reason <reason>", 'completed or "not planned"', "completed")
+    .option("-c, --comment <markdown>")
     .option("--comment-file <path>", "read the comment from a file, or - for stdin")
-    .option("--json")
+    .addOption(jsonFieldsOption(ISSUE_JSON_FIELDS))
     .action(
       async (
         number: string,
-        options: JsonOption & { readonly comment?: string; readonly commentFile?: string; readonly reason: string; readonly space: string },
+        options: JsonFieldsOption &
+          RepoOption & { readonly comment?: string; readonly commentFile?: string; readonly reason: string },
       ) => {
         const issue = await executeCommand(close, async () => {
+          const target = await issueTarget(context, number, options.repo);
           const comment = await readText(options.comment, options.commentFile, "--comment or --comment-file");
-          const reason = oneOf(options.reason, ["completed", "not-planned"], "--reason");
-          return await feature.close(options.space, issueNumber(number), {
+          const reason = oneOf(
+            options.reason.replaceAll("-", " ").replaceAll("_", " "),
+            ["completed", "not planned"],
+            "--reason",
+          );
+          return await feature.close(target.spaceId, target.number, {
             reason: reason === "completed" ? "completed" : "not_planned",
             ...(comment === undefined ? {} : { comment }),
           });
         });
-        present(close, options, { issue });
+        emit(close, options, issue, await issueLine(origin, issue));
       },
     );
 
   const reopen = new Command("reopen")
     .argument("<number>")
-    .requiredOption("--space <id>", "Space ID")
-    .option("--json")
-    .action(async (number: string, options: JsonOption & { readonly space: string }) => {
-      const issue = await executeCommand(reopen, async () =>
-        await feature.reopen(options.space, issueNumber(number)));
-      present(reopen, options, { issue });
+    .option(...REPO_OPTION)
+    .addOption(jsonFieldsOption(ISSUE_JSON_FIELDS))
+    .action(async (number: string, options: JsonFieldsOption & RepoOption) => {
+      const issue = await executeCommand(reopen, async () => {
+        const target = await issueTarget(context, number, options.repo);
+        return await feature.reopen(target.spaceId, target.number);
+      });
+      emit(reopen, options, issue, await issueLine(origin, issue));
     });
 
   const comment = new Command("comment")
     .description("Comment on an Issue")
     .argument("<number>")
-    .requiredOption("--space <id>", "Space ID")
-    .option("--body <markdown>")
-    .option("--body-file <path>", "read the comment from a file, or - for stdin")
-    .option("--json")
-    .action(async (number: string, options: JsonOption & TextOptions & { readonly space: string }) => {
+    .option(...REPO_OPTION)
+    .option("-b, --body <markdown>")
+    .option("-F, --body-file <path>", "read the comment from a file, or - for stdin")
+    .addOption(jsonFieldsOption(COMMENT_JSON_FIELDS))
+    .action(async (number: string, options: JsonFieldsOption & RepoOption & TextOptions) => {
       const value = await executeCommand(comment, async () => {
+        const target = await issueTarget(context, number, options.repo);
         const body = await readText(options.body, options.bodyFile, "--body or --body-file");
         if (body === undefined) {
           throw workspaceError("workspace-argument-invalid", "--body or --body-file is required.");
         }
-        return await feature.comment(options.space, issueNumber(number), body);
+        return await feature.comment(target.spaceId, target.number, body);
       });
-      present(comment, options, { comment: value });
+      emit(comment, options, value, `Commented on #${number.replace(/^#/, "")}`);
     });
 
-  root
+  return root
     .addCommand(list)
-    .addCommand(get)
+    .addCommand(view)
     .addCommand(create)
-    .addCommand(update)
+    .addCommand(edit)
     .addCommand(close)
     .addCommand(reopen)
-    .addCommand(comment)
-    .addCommand(createLabelCommand(feature));
-  return root;
+    .addCommand(comment);
 }
 
-function createLabelCommand(feature: WorkspaceIssueFeature): Command {
-  const label = new Command("label").description("Manage a Space's Issue labels");
-  const list = new Command("list")
-    .requiredOption("--space <id>", "Space ID")
-    .option("--json")
-    .action(async (options: JsonOption & { readonly space: string }) => {
-      const labels = await executeCommand(list, async () => await feature.labels(options.space));
-      present(list, options, { labels });
-    });
-  const create = new Command("create")
-    .argument("<name>")
-    .requiredOption("--space <id>", "Space ID")
-    .requiredOption("--color <color>", LABEL_COLORS.join(", "))
-    .option("--description <text>")
-    .option("--json")
-    .action(
-      async (
-        name: string,
-        options: JsonOption & { readonly color: string; readonly description?: string; readonly space: string },
-      ) => {
-        const created = await executeCommand(create, async () =>
-          await feature.createLabel(options.space, {
-            name,
-            color: oneOf(options.color, LABEL_COLORS, "--color"),
-            ...(options.description === undefined ? {} : { description: options.description }),
-          }));
-        present(create, options, { label: created });
-      },
-    );
-  const update = new Command("update")
-    .argument("<name>")
-    .requiredOption("--space <id>", "Space ID")
-    .option("--name <name>", "new name")
-    .option("--color <color>", LABEL_COLORS.join(", "))
-    .option("--description <text>")
-    .option("--json")
-    .action(
-      async (
-        name: string,
-        options: JsonOption & { readonly color?: string; readonly description?: string; readonly name?: string; readonly space: string },
-      ) => {
-        const updated = await executeCommand(update, async () =>
-          await feature.updateLabel(options.space, name, {
-            ...(options.name === undefined ? {} : { name: options.name }),
-            ...(options.color === undefined ? {} : { color: oneOf(options.color, LABEL_COLORS, "--color") }),
-            ...(options.description === undefined ? {} : { description: options.description }),
-          }));
-        present(update, options, { label: updated });
-      },
-    );
-  const remove = new Command("delete")
-    .argument("<name>")
-    .requiredOption("--space <id>", "Space ID")
-    .option("--json")
-    .action(async (name: string, options: JsonOption & { readonly space: string }) => {
-      const value = await executeCommand(remove, async () => await feature.deleteLabel(options.space, name));
-      present(remove, options, value);
-    });
-  return label.addCommand(list).addCommand(create).addCommand(update).addCommand(remove);
+async function issueTarget(context: RepoContext, argument: string, repo: string | undefined) {
+  const target = await context.item(argument, repo, "issue");
+  if (target.kind !== "number") throw workspaceError("workspace-argument-invalid", "Expected an Issue number.");
+  return target;
+}
+
+async function issueLine(origin: () => Promise<string>, issue: WorkspaceIssue): Promise<string> {
+  return `#${String(issue.number)} ${issue.title} [${issue.state}]\n${issueUrl(await origin(), issue.space.id, issue.number)}`;
 }

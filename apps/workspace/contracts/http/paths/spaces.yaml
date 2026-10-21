@@ -35,6 +35,41 @@
         $ref: ../schemas/common.yaml#/BadRequest
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+
+/api/spaces/lookup:
+  get:
+    tags: [Spaces]
+    operationId: lookupSpace
+    summary: Resolve `<owner>/<slug>` to a Space the current User may discover.
+    description: |
+      `owner` is a username (case-insensitive). `slug=personal` resolves the owner's Personal Space, including
+      Personal Spaces of accounts that predate slugs. A hidden Space and a missing Space both return 404.
+    parameters:
+      - name: owner
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: slug
+        in: query
+        required: true
+        schema:
+          type: string
+    responses:
+      "200":
+        description: Space and effective capabilities.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpaceView
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
 
 /api/spaces/{spaceId}/star:
   parameters:
@@ -137,3 +172,5 @@
         $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict

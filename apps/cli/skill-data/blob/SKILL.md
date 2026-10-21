@@ -1,6 +1,6 @@
 ---
 name: blob
-description: Upload, inspect, download and replace original files in remote Workspace with univer-workspace-cli, including ETag conflicts and recovery after uncertain writes. Use for Blob Resources rather than editable Univer Units or embedded image Assets.
+description: Upload, inspect, download and replace original files in remote Workspace with uvw, including ETag conflicts and recovery after uncertain writes. Use for Blob Resources rather than editable Univer Units or embedded image Assets.
 ---
 
 # Blob files
@@ -11,12 +11,12 @@ Use Blob when the exact original bytes must remain a Workspace file instead of b
 Univer Unit:
 
 ```bash
-univer-workspace-cli blob upload \
+uvw blob upload \
   --file <source> --space <space-id> [--parent <node-id>] \
   [--name <node-name>] [--media-type <mime>] [--idempotency-key <key>] --json
-univer-workspace-cli blob get <resource-id> --json
-univer-workspace-cli blob download <output> --resource <resource-id> [--force] --json
-univer-workspace-cli blob replace --resource <resource-id> --file <edited-source> \
+uvw blob get <resource-id> --json
+uvw blob download <output> --resource <resource-id> [--force] --json
+uvw blob replace --resource <resource-id> --file <edited-source> \
   --etag '"<downloaded-etag>"' --idempotency-key <key> --json
 ```
 

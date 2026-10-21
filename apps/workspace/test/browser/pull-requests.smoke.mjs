@@ -30,6 +30,8 @@ const recordWrites = () => evaluate(`(async () => {
   }});
 })()`);
 const listUrl = `${info.origin}/spaces/${info.spaceId}?view=prs`;
+const numberOf = (id) => evaluate(`fetch('/api/worktrees/${id}').then(r => r.json()).then(d => d.worktree.number)`);
+const pullUrl = (number, query = "") => `${info.origin}/spaces/${info.spaceId}/pulls/${number}${query}`;
 browser("set", "viewport", "1440", "1000");
 browser("open", listUrl);
 browser("wait", "--text", "All pull requests");
@@ -40,9 +42,17 @@ assert.equal(
 );
 click("link", "Update quarterly forecast and planning notes");
 browser("wait", "--text", "Overview");
+// Numbered pull requests open at /spaces/<id>/pulls/<n> and show #N next to the title.
+const readyNumber = numberOf(info.tasks.ready);
+assert.ok(Number.isInteger(readyNumber) && readyNumber >= 1);
+assert.equal(new URL(browser("get", "url").url).pathname, `/spaces/${info.spaceId}/pulls/${readyNumber}`);
 assert.equal(
   evaluate(`document.querySelector('.repository-pull-requests h1').textContent`),
-  "Update quarterly forecast and planning notes",
+  `Update quarterly forecast and planning notes #${readyNumber}`,
+);
+assert.equal(
+  evaluate(`document.querySelector('a[href^="/spaces/${info.spaceId}/pulls/${readyNumber}"]') !== null`),
+  true,
 );
 click("link", "Files changed 2");
 browser("wait", "--url", "**section=files*");
@@ -96,7 +106,11 @@ assert.deepEqual(draftWrites[1], { method: "POST", path: draftWrites[0].path, bo
 assert.deepEqual(draftWrites[2], { method: "POST", path: '/api/worktrees/' + info.tasks.draft + '/ready', body: null, key: null });
 assert.ok(draftWrites[3].key);
 assert.deepEqual(draftWrites[3], { method: "POST", path: '/api/worktrees/' + info.tasks.draft + '/merge', body: null, key: draftWrites[3].key });
-assert.equal(new URL(browser("get", "url").url).searchParams.get("worktree"), info.tasks.draft);
+// An old link stays valid; in-page navigation moves a numbered pull request to its numbered URL.
+assert.equal(
+  new URL(browser("get", "url").url).pathname,
+  `/spaces/${info.spaceId}/pulls/${numberOf(info.tasks.draft)}`,
+);
 
 browser("open", `${info.origin}/worktrees?spaceId=${info.spaceId}&worktree=${info.tasks.long}`);
 browser("wait", "--text", "Discard changes");
@@ -137,6 +151,25 @@ for (const width of [320, 768, 1024, 1440]) {
   browser("set", "viewport", String(width), "1000");
   assert(evaluate("document.documentElement.scrollWidth <= innerWidth"), `Overflow at ${width}px`);
 }
+
+// The numbered route renders the same detail page and honours section/unit/view.
+browser("open", pullUrl(readyNumber));
+browser("wait", "--text", "Review the agent draft");
+browser("open", pullUrl(readyNumber, "?section=files"));
+browser("wait", "iframe[title='Quarterly forecast preview']");
+const planningUnit = evaluate(
+  `fetch('/api/worktrees/${info.tasks.ready}').then(r => r.json()).then(d => d.worktree.units.find(u => u.name === 'Planning notes').unitId)`,
+);
+browser("open", pullUrl(readyNumber, `?unit=${planningUnit}`));
+browser("wait", "iframe[title='Planning notes preview']");
+// Hidden and missing numbers share the unavailable page; an invalid number never reaches the API.
+for (const number of [readyNumber + 1000, "0", "abc"]) {
+  browser("open", pullUrl(number));
+  browser("wait", "--text", "Unable to open this resource");
+}
+// Issues and pull requests share one number sequence in a Team Space.
+const issueNumber = evaluate(`fetch('/api/spaces/${info.spaceId}/issues', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'Shared sequence' }) }).then(r => r.json()).then(i => i.number)`);
+assert.ok(issueNumber > Math.max(...Object.values(info.tasks).map(numberOf)));
 
 // Inject only UI states; these do not claim to test the SDK's merge algorithm.
 const detailUrl = `${info.origin}/api/worktrees/${info.tasks.ready}`;

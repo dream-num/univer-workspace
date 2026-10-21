@@ -12,8 +12,8 @@ Every content command targets one remote draft explicitly with `--worktree <id>`
 Create an empty Sheet Unit or import workbook data into the selected Worktree:
 
 ```bash
-univer-workspace-cli unit create --worktree <worktree-id> --space <space-id> --type sheet --name <name> --json
-univer-workspace-cli import --file source.xlsx --worktree <worktree-id> --space <space-id> --type sheet --json
+uvw unit create --worktree <worktree-id> --space <space-id> --type sheet --name <name> --json
+uvw import --file source.xlsx --worktree <worktree-id> --space <space-id> --type sheet --json
 ```
 
 Both commands return server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId`
@@ -21,7 +21,7 @@ for every content command; never reuse an imported workbook's internal id as the
 For original-file preservation without an editable Sheet Unit, read the [Blob Skill](../blob/SKILL.md).
 Blob Resources have no `unitId` and cannot use this Skill's commands.
 
-Use `univer-workspace-cli api find <term>` and `univer-workspace-cli api show <symbol>` instead of guessing Facade signatures.
+Use `uvw api find <term>` and `uvw api show <symbol>` instead of guessing Facade signatures.
 
 ## Cell model: v, t, f, and number formats
 
@@ -137,8 +137,8 @@ text and computed cell values.
 
 ## Verification
 
-- Values, types, and formulas: `univer-workspace-cli inspect range A1:C9 --worksheet name:<sheet-name> --worktree <id> --unit <id> --json`.
-- Styles, number formats, and rich text: read back `getCellDatas()` through `univer-workspace-cli execute --worktree <id> --unit <id>`.
+- Values, types, and formulas: `uvw inspect range A1:C9 --worksheet name:<sheet-name> --worktree <id> --unit <id> --json`.
+- Styles, number formats, and rich text: read back `getCellDatas()` through `uvw execute --worktree <id> --unit <id>`.
 
 ## Rich text (when mixed styling inside one cell is required)
 
@@ -160,6 +160,6 @@ workbook.getActiveSheet().getRange("A1").setRichTextValueForCell(rich);
 Export only after formula and style verification:
 
 ```bash
-univer-workspace-cli screenshot --worktree <id> --unit <id> --sheet <name> --range A1:H40
-univer-workspace-cli export output.xlsx --worktree <id> --unit <id>
+uvw screenshot --worktree <id> --unit <id> --sheet <name> --range A1:H40
+uvw export output.xlsx --worktree <id> --unit <id>
 ```

@@ -222,7 +222,7 @@ describe("Workspace CLI skills command", () => {
     const base = baseData[0]?.content;
     const board = firstContent(await runSkills(["skills", "get", "board", "--json"]));
 
-    expect(base).toContain("univer-workspace-cli inspect base");
+    expect(base).toContain("uvw inspect base");
     expect(base).toContain("A new Base already contains");
     expect(base).toContain("BaseFieldType.Currency");
     expect(base).toContain("ICardLayoutConfig");
@@ -241,7 +241,7 @@ describe("Workspace CLI skills command", () => {
       ]),
     );
 
-    expect(board).toContain("univer-workspace-cli inspect board");
+    expect(board).toContain("uvw inspect board");
     expect(board).toContain("inspect board-element id:<element-id>");
     expect(board).not.toContain("Native `inspect` is not supported");
   });

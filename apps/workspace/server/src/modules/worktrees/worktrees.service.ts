@@ -153,68 +153,94 @@ export function createWorktreesModule(options: {
       );
       const search = validSearch(query.search);
       const order = validOrder(query.order);
+      const states = validStates(query.state);
       const queryKey = createHash("sha256")
-        .update(JSON.stringify([userId, scope, kind, teamSpaceId, search, order]))
+        .update(
+          JSON.stringify([
+            userId,
+            scope,
+            kind,
+            teamSpaceId,
+            search,
+            order,
+            ...(states.length ? [states] : []),
+          ])
+        )
         .digest("hex");
       const cursor = decodeCursor(query.cursor);
       if (cursor && (cursor.queryKey !== undefined
         ? cursor.queryKey !== queryKey
-        : search !== "" || order !== "updatedAtDesc" || scope === "all")) {
+        : search !== "" || order !== "updatedAtDesc" || scope === "all" || states.length > 0)) {
         throw invalidInput("cursor does not match this query.", "cursor");
       }
-      const rows = options.repository.listCandidates({
-        userId,
-        scope,
-        kind,
-        teamSpaceId,
-        search,
-        order,
-        cursor,
-        limit: limit + 1,
+      const position = (row: WorktreeRow) => ({
+        timestamp: order === "createdAtDesc" ? row.created_at : row.updated_at,
+        id: row.id,
+        queryKey,
       });
       const visible: Array<{
         readonly row: WorktreeRow;
         readonly summary: WorktreeSummary;
       }> = [];
-      const loaded = [];
-      for (const row of rows.slice(0, limit)) {
-        if (!isDiscoverable(userId, row)) continue;
-        const data = await backendCall(() =>
-          options.backend.getWorktree(row.id, userId)
-        );
-        loaded.push({ row, data });
-      }
-      // Share current permissions only across the following synchronous pass.
-      // Never retain authorization results over an await or between requests.
-      const pageAccess = cacheResourceContent(options.access, userId);
-      for (const { row, data } of loaded) {
-        const unitRows = options.repository.units(row.id);
-        const access = worktreeCapabilities(
+      let scanFrom = cursor;
+      let hasNext = false;
+      let lastScanned: WorktreeRow | undefined;
+      // State lives in the Collaboration Service, not the product database, so a
+      // state filter scans candidate batches until the page is full or exhausted.
+      for (;;) {
+        const rows = options.repository.listCandidates({
           userId,
-          row,
-          data.status,
-          unitRows,
-          pageAccess,
-          data.units,
-        );
-        visible.push({
-          row,
-          summary: summaryView(row, data.status, access.capabilities),
+          scope,
+          kind,
+          teamSpaceId,
+          search,
+          order,
+          cursor: scanFrom,
+          limit: limit + 1,
         });
+        const batch = rows.slice(0, limit);
+        const loaded = [];
+        for (const row of batch) {
+          if (!isDiscoverable(userId, row)) continue;
+          const data = await backendCall(() =>
+            options.backend.getWorktree(row.id, userId)
+          );
+          if (states.length && !states.includes(data.status)) continue;
+          loaded.push({ row, data });
+        }
+        // Share current permissions only across the following synchronous pass.
+        // Never retain authorization results over an await or between requests.
+        const pageAccess = cacheResourceContent(options.access, userId);
+        for (const { row, data } of loaded) {
+          const unitRows = options.repository.units(row.id);
+          const access = worktreeCapabilities(
+            userId,
+            row,
+            data.status,
+            unitRows,
+            pageAccess,
+            data.units,
+          );
+          visible.push({
+            row,
+            summary: summaryView(row, data.status, access.capabilities),
+          });
+        }
+        lastScanned = batch.at(-1) ?? lastScanned;
+        hasNext = rows.length > limit;
+        if (!states.length || !hasNext || visible.length >= limit) break;
+        scanFrom = position(batch[batch.length - 1]!);
       }
-      const hasNext = rows.length > limit;
-      const page = visible;
+      const page = visible.slice(0, limit);
       const last = page.at(-1);
+      // A page cut short of the scanned rows resumes right after its last item.
+      const resumeFrom = last?.row ?? lastScanned;
       return {
         items: page.map((item) => item.summary),
         hasCreatedWorktree: options.repository.hasCreatedWorktree(userId),
         nextCursor:
-          hasNext && last
-            ? encodeCursor({
-                timestamp: order === "createdAtDesc" ? last.row.created_at : last.row.updated_at,
-                id: last.row.id,
-                queryKey,
-              })
+          (hasNext || visible.length > limit) && resumeFrom
+            ? encodeCursor(position(resumeFrom))
             : null,
       };
     },
@@ -290,6 +316,21 @@ export function createWorktreesModule(options: {
     async get(userId, worktreeId) {
       const value = await context(userId, worktreeId);
       return { worktree: detailView(value) };
+    },
+
+    async getByNumber(userId, spaceId, numberValue) {
+      const number = validNumber(numberValue);
+      // Team Worktree creators remain discoverable after losing Space membership.
+      let worktreeId = options.repository.findIdByNumber({ teamSpaceId: spaceId }, number);
+      if (!worktreeId) {
+        const space = options.access.resolveSpace(userId, spaceId);
+        // A Personal Space lists its owner's own User Worktrees only.
+        if (space?.type === "personal" && space.ownerUserId === userId) {
+          worktreeId = options.repository.findIdByNumber({ creatorUserId: userId }, number);
+        }
+      }
+      if (!worktreeId) throw notFound();
+      return { worktree: detailView(await context(userId, worktreeId)) };
     },
 
     async update(userId, worktreeId, inputValue) {
@@ -1107,6 +1148,7 @@ function summaryView(
 ): WorktreeSummary {
   return {
     id: row.id,
+    number: row.number,
     name: row.name,
     summary: row.summary,
     kind: row.kind,
@@ -1437,6 +1479,25 @@ function validSearch(value: unknown): string {
     throw invalidInput("search must be a string of at most 200 characters.", "search");
   }
   return value.trim();
+}
+
+function validNumber(value: unknown): number {
+  const number = typeof value === "string" && /^[1-9]\d{0,9}$/.test(value) ? Number(value) : NaN;
+  if (!Number.isSafeInteger(number)) throw invalidInput("number must be a positive integer.", "number");
+  return number;
+}
+
+const WORKTREE_STATES: readonly WorktreeState[] = ["draft", "ready", "merging", "merged", "discarded"];
+
+/** `state` may repeat; an absent filter returns every state. */
+function validStates(value: unknown): readonly WorktreeState[] {
+  if (value === undefined) return [];
+  const values = Array.isArray(value) ? value : [value];
+  const states = values.map((entry) => {
+    if (!WORKTREE_STATES.includes(entry as WorktreeState)) throw invalidInput("state is invalid.", "state");
+    return entry as WorktreeState;
+  });
+  return [...new Set(states)].sort();
 }
 
 function validOrder(value: unknown): "updatedAtDesc" | "createdAtDesc" {

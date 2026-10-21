@@ -167,7 +167,14 @@ export class IssuesRepository {
   }
 
   nextNumber(spaceId: string): number {
-    const row = this._get("SELECT COALESCE(MAX(number), 0) + 1 AS next FROM issues WHERE space_id = ?", spaceId) as { next: number };
+    // Issues and Team Worktrees share one per-Space number sequence.
+    const row = this._get(
+      `SELECT MAX(
+         COALESCE((SELECT MAX(number) FROM issues WHERE space_id = ?), 0),
+         COALESCE((SELECT MAX(number) FROM worktrees WHERE kind = 'team' AND team_space_id = ?), 0)
+       ) + 1 AS next`,
+      spaceId, spaceId,
+    ) as { next: number };
     return row.next;
   }
 

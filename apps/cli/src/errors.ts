@@ -5,4 +5,4 @@ export {
   WorkspaceResultUnknownError,
   workspaceError,
   type StableIdentityOptions,
-} from "@univerjs/univer-workspace-client-core";
+} from "@univerjs/univer-workspace-client-core/product";

@@ -10,8 +10,11 @@ export interface DiscoverableSpaceRow {
   readonly owner_username: string;
   readonly public_read: 0 | 1;
   readonly description: string;
+  readonly slug: string | null;
   readonly member_role: Exclude<AccessRole, "owner"> | null;
 }
+
+const PERSONAL_SLUG = "personal";
 
 export class SpacesRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
@@ -27,6 +30,7 @@ export class SpacesRepository {
            users.username AS owner_username,
            spaces.public_read,
            spaces.description,
+           spaces.slug,
            space_members.role AS member_role
          FROM spaces
          JOIN users ON users.id = spaces.owner_user_id
@@ -54,12 +58,46 @@ export class SpacesRepository {
     return row as unknown as SpaceView["owner"];
   }
 
-  getDescription(spaceId: string): string {
+  getDetails(spaceId: string): { readonly description: string; readonly slug: string | null } {
     const row = this._database.connection
-      .prepare("SELECT description FROM spaces WHERE id = ?")
-      .get(spaceId) as { description: string } | undefined;
+      .prepare("SELECT description, slug FROM spaces WHERE id = ?")
+      .get(spaceId) as { description: string; slug: string | null } | undefined;
     if (!row) throw new Error("Space is missing");
-    return row.description;
+    return row;
+  }
+
+  /** Resolves `<username>/<slug>`; the personal Space is addressed by the reserved slug `personal`. */
+  findIdByFullName(username: string, slug: string): string | null {
+    const personal = slug.toLowerCase() === PERSONAL_SLUG;
+    const row = this._database.connection
+      .prepare(
+        `SELECT spaces.id FROM spaces
+         JOIN users ON users.id = spaces.owner_user_id
+         WHERE users.username = ?
+           AND ${personal ? "spaces.type = 'personal'" : "spaces.type = 'team' AND spaces.slug = ?"}`
+      )
+      .get(...(personal ? [username] : [username, slug])) as { id: string } | undefined;
+    return row?.id ?? null;
+  }
+
+  /** The first free slug for the owner: `base`, then `base-2`, `base-3`, ... */
+  freeSlug(ownerUserId: string, base: string): string {
+    const taken = this._database.connection.prepare(
+      "SELECT 1 FROM spaces WHERE owner_user_id = ? AND slug = ?"
+    );
+    for (let attempt = 1; ; attempt += 1) {
+      const suffix = attempt === 1 ? "" : `-${attempt}`;
+      const candidate = `${base.slice(0, 100 - suffix.length)}${suffix}`;
+      if (!taken.get(ownerUserId, candidate)) return candidate;
+    }
+  }
+
+  slugTaken(ownerUserId: string, slug: string, exceptSpaceId?: string): boolean {
+    return Boolean(
+      this._database.connection
+        .prepare("SELECT 1 FROM spaces WHERE owner_user_id = ? AND slug = ? AND id <> ?")
+        .get(ownerUserId, slug, exceptSpaceId ?? "")
+    );
   }
 
   getStar(userId: string, spaceId: string): SpaceStar {
@@ -86,6 +124,7 @@ export class SpacesRepository {
   createTeamSpace(input: {
     readonly id: string;
     readonly name: string;
+    readonly slug: string;
     readonly publicRead: boolean;
     readonly ownerUserId: string;
     readonly createdAt: number;
@@ -93,12 +132,13 @@ export class SpacesRepository {
     this._database.connection
       .prepare(
         `INSERT INTO spaces
-          (id, type, name, public_read, owner_user_id, created_at, updated_at)
-         VALUES (?, 'team', ?, ?, ?, ?, ?)`
+          (id, type, name, slug, public_read, owner_user_id, created_at, updated_at)
+         VALUES (?, 'team', ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.id,
         input.name,
+        input.slug,
         input.publicRead ? 1 : 0,
         input.ownerUserId,
         input.createdAt,
@@ -110,6 +150,12 @@ export class SpacesRepository {
     this._database.connection
       .prepare("UPDATE spaces SET name = ?, updated_at = ? WHERE id = ?")
       .run(name, updatedAt, spaceId);
+  }
+
+  updateSlug(spaceId: string, slug: string, updatedAt: number): void {
+    this._database.connection
+      .prepare("UPDATE spaces SET slug = ?, updated_at = ? WHERE id = ?")
+      .run(slug, updatedAt, spaceId);
   }
 
   updateDescription(spaceId: string, description: string, updatedAt: number): void {

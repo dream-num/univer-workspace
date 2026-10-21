@@ -54,7 +54,7 @@ export function verifyV10Migration(
       original.close();
       const migrated = open(filename);
       assert.deepEqual(rows(migrated.connection), before);
-      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 11);
+      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 12);
       assert.deepEqual(
         migrated.connection
           .prepare("SELECT description FROM spaces")
@@ -77,7 +77,7 @@ export function verifyV10Migration(
       assert.equal(backup.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
       backup.close();
       const restarted = open(filename);
-      assert.equal(restarted.connection.prepare("PRAGMA user_version").get()?.user_version, 11);
+      assert.equal(restarted.connection.prepare("PRAGMA user_version").get()?.user_version, 12);
       restarted.close();
       assert.equal(backups().length, 1);
     }
@@ -88,7 +88,7 @@ export function verifyV10Migration(
       "PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)",
     );
     broken.close();
-    assert.throws(() => open(filename), /V10 to V11 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V10 to V12 migration failed.*rolled back.*backup/);
     for (const name of [
       "rollback.sqlite",
       readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v10-backup-"))!,

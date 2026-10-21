@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { createWorkspaceApplication } from "../dist/server/app.js";
+import { DROP_V12_SQL } from "./support/v12-downgrade.js";
 
 const directory = mkdtempSync(join(tmpdir(), "workspace-production-v2-migration-"));
 const databaseFilename = join(directory, "workspace.sqlite");
@@ -81,6 +82,7 @@ try {
     DROP TABLE object_deletion_jobs_v3;
     CREATE INDEX blob_deletion_jobs_due
       ON blob_deletion_jobs(next_attempt_at, lease_expires_at, id);
+    ${DROP_V12_SQL}
     ALTER TABLE spaces DROP COLUMN description;
     DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
@@ -103,7 +105,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 11);
+    assert.equal(version.user_version, 12);
     const deletion = migrated.database.connection
       .prepare("SELECT reason FROM object_deletion_jobs")
       .get() as { readonly reason: string };

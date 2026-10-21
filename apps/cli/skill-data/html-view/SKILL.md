@@ -1,6 +1,6 @@
 ---
 name: html-view
-description: Create or revise live .univer.html pages backed by existing Workspace Sheet data using HTML bindings and JavaScript. Validate sources and publish pages with univer-workspace-cli html-view; revise existing pages through the Blob workflow.
+description: Create or revise live .univer.html pages backed by existing Workspace Sheet data using HTML bindings and JavaScript. Validate sources and publish pages with uvw html-view; revise existing pages through the Blob workflow.
 ---
 
 # Workspace HTML Views
@@ -14,7 +14,7 @@ For binding syntax, JavaScript data access, controls and frontend libraries, loa
 authoring reference through the CLI:
 
 ```bash
-univer-workspace-cli skills read html-view references/authoring.md
+uvw skills read html-view references/authoring.md
 ```
 
 This prints [authoring](references/authoring.md). `skills get html-view` lists the other references
@@ -28,8 +28,8 @@ and assets are not uploaded automatically. Opening the local file alone does not
 
 ## Find the sources
 
-Use `univer-workspace-cli skills get core` for authentication and discovery, and
-`univer-workspace-cli skills get sheet` to inspect worksheets, values and formulas. Bind to actual Unit
+Use `uvw skills get core` for authentication and discovery, and
+`uvw skills get sheet` to inspect worksheets, values and formulas. Bind to actual Unit
 and worksheet IDs; Resource IDs and worksheet names are different identities.
 
 Sources always resolve on trunk. If the required Unit, worksheet or changes exist only in a
@@ -44,8 +44,8 @@ Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` 
 ## Validate and create
 
 ```bash
-univer-workspace-cli html-view validate --file ./dashboard.univer.html --json
-univer-workspace-cli html-view create --file ./dashboard.univer.html \
+uvw html-view validate --file ./dashboard.univer.html --json
+uvw html-view create --file ./dashboard.univer.html \
   --space <space-id> --name Dashboard --idempotency-key <key> [--parent <node-id>] --json
 ```
 
@@ -68,7 +68,7 @@ synchronization; report which checks ran. Unit screenshot commands do not render
 
 ## Revise an existing page
 
-Read `univer-workspace-cli skills get blob`: download the existing Resource to a local `.univer.html`
+Read `uvw skills get blob`: download the existing Resource to a local `.univer.html`
 file, edit it, run `html-view validate`, then use `blob replace` with its downloaded ETag and a new
 stable write key. Replacement preserves the existing page identity and URL. Reconcile ETag
 conflicts; create another Blob only when a separate page is wanted.

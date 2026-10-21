@@ -6,6 +6,7 @@ import {
   type WorkspaceUnitType,
 } from "@univerjs/univer-workspace-client-core";
 import { executeCommand, oneOf, present, type JsonOption } from "../../command.js";
+import type { RepoContext } from "../../repo-context.js";
 
 interface BrowseOptions extends JsonOption {
   readonly parent?: string;
@@ -14,30 +15,23 @@ interface BrowseOptions extends JsonOption {
   readonly unitType?: string;
 }
 
-export function createSpaceCommand(feature: WorkspaceSpaceFeature): Command {
-  const space = new Command("space").description("Browse and manage Workspace Spaces");
-  const list = new Command("list")
-    .description("List accessible Spaces")
-    .option("--json", "write structured JSON")
-    .action(async (options: JsonOption) => {
-      const value = { spaces: await executeCommand(list, async () => await feature.list()) };
-      present(list, options, value);
-    });
+export function createSpaceCommand(feature: WorkspaceSpaceFeature, context: RepoContext): Command {
+  const space = new Command("space").description("Browse and manage the files (Nodes) of a repository; list repositories with `uvw repo list`");
   const browse = new Command("browse")
     .description("Browse a Space Node directory")
-    .argument("<space>", "Space ID")
+    .argument("<repo>", "owner/slug, Space ID or URL")
     .option("--parent <node>", "parent Node ID")
     .option("--recursive", "browse descendants recursively")
     .option("--resource-kind <kind>", "none, univer, or blob")
     .option("--unit-type <type>", "sheet, base, doc, slide, or board")
     .option("--json", "write structured JSON")
-    .action(async (spaceId: string, options: BrowseOptions) => {
+    .action(async (repo: string, options: BrowseOptions) => {
       const value = {
         nodes: await executeCommand(
           browse,
           async () =>
             await feature.browse({
-              spaceId,
+              spaceId: (await context.repo(repo)).spaceId,
               ...filters(options),
               ...(options.parent === undefined ? {} : { parentNodeId: options.parent }),
               ...(options.recursive === true ? { recursive: true } : {}),
@@ -49,7 +43,7 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature): Command {
   const find = new Command("find")
     .description("Find Nodes by name across a Space")
     .argument("<query...>", "name query")
-    .requiredOption("--space <id>", "Space ID")
+    .requiredOption("--space <repo>", "owner/slug, Space ID or URL")
     .option("--resource-kind <kind>", "none, univer, or blob")
     .option("--unit-type <type>", "sheet, base, doc, slide, or board")
     .option("--json", "write structured JSON")
@@ -60,7 +54,7 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature): Command {
           async () =>
             await feature.find({
               query: query.join(" "),
-              spaceId: options.space,
+              spaceId: (await context.repo(options.space)).spaceId,
               ...filters(options),
             }),
         ),
@@ -69,14 +63,14 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature): Command {
     });
   const node = new Command("node").description("Manage Workspace Nodes");
   const create = new Command("create")
-    .description("Create an organizational Node in a Space")
-    .argument("<space>", "Space ID")
+    .description("Create an organizational Node in a repository")
+    .argument("<repo>", "owner/slug, Space ID or URL")
     .requiredOption("--name <name>", "Node name")
     .option("--parent <node>", "parent Node ID")
     .option("--json", "write structured JSON")
     .action(
       async (
-        spaceId: string,
+        repo: string,
         options: JsonOption & { readonly name: string; readonly parent?: string },
       ) => {
         const value = {
@@ -85,7 +79,7 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature): Command {
             async () =>
               await feature.createNode({
                 name: options.name,
-                spaceId,
+                spaceId: (await context.repo(repo)).spaceId,
                 ...(options.parent === undefined ? {} : { parentNodeId: options.parent }),
               }),
           ),
@@ -147,7 +141,7 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature): Command {
       present(trash, options, value);
     });
   node.addCommand(create).addCommand(rename).addCommand(move).addCommand(trash);
-  space.addCommand(list).addCommand(browse).addCommand(find).addCommand(node);
+  space.addCommand(browse).addCommand(find).addCommand(node);
   return space;
 }
 

@@ -106,5 +106,5 @@ record. Re-read and locate that ID before writing check-in status; sorting, filt
 inserted rows can invalidate an old row index. Reading an ID and then writing its row is still not
 an atomic update-by-ID operation under concurrent structural edits.
 
-Verify this template using the main Skill's template checks and `univer-workspace-cli html-view validate --file <source.univer.html>`.
+Verify this template using the main Skill's template checks and `uvw html-view validate --file <source.univer.html>`.
 Validation does not execute the insertion handler or verify runtime saving.

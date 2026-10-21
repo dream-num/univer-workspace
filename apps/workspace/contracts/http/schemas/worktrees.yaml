@@ -45,6 +45,7 @@ WorktreeSummary:
   additionalProperties: false
   required:
     - id
+    - number
     - name
     - summary
     - kind
@@ -60,6 +61,12 @@ WorktreeSummary:
   properties:
     id:
       type: string
+    number:
+      type: [integer, "null"]
+      minimum: 1
+      description: |
+        Repository-level number shown as `#N`. A Team Worktree shares the Team Space's Issue number sequence;
+        a User Worktree is numbered per creator. Null for Worktrees created before numbering existed.
     name:
       type: string
     summary:

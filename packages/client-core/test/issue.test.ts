@@ -40,6 +40,119 @@ function feature(handler: (call: Call) => unknown): { feature: WorkspaceIssueFea
 const labelList = { labels: [label("l1", "bug"), label("l2", "Docs")] };
 const session = { authenticated: true, user: user("me-id") };
 
+const owner = { ...user("owner-id"), username: "qaowner" };
+const editor = { ...user("editor-id"), username: "qaeditor" };
+const uuidUser = { ...user("87aa3bdd-a648-4a82-b718-136161971d18"), username: "uuid-user" };
+
+function userDirectoryFeature(
+  people = [owner, editor, uuidUser],
+  searchResult: unknown = { users: people.slice(1) },
+) {
+  const self = people[0]!;
+  let current = rawIssue({ author: self, assignees: [people[1]!] });
+  return feature(({ path, method, body }) => {
+    if (path === "/api/session") return { authenticated: true, user: self };
+    if (path.startsWith("/api/users/search?")) return searchResult;
+    if (method !== "GET") {
+      const input = body as Record<string, unknown>;
+      const ids = input["assigneeUserIds"] as string[] | undefined;
+      current = {
+        ...current,
+        ...input,
+        ...(ids === undefined ? {} : { assignees: ids.flatMap((id) => people.filter((person) => person.id === id)) }),
+      };
+      return current;
+    }
+    if (/\/issues(?:\?|$)/.test(path)) {
+      const query = new URL(path, "https://workspace.test").searchParams;
+      const author = query.get("author");
+      const assignee = query.get("assignee");
+      const authorMatches = author === null || (author === "me" ? self.id : author) === self.id;
+      const assigneeMatches = assignee === null || (assignee === "none"
+        ? (current["assignees"] as { id: string }[]).length === 0
+        : (current["assignees"] as { id: string }[]).some((person) => person.id === (assignee === "me" ? self.id : assignee)));
+      return { items: authorMatches && assigneeMatches ? [current] : [], nextCursor: null, counts: { open: 1, closed: 0 } };
+    }
+    return current;
+  });
+}
+
+describe("Issue user resolution", () => {
+  it.each([undefined, "s1"])("resolves exact author and assignee usernames for list/search in %s", async (spaceId) => {
+    const fuzzy = { ...user("wrong-id"), username: "aaa-qaeditor", displayName: "qaeditor" };
+    const { feature: issues } = userDirectoryFeature([owner, editor, fuzzy], { users: [fuzzy, editor] });
+    const page = await issues.list({ ...(spaceId === undefined ? {} : { spaceId }), author: "QAOWNER", assignee: "QAEDITOR" });
+    expect(page.issues).toHaveLength(1);
+    expect(page.issues[0]).toMatchObject({ author: { id: owner.id }, assignees: [{ id: editor.id }] });
+  });
+
+  it("creates with usernames, @me and existing UUID or opaque user IDs", async () => {
+    const { feature: issues } = userDirectoryFeature();
+    const created = await issues.create({ spaceId: "s1", title: "assigned", assignees: ["QAEDITOR", "@me", uuidUser.id] });
+    expect(created.assignees.map((person) => person.id)).toEqual([editor.id, owner.id, uuidUser.id]);
+    const byId = await issues.create({ spaceId: "s1", title: "IDs", assignees: [editor.id, owner.id] });
+    expect(byId.assignees.map((person) => person.id)).toEqual([editor.id, owner.id]);
+  });
+
+  it("adds and removes assignees by username without leaving the removed user assigned", async () => {
+    const { feature: issues } = userDirectoryFeature();
+    const updated = await issues.update("s1", 7, { addAssignees: ["qaowner"], removeAssignees: ["QAEDITOR"] });
+    expect(updated.assignees.map((person) => person.id)).toEqual([owner.id]);
+  });
+
+  it("keeps me/@me, none and UUID filter semantics", async () => {
+    const { feature: issues, calls } = userDirectoryFeature([owner, uuidUser]);
+    expect((await issues.list({ author: "@me", assignee: uuidUser.id })).issues).toHaveLength(1);
+    expect((await issues.list({ author: "me", assignee: "none" })).issues).toEqual([]);
+    expect(calls.some((call) => call.path.startsWith("/api/users/search?query=none"))).toBe(false);
+  });
+
+  it("accepts one-character usernames, including the current user", async () => {
+    const self = { ...owner, username: "x" };
+    const other = { ...editor, username: "中" };
+    const { feature: issues } = userDirectoryFeature([self, other]);
+    const created = await issues.create({ spaceId: "s1", title: "one character", assignees: ["x", "中"] });
+    expect(created.assignees.map((person) => person.id)).toEqual([self.id, other.id]);
+  });
+
+  it("does not fold Unicode case onto a different account or the current user", async () => {
+    const self = { ...owner, username: "Älpha" };
+    const other = { ...editor, username: "älpha" };
+    const fuzzy = { ...user("fuzzy-id"), username: "AAA", displayName: "älpha" };
+    const { feature: issues } = userDirectoryFeature([self, other, fuzzy], { users: [fuzzy, self, other] });
+    const created = await issues.create({ spaceId: "s1", title: "Unicode", assignees: ["älphA"] });
+    expect(created.assignees.map((person) => person.id)).toEqual([other.id]);
+  });
+
+  const missingUserOperations = {
+    author: (issues: WorkspaceIssueFeature) => issues.list({ author: "missing" }),
+    assignee: (issues: WorkspaceIssueFeature) => issues.list({ spaceId: "s1", assignee: "missing" }),
+    create: (issues: WorkspaceIssueFeature) => issues.create({ spaceId: "s1", title: "invalid", assignees: ["missing"] }),
+    add: (issues: WorkspaceIssueFeature) => issues.update("s1", 7, { addAssignees: ["missing"] }),
+    remove: (issues: WorkspaceIssueFeature) => issues.update("s1", 7, { removeAssignees: ["missing"] }),
+  };
+  it.each(Object.entries(missingUserOperations))("rejects unknown usernames before %s can return misleading results or write", async (_name, run) => {
+    const fuzzy = { ...user("wrong-id"), username: "missing-suffix", displayName: "missing" };
+    const { feature: issues, calls } = userDirectoryFeature([owner, editor, fuzzy], { users: [fuzzy] });
+    await expect(run(issues)).rejects.toMatchObject({ code: "issue-user-not-found", message: expect.stringContaining("missing") });
+    expect(calls.some((call) => call.method !== "GET")).toBe(false);
+  });
+
+  it("rejects a Unicode case variant when only the other account exists", async () => {
+    const self = { ...owner, username: "Älpha" };
+    const { feature: issues } = userDirectoryFeature([self, editor], { users: [self] });
+    await expect(issues.create({ spaceId: "s1", title: "invalid", assignees: ["älpha"] }))
+      .rejects.toMatchObject({ code: "issue-user-not-found" });
+  });
+
+  it.each([{}, { users: [{}] }, { users: [{ id: 42, username: "qaeditor" }] }])("rejects malformed user-search responses: %j", async (result) => {
+    const { feature: issues, calls } = userDirectoryFeature(undefined, result);
+    await expect(issues.create({ spaceId: "s1", title: "invalid", assignees: ["qaeditor"] }))
+      .rejects.toMatchObject({ code: "workspace-invalid-response" });
+    expect(calls.some((call) => call.method !== "GET")).toBe(false);
+  });
+});
+
 describe("Workspace Issue feature", () => {
   it("lists one Space or every Team Space with repeated label filters", async () => {
     const page = { items: [rawIssue()], nextCursor: null, counts: { open: 1, closed: 0 } };
@@ -55,6 +168,7 @@ describe("Workspace Issue feature", () => {
   it("turns label names, `me` and set edits into one full-set PATCH", async () => {
     const { feature: issues, calls } = feature(({ path, method }) => {
       if (path === "/api/session") return session;
+      if (path.startsWith("/api/users/search?")) return { users: [user("u2")] };
       if (path.endsWith("/issue-labels")) return labelList;
       return method === "PATCH" ? rawIssue({ title: "patched" }) : rawIssue();
     });

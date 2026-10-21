@@ -12,6 +12,11 @@
       "development": "./src/index.ts",
       "default": "./dist/index.js"
     },
+    "./product": {
+      "types": "./src/product.ts",
+      "development": "./src/product.ts",
+      "default": "./dist/product.js"
+    },
     "./worker": {
       "types": "./src/content-worker.ts",
       "development": "./src/content-worker.ts",

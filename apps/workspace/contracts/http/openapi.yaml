@@ -90,8 +90,12 @@ paths:
     $ref: ./paths/spaces.yaml#/~1api~1spaces
   /api/team-spaces:
     $ref: ./paths/spaces.yaml#/~1api~1team-spaces
+  /api/spaces/lookup:
+    $ref: ./paths/spaces.yaml#/~1api~1spaces~1lookup
   /api/spaces/{spaceId}:
     $ref: ./paths/spaces.yaml#/~1api~1spaces~1{spaceId}
+  /api/spaces/{spaceId}/worktrees/{number}:
+    $ref: ./paths/worktrees.yaml#/~1api~1spaces~1{spaceId}~1worktrees~1{number}
   /api/spaces/{spaceId}/star:
     $ref: ./paths/spaces.yaml#/~1api~1spaces~1{spaceId}~1star
   /api/spaces/{spaceId}/nodes:

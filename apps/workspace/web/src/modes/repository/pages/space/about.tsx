@@ -1,4 +1,4 @@
-import { Link as LinkIcon, Settings, Star } from "lucide-react";
+import { BookMarked, Link as LinkIcon, Settings, Star } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { spaceStarQueryOptions } from "../../../../features/spaces";
@@ -44,6 +44,14 @@ export function RepositoryAbout({
         <p className="mt-2 mb-0 text-sm leading-6 break-words text-foreground">{description}</p>
       ) : null}
       <ul className="m-0 mt-4 grid list-none gap-2 p-0 text-sm text-muted-foreground">
+        {space.fullName ? (
+          <li className="flex min-w-0 items-center gap-2">
+            <BookMarked className="size-4 shrink-0" aria-hidden="true" />
+            <code className="truncate text-foreground" title={space.fullName}>
+              {space.fullName}
+            </code>
+          </li>
+        ) : null}
         {selectedApp ? (
           <li className="min-w-0">
             <Link

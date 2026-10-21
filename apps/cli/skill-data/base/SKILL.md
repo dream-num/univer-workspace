@@ -34,11 +34,11 @@ FUniver
 Create an empty Base or stage an existing Base Resource in the task Worktree:
 
 ```bash
-univer-workspace-cli unit create \
+uvw unit create \
   --worktree <worktree-id> --space <space-id> \
   --type base --name <name> --json
-univer-workspace-cli unit list --worktree <worktree-id> --json
-univer-workspace-cli inspect base \
+uvw unit list --worktree <worktree-id> --json
+uvw inspect base \
   --worktree <worktree-id> --unit <base-id> --json
 ```
 
@@ -50,7 +50,7 @@ Base authoring uses the shared execute transaction. Workspace execution injects 
 `FBase` as `base`, together with `univerAPI` and alias `api`; do not redeclare them:
 
 ```bash
-univer-workspace-cli execute \
+uvw execute \
   --worktree <worktree-id> --unit <base-id> \
   -e 'return base.getId();' \
   --json
@@ -63,12 +63,12 @@ Do not call `createBase()` after `unit create` merely to obtain a handle. A new 
 ## Exact API
 
 ```bash
-univer-workspace-cli api show FUniver.getBase FBase FBaseTable FBaseTableField FBaseTableRecord FBaseTableView
-univer-workspace-cli api show FEnum.BaseFieldType FBase.insertTable FBaseTable.addField FBaseTable.addRecords FBaseTable.createView
-univer-workspace-cli api show IGridViewConfig ICalendarViewConfig IGalleryViewConfig IGanttViewConfig IKanbanViewConfig ICardLayoutConfig
+uvw api show FUniver.getBase FBase FBaseTable FBaseTableField FBaseTableRecord FBaseTableView
+uvw api show FEnum.BaseFieldType FBase.insertTable FBaseTable.addField FBaseTable.addRecords FBaseTable.createView
+uvw api show IGridViewConfig ICalendarViewConfig IGalleryViewConfig IGanttViewConfig IKanbanViewConfig ICardLayoutConfig
 ```
 
-Use focused discovery such as `univer-workspace-cli api find recordLink --unit base`. Follow every
+Use focused discovery such as `uvw api find recordLink --unit base`. Follow every
 referenced child type: if a result says `card?: ICardLayoutConfig`, run
 `api show ICardLayoutConfig` instead of guessing its shape.
 
@@ -88,7 +88,7 @@ referenced child type: if a result says `card?: ICardLayoutConfig`, run
 
 After the last write, check:
 
-1. `univer-workspace-cli inspect base --worktree <worktree-id> --unit <base-id> --json` for tables,
+1. `uvw inspect base --worktree <worktree-id> --unit <base-id> --json` for tables,
    primary fields, field types and config, record counts, and view types. It is read-only and accepts
    no selector.
 2. In a fresh read-only `execute`, explicitly `return` record values plus `view.getConfig()` and
@@ -97,9 +97,9 @@ After the last write, check:
    percentages, missing card fields, and empty defaults.
 
 ```bash
-univer-workspace-cli screenshot \
+uvw screenshot \
   --worktree <worktree-id> --unit <base-id> --out <directory> --json
-univer-workspace-cli open --worktree <worktree-id> --unit <base-id>
+uvw browse <n> -R <repo> --unit <base-id>
 ```
 
 Base screenshots accept only common screenshot options; do not pass Sheet ranges or Slide page
@@ -107,7 +107,7 @@ selectors.
 
 ## Formula fields
 
-Run `univer-workspace-cli skills get base --full` and follow `references/formulas.md`. Formula
+Run `uvw skills get base --full` and follow `references/formulas.md`. Formula
 fields use exact Excel structured references. Await calculation and read back computed record
 values; stored formula text alone is not correctness evidence.
 

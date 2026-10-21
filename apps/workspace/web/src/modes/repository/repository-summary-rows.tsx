@@ -9,6 +9,7 @@ import type { WorktreeListFilters } from "../../features/worktrees/worktrees.que
 import { useI18n } from "../../shared/i18n";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import { RepositoryPrState, repositoryPrStateLabels } from "./repository-pr-state";
+import { PullRequestLink } from "./repository-pull-request-link";
 import { repositoryWorktreeSearch } from "./repository-worktree-link";
 import { spaceDisplayName } from "./space-name";
 
@@ -96,13 +97,12 @@ export function RepositoryWorktreeRows({
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 {search ? (
-                  <Link
-                    to="/worktrees"
-                    search={{ ...filters, ...search }}
+                  <PullRequestLink
+                    target={{ spaceId: search.spaceId, worktree: task, listFilters: filters }}
                     className="repository-row-title"
                   >
                     {task.name}
-                  </Link>
+                  </PullRequestLink>
                 ) : (
                   <span className="repository-row-title">{task.name}</span>
                 )}
@@ -111,6 +111,7 @@ export function RepositoryWorktreeRows({
               <div className="repository-row-meta">
                 <span>
                   {task.teamSpace?.name ?? spaceDisplayName(personal, t) ?? t("personalSpace")}
+                  {task.number !== null ? ` ${t("repositoryPrNumber", { number: task.number })}` : ""}
                 </span>
                 <span aria-hidden="true">·</span>
                 <span>{task.creator.displayName}</span>

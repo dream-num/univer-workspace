@@ -71,6 +71,7 @@ describe("repository data boundaries", () => {
     });
     const task: components["schemas"]["WorktreeDetail"] = {
       id: "older",
+      number: null,
       name: "Budget review",
       summary: null,
       kind: "team",

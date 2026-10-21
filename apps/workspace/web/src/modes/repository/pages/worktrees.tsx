@@ -22,6 +22,7 @@ import {
   type WorktreeReviewView,
 } from "../../../features/worktrees/worktree-review-search";
 import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../workspace-layout";
+import { usePullRequestNavigate } from "../repository-pull-request-link";
 
 export function RepositoryWorktreesPage(props: WorktreesPageProps) {
   const { t } = useI18n();
@@ -89,19 +90,6 @@ export function RepositoryWorktreesPage(props: WorktreesPageProps) {
           unitId={unit}
           view={view}
           section={section}
-          onViewChange={(nextView) => {
-            void navigate({
-              to: "/worktrees",
-              search: {
-                ...listFilters,
-                spaceId,
-                worktree,
-                ...(unit ? { unit } : {}),
-                section: "files",
-                view: nextView,
-              },
-            });
-          }}
         />
       ) : (
         <WorktreeDashboard
@@ -138,7 +126,6 @@ function RepositoryPullRequestPage({
   unitId,
   view,
   section,
-  onViewChange,
   listFilters,
 }: {
   readonly spaceId: string;
@@ -146,12 +133,12 @@ function RepositoryPullRequestPage({
   readonly unitId: string | undefined;
   readonly view: WorktreeReviewView;
   readonly section: "overview" | "files";
-  readonly onViewChange: (view: WorktreeReviewView) => void;
   readonly listFilters: WorktreeListFilters;
 }) {
   const { t } = useI18n();
   const query = useQuery(worktreeQueryOptions(worktreeId));
   const spaces = useQuery(spacesQueryOptions);
+  const openPullRequest = usePullRequestNavigate();
   if (query.isPending || spaces.isPending)
     return (
       <div role="status" aria-label={t("onboardingLoading")} className="grid gap-4 p-8">
@@ -187,7 +174,16 @@ function RepositoryPullRequestPage({
       worktree={query.data.worktree}
       {...(unitId ? { selectedUnitId: unitId } : {})}
       selectedView={view}
-      onSelectedViewChange={onViewChange}
+      onSelectedViewChange={(nextView) =>
+        void openPullRequest({
+          spaceId,
+          worktree: query.data.worktree,
+          listFilters,
+          unit: unitId,
+          section: "files",
+          view: nextView,
+        })
+      }
       layout={({ review, actions }) => (
         <RepositoryPullRequestLayout
           worktree={query.data.worktree}

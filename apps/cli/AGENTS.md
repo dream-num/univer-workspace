@@ -30,6 +30,20 @@ Client Core owns:
 - Node-hosted Office exchange, and Typst compile, materialize, and apply
 - SVG source/asset compilation, text measurement, Slide page wrapping, and apply orchestration
 
+## Command surface and startup
+
+The Commander root is `uvw`; `package.json` ships the `uvw` and `univer-workspace-cli` bins as the same
+program. The npm package name, `~/.univer-workspace-cli`, the session file, daemon socket/identity and the
+`UNIVER_HOME`, `UNIVER_LICENSE` and `UNIVER_WORKSPACE_CLI_BUILD_ID` variables keep their old names.
+
+Product commands (`auth`, `repo`, `issue`, `label`, `pr`/`worktree`, `search`, `browse`) only talk HTTP.
+They import the light `@univerjs/univer-workspace-client-core/product` entry and are assembled in
+`src/product-commands.ts`; `main.ts` loads `program.ts` (which pulls in the Univer runtime) only for other
+commands. Do not import the Client Core package root from product-command files. `pr` and `worktree` are
+built from the same handlers and must stay equivalent. Repository context comes from `-R` or `UVW_REPO`
+(`src/repo-context.ts`); there is no stored default. `--json [fields]` prints bare objects, and exit code 4
+means authentication is required.
+
 ## Skills output
 
 `skills get` lists references in JSON as `data[].resources` entries with `path` and
@@ -49,8 +63,8 @@ in the render copy, including image references serialized inside `resources[].da
 Base Units are not printable, and an existing output file is never replaced:
 
 ```bash
-univer-workspace-cli print-pdf ./reports/book.pdf --trunk --unit <unit-id>
-univer-workspace-cli print-pdf ./reports/review.pdf --worktree <worktree-id> --unit <unit-id>
+uvw print-pdf ./reports/book.pdf --trunk --unit <unit-id>
+uvw print-pdf ./reports/review.pdf --worktree <worktree-id> --unit <unit-id>
 ```
 
 ## Runtime license

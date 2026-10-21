@@ -45,6 +45,7 @@ export async function assemblePackageArtifact(options) {
     "utf8",
   );
   await writeLauncher(join(options.packageRoot, "bin", "univer-workspace-cli.js"));
+  await writeLauncher(join(options.packageRoot, "bin", "uvw.js"));
 }
 
 async function copyCollaborationRuntimeWorkerChild(appRoot, packageRoot) {
@@ -84,6 +85,7 @@ export function createDistributionPackageJson(source, runtimeDependencies, versi
     type: "module",
     engines: source.engines,
     bin: {
+      uvw: "./bin/uvw.js",
       "univer-workspace-cli": "./bin/univer-workspace-cli.js",
     },
     files: PACKAGE_FILES,

@@ -70,7 +70,7 @@ chart must also remove the binding declaration and dispose its callback, observe
 supply the full current range; replace chart data rather than appending each notification as new rows.
 
 Check the template for library loading order, container size, source coordinates, chart updates and
-disposal. `univer-workspace-cli html-view validate --file <source.univer.html>` does not execute chart scripts. Follow the Skill's template-only
+disposal. `uvw html-view validate --file <source.univer.html>` does not execute chart scripts. Follow the Skill's template-only
 verification workflow; do not report rendering or live chart updates as verified.
 
 Official references: [ECharts imports](https://echarts.apache.org/handbook/en/basics/import/),

@@ -50,7 +50,7 @@ export function verifyV9Migration(
       original.close();
       const migrated = open(filename);
       assert.deepEqual(rows(migrated.connection), before);
-      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 11);
+      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 12);
       assert.deepEqual(migrated.connection.prepare("SELECT * FROM space_stars").all(), []);
       assert.deepEqual(migrated.connection.prepare("PRAGMA foreign_key_check").all(), []);
       assert.equal(
@@ -92,7 +92,7 @@ export function verifyV9Migration(
       "PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)",
     );
     broken.close();
-    assert.throws(() => open(filename), /V9 to V11 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V9 to V12 migration failed.*rolled back.*backup/);
     for (const name of [
       "rollback.sqlite",
       readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v9-backup-"))!,

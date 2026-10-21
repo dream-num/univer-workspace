@@ -28,7 +28,15 @@ export interface WorkspaceUnit {
 export interface WorkspaceWorktree {
   readonly id: string;
   readonly name: string;
+  /** Repository-level `#N`; null for Worktrees created before numbering existed. Absent in responses that omit it. */
+  readonly number?: number | null;
   readonly spaceId?: string;
+  readonly summary?: string | null;
+  readonly kind?: "user" | "team";
+  readonly visibility?: "private" | "space";
+  readonly creator?: { readonly id: string; readonly username: string };
+  readonly createdAt?: string;
+  readonly updatedAt?: string;
   readonly state: WorkspaceWorktreeState;
   readonly units: readonly WorkspaceUnit[];
 }
@@ -58,8 +66,27 @@ export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWor
     name: value["name"],
     state: value["state"],
     units: units.map((unit) => parseUnit(unit, worktreeId)),
+    ...(Number.isSafeInteger(value["number"]) || value["number"] === null
+      ? { number: value["number"] as number | null }
+      : {}),
+    ...(typeof value["summary"] === "string" || value["summary"] === null
+      ? { summary: value["summary"] }
+      : {}),
     ...(spaceId === undefined ? {} : { spaceId }),
+    ...(value["kind"] === "user" || value["kind"] === "team" ? { kind: value["kind"] } : {}),
+    ...(value["visibility"] === "private" || value["visibility"] === "space"
+      ? { visibility: value["visibility"] }
+      : {}),
+    ...parseCreator(value["creator"]),
+    ...(typeof value["createdAt"] === "string" ? { createdAt: value["createdAt"] } : {}),
+    ...(typeof value["updatedAt"] === "string" ? { updatedAt: value["updatedAt"] } : {}),
   };
+}
+
+function parseCreator(value: unknown): { readonly creator?: { readonly id: string; readonly username: string } } {
+  return isWorkspaceRecord(value) && typeof value["id"] === "string" && typeof value["username"] === "string"
+    ? { creator: { id: value["id"], username: value["username"] } }
+    : {};
 }
 
 export function parseUnit(value: unknown, worktreeId: string): WorkspaceUnit {

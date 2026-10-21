@@ -46,7 +46,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - **Univer Workspace** — the deployable Browser and Server application, product HTTP API, authenticated and anonymous read-only
   collaboration entry points, and background recovery processes. Contract: [Workspace README](apps/workspace/README.md)
   and [OpenAPI source](apps/workspace/contracts/http/openapi.yaml).
-- **Univer Workspace CLI** — the internally packaged `univer-workspace-cli` application for agent-driven remote
+- **Univer Workspace CLI** — the internally packaged `univer-workspace-cli` application (executables `uvw` and
+  `univer-workspace-cli`, one program; gh-style `repo`/`issue`/`pr` commands addressing `owner/slug` and `#N`) for agent-driven remote
   Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, including Blob
   download, ETag-guarded content replacement, and HTML View validation/publication, with browser-approved
   passwordless CLI session handoff for password and external-identity users. Contract:
@@ -112,7 +113,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   `GET/PUT/DELETE /api/spaces/{spaceId}/star` contract returns only the caller's state and an aggregate count;
   `SpaceView.owner` projects the existing owner's ID and username. Product V10 adds stars through the backed-up
   V9 → V10 startup migration; V11 adds the plain-text `SpaceView.description` (at most 350 characters, editable by
-  users who can rename the Space) through a backed-up V10 → V11 startup migration. Old and new writers must not
+  users who can rename the Space) through a backed-up V10 → V11 startup migration; V12 adds the Team Space `slug` (addressed as `owner/slug`, with every
+  Personal Space as `owner/personal`) and the repository-level Worktree `number` shared with Issues in a Team Space,
+  through a backed-up V11 → V12 startup migration that backfills nothing. Old and new writers must not
   share the product file.
 - Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), sharing state, and user-authored
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.

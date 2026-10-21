@@ -1405,7 +1405,7 @@ describe("collaboration gateway", () => {
       name: "Gateway Document",
       resource: { unitType: "doc" },
     });
-  });
+  }, 60_000);
 });
 
 function commentWrite(

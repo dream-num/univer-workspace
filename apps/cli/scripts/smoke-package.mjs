@@ -13,6 +13,12 @@ const htmlViewSource = `<!DOCTYPE html>
 <output id="metric" data-univer-cell-subscribe="unit-1:sheet-1:A1"></output>
 <div id="chart" data-univer-range-subscribe="unit-1:sheet-1:A1:C4"></div>`;
 const htmlViewBytes = Buffer.byteLength(htmlViewSource);
+const smokeUser = {
+  avatarUrl: null,
+  displayName: "Package Smoke",
+  id: "package-smoke-user",
+  username: "package-smoke",
+};
 
 const packageRoot = resolve(process.argv[2] ?? "package-dist");
 const packageManifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
@@ -77,10 +83,16 @@ try {
   smokeEnv = { ...process.env, UNIVER_HOME: univerHome };
   const version = await run(executable, ["--version"], installRoot, smokeEnv);
   const expectedVersion = `univer-workspace-cli ${packageManifest.version}`;
+  const uvwExecutable = executable.replace(/univer-workspace-cli(\.cmd)?$/u, "uvw$1");
   if (version.stdout.trim() !== expectedVersion) {
     throw new Error(
       `Installed CLI version mismatch: expected ${expectedVersion}, got ${version.stdout.trim()}`,
     );
+  }
+  // The package installs the same program under both names.
+  const uvwVersion = await run(uvwExecutable, ["--version"], installRoot, smokeEnv);
+  if (uvwVersion.stdout.trim() !== expectedVersion) {
+    throw new Error(`Installed uvw version mismatch: got ${uvwVersion.stdout.trim()}`);
   }
   await run(executable, ["--help"], installRoot, smokeEnv);
   await run(executable, ["skills", "list", "--json"], installRoot, smokeEnv);
@@ -120,7 +132,7 @@ try {
     if (!htmlEntryText.includes(resource.readCommand))
       throw new Error("Missing reference read command");
     const args = resource.readCommand.split(" ");
-    if (args.shift() !== "univer-workspace-cli") throw new Error("Invalid reference read command");
+    if (args.shift() !== "uvw") throw new Error("Invalid reference read command");
     const loaded = JSON.parse(
       (await run(executable, [...args, "--json"], installRoot, smokeEnv)).stdout,
     ).data;
@@ -253,21 +265,21 @@ try {
     installRoot,
     smokeEnv,
   );
-  const authorization = await run(executable, ["login", "--json"], installRoot, smokeEnv);
+  const authorization = await run(uvwExecutable, ["auth", "login", "--json"], installRoot, smokeEnv);
   const pending = await run(
     executable,
-    ["login", "--complete", "--json"],
+    ["auth", "login", "--complete", "--json"],
     installRoot,
     smokeEnv,
   );
   const authenticated = await run(
     executable,
-    ["login", "--complete", "--json"],
+    ["auth", "login", "--complete", "--json"],
     installRoot,
     smokeEnv,
   );
-  const identity = await run(executable, ["whoami", "--json"], installRoot, smokeEnv);
-  const spaces = await run(executable, ["space", "list", "--json"], installRoot, smokeEnv);
+  const identity = await run(executable, ["auth", "status", "--json"], installRoot, smokeEnv);
+  const spaces = await run(executable, ["repo", "list", "--json"], installRoot, smokeEnv);
   const nodes = await run(
     executable,
     ["space", "browse", "space-1", "--json"],
@@ -276,19 +288,19 @@ try {
   );
   const worktrees = await run(
     executable,
-    ["worktree", "list", "--json"],
+    ["search", "prs", "--json"],
     installRoot,
     smokeEnv,
   );
   const createdWorktree = await run(
     executable,
     [
-      "worktree",
+      "pr",
       "create",
-      "--name",
+      "-R",
+      "space-1",
+      "-t",
       "Draft",
-      "--scope",
-      "user",
       "--idempotency-key",
       "smoke-worktree",
       "--json",
@@ -298,13 +310,13 @@ try {
   );
   const updatedWorktree = await run(
     executable,
-    ["worktree", "update", "wt-1", "--name", "Renamed", "--json"],
+    ["worktree", "update", "wt-1", "-t", "Renamed", "--json"],
     installRoot,
     smokeEnv,
   );
   const readyWorktree = await run(
     executable,
-    ["worktree", "ready", "wt-1", "--json"],
+    ["pr", "ready", "wt-1", "--json"],
     installRoot,
     smokeEnv,
   );
@@ -342,16 +354,7 @@ try {
   );
   const opened = await run(
     executable,
-    [
-      "open",
-      "--worktree",
-      "wt-1",
-      "--unit",
-      "unit-1",
-      "--viewer-url",
-      `${workspaceFixture.origin}/old?query=1#fragment`,
-      "--json",
-    ],
+    ["browse", "wt-1", "--unit", "unit-1", "--json"],
     installRoot,
     smokeEnv,
   );
@@ -468,7 +471,7 @@ try {
          !request.path.startsWith("/universer-api/snapshot/2/unit/unit-1/")))) {
     throw new Error(`HTML View must only read trunk sources: ${JSON.stringify(htmlRuntimeRequests)}`);
   }
-  const loggedOut = await run(executable, ["logout", "--json"], installRoot, smokeEnv);
+  const loggedOut = await run(executable, ["auth", "logout", "--json"], installRoot, smokeEnv);
   const outcomes = [
     authorization,
     pending,
@@ -496,17 +499,18 @@ try {
     values[1].status !== "authorization_pending" ||
     values[2].status !== "authenticated" ||
     values[3].subject?.id !== "package-smoke-user" ||
-    !Array.isArray(values[4].spaces) ||
+    !Array.isArray(values[4]) ||
+    values[4][0]?.owner?.id !== values[3].subject?.id ||
+    values[4][0]?.owner?.username !== smokeUser.username ||
     !Array.isArray(values[5].nodes) ||
-    !Array.isArray(values[6].worktrees) ||
-    values[7].worktree?.id !== "wt-1" ||
-    values[8].worktree?.name !== "Renamed" ||
-    values[9].worktree?.state !== "ready" ||
+    !Array.isArray(values[6]) ||
+    values[7].id !== "wt-1" ||
+    values[8].name !== "Renamed" ||
+    values[9].state !== "ready" ||
     values[10].unit?.source !== "trunk" ||
     values[11].unit?.source !== "worktree" ||
     !Array.isArray(values[12].units) ||
-    values[13].data?.openUrl !==
-      `${workspaceFixture.origin}/worktrees?worktree=wt-1&unit=unit-1&view=agent` ||
+    values[13].url !== `${workspaceFixture.origin}/worktrees?worktree=wt-1&unit=unit-1` ||
     values[14].upload?.resourceId !== "resource-blob" ||
     values[15].resource?.resourceId !== "resource-blob" ||
     values[16].download?.resourceId !== "resource-blob" ||
@@ -542,8 +546,9 @@ try {
   if (JSON.stringify(workspaceFixture.requests) !== JSON.stringify({
     authorizationStarts: 1,
     authorizationExchanges: 2,
-    whoami: 1,
+    whoami: 2,
     spaceList: 1,
+    spaceGet: 1,
     spaceBrowse: 1,
     worktreeList: 1,
     worktreeCreate: ["smoke-worktree"],
@@ -646,6 +651,7 @@ async function startWorkspaceFixture() {
     authorizationExchanges: 0,
     whoami: 0,
     spaceList: 0,
+    spaceGet: 0,
     spaceBrowse: 0,
     worktreeList: 0,
     worktreeCreate: [],
@@ -745,7 +751,7 @@ async function handleWorkspaceRequest(request, response, fixture) {
       200,
       {
         authenticated: true,
-        user: { displayName: "Package Smoke", id: "package-smoke-user" },
+        user: smokeUser,
       },
       { "set-cookie": `${fixture.cookie}; Path=/; HttpOnly` },
     );
@@ -765,13 +771,27 @@ async function handleWorkspaceRequest(request, response, fixture) {
     fixture.requests.whoami += 1;
     return writeJson(response, 200, {
       authenticated: true,
-      user: { displayName: "Package Smoke", id: "package-smoke-user" },
+      user: smokeUser,
     });
   }
   if (request.method === "GET" && request.url === "/api/spaces") {
     fixture.requests.spaceList += 1;
     return writeJson(response, 200, {
-      spaces: [{ id: "space-1", name: "Personal", type: "personal" }],
+      spaces: [{
+        id: "space-1",
+        name: "Personal",
+        type: "personal",
+        owner: { id: smokeUser.id, username: smokeUser.username },
+      }],
+    });
+  }
+  if (request.method === "GET" && request.url === "/api/spaces/space-1") {
+    fixture.requests.spaceGet += 1;
+    return writeJson(response, 200, {
+      id: "space-1",
+      name: "Personal",
+      type: "personal",
+      owner: { id: smokeUser.id, username: smokeUser.username },
     });
   }
   if (request.method === "GET" && request.url === "/api/spaces/space-1/nodes") {
@@ -785,7 +805,7 @@ async function handleWorkspaceRequest(request, response, fixture) {
       space: { id: "space-1", name: "Personal", type: "personal" },
     });
   }
-  if (request.method === "GET" && request.url === "/api/worktrees?scope=active") {
+  if (request.method === "GET" && request.url === "/api/worktrees?scope=active&limit=30") {
     fixture.requests.worktreeList += 1;
     return writeJson(response, 200, { items: [worktree()] });
   }

@@ -154,6 +154,19 @@ Discard actions, but cannot read its Unit list or draft content. Other Members
 cannot discover it. A space-visible Team Worktree can be discovered and reviewed
 read-only by current Space Members.
 
+## Repository names and numbers
+
+A Team Space may carry a `slug`, unique per owner and compared case-insensitively. Together with the owner's
+username it forms the full name `<owner>/<slug>` (`SpaceView.fullName`), resolved by `GET /api/spaces/lookup`.
+Every Personal Space, including those that predate slugs, is `<owner>/personal`; `personal` cannot be used as a Team
+Space slug. Team Spaces created before slugs existed have `slug: null` until an administrator sets one. Renaming a
+username or slug invalidates the old full name; there is no redirect.
+
+A Team Worktree shares its Space's number sequence with Issues, so `#12` names one object per Space
+(`GET /api/spaces/{spaceId}/worktrees/{number}`). A User Worktree is numbered per creator and addressed through
+the creator's own Personal Space. Worktrees created before numbering existed keep `number: null` and are addressed
+by ID.
+
 ## Issues
 
 Issues exist only in Team Spaces. A Personal Space returns `409 CONFLICT`; a Space the caller

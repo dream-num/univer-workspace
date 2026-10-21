@@ -54,6 +54,71 @@ describe("Workspace Worktree model and workflow", () => {
     expect(path).toBe(expectedPath);
   });
 
+  it.each([
+    ["Éva", "upper"],
+    ["éva", "lower"],
+    ["ÉVA", "upper"],
+    ["éVA", "lower"],
+    ["alice", "ascii"],
+  ])("matches author %s with ASCII-only username comparison", async (creatorUsername, expectedId) => {
+    const feature = worktrees(async () => Response.json({
+      items: [
+        { ...rawWorktree("upper"), creator: { id: "u1", username: "Éva" } },
+        { ...rawWorktree("lower"), creator: { id: "u2", username: "éva" } },
+        { ...rawWorktree("ascii"), creator: { id: "u3", username: "ALIce" } },
+        rawWorktree("no-creator"),
+      ],
+      nextCursor: null,
+    }));
+
+    const listed = await feature.list({ creatorUsername, view: "all" });
+
+    expect(listed.map((worktree) => worktree.id)).toEqual([expectedId]);
+  });
+
+  it.each([1, 2, 5])("counts only matching authors toward limit %i across pages", async (limit) => {
+    const source = [
+      ...Array.from({ length: 105 }, (_, index) => ({
+        ...rawWorktree(`wrong-${index}`), creator: { id: "u2", username: "éva" },
+      })),
+      ...["match-1", "match-2", "match-3"].map((id) => ({
+        ...rawWorktree(id), creator: { id: "u1", username: "Éva" },
+      })),
+    ];
+    const cursors: (string | null)[] = [];
+    const feature = worktrees(async (input, init) => {
+      const query = new URL(new Request(input, init).url).searchParams;
+      const cursor = query.get("cursor");
+      cursors.push(cursor);
+      const offset = Number(cursor ?? 0);
+      const end = offset + Number(query.get("limit"));
+      return Response.json({
+        items: source.slice(offset, end),
+        nextCursor: end < source.length ? String(end) : null,
+      });
+    });
+
+    const listed = await feature.list({ creatorUsername: "ÉVA", limit, view: "all" });
+
+    expect(listed.map((worktree) => worktree.id)).toEqual(["match-1", "match-2", "match-3"].slice(0, limit));
+    expect(cursors).toEqual([null, "100"]);
+  });
+
+  it("keeps creatorId filtering independent of username spelling for @me callers", async () => {
+    const feature = worktrees(async () => Response.json({
+      items: [
+        { ...rawWorktree("other"), creator: { id: "u2", username: "Éva" } },
+        { ...rawWorktree("mine"), creator: { id: "u1", username: "éva" } },
+        rawWorktree("no-creator"),
+      ],
+      nextCursor: null,
+    }));
+
+    const listed = await feature.list({ creatorId: "u1", limit: 1, view: "all" });
+
+    expect(listed.map((worktree) => worktree.id)).toEqual(["mine"]);
+  });
+
   it("rejects invalid Worktree lists as a whole", async () => {
     const missing = worktrees(async () => Response.json({}));
     await expect(missing.list({ view: "active" })).rejects.toMatchObject({

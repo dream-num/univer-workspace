@@ -36,6 +36,7 @@ test("generates a publishable CLI-only manifest", () => {
 
   assert.equal(result.private, false);
   assert.deepEqual(result.bin, {
+    uvw: "./bin/uvw.js",
     "univer-workspace-cli": "./bin/univer-workspace-cli.js",
   });
   assert.deepEqual(result.files, PACKAGE_FILES);

@@ -329,9 +329,9 @@ function validSearch(value: unknown): string {
     throw invalidInput("query is required.", "query");
   }
   const query = value.trim();
-  if (query.length < 2 || query.length > 100) {
+  if (query.length < 1 || query.length > 100) {
     throw invalidInput(
-      "query must contain between 2 and 100 characters.",
+      "query must contain between 1 and 100 characters.",
       "query"
     );
   }

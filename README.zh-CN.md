@@ -145,14 +145,14 @@ npx skills add dream-num/univer-workspace --skill univer-workspace-cli -g
 先把 CLI 指向你自己的 Workspace 部署，再开始需要 Browser 确认的登录流程：
 
 ```bash
-univer-workspace-cli config set workspace.origin <origin>
-univer-workspace-cli login
+uvw config set workspace.origin <origin>
+uvw auth login
 ```
 
 用户确认命令输出的 URL 与验证码后，完成一次性交换：
 
 ```bash
-univer-workspace-cli login --complete
+uvw auth login --complete
 ```
 
 安装包包含版本匹配的 Skill、结构化 JSON 输出、Facade API 发现、内容检查、PNG/PDF 渲染、Office

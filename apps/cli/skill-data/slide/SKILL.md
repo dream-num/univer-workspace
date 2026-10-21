@@ -13,8 +13,8 @@ Inside `execute`, Facade indexes are 0-based (`getSlideByIndex`, `getSlides()[i]
 page from CLI output into code, prefer `getSlideById(id)` — every page node and lint finding carries
 the page `id`.
 
-Use `univer-workspace-cli api find <query...>` to discover API symbols, then use
-`univer-workspace-cli api show <symbol...>` for exact signatures, enum values, documentation, and
+Use `uvw api find <query...>` to discover API symbols, then use
+`uvw api show <symbol...>` for exact signatures, enum values, documentation, and
 examples. Use the declared common Shape names such as `ShapeTypeEnum`, `ShapeFillEnum`, and
 `ShapeLineTypeEnum`.
 
@@ -23,8 +23,8 @@ examples. Use the declared common Shape names such as `ShapeTypeEnum`, `ShapeFil
 Create an empty Slide Unit or import a deck into the selected Worktree:
 
 ```bash
-univer-workspace-cli unit create --worktree <worktree-id> --space <space-id> --type slide --name <name> --json
-univer-workspace-cli import --file source.pptx --worktree <worktree-id> --space <space-id> --type slide --json
+uvw unit create --worktree <worktree-id> --space <space-id> --type slide --name <name> --json
+uvw import --file source.pptx --worktree <worktree-id> --space <space-id> --type slide --json
 ```
 
 Both commands return server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId`
@@ -34,7 +34,7 @@ Blob Resources have no `unitId` and cannot use this Skill's commands.
 
 ## Presentation structure
 
-A slide unit is one presentation: the presentation holds slides ("Deck and pages"), a slide holds elements in stacking order ("Stacking order"), and an element is a shape, an image, or a group — a text box is a shape ("Elements"). Tables and charts are elements too, and both are editable ("Tables", "Charts"). Native charts use the direct `FSlide` chart methods ("Native charts"). Imported decks can carry further element kinds (placeholders, connectors, media); address those through the generic element surface and verify their dedicated facade before editing. Master/layout pages render underneath a slide but are not edited here. A transition is a per-slide page-enter effect ("Transitions"). The facade mirrors this shape — `FPresentation` → `FSlide` → `FShape` / `FImage` / `FGroup` — and `univer-workspace-cli api show` gives signatures.
+A slide unit is one presentation: the presentation holds slides ("Deck and pages"), a slide holds elements in stacking order ("Stacking order"), and an element is a shape, an image, or a group — a text box is a shape ("Elements"). Tables and charts are elements too, and both are editable ("Tables", "Charts"). Native charts use the direct `FSlide` chart methods ("Native charts"). Imported decks can carry further element kinds (placeholders, connectors, media); address those through the generic element surface and verify their dedicated facade before editing. Master/layout pages render underneath a slide but are not edited here. A transition is a per-slide page-enter effect ("Transitions"). The facade mirrors this shape — `FPresentation` → `FSlide` → `FShape` / `FImage` / `FGroup` — and `uvw api show` gives signatures.
 
 ## Task routing
 
@@ -69,19 +69,19 @@ Run steps 2a–2e for page N and reach a clean 2d before starting page N+1.
 **2a. Prepare this page's assets.** Prepare the photos, logos, QR codes, icons, emoji, illustrations, and textures this page needs as individual files, record each exported path in the spec, and reuse files already exported for earlier pages. Discover and export SVG resources by meaning:
 
 ```bash
-univer-workspace-cli resources registries
-univer-workspace-cli resources find <query> [<query>...] [--registry <id>]... [--limit <n>]
-univer-workspace-cli resources export <registry>/<resource> [<handle>...] --out ./resources/
+uvw resources registries
+uvw resources find <query> [<query>...] [--registry <id>]... [--limit <n>]
+uvw resources export <registry>/<resource> [<handle>...] --out ./resources/
 ```
 
 Copy the canonical handle exactly. Export downloads uncached resources once and then reuses `UNIVER_HOME/cache/resources`; output files are named `<registryId>--<resourceId>.svg`. `colorEditable: true` resources can follow an authored color, while fixed logos, color emoji, and illustrations remain whole-image assets. Keep one icon registry/style baseline across the deck. Hand-draw an icon only when the library has no appropriate result. Do not clone one icon under different names, substitute Unicode glyphs, or use empty circles as placeholders. Keep exported resources as files and reference them with `<image href="./resources/<registry>--<resource>.svg">`; use `<defs><symbol>` + `<use>` for a self-authored graphic deliberately reused within a page. Never extract and copy an exported resource's path data into the page: that loses source organization, and truncated paths can still render without warnings.
 
 **2b. Author the page SVG.** Reread the page's spec section, then hand-author the complete `page-NN.svg` with inline styles and the prepared assets, and check it against all five spec fields. Keep every SVG through delivery so review can compare exact coordinates. Do not generate or rewrite pages through scripts, shared templates, or bulk substitutions; that produces repeated layouts and propagates page-specific errors.
 
-**2c. Compile and apply with zero warnings.** Run `univer-workspace-cli screenshot setup` once before the first compile so real fonts can be measured. Apply the page:
+**2c. Compile and apply with zero warnings.** Run `uvw screenshot setup` once before the first compile so real fonts can be measured. Apply the page:
 
 ```bash
-univer-workspace-cli compile-svg page-NN.svg --page N --apply \
+uvw compile-svg page-NN.svg --page N --apply \
   --worktree <id> --unit <id> --json
 ```
 
@@ -90,8 +90,8 @@ Clear every `warning` before continuing because warnings mean output was dropped
 **2d. Check the rendered lint and snapshot facts (required, every page).**
 
 ```bash
-univer-workspace-cli lint --worktree <id> --unit <id> --pages N --json
-univer-workspace-cli inspect slide index:N --worktree <id> --unit <id> --json
+uvw lint --worktree <id> --unit <id> --pages N --json
+uvw inspect slide index:N --worktree <id> --unit <id> --json
 ```
 
 `lint` is a standalone Slide-only command. With `--pages`, it reports only the selected page's findings. It covers three conservative rules (text off the page, text escaping an opaque card, two texts overlapping) and is tuned to almost never fire on a healthy deck, so **assume every finding is real until the evidence says otherwise**. Each finding includes the rendered ink and related geometry needed to judge that finding; `inspect slide index:N` provides the declared element facts for that page. Check everything else in the screenshot against this checklist:
@@ -350,7 +350,7 @@ Two traps, both verified against the real runtime:
 
 Slide chart support is registered in the runtime. Create detached chart information directly from
 the slide, call `.build()`, then await `slide.insertChart(info)` to obtain a live `FSlideChart`.
-Query `univer-workspace-cli api show FSlide.newChart FSlide.insertChart FSlide.getCharts
+Query `uvw api show FSlide.newChart FSlide.insertChart FSlide.getCharts
 FSlide.getChart FSlideChart` when the exact builder and live-chart surfaces matter.
 
 The first data row is the header row; use field indexes to declare category and value columns:
@@ -401,8 +401,8 @@ read, confirm `inspect slide index:N` reports a chart element, then screenshot t
 and test the exported PPTX. Insert charts after the final full-page SVG replacement, which replaces
 every page element.
 
-Use model readback as structural proof and the rendered series as visual proof. If `univer-workspace-cli screenshot`
-captures the generic blue loading placeholder, run `univer-workspace-cli open --worktree <id> --unit <id>`, open the returned Workspace review URL, wait for the real series to appear, and capture that rendered page.
+Use model readback as structural proof and the rendered series as visual proof. If `uvw screenshot`
+captures the generic blue loading placeholder, run `uvw browse <n> -R <repo> --unit <id>`, open the returned Workspace review URL, wait for the real series to appear, and capture that rendered page.
 
 ## Transitions
 
@@ -431,7 +431,7 @@ Build one with `slide.newTable()` — `setValues`, `setRows` / `setColumns`, `se
 
 **Styling takes two settings that must agree.** `setStyleId(id)` picks the palette; `setOptions({ firstRow, bandRow, firstCol, lastCol, lastRow, bandCol })` decides which roles paint — `setStyleId("univerPrimaryHeaderBandedRows")` alone renders a plain grid until you also `setOptions({ firstRow: true, bandRow: true })`. Ids are `univer` + family (`Neutral`, `Primary`, `Blue`, `Cyan`, `Green`, `Orange`, `Purple`, `Pink`) + variant (`LightPlainGrid`, `LightHeader`, `LightHeaderBandedRows`, `MediumStrongHeader`, `MediumFirstColumn`, `MediumHeaderFirstColumn`, `HorizontalLines`), plus `univerPrimaryPlainGrid` (the default). **`setStyleId` does not validate** — a misspelled id returns `true` and the styling is silently lost. Cell fill and borders go through `setCellStyle(range, style)`, text color and font through `setCellTextStyle(range, textStyle)`.
 
-`univer-workspace-cli api show FSlideTable` gives the rest.
+`uvw api show FSlideTable` gives the rest.
 
 ## Capability boundary
 
@@ -446,6 +446,6 @@ logical inspection alone cannot establish visual correctness.
 Export only after every page has passed logical and visual verification:
 
 ```bash
-univer-workspace-cli screenshot --worktree <id> --unit <id> --pages all
-univer-workspace-cli export output.pptx --worktree <id> --unit <id>
+uvw screenshot --worktree <id> --unit <id> --pages all
+uvw export output.pptx --worktree <id> --unit <id>
 ```

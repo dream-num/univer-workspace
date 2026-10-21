@@ -23,31 +23,23 @@ import {
   WorkspaceCompileSvgFeature,
   WorkspaceContentExecutionFeature,
   WorkspaceContentSource,
-  WorkspaceIssueFeature,
-  WorkspaceOpenFeature,
   WorkspacePrintPdfFeature,
   WorkspaceRenderUnitLoader,
   WorkspaceScreenshotFeature,
-  WorkspaceSpaceFeature,
   WorkspaceUnitExchangeFeature,
   WorkspaceUnitFeature,
   WorkspaceUnitLayoutLintFeature,
-  WorkspaceWorktreeFeature,
 } from "@univerjs/univer-workspace-client-core";
-import { Command, type OutputConfiguration } from "commander";
-import { resolveUniverLicense, workspaceSessionPath } from "./config.js";
+import type { Command } from "commander";
+import { resolveUniverLicense } from "./config.js";
 import { createAssetCommand } from "./features/asset/command.js";
-import { createAuthCommands } from "./features/auth/command.js";
-import { WorkspaceAuth } from "./features/auth/session.js";
 import { createBlobCommand } from "./features/blob/command.js";
 import { createContentExecuteCommand } from "./features/content/command.js";
 import { createWorkspaceDaemonRuntimeOperations } from "./features/content/execution.js";
 import { createWorkspaceUnitExchangeCommands } from "./features/exchange/command.js";
 import { createHtmlViewCommand } from "./features/html-view/command.js";
 import { WorkspaceHtmlViewFeature } from "./features/html-view/html-view.js";
-import { createIssueCommand } from "./features/issue/command.js";
 import { createWorkspaceUnitLayoutLintCommand } from "./features/lint/command.js";
-import { createOpenCommand } from "./features/open/command.js";
 import { createWorkspacePrintPdfCommand } from "./features/print-pdf/command.js";
 import { createWorkspaceScreenshotCommand } from "./features/screenshot/command.js";
 import { createSkillsCommand } from "./features/skills/command.js";
@@ -55,7 +47,7 @@ import { createSpaceCommand } from "./features/space/command.js";
 import { createWorkspaceCompileSvgCommand } from "./features/svg/command.js";
 import { createWorkspaceCompileTypstCommand } from "./features/typst/command.js";
 import { createUnitCommand } from "./features/unit/command.js";
-import { createWorktreeCommand } from "./features/worktree/command.js";
+import { configureOutput, createProductCommands, createProductServices, createRootCommand } from "./product-commands.js";
 import { workspaceDaemonIdentity } from "./runtime/daemon-identity.js";
 import { WORKSPACE_CLI_VERSION } from "./version.js";
 
@@ -88,18 +80,11 @@ export interface WorkspaceCliProgramOptions {
 }
 
 export function createProgram(options: WorkspaceCliProgramOptions): Command {
-  const program = new Command("univer-workspace-cli")
-    .description("Compose Univer CLI SDK capabilities for Workspace targets")
-    .version(
-      `univer-workspace-cli ${WORKSPACE_CLI_VERSION}`,
-      "-v, --version",
-      "output the current version",
-    );
   const output = {
     writeErr: options.writeError ?? ((text: string) => process.stderr.write(text)),
     writeOut: options.write,
   };
-  program.configureOutput(output);
+  const program = createRootCommand(output);
 
   const daemonOptions = {
     entry: options.daemonEntry,
@@ -110,13 +95,8 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
   const daemon = createDaemonClient(daemonOptions);
   const runtimeOperations = createWorkspaceDaemonRuntimeOperations(daemon);
   const daemonControl = createDaemonControl(daemonOptions);
-  const auth = new WorkspaceAuth({
-    config: options.config,
-    sessionPath: workspaceSessionPath(options.env),
-    ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
-  });
-  const authenticatedHttp = async () => await auth.authenticatedHttp("client");
-  const worktrees = new WorkspaceWorktreeFeature(authenticatedHttp);
+  const product = createProductServices(options);
+  const { auth, authenticatedHttp, spaces } = product;
   const openResourceLibrary = createNodeResourceLibraryFactory({
     cacheRoot: options.resourceCacheRoot,
     manifestPath: options.resourceManifestPath,
@@ -194,12 +174,8 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createApiCommand({ reference: createStandardApiReference() }),
     createResourcesCommand({ openLibrary: openResourceLibrary }),
     createSkillsCommand(options.skillDataRoot),
-    ...createAuthCommands(auth),
-    createSpaceCommand(
-      new WorkspaceSpaceFeature(async () => await auth.authenticatedHttp("client")),
-    ),
-    createIssueCommand(new WorkspaceIssueFeature(authenticatedHttp)),
-    createWorktreeCommand(worktrees),
+    ...createProductCommands(product),
+    createSpaceCommand(spaces, product.repoContext),
     createUnitCommand(units),
     ...createWorkspaceUnitExchangeCommands(exchange),
     createBlobCommand(blobs),
@@ -214,9 +190,6 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     ),
     createAssetCommand(
       new WorkspaceAssetFeature(async () => await auth.authenticatedHttp("client")),
-    ),
-    createOpenCommand(
-      new WorkspaceOpenFeature(authenticatedHttp, async () => await auth.configuredOrigin()),
     ),
     createWorkspaceScreenshotCommand({
       env: options.env,
@@ -251,16 +224,22 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
       },
     }),
   ];
-  for (const command of commands) {
+  const rank = (command: Command) => HELP_GROUPS.indexOf(helpGroupOf(command.name()));
+  for (const command of [...commands].sort((left, right) => rank(left) - rank(right))) {
     configureOutput(command, output);
+    command.helpGroup(helpGroupOf(command.name()));
     program.addCommand(command);
   }
   return program;
 }
 
-function configureOutput(command: Command, output: OutputConfiguration): void {
-  command.configureOutput(output);
-  for (const child of command.commands) configureOutput(child, output);
+const HELP_GROUPS = ["Core commands:", "Content commands:", "Setup commands:"];
+const CORE_COMMANDS = new Set(["auth", "repo", "issue", "label", "pr", "worktree", "search", "browse"]);
+const SETUP_COMMANDS = new Set(["config", "daemon", "skills", "resources", "api"]);
+
+function helpGroupOf(name: string): string {
+  if (CORE_COMMANDS.has(name)) return "Core commands:";
+  return SETUP_COMMANDS.has(name) ? "Setup commands:" : "Content commands:";
 }
 
 function isRecord(value: unknown): value is { readonly [key: string]: JsonValue } {

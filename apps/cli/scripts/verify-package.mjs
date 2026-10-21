@@ -20,7 +20,10 @@ assertEqual(packageJson.publishConfig?.registry, PUBLISH_REGISTRY, "publish regi
 assertEqual(packageJson.engines?.node, ">=22.12.0", "Node engine");
 assertEqual(
   JSON.stringify(packageJson.bin),
-  JSON.stringify({ "univer-workspace-cli": "./bin/univer-workspace-cli.js" }),
+  JSON.stringify({
+    uvw: "./bin/uvw.js",
+    "univer-workspace-cli": "./bin/univer-workspace-cli.js",
+  }),
   "bin",
 );
 assertEqual(JSON.stringify(packageJson.files), JSON.stringify(PACKAGE_FILES), "files");
@@ -34,6 +37,7 @@ for (const path of [
   "LICENSE",
   "README.md",
   "bin/univer-workspace-cli.js",
+  "bin/uvw.js",
   "dist/main.js",
   "dist/runtime/daemon.js",
   "dist/runtime/worker.js",
@@ -58,8 +62,10 @@ for (const path of [
 assertDirectory("dist/render-runtime/assets");
 assertWorkerChildClosure();
 assertBundledCommonjsNodeGlobals();
-if ((statSync(join(packageRoot, "bin/univer-workspace-cli.js")).mode & 0o111) === 0) {
-  throw new Error("Package launcher must be executable");
+for (const launcher of ["bin/univer-workspace-cli.js", "bin/uvw.js"]) {
+  if ((statSync(join(packageRoot, launcher)).mode & 0o111) === 0) {
+    throw new Error(`Package launcher ${launcher} must be executable`);
+  }
 }
 
 const forbidden = findFiles(packageRoot).filter((path) =>

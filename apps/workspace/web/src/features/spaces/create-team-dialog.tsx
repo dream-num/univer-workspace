@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useCreateTeamSpace } from "./spaces.commands";
 import { useI18n } from "../../shared/i18n";
+import { ApiError } from "../../shared/api/errors";
 import { Button, Dialog, DialogClose, Field, Input, toast } from "../../shared/ui";
+import { isValidSlug, suggestSlug } from "./space-slug";
 
 export function CreateTeamDialog({
   open,
@@ -14,8 +16,12 @@ export function CreateTeamDialog({
 }) {
   const { t } = useI18n();
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  // Follows the name until the user edits it; empty lets the server generate one.
+  const [slugEdited, setSlugEdited] = useState(false);
   const [publicRead, setPublicRead] = useState(false);
   const [error, setError] = useState<string>();
+  const [slugError, setSlugError] = useState<string>();
   const createTeam = useCreateTeamSpace();
 
   const submit = (event: FormEvent) => {
@@ -24,14 +30,27 @@ export function CreateTeamDialog({
       setError(t("enterSpaceName"));
       return;
     }
-    createTeam.mutate({ name: name.trim(), publicRead }, {
+    const trimmedSlug = slug.trim();
+    if (trimmedSlug && !isValidSlug(trimmedSlug)) {
+      setSlugError(t("spaceSlugInvalid"));
+      return;
+    }
+    createTeam.mutate({ name: name.trim(), publicRead, ...(trimmedSlug ? { slug: trimmedSlug } : {}) }, {
       onSuccess: async (space) => {
         onOpenChange(false);
         setName("");
+        setSlug("");
+        setSlugEdited(false);
         setPublicRead(false);
         await onCreated(space);
       },
       onError: (mutationError) => {
+        if (mutationError instanceof ApiError && mutationError.field === "slug") {
+          setSlugError(
+            mutationError.code === "SPACE_SLUG_TAKEN" ? t("spaceSlugTaken") : mutationError.message,
+          );
+          return;
+        }
         toast.error(
           mutationError instanceof Error ? mutationError.message : t("spaceCreationFailed"),
         );
@@ -44,6 +63,7 @@ export function CreateTeamDialog({
       open={open}
       onOpenChange={(next) => {
         setError(undefined);
+        setSlugError(undefined);
         onOpenChange(next);
       }}
       title={t("createTeamSpace")}
@@ -66,7 +86,33 @@ export function CreateTeamDialog({
             invalid={Boolean(error)}
             onChange={(event) => {
               setError(undefined);
+              setSlugError(undefined);
               setName(event.target.value);
+              if (!slugEdited) setSlug(suggestSlug(event.target.value));
+            }}
+          />
+        </Field>
+        <Field
+          label={t("spaceSlug")}
+          htmlFor="team-space-slug"
+          className="mt-4"
+          error={slugError}
+          hint={t("spaceSlugHint")}
+        >
+          <Input
+            id="team-space-slug"
+            maxLength={100}
+            value={slug}
+            invalid={Boolean(slugError)}
+            autoCapitalize="none"
+            spellCheck={false}
+            onChange={(event) => {
+              setSlugError(undefined);
+              setSlugEdited(true);
+              setSlug(event.target.value);
+            }}
+            onBlur={() => {
+              if (slug.trim() && !isValidSlug(slug.trim())) setSlugError(t("spaceSlugInvalid"));
             }}
           />
         </Field>

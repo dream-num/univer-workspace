@@ -27,7 +27,7 @@ export function RepositoryHeader({ space }: { readonly space: Space }) {
                 search={{}}
                 className="break-all text-foreground no-underline hover:underline"
               >
-                {name}
+                {space.fullName ?? name}
               </Link>
             </h1>
             <span className="shrink-0 rounded-full border border-border px-1.5 text-xs leading-[18px] font-medium text-muted-foreground">
