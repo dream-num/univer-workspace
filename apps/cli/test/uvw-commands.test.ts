@@ -883,6 +883,50 @@ async function run(command: Command, args: readonly string[]): Promise<string> {
   return output;
 }
 
+describe("malformed Browser URL errors", () => {
+  it.each(["%", "%ZZ", "%C3%28"])("presents invalid path encoding %s without a stack or product requests", async (encoded) => {
+    const { lookup, repoContext } = context();
+    const request = vi.fn();
+    const spaces = { get: request, getStar: request } as unknown as WorkspaceSpaceFeature;
+    const issues = { get: request, list: request } as unknown as WorkspaceIssueFeature;
+    const worktrees = { get: request, getByNumber: request } as unknown as WorkspaceWorktreeFeature;
+    const program = new Command("uvw");
+    for (const command of [
+      createRepoCommand(spaces, repoContext),
+      createIssueCommand({ context: repoContext, feature: issues, origin: async () => ORIGIN }),
+      ...createPullRequestCommands({ context: repoContext, origin: async () => ORIGIN, spaces, userId: request, worktrees }),
+      createBrowseCommand({ context: repoContext, issues, origin: async () => ORIGIN, worktrees }),
+    ]) program.addCommand(command);
+    const output = { stderr: "", stdout: "" };
+    const configure = (command: Command) => {
+      command.exitOverride().configureOutput({
+        writeErr: (text) => { output.stderr += text; },
+        writeOut: (text) => { output.stdout += text; },
+      });
+      command.commands.forEach(configure);
+    };
+    configure(program);
+
+    for (const args of [
+      ["repo", "view", `${ORIGIN}/spaces/${encoded}`],
+      ["issue", "list", "-R", `${ORIGIN}/spaces/${encoded}`],
+      ["issue", "view", `${ORIGIN}/spaces/space-1/issues/${encoded}`],
+      ["pr", "view", `${ORIGIN}/spaces/space-1/pulls/${encoded}`],
+      ["worktree", "get", `${ORIGIN}/spaces/space-1/pulls/${encoded}`],
+      ["browse", `${ORIGIN}/spaces/space-1/issues/${encoded}`],
+    ]) {
+      output.stderr = "";
+      const error: unknown = await program.parseAsync(args, { from: "user" }).catch((caught: unknown) => caught);
+      expect(error, args.join(" ")).toMatchObject({ exitCode: 1 });
+      expect(output.stderr).toContain("workspace-argument-invalid");
+      expect(output.stderr).not.toMatch(/URIError|\n\s+at /u);
+      expect(output.stdout).toBe("");
+    }
+    expect(request).not.toHaveBeenCalled();
+    expect(lookup).not.toHaveBeenCalled();
+  });
+});
+
 describe("uvw startup", () => {
   it("keeps the product commands off the Univer runtime", async () => {
     const { readFile } = await import("node:fs/promises");

@@ -66,6 +66,32 @@ describe("repository references", () => {
     for (const other of ["0", "-1", "1.5", "w-1", "0c0c7a04-ca20", "#"]) expect(parseItemNumber(other), other).toBeUndefined();
   });
 
+  it.each(["%", "%ZZ", "%C3%28"])("rejects malformed path encoding %s as an argument error", async (encoded) => {
+    const { spaces, calls } = clients(() => Response.json(view()));
+    for (const path of [`/spaces/${encoded}/issues/3`, `/spaces/s1/pulls/${encoded}`]) {
+      const url = `https://workspace.test${path}`;
+      for (const parse of [parseRepoReference, parseItemNumber]) {
+        expect(() => parse(url)).toThrowError(expect.objectContaining({ code: "workspace-argument-invalid" }));
+      }
+      await expect(resolveRepoReference(spaces, url, "https://workspace.test"))
+        .rejects.toMatchObject({ code: "workspace-argument-invalid" });
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it.each(["issues", "pulls"])("preserves valid Unicode and percent encoding in %s URLs", async (route) => {
+    const { spaces, calls } = clients(() => Response.json(view()));
+    const url = `https://workspace.test/%73paces/%E7%A9%BA%E9%97%B4%25/${route}/%33`;
+    const item = { kind: route === "issues" ? "issue" : "pr", number: 3 };
+    expect(parseRepoReference(url)).toEqual({ kind: "url", spaceId: "空间%", item });
+    expect(parseItemNumber(url)).toBe(3);
+    await expect(resolveRepoReference(spaces, url, "https://workspace.test"))
+      .resolves.toEqual({ spaceId: "空间%", item });
+    await expect(resolveRepoReference(spaces, url, "https://other.test"))
+      .rejects.toMatchObject({ code: "workspace-origin-mismatch" });
+    expect(calls).toEqual([]);
+  });
+
   it("resolves through the server lookup only when needed and rejects other origins", async () => {
     const { spaces, calls } = clients(() => Response.json(view()));
     await expect(resolveRepoReference(spaces, "Me/Docs")).resolves.toEqual({ spaceId: "s1" });

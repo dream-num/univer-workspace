@@ -89,7 +89,12 @@ function parseBrowserUrl(value: string): WorkspaceRepoReference {
   } catch {
     throw invalid(`"${value}" is not a valid URL.`);
   }
-  const segments = url.pathname.split("/").filter((segment) => segment !== "").map(decodeURIComponent);
+  let segments: string[];
+  try {
+    segments = url.pathname.split("/").filter((segment) => segment !== "").map(decodeURIComponent);
+  } catch {
+    throw invalid("The URL path contains invalid percent encoding.");
+  }
   if (segments[0] === "spaces" && segments[1] !== undefined) {
     const route = segments[2] as keyof typeof ITEM_ROUTES | undefined;
     const number = segments[3] !== undefined && /^[1-9]\d{0,9}$/.test(segments[3]) ? Number(segments[3]) : undefined;
