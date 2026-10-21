@@ -9,6 +9,7 @@ export type ApplicationErrorCode =
   | "PASSWORD_AUTH_DISABLED"
   | "UNAUTHENTICATED"
   | "USERNAME_TAKEN"
+  | "SPACE_SLUG_TAKEN"
   | "FORBIDDEN"
   | "CONFLICT"
   | "PRECONDITION_FAILED"

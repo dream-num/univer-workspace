@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { createWorkspaceApplication } from "../dist/server/app.js";
+import { DROP_V12_SQL } from "./support/v12-downgrade.js";
 
 const directory = mkdtempSync(join(tmpdir(), "workspace-production-v3-migration-"));
 const databaseFilename = join(directory, "workspace.sqlite");
@@ -124,6 +125,7 @@ try {
     BEGIN
       SELECT RAISE(ABORT, 'asset upload scope is immutable');
     END;
+    ${DROP_V12_SQL}
     ALTER TABLE spaces DROP COLUMN description;
     DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
@@ -146,7 +148,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 11);
+    assert.equal(version.user_version, 12);
     const columns = migrated.database.connection
       .prepare("PRAGMA table_info(univer_asset_uploads)")
       .all() as unknown as Array<{ readonly name: string }>;

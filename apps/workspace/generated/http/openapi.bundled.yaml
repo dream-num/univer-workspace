@@ -733,6 +733,41 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/spaces/lookup:
+    get:
+      tags:
+        - Spaces
+      operationId: lookupSpace
+      summary: Resolve `<owner>/<slug>` to a Space the current User may discover.
+      description: |
+        `owner` is a username (case-insensitive). `slug=personal` resolves the owner's Personal Space, including
+        Personal Spaces of accounts that predate slugs. A hidden Space and a missing Space both return 404.
+      parameters:
+        - name: owner
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: slug
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Space and effective capabilities.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/spaces/{spaceId}:
     parameters:
       - name: spaceId
@@ -774,6 +809,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SpaceView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/spaces/{spaceId}/worktrees/{number}:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      tags:
+        - Worktrees
+      operationId: getWorktreeByNumber
+      summary: Get a Worktree by its repository-level number.
+      description: |
+        In a Team Space the number addresses a Team Worktree. In the caller's own Personal Space it addresses one of
+        the caller's User Worktrees. Hidden and missing Worktrees both return 404.
+      responses:
+        '200':
+          description: Worktree detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2229,6 +2300,16 @@ paths:
           required: false
           schema:
             type: string
+        - name: state
+          in: query
+          required: false
+          description: Keep only Worktrees in these states. Repeat the parameter for several states. Applied before pagination, so a page is full unless the result is exhausted.
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/WorktreeState'
+          style: form
+          explode: true
         - $ref: '#/components/parameters/CursorParameter'
         - $ref: '#/components/parameters/LimitParameter'
       responses:
@@ -2715,7 +2796,21 @@ components:
             - capabilities
             - owner
             - description
+            - slug
+            - fullName
           properties:
+            slug:
+              type:
+                - string
+                - 'null'
+              description: URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed.
+            fullName:
+              type:
+                - string
+                - 'null'
+              description: |
+                `<owner.username>/<slug>` for a Team Space with a slug and `<owner.username>/personal` for a Personal Space.
+                Null for a Team Space without a slug. Computed by the server; it changes when the owner renames their username.
             description:
               type: string
               maxLength: 350
@@ -3105,6 +3200,7 @@ components:
       additionalProperties: false
       required:
         - id
+        - number
         - name
         - summary
         - kind
@@ -3120,6 +3216,14 @@ components:
       properties:
         id:
           type: string
+        number:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+          description: |
+            Repository-level number shown as `#N`. A Team Worktree shares the Team Space's Issue number sequence;
+            a User Worktree is numbered per creator. Null for Worktrees created before numbering existed.
         name:
           type: string
         summary:
@@ -3467,6 +3571,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SpaceView'
+    SpaceSlug:
+      type: string
+      minLength: 1
+      maxLength: 100
+      pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      description: Letters, digits, `.`, `_` and `-`, starting with a letter or digit. Compared case-insensitively. `personal` is reserved.
     CreateTeamSpace:
       type: object
       additionalProperties: false
@@ -3477,6 +3587,9 @@ components:
           type: string
           minLength: 1
           maxLength: 100
+        slug:
+          $ref: '#/components/schemas/SpaceSlug'
+          description: Omit to let the server derive one from the name (lowercased, unsafe characters replaced by `-`, `repo-<id8>` when nothing is left, numeric suffix on conflict).
         publicRead:
           type: boolean
           description: Whether anyone with a link can read the Space without signing in. Omit to keep it private.
@@ -3489,12 +3602,62 @@ components:
           type: string
           minLength: 1
           maxLength: 100
+        slug:
+          $ref: '#/components/schemas/SpaceSlug'
+          description: Team Spaces only. The previous slug is not reserved or redirected.
         publicRead:
           type: boolean
         description:
           type: string
           maxLength: 350
           description: Plain text. Surrounding whitespace is trimmed; an empty string clears the description.
+    WorktreeKind:
+      type: string
+      enum:
+        - user
+        - team
+    WorktreeVisibility:
+      type: string
+      enum:
+        - private
+        - space
+    WorktreeState:
+      type: string
+      enum:
+        - draft
+        - ready
+        - merging
+        - merged
+        - discarded
+    WorktreeCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        - review
+        - editDraft
+        - addUnit
+        - changeVisibility
+        - markReady
+        - reopen
+        - merge
+        - discard
+      properties:
+        review:
+          type: boolean
+        editDraft:
+          type: boolean
+        addUnit:
+          type: boolean
+        changeVisibility:
+          type: boolean
+        markReady:
+          type: boolean
+        reopen:
+          type: boolean
+        merge:
+          type: boolean
+        discard:
+          type: boolean
     UnitType:
       type: string
       enum:
@@ -3503,6 +3666,100 @@ components:
         - slide
         - board
         - base
+    WorktreeUnitTarget:
+      type: object
+      additionalProperties: false
+      required:
+        - spaceId
+        - parentNodeId
+      properties:
+        spaceId:
+          type: string
+        parentNodeId:
+          type:
+            - string
+            - 'null'
+    WorktreeUnitChange:
+      type: string
+      enum:
+        - modified
+        - added
+        - deleted
+        - unchanged
+    MergeResult:
+      type: string
+      enum:
+        - pending
+        - merged
+        - unchanged
+        - removed
+        - conflict
+        - failed
+      description: Removed means this Unit was excluded from content publication. Product deletion is complete only when the Worktree is merged and its merge Operation is completed.
+    ActivationState:
+      type: string
+      enum:
+        - notApplicable
+        - waitingForMerge
+        - pending
+        - completed
+        - failed
+        - discarded
+    WorktreeUnit:
+      type: object
+      additionalProperties: false
+      required:
+        - unitId
+        - resourceId
+        - nodeId
+        - source
+        - name
+        - unitType
+        - target
+        - draftHeadRevision
+        - change
+        - mergeResult
+        - activationState
+      properties:
+        unitId:
+          type: string
+        resourceId:
+          type: string
+        nodeId:
+          type:
+            - string
+            - 'null'
+          description: Null when the document no longer has a product Node, including after permanent deletion.
+        source:
+          type: string
+          enum:
+            - trunk
+            - worktree
+        name:
+          type: string
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        target:
+          oneOf:
+            - $ref: '#/components/schemas/WorktreeUnitTarget'
+            - type: 'null'
+        draftHeadRevision:
+          type: integer
+          minimum: 0
+        change:
+          $ref: '#/components/schemas/WorktreeUnitChange'
+        mergeResult:
+          $ref: '#/components/schemas/MergeResult'
+        activationState:
+          $ref: '#/components/schemas/ActivationState'
+    WorktreeEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - worktree
+      properties:
+        worktree:
+          $ref: '#/components/schemas/WorktreeDetail'
     ResourceCapabilities:
       type: object
       additionalProperties: false
@@ -4629,53 +4886,6 @@ components:
         description:
           type: string
           maxLength: 200
-    WorktreeKind:
-      type: string
-      enum:
-        - user
-        - team
-    WorktreeVisibility:
-      type: string
-      enum:
-        - private
-        - space
-    WorktreeState:
-      type: string
-      enum:
-        - draft
-        - ready
-        - merging
-        - merged
-        - discarded
-    WorktreeCapabilities:
-      type: object
-      additionalProperties: false
-      required:
-        - review
-        - editDraft
-        - addUnit
-        - changeVisibility
-        - markReady
-        - reopen
-        - merge
-        - discard
-      properties:
-        review:
-          type: boolean
-        editDraft:
-          type: boolean
-        addUnit:
-          type: boolean
-        changeVisibility:
-          type: boolean
-        markReady:
-          type: boolean
-        reopen:
-          type: boolean
-        merge:
-          type: boolean
-        discard:
-          type: boolean
     WorktreeList:
       type: object
       additionalProperties: false
@@ -4743,100 +4953,6 @@ components:
       oneOf:
         - $ref: '#/components/schemas/CreateUserWorktree'
         - $ref: '#/components/schemas/CreateTeamWorktree'
-    WorktreeUnitTarget:
-      type: object
-      additionalProperties: false
-      required:
-        - spaceId
-        - parentNodeId
-      properties:
-        spaceId:
-          type: string
-        parentNodeId:
-          type:
-            - string
-            - 'null'
-    WorktreeUnitChange:
-      type: string
-      enum:
-        - modified
-        - added
-        - deleted
-        - unchanged
-    MergeResult:
-      type: string
-      enum:
-        - pending
-        - merged
-        - unchanged
-        - removed
-        - conflict
-        - failed
-      description: Removed means this Unit was excluded from content publication. Product deletion is complete only when the Worktree is merged and its merge Operation is completed.
-    ActivationState:
-      type: string
-      enum:
-        - notApplicable
-        - waitingForMerge
-        - pending
-        - completed
-        - failed
-        - discarded
-    WorktreeUnit:
-      type: object
-      additionalProperties: false
-      required:
-        - unitId
-        - resourceId
-        - nodeId
-        - source
-        - name
-        - unitType
-        - target
-        - draftHeadRevision
-        - change
-        - mergeResult
-        - activationState
-      properties:
-        unitId:
-          type: string
-        resourceId:
-          type: string
-        nodeId:
-          type:
-            - string
-            - 'null'
-          description: Null when the document no longer has a product Node, including after permanent deletion.
-        source:
-          type: string
-          enum:
-            - trunk
-            - worktree
-        name:
-          type: string
-        unitType:
-          $ref: '#/components/schemas/UnitType'
-        target:
-          oneOf:
-            - $ref: '#/components/schemas/WorktreeUnitTarget'
-            - type: 'null'
-        draftHeadRevision:
-          type: integer
-          minimum: 0
-        change:
-          $ref: '#/components/schemas/WorktreeUnitChange'
-        mergeResult:
-          $ref: '#/components/schemas/MergeResult'
-        activationState:
-          $ref: '#/components/schemas/ActivationState'
-    WorktreeEnvelope:
-      type: object
-      additionalProperties: false
-      required:
-        - worktree
-      properties:
-        worktree:
-          $ref: '#/components/schemas/WorktreeDetail'
     PatchWorktree:
       type: object
       additionalProperties: false

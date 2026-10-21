@@ -58,8 +58,16 @@ SpaceView:
   allOf:
     - $ref: "#/SpaceSummary"
     - type: object
-      required: [accessRole, capabilities, owner, description]
+      required: [accessRole, capabilities, owner, description, slug, fullName]
       properties:
+        slug:
+          type: [string, "null"]
+          description: URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed.
+        fullName:
+          type: [string, "null"]
+          description: |
+            `<owner.username>/<slug>` for a Team Space with a slug and `<owner.username>/personal` for a Personal Space.
+            Null for a Team Space without a slug. Computed by the server; it changes when the owner renames their username.
         description:
           type: string
           maxLength: 350
@@ -90,6 +98,13 @@ SpaceList:
       items:
         $ref: "#/SpaceView"
 
+SpaceSlug:
+  type: string
+  minLength: 1
+  maxLength: 100
+  pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  description: Letters, digits, `.`, `_` and `-`, starting with a letter or digit. Compared case-insensitively. `personal` is reserved.
+
 CreateTeamSpace:
   type: object
   additionalProperties: false
@@ -99,6 +114,9 @@ CreateTeamSpace:
       type: string
       minLength: 1
       maxLength: 100
+    slug:
+      $ref: "#/SpaceSlug"
+      description: Omit to let the server derive one from the name (lowercased, unsafe characters replaced by `-`, `repo-<id8>` when nothing is left, numeric suffix on conflict).
     publicRead:
       type: boolean
       description: Whether anyone with a link can read the Space without signing in. Omit to keep it private.
@@ -112,6 +130,9 @@ PatchSpace:
       type: string
       minLength: 1
       maxLength: 100
+    slug:
+      $ref: "#/SpaceSlug"
+      description: Team Spaces only. The previous slug is not reserved or redirected.
     publicRead:
       type: boolean
     description:

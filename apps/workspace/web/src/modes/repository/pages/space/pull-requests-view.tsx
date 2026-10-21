@@ -6,6 +6,7 @@ import { useI18n } from "../../../../shared/i18n";
 import { isOpenWorktree } from "../../../../features/worktrees";
 import { Button, Empty, Input, Skeleton } from "../../../../shared/ui";
 import { RepositoryPrState } from "../../repository-pr-state";
+import { PullRequestLink } from "../../repository-pull-request-link";
 import { cn } from "../../../../shared/utils/cn";
 import type { Worktree } from "./types";
 
@@ -128,13 +129,17 @@ export function PullRequestsView({
                 <div className="flex items-start gap-2 px-4 py-3 hover:bg-accent/60">
                   <RepositoryPrState state={worktree.state} />
                   <div className="min-w-0 flex-1">
-                    <Link
-                      to="/worktrees"
-                      search={{ spaceId, worktree: worktree.id }}
+                    <PullRequestLink
+                      target={{ spaceId, worktree }}
                       className="text-base leading-5 font-semibold break-words text-foreground no-underline after:absolute after:inset-0 hover:text-brand-700 dark:hover:text-brand-400"
                     >
                       {worktree.name}
-                    </Link>
+                    </PullRequestLink>
+                    {worktree.number !== null ? (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {t("repositoryPrNumber", { number: worktree.number })}
+                      </span>
+                    ) : null}
                     <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
                       <FileDiff className="size-3.5" aria-hidden="true" />
                       {worktree.unitCount === 1

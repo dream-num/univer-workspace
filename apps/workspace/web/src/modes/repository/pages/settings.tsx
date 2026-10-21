@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Copy, Globe, LockKeyhole } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { RepositorySettingsLayout } from "../repository-settings-layout";
-import { useUpdateSpace, spacesQueryOptions } from "../../../features/spaces";
+import { isValidSlug, useUpdateSpace, spacesQueryOptions } from "../../../features/spaces";
+import { ApiError } from "../../../shared/api/errors";
 import { WorkspaceLayout } from "../../workspace-layout";
 import { useI18n } from "../../../shared/i18n";
 import { Button, ConfirmDialog, Field, Input, Textarea, toast } from "../../../shared/ui";
@@ -36,6 +37,8 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
   const [name, setName] = useState(space?.name ?? "");
   const [description, setDescription] = useState(space?.description ?? "");
   const [error, setError] = useState<string>();
+  const [slug, setSlug] = useState(space?.slug ?? "");
+  const [slugError, setSlugError] = useState<string>();
   const rename = useUpdateSpace(spaceId);
   function update(values: Parameters<typeof rename.mutate>[0]) {
     rename.mutate(values, {
@@ -43,8 +46,15 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
         toast.success(t("spaceRenamed"));
         if (values.name !== undefined) setName(values.name);
         if (values.description !== undefined) setDescription(values.description);
+        if (values.slug !== undefined) setSlug(values.slug);
       },
-      onError: (mutationError) => toast.error(mutationError.message),
+      onError: (mutationError) => {
+        if (mutationError instanceof ApiError && mutationError.field === "slug") {
+          setSlugError(
+            mutationError.code === "SPACE_SLUG_TAKEN" ? t("spaceSlugTaken") : mutationError.message,
+          );
+        } else toast.error(mutationError.message);
+      },
     });
   }
   if (!space) return null;
@@ -64,6 +74,23 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
     } catch {
       toast.error(t("copySpaceIdFailed"));
     }
+  };
+  const copyFullName = async () => {
+    try {
+      await navigator.clipboard.writeText(space.fullName ?? "");
+      toast.success(t("fullNameCopied"));
+    } catch {
+      toast.error(t("copyFullNameFailed"));
+    }
+  };
+  const submitSlug = (event: FormEvent) => {
+    event.preventDefault();
+    const next = slug.trim();
+    if (!isValidSlug(next)) {
+      setSlugError(t("spaceSlugInvalid"));
+      return;
+    }
+    update({ slug: next });
   };
   const VisibilityIcon = space.publicRead ? Globe : LockKeyhole;
   return (
@@ -118,6 +145,65 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
           </div>
         ) : null}
       </form>
+      {space.type === "team" ? (
+        <form onSubmit={submitSlug} aria-label={t("spaceSlug")}>
+          <Field
+            label={t("spaceSlug")}
+            htmlFor="space-slug"
+            error={slugError}
+            hint={t("spaceSlugHint")}
+          >
+            <div className="flex flex-wrap items-start gap-1.5">
+              <Input
+                id="space-slug"
+                className="h-8 max-w-[250px] rounded-[6px] px-3"
+                maxLength={100}
+                value={slug}
+                placeholder={t("spaceSlugNotSet")}
+                autoCapitalize="none"
+                spellCheck={false}
+                disabled={!canEdit || rename.isPending}
+                invalid={Boolean(slugError)}
+                onChange={(event) => {
+                  setSlugError(undefined);
+                  setSlug(event.target.value);
+                }}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                variant="secondary"
+                className="rounded-[6px] bg-secondary text-sm"
+                disabled={!canEdit || rename.isPending || slug.trim() === (space.slug ?? "")}
+              >
+                {t("save")}
+              </Button>
+            </div>
+          </Field>
+          <div className="mt-2 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <span className="shrink-0">{t("spaceFullName")}:</span>
+            {space.fullName ? (
+              <>
+                <code className="truncate" title={space.fullName}>
+                  {space.fullName}
+                </code>
+                <Button
+                  type="button"
+                  aria-label={t("copyFullName")}
+                  title={t("copyFullName")}
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() => void copyFullName()}
+                >
+                  <Copy />
+                </Button>
+              </>
+            ) : (
+              <span>{t("spaceSlugNotSet")}</span>
+            )}
+          </div>
+        </form>
+      ) : null}
       <form
         className="grid gap-3"
         aria-label={t("spaceDescription")}

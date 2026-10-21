@@ -4,17 +4,20 @@ import {
   spaceCapabilities,
   type AccessResolver,
   type AccessRole,
+  type SpaceType,
 } from "../access/index.js";
 import { SpacesRepository } from "./spaces.repository.js";
+import { RESERVED_SLUG, slugBaseFromName, validSlug } from "./space-slug.js";
 import type { SpaceStar, SpaceView } from "./spaces.types.js";
 
 export interface SpacesModule {
   list(userId: string): { readonly spaces: readonly SpaceView[] };
   createTeamSpace(
     userId: string,
-    input: { readonly name: unknown; readonly publicRead?: unknown }
+    input: { readonly name: unknown; readonly slug?: unknown; readonly publicRead?: unknown }
   ): SpaceView;
   get(userId: string, spaceId: string): SpaceView;
+  lookup(userId: string, owner: unknown, slug: unknown): SpaceView;
   getStar(userId: string, spaceId: string): SpaceStar;
   setStar(userId: string, spaceId: string, starred: boolean): SpaceStar;
   update(
@@ -22,6 +25,7 @@ export interface SpacesModule {
     spaceId: string,
     input: {
       readonly name?: unknown;
+      readonly slug?: unknown;
       readonly publicRead?: unknown;
       readonly description?: unknown;
     }
@@ -49,6 +53,7 @@ export function createSpacesModule(options: {
             name: row.name,
             publicRead: Boolean(row.public_read),
             description: row.description,
+            ...fullNameOf(row.type, row.slug, row.owner_username),
             owner: { id: row.owner_user_id, username: row.owner_username },
             accessRole: role,
             capabilities: spaceCapabilities(role, {
@@ -66,26 +71,43 @@ export function createSpacesModule(options: {
       const publicRead = input.publicRead === undefined
         ? false
         : validBoolean(input.publicRead, "publicRead");
+      const slug = input.slug === undefined
+        ? options.repository.freeSlug(userId, slugBaseFromName(name, id))
+        : validSlug(input.slug);
+      if (options.repository.slugTaken(userId, slug)) throw slugTaken();
       options.repository.createTeamSpace({
         id,
         name,
+        slug,
         publicRead,
         ownerUserId: userId,
         createdAt: now(),
       });
+      const owner = options.repository.getOwner(userId);
       return {
         id,
         type: "team",
         name,
         publicRead,
         description: "",
-        owner: options.repository.getOwner(userId),
+        ...fullNameOf("team", slug, owner.username),
+        owner,
         accessRole: "owner",
         capabilities: spaceCapabilities("owner", { type: "team", member: true }),
       };
     },
 
     get(userId, spaceId) {
+      return resolveSpace(options.access, options.repository, userId, spaceId);
+    },
+
+    lookup(userId, owner, slug) {
+      if (typeof owner !== "string" || typeof slug !== "string" || !owner || !slug) {
+        throw new ApplicationError("INVALID_INPUT", 400, "owner and slug are required.", "owner");
+      }
+      // Hidden and missing Spaces are indistinguishable.
+      const spaceId = options.repository.findIdByFullName(owner, slug);
+      if (!spaceId) throw notFound();
       return resolveSpace(options.access, options.repository, userId, spaceId);
     },
 
@@ -111,6 +133,7 @@ export function createSpacesModule(options: {
       }
       if (
         input.name === undefined &&
+        input.slug === undefined &&
         input.publicRead === undefined &&
         input.description === undefined
       ) {
@@ -125,9 +148,19 @@ export function createSpacesModule(options: {
       const publicRead = input.publicRead === undefined
         ? access.publicRead
         : validBoolean(input.publicRead, "publicRead");
+      const details = options.repository.getDetails(spaceId);
       const description = input.description === undefined
-        ? options.repository.getDescription(spaceId)
+        ? details.description
         : validDescription(input.description);
+      let slug = details.slug;
+      if (input.slug !== undefined) {
+        if (access.type !== "team") {
+          throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space has a slug.", "slug");
+        }
+        slug = validSlug(input.slug);
+        if (options.repository.slugTaken(access.ownerUserId, slug, spaceId)) throw slugTaken();
+        options.repository.updateSlug(spaceId, slug, updatedAt);
+      }
       if (input.name !== undefined) {
         options.repository.updateName(spaceId, name, updatedAt);
       }
@@ -137,13 +170,15 @@ export function createSpacesModule(options: {
       if (input.description !== undefined) {
         options.repository.updateDescription(spaceId, description, updatedAt);
       }
+      const owner = options.repository.getOwner(access.ownerUserId);
       return {
         id: access.id,
         type: access.type,
         name,
         publicRead,
         description,
-        owner: options.repository.getOwner(access.ownerUserId),
+        ...fullNameOf(access.type, slug, owner.username),
+        owner,
         accessRole: access.role,
         capabilities: access.capabilities,
       };
@@ -159,16 +194,33 @@ function resolveSpace(
 ): SpaceView {
   const access = resolver.resolveSpace(userId, spaceId);
   if (!access) throw notFound();
+  const details = repository.getDetails(access.id);
+  const owner = repository.getOwner(access.ownerUserId);
   return {
     id: access.id,
     type: access.type,
     name: access.name,
     publicRead: access.publicRead,
-    description: repository.getDescription(access.id),
-    owner: repository.getOwner(access.ownerUserId),
+    description: details.description,
+    ...fullNameOf(access.type, details.slug, owner.username),
+    owner,
     accessRole: access.role,
     capabilities: access.capabilities,
   };
+}
+
+/** The full name is computed here once: `<owner>/personal`, `<owner>/<slug>`, or null for a Team Space without a slug. */
+function fullNameOf(
+  type: SpaceType,
+  slug: string | null,
+  ownerUsername: string
+): { readonly slug: string | null; readonly fullName: string | null } {
+  if (type === "personal") return { slug: null, fullName: `${ownerUsername}/${RESERVED_SLUG}` };
+  return { slug, fullName: slug === null ? null : `${ownerUsername}/${slug}` };
+}
+
+function slugTaken(): ApplicationError {
+  return new ApplicationError("SPACE_SLUG_TAKEN", 409, "The slug is already used by another Space of this owner.", "slug");
 }
 
 function validBoolean(value: unknown, field: string): boolean {

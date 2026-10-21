@@ -9,6 +9,7 @@ export function useUpdateSpace(spaceId: string) {
   return useMutation({
     mutationFn: async (values: {
       readonly name?: string;
+      readonly slug?: string;
       readonly publicRead?: boolean;
       readonly description?: string;
     }) => {
@@ -30,7 +31,11 @@ export function useUpdateSpace(spaceId: string) {
 export function useCreateTeamSpace() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (values: { readonly name: string; readonly publicRead: boolean }) => {
+    mutationFn: async (values: {
+      readonly name: string;
+      readonly slug?: string;
+      readonly publicRead: boolean;
+    }) => {
       const { data, error } = await api.POST("/api/team-spaces", { body: values });
       if (error) throw apiError(error);
       return data;

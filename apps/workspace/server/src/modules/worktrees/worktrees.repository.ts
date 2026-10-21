@@ -17,6 +17,7 @@ export interface WorktreeRow {
   readonly id: string;
   readonly name: string;
   readonly summary: string | null;
+  readonly number: number | null;
   readonly creator_user_id: string;
   readonly kind: WorktreeKind;
   readonly team_space_id: string | null;
@@ -233,27 +234,58 @@ export class WorktreesRepository {
     readonly visibility: WorktreeVisibility;
     readonly createdAt: number;
   }): void {
-    this._database.connection
-      .prepare(
-        `INSERT INTO worktrees
-          (
-            id, name, summary, creator_user_id, kind, team_space_id,
-            visibility, created_at, updated_at
-          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (id) DO NOTHING`
-      )
-      .run(
-        input.id,
-        input.name,
-        input.summary,
-        input.creatorUserId,
-        input.kind,
-        input.teamSpaceId,
-        input.visibility,
-        input.createdAt,
-        input.createdAt
-      );
+    // The number is allocated inside the insert transaction (BEGIN IMMEDIATE), so
+    // concurrent writers serialize. Team Worktrees continue the Space's shared
+    // Issue sequence; User Worktrees are numbered per creator.
+    this._database.transaction((database) => {
+      if (database.prepare("SELECT 1 FROM worktrees WHERE id = ?").get(input.id)) return;
+      const next = (input.kind === "team"
+        ? database.prepare(
+            `SELECT MAX(
+               COALESCE((SELECT MAX(number) FROM issues WHERE space_id = ?1), 0),
+               COALESCE((SELECT MAX(number) FROM worktrees WHERE kind = 'team' AND team_space_id = ?1), 0)
+             ) + 1 AS next`
+          ).get(input.teamSpaceId)
+        : database.prepare(
+            "SELECT COALESCE(MAX(number), 0) + 1 AS next FROM worktrees WHERE kind = 'user' AND creator_user_id = ?"
+          ).get(input.creatorUserId)) as { next: number };
+      database
+        .prepare(
+          `INSERT INTO worktrees
+            (
+              id, number, name, summary, creator_user_id, kind, team_space_id,
+              visibility, created_at, updated_at
+            )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          input.id,
+          next.next,
+          input.name,
+          input.summary,
+          input.creatorUserId,
+          input.kind,
+          input.teamSpaceId,
+          input.visibility,
+          input.createdAt,
+          input.createdAt
+        );
+    });
+  }
+
+  /** Finds a numbered Worktree: in a Team Space, or among the user's own User Worktrees. */
+  findIdByNumber(
+    scope: { readonly teamSpaceId: string } | { readonly creatorUserId: string },
+    number: number
+  ): string | null {
+    const row = ("teamSpaceId" in scope
+      ? this._database.connection
+          .prepare("SELECT id FROM worktrees WHERE kind = 'team' AND team_space_id = ? AND number = ?")
+          .get(scope.teamSpaceId, number)
+      : this._database.connection
+          .prepare("SELECT id FROM worktrees WHERE kind = 'user' AND creator_user_id = ? AND number = ?")
+          .get(scope.creatorUserId, number)) as { id: string } | undefined;
+    return row?.id ?? null;
   }
 
   update(input: {

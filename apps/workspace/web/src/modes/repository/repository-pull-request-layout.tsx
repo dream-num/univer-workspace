@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { PullRequestLink, type PullRequestTarget } from "./repository-pull-request-link";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -46,14 +47,14 @@ export function RepositoryPullRequestLayout({
   const { t, language } = useI18n();
   const { spaceId, section } = presentation;
   const [filesCollapsed, setFilesCollapsed] = useState(false);
-  const search = {
-    ...presentation.listFilters,
+  const target = (patch: Pick<PullRequestTarget, "unit" | "section">): PullRequestTarget => ({
     spaceId,
-    worktree: worktree.id,
-    ...(selectedUnitId ? { unit: selectedUnitId } : {}),
+    worktree,
+    listFilters: presentation.listFilters,
     view: selectedView,
-  };
-  const filesLink = { ...search, section: "files" as const };
+    unit: selectedUnitId,
+    ...patch,
+  });
   const documents = (onCollapse?: () => void) => (
     <nav aria-label={t("repositoryPrFiles")} className="min-w-0">
       <h2 className="m-0 mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground">
@@ -89,9 +90,8 @@ export function RepositoryPullRequestLayout({
             }[unit.unitType];
             return (
               <li key={unit.unitId} className="min-w-0">
-                <Link
-                  to="/worktrees"
-                  search={{ ...filesLink, unit: unit.unitId }}
+                <PullRequestLink
+                  target={target({ unit: unit.unitId, section: "files" })}
                   activeOptions={{ exact: true, includeSearch: true }}
                   aria-current={
                     section === "files" && unit.unitId === selectedUnitId ? "true" : undefined
@@ -137,7 +137,7 @@ export function RepositoryPullRequestLayout({
                           ? "M"
                           : "="}
                   </span>
-                </Link>
+                </PullRequestLink>
               </li>
             );
           })}
@@ -173,14 +173,13 @@ export function RepositoryPullRequestLayout({
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t border-border bg-surface p-4 [&_button]:max-w-full [&_button]:whitespace-normal">
         {section === "overview" ? (
-          <Link
-            to="/worktrees"
-            search={filesLink}
+          <PullRequestLink
+            target={target({ unit: selectedUnitId, section: "files" })}
             className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "no-underline")}
           >
             <FileDiff className="size-4" />
             {t("repositoryPrViewFiles")}
-          </Link>
+          </PullRequestLink>
         ) : null}
         {actions}
       </div>
@@ -207,6 +206,14 @@ export function RepositoryPullRequestLayout({
         <header className="grid gap-2">
           <h1 className="m-0 text-[32px] leading-10 font-normal break-words max-[720px]:text-2xl max-[720px]:leading-8">
             {worktree.name}
+            {worktree.number !== null ? (
+              <>
+                {" "}
+                <span className="font-light text-muted-foreground">
+                  {t("repositoryPrNumber", { number: worktree.number })}
+                </span>
+              </>
+            ) : null}
           </h1>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
             <RepositoryPrState state={worktree.state} badge />
@@ -222,10 +229,9 @@ export function RepositoryPullRequestLayout({
           {(["overview", "files"] as const).map((value) => {
             const Icon = value === "overview" ? MessageSquareText : FileDiff;
             return (
-              <Link
+              <PullRequestLink
                 key={value}
-                to="/worktrees"
-                search={{ ...search, section: value }}
+                target={target({ unit: selectedUnitId, section: value })}
                 activeOptions={{ exact: true, includeSearch: true }}
                 aria-current={section === value ? "page" : undefined}
                 className={cn(
@@ -242,7 +248,7 @@ export function RepositoryPullRequestLayout({
                     {worktree.units.length}
                   </span>
                 ) : null}
-              </Link>
+              </PullRequestLink>
             );
           })}
         </nav>

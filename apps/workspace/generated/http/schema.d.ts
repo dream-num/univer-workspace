@@ -432,6 +432,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spaces/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve `<owner>/<slug>` to a Space the current User may discover.
+         * @description `owner` is a username (case-insensitive). `slug=personal` resolves the owner's Personal Space, including
+         *     Personal Spaces of accounts that predate slugs. A hidden Space and a missing Space both return 404.
+         */
+        get: operations["lookupSpace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spaces/{spaceId}": {
         parameters: {
             query?: never;
@@ -450,6 +471,30 @@ export interface paths {
         head?: never;
         /** Update Space settings. */
         patch: operations["updateSpace"];
+        trace?: never;
+    };
+    "/api/spaces/{spaceId}/worktrees/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a Worktree by its repository-level number.
+         * @description In a Team Space the number addresses a Team Worktree. In the caller's own Personal Space it addresses one of
+         *     the caller's User Worktrees. Hidden and missing Worktrees both return 404.
+         */
+        get: operations["getWorktreeByNumber"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/spaces/{spaceId}/star": {
@@ -1467,6 +1512,13 @@ export interface components {
         PublicUser: components["schemas"]["User"];
         SessionView: components["schemas"]["AnonymousSession"] | components["schemas"]["AuthenticatedSession"];
         SpaceView: components["schemas"]["SpaceSummary"] & {
+            /** @description URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed. */
+            slug: string | null;
+            /**
+             * @description `<owner.username>/<slug>` for a Team Space with a slug and `<owner.username>/personal` for a Personal Space.
+             *     Null for a Team Space without a slug. Computed by the server; it changes when the owner renames their username.
+             */
+            fullName: string | null;
             /** @description Short plain-text summary of the Space. Empty when none has been set. */
             description: string;
             /** @description The authoritative Space owner, including when viewed by another User. */
@@ -1597,6 +1649,11 @@ export interface components {
         };
         WorktreeSummary: {
             id: string;
+            /**
+             * @description Repository-level number shown as `#N`. A Team Worktree shares the Team Space's Issue number sequence;
+             *     a User Worktree is numbered per creator. Null for Worktrees created before numbering existed.
+             */
+            number: number | null;
             name: string;
             summary: string | null;
             kind: components["schemas"]["WorktreeKind"];
@@ -1720,19 +1777,72 @@ export interface components {
         SpaceList: {
             spaces: components["schemas"]["SpaceView"][];
         };
+        /** @description Letters, digits, `.`, `_` and `-`, starting with a letter or digit. Compared case-insensitively. `personal` is reserved. */
+        SpaceSlug: string;
         CreateTeamSpace: {
             name: string;
+            /** @description Omit to let the server derive one from the name (lowercased, unsafe characters replaced by `-`, `repo-<id8>` when nothing is left, numeric suffix on conflict). */
+            slug?: components["schemas"]["SpaceSlug"];
             /** @description Whether anyone with a link can read the Space without signing in. Omit to keep it private. */
             publicRead?: boolean;
         };
         PatchSpace: {
             name?: string;
+            /** @description Team Spaces only. The previous slug is not reserved or redirected. */
+            slug?: components["schemas"]["SpaceSlug"];
             publicRead?: boolean;
             /** @description Plain text. Surrounding whitespace is trimmed; an empty string clears the description. */
             description?: string;
         };
         /** @enum {string} */
+        WorktreeKind: "user" | "team";
+        /** @enum {string} */
+        WorktreeVisibility: "private" | "space";
+        /** @enum {string} */
+        WorktreeState: "draft" | "ready" | "merging" | "merged" | "discarded";
+        WorktreeCapabilities: {
+            review: boolean;
+            editDraft: boolean;
+            addUnit: boolean;
+            changeVisibility: boolean;
+            markReady: boolean;
+            reopen: boolean;
+            merge: boolean;
+            discard: boolean;
+        };
+        /** @enum {string} */
         UnitType: "sheet" | "doc" | "slide" | "board" | "base";
+        WorktreeUnitTarget: {
+            spaceId: string;
+            parentNodeId: string | null;
+        };
+        /** @enum {string} */
+        WorktreeUnitChange: "modified" | "added" | "deleted" | "unchanged";
+        /**
+         * @description Removed means this Unit was excluded from content publication. Product deletion is complete only when the Worktree is merged and its merge Operation is completed.
+         * @enum {string}
+         */
+        MergeResult: "pending" | "merged" | "unchanged" | "removed" | "conflict" | "failed";
+        /** @enum {string} */
+        ActivationState: "notApplicable" | "waitingForMerge" | "pending" | "completed" | "failed" | "discarded";
+        WorktreeUnit: {
+            unitId: string;
+            resourceId: string;
+            /** @description Null when the document no longer has a product Node, including after permanent deletion. */
+            nodeId: string | null;
+            /** @enum {string} */
+            source: "trunk" | "worktree";
+            name: string;
+            unitType: components["schemas"]["UnitType"];
+            target: components["schemas"]["WorktreeUnitTarget"] | null;
+            draftHeadRevision: number;
+            change: components["schemas"]["WorktreeUnitChange"];
+            mergeResult: components["schemas"]["MergeResult"];
+            activationState: components["schemas"]["ActivationState"];
+        };
+        WorktreeEnvelope: {
+            worktree: components["schemas"]["WorktreeDetail"];
+        };
         ResourceCapabilities: {
             openContent: boolean;
             editContent: boolean;
@@ -2141,22 +2251,6 @@ export interface components {
             color?: components["schemas"]["IssueLabelColor"];
             description?: string;
         };
-        /** @enum {string} */
-        WorktreeKind: "user" | "team";
-        /** @enum {string} */
-        WorktreeVisibility: "private" | "space";
-        /** @enum {string} */
-        WorktreeState: "draft" | "ready" | "merging" | "merged" | "discarded";
-        WorktreeCapabilities: {
-            review: boolean;
-            editDraft: boolean;
-            addUnit: boolean;
-            changeVisibility: boolean;
-            markReady: boolean;
-            reopen: boolean;
-            merge: boolean;
-            discard: boolean;
-        };
         WorktreeList: {
             /** @description Whether the authenticated user has a product Worktree creation record, including merged and discarded Worktrees. Independent of list filters and pagination; other users' Team Worktrees do not count. */
             hasCreatedWorktree: boolean;
@@ -2178,37 +2272,6 @@ export interface components {
             summary: string | null;
         };
         CreateWorktree: components["schemas"]["CreateUserWorktree"] | components["schemas"]["CreateTeamWorktree"];
-        WorktreeUnitTarget: {
-            spaceId: string;
-            parentNodeId: string | null;
-        };
-        /** @enum {string} */
-        WorktreeUnitChange: "modified" | "added" | "deleted" | "unchanged";
-        /**
-         * @description Removed means this Unit was excluded from content publication. Product deletion is complete only when the Worktree is merged and its merge Operation is completed.
-         * @enum {string}
-         */
-        MergeResult: "pending" | "merged" | "unchanged" | "removed" | "conflict" | "failed";
-        /** @enum {string} */
-        ActivationState: "notApplicable" | "waitingForMerge" | "pending" | "completed" | "failed" | "discarded";
-        WorktreeUnit: {
-            unitId: string;
-            resourceId: string;
-            /** @description Null when the document no longer has a product Node, including after permanent deletion. */
-            nodeId: string | null;
-            /** @enum {string} */
-            source: "trunk" | "worktree";
-            name: string;
-            unitType: components["schemas"]["UnitType"];
-            target: components["schemas"]["WorktreeUnitTarget"] | null;
-            draftHeadRevision: number;
-            change: components["schemas"]["WorktreeUnitChange"];
-            mergeResult: components["schemas"]["MergeResult"];
-            activationState: components["schemas"]["ActivationState"];
-        };
-        WorktreeEnvelope: {
-            worktree: components["schemas"]["WorktreeDetail"];
-        };
         PatchWorktree: {
             name?: string;
             summary?: string | null;
@@ -3103,6 +3166,33 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    lookupSpace: {
+        parameters: {
+            query: {
+                owner: string;
+                slug: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Space and effective capabilities. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     getSpace: {
@@ -3151,6 +3241,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SpaceView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getWorktreeByNumber: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Worktree detail. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorktreeEnvelope"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -4638,6 +4755,8 @@ export interface operations {
                 order?: "updatedAtDesc" | "createdAtDesc";
                 kind?: components["schemas"]["WorktreeKind"];
                 teamSpaceId?: string;
+                /** @description Keep only Worktrees in these states. Repeat the parameter for several states. Applied before pagination, so a page is full unless the result is exhausted. */
+                state?: components["schemas"]["WorktreeState"][];
                 /** @description Opaque cursor returned by the previous page. */
                 cursor?: components["parameters"]["CursorParameter"];
                 limit?: components["parameters"]["LimitParameter"];

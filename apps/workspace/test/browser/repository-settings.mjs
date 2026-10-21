@@ -20,6 +20,7 @@ function browser(...args) {
 const evaluate = (script) => browser("eval", script).result;
 const fill = (label, value) => browser("find", "label", label, "fill", value);
 const click = (name) => browser("find", "role", "button", "click", "--name", name, "--exact");
+const save = (form) => browser("click", `form[aria-label="${form}"] button[type="submit"]`);
 const waitForSave = () =>
   browser(
     "wait",
@@ -77,7 +78,7 @@ test("Repository settings save independently, stay on Settings, and persist afte
       evaluate(`fetch('/api/spaces/${space.id}').then(r => r.json()).then(s => s.description)`),
       "",
     );
-    click("Save");
+    save("Description");
     waitForSave();
     browser(
       "wait",
@@ -111,7 +112,7 @@ test("Repository settings save independently, stay on Settings, and persist afte
     // A failed request must retain the draft and allow retry.
     browser("network", "route", "**/api/spaces/*", "--abort");
     fill("Description", "Retry this description");
-    click("Save");
+    save("Description");
     waitForSave();
     browser(
       "wait",
@@ -123,7 +124,7 @@ test("Repository settings save independently, stay on Settings, and persist afte
       "Retry this description",
     );
     browser("network", "unroute", "**/api/spaces/*");
-    click("Save");
+    save("Description");
     waitForSave();
     browser(
       "wait",
@@ -136,6 +137,35 @@ test("Repository settings save independently, stay on Settings, and persist afte
       evaluate("document.querySelector('#space-description').value"),
       "Retry this description",
     );
+    // Slug: full name, validation, conflict, save, and lookup through owner/slug.
+    browser("wait", "--text", "Full name:");
+    assert.equal(evaluate("document.querySelector('#space-slug').value"), "settings-demo");
+    assert.equal(
+      evaluate(`document.querySelector('form[aria-label="Slug"] code').textContent`),
+      `${username}/settings-demo`,
+    );
+    evaluate(`fetch('/api/team-spaces', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'other', slug: 'other-slug' }) }).then(r => { if (!r.ok) throw new Error('slug fixture failed'); })`);
+    fill("Slug", "bad slug!");
+    save("Slug");
+    browser("wait", "--text", "A slug starts with a letter or digit");
+    fill("Slug", "OTHER-SLUG");
+    save("Slug");
+    browser("wait", "--text", "You already own a repository with this slug.");
+    fill("Slug", "renamed-slug");
+    save("Slug");
+    browser("wait", "--fn", "document.querySelector('form[aria-label=\"Slug\"] button').disabled");
+    assert.equal(
+      evaluate(`document.querySelector('form[aria-label="Slug"] code').textContent`),
+      `${username}/renamed-slug`,
+    );
+    assert.equal(
+      evaluate(`fetch('/api/spaces/lookup?owner=${username}&slug=RENAMED-SLUG').then(r => r.json()).then(s => s.id)`),
+      space.id,
+    );
+    // The Code tab header and About panel show the full name.
+    browser("open", `${origin}/spaces/${space.id}`);
+    browser("wait", "--text", `${username}/renamed-slug`);
+    // The Star control lives in the Code tab header, so the remaining checks stay on this page.
     // 领域命令保留 Star 乐观更新、失败回滚和重试。
     const starSelector = 'button[aria-label$=" settings-renamed"][aria-pressed]';
     browser("wait", "--fn", `document.querySelector('${starSelector}')?.getAttribute('aria-busy') === 'false'`);
@@ -176,13 +206,48 @@ test("Repository settings save independently, stay on Settings, and persist afte
       browser("wait", "[role=dialog] input");
       const name = `created-via-${mode}`;
       fill(mode === "repository" ? "Repository name" : "Space name", name);
+      // The Wiki file browser has no slug field; the server derives the same slug from the name.
+      if (mode === "repository") {
+        assert.equal(evaluate("document.querySelector('#team-space-slug').value"), name);
+      }
       click("Create");
       browser("wait", "--fn", "document.querySelector('[role=dialog]') === null && location.pathname.startsWith('/spaces/')");
       const created = evaluate(`fetch('/api/spaces').then(r => r.json()).then(p => p.spaces.find(s => s.name === '${name}'))`);
       assert.ok(created, "创建后空间列表刷新");
       assert.equal(browser("get", "url").url, `${origin}/spaces/${created.id}`);
       assert.equal(created.publicRead, false);
+      assert.equal(created.slug, name);
     }
+    // Dialog: a name without usable characters leaves the slug empty (server generates one);
+    // a taken slug keeps the dialog open; clearing it lets the server pick the next free one.
+    evaluate("localStorage.setItem('univer-workspace-layout-theme', 'repository')");
+    browser("open", `${origin}/home`);
+    browser("wait", "--fn", "document.querySelector('main')?.textContent.includes('New repository')");
+    click("New repository");
+    browser("wait", "[role=dialog] input");
+    fill("Repository name", "文档");
+    assert.equal(evaluate("document.querySelector('#team-space-slug').value"), "");
+    click("Create");
+    browser("wait", "--fn", "document.querySelector('[role=dialog]') === null && location.pathname.startsWith('/spaces/')");
+    assert.match(
+      evaluate("fetch('/api/spaces').then(r => r.json()).then(p => p.spaces.find(s => s.name === '文档').slug)"),
+      /^repo-[0-9a-f]{8}$/,
+    );
+    browser("open", `${origin}/home`);
+    browser("wait", "--fn", "document.querySelector('main')?.textContent.includes('New repository')");
+    click("New repository");
+    browser("wait", "[role=dialog] input");
+    fill("Repository name", "created-via-repository");
+    click("Create");
+    browser("wait", "--text", "You already own a repository with this slug.");
+    assert.equal(evaluate("document.querySelector('[role=dialog]') !== null"), true);
+    fill("Slug", " "); // whitespace trims to empty, so the server picks the next free slug
+    click("Create");
+    browser("wait", "--fn", "document.querySelector('[role=dialog]') === null && location.pathname.startsWith('/spaces/')");
+    assert.equal(
+      evaluate("fetch('/api/spaces').then(r => r.json()).then(p => p.spaces.filter(s => s.name === 'created-via-repository').map(s => s.slug).sort().join())"),
+      "created-via-repository,created-via-repository-2",
+    );
     evaluate("localStorage.setItem('univer-workspace-layout-theme', 'repository')");
     const personalId = evaluate(
       "fetch('/api/spaces').then(r => r.json()).then(p => p.spaces.find(s => s.type === 'personal').id)",

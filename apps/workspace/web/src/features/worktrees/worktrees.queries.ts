@@ -76,6 +76,19 @@ export function worktreeQueryOptions(worktreeId: string) {
   });
 }
 
+export function worktreeByNumberQueryOptions(spaceId: string, number: number) {
+  return queryOptions({
+    queryKey: [...worktreesQueryKey, "number", spaceId, number] as const,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/spaces/{spaceId}/worktrees/{number}", {
+        params: { path: { spaceId, number } },
+      });
+      if (error) throw apiError(error);
+      return data;
+    },
+  });
+}
+
 export function worktreeUnitOpenQueryOptions(
   worktreeId: string,
   unitId: string,

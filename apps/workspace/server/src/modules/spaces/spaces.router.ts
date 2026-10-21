@@ -21,9 +21,15 @@ export function createSpacesRouter(options: {
       .json(
         options.spaces.createTeamSpace(session.user.id, {
           name: request.body?.name,
+          slug: request.body?.slug,
           publicRead: request.body?.publicRead,
         })
       );
+  });
+
+  router.get("/spaces/lookup", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(options.spaces.lookup(session.user.id, request.query.owner, request.query.slug));
   });
 
   router.get("/spaces/:spaceId", (request, response) => {
@@ -41,6 +47,7 @@ export function createSpacesRouter(options: {
         requiredParameter(request.params.spaceId),
         {
           name: request.body?.name,
+          slug: request.body?.slug,
           publicRead: request.body?.publicRead,
           description: request.body?.description,
         }

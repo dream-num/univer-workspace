@@ -51,11 +51,15 @@ CREATE TABLE IF NOT EXISTS spaces (
   updated_at INTEGER NOT NULL,
   public_read INTEGER NOT NULL DEFAULT 0 CHECK (public_read IN (0, 1)),
   description TEXT NOT NULL DEFAULT '',
+  slug TEXT COLLATE NOCASE,
   FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS spaces_personal_owner
   ON spaces(owner_user_id)
   WHERE type = 'personal';
+CREATE UNIQUE INDEX IF NOT EXISTS spaces_owner_slug
+  ON spaces(owner_user_id, slug)
+  WHERE slug IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS space_members (
   space_id TEXT NOT NULL,
@@ -186,6 +190,7 @@ CREATE TABLE IF NOT EXISTS worktrees (
   processed_at INTEGER,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
+  number INTEGER,
   CHECK (
     (kind = 'user' AND team_space_id IS NULL AND visibility = 'private')
     OR
@@ -198,6 +203,12 @@ CREATE INDEX IF NOT EXISTS worktrees_creator
   ON worktrees(creator_user_id, processed_at, updated_at DESC);
 CREATE INDEX IF NOT EXISTS worktrees_team_space
   ON worktrees(team_space_id, processed_at, updated_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS worktrees_team_number
+  ON worktrees(team_space_id, number)
+  WHERE kind = 'team' AND number IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS worktrees_user_number
+  ON worktrees(creator_user_id, number)
+  WHERE kind = 'user' AND number IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS worktree_units (
   worktree_id TEXT NOT NULL,
@@ -646,4 +657,17 @@ CREATE TABLE IF NOT EXISTS space_stars (
   PRIMARY KEY (space_id, user_id)
 );
 
-PRAGMA user_version = 11;
+CREATE TRIGGER IF NOT EXISTS spaces_slug_insert
+BEFORE INSERT ON spaces
+WHEN NEW.slug IS NOT NULL AND (NEW.type <> 'team' OR NEW.slug = 'personal')
+BEGIN
+  SELECT RAISE(ABORT, 'only a team space can have a slug, and personal is reserved');
+END;
+CREATE TRIGGER IF NOT EXISTS spaces_slug_update
+BEFORE UPDATE OF slug, type ON spaces
+WHEN NEW.slug IS NOT NULL AND (NEW.type <> 'team' OR NEW.slug = 'personal')
+BEGIN
+  SELECT RAISE(ABORT, 'only a team space can have a slug, and personal is reserved');
+END;
+
+PRAGMA user_version = 12;

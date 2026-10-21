@@ -24,6 +24,7 @@ export interface WorktreeCapabilities {
 
 export interface WorktreeSummary {
   readonly id: string;
+  readonly number: number | null;
   readonly name: string;
   readonly summary: string | null;
   readonly kind: WorktreeKind;
@@ -183,6 +184,7 @@ export interface WorktreesModule {
       readonly order?: unknown;
       readonly kind: unknown;
       readonly teamSpaceId: unknown;
+      readonly state?: unknown;
       readonly cursor: unknown;
       readonly limit: unknown;
     }
@@ -199,6 +201,11 @@ export interface WorktreesModule {
   get(
     userId: string,
     worktreeId: string
+  ): Promise<{ readonly worktree: WorktreeDetail }>;
+  getByNumber(
+    userId: string,
+    spaceId: string,
+    number: unknown
   ): Promise<{ readonly worktree: WorktreeDetail }>;
   update(
     userId: string,

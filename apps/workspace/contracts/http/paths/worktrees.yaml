@@ -34,6 +34,16 @@
         required: false
         schema:
           type: string
+      - name: state
+        in: query
+        required: false
+        description: Keep only Worktrees in these states. Repeat the parameter for several states. Applied before pagination, so a page is full unless the result is exhausted.
+        schema:
+          type: array
+          items:
+            $ref: ../schemas/worktrees.yaml#/WorktreeState
+        style: form
+        explode: true
       - $ref: ../schemas/common.yaml#/CursorParameter
       - $ref: ../schemas/common.yaml#/LimitParameter
     responses:
@@ -87,6 +97,40 @@
         $ref: ../schemas/common.yaml#/Forbidden
       "409":
         $ref: ../schemas/common.yaml#/Conflict
+
+/api/spaces/{spaceId}/worktrees/{number}:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: number
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  get:
+    tags: [Worktrees]
+    operationId: getWorktreeByNumber
+    summary: Get a Worktree by its repository-level number.
+    description: |
+      In a Team Space the number addresses a Team Worktree. In the caller's own Personal Space it addresses one of
+      the caller's User Worktrees. Hidden and missing Worktrees both return 404.
+    responses:
+      "200":
+        description: Worktree detail.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/worktrees.yaml#/WorktreeEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
 
 /api/worktrees/{worktreeId}:
   parameters:

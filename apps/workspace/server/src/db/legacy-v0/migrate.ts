@@ -101,12 +101,15 @@ export function migrateLegacyV0(database: DatabaseSync): void {
   database.exec("BEGIN IMMEDIATE");
   try {
     renameLegacyTables(database);
-    database.exec(readTargetSchema());
+    // The V0 spaces and worktrees tables survive; the schema's indexes need the new columns first.
     database.exec(`
       ALTER TABLE spaces ADD COLUMN public_read INTEGER NOT NULL DEFAULT 0
         CHECK (public_read IN (0, 1));
       ALTER TABLE spaces ADD COLUMN description TEXT NOT NULL DEFAULT '';
+      ALTER TABLE spaces ADD COLUMN slug TEXT COLLATE NOCASE;
+      ALTER TABLE worktrees ADD COLUMN number INTEGER;
     `);
+    database.exec(readTargetSchema());
     copyCoreData(database, files, resourceByNode);
     copyWorktreeData(database, worktreeUnits, resourceByWorktreeUnit);
     copyOperations(database, operations, resourceByNode, resourceByWorktreeUnit);
@@ -531,9 +534,9 @@ function validateMigrated(
   const version = database.prepare("PRAGMA user_version").get() as
     | { readonly user_version?: unknown }
     | undefined;
-  if (version?.user_version !== 11) {
+  if (version?.user_version !== 12) {
     throw new Error(
-      `Migrated database has user_version ${String(version?.user_version)} instead of 11.`
+      `Migrated database has user_version ${String(version?.user_version)} instead of 12.`
     );
   }
 }

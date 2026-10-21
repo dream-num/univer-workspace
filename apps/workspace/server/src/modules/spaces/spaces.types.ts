@@ -10,6 +10,8 @@ export interface SpaceView {
   readonly name: string;
   readonly publicRead: boolean;
   readonly description: string;
+  readonly slug: string | null;
+  readonly fullName: string | null;
   readonly owner: { readonly id: string; readonly username: string };
   readonly accessRole: AccessRole;
   readonly capabilities: SpaceCapabilities;
