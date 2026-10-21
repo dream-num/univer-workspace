@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import {
+  parseRepoReference,
   workspaceError,
   type WorkspaceIssueFeature,
   type WorkspaceWorktreeFeature,
@@ -31,18 +32,18 @@ export function createBrowseCommand(deps: {
           }
           return { url: repoUrl(base, (await context.repo(options.repo)).spaceId) };
         }
-        const target = await context.item(argument, options.repo, "pr");
+        const reference = /^https?:\/\//i.test(argument.trim()) ? parseRepoReference(argument) : undefined;
+        const urlKind = reference?.kind === "url" ? reference.item?.kind : undefined;
+        const target = await context.item(argument, options.repo, urlKind ?? "pr");
         if (target.kind === "id") {
           return { url: pullUrl(base, await worktrees.get(target.id), options.unit) };
         }
         // Issues and pull requests of a Team Space share one number sequence, so at most one exists.
-        const text = argument.trim();
-        const isIssueUrl = /^https?:\/\//i.test(text) && /\/issues\/\d+/.test(new URL(text).pathname);
-        if (!isIssueUrl) {
+        if (urlKind !== "issue") {
           try {
             return { url: pullUrl(base, await worktrees.getByNumber(target.spaceId, target.number), options.unit) };
           } catch (error) {
-            if (!isNotFound(error)) throw error;
+            if (urlKind === "pr" || !isNotFound(error)) throw error;
           }
         }
         try {

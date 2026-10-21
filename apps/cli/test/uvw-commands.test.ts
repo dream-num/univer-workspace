@@ -315,25 +315,9 @@ describe("uvw pr and the worktree alias", () => {
 });
 
 describe("uvw search and browse", () => {
-  it("searches across repositories without a repository context", async () => {
-    const issues = { list: vi.fn(async () => ({ counts: { closed: 0, open: 1 }, issues: [issue()], nextCursor: null })) };
-    const worktrees = { list: vi.fn(async () => [worktree()]) };
-    const command = createSearchCommand(
-      issues as unknown as WorkspaceIssueFeature,
-      worktrees as unknown as WorkspaceWorktreeFeature,
-      async () => "u1",
-    );
-    await run(command, ["issues", "-a", "@me", "-s", "all"]);
-    await run(command, ["prs", "-A", "@me", "-s", "merged"]);
-    expect(issues.list).toHaveBeenCalledWith({ assignee: "me", limit: 30, state: "all" });
-    expect(worktrees.list).toHaveBeenCalledWith({
-      creatorId: "u1", limit: 30, states: ["merged"], view: "processed",
-    });
-  });
-
-  it("prints the repository, pull request or Issue URL without opening anything", async () => {
+  function browseCommand() {
     const { repoContext } = context();
-    const notFound = Object.assign(new Error("not found"), { code: "NOT_FOUND", detail: { status: 404 } });
+    const notFound = workspaceError("workspace-not-found", "Not found.", { status: 404 });
     const worktrees = {
       get: vi.fn(async () => worktree({ number: null, spaceId: undefined })),
       getByNumber: vi.fn(async (_space: string, number: number) => {
@@ -351,6 +335,109 @@ describe("uvw search and browse", () => {
       origin: async () => ORIGIN,
       worktrees: worktrees as unknown as WorkspaceWorktreeFeature,
     });
+    return { command, issues, notFound, worktrees };
+  }
+
+  it.each(["issues", "%69ssues"])("browses an authorized Issue URL using the canonical %s route", async (route) => {
+    const { command, issues, worktrees } = browseCommand();
+    expect(await run(command, [`${ORIGIN}/spaces/space-1/${route}/3`])).toBe(
+      `${ORIGIN}/spaces/space-1/issues/3\n`,
+    );
+    expect(issues.get).toHaveBeenCalledWith("space-1", 3);
+    expect(worktrees.getByNumber).not.toHaveBeenCalled();
+  });
+
+  it("preserves pull and legacy Worktree URLs", async () => {
+    const { command, issues } = browseCommand();
+    expect(await run(command, [`${ORIGIN}/spaces/space-1/pulls/12`, "--unit", "u-1"])).toBe(
+      `${ORIGIN}/spaces/space-1/pulls/12?unit=u-1\n`,
+    );
+    expect(await run(command, [`${ORIGIN}/worktrees?worktree=wt-1`])).toBe(
+      `${ORIGIN}/worktrees?worktree=wt-1\n`,
+    );
+    expect(issues.get).not.toHaveBeenCalled();
+  });
+
+  it("only falls back from pull requests to Issues for bare numbers", async () => {
+    const { command, issues, worktrees } = browseCommand();
+    await expect(run(command, [`${ORIGIN}/spaces/space-1/pulls/3`])).rejects.toMatchObject({ exitCode: 1 });
+    expect(issues.get).not.toHaveBeenCalled();
+    await expect(run(command, [`${ORIGIN}/spaces/space-1/issues/12`])).rejects.toMatchObject({ exitCode: 1 });
+    expect(worktrees.getByNumber).toHaveBeenCalledTimes(1);
+    expect(issues.get).toHaveBeenCalledWith("space-1", 12);
+    expect(await run(command, ["3", "-R", "alice/docs"])).toBe(`${ORIGIN}/spaces/space-1/issues/3\n`);
+  });
+
+  it.each(["issues/3", "pulls/12", "../../worktrees?worktree=wt-1"])(
+    "rejects cross-origin %s URLs before requesting an item",
+    async (path) => {
+      const { command, issues, worktrees } = browseCommand();
+      await expect(run(command, [`https://elsewhere.test/spaces/space-1/${path}`])).rejects.toMatchObject({
+        exitCode: 1,
+        message: expect.stringContaining("workspace-origin-mismatch"),
+      });
+      expect(issues.get).not.toHaveBeenCalled();
+      expect(worktrees.get).not.toHaveBeenCalled();
+      expect(worktrees.getByNumber).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["issues/3", "pulls/12"])("checks item visibility before printing a %s URL", async (path) => {
+    const { command, issues, notFound, worktrees } = browseCommand();
+    issues.get.mockRejectedValue(notFound);
+    worktrees.getByNumber.mockRejectedValue(notFound);
+    await expect(run(command, [`${ORIGIN}/spaces/space-1/${path}`])).rejects.toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining("workspace-not-found"),
+    });
+  });
+
+  it("keeps typed Issue and PR commands from accepting the other URL kind", async () => {
+    const { repoContext } = context();
+    const get = vi.fn(async () => issue());
+    const getByNumber = vi.fn(async () => worktree());
+    const issueCommand = createIssueCommand({
+      context: repoContext,
+      feature: { get } as unknown as WorkspaceIssueFeature,
+      origin: async () => ORIGIN,
+    });
+    const [prCommand] = createPullRequestCommands({
+      context: repoContext,
+      origin: async () => ORIGIN,
+      spaces: {} as WorkspaceSpaceFeature,
+      userId: async () => "u1",
+      worktrees: { getByNumber } as unknown as WorkspaceWorktreeFeature,
+    });
+    await expect(run(issueCommand, ["view", `${ORIGIN}/spaces/space-1/pulls/12`])).rejects.toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining("does not point at an issue"),
+    });
+    await expect(run(prCommand!, ["view", `${ORIGIN}/spaces/space-1/issues/3`])).rejects.toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining("does not point at a pull request"),
+    });
+    expect(get).not.toHaveBeenCalled();
+    expect(getByNumber).not.toHaveBeenCalled();
+  });
+
+  it("searches across repositories without a repository context", async () => {
+    const issues = { list: vi.fn(async () => ({ counts: { closed: 0, open: 1 }, issues: [issue()], nextCursor: null })) };
+    const worktrees = { list: vi.fn(async () => [worktree()]) };
+    const command = createSearchCommand(
+      issues as unknown as WorkspaceIssueFeature,
+      worktrees as unknown as WorkspaceWorktreeFeature,
+      async () => "u1",
+    );
+    await run(command, ["issues", "-a", "@me", "-s", "all"]);
+    await run(command, ["prs", "-A", "@me", "-s", "merged"]);
+    expect(issues.list).toHaveBeenCalledWith({ assignee: "me", limit: 30, state: "all" });
+    expect(worktrees.list).toHaveBeenCalledWith({
+      creatorId: "u1", limit: 30, states: ["merged"], view: "processed",
+    });
+  });
+
+  it("prints the repository, pull request or Issue URL without opening anything", async () => {
+    const { command } = browseCommand();
     expect(await run(command, ["-R", "alice/docs"])).toBe(`${ORIGIN}/spaces/space-1\n`);
     expect(await run(command, ["12", "-R", "alice/docs", "--unit", "u-1"])).toBe(
       `${ORIGIN}/spaces/space-1/pulls/12?unit=u-1\n`,
