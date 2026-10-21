@@ -105,6 +105,7 @@ describe("Workspace product proxy allowlist", () => {
       const headers = new Headers(init?.headers);
       expect(headers.get("range")).toBe("bytes=3-9");
       expect(headers.get("if-none-match")).toBe('"blob-etag"');
+      expect(headers.get("accept-encoding")).toBe("identity");
       return new Response("partial", {
         status: 206,
         headers: {
@@ -139,6 +140,7 @@ describe("Workspace product proxy allowlist", () => {
     const request = vi.fn(async (path: string, init?: RequestInit) => {
       expect(path).toBe("/api/resources/resource-1");
       expect(init?.method).toBe("GET");
+      expect(new Headers(init?.headers).has("accept-encoding")).toBe(false);
       return new Response(
         JSON.stringify({
           resource: { id: "resource-1", kind: "univer", unitId: "unit-1", unitType: "sheet" },

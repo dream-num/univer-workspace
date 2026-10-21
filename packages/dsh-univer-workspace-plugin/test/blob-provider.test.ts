@@ -216,7 +216,43 @@ describe("Blob provider", () => {
     const result = await service.downloadBlob("user-1", "blob-1");
     expect(Buffer.from(result.bytes).toString()).toBe("original");
     expect(result.etag).toBe('"downloaded"');
-    expect(request).toHaveBeenCalledWith("/api/blob-resources/blob-1/download", undefined);
+    expect(request).toHaveBeenCalledWith("/api/blob-resources/blob-1/download", {
+      headers: { "accept-encoding": "identity" },
+    });
+  });
+
+  it("replaces with the ETag downloaded through a compressing proxy", async () => {
+    // Mimics Envoy in front of Workspace: a gzip-capable download loses its strong ETag.
+    const { service, request } = setup();
+    request.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/blob-resources/blob-1/download") {
+        return new Headers(init?.headers).get("accept-encoding") === "identity"
+          ? new Response("original", {
+              headers: { "content-type": "text/plain", etag: '"downloaded"' },
+            })
+          : new Response("original", {
+              headers: { "content-encoding": "gzip", "content-type": "text/plain" },
+            });
+      }
+      expect(path).toBe("/api/blob-resources/blob-1/content");
+      expect(new Headers(init?.headers).get("if-match")).toBe('"downloaded"');
+      return Response.json({
+        operationId: "blob-replace-request-0001",
+        resourceId: "blob-1",
+        etag: '"new"',
+      });
+    });
+
+    const downloaded = await service.downloadBlob("user-1", "blob-1");
+    await expect(
+      service.replaceBlob("user-1", {
+        resourceId: "blob-1",
+        bytes: Buffer.from("edited"),
+        etag: downloaded.etag,
+        idempotencyKey: "blob-replace-request-0001",
+      }),
+    ).resolves.toMatchObject({ etag: '"new"' });
+    expect(request).toHaveBeenCalledTimes(2);
   });
 
   it.each([

@@ -179,8 +179,11 @@ export async function downloadBlob(
   client: WorkspaceHttpClient,
   resourceId: string,
 ): Promise<DownloadedBlob> {
+  // A compressing proxy in front of Workspace (Envoy) drops the strong ETag and
+  // Content-Length when it gzips, so byte downloads ask for the identity encoding.
   const response = await client.request(
     `/api/blob-resources/${encodeURIComponent(resourceId)}/download`,
+    { headers: { "accept-encoding": "identity" } },
   );
   if (!response.ok) await readJson(response, "blob download");
   const etag = response.headers.get("etag");
