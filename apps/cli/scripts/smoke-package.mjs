@@ -13,6 +13,12 @@ const htmlViewSource = `<!DOCTYPE html>
 <output id="metric" data-univer-cell-subscribe="unit-1:sheet-1:A1"></output>
 <div id="chart" data-univer-range-subscribe="unit-1:sheet-1:A1:C4"></div>`;
 const htmlViewBytes = Buffer.byteLength(htmlViewSource);
+const smokeUser = {
+  avatarUrl: null,
+  displayName: "Package Smoke",
+  id: "package-smoke-user",
+  username: "package-smoke",
+};
 
 const packageRoot = resolve(process.argv[2] ?? "package-dist");
 const packageManifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
@@ -494,6 +500,8 @@ try {
     values[2].status !== "authenticated" ||
     values[3].subject?.id !== "package-smoke-user" ||
     !Array.isArray(values[4]) ||
+    values[4][0]?.owner?.id !== values[3].subject?.id ||
+    values[4][0]?.owner?.username !== smokeUser.username ||
     !Array.isArray(values[5].nodes) ||
     !Array.isArray(values[6]) ||
     values[7].id !== "wt-1" ||
@@ -538,7 +546,7 @@ try {
   if (JSON.stringify(workspaceFixture.requests) !== JSON.stringify({
     authorizationStarts: 1,
     authorizationExchanges: 2,
-    whoami: 1,
+    whoami: 2,
     spaceList: 1,
     spaceGet: 1,
     spaceBrowse: 1,
@@ -743,7 +751,7 @@ async function handleWorkspaceRequest(request, response, fixture) {
       200,
       {
         authenticated: true,
-        user: { displayName: "Package Smoke", id: "package-smoke-user" },
+        user: smokeUser,
       },
       { "set-cookie": `${fixture.cookie}; Path=/; HttpOnly` },
     );
@@ -763,18 +771,28 @@ async function handleWorkspaceRequest(request, response, fixture) {
     fixture.requests.whoami += 1;
     return writeJson(response, 200, {
       authenticated: true,
-      user: { displayName: "Package Smoke", id: "package-smoke-user" },
+      user: smokeUser,
     });
   }
   if (request.method === "GET" && request.url === "/api/spaces") {
     fixture.requests.spaceList += 1;
     return writeJson(response, 200, {
-      spaces: [{ id: "space-1", name: "Personal", type: "personal" }],
+      spaces: [{
+        id: "space-1",
+        name: "Personal",
+        type: "personal",
+        owner: { id: smokeUser.id, username: smokeUser.username },
+      }],
     });
   }
   if (request.method === "GET" && request.url === "/api/spaces/space-1") {
     fixture.requests.spaceGet += 1;
-    return writeJson(response, 200, { id: "space-1", name: "Personal", type: "personal" });
+    return writeJson(response, 200, {
+      id: "space-1",
+      name: "Personal",
+      type: "personal",
+      owner: { id: smokeUser.id, username: smokeUser.username },
+    });
   }
   if (request.method === "GET" && request.url === "/api/spaces/space-1/nodes") {
     fixture.requests.spaceBrowse += 1;
