@@ -677,13 +677,15 @@ paths:
         - Users
       operationId: searchUsers
       summary: Find Users for Team Membership or Direct Share.
+      description: Match username or display name substrings, or an exact User ID, excluding the caller. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE.
       parameters:
         - name: query
           in: query
           required: true
           schema:
             type: string
-            minLength: 2
+            minLength: 1
+            maxLength: 100
       responses:
         '200':
           description: At most twenty Public User summaries.

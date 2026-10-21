@@ -15,6 +15,47 @@ afterEach(async () => {
 });
 
 describe("permissions", () => {
+  it("keeps exact username and opaque ID matches ahead of twenty fuzzy matches", async () => {
+    const application = createTestApplication();
+    const actor = await register(application, "search-actor");
+    const insertUser = application.database.connection.prepare(
+      "INSERT INTO users (id, username, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, NULL, 0, 0)"
+    );
+    for (let index = 0; index < 25; index += 1) {
+      insertUser.run(`fuzzy-${index}`, `aaa-${String(index).padStart(2, "0")}`, "target-user opaque-target-id");
+    }
+    insertUser.run("opaque-target-id", "target-user", "Target");
+
+    const byUsername = application.permissions.searchUsers(actor, "TARGET-USER").users;
+    expect(byUsername).toHaveLength(20);
+    expect(byUsername[0]).toMatchObject({ id: "opaque-target-id", username: "target-user" });
+    const byId = application.permissions.searchUsers(actor, "opaque-target-id").users;
+    expect(byId).toHaveLength(20);
+    expect(byId[0]).toMatchObject({ id: "opaque-target-id", username: "target-user" });
+    expect(application.permissions.searchUsers(actor, "search-actor").users).toEqual([]);
+  });
+
+  it("accepts one-character user searches and still rejects empty or excessive queries", async () => {
+    const application = createTestApplication();
+    const actor = await register(application, "search-actor");
+    const target = await register(application, "中");
+    expect(application.permissions.searchUsers(actor, "中").users).toMatchObject([{ id: target, username: "中" }]);
+    for (const query of ["", " ", "x".repeat(101)]) {
+      expect(() => application.permissions.searchUsers(actor, query)).toThrowError(
+        expect.objectContaining({ code: "INVALID_INPUT", status: 400 })
+      );
+    }
+  });
+
+  it("keeps Unicode case-distinct usernames separate while matching ASCII case", async () => {
+    const application = createTestApplication();
+    const actor = await register(application, "search-actor");
+    const upper = await register(application, "Älpha");
+    const lower = await register(application, "älpha");
+    expect(application.permissions.searchUsers(actor, "ÄLPHA").users).toMatchObject([{ id: upper, username: "Älpha" }]);
+    expect(application.permissions.searchUsers(actor, "äLPHA").users).toMatchObject([{ id: lower, username: "älpha" }]);
+  });
+
   it("combines anonymous public-read policies without inheriting edit grants", async () => {
     const application = createTestApplication();
     const owner = await register(application, "anonymous-policy-owner");
