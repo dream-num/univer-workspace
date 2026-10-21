@@ -6,6 +6,7 @@ import {
 } from "./errors.js";
 import type { AuthenticatedWorkspaceHttp, WorkspaceHttp } from "./http.js";
 import { rethrowUnlessServerOutdated } from "./space.js";
+import { usernameKey } from "./username.js";
 import {
   parseWorktree,
   type WorkspaceWorktree,
@@ -21,7 +22,7 @@ export interface ListWorktreesInput {
   readonly search?: string;
   /** Keep only Worktrees created by this user; filtered while paging so `limit` counts matches. */
   readonly creatorId?: string;
-  /** Same, by username (case-insensitive). */
+  /** Same, by username (ASCII case-insensitive, matching SQLite NOCASE). */
   readonly creatorUsername?: string;
   /** Keep only these states (server-side, before paging). */
   readonly states?: readonly WorkspaceWorktreeState[];
@@ -58,7 +59,8 @@ export class WorkspaceWorktreeFeature {
             (worktree) =>
               (input.creatorId === undefined || worktree.creator?.id === input.creatorId) &&
               (input.creatorUsername === undefined ||
-                worktree.creator?.username.toLowerCase() === input.creatorUsername.toLowerCase()),
+                (worktree.creator !== undefined &&
+                  usernameKey(worktree.creator.username) === usernameKey(input.creatorUsername))),
           ),
       );
       cursor = input.limit !== undefined && typeof body["nextCursor"] === "string" ? body["nextCursor"] : null;

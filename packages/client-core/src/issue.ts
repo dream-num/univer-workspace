@@ -12,6 +12,7 @@ import {
   type WorkspaceIssuePage,
   type WorkspaceIssueTimelineItem,
 } from "./issue-model.js";
+import { usernameKey } from "./username.js";
 
 export interface WorkspaceIssueLabelUsage extends WorkspaceIssueLabel {
   readonly openIssueCount: number;
@@ -335,11 +336,6 @@ async function resolveUsers(http: WorkspaceHttp, users: readonly string[]): Prom
     resolved.push(match["id"] as string);
   }
   return resolved;
-}
-
-function usernameKey(value: string): string {
-  // SQLite NOCASE folds ASCII only; Unicode case variants can belong to different users.
-  return value.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
 }
 
 function parseLabelUsages(body: Record<string, unknown>): WorkspaceIssueLabelUsage[] {

@@ -1,5 +1,9 @@
 import { Command } from "commander";
-import type { WorkspaceSpace, WorkspaceSpaceFeature } from "@univerjs/univer-workspace-client-core/product";
+import {
+  usernameKey,
+  type WorkspaceSpace,
+  type WorkspaceSpaceFeature,
+} from "@univerjs/univer-workspace-client-core/product";
 import { workspaceError } from "../../errors.js";
 import {
   emit,
@@ -33,13 +37,15 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
           const type =
             options.type === undefined ? undefined : oneOf(options.type, ["team", "personal"], "--type");
           const limit = limitOf(options.limit);
-          const owner = options.owner?.toLowerCase();
+          const owner = options.owner === undefined ? undefined : usernameKey(options.owner);
           return (await spaces.list())
             .filter((space) => type === undefined || space.type === type)
             .filter(
               (space) =>
                 owner === undefined ||
-                (owner === "@me" ? space.accessRole === "owner" : space.owner?.username.toLowerCase() === owner),
+                (owner === "@me"
+                  ? space.accessRole === "owner"
+                  : space.owner !== undefined && usernameKey(space.owner.username) === owner),
             )
             .slice(0, limit);
         });

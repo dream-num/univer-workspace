@@ -65,5 +65,6 @@ export type {
   WorkspaceSpace,
   WorkspaceUnitType,
 } from "./space-model.js";
+export { usernameKey } from "./username.js";
 export { WorkspaceWorktreeFeature } from "./worktree.js";
 export type { WorkspaceUnit, WorkspaceWorktree, WorkspaceWorktreeState } from "./worktree-model.js";

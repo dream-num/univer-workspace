@@ -177,6 +177,33 @@ describe("uvw repository and Issue commands", () => {
   });
 
   it.each([
+    ["Éva", ["upper"]],
+    ["éva", ["lower"]],
+    ["ÉVA", ["upper"]],
+    ["éVA", ["lower"]],
+    ["alice", ["ascii"]],
+    ["@me", ["lower"]],
+    [undefined, ["upper", "lower", "ascii", "legacy"]],
+  ])("filters repository owner %s using ASCII-only username comparison", async (owner, expectedIds) => {
+    const { repoContext } = context();
+    const spaces = {
+      list: async () => [
+        { ...teamSpace, id: "upper", accessRole: "viewer", owner: { id: "u1", username: "Éva" } },
+        { ...teamSpace, id: "lower", owner: { id: "u2", username: "éva" } },
+        { ...teamSpace, id: "ascii", accessRole: "viewer", owner: { id: "u3", username: "ALIce" } },
+        { ...teamSpace, id: "legacy", accessRole: "viewer", owner: undefined },
+      ],
+    } as unknown as WorkspaceSpaceFeature;
+    const command = createRepoCommand(spaces, repoContext);
+
+    const listed = JSON.parse(await run(command, [
+      "list", ...(owner === undefined ? [] : ["--owner", owner]), "--json", "id",
+    ]));
+
+    expect(listed).toEqual(expectedIds.map((id) => ({ id })));
+  });
+
+  it.each([
     ["351 characters", "x".repeat(351)],
     ["351 characters after trimming", ` \t${"x".repeat(351)}\n`],
     ["352 UTF-16 code units", "😀".repeat(176)],
