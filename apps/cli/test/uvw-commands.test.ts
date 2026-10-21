@@ -314,6 +314,170 @@ describe("uvw pr and the worktree alias", () => {
   });
 });
 
+describe("Personal pull request Browser URLs", () => {
+  const personalSpace = { ...teamSpace, fullName: "alice/personal", id: "personal-1", slug: null, type: "personal" as const };
+  const numberedUrl = `${ORIGIN}/spaces/personal-1/pulls/12`;
+  const commands = [
+    { pr: ["view"], alias: ["get"], write: false },
+    { pr: ["edit"], alias: ["update"], tail: ["-t", "Edited"], write: true },
+    { pr: ["ready"], alias: ["ready"], write: true },
+    { pr: ["ready"], alias: ["reopen"], tail: ["--undo"], write: true },
+    { pr: ["merge"], alias: ["merge"], write: true },
+    { pr: ["discard"], alias: ["discard"], write: true },
+  ];
+  const references = [
+    ["ID", ["wt-1"]],
+    ["number", ["#12", "-R", "personal-1"]],
+    ["number URL", [numberedUrl]],
+    ["legacy URL", [`${ORIGIN}/worktrees?worktree=wt-1`]],
+  ] as const;
+
+  function personalCommands(overrides: Record<string, unknown> = {}) {
+    const current = worktree({
+      kind: "user", spaceId: undefined,
+      units: [{ change: "added", name: "Team sheet", type: "sheet", unitId: "unit-1", target: { spaceId: "unrelated-team", parentNodeId: null } }],
+      ...overrides,
+    });
+    const writes: string[] = [];
+    const spaces = {
+      get: vi.fn(async () => personalSpace),
+      lookup: vi.fn(async () => personalSpace),
+    };
+    const worktrees = {
+      create: vi.fn(async () => { writes.push("create"); return current; }),
+      get: vi.fn(async () => current),
+      getByNumber: vi.fn(async () => current),
+      update: vi.fn(async (_id: string, input: { name?: string }) => {
+        writes.push("update");
+        Object.assign(current, input);
+        return current;
+      }),
+      transition: vi.fn(async (_id: string, action: string) => {
+        writes.push(action);
+        current.state = ({ ready: "ready", reopen: "draft", merge: "merged", discard: "discarded" } as Record<string, string>)[action]!;
+        return current;
+      }),
+    };
+    const deps = {
+      context: new RepoContext(spaces, async () => ORIGIN, {}),
+      origin: async () => ORIGIN,
+      spaces: spaces as unknown as WorkspaceSpaceFeature,
+      userId: async () => "u1",
+      worktrees: worktrees as unknown as WorkspaceWorktreeFeature,
+    };
+    const [pr, alias] = createPullRequestCommands(deps);
+    const browse = createBrowseCommand({ ...deps, issues: {} as WorkspaceIssueFeature });
+    return { alias: alias!, browse, current, pr: pr!, spaces, worktrees, writes };
+  }
+
+  function argsFor(command: (typeof commands)[number], group: "pr" | "alias", target: readonly string[]) {
+    return [...command[group], ...target, ...(group === "alias" && command.alias[0] === "reopen" ? [] : command.tail ?? [])];
+  }
+
+  it.each(commands)("prints the Personal Space URL for $pr and its alias through every addressing form", async (command) => {
+    for (const group of ["pr", "alias"] as const) {
+      for (const [reference, target] of references) {
+        const fixture = personalCommands();
+        const text = await run(fixture[group], argsFor(command, group, target));
+        expect(text, `${group} ${reference}`).toContain(`\n${numberedUrl}\n`);
+        expect(fixture.current.spaceId).toBeUndefined();
+        expect(fixture.spaces.lookup.mock.calls).toEqual(reference === "ID" || reference === "legacy URL" ? [["alice", "personal"]] : []);
+      }
+    }
+  });
+
+  it.each(["pr", "alias"] as const)("reuses the already resolved Personal Space for %s create before writing", async (group) => {
+    for (const repo of ["personal-1", "alice/personal"]) {
+      const fixture = personalCommands();
+      if (repo === "personal-1") fixture.spaces.lookup.mockRejectedValue(workspaceError("workspace-not-found", "Lookup unavailable."));
+      expect(await run(fixture[group], ["create", "-R", repo, "-t", "Mine"])).toContain(`\n${numberedUrl}\n`);
+      expect(fixture.spaces.lookup.mock.calls).toEqual(repo === "personal-1" ? [] : [["alice", "personal"]]);
+      expect(fixture.writes).toEqual(["create"]);
+      expect(fixture.current.spaceId).toBeUndefined();
+    }
+  });
+
+  it("browses numbered Personal PRs through every addressing form and preserves --unit", async () => {
+    for (const [reference, target] of references) {
+      const fixture = personalCommands();
+      expect(await run(fixture.browse, [...target, "--unit", "unit-1"]), reference).toBe(`${numberedUrl}?unit=unit-1\n`);
+      expect(fixture.spaces.lookup.mock.calls).toEqual(reference === "ID" || reference === "legacy URL" ? [["alice", "personal"]] : []);
+    }
+  });
+
+  it.each(commands)("does not resolve links or read an ID just for JSON on $pr and its alias", async (command) => {
+    for (const group of ["pr", "alias"] as const) {
+      for (const fields of [[], ["id,number"]]) {
+        const fixture = personalCommands();
+        fixture.spaces.lookup.mockRejectedValue(workspaceError("workspace-not-found", "Lookup unavailable."));
+        const json = JSON.parse(await run(fixture[group], [...argsFor(command, group, ["wt-1"]), "--json", ...fields]));
+        expect(json).toMatchObject({ id: "wt-1", number: 12 });
+        expect(json.spaceId).toBeUndefined();
+        expect(fixture.spaces.lookup).not.toHaveBeenCalled();
+        expect(fixture.worktrees.get).toHaveBeenCalledTimes(command.write ? 0 : 1);
+      }
+    }
+  });
+
+  it.each(commands.filter((command) => command.write))("leaves the Worktree unchanged when the pre-write link lookup fails for $pr and its alias", async (command) => {
+    for (const group of ["pr", "alias"] as const) {
+      for (const target of [["wt-1"], [`${ORIGIN}/worktrees?worktree=wt-1`]]) {
+        const fixture = personalCommands();
+        fixture.spaces.lookup.mockRejectedValue(workspaceError("workspace-not-found", "Personal Space lookup failed."));
+        await expect(run(fixture[group], argsFor(command, group, target))).rejects.toMatchObject({
+          exitCode: 1, message: expect.stringContaining("Personal Space lookup failed"),
+        });
+        expect(fixture.writes).toEqual([]);
+        expect(fixture.current).toMatchObject({ name: "Add chart", state: "draft" });
+      }
+    }
+  });
+
+  it("does not create a PR if the initial repository lookup fails", async () => {
+    for (const group of ["pr", "alias"] as const) {
+      const fixture = personalCommands();
+      fixture.spaces.lookup.mockRejectedValue(workspaceError("workspace-not-found", "Personal Space lookup failed."));
+      await expect(run(fixture[group], ["create", "-R", "alice/personal", "-t", "Mine"])).rejects.toMatchObject({ exitCode: 1 });
+      expect(fixture.writes).toEqual([]);
+    }
+  });
+
+  it("rejects mismatched Personal Space lookup results before writing", async () => {
+    for (const space of [teamSpace, { ...personalSpace, owner: { id: "u2", username: "alice" } }]) {
+      const fixture = personalCommands();
+      fixture.spaces.lookup.mockResolvedValue(space as typeof personalSpace);
+      await expect(run(fixture.pr, ["discard", "wt-1"])).rejects.toMatchObject({
+        exitCode: 1, message: expect.stringContaining("workspace-result-mismatch"),
+      });
+      expect(fixture.writes).toEqual([]);
+      expect(fixture.current.state).toBe("draft");
+    }
+  });
+
+  it("keeps unnumbered and older-server Worktrees on ID links without a lookup", async () => {
+    for (const number of [null, undefined]) {
+      for (const command of commands) {
+        for (const group of ["pr", "alias"] as const) {
+          const fixture = personalCommands({ number });
+          fixture.spaces.lookup.mockRejectedValue(workspaceError("workspace-server-capability-missing", "Old server."));
+          expect(await run(fixture[group], argsFor(command, group, ["wt-1"]))).toContain(`${ORIGIN}/worktrees?worktree=wt-1\n`);
+          expect(fixture.spaces.lookup).not.toHaveBeenCalled();
+        }
+      }
+      const fixture = personalCommands({ number });
+      expect(await run(fixture.browse, ["wt-1", "--unit", "unit-1"])).toBe(`${ORIGIN}/worktrees?worktree=wt-1&unit=unit-1\n`);
+      expect(fixture.spaces.lookup).not.toHaveBeenCalled();
+    }
+  });
+
+  it("uses the Worktree's Team Space without looking up the creator's Personal Space", async () => {
+    const fixture = personalCommands({ kind: "team", spaceId: "team-9" });
+    expect(await run(fixture.pr, ["edit", "wt-1", "-t", "Team"])).toContain(`${ORIGIN}/spaces/team-9/pulls/12\n`);
+    expect(await run(fixture.browse, ["wt-1"])).toBe(`${ORIGIN}/spaces/team-9/pulls/12\n`);
+    expect(fixture.spaces.lookup).not.toHaveBeenCalled();
+  });
+});
+
 describe("uvw search and browse", () => {
   function browseCommand() {
     const { repoContext } = context();

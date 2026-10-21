@@ -452,7 +452,10 @@ Client Core 不读取 CLI 的配置和环境变量。`UVW_REPO` 由 CLI 读取�
   CLI 的产品命令（`auth`、`repo`、`issue`、`label`、`pr`、`worktree`、`search`、`browse`）只从该入口导入，
   `main.ts` 按第一个参数分流：产品命令不加载 Univer 运行时（实测 `uvw issue list` 约 0.2 秒，内容命令仍约 1.5 秒）。
   这取代了 6.5 中“先测量再决定”的预案。
-- **PR 编号寻址**：编号参数先转为 Worktree ID；仅需要 ID 的命令（`edit`、`ready`、`merge`、`discard`）对 ID 参数不额外请求。
+- **PR 编号寻址与链接**：编号参数先转为 Worktree ID。`edit`、`ready`、`merge`、`discard`（含 `worktree` 别名）
+  的 JSON 输出对 ID 参数不额外读取；文本输出会先读取 Worktree，为有编号的 User PR 查询 creator 的 Personal Space，
+  在写入前完成链接解析，查询失败则不写入。编号/新 URL 入口、create 复用已解析的 Space，不再为链接查询仓库。
+  `view` / `browse` 也使用该 Personal Space 编号链接；Team `spaceId` 语义不变，无编号的旧 Worktree 保留 ID 链接。
 - **旧服务端检测**：lookup / 按编号查询遇到 404 时，再调用 `GET /api/spaces`，若返回的 Space 视图没有 `fullName` 字段则判定为旧服务端，
   报 `workspace-server-capability-missing`。仅在 404 路径多一次请求。
 - **`browse <n>`**：编号在同一仓库内由 Issue 与 Team PR 共用，先按 PR 查询，404 后再按 Issue 查询。

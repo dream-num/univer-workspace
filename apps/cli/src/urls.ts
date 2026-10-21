@@ -11,10 +11,12 @@ export function pullUrl(
   origin: string,
   worktree: { readonly id: string; readonly number?: number | null; readonly spaceId?: string },
   unitId?: string,
+  repoSpaceId?: string,
 ): string {
+  const spaceId = worktree.spaceId ?? repoSpaceId;
   const url =
-    worktree.number != null && worktree.spaceId !== undefined
-      ? new URL(`/spaces/${encodeURIComponent(worktree.spaceId)}/pulls/${String(worktree.number)}`, origin)
+    worktree.number != null && spaceId !== undefined
+      ? new URL(`/spaces/${encodeURIComponent(spaceId)}/pulls/${String(worktree.number)}`, origin)
       : new URL("/worktrees", origin);
   if (url.pathname === "/worktrees") url.searchParams.set("worktree", worktree.id);
   if (unitId !== undefined) url.searchParams.set("unit", unitId);

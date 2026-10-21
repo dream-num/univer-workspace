@@ -36,12 +36,14 @@ export function createBrowseCommand(deps: {
         const urlKind = reference?.kind === "url" ? reference.item?.kind : undefined;
         const target = await context.item(argument, options.repo, urlKind ?? "pr");
         if (target.kind === "id") {
-          return { url: pullUrl(base, await worktrees.get(target.id), options.unit) };
+          const worktree = await worktrees.get(target.id);
+          return { url: pullUrl(base, worktree, options.unit, await context.pullSpaceId(worktree)) };
         }
         // Issues and pull requests of a Team Space share one number sequence, so at most one exists.
         if (urlKind !== "issue") {
           try {
-            return { url: pullUrl(base, await worktrees.getByNumber(target.spaceId, target.number), options.unit) };
+            const worktree = await worktrees.getByNumber(target.spaceId, target.number);
+            return { url: pullUrl(base, worktree, options.unit, target.spaceId) };
           } catch (error) {
             if (urlKind === "pr" || !isNotFound(error)) throw error;
           }

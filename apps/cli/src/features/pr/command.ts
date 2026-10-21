@@ -96,21 +96,29 @@ function build(
   };
 
   /** A `<n|url|id>` argument becomes the Worktree it names. */
-  const find = async (argument: string, repo: string | undefined): Promise<WorkspaceWorktree> => {
+  const find = async (argument: string, repo: string | undefined) => {
     const target = await context.item(argument, repo, "pr");
-    return target.kind === "id"
+    const worktree = target.kind === "id"
       ? await worktrees.get(target.id)
       : await worktrees.getByNumber(target.spaceId, target.number);
+    return { worktree, spaceId: target.kind === "number" ? target.spaceId : undefined };
   };
-  /** Same, when only the ID is needed: an ID argument costs no request. */
-  const idOf = async (argument: string, repo: string | undefined): Promise<string> => {
-    const target = await context.item(argument, repo, "pr");
-    return target.kind === "id"
-      ? target.id
-      : (await worktrees.getByNumber(target.spaceId, target.number)).id;
+  const urlOf = async ({ worktree, spaceId }: Awaited<ReturnType<typeof find>>) =>
+    pullUrl(await origin(), worktree, undefined, await context.pullSpaceId(worktree, spaceId));
+  /** Resolve text links before writing; JSON only needs an ID and keeps the no-read fast path. */
+  const writeTarget = async (argument: string, options: JsonFieldsOption & RepoOption) => {
+    if (options.json === undefined) {
+      const result = await find(argument, options.repo);
+      return { id: result.worktree.id, url: await urlOf(result) };
+    }
+    const target = await context.item(argument, options.repo, "pr");
+    return {
+      id: target.kind === "id" ? target.id : (await worktrees.getByNumber(target.spaceId, target.number)).id,
+      url: undefined,
+    };
   };
-  const line = async (worktree: WorkspaceWorktree) =>
-    `${label(worktree)} ${worktree.name} [${worktree.state}]\n${pullUrl(await origin(), worktree)}`;
+  const line = (worktree: WorkspaceWorktree, url: string | undefined) =>
+    url === undefined ? "" : `${label(worktree)} ${worktree.name} [${worktree.state}]\n${url}`;
 
   const list = new Command("list")
     .description("List pull requests of a repository")
@@ -164,7 +172,10 @@ function build(
     .option(...REPO_OPTION)
     .addOption(jsonFieldsOption(PR_JSON_FIELDS))
     .action(async (argument: string, options: JsonFieldsOption & RepoOption) => {
-      const worktree = await executeCommand(get, async () => await find(argument, options.repo));
+      const { worktree, url } = await executeCommand(get, async () => {
+        const result = await find(argument, options.repo);
+        return { worktree: result.worktree, url: options.json === undefined ? await urlOf(result) : undefined };
+      });
       emit(
         get,
         options,
@@ -182,7 +193,7 @@ function build(
               ]
             : []),
           "",
-          pullUrl(await origin(), worktree),
+          ...(url === undefined ? [] : [url]),
         ].join("\n"),
       );
     });
@@ -207,10 +218,11 @@ function build(
             visibility?: string;
           },
       ) => {
-        const worktree = await executeCommand(create, async () => {
+        const { worktree, url } = await executeCommand(create, async () => {
           const space = await repoSpace(options.repo);
           const body = await readText(options.body, options.bodyFile, "--body or --body-file");
-          return await worktrees.create({
+          const base = options.json === undefined ? await origin() : undefined;
+          const worktree = await worktrees.create({
             name: options.title,
             scope: space.type === "personal" ? { kind: "user" } : { kind: "space", spaceId: space.id },
             ...(body === undefined ? {} : { summary: body }),
@@ -219,8 +231,9 @@ function build(
               ? {}
               : { visibility: oneOf(options.visibility, ["private", "space"], "--visibility") }),
           });
+          return { worktree, url: base === undefined ? undefined : pullUrl(base, worktree, undefined, space.id) };
         });
-        emit(create, options, worktree, await line(worktree));
+        emit(create, options, worktree, line(worktree, url));
       },
     );
 
@@ -239,7 +252,7 @@ function build(
         options: JsonFieldsOption &
           RepoOption & { body?: string; bodyFile?: string; title?: string; visibility?: string },
       ) => {
-        const worktree = await executeCommand(edit, async () => {
+        const { worktree, url } = await executeCommand(edit, async () => {
           const body = await readText(options.body, options.bodyFile, "--body or --body-file");
           if (options.title === undefined && body === undefined && options.visibility === undefined) {
             throw workspaceError(
@@ -247,15 +260,17 @@ function build(
               "Nothing to change: pass --title, --body/--body-file or --visibility.",
             );
           }
-          return await worktrees.update(await idOf(argument, options.repo), {
+          const target = await writeTarget(argument, options);
+          const worktree = await worktrees.update(target.id, {
             ...(options.title === undefined ? {} : { name: options.title }),
             ...(body === undefined ? {} : { summary: body }),
             ...(options.visibility === undefined
               ? {}
               : { visibility: oneOf(options.visibility, ["private", "space"], "--visibility") }),
           });
+          return { worktree, url: target.url };
         });
-        emit(edit, options, worktree, await line(worktree));
+        emit(edit, options, worktree, line(worktree, url));
       },
     );
 
@@ -269,13 +284,15 @@ function build(
     if (undoOption) command.option("--undo", "move a ready pull request back to draft");
     return command.addOption(jsonFieldsOption(PR_JSON_FIELDS)).action(
       async (argument: string, options: JsonFieldsOption & RepoOption & { undo?: boolean }) => {
-        const worktree = await executeCommand(command, async () => {
-          return await worktrees.transition(
-            await idOf(argument, options.repo),
+        const { worktree, url } = await executeCommand(command, async () => {
+          const target = await writeTarget(argument, options);
+          const worktree = await worktrees.transition(
+            target.id,
             options.undo === true ? "reopen" : action,
           );
+          return { worktree, url: target.url };
         });
-        emit(command, options, worktree, await line(worktree));
+        emit(command, options, worktree, line(worktree, url));
       },
     );
   };

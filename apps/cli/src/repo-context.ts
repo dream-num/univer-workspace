@@ -5,6 +5,7 @@ import {
   workspaceError,
   type ResolvedWorkspaceRepo,
   type WorkspaceSpaceFeature,
+  type WorkspaceWorktree,
 } from "@univerjs/univer-workspace-client-core/product";
 
 /** `-R, --repo <ref>` (shared by every repository-scoped command). */
@@ -69,6 +70,19 @@ export class RepoContext {
       "workspace-argument-invalid",
       `Issue number must look like 12 or #12, got "${argument}".`,
     );
+  }
+
+  /** A User Worktree's Browser repository is its creator's Personal Space, not a Unit target. */
+  public async pullSpaceId(worktree: WorkspaceWorktree, resolvedSpaceId?: string): Promise<string | undefined> {
+    if (worktree.number == null) return undefined;
+    if (worktree.spaceId !== undefined) return worktree.spaceId;
+    if (resolvedSpaceId !== undefined) return resolvedSpaceId;
+    if (worktree.kind !== "user" || worktree.creator === undefined) return undefined;
+    const space = await this.spaces.lookup(worktree.creator.username, "personal");
+    if (space.type !== "personal" || space.owner?.id !== worktree.creator.id) {
+      throw workspaceError("workspace-result-mismatch", "The Personal Space does not belong to the pull request's creator.");
+    }
+    return space.id;
   }
 
   private async assertSameOrigin(url: string): Promise<void> {
