@@ -175,6 +175,58 @@ describe("uvw repository and Issue commands", () => {
       fullName: "alice/docs", starCount: 2,
     });
   });
+
+  it.each([
+    ["351 characters", "x".repeat(351)],
+    ["351 characters after trimming", ` \t${"x".repeat(351)}\n`],
+    ["352 UTF-16 code units", "😀".repeat(176)],
+  ])("rejects a repo description of %s before any writes", async (_name, description) => {
+    const { repoContext } = context();
+    const create = vi.fn(async () => teamSpace);
+    const update = vi.fn(async () => teamSpace);
+    const command = createRepoCommand({ create, update } as unknown as WorkspaceSpaceFeature, repoContext);
+
+    const error: unknown = await run(command, ["create", "docs", "--description", description])
+      .catch((caught: unknown) => caught);
+
+    expect(create).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(error).toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining("workspace-argument-invalid"),
+    });
+    expect(error).toMatchObject({ message: expect.stringContaining("at most 350 characters") });
+  });
+
+  it.each([
+    ["350 characters", "x".repeat(350)],
+    ["350 characters after trimming", ` \t${"x".repeat(350)}\n`],
+    ["whitespace only", " \t\n "],
+    ["empty", ""],
+    ["350 UTF-16 code units", "😀".repeat(175)],
+  ])("creates a repo with a valid %s description", async (_name, description) => {
+    const { repoContext } = context();
+    const create = vi.fn(async () => teamSpace);
+    const update = vi.fn(async () => teamSpace);
+    const command = createRepoCommand({ create, update } as unknown as WorkspaceSpaceFeature, repoContext);
+
+    await run(command, ["create", "docs", "--description", description]);
+
+    expect(create).toHaveBeenCalledExactlyOnceWith({ name: "docs", slug: "docs" });
+    expect(update).toHaveBeenCalledExactlyOnceWith("space-1", { description });
+  });
+
+  it("creates a repo without updating an omitted description", async () => {
+    const { repoContext } = context();
+    const create = vi.fn(async () => teamSpace);
+    const update = vi.fn(async () => teamSpace);
+    const command = createRepoCommand({ create, update } as unknown as WorkspaceSpaceFeature, repoContext);
+
+    await run(command, ["create", "docs"]);
+
+    expect(create).toHaveBeenCalledExactlyOnceWith({ name: "docs", slug: "docs" });
+    expect(update).not.toHaveBeenCalled();
+  });
 });
 
 describe("uvw pr and the worktree alias", () => {

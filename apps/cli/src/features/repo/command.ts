@@ -87,6 +87,12 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
         options: JsonFieldsOption & { description?: string; name?: string; public?: boolean },
       ) => {
         const space = await executeCommand(create, async () => {
+          if (options.description !== undefined && options.description.trim().length > 350) {
+            throw workspaceError(
+              "workspace-argument-invalid",
+              "--description must contain at most 350 characters.",
+            );
+          }
           const created = await spaces.create({
             name: options.name ?? slug,
             slug,
