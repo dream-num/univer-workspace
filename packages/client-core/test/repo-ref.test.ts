@@ -96,6 +96,38 @@ describe("repository references", () => {
     await expect(failing.spaces.lookup("me", "x")).rejects.toMatchObject({ code: "INVALID_INPUT" });
     expect(failing.calls).toHaveLength(1);
   });
+
+  it.each(["lookup", "numbered PR"] as const)("preserves a capability probe authentication failure after %s returns 404", async (operation) => {
+    const { spaces, worktrees, calls } = clients((call) =>
+      call.path === "/api/spaces"
+        ? Response.json({ error: { code: "UNAUTHENTICATED", message: "Session expired." } }, { status: 401 })
+        : notFound());
+
+    const result = operation === "lookup" ? spaces.lookup("me", "hidden") : worktrees.getByNumber("s1", 9);
+    await expect(result).rejects.toMatchObject({
+      code: "workspace-authentication-required",
+      message: "Workspace Session is missing or expired.",
+      detail: { path: "/api/spaces", status: 401 },
+    });
+    expect(calls).toHaveLength(2);
+  });
+
+  it.each([
+    { name: "forbidden", probe: () => Response.json({ error: { code: "FORBIDDEN" } }, { status: 403 }) },
+    { name: "unavailable", probe: () => Response.json({ error: { code: "UNAVAILABLE" } }, { status: 503 }) },
+    { name: "invalid response", probe: () => new Response("not JSON", { status: 200 }) },
+    { name: "network failure", probe: () => { throw new TypeError("Connection closed."); } },
+  ])("keeps the original 404 when the capability probe has a non-authentication $name", async ({ probe }) => {
+    for (const operation of ["lookup", "numbered PR"] as const) {
+      const { spaces, worktrees } = clients((call) => call.path === "/api/spaces" ? probe() : notFound());
+      const result = operation === "lookup" ? spaces.lookup("me", "hidden") : worktrees.getByNumber("s1", 9);
+      await expect(result).rejects.toMatchObject({
+        code: "NOT_FOUND",
+        message: "The resource was not found.",
+        detail: { path: operation === "lookup" ? "/api/spaces/lookup" : "/api/spaces/s1/worktrees/9", status: 404 },
+      });
+    }
+  });
 });
 
 describe("Space and Worktree additions", () => {

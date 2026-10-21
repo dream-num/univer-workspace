@@ -278,7 +278,10 @@ export async function rethrowUnlessServerOutdated(http: WorkspaceHttp, error: un
   try {
     const body = await http.json("/api/spaces");
     first = Array.isArray(body["spaces"]) ? body["spaces"][0] : undefined;
-  } catch {
+  } catch (probeError) {
+    if (probeError instanceof WorkspaceApplicationError && probeError.code === "workspace-authentication-required") {
+      throw probeError;
+    }
     throw error;
   }
   if (isWorkspaceRecord(first) && !("fullName" in first)) {
