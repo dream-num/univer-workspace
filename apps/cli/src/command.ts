@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { StringDecoder } from "node:string_decoder";
 import { Command, InvalidArgumentError, Option } from "commander";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 
@@ -140,11 +141,12 @@ export async function readText(
   }
   if (file === undefined) return inline;
   if (file !== "-") return await readFile(file, "utf8");
+  const decoder = new StringDecoder("utf8");
   let text = "";
   for await (const chunk of process.stdin) {
-    text += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+    text += typeof chunk === "string" ? chunk : decoder.write(chunk);
   }
-  return text;
+  return text + decoder.end();
 }
 
 function isCodedError(error: unknown): error is Error & { readonly code: string } {
