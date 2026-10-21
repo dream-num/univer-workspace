@@ -3,10 +3,10 @@ import type {
   WorkspaceIssueFeature,
   WorkspaceWorktreeFeature,
 } from "@univerjs/univer-workspace-client-core/product";
-import { collect, emit, executeCommand, limitOf, oneOf, table, type JsonFieldsOption } from "../../command.js";
-import { issueRows, listIssues, userSpelling } from "../issue/command.js";
+import { collect, emit, executeCommand, jsonFieldsOption, limitOf, oneOf, table, type JsonFieldsOption } from "../../command.js";
+import { ISSUE_LIST_JSON_FIELDS, issueRows, listIssues, userSpelling } from "../issue/command.js";
+import { PR_JSON_FIELDS } from "../pr/command.js";
 
-const JSON_OPTION = ["--json [fields]", "write JSON, optionally only these comma-separated fields"] as const;
 const STATES = ["open", "merged", "discarded", "all"] as const;
 
 export function createSearchCommand(
@@ -24,7 +24,7 @@ export function createSearchCommand(
     .option("-A, --author <user>", "username or @me")
     .option("-S, --search <text>", "match title and body")
     .option("-L, --limit <n>", "maximum number of Issues", "30")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(ISSUE_LIST_JSON_FIELDS))
     .action(
       async (
         options: JsonFieldsOption & {
@@ -58,7 +58,7 @@ export function createSearchCommand(
     .option("-A, --author <user>", "username or @me")
     .option("-S, --search <text>", "match title, body, author or repository")
     .option("-L, --limit <n>", "maximum number of pull requests", "30")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(PR_JSON_FIELDS))
     .action(
       async (options: JsonFieldsOption & { author?: string; limit: string; search?: string; state: string }) => {
         const found = await executeCommand(searchPrs, async () => {

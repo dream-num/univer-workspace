@@ -4,7 +4,6 @@ import { emit, executeCommand, jsonFieldsOption, oneOf, table, type JsonFieldsOp
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 
 const LABEL_COLORS = ["gray", "blue", "green", "yellow", "orange", "red", "purple", "pink"] as const;
-const JSON_OPTION = ["--json [fields]", "write JSON, optionally only these comma-separated fields"] as const;
 export const LABEL_JSON_FIELDS = ["color", "description", "id", "name"] as const satisfies
   readonly (keyof WorkspaceIssueLabel)[];
 
@@ -17,7 +16,7 @@ export function createLabelCommand(feature: WorkspaceIssueFeature, context: Repo
 
   const list = new Command("list")
     .option(...REPO_OPTION)
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption([...LABEL_JSON_FIELDS, "openIssueCount"]))
     .action(async (options: JsonFieldsOption & RepoOption) => {
       const labels = await executeCommand(list, async () =>
         await feature.labels((await context.repo(options.repo)).spaceId));

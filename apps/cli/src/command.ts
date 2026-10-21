@@ -6,21 +6,21 @@ export interface JsonOption {
   readonly json?: boolean;
 }
 
-/** `--json [fields]`: true for the whole object, or raw/validated field names. */
+/** `--json [fields]`: true for the whole object, or validated field names. */
 export interface JsonFieldsOption {
-  readonly json?: true | string | readonly string[];
+  readonly json?: true | readonly string[];
 }
 
-/** Parse and validate fields before Commander enters a command that can change remote data. */
+/** Validate the command's field contract before its handler makes any requests. */
 export function jsonFieldsOption(available: readonly string[]): Option {
   return new Option("--json [fields]", "write JSON, optionally only these comma-separated fields")
     .argParser((value: string) => {
-      const names = fieldNames(value);
+      const names = value.split(",").map((name) => name.trim());
       const unknown = names.filter((name) => !available.includes(name));
-      if (names.length === 0 || unknown.length > 0) {
+      if (names.includes("") || unknown.length > 0) {
         throw new InvalidArgumentError(
           "workspace-argument-invalid: " +
-            (names.length === 0
+            (names.includes("")
               ? "--json fields must not be empty."
               : `Unknown --json field: ${unknown.join(", ")}. Available fields: ${available.join(", ")}.`),
         );
@@ -85,29 +85,13 @@ export function emit(
   command.configureOutput().writeOut?.(`${out}\n`);
 }
 
-function pickFields(value: unknown, fields: string | readonly string[]): unknown {
-  const names = typeof fields === "string" ? fieldNames(fields) : fields;
-  if (names.length === 0) {
-    throw workspaceError("workspace-argument-invalid", "--json fields must not be empty.");
-  }
+function pickFields(value: unknown, fields: readonly string[]): unknown {
   const pick = (item: unknown) => {
     if (typeof item !== "object" || item === null || Array.isArray(item)) return item;
     const record = item as Record<string, unknown>;
-    // Parsed field arrays already passed the command's contract, including optional fields.
-    const unknown = typeof fields === "string" ? names.filter((name) => !(name in record)) : [];
-    if (unknown.length > 0) {
-      throw workspaceError(
-        "workspace-argument-invalid",
-        `Unknown --json field: ${unknown.join(", ")}. Available fields: ${Object.keys(record).join(", ")}.`,
-      );
-    }
-    return Object.fromEntries(names.map((name) => [name, record[name]]));
+    return Object.fromEntries(fields.map((name) => [name, record[name]]));
   };
   return Array.isArray(value) ? value.map(pick) : pick(value);
-}
-
-function fieldNames(fields: string): string[] {
-  return fields.split(",").map((name) => name.trim()).filter((name) => name !== "");
 }
 
 /** Left-aligned columns separated by two spaces; trailing blanks are trimmed. */

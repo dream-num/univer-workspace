@@ -561,6 +561,142 @@ describe("uvw JSON validation before product writes", () => {
   );
 });
 
+describe("uvw read command JSON field contracts", () => {
+  const legacySpace = { id: "space-old", name: "Old repository" };
+  const personalPr = { id: "wt-personal", name: "Personal draft", state: "draft", units: [], kind: "user" };
+  const labels = [{ color: "red", description: "Bugs", id: "l1", name: "bug", openIssueCount: 4 }];
+  const timeline = [{ type: "comment", id: "c1", body: "Comment" }];
+  const READS = [
+    { args: ["repo", "list"], value: [teamSpace, legacySpace] },
+    { args: ["repo", "view", "alice/docs"], value: { ...teamSpace, starCount: 2, starred: false } },
+    { args: ["issue", "list", "-R", "alice/docs"], value: [issue()] },
+    { args: ["issue", "view", "3", "-R", "alice/docs"], value: issue() },
+    { args: ["label", "list", "-R", "alice/docs"], value: labels },
+    { args: ["pr", "list", "-R", "alice/docs"], value: [worktree(), personalPr] },
+    { args: ["pr", "view", "12", "-R", "alice/docs"], value: worktree() },
+    { args: ["worktree", "list", "-R", "alice/docs"], value: [worktree(), personalPr] },
+    { args: ["worktree", "get", "12", "-R", "alice/docs"], value: worktree() },
+    { args: ["search", "issues"], value: [issue()] },
+    { args: ["search", "prs"], value: [worktree(), personalPr] },
+    { args: ["browse", "-R", "alice/docs"], value: { url: `${ORIGIN}/spaces/space-1` } },
+  ];
+
+  function commands(emptyLists = false) {
+    const { lookup, repoContext } = context();
+    const requests: string[] = [];
+    const read = (method: string, value: unknown) => async () => {
+      requests.push(method);
+      return value;
+    };
+    const spaces = {
+      get: read("repo.get", teamSpace),
+      getStar: read("repo.getStar", { starCount: 2, starred: false }),
+      list: read("repo.list", emptyLists ? [] : [teamSpace, legacySpace]),
+    } as unknown as WorkspaceSpaceFeature;
+    const issues = {
+      get: read("issue.get", issue()),
+      labels: read("label.list", emptyLists ? [] : labels),
+      list: read("issue.list", { issues: emptyLists ? [] : [issue()], nextCursor: null }),
+      timeline: read("issue.timeline", timeline),
+    } as unknown as WorkspaceIssueFeature;
+    const worktrees = {
+      get: read("pr.get", worktree()),
+      getByNumber: read("pr.getByNumber", worktree()),
+      list: read("pr.list", emptyLists ? [] : [worktree(), personalPr]),
+    } as unknown as WorkspaceWorktreeFeature;
+    const userId = read("auth.whoami", "u1") as () => Promise<string>;
+    const program = new Command("uvw");
+    for (const command of [
+      createRepoCommand(spaces, repoContext),
+      createIssueCommand({ context: repoContext, feature: issues, origin: async () => ORIGIN }),
+      createLabelCommand(issues, repoContext),
+      ...createPullRequestCommands({ context: repoContext, origin: async () => ORIGIN, spaces, userId, worktrees }),
+      createSearchCommand(issues, worktrees, userId),
+      createBrowseCommand({ context: repoContext, issues, origin: async () => ORIGIN, worktrees }),
+    ]) program.addCommand(command);
+    return { lookup, program, requests };
+  }
+
+  it.each(READS.map(({ args }) => [args.join(" "), args] as const))(
+    "rejects invalid fields before any request for %s, even with empty results",
+    async (_description, args) => {
+      for (const fields of ["typo", "id,typo", "", " ,\t, ", "id, ", "toString", "__proto__", "constructor"]) {
+        const { lookup, program, requests } = commands(true);
+        const error: unknown = await run(program, [...args, "--json", fields])
+          .catch((caught: unknown) => caught);
+        expect(error, fields).toMatchObject({
+          exitCode: 1,
+          message: expect.stringContaining("workspace-argument-invalid"),
+        });
+        expect(requests, fields).toEqual([]);
+        expect(lookup, fields).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it.each(READS.map(({ args, value }) => [args.join(" "), args, value] as const))(
+    "preserves full JSON and text for %s",
+    async (_description, args, value) => {
+      expect(JSON.parse(await run(commands().program, [...args, "--json"]))).toEqual(value);
+      expect((await run(commands().program, args)).trim()).not.toBe("");
+    },
+  );
+
+  it.each([
+    ["pr", "list", "-R", "alice/docs"],
+    ["worktree", "list", "-R", "alice/docs"],
+    ["search", "prs"],
+  ])("projects optional fields in mixed PR lists for %s %s", async (...args) => {
+    expect(JSON.parse(await run(commands().program, [...args, "--json", " id, spaceId, summary, id "]))).toEqual([
+      { id: "wt-1", spaceId: "space-1", summary: null },
+      { id: "wt-personal" },
+    ]);
+  });
+
+  it("omits absent optional fields in PR details and older repository summaries", async () => {
+    expect(JSON.parse(await run(commands().program, ["pr", "view", "12", "-R", "alice/docs", "--json", "id,visibility"])))
+      .toEqual({ id: "wt-1" });
+    expect(JSON.parse(await run(commands().program, ["repo", "list", "--json", "id,fullName,slug"])))
+      .toEqual([{ id: "space-1", fullName: "alice/docs", slug: "docs" }, { id: "space-old" }]);
+  });
+
+  it("accepts star fields only on repo view and usage counts on label list", async () => {
+    expect(JSON.parse(await run(commands().program, ["repo", "view", "alice/docs", "--json", "starCount,starred"])))
+      .toEqual({ starCount: 2, starred: false });
+    expect(JSON.parse(await run(commands().program, ["label", "list", "-R", "alice/docs", "--json", "name,openIssueCount"])))
+      .toEqual([{ name: "bug", openIssueCount: 4 }]);
+    const { program, requests } = commands();
+    await expect(run(program, ["repo", "list", "--json", "starCount"])).rejects.toMatchObject({ exitCode: 1 });
+    expect(requests).toEqual([]);
+  });
+
+  it("accepts timeline on issue view independently of --comments", async () => {
+    const args = ["issue", "view", "3", "-R", "alice/docs"];
+    expect(JSON.parse(await run(commands().program, [...args, "--json", "id,timeline"]))).toEqual({ id: "i3" });
+    expect(JSON.parse(await run(commands().program, [...args, "--comments", "--json", "timeline"])))
+      .toEqual({ timeline });
+    expect(JSON.parse(await run(commands().program, [...args, "--comments", "--json"])))
+      .toEqual({ ...issue(), timeline });
+  });
+
+  it.each([["issue", "list", "-R", "alice/docs"], ["search", "issues"]])(
+    "rejects detail-only fields on %s %s before requests",
+    async (...args) => {
+      for (const field of ["body", "capabilities", "references", "timeline"]) {
+        const { lookup, program, requests } = commands();
+        await expect(run(program, [...args, "--json", field])).rejects.toMatchObject({ exitCode: 1 });
+        expect(requests).toEqual([]);
+        expect(lookup).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("projects the Browser URL with duplicate and padded field names", async () => {
+    expect(JSON.parse(await run(commands().program, ["browse", "12", "-R", "alice/docs", "--json", " url, url "])))
+      .toEqual({ url: `${ORIGIN}/spaces/space-1/pulls/12` });
+  });
+});
+
 async function run(command: Command, args: readonly string[]): Promise<string> {
   let output = "";
   const configuration: OutputConfiguration = {

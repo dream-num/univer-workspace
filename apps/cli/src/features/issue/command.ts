@@ -20,10 +20,12 @@ import {
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 import { issueUrl } from "../../urls.js";
 
-const JSON_OPTION = ["--json [fields]", "write JSON, optionally only these comma-separated fields"] as const;
+export const ISSUE_LIST_JSON_FIELDS = [
+  "assignees", "author", "closedAt", "closedBy", "commentCount", "createdAt", "id", "labels", "number",
+  "referenceCount", "space", "state", "stateReason", "title", "updatedAt",
+] as const satisfies readonly (keyof WorkspaceIssueSummary)[];
 export const ISSUE_JSON_FIELDS = [
-  "assignees", "author", "body", "capabilities", "closedAt", "closedBy", "commentCount", "createdAt", "id",
-  "labels", "number", "referenceCount", "references", "space", "state", "stateReason", "title", "updatedAt",
+  ...ISSUE_LIST_JSON_FIELDS, "body", "capabilities", "references",
 ] as const satisfies readonly (keyof WorkspaceIssue)[];
 const COMMENT_JSON_FIELDS = ["author", "body", "createdAt", "id", "type", "updatedAt"] as const satisfies
   readonly (keyof Extract<WorkspaceIssueTimelineItem, { type: "comment" }>)[];
@@ -94,7 +96,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
     .option("-A, --author <user>", "username or @me")
     .option("-S, --search <text>", "match title and body")
     .option("-L, --limit <n>", "maximum number of Issues", "30")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(ISSUE_LIST_JSON_FIELDS))
     .action(
       async (
         options: JsonFieldsOption &
@@ -131,7 +133,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
     .argument("<number>", "Issue number (12 or #12) or Issue URL")
     .option(...REPO_OPTION)
     .option("-c, --comments", "include every comment and event")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption([...ISSUE_JSON_FIELDS, "timeline"]))
     .action(
       async (number: string, options: JsonFieldsOption & RepoOption & { readonly comments?: boolean }) => {
         const { issue, timeline } = await executeCommand(view, async () => {

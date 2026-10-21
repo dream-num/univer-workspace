@@ -12,7 +12,6 @@ import {
 } from "../../command.js";
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 
-const JSON_OPTION = ["--json [fields]", "write JSON, optionally only these comma-separated fields"] as const;
 export const REPO_JSON_FIELDS = [
   "id", "name", "type", "accessRole", "description", "fullName", "owner", "publicRead", "slug",
 ] as const satisfies readonly (keyof WorkspaceSpace)[];
@@ -27,7 +26,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     .option("--owner <user>", "only repositories owned by this username, or @me")
     .option("--type <type>", "team or personal")
     .option("-L, --limit <n>", "maximum number of repositories", "30")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(REPO_JSON_FIELDS))
     .action(
       async (options: JsonFieldsOption & { limit: string; owner?: string; type?: string }) => {
         const all = await executeCommand(list, async () => {
@@ -56,7 +55,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
   const view = new Command("view")
     .description("Show a repository")
     .argument("[ref]", "owner/slug, Space ID or URL (default: $UVW_REPO)")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption([...REPO_JSON_FIELDS, "starCount", "starred"]))
     .action(async (ref: string | undefined, options: JsonFieldsOption) => {
       const space = await executeCommand(view, async () => {
         const { spaceId } = await context.repo(ref);

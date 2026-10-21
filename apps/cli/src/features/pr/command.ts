@@ -19,7 +19,6 @@ import {
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 import { pullUrl } from "../../urls.js";
 
-const JSON_OPTION = ["--json [fields]", "write JSON, optionally only these comma-separated fields"] as const;
 export const PR_JSON_FIELDS = [
   "id", "name", "state", "units", "number", "summary", "spaceId", "kind", "visibility", "creator", "createdAt", "updatedAt",
 ] as const satisfies readonly (keyof WorkspaceWorktree)[];
@@ -120,7 +119,7 @@ function build(
     .option("-A, --author <user>", "username or @me")
     .option("-S, --search <text>", "match title, body, author")
     .option("-L, --limit <n>", "maximum number of pull requests", "30")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(PR_JSON_FIELDS))
     .action(
       async (
         options: JsonFieldsOption &
@@ -163,7 +162,7 @@ function build(
     .description("Show a pull request with the files it changes")
     .argument("<pr>", "number (12 or #12), Worktree ID, or Browser URL")
     .option(...REPO_OPTION)
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(PR_JSON_FIELDS))
     .action(async (argument: string, options: JsonFieldsOption & RepoOption) => {
       const worktree = await executeCommand(get, async () => await find(argument, options.repo));
       emit(

@@ -5,7 +5,7 @@ import {
   type WorkspaceIssueFeature,
   type WorkspaceWorktreeFeature,
 } from "@univerjs/univer-workspace-client-core/product";
-import { emit, executeCommand, type JsonFieldsOption } from "../../command.js";
+import { emit, executeCommand, jsonFieldsOption, type JsonFieldsOption } from "../../command.js";
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 import { issueUrl, pullUrl, repoUrl } from "../../urls.js";
 
@@ -22,7 +22,7 @@ export function createBrowseCommand(deps: {
     .argument("[number]", "Issue or pull request number, or a Worktree ID")
     .option(...REPO_OPTION)
     .option("--unit <id>", "open this file inside the pull request")
-    .option("--json [fields]", "write JSON, optionally only these comma-separated fields")
+    .addOption(jsonFieldsOption(["url"]))
     .action(async (argument: string | undefined, options: JsonFieldsOption & { repo?: string; unit?: string }) => {
       const result = await executeCommand(command, async () => {
         const base = await origin();
