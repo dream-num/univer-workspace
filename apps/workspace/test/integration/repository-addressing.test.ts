@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
 
@@ -127,13 +128,99 @@ describe("shared Issue and Team Worktree numbering", () => {
       application.spaces.list(userId).spaces.find((space) => space.type === "personal")!;
     expect((await application.worktrees.getByNumber(alice.id, personalOf(alice.id).id, "2")).worktree.id)
       .toBe(a2.body.id);
-    // Another user's Personal Space is not discoverable, and numbers do not cross creators.
+    // Even a public Personal Space cannot address another creator's User Worktrees.
+    application.spaces.update(alice.id, personalOf(alice.id).id, { publicRead: true });
+    expect(application.spaces.get(bob.id, personalOf(alice.id).id).id).toBe(personalOf(alice.id).id);
     await expect(application.worktrees.getByNumber(bob.id, personalOf(alice.id).id, "1")).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     await expect(application.worktrees.getByNumber(bob.id, personalOf(bob.id).id, "2")).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+
+  it("uses the same HTTP authorization for numbered and ID-addressed private Team Worktrees", async () => {
+    const application = createApplication();
+    const owner = await register(application, "owner");
+    const creator = await register(application, "creator");
+    const admin = await register(application, "admin");
+    const viewer = await register(application, "viewer");
+    const stranger = await register(application, "stranger");
+    const team = application.spaces.createTeamSpace(owner.id, { name: "Private repo" });
+    for (const [user, role] of [[creator, "editor"], [admin, "admin"], [viewer, "viewer"]] as const) {
+      application.permissions.upsertTeamMember(owner.id, team.id, user.id, { role });
+    }
+    const created = await application.worktrees.create(creator.id, "numbered-private-team-0001", {
+      kind: "team", teamSpaceId: team.id, visibility: "private", name: "Private changes", summary: null,
+    });
+    const unit = await application.worktrees.addUnit(creator.id, created.body.id, "numbered-private-unit-0001", {
+      source: "worktree", name: "Confidential document", unitType: "doc", targetSpaceId: team.id,
+      targetParentNodeId: null,
+    });
+    const server = createServer(application.app);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Missing test address");
+      const origin = `http://127.0.0.1:${address.port}`;
+      const idPath = `/api/worktrees/${created.body.id}`;
+      const numberPath = `/api/spaces/${team.id}/worktrees/${created.body.number}`;
+      const get = (user: typeof owner, path: string) => fetch(`${origin}${path}`, {
+        headers: { cookie: user.cookie },
+      });
+      const beforeRemoval = await get(creator, numberPath);
+      expect(beforeRemoval.status).toBe(200);
+      expect(await beforeRemoval.json()).toMatchObject({
+        worktree: { units: [{ unitId: unit.body.unit.unitId }], capabilities: { review: true, editDraft: true } },
+      });
+
+      application.permissions.removeTeamMember(owner.id, team.id, creator.id);
+      expect(() => application.spaces.get(creator.id, team.id)).toThrowError(
+        expect.objectContaining({ code: "NOT_FOUND" }),
+      );
+      for (const user of [creator, owner, admin]) {
+        const byId = await get(user, idPath);
+        const byNumber = await get(user, numberPath);
+        expect(byId.status).toBe(200);
+        expect(byNumber.status).toBe(200);
+        const detail = await byId.json();
+        expect(await byNumber.json()).toEqual(detail);
+        expect(detail).toMatchObject({
+          worktree: {
+            unitCount: 1, units: [],
+            capabilities: { review: false, editDraft: false, addUnit: false, markReady: false },
+          },
+        });
+        const open = await fetch(`${origin}${idPath}/units/${unit.body.unit.unitId}/open`, {
+          method: "POST",
+          headers: { cookie: user.cookie, origin, "content-type": "application/json" },
+          body: JSON.stringify({ mode: "draft" }),
+        });
+        expect(open.status).toBe(404);
+        for (const write of [false, true]) {
+          expect(await application.worktrees.authorizeProtocol({
+            userId: user.id, worktreeId: created.body.id, unitId: unit.body.unit.unitId, write,
+          })).toBe(false);
+        }
+      }
+      expect((await application.worktrees.list(creator.id, {})).items.map((item) => item.id))
+        .toContain(created.body.id);
+      for (const user of [viewer, stranger]) {
+        for (const path of [idPath, numberPath]) {
+          const response = await get(user, path);
+          expect(response.status).toBe(404);
+          expect(await response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+        }
+      }
+      for (const path of [
+        `/api/spaces/${team.id}/worktrees/999`,
+        `/api/spaces/missing/worktrees/${created.body.number}`,
+      ]) {
+        expect((await get(creator, path)).status).toBe(404);
+      }
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
   });
 
   it("keeps old Worktrees unnumbered and filters lists by state before paging", async () => {
@@ -194,5 +281,5 @@ async function register(application: WorkspaceApplication, username: string) {
     displayName: username,
     password: "correct horse battery staple",
   });
-  return issued.view.user;
+  return { ...issued.view.user, cookie: `${application.identity.cookieName}=${issued.cookieValue}` };
 }

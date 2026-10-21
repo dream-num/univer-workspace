@@ -320,17 +320,14 @@ export function createWorktreesModule(options: {
 
     async getByNumber(userId, spaceId, numberValue) {
       const number = validNumber(numberValue);
-      const space = options.access.resolveSpace(userId, spaceId);
-      if (!space) throw notFound();
-      let worktreeId: string | null;
-      if (space.type === "team") {
-        worktreeId = options.repository.findIdByNumber({ teamSpaceId: space.id }, number);
-      } else {
+      // Team Worktree creators remain discoverable after losing Space membership.
+      let worktreeId = options.repository.findIdByNumber({ teamSpaceId: spaceId }, number);
+      if (!worktreeId) {
+        const space = options.access.resolveSpace(userId, spaceId);
         // A Personal Space lists its owner's own User Worktrees only.
-        worktreeId =
-          space.ownerUserId === userId
-            ? options.repository.findIdByNumber({ creatorUserId: userId }, number)
-            : null;
+        if (space?.type === "personal" && space.ownerUserId === userId) {
+          worktreeId = options.repository.findIdByNumber({ creatorUserId: userId }, number);
+        }
       }
       if (!worktreeId) throw notFound();
       return { worktree: detailView(await context(userId, worktreeId)) };
