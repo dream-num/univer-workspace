@@ -177,13 +177,18 @@ describe("Workspace CLI", () => {
       const help = await runCli(["--help"], env);
       for (const command of [
         "space",
+        "repo",
+        "issue",
+        "pr",
         "worktree",
+        "search",
+        "browse",
+        "auth",
         "unit",
         "blob",
         "html-view",
         "asset",
         "daemon",
-        "open",
         "resources",
         "screenshot",
         "print-pdf",
@@ -220,11 +225,11 @@ describe("Workspace CLI", () => {
       });
       expect(daemonRestarted["pid"]).not.toBe(daemonStarted["pid"]);
 
-      const loginHelp = await runCli(["login", "--help"], env);
+      const loginHelp = await runCli(["auth", "login", "--help"], env);
       expect(loginHelp.stdout).toContain("--complete");
       expect(loginHelp.stdout).toContain("Do not ask the user for a password");
 
-      const loginInstructions = await runCli(["login"], env);
+      const loginInstructions = await runCli(["auth", "login"], env);
       expect(loginInstructions.stdout).toContain("Browser approval required.");
       expect(loginInstructions.stdout).toContain(
         "This command has exited and is not waiting.",
@@ -232,34 +237,34 @@ describe("Workspace CLI", () => {
       expect(loginInstructions.stdout).toContain(
         `${origin}/cli-login?userCode=ABCD-EFGH`,
       );
-      expect(loginInstructions.stdout).toContain("univer-workspace-cli login --complete");
+      expect(loginInstructions.stdout).toContain("uvw auth login --complete");
 
-      const authorization = await runCli(["login", "--json"], env);
+      const authorization = await runCli(["auth", "login", "--json"], env);
       expect(JSON.parse(authorization.stdout)).toMatchObject({
         status: "authorization_required",
         origin,
         userCode: "ABCD-EFGH",
         verificationUrl: `${origin}/cli-login?userCode=ABCD-EFGH`,
-        nextCommand: "univer-workspace-cli login --complete",
+        nextCommand: "uvw auth login --complete",
       });
       const sessionPath = workspaceSessionPath(env);
       expect((await stat(sessionPath)).mode & 0o777).toBe(0o600);
 
-      const stillPending = await runCli(["login", "--complete", "--json"], env);
+      const stillPending = await runCli(["auth", "login", "--complete", "--json"], env);
       expect(JSON.parse(stillPending.stdout)).toMatchObject({
         status: "authorization_pending",
         origin,
         userCode: "ABCD-EFGH",
       });
 
-      const loggedIn = await runCli(["login", "--complete", "--json"], env);
+      const loggedIn = await runCli(["auth", "login", "--complete", "--json"], env);
       expect(JSON.parse(loggedIn.stdout)).toEqual({
         status: "authenticated",
         origin,
         subject: { id: "user-1", name: "Alice" },
       });
 
-      const identity = await runCli(["whoami", "--json"], env);
+      const identity = await runCli(["auth", "status", "--json"], env);
       expect(JSON.parse(identity.stdout)).toEqual({
         origin,
         subject: { id: "user-1", name: "Alice" },
@@ -520,7 +525,7 @@ describe("Workspace CLI", () => {
       });
       expect(collaboration.submittedChangesets[1]?.mutations.length).toBeGreaterThan(0);
 
-      const loggedOut = await runCli(["logout", "--json"], env);
+      const loggedOut = await runCli(["auth", "logout", "--json"], env);
       expect(JSON.parse(loggedOut.stdout)).toEqual({ loggedOut: true, origin });
       expect(`${loggedOut.stdout}${loggedOut.stderr}`).not.toContain("workspace_session=test");
       expect(JSON.parse(await readFile(sessionPath, "utf8"))).toEqual({ sessions: {} });

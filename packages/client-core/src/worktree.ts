@@ -5,6 +5,7 @@ import {
   workspaceError,
 } from "./errors.js";
 import type { AuthenticatedWorkspaceHttp, WorkspaceHttp } from "./http.js";
+import { rethrowUnlessServerOutdated } from "./space.js";
 import {
   parseWorktree,
   type WorkspaceWorktree,
@@ -14,7 +15,17 @@ import {
 export interface ListWorktreesInput {
   readonly scope?: "user" | "space";
   readonly spaceId?: string;
-  readonly view: "active" | "processed";
+  /** Total items to return; pages are followed until reached or exhausted. Defaults to one server page. */
+  readonly limit?: number;
+  /** Literal substring of name, summary, creator or Team Space name, matched by the server. */
+  readonly search?: string;
+  /** Keep only Worktrees created by this user; filtered while paging so `limit` counts matches. */
+  readonly creatorId?: string;
+  /** Same, by username (case-insensitive). */
+  readonly creatorUsername?: string;
+  /** Keep only these states (server-side, before paging). */
+  readonly states?: readonly WorkspaceWorktreeState[];
+  readonly view: "active" | "processed" | "all";
 }
 
 export class WorkspaceWorktreeFeature {
@@ -24,11 +35,35 @@ export class WorkspaceWorktreeFeature {
     const query = new URLSearchParams({ scope: input.view });
     if (input.scope !== undefined) query.set("kind", input.scope === "user" ? "user" : "team");
     if (input.spaceId !== undefined) query.set("teamSpaceId", input.spaceId);
-    const body = await (await this.authenticatedHttp()).json(`/api/worktrees?${query.toString()}`);
-    if (!Array.isArray(body["items"])) {
-      throw workspaceError("workspace-invalid-response", "Workspace response is missing Worktrees.");
-    }
-    return body["items"].map((item) => parseWorktree(item));
+    for (const state of input.states ?? []) query.append("state", state);
+    if (input.search !== undefined) query.set("search", input.search);
+    const http = await this.authenticatedHttp();
+    const worktrees: WorkspaceWorktree[] = [];
+    const filtered = input.creatorId !== undefined || input.creatorUsername !== undefined;
+    let cursor: string | null = null;
+    do {
+      const page = new URLSearchParams(query);
+      if (input.limit !== undefined) {
+        page.set("limit", String(filtered ? 100 : Math.min(input.limit - worktrees.length, 100)));
+      }
+      if (cursor !== null) page.set("cursor", cursor);
+      const body = await http.json(`/api/worktrees?${page.toString()}`);
+      if (!Array.isArray(body["items"])) {
+        throw workspaceError("workspace-invalid-response", "Workspace response is missing Worktrees.");
+      }
+      worktrees.push(
+        ...body["items"]
+          .map((item) => parseWorktree(item))
+          .filter(
+            (worktree) =>
+              (input.creatorId === undefined || worktree.creator?.id === input.creatorId) &&
+              (input.creatorUsername === undefined ||
+                worktree.creator?.username.toLowerCase() === input.creatorUsername.toLowerCase()),
+          ),
+      );
+      cursor = input.limit !== undefined && typeof body["nextCursor"] === "string" ? body["nextCursor"] : null;
+    } while (cursor !== null && worktrees.length < (input.limit ?? 0));
+    return input.limit === undefined ? worktrees : worktrees.slice(0, input.limit);
   }
 
   public async get(worktreeId: string): Promise<WorkspaceWorktree> {
@@ -38,12 +73,26 @@ export class WorkspaceWorktreeFeature {
     );
   }
 
+  /** Addresses a Worktree by `#N`: a Team Space's Team Worktree, or the caller's own User Worktree in their Personal Space. */
+  public async getByNumber(spaceId: string, number: number): Promise<WorkspaceWorktree> {
+    const http = await this.authenticatedHttp();
+    try {
+      const body = await http.json(
+        `/api/spaces/${encodeURIComponent(requireId(spaceId, "Space ID"))}/worktrees/${String(number)}`,
+      );
+      return parseWorktree(body["worktree"]);
+    } catch (error) {
+      return await rethrowUnlessServerOutdated(http, error);
+    }
+  }
+
   public async create(input: {
     readonly idempotencyKey?: string;
     readonly name: string;
     readonly scope:
       | { readonly kind: "user" }
       | { readonly kind: "space"; readonly spaceId: string };
+    readonly summary?: string;
     readonly visibility?: "private" | "space";
   }): Promise<WorkspaceWorktree> {
     const http = await this.authenticatedHttp();
@@ -53,6 +102,7 @@ export class WorkspaceWorktreeFeature {
         idempotencyKey,
         name: input.name,
         scope: input.scope,
+        ...(input.summary === undefined ? {} : { summary: input.summary }),
         ...(input.visibility === undefined ? {} : { visibility: input.visibility }),
       },
       operation: async (sameInput) => {
@@ -60,7 +110,7 @@ export class WorkspaceWorktreeFeature {
           body: {
             kind: sameInput.scope.kind === "user" ? "user" : "team",
             name: sameInput.name,
-            summary: null,
+            summary: sameInput.summary ?? null,
             ...(sameInput.scope.kind === "space"
               ? {
                   teamSpaceId: sameInput.scope.spaceId,
@@ -78,7 +128,11 @@ export class WorkspaceWorktreeFeature {
 
   public async update(
     worktreeId: string,
-    input: { readonly name?: string; readonly visibility?: "private" | "space" },
+    input: {
+      readonly name?: string;
+      readonly summary?: string | null;
+      readonly visibility?: "private" | "space";
+    },
   ): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");
     const body = await (await this.authenticatedHttp()).json(

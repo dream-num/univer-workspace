@@ -8,8 +8,8 @@ description: "Create, import, read, edit, paginate, chart, inspect, export, and 
 Every content command targets one remote draft explicitly with `--worktree <id>` and `--unit <id>`. `execute` provides `univerAPI`, `api` (an alias of `univerAPI`), and `doc` (the `FDocument` bound by `--unit`). Do not redeclare them. A Doc unit does not provide `workbook` or `presentation`; if one is undefined, verify the selected unit type.
 
 Use `doc.getParagraphs()` and `doc.getParagraph(paragraphId)` to select paragraphs. Use
-`univer-workspace-cli api find <query...>` to discover API symbols, then use
-`univer-workspace-cli api show <symbol...>` for exact signatures, enum values, documentation, and
+`uvw api find <query...>` to discover API symbols, then use
+`uvw api show <symbol...>` for exact signatures, enum values, documentation, and
 examples.
 
 ## Workspace target
@@ -17,8 +17,8 @@ examples.
 Create an empty Doc Unit or import an existing document into the selected Worktree:
 
 ```bash
-univer-workspace-cli unit create --worktree <worktree-id> --space <space-id> --type doc --name <name> --json
-univer-workspace-cli import --file source.docx --worktree <worktree-id> --space <space-id> --type doc --json
+uvw unit create --worktree <worktree-id> --space <space-id> --type doc --name <name> --json
+uvw import --file source.docx --worktree <worktree-id> --space <space-id> --type doc --json
 ```
 
 Both commands return server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId`
@@ -43,7 +43,7 @@ The body is one `dataStream` string. Paragraphs are separated by `\r`, and the d
 
 ## Paragraph and text styles
 
-Pass paragraph properties and `textStyle` together to `paragraph.setStyle` when the entire current paragraph should share one style. Important paragraph fields include `horizontalAlign`, `namedStyleType`, `headingId`, `indentStart`, and `indentFirstLine`. Always query `univer-workspace-cli api show IParagraphStyle` instead of guessing enum values.
+Pass paragraph properties and `textStyle` together to `paragraph.setStyle` when the entire current paragraph should share one style. Important paragraph fields include `horizontalAlign`, `namedStyleType`, `headingId`, `indentStart`, and `indentFirstLine`. Always query `uvw api show IParagraphStyle` instead of guessing enum values.
 
 ```js
 const paragraph = doc.appendParagraph("Section Title");
@@ -129,9 +129,9 @@ For a formal document authored from Typst, use a lightweight Typst Source Bundle
 It may also declare `title` and `prelude`. Compile once for review, then apply the same result:
 
 ```bash
-univer-workspace-cli compile-typst paper/typst.json --out review/doc.js \
+uvw compile-typst paper/typst.json --out review/doc.js \
   --diagnostics-out review/diagnostics.json --preview-dir review/png --json
-univer-workspace-cli compile-typst paper/typst.json --apply --worktree <id> --space <space-id> \
+uvw compile-typst paper/typst.json --apply --worktree <id> --space <space-id> \
   --out review/doc.js --diagnostics-out review/diagnostics.json --json
 ```
 
@@ -174,7 +174,7 @@ For a fixed two-column region or one-row grid in a paginated Doc, prefer a **bor
 Typst source must express border topology and fill regions explicitly. Use a static table `fill` for uniform backgrounds and `table.cell(fill: ...)[...]` for local row, column, or cell highlights. For booktabs or local rules, use `stroke: none` plus explicit `table.hline(...)` or `table.vline(...)`; use the default full grid only when the reference actually has one. Use `table.header(...)` and static colspan or rowspan for grouped headers, and `table.cell(stroke: ...)[...]` for cell-local borders. Do not rely on Typst defaults or opaque dynamic fill/stroke functions when static semantics can be mapped deterministically.
 
 ```bash
-univer-workspace-cli execute --worktree <id> --unit <u> -e '
+uvw execute --worktree <id> --unit <u> -e '
 const table = doc.insertTableFromData(
   [["Group", ""], ["Name", "Description"], ["A", "Long description"]],
   { width: 602, columnWidths: [200.667, 401.333], headerRowCount: 2 }
@@ -204,7 +204,7 @@ Doc chart support is registered in the runtime. Create detached chart informatio
 `doc`, then insert it to obtain a live `FDocumentChart`. Query exact signatures before authoring:
 
 ```bash
-univer-workspace-cli api show FDocument.newChart FDocument.insertChart FDocument.getCharts \
+uvw api show FDocument.newChart FDocument.insertChart FDocument.getCharts \
   FDocument.getChart FDocumentChartBuilderOf DocsChartInsertAnchorKind
 ```
 
@@ -245,8 +245,8 @@ task.
 
 ## Inspect and verify
 
-- `univer-workspace-cli inspect document --worktree <id> --unit <id>` reports title, mode, paragraph and character counts, structural features, and paragraph previews.
-- `univer-workspace-cli inspect paragraph <index|id> [...] --worktree <id> --unit <id>` reports full text, paragraph style, list membership, and text-run summaries. Indexes are zero-based.
+- `uvw inspect document --worktree <id> --unit <id>` reports title, mode, paragraph and character counts, structural features, and paragraph previews.
+- `uvw inspect paragraph <index|id> [...] --worktree <id> --unit <id>` reports full text, paragraph style, list membership, and text-run summaries. Indexes are zero-based.
 - For fine-grained reads, use read-only execute: `return doc.getParagraphs().map((p) => p.getText());`.
 
 Logical inspection cannot reveal actual wrapping or pagination. For layout-sensitive work, render PNGs with `screenshot` before following the core Skill's "Finish the task" steps. Imported DOCX paragraphs may lack persistent paragraph ids, in which case inspect falls back to a zero-based index; paragraphs created or edited in the same session have stable ids.
@@ -254,6 +254,6 @@ Logical inspection cannot reveal actual wrapping or pagination. For layout-sensi
 For visual and exchange verification, use the same explicit remote address:
 
 ```bash
-univer-workspace-cli screenshot --worktree <id> --unit <id>
-univer-workspace-cli export output.docx --worktree <id> --unit <id>
+uvw screenshot --worktree <id> --unit <id>
+uvw export output.docx --worktree <id> --unit <id>
 ```

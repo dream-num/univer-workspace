@@ -9,8 +9,8 @@ Load `core` plus the Host and child Unit Skills. The command targets the Host Un
 child is a read-only Source selected by a ResourceRef.
 
 ```bash
-univer-workspace-cli api show FUniver.createEmbed FEmbed FEmbedHostSurface ICreateEmbedParams IEmbedDescriptor
-univer-workspace-cli api find embed host surface
+uvw api show FUniver.createEmbed FEmbed FEmbedHostSurface ICreateEmbedParams IEmbedDescriptor
+uvw api find embed host surface
 ```
 
 ## Identity contract
@@ -68,7 +68,7 @@ The Host and Source are Univer Units in the same Workspace deployment and are ad
 `unitId`. Resolve the exact input with:
 
 ```bash
-univer-workspace-cli api show IResourceRefChartDataSourceInput
+uvw api show IResourceRefChartDataSourceInput
 ```
 
 Pass the ref contents (`{ file?, unit, part }`) directly to

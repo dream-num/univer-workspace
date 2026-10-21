@@ -8,7 +8,7 @@ import {
   workspaceDaemonSocketPath,
   workspaceResourceCacheRoot,
 } from "./config.js";
-import { createProgram } from "./program.js";
+import { PRODUCT_COMMAND_NAMES } from "./product-commands.js";
 import { workspaceDaemonIdentity } from "./runtime/daemon-identity.js";
 import { stopLegacyWorkspaceDaemonIfPresent } from "./runtime/legacy-daemon.js";
 
@@ -28,15 +28,27 @@ await stopLegacyWorkspaceDaemonIfPresent({
   currentStatus: await createDaemonControl(daemonOptions).status(),
   socketPath,
 });
-await createProgram({
-  renderPageRoot: resolve(appRoot, "dist/render-runtime"),
-  config: createWorkspaceConfig(env),
-  daemonEntry,
-  env,
-  resourceCacheRoot: workspaceResourceCacheRoot(env),
-  resourceManifestPath: require.resolve("@univerjs-pro/cli-assets/manifest.json"),
-  socketPath,
-  skillDataRoot: resolve(appRoot, "skill-data"),
-  write: (text) => process.stdout.write(text),
-  writeError: (text) => process.stderr.write(text),
-}).parseAsync(process.argv);
+const write = (text: string) => process.stdout.write(text);
+const writeError = (text: string) => process.stderr.write(text);
+const first = process.argv[2] ?? "";
+if (PRODUCT_COMMAND_NAMES.has(first) || first === "-v" || first === "--version") {
+  // Sign-in, repository, Issue and pull request commands never need the Univer runtime.
+  const { createProductProgram } = await import("./product-commands.js");
+  await createProductProgram({ config: createWorkspaceConfig(env), env, write, writeError }).parseAsync(
+    process.argv,
+  );
+} else {
+  const { createProgram } = await import("./program.js");
+  await createProgram({
+    renderPageRoot: resolve(appRoot, "dist/render-runtime"),
+    config: createWorkspaceConfig(env),
+    daemonEntry,
+    env,
+    resourceCacheRoot: workspaceResourceCacheRoot(env),
+    resourceManifestPath: require.resolve("@univerjs-pro/cli-assets/manifest.json"),
+    socketPath,
+    skillDataRoot: resolve(appRoot, "skill-data"),
+    write,
+    writeError,
+  }).parseAsync(process.argv);
+}

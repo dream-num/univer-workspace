@@ -19,6 +19,7 @@
     "url": "git+https://github.com/dream-num/univer-workspace.git"
   },
   "bin": {
+    "uvw": "./dist/main.js",
     "univer-workspace-cli": "./dist/main.js"
   },
   "type": "module",

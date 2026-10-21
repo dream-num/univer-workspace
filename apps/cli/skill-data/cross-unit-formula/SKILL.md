@@ -13,7 +13,7 @@ this Topic Skill owns external Source binding, formula, calculation, and cross-U
 Resolve the public Facade contract before authoring:
 
 ```bash
-univer-workspace-cli api show FRange.setFormula FShape.setFormula FShape.getFormulaResult FFormula.buildReference FFormula.upsertExternalReference FFormula.onCalculationResultApplied
+uvw api show FRange.setFormula FShape.setFormula FShape.getFormulaResult FFormula.buildReference FFormula.upsertExternalReference FFormula.onCalculationResultApplied
 ```
 
 ## Identity contract

@@ -57,8 +57,8 @@ remains, fix its cause (bindings, spacing, labels or routing intent) rather than
 Use focused readable evidence and finish with an overview:
 
 ```bash
-univer-workspace-cli screenshot --worktree <id> --unit <board-id> --out ./board-overview --json
-univer-workspace-cli screenshot --worktree <id> --unit <board-id> \
+uvw screenshot --worktree <id> --unit <board-id> --out ./board-overview --json
+uvw screenshot --worktree <id> --unit <board-id> \
   --region <left,top,width,height> --scale 2 --out ./board-detail --json
 ```
 

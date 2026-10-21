@@ -8,6 +8,14 @@ export interface WorkspaceSpace {
   readonly id: string;
   readonly name: string;
   readonly type?: "personal" | "team";
+  /** Present on full Space views, absent on the Space summaries embedded in other responses. */
+  readonly accessRole?: WorkspaceAccessRole;
+  readonly description?: string;
+  /** `<owner>/<slug>`, `<owner>/personal`, or null for a Team Space without a slug. */
+  readonly fullName?: string | null;
+  readonly owner?: { readonly id: string; readonly username: string };
+  readonly publicRead?: boolean;
+  readonly slug?: string | null;
 }
 
 export interface WorkspaceResourceCapabilities {
@@ -125,11 +133,26 @@ export function parseSpace(value: unknown): WorkspaceSpace {
   ) {
     throw invalidResponse("Workspace response contains an invalid Space");
   }
+  const owner = value["owner"];
+  const hasOwner =
+    isWorkspaceRecord(owner) && typeof owner["id"] === "string" && typeof owner["username"] === "string";
   return {
     id: value["id"],
     name: value["name"],
     ...(value["type"] === undefined ? {} : { type: value["type"] }),
+    ...(isAccessRole(value["accessRole"]) ? { accessRole: value["accessRole"] } : {}),
+    ...(typeof value["description"] === "string" ? { description: value["description"] } : {}),
+    ...(value["fullName"] === null || typeof value["fullName"] === "string"
+      ? { fullName: value["fullName"] }
+      : {}),
+    ...(hasOwner ? { owner: { id: owner["id"] as string, username: owner["username"] as string } } : {}),
+    ...(typeof value["publicRead"] === "boolean" ? { publicRead: value["publicRead"] } : {}),
+    ...(value["slug"] === null || typeof value["slug"] === "string" ? { slug: value["slug"] } : {}),
   };
+}
+
+function isAccessRole(value: unknown): value is WorkspaceAccessRole {
+  return value === "owner" || value === "admin" || value === "editor" || value === "viewer";
 }
 
 export function parseNodePage(

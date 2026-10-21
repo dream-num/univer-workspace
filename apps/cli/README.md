@@ -3,7 +3,7 @@
 An agent-ready CLI for automating remote Univer Workspace, powered by the
 [Univer SDK](https://docs.univer.ai/).
 
-`univer-workspace-cli` gives AI agents a complete environment for creating, editing, validating,
+`uvw` (npm package `univer-workspace-cli`) gives AI agents a complete environment for creating, editing, validating,
 rendering, and reviewing business content. It brings Sheets, Docs, Slides, Bases, and Boards
 together with Workspace collaboration, content exchange, and verifiable output in one installable
 tool.
@@ -36,9 +36,9 @@ The installed package supplies the operational contract an agent needs:
 - Offline Facade API and SVG resource discovery
 - CLI help aligned with the installed SDK and command surface
 
-Read a Skill with `univer-workspace-cli skills get <name>`. It lists bundled reference
+Read a Skill with `uvw skills get <name>`. It lists bundled reference
 paths and how to read them. Read one document with
-`univer-workspace-cli skills read <name> <path>`. Only listed reference and template
+`uvw skills read <name> <path>`. Only listed reference and template
 paths are accepted. `skills get <name> --full` prints the bundled references and
 templates at once.
 
@@ -52,8 +52,8 @@ templates at once.
 | Exchange business files | Office import and export with original-file preservation                      |
 | Generate content        | Typst-to-Doc and SVG-to-editable-Slide compilation                            |
 | Compose across Units    | Embedded Units and cross-Unit formulas backed by Workspace identities         |
-| Take requests from teams | Team Space Issues: read the brief and its discussion, comment, label, and close |
-| Deliver for review      | Worktree revisions, ready state, direct review links, and controlled merging  |
+| Take requests from teams | Team Space Issues (`uvw issue`): read the brief and its discussion, comment, label, and close |
+| Deliver for review      | Pull requests (`uvw pr`, Worktrees): revisions, ready state, direct review links, and controlled merging  |
 
 Together, these capabilities show the range of products and workflows that can be built with the
 Univer SDK.
@@ -67,9 +67,13 @@ npm install --global univer-workspace-cli@latest
 npx skills add dream-num/univer-workspace --skill univer-workspace-cli -g
 ```
 
+The package installs two names for one program: `uvw` and `univer-workspace-cli`. Do not install the
+unrelated npm packages `uvw` or `uvw-cli`. After upgrading from an older version, re-run the
+`npx skills add` command once so the installed Skill matches the new command names.
+
 The default Workspace service is `https://space.univer.ai/`.
 Point the CLI at your own Workspace deployment with
-`univer-workspace-cli config set workspace.origin <origin>`. Give the
+`uvw config set workspace.origin <origin>`. Give the
 agent access to the executable and that Workspace; the bundled guidance supplies the
 version-correct workflow.
 
@@ -78,7 +82,7 @@ version-correct workflow.
 The default login does not ask the agent for a Workspace password:
 
 ```bash
-univer-workspace-cli login
+uvw auth login
 ```
 
 The command prints a short-lived Workspace URL and verification code, saves the pending request
@@ -90,7 +94,7 @@ sign-in methods—including GitHub and Discord—work with this flow.
 Only after the user confirms approval, complete the one-time exchange:
 
 ```bash
-univer-workspace-cli login --complete
+uvw auth login --complete
 ```
 
 `--complete` checks once and exits; it does not wait or poll. Approval creates a separate CLI session
@@ -100,10 +104,27 @@ For compatibility, a user at an interactive terminal can still sign in directly 
 username and password:
 
 ```bash
-univer-workspace-cli login --username <name>
+uvw auth login --username <name>
 ```
 
 `--password-stdin` remains available for controlled automation that already owns a password secret.
+
+## Commands
+
+Commands follow the GitHub CLI's naming. A repository is a Space, named `<owner>/<slug>`
+(`<username>/personal` is your Personal Space); pass it with `-R` or set `UVW_REPO`. A pull request is a
+Worktree; `uvw worktree ...` is the same command group under its product name.
+
+| Group | Commands |
+| --- | --- |
+| Core | `auth login/logout/status`, `repo list/view/create/edit/rename`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse` |
+| Content | `space browse/find/node`, `unit`, `execute`, `inspect`, `screenshot`, `lint`, `print-pdf`, `import`, `export`, `compile-typst`, `compile-svg`, `blob`, `asset`, `html-view` |
+| Setup | `config`, `daemon`, `skills`, `resources`, `api` |
+
+`--json [fields]` prints the bare object or array, optionally narrowed to the listed fields. Exit code 4
+means sign-in is required. `pr discard` is irreversible; there is no `pr close` or `pr reopen`
+(use `pr ready --undo` to return to draft). Content commands take `--worktree <id>`, the `id` from
+`uvw pr view <n> -R <repo> --json id`.
 
 ## License policy
 

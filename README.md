@@ -157,15 +157,15 @@ npx skills add dream-num/univer-workspace --skill univer-workspace-cli -g
 Point the CLI at your own Workspace deployment, then begin browser-approved login:
 
 ```bash
-univer-workspace-cli config set workspace.origin <origin>
-univer-workspace-cli login
+uvw config set workspace.origin <origin>
+uvw auth login
 ```
 
 After the user approves the displayed URL and verification code, complete the
 one-time exchange:
 
 ```bash
-univer-workspace-cli login --complete
+uvw auth login --complete
 ```
 
 The installed package includes version-matched Skills, structured JSON output,

@@ -79,6 +79,13 @@ export {
   type WorkspaceUniverResource,
 } from "./space-model.js";
 export {
+  parseItemNumber,
+  parseRepoReference,
+  resolveRepoReference,
+  type ResolvedWorkspaceRepo,
+  type WorkspaceRepoReference,
+} from "./repo-ref.js";
+export {
   WorkspaceSpaceFeature,
   type BrowseSpaceInput,
   type WorkspaceResourceKindFilter,

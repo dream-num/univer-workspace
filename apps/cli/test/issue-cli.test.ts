@@ -59,24 +59,24 @@ describe("Workspace CLI Issue commands", () => {
     const env = { ...process.env, UNIVER_HOME: join(directory, "home") };
     try {
       await runCli(["config", "set", "workspace.origin", `http://127.0.0.1:${address.port}`, "--json"], env);
-      await runCli(["login", "--username", "agent", "--password-stdin", "--json"], env, "pw\n");
+      await runCli(["auth", "login", "--username", "agent", "--password-stdin", "--json"], env, "pw\n");
 
       const closed = await runCli(
-        ["issue", "close", "#3", "--space", "s1", "--reason", "not-planned", "--comment-file", "-", "--json"],
+        ["issue", "close", "#3", "-R", "s1", "-r", "not-planned", "--comment-file", "-", "--json"],
         env,
         "closing note\n",
       );
       expect(closed).toMatchObject({ code: 0, stderr: "" });
-      expect(JSON.parse(closed.stdout)).toMatchObject({ issue: { number: 3, state: "closed", stateReason: "not_planned" } });
+      expect(JSON.parse(closed.stdout)).toMatchObject({ number: 3, state: "closed", stateReason: "not_planned" });
 
-      await runCli(["issue", "list", "--space", "s1", "--label", "bug", "--label", "docs", "--assignee", "me", "--json"], env);
-      const rejected = await runCli(["issue", "get", "abc", "--space", "s1"], env);
+      await runCli(["issue", "list", "-R", "s1", "-l", "bug", "-l", "docs", "-a", "@me", "--json"], env);
+      const rejected = await runCli(["issue", "view", "abc", "-R", "s1"], env);
 
       expect(requests).toEqual([
         { body: undefined, method: "GET", path: "/api/spaces/s1/issues/3" },
         { body: { body: "closing note\n" }, method: "POST", path: "/api/spaces/s1/issues/3/comments" },
         { body: { state: "closed", stateReason: "not_planned" }, method: "PATCH", path: "/api/spaces/s1/issues/3" },
-        { body: undefined, method: "GET", path: "/api/spaces/s1/issues?state=open&label=bug&label=docs&assignee=me" },
+        { body: undefined, method: "GET", path: "/api/spaces/s1/issues?state=open&label=bug&label=docs&assignee=me&limit=30" },
       ]);
       expect(rejected.code).not.toBe(0);
       expect(rejected.stderr).toContain("workspace-argument-invalid");

@@ -11,7 +11,7 @@ interface LoginOptions extends JsonOption {
   readonly username?: string;
 }
 
-export function createAuthCommands(auth: WorkspaceAuth): readonly Command[] {
+export function createAuthCommand(auth: WorkspaceAuth): Command {
   const login = new Command("login")
     .description("Start or complete a user-approved Workspace browser login")
     .option(
@@ -29,9 +29,9 @@ export function createAuthCommands(auth: WorkspaceAuth): readonly Command[] {
       [
         "",
         "Agent browser-login workflow:",
-        "  1. Run `univer-workspace-cli login`; it prints an approval URL and exits.",
+        "  1. Run `uvw auth login`; it prints an approval URL and exits.",
         "  2. Send the URL and verification code to the user, then wait for their reply.",
-        "  3. Only after the user confirms approval, run `univer-workspace-cli login --complete`.",
+        "  3. Only after the user confirms approval, run `uvw auth login --complete`.",
         "  Do not ask the user for a password and do not poll --complete while waiting.",
         "",
       ].join("\n"),
@@ -74,7 +74,7 @@ export function createAuthCommands(auth: WorkspaceAuth): readonly Command[] {
           if (pending === undefined) {
             throw workspaceError(
               "workspace-cli-authorization-missing",
-              "No pending browser login exists. Run login first.",
+              "No pending browser login exists. Run `uvw auth login` first.",
             );
           }
           const completion = await auth.completeCliLogin(pending);
@@ -96,7 +96,7 @@ export function createAuthCommands(auth: WorkspaceAuth): readonly Command[] {
             [
               "Browser approval has not completed.",
               "This command has exited and is not waiting.",
-              "Ask the user to finish the approval, then run login --complete once more.",
+              "Ask the user to finish the approval, then run `uvw auth login --complete` once more.",
             ].join("\n"),
           );
           return;
@@ -117,7 +117,7 @@ export function createAuthCommands(auth: WorkspaceAuth): readonly Command[] {
         userCode: pending.userCode,
         verificationUrl: pending.verificationUrl,
         expiresAt: new Date(pending.expiresAt).toISOString(),
-        nextCommand: "univer-workspace-cli login --complete",
+        nextCommand: "uvw auth login --complete",
       };
       present(
         login,
@@ -133,17 +133,17 @@ export function createAuthCommands(auth: WorkspaceAuth): readonly Command[] {
           "This command has exited and is not waiting.",
           "Wait for the user to confirm approval. Do not poll in the meantime.",
           "After the user confirms, run:",
-          "  univer-workspace-cli login --complete",
+          "  uvw auth login --complete",
         ].join("\n"),
       );
     });
 
-  const whoami = new Command("whoami")
-    .description("Show the authenticated Workspace user")
+  const status = new Command("status")
+    .description("Show the Workspace origin and the authenticated user")
     .option("--json", "write structured JSON")
     .action(async (options: JsonOption) => {
-      const result = await executeCommand(whoami, async () => await auth.whoami());
-      present(whoami, options, result, `${result.subject.name} (${result.subject.id})`);
+      const result = await executeCommand(status, async () => await auth.whoami());
+      present(status, options, result, `${result.origin}\nLogged in as ${result.subject.name} (${result.subject.id})`);
     });
 
   const logout = new Command("logout")
@@ -154,7 +154,11 @@ export function createAuthCommands(auth: WorkspaceAuth): readonly Command[] {
       present(logout, options, result, `Logged out from ${result.origin}`);
     });
 
-  return [login, whoami, logout];
+  return new Command("auth")
+    .description("Sign in to a Workspace and check the current session")
+    .addCommand(login)
+    .addCommand(logout)
+    .addCommand(status);
 }
 
 type PasswordSource = "interactive" | "stdin";

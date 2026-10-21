@@ -39,13 +39,11 @@ describe("Workspace CLI Space/Node built entrypoint", () => {
         stderr: "",
       });
       expect(
-        await runCli(["login", "--username", "agent", "--password-stdin", "--json"], env, "test-password\n"),
+        await runCli(["auth", "login", "--username", "agent", "--password-stdin", "--json"], env, "test-password\n"),
       ).toMatchObject({ code: 0, stderr: "" });
 
-      const listed = await runCli(["space", "list", "--json"], env);
-      expect(JSON.parse(listed.stdout)).toEqual({
-        spaces: [{ id: "space-1", name: "Personal", type: "personal" }],
-      });
+      const listed = await runCli(["repo", "list", "--json"], env);
+      expect(JSON.parse(listed.stdout)).toEqual([{ id: "space-1", name: "Personal", type: "personal" }]);
       expect(listed).toMatchObject({ code: 0, stderr: "" });
 
       const browsed = await runCli(["space", "browse", "space-1", "--json"], env);
@@ -85,7 +83,7 @@ describe("Workspace CLI Space/Node built entrypoint", () => {
       });
 
       state.invalidSpaces = true;
-      const failed = await runCli(["space", "list", "--json"], env);
+      const failed = await runCli(["repo", "list", "--json"], env);
       expect(failed).toMatchObject({ code: 1, stdout: "" });
       expect(failed.stderr).toContain("workspace-invalid-response: Workspace response is missing Spaces");
 

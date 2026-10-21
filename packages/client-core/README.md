@@ -9,6 +9,8 @@
 - 提供 Workspace HTTP transport、错误和 result-unknown 语义。
 - 提供 storage-neutral 的 password login、browser approval、`whoami` 和 remote logout 协议。
 - 提供 Space/Node 模型、严格响应解析和远程 workflow。
+- 提供仓库引用解析（`owner/slug`、`owner/personal`、Space ID、Browser URL）与 `#N` 编号参数解析；
+  服务端不支持时返回 `workspace-server-capability-missing`。
 - 提供 Worktree lifecycle、Worktree Unit membership 与 review URL workflow。
 - 提供 Blob/Asset 协议、bounded recovery，以及同进程 local Node filesystem 的原子文件传输。
 - 提供 runtime target、Worktree/Trunk source resolution、Snapshot read adapter 与 referenced-Unit policy。
@@ -23,7 +25,9 @@
 - 提供本机 SVG/relative asset 编译、真实或估算字体测量、Slide page 包装与 Worktree apply workflow。
 - 通过独立 worker subpath 交付共享 worker implementation；Client Shell 显式提供 packaged worker entry、
   credential 与 license resolver。
-- 通过 package 根入口提供 named exports。
+- 通过 package 根入口提供 named exports；另提供轻量子入口 `@univerjs/univer-workspace-client-core/product`，
+  只导出 HTTP 型产品 workflow（认证、Space、Issue、Worktree、仓库引用解析），不加载 Univer runtime。
+  CLI 的 product 命令（auth/repo/issue/label/pr/search/browse）使用它以保持快速启动。
 
 ## 非职责
 

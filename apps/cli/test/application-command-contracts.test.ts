@@ -1,24 +1,21 @@
 import { Readable, Writable } from "node:stream";
 import { Command, type OutputConfiguration } from "commander";
 import type {
-  WorkspaceOpenFeature,
   WorkspaceContentExecutionFeature,
   WorkspaceSpaceFeature,
   WorkspaceUnitFeature,
-  WorkspaceWorktreeFeature,
 } from "@univerjs/univer-workspace-client-core";
 import { describe, expect, it, vi } from "vitest";
 import { createAssetCommand } from "../src/features/asset/command.js";
 import type { WorkspaceAssetFeature } from "@univerjs/univer-workspace-client-core";
-import { createAuthCommands, readPassword } from "../src/features/auth/command.js";
+import { createAuthCommand, readPassword } from "../src/features/auth/command.js";
 import type { WorkspaceAuth } from "../src/features/auth/session.js";
 import { createBlobCommand } from "../src/features/blob/command.js";
 import type { WorkspaceBlobFeature } from "@univerjs/univer-workspace-client-core";
 import { createContentExecuteCommand } from "../src/features/content/command.js";
-import { createOpenCommand } from "../src/features/open/command.js";
+import { RepoContext } from "../src/repo-context.js";
 import { createSpaceCommand } from "../src/features/space/command.js";
 import { createUnitCommand } from "../src/features/unit/command.js";
-import { createWorktreeCommand } from "../src/features/worktree/command.js";
 
 describe("Workspace application Commander adapters", () => {
   it("keeps the authentication command names, options and browser default", async () => {
@@ -29,8 +26,8 @@ describe("Workspace application Commander adapters", () => {
       userCode: "ABCD-EFGH",
       verificationUrl: "https://workspace.test/cli-login?userCode=ABCD-EFGH",
     }));
-    const commands = createAuthCommands({ startCliLogin } as unknown as WorkspaceAuth);
-    expect(commands.map((command) => command.name())).toEqual(["login", "whoami", "logout"]);
+    const commands = authCommands({ startCliLogin } as unknown as WorkspaceAuth);
+    expect(commands.map((command) => command.name())).toEqual(["login", "logout", "status"]);
     const login = commands[0]!;
     const help = login.helpInformation();
     expect(help).toContain("--complete");
@@ -41,7 +38,7 @@ describe("Workspace application Commander adapters", () => {
     expect(startCliLogin).toHaveBeenCalledTimes(1);
     expect(JSON.parse(output)).toEqual({
       expiresAt: "2026-08-28T01:10:00.000Z",
-      nextCommand: "univer-workspace-cli login --complete",
+      nextCommand: "uvw auth login --complete",
       origin: "https://workspace.test",
       status: "authorization_required",
       userCode: "ABCD-EFGH",
@@ -58,14 +55,14 @@ describe("Workspace application Commander adapters", () => {
       startCliLogin: vi.fn(),
     };
     await expect(
-      run(createAuthCommands(facade as unknown as WorkspaceAuth)[0]!, [
+      run(authCommands(facade as unknown as WorkspaceAuth)[0]!, [
         "--complete",
         "--username",
         "alice",
       ]),
     ).rejects.toThrow(/process\.exit/u);
     await expect(
-      run(createAuthCommands(facade as unknown as WorkspaceAuth)[0]!, ["--password-stdin"]),
+      run(authCommands(facade as unknown as WorkspaceAuth)[0]!, ["--password-stdin"]),
     ).rejects.toThrow(/process\.exit/u);
     expect(facade.login).not.toHaveBeenCalled();
     expect(facade.startCliLogin).not.toHaveBeenCalled();
@@ -165,15 +162,18 @@ describe("Workspace application Commander adapters", () => {
     const moveNode = vi.fn(async () => ({ nodeId: "node-1" }));
     const renameNode = vi.fn(async () => ({ nodeId: "node-1" }));
     const trashNode = vi.fn(async () => ({ trashBatchId: "trash-1" }));
-    const command = createSpaceCommand({
-      browse,
-      createNode,
-      find,
-      list: async () => [],
-      moveNode,
-      renameNode,
-      trashNode,
-    } as unknown as WorkspaceSpaceFeature);
+    const command = createSpaceCommand(
+      {
+        browse,
+        createNode,
+        find,
+        list: async () => [],
+        moveNode,
+        renameNode,
+        trashNode,
+      } as unknown as WorkspaceSpaceFeature,
+      repoContext(),
+    );
 
     const browseOutput = await run(command, [
       "browse",
@@ -233,62 +233,13 @@ describe("Workspace application Commander adapters", () => {
 
   it("requires exactly one explicit Node move destination", async () => {
     const moveNode = vi.fn();
-    const command = createSpaceCommand({ moveNode } as unknown as WorkspaceSpaceFeature);
+    const command = createSpaceCommand({ moveNode } as unknown as WorkspaceSpaceFeature, repoContext());
 
     await expect(run(command, ["node", "move", "node-1"])).rejects.toThrow(/process\.exit/u);
     await expect(
       run(command, ["node", "move", "node-1", "--parent", "parent-1", "--root"]),
     ).rejects.toThrow(/process\.exit/u);
     expect(moveNode).not.toHaveBeenCalled();
-  });
-
-  it("maps all Worktree management options and lifecycle actions", async () => {
-    const create = vi.fn(async () => ({ id: "wt-1" }));
-    const update = vi.fn(async () => ({ id: "wt-1" }));
-    const transition = vi.fn(
-      async (_id: string, _action: "ready" | "reopen" | "merge" | "discard") => ({
-        id: "wt-1",
-      }),
-    );
-    const command = createWorktreeCommand({
-      create,
-      get: async () => ({ id: "wt-1" }),
-      list: async () => [],
-      transition,
-      update,
-    } as unknown as WorkspaceWorktreeFeature);
-
-    await run(command, [
-      "create",
-      "--name",
-      "Draft",
-      "--scope",
-      "space",
-      "--space",
-      "space-1",
-      "--visibility",
-      "space",
-      "--idempotency-key",
-      "key-1",
-    ]);
-    await run(command, ["update", "wt-1", "--name", "Renamed", "--visibility", "private"]);
-    for (const action of ["ready", "reopen", "merge", "discard"] as const) {
-      await run(command, [action, "wt-1"]);
-    }
-
-    expect(create).toHaveBeenCalledWith({
-      idempotencyKey: "key-1",
-      name: "Draft",
-      scope: { kind: "space", spaceId: "space-1" },
-      visibility: "space",
-    });
-    expect(update).toHaveBeenCalledWith("wt-1", { name: "Renamed", visibility: "private" });
-    expect(transition.mock.calls.map((call) => call[1])).toEqual([
-      "ready",
-      "reopen",
-      "merge",
-      "discard",
-    ]);
   });
 
   it("maps Unit add/create identities and target metadata", async () => {
@@ -412,7 +363,7 @@ describe("Workspace application Commander adapters", () => {
     },
   );
 
-  it("maps Asset download and Open review URL options", async () => {
+  it("maps Asset download options", async () => {
     const download = vi.fn(async () => ({ outputPath: "asset.bin" }));
     const asset = createAssetCommand({ download } as unknown as WorkspaceAssetFeature);
     await run(asset, ["download", "asset.bin", "--id", "file-1", "--worktree", "wt-1", "--force"]);
@@ -422,31 +373,20 @@ describe("Workspace application Commander adapters", () => {
       outputPath: "asset.bin",
       worktreeId: "wt-1",
     });
-
-    const createUrl = vi.fn(async () => ({
-      openUrl: "https://viewer.test/worktrees?worktree=wt-1&unit=unit-1&view=agent",
-      type: "sheet" as const,
-      unitId: "unit-1",
-      worktreeId: "wt-1",
-    }));
-    const open = createOpenCommand({ createUrl } as unknown as WorkspaceOpenFeature);
-    const output = await run(open, [
-      "--worktree",
-      "wt-1",
-      "--unit",
-      "unit-1",
-      "--viewer-url",
-      "https://viewer.test",
-      "--json",
-    ]);
-    expect(createUrl).toHaveBeenCalledWith({
-      unitId: "unit-1",
-      viewerBaseUrl: "https://viewer.test",
-      worktreeId: "wt-1",
-    });
-    expect(JSON.parse(output)).toMatchObject({ success: true, data: { unitId: "unit-1" } });
   });
 });
+
+function authCommands(auth: WorkspaceAuth): readonly Command[] {
+  return createAuthCommand(auth).commands;
+}
+
+function repoContext(): RepoContext {
+  return new RepoContext(
+    { lookup: async () => ({ id: "looked-up", name: "Looked up" }) },
+    async () => "https://workspace.test",
+    {},
+  );
+}
 
 async function run(command: Command, args: readonly string[]): Promise<string> {
   let output = "";

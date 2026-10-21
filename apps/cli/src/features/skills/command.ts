@@ -113,7 +113,7 @@ export function createSkillsCommand(skillDataRoot: string): Command {
         const snapshot = await readSkillSnapshot(skillDataRoot, name, false);
         if (!snapshot.resources.some((entry) => entry.path === resource)) {
           throw new SkillResourceError(
-            `Unknown resource for skill ${name}: ${resource}. Run univer-workspace-cli skills get ${name} to list resources.`,
+            `Unknown resource for skill ${name}: ${resource}. Run uvw skills get ${name} to list resources.`,
           );
         }
         return {
@@ -196,7 +196,7 @@ async function readSkillSnapshot(
   }
   const resources = (await listSupplementalPaths(directory)).map((path) => ({
     path,
-    readCommand: `univer-workspace-cli skills read ${name} ${shellArgument(path)}`,
+    readCommand: `uvw skills read ${name} ${shellArgument(path)}`,
   }));
   return {
     content,
@@ -269,7 +269,7 @@ function renderSkillSnapshot(snapshot: SkillSnapshot): string {
       snapshot.content.trimEnd(),
       "\nRead bundled references and templates through the CLI (no installation-directory access needed):\n",
       ...snapshot.resources.map((resource) => resource.readCommand),
-      `\nRead all: univer-workspace-cli skills get ${snapshot.metadata.name} --full`,
+      `\nRead all: uvw skills get ${snapshot.metadata.name} --full`,
     ].join("\n");
   }
   if (snapshot.files === undefined || snapshot.files.length === 0) {

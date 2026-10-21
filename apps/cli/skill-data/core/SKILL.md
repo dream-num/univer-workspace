@@ -1,11 +1,11 @@
 ---
 name: core
-description: Operate remote Workspace Resources with univer-workspace-cli. Use for authentication, Space Node discovery and organization, per-task Worktree creation, existing-Univer-Resource staging, Unit authoring, verification, review handoff, rework, and export. Start every new editable-content task in a new Worktree; continue an existing Worktree only for rework on that same task.
+description: Operate remote Workspace Resources with uvw. Use for authentication, Space Node discovery and organization, per-task Worktree creation, existing-Univer-Resource staging, Unit authoring, verification, review handoff, rework, and export. Start every new editable-content task in a new Worktree; continue an existing Worktree only for rework on that same task.
 ---
 
 # Univer Workspace CLI Core
 
-Use `univer-workspace-cli` for remote Workspace content. If it is unavailable, stop and report that
+Use `uvw` for remote Workspace content. If it is unavailable, stop and report that
 the Workspace CLI is not installed. Do not substitute a local office writer because that bypasses
 the remote Worktree and review lifecycle.
 
@@ -14,9 +14,9 @@ the remote Worktree and review lifecycle.
 When a Unit needs icons, logos, emoji, or illustrations, use the built-in SVG resource library:
 
 ```bash
-univer-workspace-cli resources registries
-univer-workspace-cli resources find <query> [<query>...]
-univer-workspace-cli resources export <handle> [<handle>...] --out <directory>
+uvw resources registries
+uvw resources find <query> [<query>...]
+uvw resources export <handle> [<handle>...] --out <directory>
 ```
 
 ## Concepts
@@ -24,11 +24,14 @@ univer-workspace-cli resources export <handle> [<handle>...] --out <directory>
 Understand these identities before running a mutation:
 
 - **Workspace origin**: the remote Workspace service address of the user's own deployment.
-  Point the CLI at it with `univer-workspace-cli config set workspace.origin <origin>` before
+  Point the CLI at it with `uvw config set workspace.origin <origin>` before
   connecting.
-- **Space**: the container whose visible tree is made of Nodes.
+- **Space** (a *repository*): the container whose visible tree is made of Nodes. A Team Space is named
+  `<owner>/<slug>`; every Personal Space is `<owner>/personal`. Pass that name as `-R <owner>/<slug>`
+  (or set `UVW_REPO`); a Space ID or a Workspace URL is accepted wherever a repository is expected.
+  A Team Space created before slugs existed may have no name; use its Space ID.
 - **Personal Space**: the authenticated user's own Space. Files here are personal Workspace files.
-  A Personal Space is not a Worktree and is not the same thing as `--scope user`.
+  A Personal Space is not a Worktree. Its repository name is `<username>/personal`.
 - **Team Space**: a Space shared by a team. Access depends on current team membership and role.
 - **Issue**: a Team Space discussion item addressed by Space and number (`#12`), with a Markdown
   body, comments, labels, assignees, and referenced Nodes. Personal Spaces have no Issues. An Issue
@@ -43,15 +46,20 @@ Understand these identities before running a mutation:
 - **Unit**: the Collaboration content identity inside one Worktree. Use its `unitId` for execute,
   inspect, screenshot, export, snapshot, and changeset operations.
 - **Worktree**: one task's isolated Agent workspace and draft/review boundary. Changes remain
-  isolated from the normal Space file until the Worktree is merged.
-- **User-scoped Worktree**: a private Worktree owned by the authenticated user. It can contain Units
+  isolated from the normal Space file until the Worktree is merged. The CLI calls it a **pull
+  request** (`uvw pr ...`); `uvw worktree ...` is an equivalent spelling with the same options and
+  output. This Skill uses `pr`. A Team Worktree shares its `#N` number sequence with the Space's Issues;
+  a Worktree created before numbering existed has `number: null` and is addressed by its `id`.
+- **User-scoped Worktree**: a private Worktree owned by the authenticated user, created with `-R <username>/personal`. It can contain Units
   the user may edit from Personal or Team Spaces. It is not a Personal Space.
-- **Space-scoped Worktree**: a Worktree belonging to one Team Space. It can contain only Units from
+- **Space-scoped Worktree**: a Worktree belonging to one Team Space, created with `-R <owner>/<slug>`. It can contain only Units from
   that Space and may be private or visible to that Space.
 - **Worktree-local Unit**: a new Unit created inside a Worktree. The server allocates its
   `unitId`, `resourceId`, and `nodeId`; merge activates the target Node/Resource.
 
-Never interchange `spaceId`, `nodeId`, `resourceId`, `unitId`, Worktree `id`, or display name.
+Never interchange `spaceId`, `nodeId`, `resourceId`, `unitId`, Worktree `id`, pull request number, or
+display name. Content commands (`execute`, `inspect`, `screenshot`, `unit`, `import`, `export`, ...) take
+`--worktree <id>`: the `id` field of `uvw pr view <n> -R <repo> --json id`, not the `#N` number.
 Use display names and `path` only for discovery and disambiguation; use stable ids for commands.
 
 `space browse` and `space find` discover Nodes and Resources before they enter a Worktree. `unit list` only lists
@@ -61,9 +69,9 @@ catalog, not Workspace file discovery.
 Filter discovery by Resource kind and, independently, Univer Unit type:
 
 ```bash
-univer-workspace-cli space browse <space-id> --resource-kind blob --json
-univer-workspace-cli space find <name> --space <space-id> --resource-kind univer --unit-type doc --json
-univer-workspace-cli space browse <space-id> --resource-kind none --json
+uvw space browse <space-id> --resource-kind blob --json
+uvw space find <name> --space <space-id> --resource-kind univer --unit-type doc --json
+uvw space browse <space-id> --resource-kind none --json
 ```
 
 `--unit-type` may be combined only with `--resource-kind univer`. Filters change returned results,
@@ -72,19 +80,19 @@ not recursive reachability; a Blob Resource Node may still have children.
 ## Blob files
 
 For original-file upload, download and replacement, read the [Blob Skill](../blob/SKILL.md)
-with `univer-workspace-cli skills get blob`.
+with `uvw skills get blob`.
 
 ## HTML Views
 
 For live HTML pages backed by Sheet data, read the [HTML View Skill](../html-view/SKILL.md)
-with `univer-workspace-cli skills get html-view`.
+with `uvw skills get html-view`.
 
 ## Manage Space Nodes
 
 Create a root organizational Node by naming the target Space:
 
 ```bash
-univer-workspace-cli space node create \
+uvw space node create \
   <space-id> --name <node-name> --json
 ```
 
@@ -92,7 +100,7 @@ Create a direct child by passing the stable Node ID returned by the first comman
 may also be the parent when its capabilities allow child creation:
 
 ```bash
-univer-workspace-cli space node create \
+uvw space node create \
   <space-id> --name <child-node-name> --parent <node-id> --json
 ```
 
@@ -109,7 +117,7 @@ an arbitrary same-name result is the Node created by the interrupted request.
 Rename an organizational or Resource Node by stable Node ID:
 
 ```bash
-univer-workspace-cli space node rename \
+uvw space node rename \
   <node-id> --name <new-name> --json
 ```
 
@@ -117,9 +125,9 @@ Move a Node by choosing exactly one destination form. Use `--root` only when the
 destination is the current Space root:
 
 ```bash
-univer-workspace-cli space node move \
+uvw space node move \
   <node-id> --parent <destination-node-id> --json
-univer-workspace-cli space node move <node-id> --root --json
+uvw space node move <node-id> --root --json
 ```
 
 Rename and move are direct desired-state Space writes. If their write response is interrupted, the
@@ -131,7 +139,7 @@ Trash is a user-authorized recursive lifecycle action. Run it only when the user
 remove that Node subtree from its Space location:
 
 ```bash
-univer-workspace-cli space node trash <node-id> --json
+uvw space node trash <node-id> --json
 ```
 
 Read and retain the returned `trashBatchId` and `nodeCount`. Trash creates a new batch and is not
@@ -142,7 +150,7 @@ does not restore or permanently remove Trash Batches.
 ## Worktree rule
 
 **Start every new task in a new Worktree.** Do not select or reuse an active Worktree merely because
-its name, Space, or Unit looks suitable. `worktree list` is diagnostic; it is not permission to
+its name, Space, or Unit looks suitable. `pr list` is diagnostic; it is not permission to
 continue someone else's or another task's draft.
 
 Continue an existing Worktree only when all of these are true:
@@ -163,24 +171,28 @@ two-command browser approval protocol below. Never ask the user for a password.
 
 ```bash
 # Point the CLI at the user's Workspace deployment:
-univer-workspace-cli config set workspace.origin https://workspace.example.com
+uvw config set workspace.origin https://workspace.example.com
 
 # Step 1: create an approval request. This command exits immediately.
-univer-workspace-cli login --json
+uvw auth login --json
 
 # Step 2: relay verificationUrl and userCode to the user, then STOP.
 # Do not poll, do not run --complete, and do not continue the Workspace task.
 # Wait until the user explicitly says that they approved the request.
 
 # Step 3: only after that user confirmation, exchange the approval once.
-univer-workspace-cli login --complete --json
+uvw auth login --complete --json
 
 # Compatibility only, when the caller already owns a password secret:
-printf '%s\n' "$WORKSPACE_PASSWORD" | univer-workspace-cli login --username <name> --password-stdin
+printf '%s\n' "$WORKSPACE_PASSWORD" | uvw auth login --username <name> --password-stdin
 
-univer-workspace-cli whoami --json
-univer-workspace-cli space list --json
+uvw auth status --json
+uvw repo list --json
 ```
+
+Exit code 4 means sign-in is required: run `uvw auth login`, do not retry the failed command.
+`--json` prints the bare object or array (no `{ issue }` or `{ worktree }` wrapper); `--json id,number`
+keeps only those top-level fields.
 
 The first command returns `status: "authorization_required"`, `verificationUrl`, `userCode`,
 `expiresAt`, and `nextCommand`. The completion command also exits immediately: it returns
@@ -194,24 +206,24 @@ same handoff.
 When the user asks you to handle an Issue ("work on #12"), the Issue is the brief. Do not ask the user
 to restate it.
 
-1. Resolve the Space with `space list` and read the Issue with its whole discussion:
+1. Resolve the repository with `repo list` and read the Issue with its whole discussion:
 
    ```bash
-   univer-workspace-cli issue get 12 --space <space-id> --timeline --json
+   uvw issue view 12 -R <owner>/<slug> -c --json
    ```
 
-   The newest comments may change or narrow the request; read them before acting. Without a Space
-   ID, `issue list --assignee me --json` shows the work assigned to the user across Team Spaces.
-2. `issue.references[]` lists the files the Issue points at. Use `resource.id` as the
+   The newest comments may change or narrow the request; read them before acting. Without a
+   repository, `uvw search issues -a @me --json` shows the work assigned to the user across Team Spaces.
+2. `references[]` lists the files the Issue points at. Use `resource.id` as the
    `resourceId` and `nodeId` to stage them. A reference with `available: false` was trashed or
    became unreadable; say so instead of guessing which file was meant.
-3. Follow "Start a new task" in a **new** Space-scoped Worktree named `#12 <Issue title>`. The
+3. Follow "Start a new task" in a **new** Space-scoped pull request titled `#12 <Issue title>`. The
    Worktree does not link to the Issue itself, so that name is what ties them together for reviewers.
 4. Verify and hand off as usual, then report on the Issue. Post the review URL with what you changed;
    write multi-line Markdown through stdin so nothing needs shell escaping:
 
    ```bash
-   univer-workspace-cli issue comment 12 --space <space-id> --body-file - --json <<'MD'
+   uvw issue comment 12 -R <owner>/<slug> -F - --json <<'MD'
    Updated `Budget!B12` to include the East region.
 
    Review: <review-url>
@@ -224,7 +236,7 @@ to restate it.
    do either only when they ask.
 
 Issue writes are not idempotent. If a create or comment fails with `workspace-result-unknown`,
-read `issue get ... --timeline` before repeating it, or the discussion may end up with a duplicate.
+read `issue view ... -c` before repeating it, or the discussion may end up with a duplicate.
 Labels and assignees need triage rights; when the CLI reports `FORBIDDEN`, tell the user rather than
 working around it. Use `issue create` to record follow-up work you found but were not asked to do.
 
@@ -232,28 +244,27 @@ working around it. Use `issue create` to record follow-up work you found but wer
 
 ### Modify an existing file
 
-1. Resolve the owning Space with `space list`.
+1. Resolve the owning repository with `repo list`.
 2. Find the Resource Node. Prefer `space find`; use `space browse` when tree context matters.
 3. If multiple candidates match, compare `path`, `spaceId`, `nodeId`, `resourceId`, and Unit type. Ask the user
    when the target remains ambiguous; never pick one by name alone.
-4. Create a new Worktree, then stage the exact `resourceId`.
-5. Read the returned Worktree id, then run `unit list` to confirm the staged Unit.
+4. Create a new pull request (Worktree), then stage the exact `resourceId`.
+5. Read the returned `id` and `number` (the `--worktree` value is the `id`), then run `unit list` to confirm the staged Unit.
 
 For a Personal Space file, use a new user-scoped Worktree:
 
 ```bash
-univer-workspace-cli space find <document-name> --space <personal-space-id> --unit-type doc --json
-univer-workspace-cli worktree create \
-  --name <task-name> --scope user --json
-univer-workspace-cli unit add \
+uvw space find <document-name> --space <username>/personal --unit-type doc --json
+uvw pr create -R <username>/personal -t <task-name> --json
+uvw unit add \
   --worktree <new-worktree-id> --resource <resource-id> --json
-univer-workspace-cli unit list --worktree <new-worktree-id> --json
+uvw unit list --worktree <new-worktree-id> --json
 ```
 
 For a Team Space file, choose scope deliberately:
 
-- Use `--scope user` for a private Agent task.
-- Use `--scope space --space <team-space-id>` when the task itself belongs to that Team Space.
+- Use `-R <username>/personal` for a private Agent task.
+- Use `-R <owner>/<slug>` of the Team Space when the task itself belongs to that Team Space.
   Add `--visibility space` only when Space members should see the Worktree.
 
 After creating the Worktree, add the Resource with
@@ -265,10 +276,9 @@ all subsequent content commands; do not continue with the Node or Resource ID.
 Create a new Worktree first, then create or import one Worktree-local Unit:
 
 ```bash
-univer-workspace-cli worktree create \
-  --name <task-name> --scope space --space <team-space-id> --json
+uvw pr create -R <owner>/<slug> -t <task-name> --json
 
-univer-workspace-cli unit create \
+uvw unit create \
   --worktree <new-worktree-id> --space <team-space-id> \
   --type sheet --name <file-name> [--parent <node-id>] [--idempotency-key <key>] --json
 ```
@@ -286,14 +296,14 @@ logical operation; use a new or omitted key for an intentional second copy.
 Use only the already-known Worktree:
 
 ```bash
-univer-workspace-cli worktree get <worktree-id> --json
-univer-workspace-cli unit list --worktree <worktree-id> --json
+uvw pr view <n|worktree-id> -R <owner>/<slug> --json
+uvw unit list --worktree <worktree-id> --json
 ```
 
 If it is `ready`, reopen it before editing:
 
 ```bash
-univer-workspace-cli worktree reopen <worktree-id> --json
+uvw pr ready <n> -R <owner>/<slug> --undo --json
 ```
 
 If it is `merged` or `discarded`, start a new Worktree and stage the current Space file again.
@@ -302,19 +312,19 @@ If it is `merged` or `discarded`, start a new Worktree and stage the current Spa
 
 Before writing Facade code, load the matching versioned Skill:
 
-- Doc: `univer-workspace-cli skills get doc`
-- Sheet: `univer-workspace-cli skills get sheet`
-- Slide: `univer-workspace-cli skills get slide`
-- Base: `univer-workspace-cli skills get base`
-- Board: `univer-workspace-cli skills get board`
+- Doc: `uvw skills get doc`
+- Sheet: `uvw skills get sheet`
+- Slide: `uvw skills get slide`
+- Base: `uvw skills get base`
+- Board: `uvw skills get board`
 
 For cross-Unit composition, also load the matching Topic Skill after the Host and Source Skills:
 
-- Embed: `univer-workspace-cli skills get embed`
+- Embed: `uvw skills get embed`
 - Cross-Unit formula in a Sheet cell or formula-driven Shape:
-  `univer-workspace-cli skills get cross-unit-formula`
+  `uvw skills get cross-unit-formula`
 - Chart backed by another Unit's Sheet or Base data:
-  `univer-workspace-cli skills get embed` (see "Referencing another Unit's data from a Chart")
+  `uvw skills get embed` (see "Referencing another Unit's data from a Chart")
 
 Both Topic Skills persist the stable Source `unitId` in Host metadata and load Source data on demand;
 they do not resolve identity from a display name or require staging a read-only Source into the task
@@ -323,9 +333,9 @@ Worktree.
 Every content command requires the full remote address:
 
 ```bash
-univer-workspace-cli execute \
+uvw execute \
   --worktree <worktree-id> --unit <unit-id> -e '…' --json
-univer-workspace-cli inspect range A1:C9 \
+uvw inspect range A1:C9 \
   --worksheet name:<sheet-name> \
   --worktree <worktree-id> --unit <unit-id> --json
 ```
@@ -344,16 +354,16 @@ When Facade readback returns a UUID and the original asset bytes are needed, dow
 the managed CLI path:
 
 ```bash
-univer-workspace-cli asset download <output> --id <uuid> --worktree <worktree-id>
+uvw asset download <output> --id <uuid> --worktree <worktree-id>
 ```
 
 ### Facade API lookup
 
 - When no relevant class or API symbol is known, use
-  `univer-workspace-cli api find <query...>` with API-name keywords or identifier fragments.
-- When a class is known, use `univer-workspace-cli api show <Class>` to inspect its supported APIs.
+  `uvw api find <query...>` with API-name keywords or identifier fragments.
+- When a class is known, use `uvw api show <Class>` to inspect its supported APIs.
 - When a type or exact `Class.member` symbol is known, use
-  `univer-workspace-cli api show <symbol>` for its authoritative signature, documentation,
+  `uvw api show <symbol>` for its authoritative signature, documentation,
   referenced types, and examples.
 
 `find` is case-insensitive. Each query is searched independently and returns its own matches;
@@ -378,34 +388,38 @@ After mutations:
 3. Mark the Worktree ready.
 4. Read it back and confirm state `ready`.
 5. Generate the review URL for the edited Unit.
-6. Return the review URL, Worktree id, and Unit id to the user.
+6. Return the review URL, pull request number, Worktree id, and Unit id to the user.
 
 ```bash
-univer-workspace-cli worktree ready <worktree-id> --json
-univer-workspace-cli worktree get <worktree-id> --json
-univer-workspace-cli open --worktree <worktree-id> --unit <unit-id>
+uvw pr ready <n> -R <owner>/<slug> --json
+uvw pr view <n> -R <owner>/<slug> --json
+uvw browse <n> -R <owner>/<slug> --unit <unit-id>
 ```
 
-Do not merge or discard unless the user explicitly requests that consequential action. A later
+Do not merge or discard unless the user explicitly requests that consequential action. `pr discard` is
+irreversible. There is no `pr close` or `pr reopen`; to take a `ready` pull request back to draft use
+`pr ready <n> --undo`. A later
 same-task correction follows the rework flow above.
 
 ## Command map
 
-Use `univer-workspace-cli <command> --help` as the syntax authority.
+Use `uvw <command> --help` as the syntax authority. `-R <owner>/<slug>` (or `UVW_REPO`) selects the
+repository; there is no stored default repository.
 
 | Intent                    | Commands                                                                    |
 | ------------------------- | --------------------------------------------------------------------------- |
-| Connect                   | `config set workspace.origin`, `login`, `whoami`, `logout`                  |
-| Discover/organize Spaces  | `space list`, `space browse`, `space find`, `space node create/rename/move` |
-| Read and update Issues    | `issue list/get/create/update/comment/close/reopen`, `issue label ...`      |
+| Connect                   | `config set workspace.origin`, `auth login`, `auth status`, `auth logout`   |
+| Discover repositories     | `repo list`, `repo view`, `repo create/edit/rename`                         |
+| Discover/organize files   | `space browse`, `space find`, `space node create/rename/move`               |
+| Read and update Issues    | `issue list/view/create/edit/comment/close/reopen`, `label list/create/edit/delete`, `search issues` |
 | Preserve original files   | `blob upload`, `blob get`, `blob download`, `blob replace`                  |
-| Start a task              | `worktree create`, `unit create`, `unit add`                                |
-| Inspect a known Worktree  | `worktree get`, `unit list`                                                 |
-| Continue same-task rework | `worktree reopen`                                                           |
+| Start a task              | `pr create`, `unit create`, `unit add`                                      |
+| Inspect a known task      | `pr view`, `pr list`, `unit list`                                           |
+| Continue same-task rework | `pr ready <n> --undo`                                                       |
 | Write                     | `execute`, `compile-svg`, `compile-typst`, import                           |
 | Verify                    | `inspect`, `screenshot`                                                     |
 | Deliver output            | `export`, `print-pdf`                                                       |
-| Hand off                  | `worktree ready`, `open`                                                    |
-| User-authorized lifecycle | `worktree merge`, `worktree discard`                                        |
+| Hand off                  | `pr ready`, `browse <n> --unit <id>`                                        |
+| User-authorized lifecycle | `pr merge`, `pr discard` (irreversible)                                     |
 | User-authorized cleanup   | `space node trash`                                                          |
 | Find APIs/assets/guidance | `api find/show`, `resources`, `skills`                                      |

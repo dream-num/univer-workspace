@@ -11,12 +11,12 @@ import {
   type PendingCliLogin,
   type WorkspaceSubject,
   WorkspaceHttp,
-} from "@univerjs/univer-workspace-client-core";
+} from "@univerjs/univer-workspace-client-core/product";
 import { WORKSPACE_ORIGIN_CONFIG_KEY } from "../../config.js";
 import { workspaceError } from "../../errors.js";
 import { isWorkspaceRecord } from "../../transport/http.js";
 
-export type { PendingCliLogin, WorkspaceSubject } from "@univerjs/univer-workspace-client-core";
+export type { PendingCliLogin, WorkspaceSubject } from "@univerjs/univer-workspace-client-core/product";
 
 interface StoredSession {
   readonly cookie: string;
