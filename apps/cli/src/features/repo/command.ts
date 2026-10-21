@@ -4,6 +4,7 @@ import { workspaceError } from "../../errors.js";
 import {
   emit,
   executeCommand,
+  jsonFieldsOption,
   limitOf,
   oneOf,
   table,
@@ -12,6 +13,9 @@ import {
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 
 const JSON_OPTION = ["--json [fields]", "write JSON, optionally only these comma-separated fields"] as const;
+export const REPO_JSON_FIELDS = [
+  "id", "name", "type", "accessRole", "description", "fullName", "owner", "publicRead", "slug",
+] as const satisfies readonly (keyof WorkspaceSpace)[];
 
 export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoContext): Command {
   const root = new Command("repo").description(
@@ -77,7 +81,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     .option("--name <name>", "display name (default: the slug)")
     .option("--description <text>", "short plain-text description")
     .option("--public", "let anyone with the link read it")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(REPO_JSON_FIELDS))
     .action(
       async (
         slug: string,
@@ -103,7 +107,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     .option("--name <name>")
     .option("--description <text>", "plain text; an empty string clears it")
     .option("--visibility <visibility>", "public or private")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(REPO_JSON_FIELDS))
     .action(
       async (
         ref: string | undefined,
@@ -137,7 +141,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
     .description("Change a repository's slug; the old owner/slug stops resolving")
     .argument("<new-slug>")
     .option(...REPO_OPTION)
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(REPO_JSON_FIELDS))
     .action(async (slug: string, options: JsonFieldsOption & { repo?: string }) => {
       const space = await executeCommand(rename, async () => {
         const { spaceId } = await context.repo(options.repo);

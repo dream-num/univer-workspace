@@ -4,11 +4,13 @@ import {
   type WorkspaceIssue,
   type WorkspaceIssueFeature,
   type WorkspaceIssueSummary,
+  type WorkspaceIssueTimelineItem,
 } from "@univerjs/univer-workspace-client-core/product";
 import {
   collect,
   emit,
   executeCommand,
+  jsonFieldsOption,
   limitOf,
   oneOf,
   readText,
@@ -19,6 +21,12 @@ import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 import { issueUrl } from "../../urls.js";
 
 const JSON_OPTION = ["--json [fields]", "write JSON, optionally only these comma-separated fields"] as const;
+export const ISSUE_JSON_FIELDS = [
+  "assignees", "author", "body", "capabilities", "closedAt", "closedBy", "commentCount", "createdAt", "id",
+  "labels", "number", "referenceCount", "references", "space", "state", "stateReason", "title", "updatedAt",
+] as const satisfies readonly (keyof WorkspaceIssue)[];
+const COMMENT_JSON_FIELDS = ["author", "body", "createdAt", "id", "type", "updatedAt"] as const satisfies
+  readonly (keyof Extract<WorkspaceIssueTimelineItem, { type: "comment" }>)[];
 
 interface RepoOption {
   readonly repo?: string;
@@ -162,7 +170,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
     .option("-l, --label <name>", "label name; repeat for several", collect)
     .option("-a, --assignee <user>", "username or @me; repeat for several", collect)
     .option("--node <id>", "reference a file (Node); repeat for several", collect)
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(ISSUE_JSON_FIELDS))
     .action(
       async (
         options: JsonFieldsOption &
@@ -203,7 +211,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
     .option("--remove-assignee <user>", "repeatable", collect)
     .option("--add-node <id>", "repeatable", collect)
     .option("--remove-node <id>", "repeatable", collect)
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(ISSUE_JSON_FIELDS))
     .action(
       async (
         number: string,
@@ -244,7 +252,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
     .option("-r, --reason <reason>", 'completed or "not planned"', "completed")
     .option("-c, --comment <markdown>")
     .option("--comment-file <path>", "read the comment from a file, or - for stdin")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(ISSUE_JSON_FIELDS))
     .action(
       async (
         number: string,
@@ -271,7 +279,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
   const reopen = new Command("reopen")
     .argument("<number>")
     .option(...REPO_OPTION)
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(ISSUE_JSON_FIELDS))
     .action(async (number: string, options: JsonFieldsOption & RepoOption) => {
       const issue = await executeCommand(reopen, async () => {
         const target = await issueTarget(context, number, options.repo);
@@ -286,7 +294,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
     .option(...REPO_OPTION)
     .option("-b, --body <markdown>")
     .option("-F, --body-file <path>", "read the comment from a file, or - for stdin")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(COMMENT_JSON_FIELDS))
     .action(async (number: string, options: JsonFieldsOption & RepoOption & TextOptions) => {
       const value = await executeCommand(comment, async () => {
         const target = await issueTarget(context, number, options.repo);

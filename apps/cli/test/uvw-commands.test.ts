@@ -8,6 +8,7 @@ import type {
 import { workspaceError } from "../src/errors.js";
 import { createBrowseCommand } from "../src/features/browse/command.js";
 import { createIssueCommand } from "../src/features/issue/command.js";
+import { createLabelCommand } from "../src/features/label/command.js";
 import { createPullRequestCommands } from "../src/features/pr/command.js";
 import { createRepoCommand } from "../src/features/repo/command.js";
 import { createSearchCommand } from "../src/features/search/command.js";
@@ -307,6 +308,119 @@ describe("uvw search and browse", () => {
     expect(await run(command, ["wt-1"])).toBe(`${ORIGIN}/worktrees?worktree=wt-1\n`);
     await expect(run(command, ["99", "-R", "alice/docs"])).rejects.toMatchObject({ exitCode: 1 });
   });
+});
+
+describe("uvw JSON validation before product writes", () => {
+  const WRITES = [
+    ["repo", "create", "scratch", "--description", "description"],
+    ["repo", "edit", "alice/docs", "--name", "Changed"],
+    ["repo", "rename", "changed", "-R", "alice/docs"],
+    ["issue", "create", "-R", "alice/docs", "-t", "Title"],
+    ["issue", "edit", "3", "-R", "alice/docs", "-t", "Changed"],
+    ["issue", "close", "3", "-R", "alice/docs", "-c", "Closing comment"],
+    ["issue", "reopen", "3", "-R", "alice/docs"],
+    ["issue", "comment", "3", "-R", "alice/docs", "-b", "Comment"],
+    ["label", "create", "bug", "-R", "alice/docs", "--color", "red"],
+    ["label", "edit", "bug", "-R", "alice/docs", "--name", "Changed"],
+    ["label", "delete", "bug", "-R", "alice/docs"],
+    ["pr", "create", "-R", "alice/docs", "-t", "Title"],
+    ["pr", "edit", "12", "-R", "alice/docs", "-t", "Changed"],
+    ["pr", "ready", "12", "-R", "alice/docs"],
+    ["pr", "ready", "12", "-R", "alice/docs", "--undo"],
+    ["pr", "merge", "12", "-R", "alice/docs"],
+    ["pr", "discard", "12", "-R", "alice/docs"],
+    ["worktree", "create", "-R", "alice/docs", "-t", "Title"],
+    ["worktree", "update", "12", "-R", "alice/docs", "-t", "Changed"],
+    ["worktree", "ready", "12", "-R", "alice/docs"],
+    ["worktree", "reopen", "12", "-R", "alice/docs"],
+    ["worktree", "merge", "12", "-R", "alice/docs"],
+    ["worktree", "discard", "12", "-R", "alice/docs"],
+  ];
+
+  function commands() {
+    const { repoContext } = context();
+    const writes: string[] = [];
+    const write = (method: string, value: unknown) => async () => {
+      writes.push(method);
+      return value;
+    };
+    const spaces = {
+      create: write("repo.create", teamSpace),
+      get: async () => teamSpace,
+      update: write("repo.update", teamSpace),
+    } as unknown as WorkspaceSpaceFeature;
+    const label = { color: "red", description: "", id: "l1", name: "bug" };
+    const issues = {
+      close: write("issue.close", issue()),
+      comment: write("issue.comment", { id: "c1" }),
+      create: write("issue.create", issue()),
+      createLabel: write("label.create", label),
+      deleteLabel: write("label.delete", { deleted: "bug" }),
+      reopen: write("issue.reopen", issue()),
+      update: write("issue.update", issue()),
+      updateLabel: write("label.update", label),
+    } as unknown as WorkspaceIssueFeature;
+    const worktrees = {
+      create: write("pr.create", worktree()),
+      getByNumber: async () => worktree(),
+      transition: write("pr.transition", worktree()),
+      update: write("pr.update", worktree()),
+    } as unknown as WorkspaceWorktreeFeature;
+    const output = { stderr: "", stdout: "" };
+    const configure = (command: Command) => {
+      command.exitOverride().configureOutput({
+        writeErr: (text) => { output.stderr += text; },
+        writeOut: (text) => { output.stdout += text; },
+      });
+      command.commands.forEach(configure);
+    };
+    const program = new Command("uvw");
+    for (const command of [
+      createRepoCommand(spaces, repoContext),
+      createIssueCommand({ context: repoContext, feature: issues, origin: async () => ORIGIN }),
+      createLabelCommand(issues, repoContext),
+      ...createPullRequestCommands({
+        context: repoContext, origin: async () => ORIGIN, spaces, userId: async () => "u1", worktrees,
+      }),
+    ]) program.addCommand(command);
+    configure(program);
+    return { output, program, writes };
+  }
+
+  describe.each(["typo", "id,typo", "", "  , \t, ", "toString"])("--json %j", (fields) => {
+    it.each(WRITES.map((args) => [args.join(" "), args] as const))(
+      "rejects %s without any remote write",
+      async (_description, args) => {
+        const { output, program, writes } = commands();
+        const error: unknown = await program.parseAsync([...args, "--json", fields], { from: "user" })
+          .catch((caught: unknown) => caught);
+        expect(writes).toEqual([]);
+        expect(error).toMatchObject({ exitCode: 1 });
+        expect(output.stdout).toBe("");
+        expect(output.stderr).toContain("workspace-argument-invalid");
+        expect(output.stderr).not.toMatch(/\n\s+at /u);
+        if (fields.includes("typo")) expect(output.stderr).toContain("Available fields");
+      },
+    );
+  });
+
+  it.each(WRITES.map((args) => [args.join(" "), args] as const))(
+    "preserves text, full JSON and field selections for %s",
+    async (_description, args) => {
+      const field = args[0] === "label" && args[1] === "delete" ? "deleted" : "id";
+      for (const json of [[], ["--json"], ["--json", ` ${field}, ${field} `]]) {
+        const { output, program, writes } = commands();
+        await program.parseAsync([...args, ...json], { from: "user" });
+        expect(writes.length).toBeGreaterThan(0);
+        expect(output.stderr).toBe("");
+        expect(output.stdout.trim()).not.toBe("");
+        if (json.length > 0) {
+          expect(JSON.parse(output.stdout)).toHaveProperty(field);
+          if (json.length > 1) expect(Object.keys(JSON.parse(output.stdout))).toEqual([field]);
+        }
+      }
+    },
+  );
 });
 
 async function run(command: Command, args: readonly string[]): Promise<string> {

@@ -9,6 +9,7 @@ import {
 import {
   emit,
   executeCommand,
+  jsonFieldsOption,
   limitOf,
   oneOf,
   readText,
@@ -19,6 +20,9 @@ import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 import { pullUrl } from "../../urls.js";
 
 const JSON_OPTION = ["--json [fields]", "write JSON, optionally only these comma-separated fields"] as const;
+export const PR_JSON_FIELDS = [
+  "id", "name", "state", "units", "number", "summary", "spaceId", "kind", "visibility", "creator", "createdAt", "updatedAt",
+] as const satisfies readonly (keyof WorkspaceWorktree)[];
 
 interface RepoOption {
   readonly repo?: string;
@@ -181,7 +185,7 @@ function build(
     .option("-F, --body-file <path>", "read the body from a file, or - for stdin")
     .option("--visibility <visibility>", "private or space (Team Space repositories only)")
     .option("--idempotency-key <key>", "retry-safe key for this creation")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(PR_JSON_FIELDS))
     .action(
       async (
         options: JsonFieldsOption &
@@ -219,7 +223,7 @@ function build(
     .option("-b, --body <markdown>")
     .option("-F, --body-file <path>", "read the body from a file, or - for stdin")
     .option("--visibility <visibility>", "private or space (Team Space repositories only)")
-    .option(...JSON_OPTION)
+    .addOption(jsonFieldsOption(PR_JSON_FIELDS))
     .action(
       async (
         argument: string,
@@ -254,7 +258,7 @@ function build(
   ): Command => {
     const command = new Command(commandName).description(text).argument("<pr>").option(...REPO_OPTION);
     if (undoOption) command.option("--undo", "move a ready pull request back to draft");
-    return command.option(...JSON_OPTION).action(
+    return command.addOption(jsonFieldsOption(PR_JSON_FIELDS)).action(
       async (argument: string, options: JsonFieldsOption & RepoOption & { undo?: boolean }) => {
         const worktree = await executeCommand(command, async () => {
           return await worktrees.transition(

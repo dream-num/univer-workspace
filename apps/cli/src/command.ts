@@ -1,14 +1,32 @@
 import { readFile } from "node:fs/promises";
-import { Command } from "commander";
+import { Command, InvalidArgumentError, Option } from "commander";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 
 export interface JsonOption {
   readonly json?: boolean;
 }
 
-/** `--json [fields]`: true for the whole object, or a comma-separated field list. */
+/** `--json [fields]`: true for the whole object, or raw/validated field names. */
 export interface JsonFieldsOption {
-  readonly json?: true | string;
+  readonly json?: true | string | readonly string[];
+}
+
+/** Parse and validate fields before Commander enters a command that can change remote data. */
+export function jsonFieldsOption(available: readonly string[]): Option {
+  return new Option("--json [fields]", "write JSON, optionally only these comma-separated fields")
+    .argParser((value: string) => {
+      const names = fieldNames(value);
+      const unknown = names.filter((name) => !available.includes(name));
+      if (names.length === 0 || unknown.length > 0) {
+        throw new InvalidArgumentError(
+          "workspace-argument-invalid: " +
+            (names.length === 0
+              ? "--json fields must not be empty."
+              : `Unknown --json field: ${unknown.join(", ")}. Available fields: ${available.join(", ")}.`),
+        );
+      }
+      return names;
+    });
 }
 
 /** Exit status 4 tells an agent that signing in, not retrying, is the next step. */
@@ -67,15 +85,16 @@ export function emit(
   command.configureOutput().writeOut?.(`${out}\n`);
 }
 
-function pickFields(value: unknown, fields: string): unknown {
-  const names = fields.split(",").map((name) => name.trim()).filter((name) => name !== "");
+function pickFields(value: unknown, fields: string | readonly string[]): unknown {
+  const names = typeof fields === "string" ? fieldNames(fields) : fields;
   if (names.length === 0) {
     throw workspaceError("workspace-argument-invalid", "--json fields must not be empty.");
   }
   const pick = (item: unknown) => {
     if (typeof item !== "object" || item === null || Array.isArray(item)) return item;
     const record = item as Record<string, unknown>;
-    const unknown = names.filter((name) => !(name in record));
+    // Parsed field arrays already passed the command's contract, including optional fields.
+    const unknown = typeof fields === "string" ? names.filter((name) => !(name in record)) : [];
     if (unknown.length > 0) {
       throw workspaceError(
         "workspace-argument-invalid",
@@ -85,6 +104,10 @@ function pickFields(value: unknown, fields: string): unknown {
     return Object.fromEntries(names.map((name) => [name, record[name]]));
   };
   return Array.isArray(value) ? value.map(pick) : pick(value);
+}
+
+function fieldNames(fields: string): string[] {
+  return fields.split(",").map((name) => name.trim()).filter((name) => name !== "");
 }
 
 /** Left-aligned columns separated by two spaces; trailing blanks are trimmed. */
