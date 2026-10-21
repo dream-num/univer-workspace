@@ -178,8 +178,8 @@ describe("uvw repository and Issue commands", () => {
 });
 
 describe("uvw pr and the worktree alias", () => {
-  function pullRequestCommands() {
-    const { repoContext } = context();
+  function pullRequestCommands(options: { env?: NodeJS.ProcessEnv; ownerId?: string } = {}) {
+    const { repoContext } = context(options.env);
     const calls: [string, ...unknown[]][] = [];
     const record = (name: string, result: unknown) =>
       vi.fn(async (...args: unknown[]) => {
@@ -194,7 +194,12 @@ describe("uvw pr and the worktree alias", () => {
       transition: record("transition", worktree({ state: "ready" })),
       update: record("update", worktree({ name: "New" })),
     } as unknown as WorkspaceWorktreeFeature;
-    const spaces = { get: vi.fn(async (id: string) => ({ ...teamSpace, id, type: id === "personal-1" ? "personal" : "team" })) };
+    const spaces = { get: vi.fn(async (id: string) => ({
+      ...teamSpace,
+      id,
+      owner: { id: options.ownerId ?? "u1", username: "alice" },
+      type: id === "personal-1" ? "personal" : "team",
+    })) };
     const [pr, alias] = createPullRequestCommands({
       context: repoContext,
       origin: async () => ORIGIN,
@@ -246,6 +251,52 @@ describe("uvw pr and the worktree alias", () => {
       ["getByNumber", "space-1", 12],
       ["transition", "wt-1", "reopen"],
     ]);
+  });
+
+  const PERSONAL_REFS: readonly (readonly [string, readonly string[], NodeJS.ProcessEnv])[] = [
+    ["full name", ["-R", "alice/personal"], {}],
+    ["Space ID", ["-R", "personal-1"], {}],
+    ["Browser URL", ["-R", `${ORIGIN}/spaces/personal-1`], {}],
+    ["environment", [], { UVW_REPO: "alice/personal" }],
+  ];
+
+  it.each([
+    ["pr", "list"], ["pr", "create"], ["alias", "list"], ["alias", "create"],
+  ] as const)("rejects another owner's Personal Space before %s %s reads or writes User Worktrees", async (group, verb) => {
+    for (const [reference, repoArgs, env] of PERSONAL_REFS) {
+      const commands = pullRequestCommands({ env, ownerId: "u2" });
+      const args = [verb, ...repoArgs, ...(verb === "create" ? ["-t", "Wrong target"] : []), "--json"];
+      const error = await run(commands[group], args).catch((caught: unknown) => caught);
+      expect(error, reference).toMatchObject({
+        exitCode: 1,
+        message: expect.stringContaining("Personal Space"),
+      });
+      expect(commands.calls, reference).toEqual([]);
+    }
+  });
+
+  it.each(PERSONAL_REFS)("preserves the signed-in owner's User Worktrees via %s", async (_reference, repoArgs, env) => {
+    for (const group of ["pr", "alias"] as const) {
+      const commands = pullRequestCommands({ env });
+      await run(commands[group], ["list", ...repoArgs, "--json"]);
+      await run(commands[group], ["create", ...repoArgs, "-t", "Mine", "--json"]);
+      expect(commands.calls).toEqual([
+        ["list", { limit: 30, scope: "user", view: "active" }],
+        ["create", { name: "Mine", scope: { kind: "user" } }],
+      ]);
+    }
+  });
+
+  it("preserves Team Space scope for a user who is not its owner", async () => {
+    for (const group of ["pr", "alias"] as const) {
+      const commands = pullRequestCommands({ ownerId: "u2" });
+      await run(commands[group], ["list", "-R", "alice/docs", "--json"]);
+      await run(commands[group], ["create", "-R", "alice/docs", "-t", "Team work", "--json"]);
+      expect(commands.calls).toEqual([
+        ["list", { limit: 30, scope: "space", spaceId: "space-1", view: "active" }],
+        ["create", { name: "Team work", scope: { kind: "space", spaceId: "space-1" } }],
+      ]);
+    }
   });
 
   it("answers gh's close and reopen with an explanation instead of guessing", async () => {

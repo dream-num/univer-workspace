@@ -32,7 +32,7 @@ export interface PullRequestDependencies {
   readonly context: RepoContext;
   readonly origin: () => Promise<string>;
   readonly spaces: WorkspaceSpaceFeature;
-  /** The signed-in user's ID, for `@me`. */
+  /** The signed-in user's ID, for Personal Space ownership and `@me`. */
   readonly userId: () => Promise<string>;
   readonly worktrees: WorkspaceWorktreeFeature;
 }
@@ -84,6 +84,18 @@ function build(
   const { context, origin, spaces, userId, worktrees } = deps;
   const root = new Command(name).description(description);
 
+  const repoSpace = async (repo: string | undefined) => {
+    const { spaceId } = await context.repo(repo);
+    const space = await spaces.get(spaceId);
+    if (space.type === "personal" && space.owner?.id !== await userId()) {
+      throw workspaceError(
+        "workspace-argument-invalid",
+        "Personal Space pull requests must target the signed-in user's own Space.",
+      );
+    }
+    return space;
+  };
+
   /** A `<n|url|id>` argument becomes the Worktree it names. */
   const find = async (argument: string, repo: string | undefined): Promise<WorkspaceWorktree> => {
     const target = await context.item(argument, repo, "pr");
@@ -117,10 +129,9 @@ function build(
         const items = await executeCommand(list, async () => {
           const state = oneOf(options.state, STATES, "--state");
           const limit = limitOf(options.limit);
-          const { spaceId } = await context.repo(options.repo);
-          const space = await spaces.get(spaceId);
+          const space = await repoSpace(options.repo);
           return await worktrees.list({
-            ...(space.type === "personal" ? { scope: "user" as const } : { scope: "space" as const, spaceId }),
+            ...(space.type === "personal" ? { scope: "user" as const } : { scope: "space" as const, spaceId: space.id }),
             ...viewOf(state),
             limit,
             ...(options.search === undefined ? {} : { search: options.search }),
@@ -198,12 +209,11 @@ function build(
           },
       ) => {
         const worktree = await executeCommand(create, async () => {
-          const { spaceId } = await context.repo(options.repo);
+          const space = await repoSpace(options.repo);
           const body = await readText(options.body, options.bodyFile, "--body or --body-file");
-          const space = await spaces.get(spaceId);
           return await worktrees.create({
             name: options.title,
-            scope: space.type === "personal" ? { kind: "user" } : { kind: "space", spaceId },
+            scope: space.type === "personal" ? { kind: "user" } : { kind: "space", spaceId: space.id },
             ...(body === undefined ? {} : { summary: body }),
             ...(options.idempotencyKey === undefined ? {} : { idempotencyKey: options.idempotencyKey }),
             ...(options.visibility === undefined
