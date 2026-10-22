@@ -10,6 +10,11 @@ export interface WorkspaceHttpOptions {
 export type AuthenticatedWorkspaceHttp = () => Promise<WorkspaceHttp>;
 
 export interface WorkspaceRequestOptions {
+  /**
+   * Byte downloads request `identity` so a compressing proxy in front of Workspace
+   * (Envoy strips strong ETag and Content-Length when it gzips) returns the validators intact.
+   */
+  readonly acceptEncoding?: "identity";
   readonly authenticated?: boolean;
   readonly body?: unknown;
   readonly contentLength?: number;
@@ -79,6 +84,9 @@ export class WorkspaceHttp {
             ? {}
             : { "idempotency-key": options.idempotencyKey }),
           ...(options.ifMatch === undefined ? {} : { "if-match": options.ifMatch }),
+          ...(options.acceptEncoding === undefined
+            ? {}
+            : { "accept-encoding": options.acceptEncoding }),
           ...(method === "GET" || method === "HEAD" ? {} : { origin: this.origin }),
           "x-univer-cli-sdk-role": this.role,
           ...(this.role === "worker" ? { "x-univer-cli-sdk-worker-pid": String(process.pid) } : {}),
@@ -185,7 +193,10 @@ export class WorkspaceHttp {
     let response: Response;
     try {
       response = await this.fetcher(url, {
-        headers: sameOrigin ? { cookie: this.cookie! } : {},
+        headers: {
+          ...(sameOrigin ? { cookie: this.cookie! } : {}),
+          "accept-encoding": "identity",
+        },
         method: "GET",
         redirect: "manual",
         ...(signal === undefined ? {} : { signal }),

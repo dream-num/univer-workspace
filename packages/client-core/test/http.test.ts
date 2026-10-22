@@ -189,6 +189,24 @@ describe("Workspace HTTP transport", () => {
     expect(cookies).toEqual(["session=x", null]);
   });
 
+  it("requests uncompressed bodies only for byte downloads", async () => {
+    const encodings: Array<string | null> = [];
+    const http = new WorkspaceHttp({
+      cookie: "session=x",
+      fetcher: async (input, init) => {
+        encodings.push(new Request(input, init).headers.get("accept-encoding"));
+        return new Response("bytes", { headers: { "content-type": "text/plain" } });
+      },
+      origin: "https://workspace.test",
+      role: "client",
+    });
+
+    await http.request("/api/nodes");
+    await http.request("/api/blob-resources/resource-1/download", { acceptEncoding: "identity" });
+    await http.content(new URL("https://cdn.test/asset"));
+    expect(encodings).toEqual([null, "identity", "identity"]);
+  });
+
   it("rejects unsafe Asset content URLs before fetch", async () => {
     const fetcher = vi.fn<typeof fetch>();
     const http = new WorkspaceHttp({

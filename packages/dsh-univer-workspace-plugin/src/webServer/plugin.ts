@@ -466,6 +466,8 @@ const PRODUCT_PROXY_ROUTES = [
   { method: "GET", pattern: /^\/shared-with-me$/ },
 ] as const;
 
+const BLOB_BYTES_ROUTE = /^\/api\/blob-resources\/[^/]+\/(content|download)$/;
+
 export function productProxyTarget(
   method: string | undefined,
   subPath: string,
@@ -496,6 +498,11 @@ async function proxyWorkspaceProductRequest(
   ] as const) {
     const value = req.headers[name];
     if (typeof value === "string") headers.set(name, value);
+  }
+  if (BLOB_BYTES_ROUTE.test(path)) {
+    // Keep the upstream ETag, Content-Length and Range semantics intact: a compressing
+    // proxy in front of Workspace (Envoy) strips them when it gzips the body.
+    headers.set("accept-encoding", "identity");
   }
   const carriesBody = method !== "GET" && method !== "HEAD";
   const init = {
