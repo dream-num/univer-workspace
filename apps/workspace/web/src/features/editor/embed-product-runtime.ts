@@ -104,18 +104,11 @@ async function loadEmbedProduct(
 ): Promise<() => EmbedProductDefinition> {
   switch (unitType) {
     case UniverInstanceType.UNIVER_SHEET: {
-      const { createSheetEditorPresets, sheetEditorLocales } =
+      const { createSheetComparisonPresets, sheetEditorLocales } =
         await import("./units/sheet/sheet-comparison-presets");
       return () => ({
         locales: sheetEditorLocales,
-        presets: createSheetEditorPresets({
-          container,
-          license,
-          universerEndpoint: window.location.origin,
-          collaborationEnabled: false,
-          threadCommentsEnabled: false,
-          workbenchChrome: "hidden",
-        }),
+        presets: createSheetComparisonPresets({ container, license }),
       });
     }
     case UniverInstanceType.UNIVER_DOC: {

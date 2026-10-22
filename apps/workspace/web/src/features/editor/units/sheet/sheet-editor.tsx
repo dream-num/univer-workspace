@@ -27,9 +27,11 @@ import {
   createSheetEditorPresets,
   sheetEditorLocales,
 } from "./sheet-presets";
-import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { threadCommentComposition } from "../../features/thread-comments";
 
 export type SheetEditorProps = CollaborationEditorProps;
+
+const threadComments = threadCommentComposition("sheet", "desktop");
 
 export default createCollaborationEditor({
   label: "spreadsheet",
@@ -52,13 +54,15 @@ export default createCollaborationEditor({
   exchangeProvidedByPreset: true,
   licenseProvidedByPreset: true,
   locales: sheetEditorLocales,
-  createPresets: (container, license) =>
-    createSheetEditorPresets({
+  createPresets: (container, license) => [
+    ...createSheetEditorPresets({
       container,
       license,
       universerEndpoint: window.location.origin,
     }),
-  collaborationFeaturePlugins: () => getThreadCommentCollaborationPlugins(),
+    ...threadComments.presets,
+  ],
+  collaborationDependentPlugins: () => threadComments.collaborationPlugins,
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadSheetAsync(unitId),
 });

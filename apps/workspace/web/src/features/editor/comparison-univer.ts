@@ -158,20 +158,13 @@ async function loadComparisonRenderingDefinition(
 ): Promise<ComparisonRenderingDefinition> {
   switch (unitType) {
     case UniverInstanceType.UNIVER_SHEET: {
-      const { createSheetEditorPresets, sheetEditorLocales } = await import(
+      const { createSheetComparisonPresets, sheetEditorLocales } = await import(
         "./units/sheet/sheet-comparison-presets"
       );
       return {
         licenseProvidedByPreset: true,
         locales: sheetEditorLocales,
-        presets: createSheetEditorPresets({
-          container,
-          license,
-          universerEndpoint: window.location.origin,
-          threadCommentsEnabled: false,
-          collaborationEnabled: false,
-          workbenchChrome: "hidden",
-        }),
+        presets: createSheetComparisonPresets({ container, license }),
         theme: greenTheme,
       };
     }

@@ -178,6 +178,9 @@ PR 摘要仅依据 `capabilities.review` 提供审阅链接；直接 Worktree �
 快照 adapter），`features/editor/units/<type>/` 保存五类 Unit（sheet、doc、slide、board、base）
 各自的编辑器入口与 preset，`features/editor/features/` 保存跨类型共享能力（exchange、
 thread comment、license、assets），`features/editor/workarounds/` 集中保存上游 SDK workaround。
+Thread Comment 的 model、UI 与 datasource 只在 `features/thread-comments.ts` 组合：每类 Unit 按
+desktop / mobile / comparison 三种 variant 取 preset（model 永远显式注册）和协同后注册的 datasource，
+编辑器、对比面板和内嵌产品运行时都从这里取，不各自拼装。
 
 Worktree 审阅保留 Agent 草稿作为默认视图，并通过 `packages/unit-comparison-viewer` 提供可选的结构化
 双栏比较。该 package 只消费已解码的 UnitData 和语义 comparison result，不请求数据或装配 Univer Runtime；Web 通过

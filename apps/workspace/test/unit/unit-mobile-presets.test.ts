@@ -60,8 +60,6 @@ describe("Workspace mobile unit presets", () => {
         drawingUI.UniverDrawingMobileUIPlugin,
         docsDrawingUI.UniverDocsDrawingMobileUIPlugin,
         docsHyperLinkUI.UniverDocsHyperLinkMobileUIPlugin,
-        threadCommentUI.UniverThreadCommentMobileUIPlugin,
-        docsThreadCommentUI.UniverDocsThreadCommentMobileUIPlugin,
         calloutUI.UniverDocsCalloutMobileUIPlugin,
         chartUI.UniverDocsChartMobileUIPlugin,
         codeUI.UniverDocsCodeMobileUIPlugin,
@@ -187,8 +185,6 @@ describe("Workspace mobile unit presets", () => {
         ui.UniverMobileUIPlugin,
         docsUI.UniverDocsMobileUIPlugin,
         basesUI.UniverBasesMobileUIPlugin,
-        // Satisfies bases-thread-comment-ui's dependency with the touch UI.
-        threadCommentUI.UniverThreadCommentMobileUIPlugin,
       ])
     );
     expectNone(constructors, [

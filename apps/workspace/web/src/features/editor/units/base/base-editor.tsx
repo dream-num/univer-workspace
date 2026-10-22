@@ -7,7 +7,6 @@ import UniverBasesExchangeClientZhCN from "@univerjs-pro/bases-exchange-client/l
 import { UniverBasesHistoryUIPlugin } from "@univerjs-pro/bases-history-ui";
 import BasesHistoryUIEnUS from "@univerjs-pro/bases-history-ui/locale/en-US";
 import BasesHistoryUIZhCN from "@univerjs-pro/bases-history-ui/locale/zh-CN";
-import { UniverBasesThreadCommentUIPlugin } from "@univerjs-pro/bases-thread-comment-ui";
 import BasesThreadCommentUIEnUS from "@univerjs-pro/bases-thread-comment-ui/locale/en-US";
 import BasesThreadCommentUIZhCN from "@univerjs-pro/bases-thread-comment-ui/locale/zh-CN";
 import { UniverBasesUIPlugin } from "@univerjs-pro/bases-ui";
@@ -47,7 +46,7 @@ import {
   type CollaborationEditorProps,
   type ICollaborationEditorDefinition,
 } from "../../collaboration-editor";
-import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { threadCommentComposition } from "../../features/thread-comments";
 import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 
 export type BaseEditorProps = CollaborationEditorProps;
@@ -127,8 +126,11 @@ export function createBaseComparisonPresets(
         ],
       ],
     },
+    ...threadCommentComposition("base", "comparison").presets,
   ];
 }
+
+const threadComments = threadCommentComposition("base", "desktop");
 
 export const baseEditorDefinition: ICollaborationEditorDefinition = {
   label: "base",
@@ -148,8 +150,7 @@ export const baseEditorDefinition: ICollaborationEditorDefinition = {
   theme: yellowTheme,
   hideCollaborationStatus: true,
   locales: baseEditorLocales,
-  collaborationFeaturePlugins: () =>
-    getThreadCommentCollaborationPlugins(UniverBasesThreadCommentUIPlugin),
+  collaborationDependentPlugins: () => threadComments.collaborationPlugins,
   exchangeFeaturePlugins: () => [UniverBasesExchangeClientPlugin],
   createPresets: (container) => [
     {
@@ -200,6 +201,7 @@ export const baseEditorDefinition: ICollaborationEditorDefinition = {
         ],
       ],
     },
+    ...threadComments.presets,
   ],
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadBaseAsync(unitId),

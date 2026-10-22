@@ -24,7 +24,6 @@ import { UniverSlidesTablePlugin } from "@univerjs-pro/slides-table";
 import { UniverSlidesTableUIPlugin } from "@univerjs-pro/slides-table-ui";
 import UniverSlidesTableUIEnUS from "@univerjs-pro/slides-table-ui/locale/en-US";
 import UniverSlidesTableUIZhCN from "@univerjs-pro/slides-table-ui/locale/zh-CN";
-import { UniverSlidesThreadCommentUIPlugin } from "@univerjs-pro/slides-thread-comment-ui";
 import SlidesThreadCommentUIEnUS from "@univerjs-pro/slides-thread-comment-ui/locale/en-US";
 import SlidesThreadCommentUIZhCN from "@univerjs-pro/slides-thread-comment-ui/locale/zh-CN";
 import { UniverSlidesUIPlugin } from "@univerjs-pro/slides-ui";
@@ -74,7 +73,7 @@ import {
   type CollaborationEditorProps,
   type ICollaborationEditorDefinition,
 } from "../../collaboration-editor";
-import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { threadCommentComposition } from "../../features/thread-comments";
 import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 import { getReferencedSheetPlugins } from "../../features/referenced-sheet-plugins";
 
@@ -157,8 +156,11 @@ export function createSlideComparisonPresets(
         UniverSlidesTableUIPlugin,
       ],
     },
+    ...threadCommentComposition("slide", "comparison").presets,
   ];
 }
+
+const threadComments = threadCommentComposition("slide", "desktop");
 
 export const slideEditorDefinition: ICollaborationEditorDefinition = {
   liveSheetReferences: true,
@@ -198,8 +200,7 @@ export const slideEditorDefinition: ICollaborationEditorDefinition = {
   theme: purpleTheme,
   useCustomCollaborationStatus: true,
   locales: slideEditorLocales,
-  collaborationFeaturePlugins: () =>
-    getThreadCommentCollaborationPlugins(UniverSlidesThreadCommentUIPlugin),
+  collaborationDependentPlugins: () => threadComments.collaborationPlugins,
   exchangeFeaturePlugins: () => [UniverSlidesExchangeClientPlugin],
   printFeaturePlugins: () => [UniverSlidesPrintPlugin],
   createPresets: (container, _license, _scope, compact) => [
@@ -234,6 +235,7 @@ export const slideEditorDefinition: ICollaborationEditorDefinition = {
         UniverSlidesTableUIPlugin,
       ],
     },
+    ...threadComments.presets,
   ],
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadSlideAsync(unitId),

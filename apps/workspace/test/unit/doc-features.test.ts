@@ -101,28 +101,25 @@ describe("Workspace Doc feature plugins", () => {
     installBrowserShapeStubs();
     const [
       { UniverThreadCommentDataSourcePlugin },
-      {
-        getThreadCommentCollaborationPlugins,
-      },
+      { threadCommentComposition },
       {
         UniverWorkspaceDocsThreadCommentDataSourcePlugin,
         deleteDocRootCommentBody,
-        getDocThreadCommentCollaborationPlugins,
       },
       { DeleteDocCommentComment },
     ] = await Promise.all([
       import("@univerjs-pro/thread-comment-datasource"),
-      import("../../web/src/features/editor/features/thread-comment-features.js"),
+      import("../../web/src/features/editor/features/thread-comments.js"),
       import(
         "../../web/src/features/editor/workarounds/doc-thread-comment-delete.js"
       ),
       import("@univerjs/docs-thread-comment-ui"),
     ]);
 
-    expect(getThreadCommentCollaborationPlugins()).toEqual([
+    expect(threadCommentComposition("sheet", "desktop").collaborationPlugins).toEqual([
       UniverThreadCommentDataSourcePlugin,
     ]);
-    expect(getDocThreadCommentCollaborationPlugins()).toEqual([
+    expect(threadCommentComposition("doc", "desktop").collaborationPlugins).toEqual([
       UniverWorkspaceDocsThreadCommentDataSourcePlugin,
     ]);
 

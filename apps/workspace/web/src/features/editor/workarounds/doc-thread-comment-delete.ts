@@ -8,7 +8,6 @@ import {
   DeleteDocCommentComment,
   type IDeleteDocCommentComment,
 } from "@univerjs/docs-thread-comment-ui";
-import type { IPresetPlugin } from "@univerjs/presets";
 import {
   IThreadCommentDataSourceService,
   ThreadCommentModel,
@@ -102,9 +101,4 @@ export class UniverWorkspaceDocsThreadCommentDataSourcePlugin extends UniverThre
       })
     );
   }
-}
-
-/** Doc registration entry; normal editors do not import this module. */
-export function getDocThreadCommentCollaborationPlugins(): IPresetPlugin[] {
-  return [UniverWorkspaceDocsThreadCommentDataSourcePlugin];
 }

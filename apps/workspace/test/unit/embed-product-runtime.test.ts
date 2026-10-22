@@ -17,7 +17,7 @@ const factories = vi.hoisted(() => ({
   board: vi.fn(() => [{ plugins: [] }]),
 }));
 vi.mock("../../web/src/features/editor/units/sheet/sheet-comparison-presets", () => ({
-  createSheetEditorPresets: factories.sheet,
+  createSheetComparisonPresets: factories.sheet,
   sheetEditorLocales: { "en-US": {}, "zh-CN": {} },
 }));
 vi.mock("../../web/src/features/editor/units/doc/doc-editor", () => ({
