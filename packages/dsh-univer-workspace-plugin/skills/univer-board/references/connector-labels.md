@@ -80,6 +80,15 @@ it does not apply changes. Review diagnostics and apply only a ready, current pl
 measurements require more evidence. This capability needs the Boards UI runtime and is not established by
 headless execution; never estimate font boxes to manufacture an equivalent result.
 
+If a label plan remains incomplete with `label-layout/no-free-position` or endpoint constraints, give eligible
+automatic connections more room before retrying placement. Reuse the original `elementIds`, `fixedElementIds`
+and `direction` in `board.planGraphLayout`, increasing `layerGap` to `160` when the existing gap is smaller,
+or increasing it further as needed. Review and apply only a ready, current graph plan to the same Board/page.
+Keep semantic labels, explicit port pins, manual waypoints, locked elements and native layout owners intact.
+Discard the old label plan, obtain a fresh rendered label plan, apply it only when ready/current, then lint and
+capture again. A ready label plan does not make the full diagram clean; report remaining findings or incomplete
+results instead of relaxing hard constraints. Larger spacing cannot guarantee clearance in every scene.
+
 Headless Facade success proves accepted data, not exact font metrics or visual clearance. After fonts and render
 resources settle, inspect the full screenshot and rendered layout diagnostics. Treat label-layout-unresolved as
 unfinished evidence, not a clean pass. Review `connector-label-overflow`, `connector-label-collision`, and

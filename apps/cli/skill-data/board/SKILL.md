@@ -113,6 +113,9 @@ An empty `patches` array needs no write. For a non-empty plan, check that it is 
 through `execute` on the same Worktree/Unit/current page. Report other-page plans as unapplied; use only an
 installed, supported page-selection API if one is available. Check the boolean result. A stale rejection requires a fresh lint;
 an incomplete or unavailable plan requires resolving its diagnostics. Run lint and capture again after apply.
+For endpoint constraints or `label-layout/no-free-position`, follow the [label spacing repair](references/connector-labels.md#verification-and-repair):
+keep the same selection, fixed elements and direction, increase graph `layerGap` for movable nodes with automatic
+endpoints, then obtain a fresh rendered label plan. Preserve manual/native constraints and report any remaining incomplete result.
 
 ```bash
 uvw screenshot --worktree <id> --unit <board-id> --out ./board-overview --json
