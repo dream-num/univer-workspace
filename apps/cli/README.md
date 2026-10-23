@@ -126,6 +126,10 @@ means sign-in is required. `pr discard` is irreversible; there is no `pr close` 
 (use `pr ready --undo` to return to draft). Content commands take `--worktree <id>`, the `id` from
 `uvw pr view <n> -R <repo> --json id`.
 
+Configuration and daemon lifecycle commands start without loading Office or rendering capabilities. The daemon
+loads content capabilities on its first content request. Concurrent first requests share one runtime
+initialization, and shutdown waits for that initialization before closing it.
+
 `lint` checks Slide and Board Units without changing content. Select `--trunk` or an existing
 `--worktree <id>`; inspection does not require creating a draft. For a Board, `--mode model` runs without a
 browser; `--mode rendered` checks final geometry and `--mode both` (the default) retains both analyses.

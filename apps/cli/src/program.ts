@@ -2,10 +2,8 @@
 import { createStandardApiReference } from "@univer-cli/api-reference";
 import { createApiCommand } from "@univer-cli/api-reference-command";
 import type { Config } from "@univer-cli/config";
-import { createConfigCommand } from "@univer-cli/config-command";
 import { createWorktreeContentInspectionCommand } from "@univer-cli/content-inspection-command";
 import { createDaemonClient, createDaemonControl, type JsonValue } from "@univer-cli/daemon";
-import { createDaemonCommand } from "@univer-cli/daemon-command";
 import { createNodeResourceLibraryFactory } from "@univer-cli/resource-library";
 import { createResourcesCommand } from "@univer-cli/resource-library-command";
 import type {
@@ -46,7 +44,13 @@ import { createSpaceCommand } from "./features/space/command.js";
 import { createWorkspaceCompileSvgCommand } from "./features/svg/command.js";
 import { createWorkspaceCompileTypstCommand } from "./features/typst/command.js";
 import { createUnitCommand } from "./features/unit/command.js";
-import { configureOutput, createProductCommands, createProductServices, createRootCommand } from "./product-commands.js";
+import {
+  configureOutput,
+  createProductCommands,
+  createProductServices,
+  createRootCommand,
+} from "./product-commands.js";
+import { createLifecycleCommands } from "./lifecycle-commands.js";
 import { workspaceDaemonIdentity } from "./runtime/daemon-identity.js";
 import { WORKSPACE_CLI_VERSION } from "./version.js";
 
@@ -119,7 +123,9 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
   const exchange = new WorkspaceUnitExchangeFeature({
     runtime: runtimeOperations,
     resolveImageAsset: async (input) =>
-      await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveImageAsset(input),
+      await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveImageAsset(
+        input,
+      ),
     createUnit: async (input) => await units.create(input),
     resolveRuntimeTarget: async (input) =>
       await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveRuntimeTarget(
@@ -168,8 +174,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
       : { createRuntime: options.createTextMeasureRuntime }),
   });
   const commands = [
-    createConfigCommand({ config: options.config }),
-    createDaemonCommand({ control: daemonControl }),
+    ...createLifecycleCommands({ config: options.config, control: daemonControl }),
     createApiCommand({ reference: createStandardApiReference() }),
     createResourcesCommand({ openLibrary: openResourceLibrary }),
     createSkillsCommand(options.skillDataRoot),
@@ -184,7 +189,9 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
         runtime: runtimeOperations,
         configuredOrigin: async () => await auth.configuredOrigin(),
         resolveTrunkRuntimeTarget: async (input) =>
-          await new WorkspaceContentSource(await authenticatedHttp()).resolveTrunkRuntimeTarget(input),
+          await new WorkspaceContentSource(await authenticatedHttp()).resolveTrunkRuntimeTarget(
+            input,
+          ),
       }),
     ),
     createAssetCommand(
@@ -233,7 +240,16 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
 }
 
 const HELP_GROUPS = ["Core commands:", "Content commands:", "Setup commands:"];
-const CORE_COMMANDS = new Set(["auth", "repo", "issue", "label", "pr", "worktree", "search", "browse"]);
+const CORE_COMMANDS = new Set([
+  "auth",
+  "repo",
+  "issue",
+  "label",
+  "pr",
+  "worktree",
+  "search",
+  "browse",
+]);
 const SETUP_COMMANDS = new Set(["config", "daemon", "skills", "resources", "api"]);
 
 function helpGroupOf(name: string): string {

@@ -34,9 +34,28 @@ const first = process.argv[2] ?? "";
 if (PRODUCT_COMMAND_NAMES.has(first) || first === "-v" || first === "--version") {
   // Sign-in, repository, Issue and pull request commands never need the Univer runtime.
   const { createProductProgram } = await import("./product-commands.js");
-  await createProductProgram({ config: createWorkspaceConfig(env), env, write, writeError }).parseAsync(
-    process.argv,
-  );
+  await createProductProgram({
+    config: createWorkspaceConfig(env),
+    env,
+    write,
+    writeError,
+  }).parseAsync(process.argv);
+} else if (first === "daemon" || first === "config") {
+  const { createLifecycleCommands } = await import("./lifecycle-commands.js");
+  const { configureOutput, createRootCommand } = await import("./product-commands.js");
+  const output = { writeErr: writeError, writeOut: write };
+  const program = createRootCommand(output);
+  const control = createDaemonControl({
+    entry: daemonEntry,
+    env,
+    identity: workspaceDaemonIdentity(env),
+    socketPath,
+  });
+  for (const command of createLifecycleCommands({ config: createWorkspaceConfig(env), control })) {
+    configureOutput(command, output);
+    program.addCommand(command.helpGroup("Setup commands:"));
+  }
+  await program.parseAsync(process.argv);
 } else {
   const { createProgram } = await import("./program.js");
   await createProgram({
