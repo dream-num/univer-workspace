@@ -219,7 +219,9 @@ that keeps emitted DI types imported from Core; do not routinely add direct Redi
 imports or dependencies to SDK consumers.
 
 When upgrading the SDK, inspect the published declarations and manifests before
-changing these extensions. Remove obsolete entries only after an isolated clean
+changing these extensions. The SDK update script does not rewrite packageExtensions;
+review the exact version keys for each release instead of mechanically carrying them forward.
+Remove obsolete entries only after an isolated clean
 install verifies both Workspace and Agent typechecks and browser startup. Check
 actual resolved Redi peer contexts; `skipLibCheck`, a successful single-app build,
 or an already-populated `node_modules` is insufficient evidence. Do not force a

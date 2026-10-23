@@ -24,7 +24,7 @@ The CLI owns:
 
 Client Core owns:
 
-- Asset image resolution, render Unit assembly, screenshot capture, PNG output, PDF printing, and Slide layout lint
+- Asset image resolution, render Unit assembly, screenshot capture, PNG output, PDF printing, and Slide and Board layout lint
 - The render-page source, shared worker composition, and the runtime pool
 - Content execution, embedded-image externalization, and the changeset commit workflow
 - Node-hosted Office exchange, and Typst compile, materialize, and apply

@@ -32,7 +32,14 @@ describe("render tool surface", () => {
     ]);
     expect(
       definitions.find((definition) => definition.name === "univer_lint")?.parameters,
-    ).toMatchObject({ properties: { unitId: { type: "string" }, unitType: { type: "string" } } });
+    ).toMatchObject({
+      properties: {
+        unitId: { type: "string" },
+        unitType: { type: "string", enum: ["slide", "board"] },
+        mode: { enum: ["model", "rendered", "both"] },
+        includeLabelPlan: { type: "boolean" },
+      },
+    });
     dispose();
   });
 
@@ -65,5 +72,40 @@ describe("render tool surface", () => {
         env: {},
       }),
     ).rejects.toThrow(/UWH_RENDER_PAGE_ROOT/);
+  });
+
+  it("rejects unsupported Unit types and Slide-only mode misuse before opening a browser", async () => {
+    const config = { license: "test-license", env: {} };
+    await expect(
+      lintUnitLayout(
+        {
+          unitId: "sheet-1",
+          unitType: "sheet",
+          unitData: { id: "sheet-1" } as never,
+        },
+        undefined,
+        config,
+      ),
+    ).rejects.toThrow(/Slide or Board/);
+    await expect(
+      lintUnitLayout(
+        {
+          unitId: "slide-1",
+          unitType: "slide",
+          unitData: { id: "slide-1" } as never,
+        },
+        undefined,
+        config,
+        { mode: "model" },
+      ),
+    ).rejects.toThrow(/only supported for Board/);
+    await expect(
+      lintUnitLayout(
+        { unitId: "board-1", unitType: "board", unitData: { id: "board-1" } as never },
+        undefined,
+        config,
+        { mode: "model", includeLabelPlan: true },
+      ),
+    ).rejects.toThrow(/requires rendered or both/);
   });
 });

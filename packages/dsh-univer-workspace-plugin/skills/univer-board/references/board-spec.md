@@ -94,3 +94,9 @@ rendered diagnostics. Preserve a semantic-to-generated ID mapping rather than se
 
 JSON is the exchange form; accept user YAML or fenced Markdown by normalizing to the same object, not by
 maintaining three schemas. Compact notation is fine. Do not duplicate an existing valid spec just to reformat it.
+
+For an existing Archify architecture IR v1 document, inspect `FBoard.importArchify` in the installed API.
+Pass the parsed document to that dedicated importer, retain its semantic ID mapping and report unsupported
+decorations. A rejected import must leave the Board unchanged. The importer creates editable native elements;
+verify their text, container membership and connector bindings, then run model and rendered checks. Archify IR
+and BoardSpec have different contracts: do not pass BoardSpec to this importer or send input to a shell renderer.

@@ -55,7 +55,7 @@ Run this code through `univer_execute` with `unitType: "board"`, the Board `unit
 ```js
 const shape = board.insertShape({
   shapeType: api.Enum.ShapeTypeEnum.RoundRect,
-  transform: { left: 80, top: 80, width: 180, height: 100 }
+  transform: { left: 80, top: 80, width: 180, height: 100 },
 });
 if (!shape) throw new Error("Cannot insert Board shape");
 shape.getText().setText("Review");
@@ -81,8 +81,10 @@ For a generated diagram, follow intent → spec when useful → layout decisions
 
 1. Read back persisted elements/text, ownership and bindings with `describeElements()`, `getElements()`, or
    `univer_edit` with `mode: "read"`. Check the requested meaning, not only counts.
-2. Run `board.analyzeModelLayout(48)`, then a full `univer_screenshot`. Inspect the image and
-   each returned image's `metadata.layoutAnalysis`; headless analysis cannot establish final font metrics or automatic routes.
+2. Run `univer_lint` with `unitType: "board"` and `mode: "model"` for a browser-free model check;
+   finish with `mode: "both"` (the default) and a full `univer_screenshot`. Inspect the report's `status`,
+   `coverage`, raw `analyses`, the image and each image's `metadata.layoutAnalysis`. `incomplete` is a blocker
+   to claiming clean layout; model checks cannot establish final font metrics or automatic routes.
 3. Repair implicated elements and recapture. Use [routing](references/connector-routing.md) or
    [label](references/connector-labels.md) guidance for their diagnostics. Never silently discard semantics to pass.
 4. Hand off an overview and any needed readable details. Distinguish clean results, visually reviewed diagnostic
@@ -91,6 +93,20 @@ For a generated diagram, follow intent → spec when useful → layout decisions
 For a localized edit, inspect the changed region and affected relationships; do not regenerate the Board or run
 an unrelated profile matrix. Full drag/menu/Undo/Redo testing belongs to explicit interaction or coverage requests,
 not every authoring task. A static screenshot does not prove UI behavior.
+
+For requested automatic layout, inspect `FBoard.planGraphLayout` and `FBoard.applyLayoutPlan` in the installed
+API. Run planning through `univer_edit` with `mode: "read"`: review its diagnostics and proposed patches before
+applying a ready plan through `univer_execute` to the same Board/page. Preserve fixed elements, manual connectors
+and native structured-layout owners. A stale or incomplete plan must be recomputed or reported; never
+force-apply it or replace the Board snapshot.
+
+For measured label repair, call `univer_lint` with `unitType: "board"`, `mode: "both"` and
+`includeLabelPlan: true`. The check remains read-only. An empty `patches` array needs no write.
+For a non-empty plan, check that `analyses[].labelPlan` is ready and
+`plan.pageId === board.getActivePageId()`, then pass that exact plan to `board.applyLayoutPlan(plan)`
+through `univer_execute` on the same Worktree/Unit/current page. Report other-page plans as unapplied; use only an
+installed, supported page-selection API if one is available. Check the boolean result. A stale rejection requires a fresh lint; an incomplete or
+unavailable plan requires resolving its diagnostics. Lint and screenshot again after application.
 
 Call `univer_screenshot` with `unitType: "board"`, the selected `unitId`, `worktreeId`, and an authorized workspace `output`
 directory. Use the DSH live Board preview for requested interaction or animation checks. Follow the

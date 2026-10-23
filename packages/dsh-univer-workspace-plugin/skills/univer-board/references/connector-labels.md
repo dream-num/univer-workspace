@@ -74,6 +74,12 @@ string instead of guessing a smaller character-based mask. Empty content should 
 
 ## Verification and repair
 
+In a rendered Board runtime, inspect `FBoard.planRenderedLabelLayout` before using it. It proposes placement
+patches from the current measured scene and returns the same plan contract used by `applyLayoutPlan`;
+it does not apply changes. Review diagnostics and apply only a ready, current plan. Missing fonts, routes or
+measurements require more evidence. This capability needs the Boards UI runtime and is not established by
+headless execution; never estimate font boxes to manufacture an equivalent result.
+
 Headless Facade success proves accepted data, not exact font metrics or visual clearance. After fonts and render
 resources settle, inspect the full screenshot and rendered layout diagnostics. Treat label-layout-unresolved as
 unfinished evidence, not a clean pass. Review `connector-label-overflow`, `connector-label-collision`, and

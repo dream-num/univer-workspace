@@ -44,16 +44,16 @@ templates at once.
 
 ## SDK capabilities in one CLI
 
-| Agent outcome           | Univer capabilities composed                                                  |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| Author rich content     | Facade APIs across Sheet, Doc, Slide, Base, and Board                         |
-| Work in isolation       | Personal and Team Spaces, task Worktrees, stable Resource and Unit identities |
-| Verify results          | Structured inspection, layout capture, PNG rendering, and PDF printing         |
-| Exchange business files | Office import and export with original-file preservation                      |
-| Generate content        | Typst-to-Doc and SVG-to-editable-Slide compilation                            |
-| Compose across Units    | Embedded Units and cross-Unit formulas backed by Workspace identities         |
-| Take requests from teams | Team Space Issues (`uvw issue`): read the brief and its discussion, comment, label, and close |
-| Deliver for review      | Pull requests (`uvw pr`, Worktrees): revisions, ready state, direct review links, and controlled merging  |
+| Agent outcome            | Univer capabilities composed                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Author rich content      | Facade APIs across Sheet, Doc, Slide, Base, and Board                                                    |
+| Work in isolation        | Personal and Team Spaces, task Worktrees, stable Resource and Unit identities                            |
+| Verify results           | Structured inspection, layout capture, PNG rendering, and PDF printing                                   |
+| Exchange business files  | Office import and export with original-file preservation                                                 |
+| Generate content         | Typst-to-Doc and SVG-to-editable-Slide compilation                                                       |
+| Compose across Units     | Embedded Units and cross-Unit formulas backed by Workspace identities                                    |
+| Take requests from teams | Team Space Issues (`uvw issue`): read the brief and its discussion, comment, label, and close            |
+| Deliver for review       | Pull requests (`uvw pr`, Worktrees): revisions, ready state, direct review links, and controlled merging |
 
 Together, these capabilities show the range of products and workflows that can be built with the
 Univer SDK.
@@ -115,16 +115,27 @@ Commands follow the GitHub CLI's naming. A repository is a Space, named `<owner>
 (`<username>/personal` is your Personal Space); pass it with `-R` or set `UVW_REPO`. A pull request is a
 Worktree; `uvw worktree ...` is the same command group under its product name.
 
-| Group | Commands |
-| --- | --- |
-| Core | `auth login/logout/status`, `repo list/view/create/edit/rename`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse` |
-| Content | `space browse/find/node`, `unit`, `execute`, `inspect`, `screenshot`, `lint`, `print-pdf`, `import`, `export`, `compile-typst`, `compile-svg`, `blob`, `asset`, `html-view` |
-| Setup | `config`, `daemon`, `skills`, `resources`, `api` |
+| Group   | Commands                                                                                                                                                                                                                                                |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core    | `auth login/logout/status`, `repo list/view/create/edit/rename`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse` |
+| Content | `space browse/find/node`, `unit`, `execute`, `inspect`, `screenshot`, `lint`, `print-pdf`, `import`, `export`, `compile-typst`, `compile-svg`, `blob`, `asset`, `html-view`                                                                             |
+| Setup   | `config`, `daemon`, `skills`, `resources`, `api`                                                                                                                                                                                                        |
 
 `--json [fields]` prints the bare object or array, optionally narrowed to the listed fields. Exit code 4
 means sign-in is required. `pr discard` is irreversible; there is no `pr close` or `pr reopen`
 (use `pr ready --undo` to return to draft). Content commands take `--worktree <id>`, the `id` from
 `uvw pr view <n> -R <repo> --json id`.
+
+`lint` checks Slide and Board Units without changing content. Select `--trunk` or an existing
+`--worktree <id>`; inspection does not require creating a draft. For a Board, `--mode model` runs without a
+browser; `--mode rendered` checks final geometry and `--mode both` (the default) retains both analyses.
+An incomplete report means some geometry could not be established and must not be treated as a clean pass.
+Rendered checks require the version-matched render page and a supported browser.
+For a Board, `--plan-labels` with `--mode rendered` or `--mode both` adds read-only measured label plans in
+`analyses[].labelPlan`. Review a ready plan for `FBoard.getActivePageId()`, apply it with `FBoard.applyLayoutPlan`, then lint
+again. Stale plans are rejected and must be recaptured; model-only checks cannot produce measured label plans.
+Board errors or incomplete coverage exit with code 2; with `--json`, stderr contains one error object whose
+`error.details.report` retains the full report, and stdout stays empty.
 
 ## License policy
 

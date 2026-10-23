@@ -21,7 +21,7 @@
   导出通过当前 Worktree 的已认证 Asset 读取解析图片 ID，仅在导出副本中恢复内嵌图片；
   缺失、无权限或无效图片使导出失败，不静默丢图，也不写回 Unit 或产生新 revision。
 - 提供 Typst bundle 编译、确定性 Doc materialization，以及可选的 Worktree Unit apply workflow。
-- 提供 render Unit 装配、browser screenshot capture、PNG 输出、PDF 打印、Slide layout lint，以及配套 render page 构建源。
+- 提供 render Unit 装配、browser screenshot capture、PNG 输出、PDF 打印、Slide and Board layout lint，以及配套 render page 构建源。
 - 提供本机 SVG/relative asset 编译、真实或估算字体测量、Slide page 包装与 Worktree apply workflow。
 - 通过独立 worker subpath 交付共享 worker implementation；Client Shell 显式提供 packaged worker entry、
   credential 与 license resolver。
@@ -40,3 +40,22 @@
 Node-hosted Client Shell 必须注入 Workspace origin、协议调用所需凭据或已认证 HTTP capability。
 `apps/cli` 当前是第一个 consumer。CLI 注入 authenticated HTTP 与 configured origin，并继续负责
 Commander、Session/config、输出与打开或打印 review URL 的交互。
+
+## Board 布局验证
+
+Board lint 直接组合公开 CLI SDK 的 model/rendered 检查合同，不在本 package 维护几何规则。
+`mode: "model"` 使用标准 headless factory，不启动浏览器；默认 `both` 保留两阶段原始分析和
+incomplete coverage。rendered 检查使用同版本 render page，只有完整覆盖才能报告 clean。
+
+`pnpm --filter @univerjs/univer-workspace-client-core test:board-profiles --out <new-directory>`
+运行 15 个 profile 的 45 个确定性变体，覆盖长中英文文字、尺寸与分支变化、真实 native ownership、
+plan 只读与确定性、固定元素、应用前后语义、单次 Undo/Redo 和 stale/incomplete 拒绝。
+它通过已安装 SDK 的公开 Facade 创建新内存 Board，不连接远程服务。可用 `--profile <name>` 只测
+一个 profile；`--fixtures-only` 仅验证 fixture/analysis，不声称覆盖 plan/apply。输出保留原始 model
+诊断和快照。增加 `--render --render-page-root <built-render-page>` 会复用一个 browser runtime，
+为全部 15 类基础变体和 6 类长文本变体保存截图与原始 rendered 诊断，并为长文本保留可读细节图。
+同时增加 `--plan-labels` 会通过真实 renderer 获取计划，再在源 headless Board 中验证 apply、
+Undo/Redo、stale 拒绝、语义和节点几何保持，以及重新检查后的标签碰撞数。
+输出的 `assertions: "passed"` 仅表示合同与保留约束断言通过，不表示图的质量通过；
+`labelPlan.status: "ready"` 仅表示该标签计划可应用，不表示整图 clean。截图和原始诊断中的
+findings/incomplete 如实保留，修复后仍须读取完整诊断；该脚本不代替实际拖拽交互验证。

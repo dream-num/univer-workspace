@@ -12,7 +12,6 @@ import type {
   UniverPrintPdfRuntime,
   UniverRenderRuntime,
   UniverRenderRuntimeOptions,
-  UniverSlideLayoutRuntime,
   UniverTextMeasureRuntime,
 } from "@univer-cli/univer-render-runtime";
 import {
@@ -62,9 +61,9 @@ export interface WorkspaceCliProgramOptions {
   readonly createPrintPdfRuntime?: (
     options: UniverRenderRuntimeOptions,
   ) => Promise<UniverPrintPdfRuntime>;
-  readonly createSlideLayoutRuntime?: (
-    options: UniverRenderRuntimeOptions,
-  ) => Promise<UniverSlideLayoutRuntime & { close(): Promise<void> }>;
+  readonly createLayoutRuntime?: ConstructorParameters<
+    typeof WorkspaceUnitLayoutLintFeature
+  >[0]["createRuntime"];
   readonly createTextMeasureRuntime?: (
     options: UniverRenderRuntimeOptions,
   ) => Promise<UniverTextMeasureRuntime>;
@@ -155,9 +154,9 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     license,
     env: options.env,
     loader: renderUnitLoader,
-    ...(options.createSlideLayoutRuntime === undefined
+    ...(options.createLayoutRuntime === undefined
       ? {}
-      : { createRuntime: options.createSlideLayoutRuntime }),
+      : { createRuntime: options.createLayoutRuntime }),
   });
   const compileSvg = new WorkspaceCompileSvgFeature({
     contentExecution,

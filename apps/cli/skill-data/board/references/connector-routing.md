@@ -9,6 +9,10 @@ Create and arrange nodes before connecting them. For ordinary automatic relation
 and `routingMode`: Facade planning selects facing sides and a straight unobstructed corridor or automatic
 orthogonal routing. Use explicit ports, curves or manual waypoints when the intended topology requires them.
 
+For manual waypoints, inspect `IBoardConnectorWaypoint`: each entry requires a stable `id`, `kind: "manual"`
+and finite `x`/`y`; `locked: true` pins an intentional constraint. Read back the waypoint list after insertion
+and preserve its IDs, coordinates and locks through automatic layout.
+
 Independent fan-in/fan-out edges may need separate ports even if automatic routing succeeds. Order side
 `position` values by the opposite nodes' geometry and use `setConnectorConnection()` to separate implicated
 attachments. Shared terminal legs are appropriate for an intentional bus, not an accidental merge of relations.
@@ -29,6 +33,11 @@ Marker types are a closed API union: query `BoardConnectorMarkerType` (for examp
 Declare marker type/size/offset; let the renderer calculate paint bounds and terminal clearance.
 
 ## Rendered evidence
+
+Use Board `lint --mode model` for early headless feedback and `lint --mode both` for the final diagnostic report.
+Keep `status`, `coverage.incomplete`, `snapshotHash`, phase-specific `analyses` and each finding's `source`.
+Unresolved routes or labels mean incomplete coverage even if `findings` is empty. Retain model findings that
+rendering resolves as evidence; do not add their counts together as separate defects.
 
 Run model analysis and a full `screenshot --json`; inspect `outputs[0].layoutAnalysis`. An automatic connector
 without persisted route points can be unresolved in model analysis. Only final rendering establishes its route.

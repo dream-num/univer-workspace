@@ -144,7 +144,8 @@ export class WorkspaceSnapshotServerAdapter
     ).fetchMissingChangesets(context, params);
   }
 
-  // TODO(@ai-review): Confirm every Workspace unit kind now loads plugin resources only from its bundled snapshot payload.
+  // Sheet, Doc, Slide, Base and Board plugin resources travel in snapshot metadata.
+  // Keep the legacy resources contract local; it has no standalone Workspace route.
   public getResourcesRequest(
     _context: ILogContext,
     _params: IGetResourcesRequest,

@@ -249,9 +249,15 @@ cannot authorize:
 | `univer_import` / `univer_export`                          | same names                                                             | Local exchange SDK conversion; import creates a Worktree-local Unit and export reads trunk/draft UnitData into a session-relative output.  |
 | `univer_api`                                               | `univer_api` (`find`/`show`)                                           | Pinned local CLI SDK reference; read-only and independent of Workspace ACL.                                                                |
 | `univer_resources`                                         | `univer_resources` (`registries`/`find`/`read`/`export`/`clear-cache`) | Pinned local visual-resource library; cache/export are session-relative. This is not a product Resource listing.                           |
-| `univer_screenshot` / `univer_lint` / `univer_compile_svg` | —                                                                      | No deployable remote render contract is available yet; these remain explicit follow-up work, not silently faked tools.                     |
+| `univer_screenshot` / `univer_lint` / `univer_compile_svg` | same names                                                              | Uses the published CLI SDK; rendered checks require a version-matched render page and browser supplied by the host. Board model lint runs headless. |
 
 ## Architecture boundary
+
+`univer_lint` accepts Slide and Board Units. Board `mode: "model"` runs without a browser;
+`"rendered"` checks final geometry and `"both"` (the default) preserves both raw analyses.
+Reports retain status, incomplete coverage and the inspected snapshot hash. An empty findings list with
+incomplete coverage is not a clean pass. Configure `UWH_RENDER_PAGE_ROOT` (or `UNIVER_RENDER_PAGE_ROOT`)
+for rendered checks and screenshots; rendering errors remain explicit failures.
 
 - No separate gateway process: the browser-facing API is registered on the
   DSH web server (`/univer-workspace/api/**`), and the host side calls the

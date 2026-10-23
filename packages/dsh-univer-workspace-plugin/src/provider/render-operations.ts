@@ -18,8 +18,13 @@ import {
   createUnitLayoutLint,
   isUnitLayoutLintError,
   type SlideLayoutLintPageSelector,
+  type UnitLayoutLintInput,
   type UnitLayoutLintReport,
 } from "@univer-cli/unit-layout-lint";
+import {
+  createHeadlessBoardLayoutRuntime,
+  createStandardHeadlessUniverFactory,
+} from "@univer-cli/headless-univer";
 import {
   createUnitScreenshot,
   isUnitScreenshotError,
@@ -31,7 +36,6 @@ import {
   createUniverRenderRuntime,
   isUniverRenderError,
   type UniverRenderRuntime,
-  type UniverSlideLayoutRuntime,
   type UniverRenderUnit,
 } from "@univer-cli/univer-render-runtime";
 import type { CollaborationUnitData } from "@univer-cli/univer-collaboration-runtime";
@@ -71,7 +75,7 @@ const DEFAULT_MAX_PAGES = 30;
 const DEFAULT_MAX_PIXELS = 16_777_216;
 
 /**
- * Run the public Slide layout-lint SDK against one synchronized Unit.
+ * Run the public Slide/Board layout-lint SDK against one synchronized Unit.
  * `createUnitLayoutLint` itself performs all finding calculations; no local
  * heuristic is substituted here.
  */
@@ -79,18 +83,51 @@ export async function lintUnitLayout(
   source: RenderUnitSource,
   pages: readonly SlideLayoutLintPageSelector[] | undefined,
   config: RenderRuntimeConfig,
+  options: Pick<
+    Extract<UnitLayoutLintInput, { unitType: "board" }>,
+    "mode" | "includeLabelPlan"
+  > = {},
 ): Promise<UnitLayoutLintReport> {
-  if (source.unitType !== "slide") {
-    throw new Error(`Unit is ${source.unitType}; layout lint requires a Slide Unit.`);
+  if (source.unitType !== "slide" && source.unitType !== "board") {
+    throw new Error(`Unit is ${source.unitType}; layout lint requires a Slide or Board Unit.`);
+  }
+  if (
+    source.unitType === "slide" &&
+    (options.mode !== undefined || options.includeLabelPlan === true)
+  ) {
+    throw new Error("Layout lint mode and label planning are only supported for Board Units.");
+  }
+  if (options.mode === "model" && options.includeLabelPlan === true) {
+    throw new Error("Label planning requires rendered or both Board layout lint mode.");
+  }
+  const modelRuntime =
+    source.unitType === "board"
+      ? createHeadlessBoardLayoutRuntime({
+          createUniver: createStandardHeadlessUniverFactory({ license: config.license }),
+        })
+      : undefined;
+  const input = {
+    unitType: source.unitType,
+    unitData: source.unitData,
+    ...(pages === undefined ? {} : { pages }),
+    ...(config.signal === undefined ? {} : { signal: config.signal }),
+    ...options,
+  } as UnitLayoutLintInput;
+  if (source.unitType === "board" && options.mode === "model") {
+    try {
+      return await createUnitLayoutLint(modelRuntime === undefined ? {} : { modelRuntime }).lint(
+        input,
+      );
+    } catch (error) {
+      throw normalizeRenderError(error);
+    }
   }
   const runtime = await openRenderRuntime(config);
   try {
-    return await createUnitLayoutLint({ runtime }).lint({
-      unitType: "slide",
-      unitData: source.unitData as never,
-      ...(pages === undefined ? {} : { pages }),
-      ...(config.signal === undefined ? {} : { signal: config.signal }),
-    });
+    return await createUnitLayoutLint({
+      runtime,
+      ...(modelRuntime === undefined ? {} : { modelRuntime }),
+    }).lint(input);
   } catch (error) {
     throw normalizeRenderError(error);
   } finally {
@@ -139,7 +176,9 @@ export async function screenshotUnit(
 
 async function openRenderRuntime(
   config: RenderRuntimeConfig,
-): Promise<UniverRenderRuntime & UniverSlideLayoutRuntime> {
+): Promise<
+  UniverRenderRuntime & NonNullable<Parameters<typeof createUnitLayoutLint>[0]["runtime"]>
+> {
   const env = config.env ?? process.env;
   const renderPageRoot = env.UWH_RENDER_PAGE_ROOT?.trim() || env.UNIVER_RENDER_PAGE_ROOT?.trim();
   if (renderPageRoot === undefined || renderPageRoot === "") {
