@@ -54,6 +54,7 @@ plan 只读与确定性、固定元素、应用前后语义、单次 Undo/Redo �
 一个 profile；`--fixtures-only` 仅验证 fixture/analysis，不声称覆盖 plan/apply。输出保留原始 model
 诊断和快照。增加 `--render --render-page-root <built-render-page>` 会复用一个 browser runtime，
 为全部 15 类基础变体和 6 类长文本变体保存截图与原始 rendered 诊断，并为长文本保留可读细节图。
+使用 `--render-all` 会为全部 45 个压力变体执行真实 render，保留相同的固定元素和手工路径约束。
 同时增加 `--plan-labels` 会通过真实 renderer 获取计划，再在源 headless Board 中验证 apply、
 Undo/Redo、stale 拒绝、语义和节点几何保持，以及重新检查后的标签碰撞数。
 输出的 `assertions: "passed"` 仅表示合同与保留约束断言通过，不表示图的质量通过；

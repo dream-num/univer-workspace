@@ -19,13 +19,14 @@ const { values } = parseArgs({
     suite: { type: "string", default: "contract" },
     "fixtures-only": { type: "boolean", default: false },
     render: { type: "boolean", default: false },
+    "render-all": { type: "boolean", default: false },
     "plan-labels": { type: "boolean", default: false },
     "render-page-root": { type: "string" },
   },
 });
 assert.ok(["contract", "quality"].includes(values.suite), "Unknown suite");
 const qualitySuite = values.suite === "quality";
-const rendering = values.render || qualitySuite;
+const rendering = values.render || values["render-all"] || qualitySuite;
 const planLabels = values["plan-labels"] || qualitySuite;
 assert.ok(!qualitySuite || !values["fixtures-only"], "Quality checks require plan/apply");
 const profiles = [
@@ -245,6 +246,7 @@ try {
         const shouldRender =
           screenshot &&
           (qualitySuite ||
+            values["render-all"] ||
             variant === "small" ||
             (variant === "long-labels" && detailProfiles.has(profile)));
         const labelRepair =
@@ -301,7 +303,7 @@ try {
       } catch (error) {
         let rendered;
         let captureError;
-        if (qualitySuite && screenshot && board) {
+        if (screenshot && board) {
           try {
             rendered = await renderEvidence(
               screenshot,
