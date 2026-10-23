@@ -570,6 +570,10 @@ function realize(board, E, profile, variant, quality = false) {
       : board.insertShape({ shapeType: type, transform });
     assert.ok(ref, "Shape insertion failed");
     ref.getText().setText(text);
+    if ([E.BoardCustomShapeType.StateBar, E.BoardCustomShapeType.InitialState].includes(type)) {
+      ref.getText().setColor("#ffffff");
+    }
+    assert.equal(ref.getText().getPlainText(), text, "Shape caption changed during styling");
     ids.push(ref.getId());
     if (parentId) {
       if (!laneId) assert.equal(board.moveElementsToContainer([ref.getId()], parentId), true);
