@@ -131,8 +131,17 @@ not solve routes or make an incomplete graph plan applicable. Preserve authored 
 and native layout owners. Re-read leaf world bounds, text, membership and bindings after fitting, then obtain fresh
 rendered label measurements and screenshots. Earlier layout plans can be stale after frame changes.
 
+## Imported label constraints
+
 For an existing Archify architecture IR v1 document, inspect `FBoard.importArchify` in the installed API.
 Pass the parsed document to that dedicated importer, retain its semantic ID mapping and report unsupported
 decorations. A rejected import must leave the Board unchanged. The importer creates editable native elements;
 verify their text, container membership and connector bindings, then run model and rendered checks. Archify IR
 and BoardSpec have different contracts: do not pass BoardSpec to this importer or send input to a shell renderer.
+
+Imported source label pins stay fixed by default. When optimizing a newly generated copy is requested,
+retain each chosen label's original placement and source metadata before using `updateConnectorLabel` with
+`placement: { mode: 'auto', anchor: 'auto', side: 'onPath', offset: null }`. Release only selected relative hints
+that still match their imported baseline; preserve absolute `labelAt` and user-edited pins. Obtain a fresh ready
+measured label plan, apply it, and check again. Lint and planning never relax pins implicitly. Keep import-only
+findings separate from the explicitly optimized result.
