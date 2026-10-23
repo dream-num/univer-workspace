@@ -131,6 +131,10 @@ not solve routes or make an incomplete graph plan applicable. Preserve authored 
 and native layout owners. Re-read leaf world bounds, text, membership and bindings after fitting, then obtain fresh
 rendered label measurements and screenshots. Earlier layout plans can be stale after frame changes.
 
+New ordinary groups with external captions can set `containerData.headerSize` to `0` through `updateElement`
+before child insertion, then fit and remeasure. Patch the complete element and preserve source constraints; leave
+existing authored groups, swimlanes and native layout owners unchanged.
+
 ## Imported label constraints
 
 For an existing Archify architecture IR v1 document, inspect `FBoard.importArchify` in the installed API.
