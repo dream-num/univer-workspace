@@ -77,6 +77,34 @@ requires a line: `annotates` can become an Ink underline or a nearby note.
 A profile guides selection, not an all-elements template. Instance-specific meaning belongs here; reusable selection
 rules stay in references. Read a second reference only if that capability participates in the requested result.
 
+## Realize meaning and hierarchy
+
+Preserve every meaningful title, description, tag, explanation card, phase and group from the source. Check
+source-to-element coverage explicitly; an importer accepting a document does not establish that every field was
+represented. Keep source lane/phase constraints and a requested main path in the semantic plan and readback.
+
+Choose a consistent visual vocabulary for responsibilities, storage, messages, decisions and exception paths.
+Use emphasis for the requested primary path while keeping secondary/evidence relations readable. Discover the
+installed text and style APIs: distinguish headings, supporting text and tags with rich-text hierarchy where
+supported. A newline alone does not create that hierarchy. Size for the actual text and verify wrapping and contrast.
+
+Use the shared `univerAPI.newRichText()` builder: a heading span followed by `paragraph()` and supporting/tag spans
+stays editable. Set each span's font family, size, color and bold state explicitly; normal text must not inherit a
+bold heading. For a compact 12/10/8 px title/body/tag hierarchy, native document point sizes are 9/7.5/6 pt.
+Container/lane title styles use pixels directly. Verify the actual render and enlarge text for the requested
+output scale. Use native text-box wrapping and padding; enlarge for real content rather than clipping or dropping
+words. Apply primary-path color/weight to the actual connectors, not only custom metadata.
+
+For lane/phase workflows, derive a repeatable grid from semantic column order and measured content sizes. Fit lane
+headers to their longest caption and place wrapping explanation cards below the content when a side column makes the
+whole diagram too wide. Preserve phase order and native group/lane ownership. If those constraints fix node frames,
+`planGraphLayout({ elementIds, fixedElementIds: elementIds, direction })` can still assign automatic ports; apply
+only a ready plan and verify every frame stayed fixed. Preserve authored endpoint sides with fixed endpoint bindings.
+Report this constrained placement separately from a free graph layout; a rejected free plan must remain unapplied.
+
+Treat source positions, columns and authored routes as constraints or an import baseline. Report public automatic
+layout separately; reproducing source coordinates is not evidence that the automatic layout algorithm improved.
+
 ## Check before realization
 
 Check in memory or with a short script; no general parser/compiler is needed:
@@ -94,6 +122,14 @@ rendered diagnostics. Preserve a semantic-to-generated ID mapping rather than se
 
 JSON is the exchange form; accept user YAML or fenced Markdown by normalizing to the same object, not by
 maintaining three schemas. Compact notation is fine. Do not duplicate an existing valid spec just to reformat it.
+
+## Compact generated containers
+
+After applying a ready layout to a newly generated diagram, inspect `FBoard.fitContainerToContent` and fit its
+generated ordinary containers deepest-first. This existing write fits frames to their current children; it does
+not solve routes or make an incomplete graph plan applicable. Preserve authored fixed frames, protected elements
+and native layout owners. Re-read leaf world bounds, text, membership and bindings after fitting, then obtain fresh
+rendered label measurements and screenshots. Earlier layout plans can be stale after frame changes.
 
 For an existing Archify architecture IR v1 document, inspect `FBoard.importArchify` in the installed API.
 Pass the parsed document to that dedicated importer, retain its semantic ID mapping and report unsupported
