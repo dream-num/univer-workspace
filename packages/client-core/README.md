@@ -59,3 +59,14 @@ Undo/Redo、stale 拒绝、语义和节点几何保持，以及重新检查后�
 输出的 `assertions: "passed"` 仅表示合同与保留约束断言通过，不表示图的质量通过；
 `labelPlan.status: "ready"` 仅表示该标签计划可应用，不表示整图 clean。截图和原始诊断中的
 findings/incomplete 如实保留，修复后仍须读取完整诊断；该脚本不代替实际拖拽交互验证。
+
+默认 `--suite contract` 保留上述固定元素与手工路径压力场景。独立的 `--suite quality`
+运行同样 15 类的全部 45 个变体，并自动开启真实 render 和 label plan；仍须提供 `--out`
+与 `--render-page-root`。普通节点可移动，反馈关系使用自动正交路由，保留全部关系和标签，
+以及真实的 container/lane、sequence、mind map/tree/timeline 所有权。嵌套 frame 有合法容纳空间，
+class 使用 `layerGap: 160`；节点尺寸不为消除诊断而预先放大。每个质量场景要求 model/rendered
+诊断均 clean。flowchart、dataflow、architecture、deployment 的 fan-out 变体还保留原有边，
+增加明确标注的汇聚边，同时验证普通 source/sink 的 fan-out+fan-in；专属语义图不强加 Join 关系。
+原始报告、关系/标签数量、截图与残余规则完整输出，不能用合同断言替代该预期。
+脚本先完成所有场景，再在质量未达预期时退出 2；合同断言失败退出 1。两类证据应写到独立新目录，
+不覆盖已有压力场景或把 native/manual findings 从原始报告中过滤掉。

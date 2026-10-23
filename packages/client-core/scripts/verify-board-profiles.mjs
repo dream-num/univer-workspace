@@ -16,12 +16,18 @@ const { values } = parseArgs({
   options: {
     out: { type: "string" },
     profile: { type: "string" },
+    suite: { type: "string", default: "contract" },
     "fixtures-only": { type: "boolean", default: false },
     render: { type: "boolean", default: false },
     "plan-labels": { type: "boolean", default: false },
     "render-page-root": { type: "string" },
   },
 });
+assert.ok(["contract", "quality"].includes(values.suite), "Unknown suite");
+const qualitySuite = values.suite === "quality";
+const rendering = values.render || qualitySuite;
+const planLabels = values["plan-labels"] || qualitySuite;
+assert.ok(!qualitySuite || !values["fixtures-only"], "Quality checks require plan/apply");
 const profiles = [
   "architecture",
   "dataflow",
@@ -42,13 +48,13 @@ const profiles = [
 if (values.profile) assert.ok(profiles.includes(values.profile), "Unknown profile");
 const selected = values.profile ? [values.profile] : profiles;
 const results = [];
-assert.ok(!values["plan-labels"] || values.render, "--plan-labels requires --render");
+assert.ok(!planLabels || rendering, "--plan-labels requires --render");
 const renderPageRoot = values["render-page-root"] ?? process.env.UNIVER_RENDER_PAGE_ROOT;
-if (values.render) {
+if (rendering) {
   assert.ok(values.out, "--render requires --out for PNG and raw-analysis evidence");
   assert.ok(renderPageRoot, "--render requires --render-page-root or UNIVER_RENDER_PAGE_ROOT");
 }
-const renderRuntime = values.render
+const renderRuntime = rendering
   ? await createUniverRenderRuntime({
       renderPageRoot,
       env: process.env,
@@ -67,7 +73,7 @@ const detailProfiles = new Set([
 try {
   for (const profile of selected) {
     for (const variant of ["small", "long-labels", "fan-out"]) {
-      const id = `${profile}-${variant}`;
+      const id = `${qualitySuite ? "quality-" : ""}${profile}-${variant}`;
       const univer = await createStandardHeadlessUniverFactory({
         license: process.env.UNIVER_LICENSE ?? "",
       })({
@@ -78,7 +84,7 @@ try {
       try {
         const api = createStandardHeadlessUniverFacade(univer);
         board = api.createBoard({ id, name: id });
-        const fixture = realize(board, api.Enum, profile, variant);
+        const fixture = realize(board, api.Enum, profile, variant, qualitySuite);
         const initial = persistedSnapshot(board);
         const before = semanticElements(board);
         const analysisBefore = board.analyzeModelLayout(48);
@@ -104,6 +110,7 @@ try {
             direction: variant === "fan-out" ? "vertical" : "horizontal",
             fixedElementIds: fixture.fixed,
             maxNodes: 100,
+            ...(qualitySuite && profile === "uml-class" ? { layerGap: 160 } : {}),
           };
           plan = board.planGraphLayout(options);
           assert.deepEqual(persistedSnapshot(board), initial, "Planning mutated the Board");
@@ -229,23 +236,27 @@ try {
         ]);
         const hardCount = (analysis) =>
           analysis.issues.filter((issue) => hardRules.has(issue.rule)).length;
-        assert.ok(
-          hardCount(analysisAfter) <= hardCount(analysisBefore),
-          "Layout increased blocking model findings",
-        );
+        if (!qualitySuite) {
+          assert.ok(
+            hardCount(analysisAfter) <= hardCount(analysisBefore),
+            "Layout increased blocking model findings",
+          );
+        }
         const shouldRender =
           screenshot &&
-          (variant === "small" || (variant === "long-labels" && detailProfiles.has(profile)));
+          (qualitySuite ||
+            variant === "small" ||
+            (variant === "long-labels" && detailProfiles.has(profile)));
         const labelRepair =
-          values["plan-labels"] && shouldRender
-            ? await verifyRenderedLabelPlan(board, renderRuntime)
+          planLabels && shouldRender
+            ? await verifyRenderedLabelPlan(board, renderRuntime, !qualitySuite)
             : undefined;
-        const rendered =
-          screenshot &&
-          (variant === "small" || (variant === "long-labels" && detailProfiles.has(profile)))
-            ? await renderEvidence(screenshot, board.save(), id, variant === "long-labels")
-            : undefined;
+        const rendered = shouldRender
+          ? await renderEvidence(screenshot, board.save(), id, variant === "long-labels")
+          : undefined;
+        const quality = qualitySuite ? qualityResult(plan, analysisAfter, labelRepair) : undefined;
         const result = {
+          suite: values.suite,
           profile,
           variant,
           assertions: "passed",
@@ -256,6 +267,8 @@ try {
           snapshot: board.save(),
           rendered,
           labelRepair,
+          semanticCoverage: fixture.semanticCoverage,
+          quality,
         };
         results.push({
           profile,
@@ -273,6 +286,7 @@ try {
           renderedStatus: rendered?.status ?? "not-run",
           labelPlanStatus: labelRepair?.before.analyses[0]?.labelPlan?.status ?? "not-run",
           labelPatchCount: labelRepair?.before.analyses[0]?.labelPlan?.patches.length ?? 0,
+          ...(quality ? { quality } : {}),
         });
         if (values.out) {
           await mkdir(resolve(values.out), { recursive: true });
@@ -285,7 +299,28 @@ try {
           );
         }
       } catch (error) {
-        results.push({ profile, variant, assertions: "failed", reason: error.message });
+        let rendered;
+        let captureError;
+        if (qualitySuite && screenshot && board) {
+          try {
+            rendered = await renderEvidence(
+              screenshot,
+              board.save(),
+              id,
+              variant === "long-labels",
+            );
+          } catch (failure) {
+            captureError = { name: failure.name, message: failure.message };
+          }
+        }
+        results.push({
+          profile,
+          variant,
+          assertions: "failed",
+          reason: error.message,
+          ...(rendered ? { renderedStatus: rendered.status } : {}),
+          ...(qualitySuite ? { quality: { expected: "clean", status: "incomplete" } } : {}),
+        });
         if (values.out) {
           await mkdir(resolve(values.out), { recursive: true });
           await writeFile(
@@ -302,6 +337,8 @@ try {
                 },
                 snapshot: board?.save(),
                 analysis: board?.analyzeModelLayout(48),
+                rendered,
+                captureError,
               },
               null,
               2,
@@ -318,9 +355,35 @@ try {
   await renderRuntime?.close();
 }
 process.stdout.write(
-  `${JSON.stringify({ profiles: selected.length, cases: results.length, results }, null, 2)}\n`,
+  `${JSON.stringify({ suite: values.suite, profiles: selected.length, cases: results.length, results }, null, 2)}\n`,
 );
 if (results.some((result) => result.assertions === "failed")) process.exitCode = 1;
+else if (qualitySuite && results.some((result) => result.quality.status !== "clean")) {
+  process.exitCode = 2;
+}
+
+function qualityResult(plan, model, labels) {
+  const report = labels?.after;
+  const status = !report
+    ? "not-run"
+    : plan?.status === "incomplete" ||
+        labels.before.analyses[0].labelPlan.status === "incomplete" ||
+        report.status === "incomplete"
+      ? "incomplete"
+      : model.issues.length > 0 || report.findings.length > 0
+        ? "findings"
+        : "clean";
+  return {
+    expected: "clean",
+    status,
+    modelFindings: model.issues.length,
+    renderedFindings: report?.findings.length ?? 0,
+    rules: [
+      ...model.issues.map((issue) => ({ source: "model", rule: issue.rule })),
+      ...(report?.findings.map((finding) => ({ source: "rendered", rule: finding.rule })) ?? []),
+    ],
+  };
+}
 
 async function renderEvidence(screenshot, unitData, id, detail) {
   const directory = resolve(values.out, id);
@@ -386,7 +449,7 @@ async function renderEvidence(screenshot, unitData, id, detail) {
   };
 }
 
-async function verifyRenderedLabelPlan(board, runtime) {
+async function verifyRenderedLabelPlan(board, runtime, assertCollisionImprovement = true) {
   const lint = createUnitLayoutLint({ runtime });
   const input = {
     unitType: "board",
@@ -440,11 +503,11 @@ async function verifyRenderedLabelPlan(board, runtime) {
       (finding) =>
         finding.rule.startsWith("connector-label-") && finding.rule.includes("collision"),
     ).length;
-  assert.ok(
-    collisions(after) <= collisions(before),
-    "Label planning increased measured collisions",
-  );
-  return { before, after, applied };
+  const collisionNonIncreasing = collisions(after) <= collisions(before);
+  if (assertCollisionImprovement) {
+    assert.ok(collisionNonIncreasing, "Label planning increased measured collisions");
+  }
+  return { before, after, applied, collisionNonIncreasing };
 }
 
 function labelSemantics(board) {
@@ -460,7 +523,7 @@ function labelSemantics(board) {
   return snapshot;
 }
 
-function realize(board, E, profile, variant) {
+function realize(board, E, profile, variant, quality = false) {
   let next = 0;
   const labels =
     variant === "long-labels"
@@ -542,8 +605,24 @@ function realize(board, E, profile, variant) {
         kind,
         left: parentId ? 30 : 60,
         top: parentId ? 60 : 60,
-        width: 1100,
-        height: 600,
+        width: quality
+          ? variant === "fan-out"
+            ? parentId
+              ? 1800
+              : 2200
+            : parentId
+              ? 1100
+              : 1400
+          : 1100,
+        height: quality
+          ? variant === "fan-out"
+            ? parentId
+              ? 1200
+              : 1600
+            : parentId
+              ? 600
+              : 900
+          : 600,
         title: id,
         ...(parentId ? { parentId } : {}),
       }),
@@ -718,23 +797,76 @@ function realize(board, E, profile, variant) {
       );
     }
   }
+  const fanIn =
+    quality &&
+    variant === "fan-out" &&
+    ["flowchart", "dataflow", "architecture", "deployment"].includes(profile);
+  if (fanIn) {
+    for (let index = 1; index < count - 1; index++) {
+      edge(ids[index], ids[count - 1], `Join branch ${index}`);
+    }
+  }
   if (["flowchart", "dataflow", "uml-component", "uml-class", "erd"].includes(profile)) {
-    protectedIds.push(
-      edge(ids.at(-1), ids[0], "Manual feedback guide", {
+    if (quality) {
+      const feedbackId = edge(ids.at(-1), ids[0], "Feedback guide", {
         routing: "orthogonal",
-        routingMode: "manual",
-        waypoints: [
-          { id: "guide-0", kind: "manual", x: -180, y: -150, locked: true },
-          { id: "guide-1", kind: "manual", x: 550, y: -150, locked: true },
-        ],
-      }),
-    );
+        routingMode: "auto",
+      });
+      const feedback = board.getElement(feedbackId).connectorData;
+      assert.equal(feedback.routingMode, "auto");
+      assert.equal(feedback.waypoints?.length ?? 0, 0);
+    } else
+      protectedIds.push(
+        edge(ids.at(-1), ids[0], "Manual feedback guide", {
+          routing: "orthogonal",
+          routingMode: "manual",
+          waypoints: [
+            { id: "guide-0", kind: "manual", x: -180, y: -150, locked: true },
+            { id: "guide-1", kind: "manual", x: 550, y: -150, locked: true },
+          ],
+        }),
+      );
   }
   assert.ok(Object.keys(board.getElements()).length > 0, "Empty profile");
+  const elements = Object.values(board.getElements());
+  const connectors = elements.filter((element) => element.type === "connector");
+  const nativeTree = ["mindmap", "tree", "timeline"].includes(profile);
+  const feedback = ["flowchart", "dataflow", "uml-component", "uml-class", "erd"].includes(profile);
+  const expectedRelations = nativeTree
+    ? count + Math.floor(count / 2)
+    : profile === "uml-sequence"
+      ? count
+      : count - 1 + Number(feedback) + Number(profile === "uml-use-case") + (fanIn ? count - 2 : 0);
+  const labelCount = connectors.reduce(
+    (total, connector) => total + (connector.connectorData.labels?.length ?? 0),
+    0,
+  );
+  const expectedLabels = nativeTree
+    ? 0
+    : profile === "uml-class"
+      ? (count - 1) * 5 + 1
+      : expectedRelations;
+  if (quality) {
+    assert.equal(
+      connectors.length,
+      expectedRelations,
+      "Quality fixture lost semantic relationships",
+    );
+    assert.equal(labelCount, expectedLabels, "Quality fixture lost connector labels");
+  }
   return {
     nodes: ids,
-    fixed: ids.length > 0 ? [ids[0]] : [],
+    fixed: !quality && ids.length > 0 ? [ids[0]] : [],
     protected: protectedIds,
+    semanticCoverage: {
+      nodes: elements.length - connectors.length,
+      relations: connectors.length,
+      expectedRelations,
+      labels: labelCount,
+      expectedLabels,
+      feedback: feedback ? (quality ? "auto" : "manual") : "none",
+      joiningRelations: fanIn ? count - 2 : 0,
+    },
     verifyLayout() {
       if (profile !== "uml-activity") return;
       for (const id of ids) {
