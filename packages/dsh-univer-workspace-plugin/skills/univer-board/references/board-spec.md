@@ -92,7 +92,9 @@ Use the shared `univerAPI.newRichText()` builder: a heading span followed by `pa
 stays editable. Set each span's font family, size, color and bold state explicitly; normal text must not inherit a
 bold heading. For a compact 12/10/8 px title/body/tag hierarchy, native document point sizes are 9/7.5/6 pt.
 Container/lane title styles use pixels directly. Verify the actual render and enlarge text for the requested
-output scale. Use native text-box wrapping and padding; enlarge for real content rather than clipping or dropping
+output scale. Rich-text `paragraph()` options style the following paragraph: set heading/body line height and
+spacing before their spans, and set each multiline body paragraph explicitly rather than relying on inheritance.
+Use native text-box wrapping and padding; enlarge for real content rather than clipping or dropping
 words. Apply primary-path color/weight to the actual connectors, not only custom metadata.
 
 For lane/phase workflows, derive a repeatable grid from semantic column order and measured content sizes. Fit lane
@@ -125,6 +127,13 @@ maintaining three schemas. Compact notation is fine. Do not duplicate an existin
 
 ## Compact generated containers
 
+Use real domain text and relationships when reviewing a generated diagram, including long Chinese/English text,
+nested boundaries, table compartments and native ownership. Preserve the source labels, captions, badges and styles.
+Inspect a full fit view and overlapping 100%/200% details covering the whole content extent; check text fit and readable
+type, hierarchy, whitespace, titles, corners, borders, markers and routes. Record visual review separately from model
+and rendered diagnostics. A clean diagnostic or a ready plan is not visual approval; retain unresolved findings and
+explicit refusals caused by fixed/manual/native constraints. Count applications from actual apply results, not patches.
+
 After applying a ready layout to a newly generated diagram, inspect `FBoard.fitContainerToContent` and fit its
 generated ordinary containers deepest-first. This existing write fits frames to their current children; it does
 not solve routes or make an incomplete graph plan applicable. Preserve authored fixed frames, protected elements
@@ -137,11 +146,20 @@ existing authored groups, swimlanes and native layout owners unchanged.
 
 ## Imported label constraints
 
-For an existing Archify architecture IR v1 document, inspect `FBoard.importArchify` in the installed API.
+For an existing Archify document, inspect `FBoard.importArchify` and schema support in the installed API.
+Supported inputs are architecture v1, workflow v1/v2, sequence v1, dataflow v1, lifecycle v3, and
+ERD/class/tree/timeline/waterfall/explainer v1. Preserve native lanes, groups, ordered messages, compartments,
+semantic markers and source constraints; accepting these schemas does not establish free-layout quality.
 Pass the parsed document to that dedicated importer, retain its semantic ID mapping and report unsupported
 decorations. A rejected import must leave the Board unchanged. The importer creates editable native elements;
 verify their text, container membership and connector bindings, then run model and rendered checks. Archify IR
 and BoardSpec have different contracts: do not pass BoardSpec to this importer or send input to a shell renderer.
+
+For verified brand geometry, use the installed async `importArchifyWithAssets(input, { brandAssets })` and provide
+each asset as `{ svg, sha256, source? }`. The importer uses the current Board theme, validates exact UTF-8 SHA256
+and portable SVG paths with solid hex/currentColor fills, and performs no network fallback. Unsupported SVG features or
+an active-page change while awaiting assets reject the import atomically. Preserve synchronous import warnings
+when brand assets were not supplied; do not call that result exact brand fidelity.
 
 Imported source label pins stay fixed by default. When optimizing a newly generated copy is requested,
 retain each chosen label's original placement and source metadata before using `updateConnectorLabel` with

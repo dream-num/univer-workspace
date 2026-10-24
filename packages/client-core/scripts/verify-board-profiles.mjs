@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { parseArgs } from "node:util";
+import { isDeepStrictEqual, parseArgs } from "node:util";
 import {
   createStandardHeadlessUniverFacade,
   createStandardHeadlessUniverFactory,
@@ -10,12 +10,17 @@ import { UniverInstanceType } from "@univerjs/core";
 import { createUniverRenderRuntime } from "@univer-cli/univer-render-runtime";
 import { createUnitScreenshot } from "@univer-cli/unit-screenshot";
 import { createUnitLayoutLint } from "@univer-cli/unit-layout-lint";
+import { realizeVisualFixture, visualVariants } from "./board-visual-fixtures.mjs";
+import { captureVisualEvidence } from "./board-visual-evidence.mjs";
+import { elementProfiles, realizeElementFixture } from "./board-element-fixtures.mjs";
+import { repairMeasuredVisualText } from "./board-visual-repair.mjs";
 
 // Exercise the installed public SDK in plain Node ESM, as the content worker does.
 const { values } = parseArgs({
   options: {
     out: { type: "string" },
     profile: { type: "string" },
+    variant: { type: "string" },
     suite: { type: "string", default: "contract" },
     "fixtures-only": { type: "boolean", default: false },
     render: { type: "boolean", default: false },
@@ -24,11 +29,15 @@ const { values } = parseArgs({
     "render-page-root": { type: "string" },
   },
 });
-assert.ok(["contract", "quality"].includes(values.suite), "Unknown suite");
+assert.ok(["contract", "quality", "visual", "elements"].includes(values.suite), "Unknown suite");
 const qualitySuite = values.suite === "quality";
-const rendering = values.render || values["render-all"] || qualitySuite;
-const planLabels = values["plan-labels"] || qualitySuite;
-assert.ok(!qualitySuite || !values["fixtures-only"], "Quality checks require plan/apply");
+const visualSuite = values.suite === "visual";
+const elementsSuite = values.suite === "elements";
+const visualEvidence = visualSuite || elementsSuite;
+const requireClean = qualitySuite || visualSuite;
+const rendering = values.render || values["render-all"] || requireClean || elementsSuite;
+const planLabels = values["plan-labels"] || requireClean;
+assert.ok(!requireClean || !values["fixtures-only"], "Quality checks require plan/apply");
 const profiles = [
   "architecture",
   "dataflow",
@@ -46,8 +55,15 @@ const profiles = [
   "tree",
   "timeline",
 ];
-if (values.profile) assert.ok(profiles.includes(values.profile), "Unknown profile");
-const selected = values.profile ? [values.profile] : profiles;
+const availableProfiles = elementsSuite ? elementProfiles : profiles;
+if (values.profile) assert.ok(availableProfiles.includes(values.profile), "Unknown profile");
+const selected = values.profile ? [values.profile] : availableProfiles;
+const variants = elementsSuite
+  ? ["catalogue"]
+  : visualSuite
+    ? visualVariants
+    : ["small", "long-labels", "fan-out"];
+if (values.variant) assert.ok(variants.includes(values.variant), "Unknown variant");
 const results = [];
 assert.ok(!planLabels || rendering, "--plan-labels requires --render");
 const renderPageRoot = values["render-page-root"] ?? process.env.UNIVER_RENDER_PAGE_ROOT;
@@ -73,8 +89,8 @@ const detailProfiles = new Set([
 ]);
 try {
   for (const profile of selected) {
-    for (const variant of ["small", "long-labels", "fan-out"]) {
-      const id = `${qualitySuite ? "quality-" : ""}${profile}-${variant}`;
+    for (const variant of values.variant ? [values.variant] : variants) {
+      const id = `${elementsSuite ? "elements-" : visualSuite ? "visual-" : qualitySuite ? "quality-" : ""}${profile}-${variant}`;
       const univer = await createStandardHeadlessUniverFactory({
         license: process.env.UNIVER_LICENSE ?? "",
       })({
@@ -85,7 +101,11 @@ try {
       try {
         const api = createStandardHeadlessUniverFacade(univer);
         board = api.createBoard({ id, name: id });
-        const fixture = realize(board, api.Enum, profile, variant, qualitySuite);
+        const fixture = visualSuite
+          ? realizeVisualFixture(board, api, profile, variant)
+          : elementsSuite
+            ? await realizeElementFixture(board, api, profile)
+            : realize(board, api.Enum, profile, variant, qualitySuite);
         const initial = persistedSnapshot(board);
         const before = semanticElements(board);
         const analysisBefore = board.analyzeModelLayout(48);
@@ -96,6 +116,15 @@ try {
         assert.deepEqual(semanticElements(board), before, "Analysis mutated content");
         fixture.verify();
         let plan;
+        let graphApplication = { status: "not-run", applied: false };
+        const beforeRendered = visualSuite
+          ? await captureVisualEvidence(
+              screenshot,
+              board.save(),
+              resolve(values.out, id, "before"),
+              { overviewOnly: true },
+            )
+          : undefined;
         if (!values["fixtures-only"]) {
           assert.equal(
             typeof board.planGraphLayout,
@@ -112,12 +141,14 @@ try {
             fixedElementIds: fixture.fixed,
             maxNodes: 100,
             ...(qualitySuite && profile === "uml-class" ? { layerGap: 160 } : {}),
+            ...fixture.layoutOptions,
           };
           plan = board.planGraphLayout(options);
           assert.deepEqual(persistedSnapshot(board), initial, "Planning mutated the Board");
           assert.deepEqual(board.planGraphLayout(options), plan, "Planning is not deterministic");
           assert.ok(["ready", "incomplete"].includes(plan.status));
           if (
+            !visualEvidence &&
             ["architecture", "deployment", "uml-package", "uml-state", "uml-activity"].includes(
               profile,
             ) &&
@@ -194,12 +225,27 @@ try {
               false,
               "Stale plan accepted after application",
             );
+            graphApplication = {
+              status: "applied-undo-redo",
+              applied: true,
+              changed: !isDeepStrictEqual(initial, afterApply),
+              undoExact: true,
+              redoExact: true,
+              staleRejected: true,
+            };
           } else if (plan.status === "incomplete") {
             assert.equal(board.applyLayoutPlan(plan), false, "Incomplete plan accepted");
             assert.deepEqual(persistedSnapshot(board), initial, "Rejected plan mutated content");
+            graphApplication = {
+              status: "rejected-incomplete",
+              applied: false,
+              changed: false,
+              rejectedWithoutMutation: true,
+            };
           } else {
             assert.equal(board.applyLayoutPlan(plan), true, "Current empty plan rejected");
             assert.deepEqual(persistedSnapshot(board), initial, "Empty plan mutated content");
+            graphApplication = { status: "unchanged-native", applied: true, changed: false };
           }
           if (fixture.fixed.length > 0) {
             const current = board.planGraphLayout(options);
@@ -229,6 +275,55 @@ try {
             );
           }
         }
+        const compactApplications = [];
+        for (const containerId of fixture.compactContainers ?? []) {
+          const compactBefore = persistedSnapshot(board);
+          const leafIds = Object.values(board.getElements())
+            .filter((element) => !["container", "connector"].includes(element.type))
+            .map((element) => element.id);
+          const worldBefore = leafIds.map((elementId) => board.getElementGeometry(elementId));
+          assert.equal(
+            board.fitContainerToContent(containerId),
+            true,
+            "Generated container fit failed",
+          );
+          assert.deepEqual(
+            leafIds.map((elementId) => board.getElementGeometry(elementId)),
+            worldBefore,
+            "Container fit changed leaf world geometry",
+          );
+          const compactAfter = persistedSnapshot(board);
+          const changed = JSON.stringify(compactBefore) !== JSON.stringify(compactAfter);
+          if (changed) {
+            assert.equal(await board.undo(), true);
+            assert.deepEqual(
+              persistedSnapshot(board),
+              compactBefore,
+              "Container fit Undo lost content",
+            );
+            assert.equal(await board.redo(), true);
+            assert.deepEqual(
+              persistedSnapshot(board),
+              compactAfter,
+              "Container fit Redo lost content",
+            );
+          }
+          fixture.verify();
+          compactApplications.push({
+            containerId,
+            applied: true,
+            changed,
+            leafWorldGeometryPreserved: true,
+            ...(changed ? { undoExact: true, redoExact: true } : {}),
+          });
+        }
+        const textRepair = visualSuite
+          ? await repairMeasuredVisualText(
+              board,
+              createUnitLayoutLint({ runtime: renderRuntime }),
+              fixture,
+            )
+          : undefined;
         const analysisAfter = board.analyzeModelLayout(48);
         const hardRules = new Set([
           "element-overlap",
@@ -237,7 +332,7 @@ try {
         ]);
         const hardCount = (analysis) =>
           analysis.issues.filter((issue) => hardRules.has(issue.rule)).length;
-        if (!qualitySuite) {
+        if (!requireClean) {
           assert.ok(
             hardCount(analysisAfter) <= hardCount(analysisBefore),
             "Layout increased blocking model findings",
@@ -245,18 +340,25 @@ try {
         }
         const shouldRender =
           screenshot &&
-          (qualitySuite ||
+          (requireClean ||
+            elementsSuite ||
             values["render-all"] ||
             variant === "small" ||
             (variant === "long-labels" && detailProfiles.has(profile)));
         const labelRepair =
           planLabels && shouldRender
-            ? await verifyRenderedLabelPlan(board, renderRuntime, !qualitySuite)
+            ? await verifyRenderedLabelPlan(board, renderRuntime, !requireClean)
             : undefined;
         const rendered = shouldRender
-          ? await renderEvidence(screenshot, board.save(), id, variant === "long-labels")
+          ? visualEvidence
+            ? await captureVisualEvidence(
+                screenshot,
+                board.save(),
+                resolve(values.out, id, "after"),
+              )
+            : await renderEvidence(screenshot, board.save(), id, variant === "long-labels")
           : undefined;
-        const quality = qualitySuite ? qualityResult(plan, analysisAfter, labelRepair) : undefined;
+        const quality = requireClean ? qualityResult(plan, analysisAfter, labelRepair) : undefined;
         const result = {
           suite: values.suite,
           profile,
@@ -264,6 +366,11 @@ try {
           assertions: "passed",
           mode: values["fixtures-only"] ? "fixtures-only" : "plan",
           plan,
+          graphApplication,
+          compactApplications,
+          textRepair,
+          initialSnapshot: visualEvidence ? initial : undefined,
+          beforeRendered,
           analysisBefore,
           analysisAfter,
           snapshot: board.save(),
@@ -271,6 +378,22 @@ try {
           labelRepair,
           semanticCoverage: fixture.semanticCoverage,
           quality,
+          ...(visualEvidence
+            ? {
+                visualReview: {
+                  status: "pending",
+                  criteria: [
+                    "text-fit-and-legibility",
+                    "hierarchy-and-reading-direction",
+                    "container-whitespace",
+                    "titles-captions-and-badges",
+                    "border-marker-and-route-clearance",
+                    "semantic-completeness",
+                  ],
+                  automatedDiagnosticsAreVisualApproval: false,
+                },
+              }
+            : {}),
         };
         results.push({
           profile,
@@ -278,16 +401,13 @@ try {
           assertions: "passed",
           planStatus: plan?.status ?? "not-run",
           patchCount: plan?.patches.length ?? 0,
-          application: !plan
-            ? "not-run"
-            : plan.status === "incomplete"
-              ? "rejected-incomplete"
-              : plan.patches.length > 0
-                ? "applied-undo-redo"
-                : "unchanged-native",
+          application: graphApplication.status,
+          graphApplication,
           renderedStatus: rendered?.status ?? "not-run",
           labelPlanStatus: labelRepair?.before.analyses[0]?.labelPlan?.status ?? "not-run",
           labelPatchCount: labelRepair?.before.analyses[0]?.labelPlan?.patches.length ?? 0,
+          labelApplication: labelRepair?.application ?? { status: "not-run", applied: false },
+          ...(visualEvidence ? { visualReviewStatus: "pending" } : {}),
           ...(quality ? { quality } : {}),
         });
         if (values.out) {
@@ -305,12 +425,13 @@ try {
         let captureError;
         if (screenshot && board) {
           try {
-            rendered = await renderEvidence(
-              screenshot,
-              board.save(),
-              id,
-              variant === "long-labels",
-            );
+            rendered = visualEvidence
+              ? await captureVisualEvidence(
+                  screenshot,
+                  board.save(),
+                  resolve(values.out, id, "failure"),
+                )
+              : await renderEvidence(screenshot, board.save(), id, variant === "long-labels");
           } catch (failure) {
             captureError = { name: failure.name, message: failure.message };
           }
@@ -321,7 +442,7 @@ try {
           assertions: "failed",
           reason: error.message,
           ...(rendered ? { renderedStatus: rendered.status } : {}),
-          ...(qualitySuite ? { quality: { expected: "clean", status: "incomplete" } } : {}),
+          ...(requireClean ? { quality: { expected: "clean", status: "incomplete" } } : {}),
         });
         if (values.out) {
           await mkdir(resolve(values.out), { recursive: true });
@@ -360,7 +481,7 @@ process.stdout.write(
   `${JSON.stringify({ suite: values.suite, profiles: selected.length, cases: results.length, results }, null, 2)}\n`,
 );
 if (results.some((result) => result.assertions === "failed")) process.exitCode = 1;
-else if (qualitySuite && results.some((result) => result.quality.status !== "clean")) {
+else if (requireClean && results.some((result) => result.quality.status !== "clean")) {
   process.exitCode = 2;
 }
 
@@ -470,6 +591,7 @@ async function verifyRenderedLabelPlan(board, runtime, assertCollisionImprovemen
   const plan = before.analyses[0].labelPlan;
   assert.ok(plan, "Requested rendered label plan unavailable");
   let applied = false;
+  let application;
   if (plan.status === "ready" && plan.patches.length > 0) {
     const semantics = labelSemantics(board);
     if (!board.applyLayoutPlan(plan)) {
@@ -492,12 +614,22 @@ async function verifyRenderedLabelPlan(board, runtime, assertCollisionImprovemen
     assert.equal(board.redo(), true, "Rendered label plan Redo failed");
     assert.deepEqual(persistedSnapshot(board), afterApply, "Label plan Redo lost data");
     assert.equal(board.applyLayoutPlan(plan), false, "Stale rendered label plan accepted");
+    application = {
+      status: "applied-undo-redo",
+      applied: true,
+      changed: !isDeepStrictEqual(snapshot, afterApply),
+      undoExact: true,
+      redoExact: true,
+      staleRejected: true,
+    };
   } else if (plan.status === "incomplete") {
     assert.equal(board.applyLayoutPlan(plan), false, "Incomplete rendered label plan accepted");
     assert.deepEqual(persistedSnapshot(board), snapshot, "Rejected label plan changed content");
+    application = { status: "rejected-incomplete", applied: false, rejectedWithoutMutation: true };
   } else {
     assert.equal(plan.status, "ready");
     assert.deepEqual(persistedSnapshot(board), snapshot, "No-op rendered plan changed content");
+    application = { status: "unchanged", applied: false };
   }
   const after = await lint.lint({ ...input, unitData: board.save(), includeLabelPlan: false });
   const collisions = (report) =>
@@ -509,7 +641,7 @@ async function verifyRenderedLabelPlan(board, runtime, assertCollisionImprovemen
   if (assertCollisionImprovement) {
     assert.ok(collisionNonIncreasing, "Label planning increased measured collisions");
   }
-  return { before, after, applied, collisionNonIncreasing };
+  return { before, after, applied, application, collisionNonIncreasing };
 }
 
 function labelSemantics(board) {

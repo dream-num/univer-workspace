@@ -1,0 +1,328 @@
+import { describe, expect, it } from "vitest";
+import {
+  getVisualCase,
+  realizeVisualFixture,
+  visualCases,
+  visualVariants,
+} from "../scripts/board-visual-fixtures.mjs";
+import { visualCaptureRegions } from "../scripts/board-visual-evidence.mjs";
+import {
+  proposeMeasuredTextGrowth,
+  repairMeasuredVisualText,
+} from "../scripts/board-visual-repair.mjs";
+import { elementProfiles, realizeElementFixture } from "../scripts/board-element-fixtures.mjs";
+
+describe("Board business visual manifests", () => {
+  it("has 45 independent cases with complete native or explicitly connected business content", () => {
+    expect(Object.keys(visualCases)).toHaveLength(15);
+    for (const profile of Object.keys(visualCases))
+      for (const variant of visualVariants) {
+        const fixture = getVisualCase(profile, variant);
+        const ids = new Set(fixture.nodes.map((node) => node.id));
+        expect(ids.size).toBe(fixture.nodes.length);
+        expect(fixture.nodes.length).toBeGreaterThanOrEqual(4);
+        expect(JSON.stringify(fixture)).not.toMatch(/"(?:Entry|Work|Result)"/);
+        for (const edge of fixture.edges) {
+          expect(ids.has(edge.from)).toBe(true);
+          expect(ids.has(edge.to)).toBe(true);
+        }
+        if (fixture.native) expect(fixture.nodes.filter((node) => !node.parent)).toHaveLength(1);
+        if (variant === "long-bilingual") expect(fixture.title).toMatch(/[\u4e00-\u9fff]/);
+        for (const [index, id] of (fixture.mainPath ?? []).entries()) {
+          if (index)
+            expect(
+              fixture.edges.some(
+                (edge) => edge.from === fixture.mainPath[index - 1] && edge.to === id,
+              ),
+            ).toBe(true);
+        }
+        fixture.nodes[0].title = "changed copy";
+        expect(visualCases[profile].nodes[0].title).not.toBe("changed copy");
+      }
+  });
+  it("retains typed compartments, ownership, sequence ordering and business multiplicity", () => {
+    const classes = getVisualCase("uml-class", "nested-dense");
+    expect(classes.nodes.find((node) => node.id === "reservation").detail).toContain(
+      "release(): void",
+    );
+    expect(classes.edges.find((edge) => edge.to === "reservation")).toMatchObject({
+      relation: "composition",
+      endMultiplicity: "0..*",
+    });
+    expect(getVisualCase("uml-sequence", "nested-dense").edges).toHaveLength(12);
+    expect(getVisualCase("uml-activity", "nested-dense").nodes.every((node) => node.lane)).toBe(
+      true,
+    );
+    expect(
+      getVisualCase("uml-use-case", "business").nodes.find((node) => node.id === "patient").parent,
+    ).toBeUndefined();
+  });
+});
+
+describe("Board measured text growth boundaries", () => {
+  const shape = (id, extra = {}) => ({
+    id,
+    type: "shape",
+    transform: { left: 10, top: 20, width: 200, height: 100 },
+    ...extra,
+  });
+  const report = (
+    ids,
+    available = { width: 100, height: 50 },
+    content = { width: 160, height: 75 },
+  ) => ({
+    analyses: [
+      {
+        rendered: {
+          issues: ids.map((id) => ({
+            rule: "element-text-overflow",
+            elementIds: [id],
+            textLayout: { availableSize: available, contentSize: content },
+          })),
+        },
+      },
+    ],
+  });
+  const fixture = { nodes: ["a"], fixed: [], protected: [], layoutOptions: {}, verify() {} };
+  it("uses the measured text-rectangle ratio without changing font or style", () => {
+    const a = shape("a", { shapeData: { shapeType: "ellipse", fontSize: 16 } });
+    const original = structuredClone(a);
+    expect(
+      proposeMeasuredTextGrowth({ getElement: () => a }, report(["a"]), fixture).patches,
+    ).toEqual({ a: { width: 324, height: 154 } });
+    expect(a).toEqual(original);
+  });
+  it("preserves fixed/native, locked parents, unselectable objects and table resources", () => {
+    const elements = {
+      a: shape("a"),
+      b: shape("b", { parentId: "owner" }),
+      owner: { id: "owner", type: "container", locked: true },
+      c: shape("c", { selectable: false }),
+      d: { ...shape("d"), type: "table" },
+      e: shape("e"),
+    };
+    const f = { ...fixture, nodes: ["a", "b", "c", "d", "e"], fixed: ["a"], protected: ["e"] };
+    const proposal = proposeMeasuredTextGrowth(
+      { getElement: (id) => elements[id] },
+      report(f.nodes),
+      f,
+    );
+    expect(proposal.patches).toEqual({});
+    expect(proposal.skipped).toHaveLength(5);
+  });
+  it("rejects unavailable or invalid text measurement instead of guessing", () => {
+    const board = { getElement: () => shape("a") };
+    expect(
+      proposeMeasuredTextGrowth(board, report(["a"], { width: 0, height: 50 }), fixture).skipped[0]
+        .reason,
+    ).toBe("measurement-unavailable");
+    expect(
+      proposeMeasuredTextGrowth(
+        board,
+        report(["a"], undefined, { width: Infinity, height: 10 }),
+        fixture,
+      ).patches,
+    ).toEqual({});
+  });
+  it("rolls back a measured growth whose fresh public graph plan is incomplete", async () => {
+    let value = { id: "board", pages: { p: { elements: { a: shape("a") } } } },
+      undo,
+      redo;
+    const initial = structuredClone(value);
+    const board = {
+      save: () => value,
+      getElement: (id) => value.pages.p.elements[id],
+      setElementsTransform(patches) {
+        undo = structuredClone(value);
+        for (const [id, patch] of Object.entries(patches))
+          Object.assign(value.pages.p.elements[id].transform, patch);
+        return true;
+      },
+      undo() {
+        redo = structuredClone(value);
+        value = structuredClone(undo);
+        return true;
+      },
+      redo() {
+        value = structuredClone(redo);
+        return true;
+      },
+      planGraphLayout: () => ({
+        status: "incomplete",
+        patches: [],
+        diagnostics: [{ code: "swimlane-capacity-exceeded", elementIds: ["a"] }],
+      }),
+      applyLayoutPlan: () => false,
+    };
+    const result = await repairMeasuredVisualText(
+      board,
+      { lint: async () => report(["a"]) },
+      fixture,
+    );
+    expect(result.status).toBe("replan-incomplete");
+    expect(result.attempts[0]).toMatchObject({
+      growthApplied: true,
+      growthRolledBack: true,
+      planApplied: false,
+    });
+    expect(value).toEqual(initial);
+  });
+});
+
+describe("Board public Facade business fixture preservation", () => {
+  it.each(
+    Object.keys(visualCases).flatMap((profile) =>
+      visualVariants.map((variant) => [profile, variant]),
+    ),
+  )(
+    "preserves %s / %s through actual graph apply and one-step history",
+    async (profile, variant) => {
+      const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+        await import("@univer-cli/headless-univer");
+      const { UniverInstanceType } = await import("@univerjs/core");
+      const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+        unitId: profile,
+        unitType: UniverInstanceType.UNIVER_BOARD,
+      });
+      const snapshot = (board) => JSON.parse(JSON.stringify(board.save()));
+      try {
+        const api = createStandardHeadlessUniverFacade(univer);
+        const board = api.createBoard({ id: profile, name: profile });
+        const fixture = realizeVisualFixture(board, api, profile, variant);
+        fixture.verify();
+        const initial = snapshot(board);
+        const protectedBefore = JSON.parse(
+          JSON.stringify(
+            [...fixture.fixed, ...fixture.protected].map((id) => board.getElement(id)),
+          ),
+        );
+        const options = { ...fixture.layoutOptions, fixedElementIds: fixture.fixed };
+        const plan = board.planGraphLayout(options);
+        if (profile === "uml-activity") {
+          expect(plan.status).toBe("ready");
+          expect(
+            plan.patches.some(
+              (patch) => patch.transform && fixture.nodes.includes(patch.elementId),
+            ),
+          ).toBe(true);
+        }
+        expect(snapshot(board)).toEqual(initial);
+        expect(board.planGraphLayout(options)).toEqual(plan);
+        if (plan.status === "incomplete") {
+          expect(board.applyLayoutPlan(plan)).toBe(false);
+          expect(snapshot(board)).toEqual(initial);
+        } else {
+          expect(board.applyLayoutPlan(plan)).toBe(true);
+          fixture.verify();
+          expect(
+            JSON.parse(
+              JSON.stringify(
+                [...fixture.fixed, ...fixture.protected].map((id) => board.getElement(id)),
+              ),
+            ),
+          ).toEqual(protectedBefore);
+          if (plan.patches.length) {
+            const after = snapshot(board);
+            expect(await board.undo()).toBe(true);
+            expect(snapshot(board)).toEqual(initial);
+            expect(await board.redo()).toBe(true);
+            expect(snapshot(board)).toEqual(after);
+            expect(board.applyLayoutPlan(plan)).toBe(false);
+          }
+        }
+        for (const id of fixture.compactContainers ?? []) {
+          const before = snapshot(board);
+          expect(board.fitContainerToContent(id)).toBe(true);
+          fixture.verify();
+          const after = snapshot(board);
+          if (JSON.stringify(before) !== JSON.stringify(after)) {
+            expect(await board.undo()).toBe(true);
+            expect(snapshot(board)).toEqual(before);
+            expect(await board.redo()).toBe(true);
+            expect(snapshot(board)).toEqual(after);
+          }
+        }
+      } finally {
+        univer.dispose();
+      }
+    },
+    20_000,
+  );
+});
+
+describe("Board full-extent visual capture tiling", () => {
+  it("covers negative origins and every part of a large canvas with overlapping native-scale tiles", () => {
+    const bounds = { left: -171, top: -63, width: 1733, height: 985 };
+    const tiles = visualCaptureRegions(bounds, 550, 320);
+    expect(tiles[0]).toMatchObject({ left: -171, top: -63 });
+    expect(Math.max(...tiles.map((tile) => tile.left + tile.width))).toBe(
+      bounds.left + bounds.width,
+    );
+    expect(Math.max(...tiles.map((tile) => tile.top + tile.height))).toBe(
+      bounds.top + bounds.height,
+    );
+    for (let x = bounds.left; x < bounds.left + bounds.width; x += 17)
+      for (let y = bounds.top; y < bounds.top + bounds.height; y += 13) {
+        expect(
+          tiles.some(
+            (tile) =>
+              x >= tile.left &&
+              y >= tile.top &&
+              x < tile.left + tile.width &&
+              y < tile.top + tile.height,
+          ),
+        ).toBe(true);
+      }
+  });
+  it("rejects invalid or unbounded capture rectangles", () => {
+    expect(() => visualCaptureRegions({ left: 0, top: 0, width: Infinity, height: 1 })).toThrow();
+    expect(() => visualCaptureRegions({ left: 0, top: 0, width: 0, height: 1 })).toThrow();
+  });
+});
+
+describe("Board public element catalogue preservation", () => {
+  // The combined chart case is exercised by the licensed rendered runner; chart creation requires the runtime credential.
+  it.each(elementProfiles.filter((profile) => profile !== "text-image-ink-chart"))(
+    "preserves authored %s catalogue geometry and public preset coverage",
+    async (profile) => {
+      const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+        await import("@univer-cli/headless-univer");
+      const { UniverInstanceType } = await import("@univerjs/core");
+      const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+        unitId: profile,
+        unitType: UniverInstanceType.UNIVER_BOARD,
+      });
+      try {
+        const api = createStandardHeadlessUniverFacade(univer);
+        const board = api.createBoard({ id: profile, name: profile });
+        const fixture = await realizeElementFixture(board, api, profile);
+        fixture.verify();
+        const plan = board.planGraphLayout(fixture.layoutOptions);
+        expect(plan.status).toBe("ready");
+        expect(plan.patches).toEqual([]);
+        expect(board.applyLayoutPlan(plan)).toBe(true);
+        fixture.verifyLayout();
+        expect(fixture.semanticCoverage.automatedLayoutQualityClaim).toBe(false);
+        if (profile === "builtin-shapes")
+          expect(fixture.semanticCoverage.covered).toHaveLength(
+            new Set(
+              Object.values(api.Enum.ShapeTypeEnum).filter(
+                (type) => !["none", "smartArt"].includes(type),
+              ),
+            ).size,
+          );
+        if (profile === "connector-grammar")
+          expect(
+            Object.values(board.getElements()).some((element) =>
+              element.connectorData?.waypoints?.some(
+                (point) => point.kind === "manual" && point.locked,
+              ),
+            ),
+          ).toBe(true);
+      } finally {
+        univer.dispose();
+      }
+    },
+    20_000,
+  );
+});
