@@ -108,6 +108,7 @@ verify resizing. Do not copy SDK factory implementation or detach the caption in
 Keep authored endpoint sides, fractions and manual guides; bind new unconstrained relations to the glyph rather
 than its caption region.
 
+Start built-in presets at their native default insertion proportions rather than imposing one aspect ratio on every glyph.
 Preserve the native sequence factory's participant kind, geometry and default proportions. Actors, controls,
 entities and other participant variants must retain their own symbols; activations remain narrow bars. Adjust
 lifeline tail height independently of participant shape height, and size captions for their complete text.
@@ -188,6 +189,9 @@ When newly generated lane capacity, or an explicitly approved repair, allows gro
 and obtain a fresh graph plan. Keep the pool protected from generic graph resizing. Do not alter an authored
 capacity, a fixed pool, a locked/collapsed lane or other native ownership. Verify each capacity write with exact
 Undo/Redo and roll it back together with child growth if replanning is incomplete.
+The native lane-size setter reallocates capacity from the following lane: preflight every affected generated,
+unlocked and unpinned lane, reserve cumulative growth at the last lane first, then expand earlier lanes in reverse
+order so no final lane shrinks below its original or required size.
 
 ## Imported label constraints
 

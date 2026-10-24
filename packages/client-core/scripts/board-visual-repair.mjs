@@ -4,14 +4,17 @@ const snapshot = (board) => JSON.parse(JSON.stringify(board.save()));
 
 function proposeLaneCapacity(board, patches, fixture) {
   const lanePatches = [];
+  const containers = new Map();
   for (const { containerId, laneId } of fixture.expandableLanes ?? []) {
+    if (!containers.has(containerId)) containers.set(containerId, new Set());
+    containers.get(containerId).add(laneId);
+  }
+  const protectedIds = new Set([...fixture.fixed, ...fixture.protected]);
+  for (const [containerId, allowed] of containers) {
     const pool = board.getElement(containerId),
-      swimlane = pool?.containerData?.swimlane,
-      lane = swimlane?.lanes.find((item) => item.id === laneId);
+      swimlane = pool?.containerData?.swimlane;
     if (
-      !lane ||
-      lane.locked ||
-      lane.collapsed ||
+      !swimlane ||
       pool.locked ||
       pool.selectable === false ||
       pool.managedBy ||
@@ -26,21 +29,59 @@ function proposeLaneCapacity(board, patches, fixture) {
       (pool.transform.scaleY ?? 1) !== 1
     )
       continue;
-    const members = fixture.nodes
-      .map((id) => board.getElement(id))
-      .filter((item) => item?.parentId === containerId && item.laneId === laneId);
-    if (!members.some((item) => patches[item.id])) continue;
-    const axis = swimlane.orientation === "horizontal" ? "height" : "width",
-      sizes = members.map((item) => patches[item.id]?.[axis] ?? item.transform[axis]),
-      stacked = (fixture.layoutOptions.direction ?? "horizontal") !== swimlane.orientation;
-    if (!sizes.every((size) => Number.isFinite(size) && size > 0)) continue;
-    // The generator owns this gutter; the SDK still validates and plans the native lane.
-    const required = Math.ceil(
-      (stacked ? sizes.reduce((sum, size) => sum + size, 0) : Math.max(...sizes)) +
-        72 +
-        (stacked ? Math.max(0, sizes.length - 1) * (fixture.layoutOptions.itemGap ?? 100) : 0),
-    );
-    if (required > lane.size) lanePatches.push({ containerId, laneId, size: required });
+    const lanes = [...swimlane.lanes].sort((a, b) => a.order - b.order);
+    const elements = Object.values(board.getElements());
+    const eligible = (lane) =>
+      allowed.has(lane.id) &&
+      !lane.locked &&
+      !lane.collapsed &&
+      !elements.some((element) => {
+        const seen = new Set();
+        let current = element,
+          laneId = current.laneId,
+          pinned = false;
+        while (current && current.id !== containerId && !seen.has(current.id)) {
+          seen.add(current.id);
+          pinned ||=
+            protectedIds.has(current.id) ||
+            current.locked ||
+            current.selectable === false ||
+            !!current.managedBy;
+          if (current.parentId === containerId) return laneId === lane.id && pinned;
+          current = current.parentId ? board.getElement(current.parentId) : undefined;
+          laneId ??= current?.laneId;
+        }
+        return false;
+      });
+    const desired = lanes.map((lane) => {
+      if (!eligible(lane)) return lane.size;
+      const members = fixture.nodes
+        .map((id) => board.getElement(id))
+        .filter((item) => item?.parentId === containerId && item.laneId === lane.id);
+      const axis = swimlane.orientation === "horizontal" ? "height" : "width",
+        sizes = members.map((item) => patches[item.id]?.[axis] ?? item.transform[axis]),
+        stacked = (fixture.layoutOptions.direction ?? "horizontal") !== swimlane.orientation;
+      if (!sizes.length || !sizes.every((size) => Number.isFinite(size) && size > 0))
+        return lane.size;
+      // Conservative generated-lane preflight; the public graph plan remains authoritative.
+      const required = Math.ceil(
+        (stacked ? sizes.reduce((sum, size) => sum + size, 0) : Math.max(...sizes)) +
+          72 +
+          (stacked ? Math.max(0, sizes.length - 1) * (fixture.layoutOptions.layerGap ?? 100) : 0),
+      );
+      return Math.max(lane.size, required);
+    });
+    const firstGrowth = desired.findIndex((size, index) => size > lanes[index].size);
+    if (firstGrowth < 0 || !lanes.slice(firstGrowth).every(eligible)) continue;
+    const targets = [];
+    let carry = 0;
+    for (const [index, lane] of lanes.entries()) {
+      const size = desired[index] + carry;
+      if (size > lane.size) targets.push({ containerId, laneId: lane.id, size });
+      carry += desired[index] - lane.size;
+    }
+    // Native resizing transfers capacity to the next lane. Reserve it at the pool's end first.
+    lanePatches.push(...targets.reverse());
   }
   return lanePatches;
 }
