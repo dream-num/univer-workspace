@@ -600,7 +600,9 @@ export function getVisualCase(profile, variant) {
           title: "Operational ownership / 运行责任边界",
           parent: root.id,
         };
-        value.groups.push(nested);
+        value.groups.splice(value.groups.indexOf(root) + 1, 0, nested);
+        for (const group of value.groups)
+          if (group !== nested && group.parent === root.id) group.parent = nested.id;
         for (const item of value.nodes.filter((item) => !item.parent || item.parent === root.id))
           item.parent = nested.id;
       }
