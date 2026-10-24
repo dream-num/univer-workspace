@@ -10,7 +10,10 @@ Use the structured `univer_*` tools whenever the task creates, reads, changes, c
 ## Start immediately
 
 - Existing document: discover it with `univer_documents` and open its `resourceId` with `univer_open`; call `univer_status` with that identity before selecting a Unit or continuing a worktree.
-- New document: call `univer_worktree` with `action: "create"` and no `resourceId`, then `univer_unit` with `action: "create"`, the returned `worktreeId`, `name`, and `unitType`. The target `spaceId` defaults to the session's linked Space; set it and `parentNodeId` explicitly when needed.
+- New Modern Doc: create an empty draft Worktree, load `univer-doc`, then call
+  `univer_compile_markdown` with a session Markdown file. It creates the Doc Unit; no placeholder
+  is needed. Use `univer_export_markdown` before editing selected current native blocks.
+- Other new document: call `univer_worktree` with `action: "create"` and no `resourceId`, then `univer_unit` with `action: "create"`, the returned `worktreeId`, `name`, and `unitType`. The target `spaceId` defaults to the session's linked Space; set it and `parentNodeId` explicitly when needed.
 - Office source (`.xlsx`, `.csv`, `.tsv`, `.docx`, `.pptx`): create an empty draft worktree, then call `univer_import` in that worktree. Import creates the new Unit; no placeholder document is needed.
 - `univer_new` and `univer_create` create a document directly in the Space's trunk. Use them only when the user explicitly requests immediate creation outside the review workflow.
 - Before authoring content, load the matching Unit skill: `univer-sheet`, `univer-doc`, `univer-slide`, `univer-base`, or `univer-board`.
@@ -65,10 +68,14 @@ For document deletion, use `univer_unit` with `action: "remove"`, `worktreeId`, 
 
 1. Discover existing documents through `univer_spaces`, `univer_documents`, and `univer_open`. For an existing scope, call `univer_status` with `resourceId` or `worktreeId`; it is not an unscoped listing tool.
 2. Use one Worktree for the ongoing task, including follow-up requests that add another document type. For example, adding a presentation based on a draft spreadsheet belongs in the same Worktree. Check the existing task Worktree with `univer_status`; reuse it if draft, or call `univer_worktree` with `action: "reopen"` if ready. Create a new Worktree only for an independent task or after the previous one was merged or discarded. For new documents, omit `resourceId`; for an existing document, supply its `resourceId` when creating the worktree. Continue an existing worktree only after confirming its state.
-3. For a new document, create a Unit with `univer_unit` or import one with `univer_import`. For an existing document, use its returned Unit identity; do not create a duplicate.
+3. For a new Modern Doc, let `univer_compile_markdown` create the Unit. For other new documents,
+   use `univer_unit` or `univer_import`. For an existing document, use its returned Unit identity;
+   do not create a duplicate.
 4. Load the matching Unit skill before writing Facade code.
 5. Resolve unfamiliar Facade usage with `univer_api` following the lookup rules above. Never guess an unfamiliar signature, parameter type, or enum.
-6. Mutate through `univer_execute`, or through `univer_compile_svg` for generated Slide page content.
+6. For Modern Docs, use `univer_compile_markdown`; export selected current blocks with
+   `univer_export_markdown` before guarded partial updates. Use `univer_compile_svg` for generated
+   Slide page content, or `univer_execute` for direct Facade operations.
 7. Read the changed scope with `univer_inspect`; use a fresh read-only `univer_execute` when inspection omits a required model field.
 8. For every changed Slide page, call `univer_lint` and resolve or explicitly justify each finding.
 9. For visually relevant changes, call `univer_screenshot` with an explicit workspace output directory and the narrowest useful Unit-specific target. Inspect every returned image; screenshots complement rather than replace structural readback or Slide lint.
@@ -102,6 +109,8 @@ Never reopen or reuse a merged or discarded worktree; create a new worktree inst
 | Start | `univer_unit` | Create a draft Unit, mark one for deletion with `remove`, or undo its deletion intent with `restore`. |
 | Start | `univer_import` | Import local xlsx, csv, tsv, docx, or pptx as a new Unit. |
 | Write | `univer_execute` | Run version-matched Facade JavaScript against one Unit in a draft worktree. |
+| Write | `univer_compile_markdown` | Create native Modern Docs or replace selected explicit blocks from session Markdown. |
+| Read for editing | `univer_export_markdown` | Export selected current native Doc blocks, assets, map, and revision. |
 | Write | `univer_compile_svg` | Compile workspace SVG into one explicit Slide page with browser text metrics. |
 | Verify | `univer_inspect` | Read structured Unit content from trunk or one worktree. |
 | Verify | `univer_lint` | Check Slide text off-page, container escape, and text overlap. |

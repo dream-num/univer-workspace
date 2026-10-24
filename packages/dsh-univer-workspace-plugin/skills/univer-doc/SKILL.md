@@ -9,6 +9,31 @@ Load `univer` first. `univer_execute` provides `univerAPI`, `api` (the same obje
 
 Select paragraphs with `doc.getParagraphs()` and `doc.getParagraph(paragraphId)`. Resolve exact signatures and enums with `univer_api`; do not guess or use Doc model internals.
 
+## Modern Docs through Markdown
+
+For new Modern Docs, write a session Markdown file and call `univer_compile_markdown` once.
+Read [Markdown authoring](references/markdown.md) with
+`univer_skill_resource({ skill: "univer-doc", path: "references/markdown.md" })` for valid syntax,
+assets, and tool examples. The compiler is shared through the AI SDK; Workspace authentication,
+target identities, session paths, and review remain this application's responsibility.
+
+- Create a draft Worktree, then pass `source` and `worktreeId` to `univer_compile_markdown`.
+  It creates the Doc Unit; do not call `univer_unit` to create a placeholder. Use returned
+  `unit.unitId` and save the returned **execution** `sourceMap` as session JSON.
+- Preserve SDK default typography, line/paragraph spacing, and callout colors. Use plain
+  `:::callout{#notice}`. Modern columns use native ColumnGroup with 2–5 columns; do not use
+  Traditional section breaks or replace requested columns with layout tables.
+- Before each partial update, call `univer_export_markdown` for selected explicit top-level IDs.
+  It reads current native content, resources, a refreshed map, and the authoritative revision.
+  Edit that fragment, retain its root IDs, then pass `unitId`, that `revision`, `sourceMapFile`, and
+  the same `blockIds` together to `univer_compile_markdown`. Save the new execution map on success.
+- Native content is authoritative; old Markdown misses subsequent editor changes. On conflicts,
+  export again and replan. Unsupported content or diagnostic errors stop conversion; report the
+  exact limitation instead of flattening content or overwriting the Doc.
+- Keep all source/assets/map files inside the session workspace. Inspect and screenshot the result
+  before the normal Worktree review handoff. Generation should finish after compilation and
+  verification; avoid cosmetic Facade patches after conversion.
+
 ## Model essentials
 
 - A new Doc starts with one empty paragraph. Usually update it with `setText` or append with `doc.appendParagraph(text)`.

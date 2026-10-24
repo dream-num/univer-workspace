@@ -283,10 +283,12 @@ uvw unit create \
   --type sheet --name <file-name> [--parent <node-id>] [--idempotency-key <key>] --json
 ```
 
-Use `unit create` for an empty Unit. Use `import --file` when an office file supplies the initial
-content. Do not add an unrelated Unit to an existing task Worktree.
+Use `unit create` for an empty Unit. Use `compile-markdown --apply` for a generated Modern Doc
+without creating a placeholder; load the Doc Skill first. Use `import --file` when an office file
+supplies the initial content. Do not add an unrelated Unit to an existing task Worktree.
 
-`unit create`, `import`, and `compile-typst --apply` allocate all three identities on the server.
+`unit create`, `import`, `compile-markdown --apply`, and `compile-typst --apply` allocate all three
+identities on the server.
 They accept `--idempotency-key <key>`. Normally omit it and let the CLI generate one. If a final
 `workspace-result-unknown` diagnostic returns a key, reuse that exact key only to retry the same
 logical operation; use a new or omitted key for an intentional second copy.
@@ -312,7 +314,8 @@ If it is `merged` or `discarded`, start a new Worktree and stage the current Spa
 
 Before writing Facade code, load the matching versioned Skill:
 
-- Doc: `uvw skills get doc`
+- Doc: `uvw skills get doc` (Modern Docs use `compile-markdown`; export selected current native
+  blocks with `export-markdown` before guarded partial updates)
 - Sheet: `uvw skills get sheet`
 - Slide: `uvw skills get slide`
 - Base: `uvw skills get base`
@@ -416,7 +419,7 @@ repository; there is no stored default repository.
 | Start a task              | `pr create`, `unit create`, `unit add`                                      |
 | Inspect a known task      | `pr view`, `pr list`, `unit list`                                           |
 | Continue same-task rework | `pr ready <n> --undo`                                                       |
-| Write                     | `execute`, `compile-svg`, `compile-typst`, import                           |
+| Write                     | `execute`, `compile-markdown`, `compile-svg`, `compile-typst`, import                           |
 | Verify                    | `inspect`, `screenshot`                                                     |
 | Deliver output            | `export`, `print-pdf`                                                       |
 | Hand off                  | `pr ready`, `browse <n> --unit <id>`                                        |

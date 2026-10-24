@@ -51,6 +51,7 @@ for (const path of [
   "skill-data/html-view/references/frontend-libraries.md",
   "skill-data/sheet/SKILL.md",
   "skill-data/doc/SKILL.md",
+  "skill-data/doc/references/markdown.md",
   "skill-data/slide/SKILL.md",
   "skill-data/base/SKILL.md",
   "skill-data/board/SKILL.md",
