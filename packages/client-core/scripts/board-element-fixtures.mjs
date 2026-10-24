@@ -10,6 +10,8 @@ export const elementProfiles = [
   "text-image-ink-chart",
   "container-grammar",
   "transform-style",
+  "native-sheet-embed",
+  "formula-bound-shapes",
 ];
 const markers = [
   "none",
@@ -39,6 +41,7 @@ export async function realizeElementFixture(board, api, profile) {
   const covered = [];
   const ids = [];
   const expect = [];
+  const renderUnits = {};
   const ensure = (value, reason) => {
     assert.ok(value, reason);
     return value;
@@ -85,7 +88,130 @@ export async function realizeElementFixture(board, api, profile) {
     covered.push({ feature: "shape", shapeType, elementId: ref.id });
     return ref;
   };
-  if (["builtin-shapes", "custom-shapes", "sequence-shapes"].includes(profile)) {
+  if (["native-sheet-embed", "formula-bound-shapes"].includes(profile)) {
+    const workbookId = `catalogue-${profile}-source`,
+      sheetId = `${workbookId}-sales`;
+    const workbook = api.createWorkbook(
+      {
+        id: workbookId,
+        name: "Quarterly sales / 季度销售",
+        sheetOrder: [sheetId],
+        sheets: {
+          [sheetId]: {
+            id: sheetId,
+            name: "Sales",
+            rowCount: 12,
+            columnCount: 5,
+            cellData: {
+              0: { 0: { v: "Quarter" }, 1: { v: "Orders" } },
+              1: { 0: { v: "Q1" }, 1: { v: 120 } },
+              2: { 0: { v: "Q2" }, 1: { v: 168 } },
+              3: { 0: { v: "Q3" }, 1: { v: 192 } },
+              4: { 0: { v: "Q4" }, 1: { v: 226 } },
+            },
+          },
+        },
+      },
+      { makeCurrent: false },
+    );
+    ensure(workbook, "Embedded/reference source creation failed");
+    const unit = { unitType: "sheet", unitData: workbook.save() };
+    if (profile === "native-sheet-embed") {
+      const embed = api.createEmbed({
+        embedId: "catalogue-sales-embed",
+        host: {
+          unitId: board.getId(),
+          surface: E.FEmbedHostSurface.BoardFloating,
+          context: { left: 70, top: 130, width: 940, height: 520 },
+        },
+        content: {
+          unitType: E.UniverInstanceType.UNIVER_SHEET,
+          ref: `#unit=${workbookId}&type=sheet`,
+        },
+        displayTarget: { subUnitId: sheetId },
+      });
+      ensure(embed, "Native Embed creation failed");
+      const child = await embed.loadAsync();
+      assert.equal(child.getId(), workbookId, "Embed loaded a different child");
+      ensure(board.getElement(embed.getHostAnchorId()), "Embed host anchor missing");
+      ids.push(embed.getHostAnchorId());
+      renderUnits.embeddedUnits = [unit];
+      covered.push({
+        feature: "native-sheet-embed",
+        descriptorId: embed.getId(),
+        elementId: embed.getHostAnchorId(),
+        childUnitId: child.getId(),
+        expectedVisibleContent: [
+          ["Quarter", "Orders"],
+          ["Q1", "120"],
+          ["Q2", "168"],
+          ["Q3", "192"],
+          ["Q4", "226"],
+        ],
+        staticModelLoaded: true,
+        actualChildPixelsAndInteraction: "pending",
+      });
+      caption("Native editable Sheet embed / 原生可编辑表格子文档", 70, 50, 1000);
+    } else {
+      for (const [index, formula] of ["=SUM(120,168)", "external"].entries()) {
+        const ref = ensure(
+          board.insertShape({
+            shapeType: E.ShapeTypeEnum.RoundRect,
+            transform: { left: 70 + index * 450, top: 180, width: 340, height: 140 },
+          }),
+          "Formula shape insertion failed",
+        );
+        if (formula === "external") {
+          const source = { unitId: workbookId, formulaQualifier: "Quarterly sales" };
+          const reference = api
+            .getFormula()
+            .buildReference({
+              hostUnitId: board.getId(),
+              unit: source,
+              target: {
+                kind: E.FormulaReferenceType.SHEET_RANGE,
+                sheetName: "Sales",
+                range: { startRow: 1, endRow: 4, startColumn: 1, endColumn: 1 },
+              },
+            });
+          ref.setFormula({
+            formula: `=SUM(${reference})`,
+            externalReferences: [
+              {
+                qualifier: source.formulaQualifier,
+                sourceUnitId: source.unitId,
+                sourceUnitType: E.UniverInstanceType.UNIVER_SHEET,
+              },
+            ],
+          });
+        } else ref.setFormula({ formula, externalReferences: [] });
+        ref.setFormulaAnimationEnabled(false);
+        ids.push(ref.getId());
+        covered.push({
+          feature: formula === "external" ? "cross-unit-formula" : "constant-formula",
+          elementId: ref.getId(),
+          formula: ref.getFormula(),
+          expectedRenderedValue: formula === "external" ? "706" : "288",
+          actualRenderedValue: "pending",
+        });
+        caption(
+          formula === "external" ? "SUM of source Sheet B2:B5 · 706" : "SUM(120,168) · 288",
+          70 + index * 450,
+          100,
+          420,
+        );
+      }
+      renderUnits.formulaReferenceUnits = [unit];
+    }
+    const values = workbook.getActiveSheet().getRange("A1:B5").getValues();
+    expect.push(() =>
+      assert.deepEqual(
+        workbook.getActiveSheet().getRange("A1:B5").getValues(),
+        values,
+        "Child/reference source values changed",
+      ),
+    );
+  } else if (["builtin-shapes", "custom-shapes", "sequence-shapes"].includes(profile)) {
     const source = {
       "builtin-shapes": E.ShapeTypeEnum,
       "custom-shapes": E.BoardCustomShapeType,
@@ -428,6 +554,7 @@ export async function realizeElementFixture(board, api, profile) {
   const elementIds = Object.keys(board.getElements());
   return {
     nodes: ids,
+    renderUnits,
     fixed: elementIds,
     protected: elementIds,
     layoutOptions: { fixedElementIds: elementIds, maxNodes: 1000 },

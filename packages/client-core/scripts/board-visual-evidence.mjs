@@ -24,12 +24,13 @@ export async function captureVisualEvidence(
   screenshot,
   unitData,
   directory,
-  { overviewOnly = false } = {},
+  { overviewOnly = false, renderUnits = {} } = {},
 ) {
   await mkdir(directory, { recursive: true });
   const first = await screenshot.capture({
     unitType: "board",
     unitData,
+    ...renderUnits,
     target: { kind: "board-content" },
   });
   assert.equal(first.images.length, 1, "Visual case must have one active Board page");
@@ -51,7 +52,11 @@ export async function captureVisualEvidence(
   };
   const capture = async (name, region, scale) => {
     const target = { kind: "board-content", region, scale };
-    await save(name, await screenshot.capture({ unitType: "board", unitData, target }), target);
+    await save(
+      name,
+      await screenshot.capture({ unitType: "board", unitData, ...renderUnits, target }),
+      target,
+    );
   };
   const fitScale = first.images[0].scale;
   await save("fit", first, { kind: "board-content" });

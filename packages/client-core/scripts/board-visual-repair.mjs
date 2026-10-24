@@ -70,7 +70,13 @@ async function assertHistory(board, before, after, label) {
 export async function repairMeasuredVisualText(board, lint, fixture) {
   const reports = [],
     attempts = [];
-  const measure = () => lint.lint({ unitType: "board", unitData: board.save(), mode: "rendered" });
+  const measure = () =>
+    lint.lint({
+      unitType: "board",
+      unitData: board.save(),
+      ...fixture.renderUnits,
+      mode: "rendered",
+    });
   for (let index = 0; index < 3; index++) {
     const report = await measure();
     reports.push(report);

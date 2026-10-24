@@ -98,10 +98,11 @@ try {
         unitType: UniverInstanceType.UNIVER_BOARD,
       });
       let board;
+      let fixture;
       try {
         const api = createStandardHeadlessUniverFacade(univer);
         board = api.createBoard({ id, name: id });
-        const fixture = visualSuite
+        fixture = visualSuite
           ? realizeVisualFixture(board, api, profile, variant)
           : elementsSuite
             ? await realizeElementFixture(board, api, profile)
@@ -122,7 +123,7 @@ try {
               screenshot,
               board.save(),
               resolve(values.out, id, "before"),
-              { overviewOnly: true },
+              { overviewOnly: true, renderUnits: fixture.renderUnits },
             )
           : undefined;
         if (!values["fixtures-only"]) {
@@ -347,7 +348,12 @@ try {
             (variant === "long-labels" && detailProfiles.has(profile)));
         const labelRepair =
           planLabels && shouldRender
-            ? await verifyRenderedLabelPlan(board, renderRuntime, !requireClean)
+            ? await verifyRenderedLabelPlan(
+                board,
+                renderRuntime,
+                !requireClean,
+                fixture.renderUnits,
+              )
             : undefined;
         const rendered = shouldRender
           ? visualEvidence
@@ -355,6 +361,7 @@ try {
                 screenshot,
                 board.save(),
                 resolve(values.out, id, "after"),
+                { renderUnits: fixture.renderUnits },
               )
             : await renderEvidence(screenshot, board.save(), id, variant === "long-labels")
           : undefined;
@@ -430,6 +437,7 @@ try {
                   screenshot,
                   board.save(),
                   resolve(values.out, id, "failure"),
+                  { renderUnits: fixture?.renderUnits },
                 )
               : await renderEvidence(screenshot, board.save(), id, variant === "long-labels");
           } catch (failure) {
@@ -572,11 +580,17 @@ async function renderEvidence(screenshot, unitData, id, detail) {
   };
 }
 
-async function verifyRenderedLabelPlan(board, runtime, assertCollisionImprovement = true) {
+async function verifyRenderedLabelPlan(
+  board,
+  runtime,
+  assertCollisionImprovement = true,
+  renderUnits = {},
+) {
   const lint = createUnitLayoutLint({ runtime });
   const input = {
     unitType: "board",
     unitData: board.save(),
+    ...renderUnits,
     mode: "rendered",
     includeLabelPlan: true,
   };

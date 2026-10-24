@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import {
   getVisualCase,
   realizeVisualFixture,
   visualCases,
   visualVariants,
 } from "../scripts/board-visual-fixtures.mjs";
-import { visualCaptureRegions } from "../scripts/board-visual-evidence.mjs";
+import { captureVisualEvidence, visualCaptureRegions } from "../scripts/board-visual-evidence.mjs";
 import {
   proposeMeasuredTextGrowth,
   repairMeasuredVisualText,
@@ -251,6 +254,55 @@ describe("Board public Facade business fixture preservation", () => {
 });
 
 describe("Board full-extent visual capture tiling", () => {
+  it("preserves public child/reference input on every scale without treating clean as visual approval", async () => {
+    const parent = resolve(tmpdir());
+    const directory = await mkdtemp(join(parent, "board-visual-capture-"));
+    const calls = [];
+    const renderUnits = {
+      embeddedUnits: [{ unitType: "sheet", unitData: { id: "child" } }],
+      formulaReferenceUnits: [{ unitType: "sheet", unitData: { id: "source" } }],
+    };
+    try {
+      const screenshot = {
+        async capture(input) {
+          calls.push(input);
+          return {
+            images: [
+              {
+                name: "board-content.png",
+                width: 800,
+                height: 600,
+                scale: 1,
+                bytes: new Uint8Array([137, 80, 78, 71]),
+                contentBounds: { left: -20, top: -10, width: 400, height: 250 },
+                layoutAnalysis: { source: "rendered", routes: [], issues: [] },
+              },
+            ],
+          };
+        },
+      };
+      const result = await captureVisualEvidence(screenshot, { id: "host" }, directory, {
+        renderUnits,
+      });
+      expect(calls.length).toBeGreaterThanOrEqual(4);
+      expect(
+        calls.every(
+          (input) =>
+            input.embeddedUnits === renderUnits.embeddedUnits &&
+            input.formulaReferenceUnits === renderUnits.formulaReferenceUnits,
+        ),
+      ).toBe(true);
+      expect(result.status).toBe("clean");
+      expect(result.coverage.visualApproval).toBe("pending");
+      expect(result.coverage.typographyInkMeasured).toBe(false);
+      expect(
+        JSON.parse(await readFile(join(directory, "capture-progress.json"), "utf8")).complete,
+      ).toBe(true);
+    } finally {
+      expect(dirname(directory)).toBe(parent);
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
   it("covers negative origins and every part of a large canvas with overlapping native-scale tiles", () => {
     const bounds = { left: -171, top: -63, width: 1733, height: 985 };
     const tiles = visualCaptureRegions(bounds, 550, 320);
