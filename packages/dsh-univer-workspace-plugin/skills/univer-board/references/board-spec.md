@@ -97,6 +97,21 @@ spacing before their spans, and set each multiline body paragraph explicitly rat
 Use native text-box wrapping and padding; enlarge for real content rather than clipping or dropping
 words. Apply primary-path color/weight to the actual connectors, not only custom metadata.
 
+Keep class relation names, endpoint roles and multiplicities independent. Render only authored roles; a node ID
+is not a role, and a relation name must not also become an inferred endpoint label. Preserve every explicit role
+and multiplicity when changing layout.
+
+Give actor names and supporting text their own readable region below the glyph. Keep the glyph, text and endpoint
+bindings in one native actor object. If the installed shape needs a larger caption rail, clone that inserted
+instance's geometry and update the complete element through the public API; preserve the glyph proportions and
+verify resizing. Do not copy SDK factory implementation or detach the caption into an unrelated text object.
+Keep authored endpoint sides, fractions and manual guides; bind new unconstrained relations to the glyph rather
+than its caption region.
+
+Preserve the native sequence factory's participant kind, geometry and default proportions. Actors, controls,
+entities and other participant variants must retain their own symbols; activations remain narrow bars. Adjust
+lifeline tail height independently of participant shape height, and size captions for their complete text.
+
 For lane/phase workflows, derive a repeatable grid from semantic column order and measured content sizes. Fit lane
 headers to their longest caption and place wrapping explanation cards below the content when a side column makes the
 whole diagram too wide. Preserve phase order and native group/lane ownership. If those constraints fix node frames,
