@@ -441,15 +441,17 @@ export async function realizeElementFixture(board, api, profile) {
     );
     ids.push(image.id);
     covered.push({ feature: "embedded-image", elementId: image.id });
+    const imageCaption = caption("Embedded image", 70, 378);
+    const inkTop = imageCaption.transform.top + imageCaption.transform.height + 24;
     const ink = ensure(
       board.insertInk({
         model: {
           kind: "brush",
           points: [
-            { x: 80, y: 435, t: 0 },
-            { x: 145, y: 410, t: 1 },
-            { x: 210, y: 448, t: 2 },
-            { x: 280, y: 420, t: 3 },
+            { x: 80, y: inkTop + 25, t: 0 },
+            { x: 145, y: inkTop, t: 1 },
+            { x: 210, y: inkTop + 38, t: 2 },
+            { x: 280, y: inkTop + 10, t: 3 },
           ],
           color: "#be185d",
           width: 5,
@@ -460,6 +462,13 @@ export async function realizeElementFixture(board, api, profile) {
     );
     ids.push(ink.id);
     covered.push({ feature: "persistent-ink", elementId: ink.id });
+    expect.push(() => {
+      const captionBounds = board.getElement(imageCaption.id).transform;
+      assert.ok(
+        board.getElement(ink.id).transform.top >= captionBounds.top + captionBounds.height + 16,
+        "Ink overlaps the image caption",
+      );
+    });
     const chartInfo = board
       .newChart(E.ChartTypeString.Column)
       .setSource([
@@ -476,8 +485,7 @@ export async function realizeElementFixture(board, api, profile) {
     const chart = ensure(await board.insertChart(chartInfo), "Chart insertion failed");
     ids.push(chart.getElementId());
     covered.push({ feature: "inline-data-chart", elementId: chart.getElementId() });
-    caption("Embedded image", 70, 378);
-    caption("Editable persistent Ink", 70, 475);
+    caption("Editable persistent Ink", 70, inkTop + 65);
   } else if (profile === "container-grammar") {
     for (const [index, kind] of ["generic", "system-boundary", "uml-package"].entries()) {
       const p = point(index, 440, 350, 3),
