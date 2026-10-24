@@ -2,6 +2,49 @@ import assert from "node:assert/strict";
 
 const snapshot = (board) => JSON.parse(JSON.stringify(board.save()));
 
+function proposeLaneCapacity(board, patches, fixture) {
+  const lanePatches = [];
+  for (const { containerId, laneId } of fixture.expandableLanes ?? []) {
+    const pool = board.getElement(containerId),
+      swimlane = pool?.containerData?.swimlane,
+      lane = swimlane?.lanes.find((item) => item.id === laneId);
+    if (
+      !lane ||
+      lane.locked ||
+      lane.collapsed ||
+      pool.locked ||
+      pool.selectable === false ||
+      pool.managedBy ||
+      fixture.fixed.includes(containerId) ||
+      pool.containerData.behavior.membershipLocked ||
+      pool.transform.rotation ||
+      pool.transform.skewX ||
+      pool.transform.skewY ||
+      pool.transform.flipX ||
+      pool.transform.flipY ||
+      (pool.transform.scaleX ?? 1) !== 1 ||
+      (pool.transform.scaleY ?? 1) !== 1
+    )
+      continue;
+    const members = fixture.nodes
+      .map((id) => board.getElement(id))
+      .filter((item) => item?.parentId === containerId && item.laneId === laneId);
+    if (!members.some((item) => patches[item.id])) continue;
+    const axis = swimlane.orientation === "horizontal" ? "height" : "width",
+      sizes = members.map((item) => patches[item.id]?.[axis] ?? item.transform[axis]),
+      stacked = (fixture.layoutOptions.direction ?? "horizontal") !== swimlane.orientation;
+    if (!sizes.every((size) => Number.isFinite(size) && size > 0)) continue;
+    // The generator owns this gutter; the SDK still validates and plans the native lane.
+    const required = Math.ceil(
+      (stacked ? sizes.reduce((sum, size) => sum + size, 0) : Math.max(...sizes)) +
+        72 +
+        (stacked ? Math.max(0, sizes.length - 1) * (fixture.layoutOptions.itemGap ?? 100) : 0),
+    );
+    if (required > lane.size) lanePatches.push({ containerId, laneId, size: required });
+  }
+  return lanePatches;
+}
+
 export function proposeMeasuredTextGrowth(board, report, fixture) {
   const patches = {},
     tablePatches = {},
@@ -47,7 +90,17 @@ export function proposeMeasuredTextGrowth(board, report, fixture) {
         skipped.push({ elementId: id, reason, issue });
         continue;
       }
-      if (element.type === "table") {
+      if (
+        element.type === "table" &&
+        issue.tableRange === undefined &&
+        ["width", "height"].some(
+          (axis) => Math.abs(available[axis] - element.transform[axis]) > 1e-6,
+        )
+      ) {
+        skipped.push({ elementId: id, reason: "table-cell-range-unavailable", issue });
+        continue;
+      }
+      if (element.type === "table" && issue.tableRange !== undefined) {
         const table = board.getTable?.(id),
           structure = table?.getStructure(),
           range = issue.tableRange;
@@ -107,7 +160,13 @@ export function proposeMeasuredTextGrowth(board, report, fixture) {
         height: Math.ceil(height + (content.height > available.height ? 4 : 0)),
       };
     }
-  return { patches, tablePatches, skipped, issues };
+  return {
+    patches,
+    tablePatches,
+    lanePatches: proposeLaneCapacity(board, patches, fixture),
+    skipped,
+    issues,
+  };
 }
 
 async function assertHistory(board, before, after, label) {
@@ -155,9 +214,17 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
         ...(changed ? { undoExact: true, redoExact: true } : {}),
       });
     };
+    for (const patch of proposal.lanePatches)
+      await applyGrowth(
+        () => board.setSwimlaneLaneSize(patch.containerId, patch.laneId, patch.size),
+        {
+          kind: "swimlane-capacity",
+          ...patch,
+        },
+      );
     if (Object.keys(proposal.patches).length)
       await applyGrowth(() => board.setElementsTransform(proposal.patches), {
-        kind: "shape-size",
+        kind: "element-frame-size",
         patches: proposal.patches,
       });
     for (const [id, patch] of Object.entries(proposal.tablePatches)) {
@@ -193,6 +260,7 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
         index,
         patches: proposal.patches,
         tablePatches: proposal.tablePatches,
+        lanePatches: proposal.lanePatches,
         growthApplications,
         skipped: proposal.skipped,
         growthApplied: true,
@@ -225,6 +293,7 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
       index,
       patches: proposal.patches,
       tablePatches: proposal.tablePatches,
+      lanePatches: proposal.lanePatches,
       growthApplications,
       skipped: proposal.skipped,
       growthApplied: true,

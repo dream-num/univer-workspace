@@ -138,6 +138,10 @@ Rendered checks require the version-matched render page and a supported browser.
 For a Board, `--plan-labels` with `--mode rendered` or `--mode both` adds read-only measured label plans in
 `analyses[].labelPlan`. Review a ready plan for `FBoard.getActivePageId()`, apply it with `FBoard.applyLayoutPlan`, then lint
 again. Stale plans are rejected and must be recaptured; model-only checks cannot produce measured label plans.
+For a new diagram or an explicit repair, use rendered measurements before growing shapes or table frames.
+Generated lane capacity can be enlarged with the native lane API before replanning; authored capacities and fixed
+or locked owners stay unchanged. Verify each write with Undo/Redo and roll back capacity and size changes if the
+fresh plan is incomplete. Screenshot review remains a separate step.
 Board errors or incomplete coverage exit with code 2; with `--json`, stderr contains one error object whose
 `error.details.report` retains the full report, and stdout stays empty.
 

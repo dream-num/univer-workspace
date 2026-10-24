@@ -144,6 +144,16 @@ New ordinary groups with external captions can set `containerData.headerSize` to
 before child insertion, then fit and remeasure. Patch the complete element and preserve source constraints; leave
 existing authored groups, swimlanes and native layout owners unchanged.
 
+For new scopes with declared membership, create them with `membershipLocked: true`, then update the complete
+container to structural membership with `behavior.autoCapture: false`, `capturePolicy.enabled: false` and
+`behavior.membershipLocked: false` before inserting explicit children. Overlapping seed frames must not capture
+one another. Verify both group parents and node parents against the semantic spec. Reserve external child-caption
+space in the parent padding before fitting; a 24-pixel native caption needs its own rail and a gap from the parent
+border (for example, 48 pixels of top padding), rather than overlaying two titles at the same left/top.
+For a new feedback relation with no authored endpoints or guides, choose exterior return ports before planning
+(bottom in a horizontal flow, right in a vertical flow) so the return avoids top captions. Keep automatic routing
+and real node bindings; preserve existing endpoint and manual-route choices.
+
 For a semantic visual scope, explicitly set native `containerData.behavior.layoutOccupancy` to `frame` so its
 interior remains available while borders and captions are checked; ordinary panels, tables and Embed keep body
 occupancy. Do not replace this native contract with custom metadata or use it to exempt diagnostics.
@@ -151,9 +161,18 @@ occupancy. Do not replace this native contract with custom metadata or use it to
 When the installed rendered report includes `element-text-overflow`, use its `textLayout` content/available ratio
 to grow eligible generated shapes without shrinking type. For a table, use the inclusive zero-based `tableRange`
 to resize only the measured rows/columns, including every row/column in a merged range; preserve values, merges
-and styles. Keep fixed, locked, unselectable and native/managed owners unchanged, verify each write with Undo/Redo,
+and styles. A whole-table native paint measurement without a cell range, whose available size matches the current
+outer frame, can instead grow the Table element frame
+through `setElementsTransform`, preserving every resource row, cell and style; an invalid partial range is refused.
+Keep fixed, locked, unselectable and native/managed owners unchanged, verify each write with Undo/Redo,
 then replan, fit and remeasure. Stop after a bounded number of attempts (at most three); roll back the growth if
 the fresh graph plan is incomplete and retain unresolved/missing measurements instead of guessing sizes.
+
+When newly generated lane capacity, or an explicitly approved repair, allows growth, first use
+`setSwimlaneLaneSize` to make room for the measured child sizes and the generation gutter, then grow children
+and obtain a fresh graph plan. Keep the pool protected from generic graph resizing. Do not alter an authored
+capacity, a fixed pool, a locked/collapsed lane or other native ownership. Verify each capacity write with exact
+Undo/Redo and roll it back together with child growth if replanning is incomplete.
 
 ## Imported label constraints
 

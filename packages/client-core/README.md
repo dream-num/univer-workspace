@@ -76,12 +76,18 @@ class 使用 `layerGap: 160`；节点尺寸不为消除诊断而预先放大。�
 `business`、`long-bilingual` 和 `nested-dense`。可用 `--variant <name>` 缩小迭代范围。
 业务清单保留领域字段、UML 基数、消息时序、原生结构所有权、泳道和嵌套边界；新增普通容器在布局前后
 通过现有 `fitContainerToContent` 收紧，不将手工排好的坐标当作自动布局结果。
+显式指定成员的新 scope 关闭自动捕获，逐层校验 group 和 node 的父级，并为子框的外置标题保留 padding，
+避免重叠 seed 框颠倒真实所有权或让父边框压住子标题。
 若已安装 renderer 返回 `element-text-overflow` 的公开 `textLayout` 测量，最多三轮按真实内容/可用
 textRect 比例扩大可编辑普通 Shape；Table 使用 inclusive 零基 `tableRange` 仅调整实测行列，合并范围内
-按原行列比例扩展，不改单元格内容、合并或样式。每条公开 resize 写入独立验证 Undo/Redo，再通过相同
+按原行列比例扩展，不改单元格内容、合并或样式。无 cell range 的完整原生 Table paint 测量只扩大元素框，
+保留资源行列和内容；不完整的 range 仍拒绝。每条公开 resize 写入独立验证 Undo/Redo，再通过相同
 selection/direction/fixed 约束重新 plan、apply、fit
 和测量；不缩字号。固定、locked、不可选和 native/managed 元素保持不变。新的图计划 incomplete
-时回滚该轮尺寸变更并保存诊断。停止边界不代表必然收敛，未报告 overflow 也不代表人工视觉验收通过。
+时回滚该轮尺寸变更并保存诊断。仅对明确允许扩容的新生成 lane，先调用 `setSwimlaneLaneSize` 为实测
+子节点和留白增加容量，再扩大子节点并重新规划；pool 仍受 generic graph plan 保护。用户容量、固定 pool
+和 locked/collapsed lane 不变。容量写入单独验证 Undo/Redo，规划不完整时一并回滚。
+停止边界不代表必然收敛，未报告 overflow 也不代表人工视觉验收通过。
 `--suite elements` 另建元素目录，覆盖已安装 SDK 的全部注册内建/custom/sequence 形状、图表、
 8 类图示表格、文字、图片、Ink、连接线标记与容器。目录使用固定展示坐标，只验证可用性与视觉表现；
 另外以真实本地 Sheet 验证 native BoardFloating Embed 和 constant/cross-Unit 公式 Shape，通过公开

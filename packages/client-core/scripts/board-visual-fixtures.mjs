@@ -9,6 +9,7 @@ const node = (id, title, detail, kind = "service", extra = {}) => ({
   ...extra,
 });
 const edge = (from, to, label, extra = {}) => ({ from, to, label, ...extra });
+const INK_COLOR = "#0f172a";
 
 // Content is independent of seeded positions, so the same manifest can be reviewed in another renderer.
 export const visualCases = {
@@ -600,7 +601,8 @@ export function getVisualCase(profile, variant) {
           parent: root.id,
         };
         value.groups.push(nested);
-        for (const item of value.nodes.filter((item) => !item.parent)) item.parent = nested.id;
+        for (const item of value.nodes.filter((item) => !item.parent || item.parent === root.id))
+          item.parent = nested.id;
       }
     }
   }
@@ -731,6 +733,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
           top: 78,
           width: 640,
           height: 360,
+          membershipLocked: true,
           fillColor: group.parent ? "#f8fafc" : "#ffffff",
           strokeColor: "#94a3b8",
           strokeWidth: 1,
@@ -746,7 +749,19 @@ export function realizeVisualFixture(board, api, profile, variant) {
             containerData: {
               ...created.containerData,
               headerSize: 0,
-              behavior: { ...created.containerData.behavior, layoutOccupancy: "frame" },
+              padding: {
+                ...created.containerData.padding,
+                top: spec.groups.some((child) => child.parent === group.id) ? 48 : 12,
+              },
+              behavior: {
+                ...created.containerData.behavior,
+                autoCapture: false,
+                autoResize: false,
+                membershipLocked: false,
+                membershipAwareness: "structural",
+                layoutOccupancy: "frame",
+              },
+              capturePolicy: { ...created.containerData.capturePolicy, enabled: false },
             },
           },
         }),
@@ -780,12 +795,14 @@ export function realizeVisualFixture(board, api, profile, variant) {
         const members = spec.nodes.filter((item) => item.lane === lane.id).map(size);
         return {
           ...lane,
-          size: Math.max(
-            230,
-            members.reduce((sum, value) => sum + value.height, 0) +
-              Math.max(0, members.length - 1) * (spec.direction === "vertical" ? 100 : 48) +
-              72,
-          ),
+          size:
+            lane.size ??
+            Math.max(
+              230,
+              members.reduce((sum, value) => sum + value.height, 0) +
+                Math.max(0, members.length - 1) * (spec.direction === "vertical" ? 100 : 48) +
+                72,
+            ),
         };
       });
       ensure(
@@ -901,6 +918,8 @@ export function realizeVisualFixture(board, api, profile, variant) {
           final: E.BoardCustomShapeType.FinalState,
         }[item.kind] ?? E.ShapeTypeEnum.RoundRect;
       const palette = {
+        initial: [INK_COLOR, INK_COLOR],
+        final: [INK_COLOR, INK_COLOR],
         security: ["#fff1f2", "#be185d"],
         database: ["#f5f3ff", "#7c3aed"],
         queue: ["#fff7ed", "#c2410c"],
@@ -971,12 +990,44 @@ export function realizeVisualFixture(board, api, profile, variant) {
         const primary = spec.mainPath?.some(
           (id, index) => id === item.from && spec.mainPath[index + 1] === item.to,
         );
+        const outerFeedback =
+          item.feedback &&
+          item.start === undefined &&
+          item.end === undefined &&
+          item.waypoints === undefined &&
+          item.routing === undefined &&
+          item.routingMode !== "manual";
+        const feedbackSite =
+          spec.direction === "horizontal"
+            ? E.BoardConnectorSite.Bottom
+            : E.BoardConnectorSite.Right;
         ref = board.insertConnector({
           fromElementId: ids[item.from],
           toElementId: ids[item.to],
+          ...(outerFeedback
+            ? {
+                start: {
+                  kind: "shapeSite",
+                  shapeId: ids[item.from],
+                  connectionSiteId: feedbackSite,
+                  connectionPosition: 0.5,
+                  connectionPositionMode: "fixed",
+                },
+                end: {
+                  kind: "shapeSite",
+                  shapeId: ids[item.to],
+                  connectionSiteId: feedbackSite,
+                  connectionPosition: 0.5,
+                  connectionPositionMode: "fixed",
+                },
+              }
+            : {}),
+          ...(item.start ? { start: item.start } : {}),
+          ...(item.end ? { end: item.end } : {}),
+          ...(item.waypoints !== undefined ? { waypoints: item.waypoints } : {}),
           labelText: item.label,
-          routing: "orthogonal",
-          routingMode: "auto",
+          routing: item.routing ?? "orthogonal",
+          routingMode: item.routingMode ?? "auto",
           style: {
             stroke: primary ? "#0369a1" : "#64748b",
             strokeWidth: primary ? 2 : 1.25,
@@ -995,6 +1046,26 @@ export function realizeVisualFixture(board, api, profile, variant) {
         });
       }
       ensure(ref, `Cannot create ${item.from} → ${item.to}`);
+      if (item.waypoints?.length || item.routingMode === "manual") {
+        for (const id of [ids[item.from], ids[item.to]]) if (!fixed.includes(id)) fixed.push(id);
+        protectedIds.push(ref.id);
+      }
+      if (item.feedback) {
+        const bindings = (data) => {
+          const { start, end, waypoints } = json(data);
+          delete start.fallbackPoint;
+          delete end.fallbackPoint;
+          return { start, end, waypoints };
+        };
+        const before = bindings(board.getElement(ref.id).connectorData);
+        expectations.push(() => {
+          assert.deepEqual(
+            bindings(board.getElement(ref.id).connectorData),
+            before,
+            "Feedback bindings or authored guides changed",
+          );
+        });
+      }
     }
   }
   // Fit generated seed frames before graph spacing; authored oversized frames would otherwise dictate the layout span.
@@ -1011,7 +1082,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
       text: api
         .newRichText()
         .paragraph({ lineHeight: 1.2, spaceAfter: 5 })
-        .span(spec.title, { fontFamily: "Arial", fontSize: 18, bold: true, color: "#0f172a" })
+        .span(spec.title, { fontFamily: "Arial", fontSize: 18, bold: true, color: INK_COLOR })
         .paragraph({ lineHeight: 1.25, spaceAfter: 0 })
         .span(`${profile} · ${variant}`, {
           fontFamily: "Consolas",
@@ -1031,6 +1102,9 @@ export function realizeVisualFixture(board, api, profile, variant) {
     nodes,
     fixed,
     protected: protectedIds,
+    expandableLanes: (spec.lanes ?? [])
+      .filter((lane) => lane.size === undefined && !lane.locked && !lane.collapsed)
+      .map((lane) => ({ containerId: "visual-pool", laneId: lane.id })),
     layoutOptions: {
       elementIds: layoutElementIds,
       direction: spec.direction,
@@ -1057,12 +1131,19 @@ export function realizeVisualFixture(board, api, profile, variant) {
         expectedRelations,
         "Business relationships lost",
       );
-      for (const id of Object.values(groups))
+      for (const group of spec.groups ?? []) {
+        const id = groups[group.id];
+        assert.equal(
+          board.getElement(id).parentId ?? null,
+          group.parent ? groups[group.parent] : null,
+          "Business group ancestry changed",
+        );
         assert.equal(
           board.getElement(id).containerData.behavior.layoutOccupancy,
           "frame",
           "Generated visual scope occupancy changed",
         );
+      }
       for (const item of spec.nodes) {
         if (!ids[item.id]) continue;
         const actual = board.getElement(ids[item.id]);

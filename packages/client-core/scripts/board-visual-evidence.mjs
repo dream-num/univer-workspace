@@ -2,6 +2,36 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+function renderedCaptureBounds(image) {
+  const measured = image.layoutAnalysis?.contentBounds;
+  const selected = image.contentBounds;
+  for (const bounds of [selected, measured])
+    assert.ok(
+      bounds &&
+        [bounds.left, bounds.top, bounds.width, bounds.height].every(Number.isFinite) &&
+        bounds.width > 0 &&
+        bounds.height > 0,
+      "Fresh rendered content extent missing",
+    );
+  const left = Math.min(selected.left, measured.left),
+    top = Math.min(selected.top, measured.top);
+  return {
+    left,
+    top,
+    width: Math.max(selected.left + selected.width, measured.left + measured.width) - left,
+    height: Math.max(selected.top + selected.height, measured.top + measured.height) - top,
+  };
+}
+
+function containsRect(outer, inner) {
+  return (
+    inner.left >= outer.left - 1e-6 &&
+    inner.top >= outer.top - 1e-6 &&
+    inner.left + inner.width <= outer.left + outer.width + 1e-6 &&
+    inner.top + inner.height <= outer.top + outer.height + 1e-6
+  );
+}
+
 export function visualCaptureRegions(bounds, tileWidth = 1000, tileHeight = 720) {
   assert.ok([bounds.left, bounds.top, bounds.width, bounds.height].every(Number.isFinite));
   assert.ok(bounds.width > 0 && bounds.height > 0);
@@ -34,8 +64,6 @@ export async function captureVisualEvidence(
     target: { kind: "board-content" },
   });
   assert.equal(first.images.length, 1, "Visual case must have one active Board page");
-  const bounds = first.images[0].contentBounds;
-  assert.ok(bounds, "No rendered content extent available");
   const captures = [];
   const save = async (name, result, target) => {
     assert.equal(result.images.length, 1, "Visual case must have one active Board page");
@@ -66,8 +94,41 @@ export async function captureVisualEvidence(
       target,
     );
   };
-  const fitScale = first.images[0].scale;
-  await save("fit", first, { kind: "board-content" });
+  const image = first.images[0];
+  let bounds;
+  try {
+    bounds = renderedCaptureBounds(image);
+  } catch (error) {
+    await save("initial-model-fit", first, { kind: "board-content" });
+    throw error;
+  }
+  let fitScale = image.scale;
+  if (!containsRect(image.contentBounds, bounds)) {
+    await save("initial-model-fit", first, { kind: "board-content" });
+    // The public renderer fixes Board deviceScaleFactor at 1. Leave 2px for raster rounding beyond the 32px margins.
+    fitScale = Math.min(
+      image.scale,
+      (image.width - 66) / bounds.width,
+      (image.height - 66) / bounds.height,
+    );
+    assert.ok(Number.isFinite(fitScale) && fitScale > 0, "Rendered extent cannot fit the viewport");
+    const padding = 32 / fitScale;
+    const region = {
+      left: bounds.left - padding,
+      top: bounds.top - padding,
+      width: bounds.width + 2 * padding,
+      height: bounds.height + 2 * padding,
+    };
+    const target = { kind: "board-content", region, scale: fitScale };
+    const fit = await screenshot.capture({ unitType: "board", unitData, ...renderUnits, target });
+    await save("fit", fit, target);
+    assert.ok(
+      containsRect(region, renderedCaptureBounds(fit.images[0])),
+      "Fresh rendered content escaped the selected Fit extent",
+    );
+  } else {
+    await save("fit", first, { kind: "board-content" });
+  }
   if (!overviewOnly) {
     // Explicit-scale captures must fit the renderer viewport; use its successful fit image as a conservative budget.
     for (const scale of [0.5, 1, 2]) {
@@ -102,7 +163,7 @@ export async function captureVisualEvidence(
       fullNativeScaleTiling: !overviewOnly,
       scales: overviewOnly ? [fitScale] : [fitScale, 0.5, 1, 2],
       visualApproval: "pending",
-      extentSource: "public-rendered-capture-bounds",
+      extentSource: "fresh-public-rendered-analysis-union",
       typographyInkMeasured: false,
     },
   };

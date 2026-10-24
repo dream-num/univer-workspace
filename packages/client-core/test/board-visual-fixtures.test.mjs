@@ -95,13 +95,13 @@ describe("Board measured text growth boundaries", () => {
     ).toEqual({ a: { width: 324, height: 154 } });
     expect(a).toEqual(original);
   });
-  it("preserves fixed/native, locked parents, unselectable objects and table resources", () => {
+  it("preserves fixed/native, locked parents, unselectable objects and locked tables", () => {
     const elements = {
       a: shape("a"),
       b: shape("b", { parentId: "owner" }),
       owner: { id: "owner", type: "container", locked: true },
       c: shape("c", { selectable: false }),
-      d: { ...shape("d"), type: "table" },
+      d: { ...shape("d"), type: "table", locked: true },
       e: shape("e"),
     };
     const f = { ...fixture, nodes: ["a", "b", "c", "d", "e"], fixed: ["a"], protected: ["e"] };
@@ -161,6 +161,28 @@ describe("Board measured text growth boundaries", () => {
       ).skipped[0].reason,
     ).toBe("table-cell-range-unavailable");
   });
+  it("uses measured whole-table paint overflow to grow its frame without changing the resource", () => {
+    const table = { ...shape("a"), type: "table" },
+      original = structuredClone(table);
+    expect(
+      proposeMeasuredTextGrowth(
+        { getElement: () => table },
+        report(["a"], { width: 200, height: 100 }, { width: 320, height: 150 }),
+        fixture,
+      ),
+    ).toMatchObject({
+      patches: { a: { width: 324, height: 154 } },
+      tablePatches: {},
+    });
+    expect(table).toEqual(original);
+    expect(
+      proposeMeasuredTextGrowth({ getElement: () => table }, report(["a"]), fixture),
+    ).toMatchObject({
+      patches: {},
+      tablePatches: {},
+      skipped: [{ elementId: "a", reason: "table-cell-range-unavailable" }],
+    });
+  });
   it("rolls back a measured growth whose fresh public graph plan is incomplete", async () => {
     let value = { id: "board", pages: { p: { elements: { a: shape("a") } } } },
       undo,
@@ -207,13 +229,173 @@ describe("Board measured text growth boundaries", () => {
 });
 
 describe("Board public Facade business fixture preservation", () => {
+  it("preserves authored feedback endpoints and manual guides instead of imposing an exterior default", async () => {
+    const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+      await import("@univer-cli/headless-univer");
+    const { UniverInstanceType } = await import("@univerjs/core");
+    const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+      unitId: "authored-feedback",
+      unitType: UniverInstanceType.UNIVER_BOARD,
+    });
+    const original = visualCases["uml-state"].edges;
+    const authored = {
+      start: {
+        kind: "shapeSite",
+        shapeId: "visual-pastdue",
+        connectionSiteId: 0,
+        connectionPosition: 0.2,
+        connectionPositionMode: "fixed",
+      },
+      end: {
+        kind: "shapeSite",
+        shapeId: "visual-active",
+        connectionSiteId: 0,
+        connectionPosition: 0.8,
+        connectionPositionMode: "fixed",
+      },
+      waypoints: [{ id: "authored-guide", x: 800, y: 110, kind: "manual" }],
+      routingMode: "manual",
+    };
+    try {
+      visualCases["uml-state"].edges = original.map((item) =>
+        item.feedback ? { ...item, ...authored } : item,
+      );
+      const api = createStandardHeadlessUniverFacade(univer),
+        board = api.createBoard({ id: "authored-feedback", name: "Authored feedback" }),
+        fixture = realizeVisualFixture(board, api, "uml-state", "business");
+      const connector = Object.values(board.getElements()).find(
+        (item) => item.custom?.visualSource?.feedback,
+      );
+      expect(connector.connectorData).toMatchObject(authored);
+      const plan = board.planGraphLayout({
+        ...fixture.layoutOptions,
+        fixedElementIds: fixture.fixed,
+      });
+      expect(board.applyLayoutPlan(plan)).toBe(plan.status === "ready");
+      fixture.verify();
+      expect(board.getElement(connector.id).connectorData).toMatchObject(authored);
+    } finally {
+      visualCases["uml-state"].edges = original;
+      univer.dispose();
+    }
+  }, 20_000);
+  it.each(["deployment", "uml-state"])(
+    "keeps declared %s group ancestry and reserves nested external caption space",
+    async (profile) => {
+      const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+        await import("@univer-cli/headless-univer");
+      const { UniverInstanceType } = await import("@univerjs/core");
+      const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+        unitId: profile,
+        unitType: UniverInstanceType.UNIVER_BOARD,
+      });
+      try {
+        const api = createStandardHeadlessUniverFacade(univer),
+          board = api.createBoard({ id: profile, name: profile }),
+          fixture = realizeVisualFixture(board, api, profile, "business");
+        const check = () => {
+          for (const group of fixture.spec.groups) {
+            const actual = board.getElement(`visual-${group.id}`);
+            expect(actual.parentId ?? null).toBe(group.parent ? `visual-${group.parent}` : null);
+            expect(actual.containerData.behavior.autoCapture).toBe(false);
+            if (group.parent) {
+              expect(actual.transform.top).toBeGreaterThanOrEqual(48);
+            }
+          }
+          fixture.verify();
+        };
+        check();
+        const plan = board.planGraphLayout({
+          ...fixture.layoutOptions,
+          fixedElementIds: fixture.fixed,
+        });
+        expect(plan.status).toBe("ready");
+        expect(board.applyLayoutPlan(plan)).toBe(true);
+        for (const id of fixture.compactContainers)
+          expect(board.fitContainerToContent(id)).toBe(true);
+        check();
+      } finally {
+        univer.dispose();
+      }
+    },
+    20_000,
+  );
+  it.each([true, false, "over-budget"])(
+    "grows measured generated lane capacity only when explicitly allowed (%s)",
+    async (allowed) => {
+      const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+        await import("@univer-cli/headless-univer");
+      const { UniverInstanceType } = await import("@univerjs/core");
+      const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+        unitId: "activity-capacity",
+        unitType: UniverInstanceType.UNIVER_BOARD,
+      });
+      try {
+        const api = createStandardHeadlessUniverFacade(univer),
+          board = api.createBoard({ id: "activity-capacity", name: "Activity capacity" }),
+          fixture = realizeVisualFixture(board, api, "uml-activity", "long-bilingual");
+        const initialPlan = board.planGraphLayout(fixture.layoutOptions);
+        expect(board.applyLayoutPlan(initialPlan)).toBe(true);
+        const before = JSON.parse(JSON.stringify(board.save()));
+        let measurements = 0;
+        const result = await repairMeasuredVisualText(
+          board,
+          {
+            lint: async () => ({
+              analyses: [
+                {
+                  rendered: {
+                    issues: measurements++
+                      ? []
+                      : [
+                          {
+                            rule: "element-text-overflow",
+                            elementIds: ["visual-budget"],
+                            textLayout: {
+                              availableSize: { width: 100, height: 100 },
+                              contentSize: { width: 100, height: 312 },
+                            },
+                          },
+                        ],
+                  },
+                },
+              ],
+            }),
+          },
+          allowed === "over-budget"
+            ? { ...fixture, layoutOptions: { ...fixture.layoutOptions, maxNodes: 1 } }
+            : allowed
+              ? fixture
+              : { ...fixture, expandableLanes: [] },
+        );
+        expect(result.status).toBe(allowed === true ? "no-overflow-reported" : "replan-incomplete");
+        if (allowed === true) {
+          const lane = board
+            .getElement("visual-pool")
+            .containerData.swimlane.lanes.find((item) => item.id === "finance");
+          expect(lane.size).toBeGreaterThan(board.getElement("visual-budget").transform.height);
+          expect(result.attempts[0].growthApplications[0]).toMatchObject({
+            kind: "swimlane-capacity",
+            undoExact: true,
+            redoExact: true,
+          });
+        } else expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
+        fixture.verify();
+      } finally {
+        univer.dispose();
+      }
+    },
+    20_000,
+  );
   it.each([
-    ["erd", false],
-    ["uml-class", false],
-    ["uml-class", true],
+    ["erd", false, false],
+    ["uml-class", false, false],
+    ["uml-class", true, false],
+    ["uml-class", false, true],
+    ["uml-class", true, true],
   ])(
-    "uses actual public %s table resource history for measured cell growth (budget refusal %s)",
-    async (profile, incomplete) => {
+    "uses actual public %s table history for measured growth (budget refusal %s, whole paint %s)",
+    async (profile, incomplete, wholePaint) => {
       const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
         await import("@univer-cli/headless-univer");
       const { UniverInstanceType } = await import("@univerjs/core");
@@ -229,6 +411,7 @@ describe("Board public Facade business fixture preservation", () => {
           values = structuredClone(table.getValues()),
           original = table.getStructure();
         const before = JSON.parse(JSON.stringify(board.save()));
+        const frame = board.getElement(table.getId()).transform;
         let measurements = 0;
         const result = await repairMeasuredVisualText(
           board,
@@ -243,15 +426,23 @@ describe("Board public Facade business fixture preservation", () => {
                           {
                             rule: "element-text-overflow",
                             elementIds: [table.getId()],
-                            tableRange: {
-                              startRow: 0,
-                              endRow: 0,
-                              startColumn: 0,
-                              endColumn: original.columnCount - 1,
-                            },
+                            ...(!wholePaint
+                              ? {
+                                  tableRange: {
+                                    startRow: 0,
+                                    endRow: 0,
+                                    startColumn: 0,
+                                    endColumn: original.columnCount - 1,
+                                  },
+                                }
+                              : {}),
                             textLayout: {
-                              availableSize: { width: 400, height: 40 },
-                              contentSize: { width: 500, height: 50 },
+                              availableSize: wholePaint
+                                ? { width: frame.width, height: frame.height }
+                                : { width: 400, height: 40 },
+                              contentSize: wholePaint
+                                ? { width: frame.width * 1.25, height: frame.height * 1.25 }
+                                : { width: 500, height: 50 },
                             },
                           },
                         ],
@@ -265,7 +456,9 @@ describe("Board public Facade business fixture preservation", () => {
             : fixture,
         );
         expect(result.status).toBe(incomplete ? "replan-incomplete" : "no-overflow-reported");
-        expect(result.attempts[0].growthApplications.length).toBe(original.columnCount + 1);
+        expect(result.attempts[0].growthApplications.length).toBe(
+          wholePaint ? 1 : original.columnCount + 1,
+        );
         expect(
           result.attempts[0].growthApplications.every(
             (application) =>
@@ -277,7 +470,13 @@ describe("Board public Facade business fixture preservation", () => {
         ).toBe(true);
         expect(table.getValues()).toEqual(values);
         if (incomplete) expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
-        else expect(table.getStructure().rowHeights[0]).toBeGreaterThan(original.rowHeights[0]);
+        else if (wholePaint) {
+          expect(table.getStructure()).toEqual(original);
+          const originalElement = before.pages[before.activePageId].elements[table.getId()];
+          expect(board.getElement(table.getId()).transform.height).toBeGreaterThan(
+            originalElement.transform.height,
+          );
+        } else expect(table.getStructure().rowHeights[0]).toBeGreaterThan(original.rowHeights[0]);
         fixture.verify();
       } finally {
         univer.dispose();
@@ -305,6 +504,31 @@ describe("Board public Facade business fixture preservation", () => {
         const board = api.createBoard({ id: profile, name: profile });
         const fixture = realizeVisualFixture(board, api, profile, variant);
         fixture.verify();
+        for (const item of Object.values(board.getElements()).filter(
+          (item) => item.custom?.visualSource?.feedback,
+        )) {
+          const side =
+            fixture.spec.direction === "horizontal"
+              ? api.Enum.BoardConnectorSite.Bottom
+              : api.Enum.BoardConnectorSite.Right;
+          expect(item.connectorData).toMatchObject({
+            routingMode: "auto",
+            start: { connectionSiteId: side, connectionPositionMode: "fixed" },
+            end: { connectionSiteId: side, connectionPositionMode: "fixed" },
+          });
+        }
+        if (profile === "uml-state")
+          for (const [id, shapeType] of [
+            ["initial", api.Enum.BoardCustomShapeType.InitialState],
+            ["final", api.Enum.BoardCustomShapeType.FinalState],
+          ]) {
+            const element = board.getElement(`visual-${id}`);
+            expect(element.shapeData).toMatchObject({
+              shapeType,
+              fill: { color: "#0f172a" },
+              stroke: { color: "#0f172a" },
+            });
+          }
         for (const id of fixture.semanticCoverage.visualScopeElementIds)
           expect(board.getElement(id).containerData.behavior.layoutOccupancy).toBe("frame");
         if (profile === "erd") {
@@ -398,6 +622,164 @@ describe("Board public Facade business fixture preservation", () => {
 });
 
 describe("Board full-extent visual capture tiling", () => {
+  it.each([
+    {
+      name: "labels left of the model",
+      measured: { left: -150, top: -20, width: 550, height: 270 },
+    },
+    { name: "table rows below the model", measured: { left: 0, top: 0, width: 400, height: 350 } },
+  ])("refits $name using fresh rendered bounds", async ({ measured }) => {
+    const directory = await mkdtemp(join(resolve(tmpdir()), "board-rendered-fit-"));
+    const calls = [],
+      selected = { left: 0, top: 0, width: 400, height: 250 };
+    try {
+      const screenshot = {
+        async capture(input) {
+          calls.push(input);
+          return {
+            images: [
+              {
+                width: 800,
+                height: 600,
+                scale: input.target.scale ?? 1.84,
+                bytes: new Uint8Array([137, 80, 78, 71]),
+                contentBounds: input.target.region ?? selected,
+                layoutAnalysis: {
+                  source: "rendered",
+                  routes: [],
+                  issues: [],
+                  contentBounds: measured,
+                },
+              },
+            ],
+          };
+        },
+      };
+      const result = await captureVisualEvidence(screenshot, { id: "host" }, directory, {
+        overviewOnly: true,
+      });
+      expect(calls).toHaveLength(2);
+      expect(calls[1].target.region.left).toBeLessThan(measured.left);
+      expect(calls[1].target.region.top).toBeLessThan(measured.top);
+      expect(calls[1].target.region.left + calls[1].target.region.width).toBeGreaterThan(
+        measured.left + measured.width,
+      );
+      expect(calls[1].target.region.top + calls[1].target.region.height).toBeGreaterThan(
+        measured.top + measured.height,
+      );
+      expect(calls[1].target.region.width * result.fitScale).toBeLessThanOrEqual(800 + 1e-6);
+      expect(calls[1].target.region.height * result.fitScale).toBeLessThanOrEqual(600 + 1e-6);
+      expect(result.contentBounds).toMatchObject(measured);
+      expect(result.outputs[0].file).toMatch(/initial-model-fit\.png$/);
+      expect(result.outputs[1].file).toMatch(/[/\\]fit\.png$/);
+      expect(result.coverage.extentSource).toBe("fresh-public-rendered-analysis-union");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves partial pixels and rejects a missing or unstable rendered extent", async () => {
+    for (const missing of [true, false]) {
+      const directory = await mkdtemp(join(resolve(tmpdir()), "board-unresolved-fit-"));
+      let calls = 0;
+      try {
+        const screenshot = {
+          async capture(input) {
+            calls++;
+            return {
+              images: [
+                {
+                  width: 800,
+                  height: 600,
+                  scale: input.target.scale ?? 1,
+                  bytes: new Uint8Array([137, 80, 78, 71]),
+                  contentBounds: input.target.region ?? {
+                    left: 0,
+                    top: 0,
+                    width: 400,
+                    height: 250,
+                  },
+                  layoutAnalysis: {
+                    source: "rendered",
+                    routes: [],
+                    issues: [],
+                    ...(missing
+                      ? {}
+                      : {
+                          contentBounds: {
+                            left: calls === 1 ? -100 : -1000,
+                            top: 0,
+                            width: calls === 1 ? 500 : 1400,
+                            height: 250,
+                          },
+                        }),
+                  },
+                },
+              ],
+            };
+          },
+        };
+        await expect(
+          captureVisualEvidence(screenshot, { id: "host" }, directory, { overviewOnly: true }),
+        ).rejects.toThrow(
+          missing ? "Fresh rendered content extent missing" : "Fresh rendered content escaped",
+        );
+        const progress = JSON.parse(
+          await readFile(join(directory, "capture-progress.json"), "utf8"),
+        );
+        expect(progress.complete).toBe(false);
+        expect(progress.outputs).toHaveLength(missing ? 1 : 2);
+        expect(await readFile(progress.outputs[0].file)).toEqual(Buffer.from([137, 80, 78, 71]));
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("leaves a pixel budget for the real 1335-unit label extent when raster dimensions round up", async () => {
+    const directory = await mkdtemp(join(resolve(tmpdir()), "board-fit-pixel-budget-"));
+    const measured = { left: -109, top: -60, width: 1335, height: 502 };
+    const selected = { left: 70, top: -60, width: 1156, height: 502 };
+    const calls = [];
+    try {
+      const screenshot = {
+        async capture(input) {
+          calls.push(input);
+          if (input.target.region) {
+            expect(Math.ceil(input.target.region.width * input.target.scale)).toBeLessThanOrEqual(
+              1600,
+            );
+            expect(Math.ceil(input.target.region.height * input.target.scale)).toBeLessThanOrEqual(
+              999,
+            );
+          }
+          return {
+            images: [
+              {
+                width: 1600,
+                height: 999,
+                scale: input.target.scale ?? 1536 / 1156,
+                bytes: new Uint8Array([137, 80, 78, 71]),
+                contentBounds: input.target.region ?? selected,
+                layoutAnalysis: {
+                  source: "rendered",
+                  routes: [],
+                  issues: [],
+                  contentBounds: measured,
+                },
+              },
+            ],
+          };
+        },
+      };
+      await captureVisualEvidence(screenshot, { id: "host" }, directory, { overviewOnly: true });
+      expect(calls).toHaveLength(2);
+      expect(calls[1].target.region.width * calls[1].target.scale).toBeLessThan(1600);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("preserves public child/reference input on every scale without treating clean as visual approval", async () => {
     const parent = resolve(tmpdir());
     const directory = await mkdtemp(join(parent, "board-visual-capture-"));
@@ -419,7 +801,12 @@ describe("Board full-extent visual capture tiling", () => {
                 scale: input.target.scale ?? 1,
                 bytes: new Uint8Array([137, 80, 78, 71]),
                 contentBounds: { left: -20, top: -10, width: 400, height: 250 },
-                layoutAnalysis: { source: "rendered", routes: [], issues: [] },
+                layoutAnalysis: {
+                  source: "rendered",
+                  routes: [],
+                  issues: [],
+                  contentBounds: { left: -20, top: -10, width: 400, height: 250 },
+                },
               },
             ],
           };
@@ -461,7 +848,12 @@ describe("Board full-extent visual capture tiling", () => {
                 scale: 1,
                 bytes: new Uint8Array([137, 80, 78, 71]),
                 contentBounds: { left: 0, top: 0, width: 400, height: 250 },
-                layoutAnalysis: { source: "rendered", routes: [], issues: [] },
+                layoutAnalysis: {
+                  source: "rendered",
+                  routes: [],
+                  issues: [],
+                  contentBounds: { left: 0, top: 0, width: 400, height: 250 },
+                },
               },
             ],
           };
