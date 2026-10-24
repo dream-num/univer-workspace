@@ -85,6 +85,7 @@ describe("native catalogue content and measured authoring", () => {
         "Scatter",
       ]);
       for (const { family, info } of infos) {
+        expect(info.config.type).toBe(api.Enum.ChartTypeString[family]);
         expect(info.sourceHeader).toEqual({ band: { startOffset: 0, endOffset: 0 } });
         expect(info.dataSource.values).toHaveLength(5);
         expect(info.dataSource.values[0]).toEqual([

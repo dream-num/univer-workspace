@@ -681,6 +681,11 @@ export async function realizeElementFixture(board, api, profile, options = {}) {
         sourceHeader: chartInfo.sourceHeader,
       });
       expect.push(() => {
+        assert.equal(
+          chart.getInfo().config.type,
+          E.ChartTypeString[family],
+          `${family} native chart kind changed`,
+        );
         assert.deepEqual(
           chart.getInfo().dataSource,
           chartInfo.dataSource,
