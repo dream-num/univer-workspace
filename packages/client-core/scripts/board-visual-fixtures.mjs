@@ -613,6 +613,60 @@ function json(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function actorCaption(element, item, E) {
+  const copy = json(element),
+    glyphHeight = copy.transform.height,
+    width = copy.transform.width;
+  const lines = (text, font) =>
+    Math.max(
+      1,
+      Math.ceil(
+        (Array.from(text).reduce(
+          (sum, character) => sum + (/[\u2e80-\uffff]/u.test(character) ? 1 : 0.6),
+          0,
+        ) *
+          font) /
+          (width - 24),
+      ),
+    );
+  const captionHeight =
+    lines(item.title, 15) * 18 +
+    item.detail
+      .split("\n")
+      .filter(Boolean)
+      .reduce((sum, line) => sum + lines(line, 12) * 15, 0) +
+    12;
+  const top = glyphHeight + 4,
+    height = top + captionHeight,
+    geometry = copy.shapeData.customGeometry;
+  // Read the factory's horizontal arm from this instance instead of copying its drawing implementation.
+  const arms = [];
+  for (const path of geometry.pathLst) {
+    let previous;
+    for (const command of path.dataArray) {
+      if (command.command === "L" && previous?.[1] === command.points[1])
+        arms.push({
+          length: Math.abs(command.points[0] - previous[0]),
+          y: (command.points[1] * glyphHeight) / path.h,
+        });
+      previous = ["M", "L"].includes(command.command) ? command.points : undefined;
+    }
+    path.h *= height / glyphHeight;
+  }
+  const arm = arms.sort((a, b) => b.length - a.length)[0];
+  assert.ok(arm, "Native Actor has no horizontal arm anchor");
+  if (geometry.strokeReferenceSize) geometry.strokeReferenceSize.height *= height / glyphHeight;
+  geometry.gd = {
+    ...geometry.gd,
+    visualActorCaptionTop: [E.ShapeOperatorEnum.MulDiv, "h", top, height],
+  };
+  geometry.gdKeyList = [...(geometry.gdKeyList ?? []), "visualActorCaptionTop"];
+  geometry.rect = { l: "l", t: "visualActorCaptionTop", r: "r", b: "b" };
+  copy.transform.height = height;
+  copy.shapeData.textRectPadding = { left: 12, right: 12, top: 0, bottom: 8 };
+  return { element: copy, connectionPosition: arm.y / height };
+}
+
 export function realizeVisualFixture(board, api, profile, variant) {
   const spec = getVisualCase(profile, variant);
   const E = api.Enum;
@@ -622,6 +676,8 @@ export function realizeVisualFixture(board, api, profile, variant) {
   const groups = {};
   const expectations = [];
   const structuredTableText = new Map();
+  const actorPorts = new Map(),
+    usedActorPorts = new Map();
   const ensure = (value, reason) => {
     assert.ok(value, reason);
     return value;
@@ -966,6 +1022,14 @@ export function realizeVisualFixture(board, api, profile, variant) {
         `Cannot create ${item.id}`,
       );
       ids[item.id] = ref.id;
+      if (item.kind === "actor") {
+        const caption = actorCaption(board.getElement(ref.id), item, E);
+        ensure(
+          board.updateElement(ref.id, { element: caption.element }),
+          "Cannot reserve Actor caption rail",
+        );
+        actorPorts.set(ref.id, caption.connectionPosition);
+      }
     });
     for (const item of spec.edges) {
       let ref;
@@ -974,10 +1038,14 @@ export function realizeVisualFixture(board, api, profile, variant) {
           type: item.relation,
           start: {
             elementId: ids[item.from],
-            role: item.from,
+            ...(item.startRole !== undefined ? { role: item.startRole } : {}),
             multiplicity: item.startMultiplicity,
           },
-          end: { elementId: ids[item.to], role: item.label, multiplicity: item.endMultiplicity },
+          end: {
+            elementId: ids[item.to],
+            ...(item.endRole !== undefined ? { role: item.endRole } : {}),
+            multiplicity: item.endMultiplicity,
+          },
           name: item.label,
         });
       else if (profile === "erd")
@@ -1002,6 +1070,32 @@ export function realizeVisualFixture(board, api, profile, variant) {
           spec.direction === "horizontal"
             ? E.BoardConnectorSite.Bottom
             : E.BoardConnectorSite.Right;
+        const actorEndpoint = (key, side) => {
+          const shapeId = ids[item[key]],
+            position = actorPorts.get(shapeId);
+          if (
+            position === undefined ||
+            item[side] !== undefined ||
+            item.waypoints !== undefined ||
+            item.routing !== undefined ||
+            item.routingMode === "manual"
+          )
+            return {};
+          const use = `${shapeId}:${side}`,
+            count = usedActorPorts.get(use) ?? 0;
+          usedActorPorts.set(use, count + 1);
+          const face = side === "start" ? E.BoardConnectorSite.Right : E.BoardConnectorSite.Left;
+          // The auto fraction allocator uses the complete text frame. Keep these generated anchors on the glyph.
+          return {
+            [side]: {
+              kind: "shapeSite",
+              shapeId,
+              connectionSiteId: count % 2 ? (face + 2) % 4 : face,
+              connectionPosition: position,
+              connectionPositionMode: "fixed",
+            },
+          };
+        };
         ref = board.insertConnector({
           fromElementId: ids[item.from],
           toElementId: ids[item.to],
@@ -1023,6 +1117,8 @@ export function realizeVisualFixture(board, api, profile, variant) {
                 },
               }
             : {}),
+          ...actorEndpoint("from", "start"),
+          ...actorEndpoint("to", "end"),
           ...(item.start ? { start: item.start } : {}),
           ...(item.end ? { end: item.end } : {}),
           ...(item.waypoints !== undefined ? { waypoints: item.waypoints } : {}),
