@@ -298,6 +298,7 @@ describe("Board public Facade business fixture preservation", () => {
             const actual = board.getElement(`visual-${group.id}`);
             expect(actual.parentId ?? null).toBe(group.parent ? `visual-${group.parent}` : null);
             expect(actual.containerData.behavior.autoCapture).toBe(false);
+            expect(actual.containerData.padding.bottom).toBe(48);
             if (group.parent) {
               expect(actual.transform.top).toBeGreaterThanOrEqual(48);
             }
@@ -504,6 +505,18 @@ describe("Board public Facade business fixture preservation", () => {
         const board = api.createBoard({ id: profile, name: profile });
         const fixture = realizeVisualFixture(board, api, profile, variant);
         fixture.verify();
+        for (const item of fixture.spec.nodes.filter((item) => item.kind === "database")) {
+          const element = Object.values(board.getElements()).find(
+            (element) => element.custom?.visualSourceId === item.id,
+          );
+          expect(element.shapeData).toMatchObject({
+            shapeType: api.Enum.ShapeTypeEnum.Can,
+            shapeText: { autoFitType: api.Enum.ShapeTextAutoFitType.NoAutoFit },
+          });
+          expect(
+            element.shapeData.shapeText.dataModel.doc.body.textRuns.map((run) => run.ts.fs),
+          ).toContain(11.25);
+        }
         for (const item of Object.values(board.getElements()).filter(
           (item) => item.custom?.visualSource?.feedback,
         )) {

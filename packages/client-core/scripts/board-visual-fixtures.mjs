@@ -752,6 +752,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
               padding: {
                 ...created.containerData.padding,
                 top: spec.groups.some((child) => child.parent === group.id) ? 48 : 12,
+                bottom: 48,
               },
               behavior: {
                 ...created.containerData.behavior,
@@ -909,7 +910,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
           start: E.ShapeTypeEnum.FlowchartTerminator,
           end: E.ShapeTypeEnum.FlowchartTerminator,
           process: E.ShapeTypeEnum.FlowchartProcess,
-          database: E.BoardCustomShapeType.DataStorage1,
+          database: E.ShapeTypeEnum.Can,
           queue: E.ShapeTypeEnum.RoundRect,
           actor: E.BoardCustomShapeType.Actor,
           usecase: E.ShapeTypeEnum.Ellipse,
