@@ -35,7 +35,7 @@ for valid directives, assets, and full creation/update examples. The compiler is
 AI SDK; this Skill owns the Workspace target and review workflow.
 
 - Apply with `uvw compile-markdown report.md --apply --worktree <id> --space <space-id>
-  --source-map-out review/doc-map.json --json`. It creates the draft Doc; do not create an empty
+--source-map-out review/doc-map.json --json`. It creates the draft Doc; do not create an empty
   placeholder first. Use the returned server-owned `unit.unitId` for later commands.
 - Preserve SDK default typography, line/paragraph spacing, and callout colors. Use plain
   `:::callout{#notice}`. Modern columns use native ColumnGroup with 2–5 columns; do not use
@@ -44,7 +44,7 @@ AI SDK; this Skill owns the Workspace target and review workflow.
   not contain native identities and cannot address later edits.
 - Before each partial update, export the selected current native blocks with `export-markdown`,
   including their resources, refreshed source map, and authoritative revision. Edit that fragment,
-  retain its root IDs, and apply with `--unit`, `--revision`, `--source-map`, and `--blocks` together.
+  retain its root IDs, and apply with `--unit`, `--source-map`, and `--blocks` together.
   Save the new execution map after success. Native content is authoritative; old Markdown does not
   include subsequent editor changes.
 - On conflicts, read/export again and replan. Unsupported content or diagnostic errors stop the

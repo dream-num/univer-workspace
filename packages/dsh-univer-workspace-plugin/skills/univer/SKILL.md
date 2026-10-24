@@ -74,7 +74,7 @@ For document deletion, use `univer_unit` with `action: "remove"`, `worktreeId`, 
 4. Load the matching Unit skill before writing Facade code.
 5. Resolve unfamiliar Facade usage with `univer_api` following the lookup rules above. Never guess an unfamiliar signature, parameter type, or enum.
 6. For Modern Docs, use `univer_compile_markdown`; export selected current blocks with
-   `univer_export_markdown` before guarded partial updates. Use `univer_compile_svg` for generated
+   `univer_export_markdown` before partial updates. Use `univer_compile_svg` for generated
    Slide page content, or `univer_execute` for direct Facade operations.
 7. Read the changed scope with `univer_inspect`; use a fresh read-only `univer_execute` when inspection omits a required model field.
 8. For every changed Slide page, call `univer_lint` and resolve or explicitly justify each finding.
@@ -99,25 +99,25 @@ Never reopen or reuse a merged or discarded worktree; create a new worktree inst
 
 ## Tool map
 
-| Stage | Tool | Use |
-| --- | --- | --- |
-| Discover | `univer_spaces`, `univer_documents`, `univer_open` | Discover remote documents and resolve their identities. |
-| Direct creation | `univer_new`, `univer_create` | Create a typed document immediately in trunk; prefer Worktree-local creation for agent tasks. |
-| Start | `univer_status` | Inspect a document or Worktree using an explicit identity. |
-| Start | `univer_issue` | `list`, `get`, `create`, `update`, `comment`, `close`, or `reopen` Team Space Issues. `get` before working on one. |
-| Start | `univer_worktree` | `create`, `ready`, `reopen`, `merge`, or `discard`. |
-| Start | `univer_unit` | Create a draft Unit, mark one for deletion with `remove`, or undo its deletion intent with `restore`. |
-| Start | `univer_import` | Import local xlsx, csv, tsv, docx, or pptx as a new Unit. |
-| Write | `univer_execute` | Run version-matched Facade JavaScript against one Unit in a draft worktree. |
-| Write | `univer_compile_markdown` | Create native Modern Docs or replace selected explicit blocks from session Markdown. |
-| Read for editing | `univer_export_markdown` | Export selected current native Doc blocks, assets, map, and revision. |
-| Write | `univer_compile_svg` | Compile workspace SVG into one explicit Slide page with browser text metrics. |
-| Verify | `univer_inspect` | Read structured Unit content from trunk or one worktree. |
-| Verify | `univer_lint` | Check Slide text off-page, container escape, and text overlap. |
-| Verify | `univer_screenshot` | Render Sheet, Doc, Slide, Base, or Board PNG evidence and return it to an image-capable model. |
-| Reference | `univer_api` | Find an unknown name, or show a known class, API, or type. |
-| Reference | `univer_resources` | List/find/read/export bundled SVG resources or clear their download cache. |
-| Deliver | `univer_export` | Export Sheet/Base to xlsx/csv/tsv, Doc to docx, or Slide to pptx. |
+| Stage            | Tool                                               | Use                                                                                                                |
+| ---------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Discover         | `univer_spaces`, `univer_documents`, `univer_open` | Discover remote documents and resolve their identities.                                                            |
+| Direct creation  | `univer_new`, `univer_create`                      | Create a typed document immediately in trunk; prefer Worktree-local creation for agent tasks.                      |
+| Start            | `univer_status`                                    | Inspect a document or Worktree using an explicit identity.                                                         |
+| Start            | `univer_issue`                                     | `list`, `get`, `create`, `update`, `comment`, `close`, or `reopen` Team Space Issues. `get` before working on one. |
+| Start            | `univer_worktree`                                  | `create`, `ready`, `reopen`, `merge`, or `discard`.                                                                |
+| Start            | `univer_unit`                                      | Create a draft Unit, mark one for deletion with `remove`, or undo its deletion intent with `restore`.              |
+| Start            | `univer_import`                                    | Import local xlsx, csv, tsv, docx, or pptx as a new Unit.                                                          |
+| Write            | `univer_execute`                                   | Run version-matched Facade JavaScript against one Unit in a draft worktree.                                        |
+| Write            | `univer_compile_markdown`                          | Create native Modern Docs or replace selected explicit blocks from session Markdown.                               |
+| Read for editing | `univer_export_markdown`                           | Export selected current native Doc blocks, assets, map, and revision.                                              |
+| Write            | `univer_compile_svg`                               | Compile workspace SVG into one explicit Slide page with browser text metrics.                                      |
+| Verify           | `univer_inspect`                                   | Read structured Unit content from trunk or one worktree.                                                           |
+| Verify           | `univer_lint`                                      | Check Slide text off-page, container escape, and text overlap.                                                     |
+| Verify           | `univer_screenshot`                                | Render Sheet, Doc, Slide, Base, or Board PNG evidence and return it to an image-capable model.                     |
+| Reference        | `univer_api`                                       | Find an unknown name, or show a known class, API, or type.                                                         |
+| Reference        | `univer_resources`                                 | List/find/read/export bundled SVG resources or clear their download cache.                                         |
+| Deliver          | `univer_export`                                    | Export Sheet/Base to xlsx/csv/tsv, Doc to docx, or Slide to pptx.                                                  |
 
 ## Facade execution
 

@@ -25,8 +25,9 @@ target identities, session paths, and review remain this application's responsib
   Traditional section breaks or replace requested columns with layout tables.
 - Before each partial update, call `univer_export_markdown` for selected explicit top-level IDs.
   It reads current native content, resources, a refreshed map, and the authoritative revision.
-  Edit that fragment, retain its root IDs, then pass `unitId`, that `revision`, `sourceMapFile`, and
-  the same `blockIds` together to `univer_compile_markdown`. Save the new execution map on success.
+  Edit that fragment, retain its root IDs, then pass `unitId`, `sourceMapFile`, and the same
+  `blockIds` together to `univer_compile_markdown`. The revision is read metadata. Save the new
+  execution map on success.
 - Native content is authoritative; old Markdown misses subsequent editor changes. On conflicts,
   export again and replan. Unsupported content or diagnostic errors stop conversion; report the
   exact limitation instead of flattening content or overwriting the Doc.
@@ -114,8 +115,12 @@ For fixed columns in a Traditional Doc, prefer a borderless layout table. Real d
 
 ```js
 const table = doc.insertTableFromData(
-  [["Group", ""], ["Name", "Description"], ["A", "Long description"]],
-  { width: 602, columnWidths: [200.667, 401.333], headerRowCount: 2 }
+  [
+    ["Group", ""],
+    ["Name", "Description"],
+    ["A", "Long description"],
+  ],
+  { width: 602, columnWidths: [200.667, 401.333], headerRowCount: 2 },
 );
 if (!table) throw new Error("table insert failed");
 table.mergeCells({ startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 });

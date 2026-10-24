@@ -33,17 +33,17 @@ uvw export-markdown --worktree <worktree-id> --unit <doc-id> \
   --out review/edit.md --source-map-out review/current-map.json --json
 ```
 
-Edit `review/edit.md`, retain the selected root IDs and exported assets, then use the exact returned
-revision and refreshed map in one guarded update:
+Edit `review/edit.md`, retain the selected root IDs and exported assets, then use the refreshed map
+for the block update. The returned revision remains read metadata:
 
 ```bash
 uvw compile-markdown review/edit.md --apply --worktree <worktree-id> --unit <doc-id> \
-  --revision <exported-revision> --source-map review/current-map.json \
+  --source-map review/current-map.json \
   --blocks overview,readiness --source-map-out review/updated-map.json --json
 ```
 
 Creation options (`--space`, `--parent`, `--idempotency-key`) cannot accompany `--unit`. On a mapping
-or revision conflict, export again and replan; never guess a revision or overwrite unrelated blocks.
+or block-boundary conflict, export again and replan; never overwrite unrelated blocks.
 Save the new execution map, inspect structural readback and screenshots, then hand off the Worktree.
 
 ## Univer Markdown v1

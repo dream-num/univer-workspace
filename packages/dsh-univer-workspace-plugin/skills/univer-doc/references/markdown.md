@@ -42,7 +42,7 @@ Call `univer_export_markdown` before each edit:
 
 This reads current native content, resolves current image bytes using Workspace authorization,
 and writes Markdown plus sidecar resources. `sourceMapOut` defaults to `<out>.map.json` if omitted.
-Keep the returned revision from this same read. Edit the fragment, preserving selected root IDs,
+The returned revision describes this same read. Edit the fragment, preserving selected root IDs,
 and pass the following to `univer_compile_markdown`:
 
 ```json
@@ -50,14 +50,13 @@ and pass the following to `univer_compile_markdown`:
   "source": "review/edit.md",
   "worktreeId": "<draft-worktree-id>",
   "unitId": "<doc-id>",
-  "revision": 7,
   "sourceMapFile": "review/current-map.json",
   "blockIds": ["overview", "readiness"]
 }
 ```
 
-Replace illustrative revision `7` with the exact export result's revision. All four update fields
-(`unitId`, `revision`, `sourceMapFile`, `blockIds`) are required together; creation-only `spaceId`,
+The three update fields (`unitId`, `sourceMapFile`, `blockIds`) are required together; the exported
+revision is read metadata. Creation-only `spaceId`,
 `parentNodeId`, and `idempotencyKey` cannot accompany them. Save the returned execution `sourceMap`
 after success. On conflict, export again and replan. Inspect and screenshot before review handoff.
 
