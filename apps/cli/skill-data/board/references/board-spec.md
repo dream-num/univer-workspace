@@ -113,6 +113,10 @@ Preserve the native sequence factory's participant kind, geometry and default pr
 entities and other participant variants must retain their own symbols; activations remain narrow bars. Adjust
 lifeline tail height independently of participant shape height, and size captions for their complete text.
 
+For inline native charts, retain the complete source table and declare title rows with
+`setSourceHeader({ band: { startOffset: 0, endOffset: 0 } })` plus category/value fields;
+`setSource(array)` alone is headerless.
+
 For lane/phase workflows, derive a repeatable grid from semantic column order and measured content sizes. Fit lane
 headers to their longest caption and place wrapping explanation cards below the content when a side column makes the
 whole diagram too wide. Preserve phase order and native group/lane ownership. If those constraints fix node frames,
