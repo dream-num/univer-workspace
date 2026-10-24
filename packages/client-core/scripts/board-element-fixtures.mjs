@@ -64,7 +64,9 @@ export async function realizeElementFixture(board, api, profile) {
       board.insertShapeAtPoint({
         shapeType,
         point: p,
-        ...(profile === "sequence-shapes" ? {} : { width: 154, height: 100 }),
+        ...(["sequence-shapes", "builtin-shapes"].includes(profile)
+          ? {}
+          : { width: 154, height: 100 }),
         attachToDropTarget: false,
         ...options,
       }),

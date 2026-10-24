@@ -915,6 +915,44 @@ describe("Board full-extent visual capture tiling", () => {
 });
 
 describe("Board public element catalogue preservation", () => {
+  it("keeps every builtin preset's native default geometry and aspect ratio", async () => {
+    const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+      await import("@univer-cli/headless-univer");
+    const { UniverInstanceType } = await import("@univerjs/core");
+    const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+      unitId: "builtin-native-defaults",
+      unitType: UniverInstanceType.UNIVER_BOARD,
+    });
+    try {
+      const api = createStandardHeadlessUniverFacade(univer);
+      const defaults = api.createBoard({ id: "builtin-defaults", name: "Native defaults" });
+      const board = api.createBoard({ id: "builtin-catalogue", name: "Builtin catalogue" });
+      const fixture = await realizeElementFixture(board, api, "builtin-shapes");
+      for (const item of fixture.semanticCoverage.covered) {
+        const expected = defaults.insertShapeAtPoint({
+          shapeType: item.shapeType,
+          point: { x: 0, y: 0 },
+          attachToDropTarget: false,
+        });
+        const actual = board.getElement(item.elementId);
+        expect(expected, item.shapeType).toBeTruthy();
+        expect(actual.transform.width, item.shapeType).toBe(expected.transform.width);
+        expect(actual.transform.height, item.shapeType).toBe(expected.transform.height);
+        expect(actual.shapeData.adjustValues, item.shapeType).toEqual(
+          expected.shapeData.adjustValues,
+        );
+      }
+      const arrow = fixture.semanticCoverage.covered.find(
+        (item) => item.shapeType === api.Enum.ShapeTypeEnum.UpDownArrow,
+      );
+      const frame = board.getElement(arrow.elementId).transform;
+      expect(frame.height - Math.min(frame.width, frame.height)).toBeGreaterThan(0);
+      fixture.verify();
+    } finally {
+      univer.dispose();
+    }
+  });
+
   it("keeps distinct native sequence participants and activation proportions", async () => {
     const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
       await import("@univer-cli/headless-univer");
