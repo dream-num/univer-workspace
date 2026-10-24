@@ -261,7 +261,7 @@ export async function realizeElementFixture(board, api, profile, options = {}) {
       "custom-shapes": E.BoardCustomShapeType,
       "sequence-shapes": E.BoardSequenceShapeType,
     }[profile];
-    // None is the absence of a shape; SmartArt is an import/adapter slot rather than a registered preset.
+    // None is not a shape. SmartArt needs a composite payload rather than an empty preset insertion.
     const types = [...new Set(Object.values(source))].filter(
       (type) => !["none", "smartArt"].includes(type),
     );
@@ -269,8 +269,102 @@ export async function realizeElementFixture(board, api, profile, options = {}) {
       shape(type, index);
     }
     expect.push(() =>
-      assert.equal(covered.length, types.length, "A public shape preset was skipped"),
+      assert.equal(
+        covered.filter((item) => item.feature === "shape").length,
+        types.length,
+        "A public shape preset was skipped",
+      ),
     );
+    if (profile === "builtin-shapes") {
+      const entries = [
+        ["plan", "Plan / 计划", E.ShapeTypeEnum.RoundRect, 20, "#dbeafe"],
+        ["release", "Release / 发布", E.ShapeTypeEnum.Hexagon, 310, "#fef3c7"],
+      ];
+      const smartArt = {
+        version: 1,
+        viewport: { width: 520, height: 160 },
+        layout: { id: "urn:univer:catalogue:authored-process", category: "process" },
+        style: {},
+        direction: "leftToRight",
+        rootNodeIds: entries.map(([id]) => id),
+        nodes: Object.fromEntries(
+          entries.map(([id, text]) => [
+            id,
+            {
+              id,
+              childIds: [],
+              role: "content",
+              text: { isHorizontal: true, text },
+            },
+          ]),
+        ),
+        presentationShapeOrder: ["plan-shape", "flow-shape", "release-shape"],
+        presentationShapes: Object.fromEntries([
+          ...entries.map(([id, text, shapeType, left, color]) => [
+            `${id}-shape`,
+            {
+              id: `${id}-shape`,
+              role: "node",
+              dataNodeIds: [id],
+              textSource: "dataNode",
+              transform: { left, top: 30, width: 190, height: 100 },
+              shapeData: {
+                shapeType,
+                fill: { fillType: E.ShapeFillEnum.SolidFill, color },
+                stroke: { color: "#334155", width: 1.5 },
+                shapeText: { isHorizontal: true, text, fontSize: 16 },
+              },
+            },
+          ]),
+          [
+            "flow-shape",
+            {
+              id: "flow-shape",
+              role: "connection",
+              dataNodeIds: [],
+              sourcePresentationShapeId: "plan-shape",
+              targetPresentationShapeId: "release-shape",
+              transform: { left: 230, top: 62, width: 60, height: 36 },
+              shapeData: {
+                shapeType: E.ShapeTypeEnum.RightArrow,
+                fill: { fillType: E.ShapeFillEnum.SolidFill, color: "#475569" },
+              },
+            },
+          ],
+        ]),
+      };
+      const top = 90 + Math.ceil(types.length / 5) * 190;
+      const ref = ensure(
+        board.insertShape({
+          shapeType: E.ShapeTypeEnum.SmartArt,
+          transform: { left: 70, top, width: 520, height: 160 },
+          shapeData: { smartArt },
+        }),
+        "SmartArt composite insertion failed",
+      );
+      ids.push(ref.getId());
+      covered.push({
+        feature: "smart-art-composite",
+        elementId: ref.getId(),
+        logicalNodes: 2,
+        presentationShapes: 3,
+        rendering: "partial-native-composite",
+        childTextPaint: "not-rendered-by-board",
+      });
+      caption(
+        "SmartArt native composite · child text not painted / 子文字未绘制",
+        70,
+        top + 172,
+        520,
+      );
+      expect.push(() =>
+        assert.deepEqual(
+          board.getElement(ref.getId()).shapeData.smartArt,
+          smartArt,
+          "SmartArt source nodes or presentation geometry changed",
+        ),
+      );
+    }
   } else if (profile === "table-presets") {
     let left = 70;
     let top = 90;

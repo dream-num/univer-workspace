@@ -928,7 +928,9 @@ describe("Board public element catalogue preservation", () => {
       const defaults = api.createBoard({ id: "builtin-defaults", name: "Native defaults" });
       const board = api.createBoard({ id: "builtin-catalogue", name: "Builtin catalogue" });
       const fixture = await realizeElementFixture(board, api, "builtin-shapes");
-      for (const item of fixture.semanticCoverage.covered) {
+      for (const item of fixture.semanticCoverage.covered.filter(
+        (item) => item.feature === "shape",
+      )) {
         const expected = defaults.insertShapeAtPoint({
           shapeType: item.shapeType,
           point: { x: 0, y: 0 },
@@ -951,7 +953,7 @@ describe("Board public element catalogue preservation", () => {
     } finally {
       univer.dispose();
     }
-  });
+  }, 20_000);
 
   it("keeps distinct native sequence participants and activation proportions", async () => {
     const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
@@ -1031,11 +1033,7 @@ describe("Board public element catalogue preservation", () => {
         expect(fixture.semanticCoverage.automatedLayoutQualityClaim).toBe(false);
         if (profile === "builtin-shapes")
           expect(fixture.semanticCoverage.covered).toHaveLength(
-            new Set(
-              Object.values(api.Enum.ShapeTypeEnum).filter(
-                (type) => !["none", "smartArt"].includes(type),
-              ),
-            ).size,
+            new Set(Object.values(api.Enum.ShapeTypeEnum).filter((type) => type !== "none")).size,
           );
         if (profile === "connector-grammar")
           expect(

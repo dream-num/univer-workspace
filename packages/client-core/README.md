@@ -95,6 +95,8 @@ selection/direction/fixed 约束重新 plan、apply、fit
 像素、公式结果或交互已经通过；预期源值与实际截图/交互审阅分别记录。图表文字和缺少原生 cell 测量的
 表格仍须检查其原生本体 bounds 和完整分块截图；cell 测量也不能替代字形 ink 的逐图审阅。
 未注册的 Media、模板 Placeholder、legacy Group 和 Diagram adapter slot 分别列出，不冒称已渲染。
+SmartArt 使用公开 `insertShape` 创建真实复合 payload，验证逻辑节点、原生子形状和保存历史；当前 Board
+绘制复合几何但不绘制子节点文字，目录明确标为 partial，不将保留的文字数据视为完整文字渲染或子节点编辑。
 
 两套新场景均保存每个 case 的完整 fit 图，以及覆盖整个公开 content extent 的 50%、100%、200%
 重叠分块图和原始 rendered 分析。输出记录真正 apply 的结果与 Undo/Redo/stale 断言，不从非空
