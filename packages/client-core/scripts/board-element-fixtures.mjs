@@ -46,13 +46,13 @@ export async function realizeElementFixture(board, api, profile) {
     assert.ok(value, reason);
     return value;
   };
-  const caption = (text, x, y, width = 220) =>
+  const caption = (text, x, y, width = 220, height = 38) =>
     ensure(
       board.insertText({
         left: x,
         top: y,
         width,
-        height: 38,
+        height,
         text,
         textStyle: { fontFamily: "Arial", fontSize: 12, color: "#334155" },
       }),
@@ -60,31 +60,37 @@ export async function realizeElementFixture(board, api, profile) {
     );
   const shape = (shapeType, index, options = {}) => {
     const p = profile === "sequence-shapes" ? point(index, 260, 310, 4) : point(index);
-    const native = options.shapeData
-      ? ensure(
-          board.insertShape({
-            shapeType,
-            transform: { left: p.x, top: p.y, width: 154, height: 100 },
-            shapeData: options.shapeData,
-          }),
-          `Shape unavailable: ${shapeType}`,
-        )
-      : undefined;
-    const ref = native
-      ? board.getElement(native.getId())
-      : ensure(
-          board.insertShapeAtPoint({
-            shapeType,
-            point: p,
-            width: 154,
-            height: 100,
-            attachToDropTarget: false,
-            ...options,
-          }),
-          `Shape unavailable: ${shapeType}`,
-        );
+    const ref = ensure(
+      board.insertShapeAtPoint({
+        shapeType,
+        point: p,
+        ...(profile === "sequence-shapes" ? {} : { width: 154, height: 100 }),
+        attachToDropTarget: false,
+        ...options,
+      }),
+      `Shape unavailable: ${shapeType}`,
+    );
+    if (profile === "sequence-shapes" && ref.shapeData.sequenceLifeline)
+      ensure(
+        board.updateElement(ref.id, {
+          element: {
+            ...ref,
+            shapeData: {
+              ...ref.shapeData,
+              sequenceLifeline: {
+                ...ref.shapeData.sequenceLifeline,
+                lifelineHeight: 60,
+                minLifelineHeight: 40,
+              },
+            },
+          },
+        }),
+        `Lifeline height unavailable: ${shapeType}`,
+      );
     ids.push(ref.id);
-    caption(shapeType, p.x - 12, p.y + (profile === "sequence-shapes" ? 180 : 110));
+    if (profile === "sequence-shapes")
+      caption(shapeType.replace(/^sequence_/, "sequence_\n"), p.x - 12, p.y + 180, 244, 60);
+    else caption(shapeType, p.x - 12, p.y + 110);
     covered.push({ feature: "shape", shapeType, elementId: ref.id });
     return ref;
   };
@@ -220,20 +226,7 @@ export async function realizeElementFixture(board, api, profile) {
       (type) => !["none", "smartArt"].includes(type),
     );
     for (const [index, type] of types.entries()) {
-      const options =
-        profile === "sequence-shapes" && type !== E.BoardSequenceShapeType.ActivationBar
-          ? {
-              shapeData: {
-                sequenceLifeline: {
-                  participantShapeType: "object",
-                  participantEngineShapeType: E.ShapeTypeEnum.RoundRect,
-                  lifelineHeight: 60,
-                  minLifelineHeight: 40,
-                },
-              },
-            }
-          : {};
-      shape(type, index, options);
+      shape(type, index);
     }
     expect.push(() =>
       assert.equal(covered.length, types.length, "A public shape preset was skipped"),

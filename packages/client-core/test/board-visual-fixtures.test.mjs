@@ -915,6 +915,56 @@ describe("Board full-extent visual capture tiling", () => {
 });
 
 describe("Board public element catalogue preservation", () => {
+  it("keeps distinct native sequence participants and activation proportions", async () => {
+    const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+      await import("@univer-cli/headless-univer");
+    const { UniverInstanceType } = await import("@univerjs/core");
+    const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+      unitId: "sequence-native-defaults",
+      unitType: UniverInstanceType.UNIVER_BOARD,
+    });
+    try {
+      const api = createStandardHeadlessUniverFacade(univer);
+      const defaults = api.createBoard({ id: "sequence-defaults", name: "Native defaults" });
+      const native = new Map(
+        Object.values(api.Enum.BoardSequenceShapeType).map((shapeType) => [
+          shapeType,
+          defaults.insertShapeAtPoint({
+            shapeType,
+            point: { x: 0, y: 0 },
+            attachToDropTarget: false,
+          }),
+        ]),
+      );
+      const board = api.createBoard({ id: "sequence-catalogue", name: "Sequence catalogue" });
+      const fixture = await realizeElementFixture(board, api, "sequence-shapes");
+      const participantKinds = [];
+      for (const item of fixture.semanticCoverage.covered) {
+        const actual = board.getElement(item.elementId),
+          expected = native.get(item.shapeType);
+        expect(expected).toBeTruthy();
+        expect(actual.transform.width).toBe(expected.transform.width);
+        expect(actual.transform.height).toBe(expected.transform.height);
+        expect(actual.shapeData.customGeometry).toEqual(expected.shapeData.customGeometry);
+        expect(actual.shapeData.sequenceActivation).toEqual(expected.shapeData.sequenceActivation);
+        if (expected.shapeData.sequenceLifeline) {
+          expect(actual.shapeData.sequenceLifeline).toEqual({
+            ...expected.shapeData.sequenceLifeline,
+            lifelineHeight: 60,
+            minLifelineHeight: 40,
+          });
+          participantKinds.push(actual.shapeData.sequenceLifeline.participantShapeType);
+        } else {
+          expect(actual.shapeData.sequenceLifeline).toBeUndefined();
+          expect(actual.transform.width / actual.transform.height).toBeLessThan(0.25);
+        }
+      }
+      expect(new Set(participantKinds).size).toBe(8);
+      fixture.verify();
+    } finally {
+      univer.dispose();
+    }
+  });
   // The combined chart case is exercised by the licensed rendered runner; chart creation requires the runtime credential.
   it.each(elementProfiles.filter((profile) => profile !== "text-image-ink-chart"))(
     "preserves authored %s catalogue geometry and public preset coverage",
