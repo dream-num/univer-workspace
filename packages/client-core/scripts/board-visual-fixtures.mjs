@@ -78,6 +78,7 @@ export const visualCases = {
   deployment: {
     title: "Dual-region release and recovery",
     zh: "双区域发布与故障恢复",
+    scopeCaptionGutter: 64,
     groups: [
       { id: "cloud", title: "Production cloud", kind: "system-boundary" },
       { id: "east", title: "Region A · primary", parent: "cloud" },
@@ -314,6 +315,7 @@ export const visualCases = {
   "uml-use-case": {
     title: "Outpatient appointment system",
     zh: "门诊预约系统用例",
+    scopeCaptionGutter: 64,
     groups: [{ id: "clinic", title: "Appointment system", kind: "system-boundary" }],
     nodes: [
       node("patient", "Patient", "", "actor"),
@@ -722,7 +724,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
           children: children(item.id),
         }));
     const root = spec.nodes.find((item) => !item.parent);
-    ensure(
+    const native = ensure(
       board.insertMindMap({
         left: 520,
         top: 400,
@@ -738,6 +740,17 @@ export function realizeVisualFixture(board, api, profile, variant) {
       }),
       "Native structure insertion failed",
     );
+    if (profile === "timeline")
+      ensure(
+        native.setLayout({
+          structureKind: "timeline-vertical",
+          direction: "right",
+          horizontalGap: 80,
+          siblingGap: 16,
+          branchGap: 24,
+        }),
+        "Readable native timeline layout failed",
+      );
     protectedIds.push(...Object.keys(board.getElements()));
   } else if (profile === "uml-sequence") {
     spec.nodes.forEach((item, index) => {
@@ -809,7 +822,10 @@ export function realizeVisualFixture(board, api, profile, variant) {
               headerSize: 0,
               padding: {
                 ...created.containerData.padding,
-                top: spec.groups.some((child) => child.parent === group.id) ? 48 : 12,
+                top: Math.max(
+                  spec.scopeCaptionGutter ?? 0,
+                  spec.groups.some((child) => child.parent === group.id) ? 48 : 12,
+                ),
                 bottom: 48,
               },
               behavior: {
@@ -1168,11 +1184,12 @@ export function realizeVisualFixture(board, api, profile, variant) {
   for (const id of Object.values(groups).reverse())
     ensure(board.fitContainerToContent(id), "Generated seed frame fit failed");
   const layoutElementIds = Object.keys(board.getElements());
+  const nativeBounds = profile === "timeline" ? board.getMindMaps()[0].getBounds() : undefined;
   const heading = ensure(
     board.insertText({
       id: "visual-case-heading",
-      left: 70,
-      top: -60,
+      left: nativeBounds?.left ?? 70,
+      top: nativeBounds ? nativeBounds.top - 142 : -60,
       width: variant === "long-bilingual" ? 1500 : 1100,
       height: 110,
       text: api
@@ -1206,6 +1223,9 @@ export function realizeVisualFixture(board, api, profile, variant) {
       direction: spec.direction,
       maxNodes: 180,
       ...(profile === "uml-class" ? { layerGap: 160 } : {}),
+      ...(["architecture", "deployment", "uml-package", "uml-use-case"].includes(profile)
+        ? { layerGap: 192, itemGap: 64 }
+        : {}),
     },
     compactContainers: Object.values(groups).reverse(),
     semanticCoverage: {

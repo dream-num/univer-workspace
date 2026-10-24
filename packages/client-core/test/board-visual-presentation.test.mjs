@@ -1,0 +1,85 @@
+import { describe, expect, it } from "vitest";
+import { realizeVisualFixture, visualVariants } from "../scripts/board-visual-fixtures.mjs";
+
+async function withBoard(callback) {
+  const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+    await import("@univer-cli/headless-univer");
+  const { UniverInstanceType } = await import("@univerjs/core");
+  const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+    unitId: "visual-presentation",
+    unitType: UniverInstanceType.UNIVER_BOARD,
+  });
+  try {
+    const api = createStandardHeadlessUniverFacade(univer);
+    return await callback(api.createBoard({ id: "visual-presentation" }), api);
+  } finally {
+    univer.dispose();
+  }
+}
+
+describe("Generated business presentation", () => {
+  it.each(["architecture", "deployment", "uml-package", "uml-use-case"])(
+    "reserves explicit generated label and caption space for %s without changing facts",
+    async (profile) => {
+      await withBoard((board, api) => {
+        const fixture = realizeVisualFixture(board, api, profile, "business");
+        expect(fixture.layoutOptions).toMatchObject({ layerGap: 192, itemGap: 64 });
+        for (const elementId of fixture.compactContainers) {
+          const scope = board.getElement(elementId);
+          expect(scope.containerData.behavior.layoutOccupancy).toBe("frame");
+          if (fixture.spec.scopeCaptionGutter)
+            expect(scope.containerData.padding.top).toBeGreaterThanOrEqual(
+              fixture.spec.scopeCaptionGutter,
+            );
+        }
+        fixture.verify();
+        const before = JSON.parse(JSON.stringify(board.save()));
+        const plan = board.planGraphLayout({
+          ...fixture.layoutOptions,
+          fixedElementIds: fixture.fixed,
+        });
+        expect(plan.status).toBe("ready");
+        expect(board.applyLayoutPlan(plan)).toBe(true);
+        const after = JSON.parse(JSON.stringify(board.save()));
+        fixture.verify();
+        expect(board.undo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
+        expect(board.redo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
+      });
+    },
+    20_000,
+  );
+
+  it.each(visualVariants)(
+    "keeps the complete chronological native timeline readable in %s",
+    async (variant) => {
+      await withBoard((board, api) => {
+        const fixture = realizeVisualFixture(board, api, "timeline", variant);
+        fixture.verify();
+        const native = board.getMindMaps()[0];
+        expect(native.getLayout()).toMatchObject({
+          structureKind: "timeline-vertical",
+          direction: "right",
+          horizontalGap: 80,
+          siblingGap: 16,
+          branchGap: 24,
+        });
+        const bounds = native.getBounds();
+        expect(bounds.width).toBeLessThan(variant === "long-bilingual" ? 2700 : 2100);
+        const heading = board.getElement("visual-case-heading");
+        expect(heading.transform.left).toBe(bounds.left);
+        expect(heading.transform.top + heading.transform.height + 32).toBe(bounds.top);
+        const before = JSON.parse(JSON.stringify(board.save()));
+        expect(native.setLayout({ direction: "both" })).toBe(true);
+        const after = JSON.parse(JSON.stringify(board.save()));
+        expect(board.undo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
+        expect(board.redo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
+        fixture.verify();
+      });
+    },
+    20_000,
+  );
+});

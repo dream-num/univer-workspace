@@ -78,6 +78,9 @@ class 使用 `layerGap: 160`；节点尺寸不为消除诊断而预先放大。�
 通过现有 `fitContainerToContent` 收紧，不将手工排好的坐标当作自动布局结果。
 显式指定成员的新 scope 关闭自动捕获，逐层校验 group 和 node 的父级，并为子框的外置标题保留 padding，
 避免重叠 seed 框颠倒真实所有权或让父边框压住子标题。
+Architecture、Deployment、Package 和 Use Case 模板为关系文字预留更大的层间距；多区域和用例边界另留
+标题通道。原生 Timeline 使用公开 `setLayout` 的纵向单侧结构，生成标题跟随真实结构范围，保留全部时间顺序、
+文字、字号与原生所有权。上述是新生成模板的展示选择，不自动改动已导入的固定边界或端点。
 若已安装 renderer 返回 `element-text-overflow` 的公开 `textLayout` 测量，最多三轮按真实内容/可用
 textRect 比例扩大可编辑普通 Shape；Table 使用 inclusive 零基 `tableRange` 仅调整实测行列，合并范围内
 按原行列比例扩展，不改单元格内容、合并或样式。无 cell range 的完整原生 Table paint 测量只扩大元素框，
