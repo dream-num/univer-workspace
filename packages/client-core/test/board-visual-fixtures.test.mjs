@@ -305,6 +305,8 @@ describe("Board public Facade business fixture preservation", () => {
         const board = api.createBoard({ id: profile, name: profile });
         const fixture = realizeVisualFixture(board, api, profile, variant);
         fixture.verify();
+        for (const id of fixture.semanticCoverage.visualScopeElementIds)
+          expect(board.getElement(id).containerData.behavior.layoutOccupancy).toBe("frame");
         if (profile === "erd") {
           const tables = fixture.nodes.map((id) => board.getTable(id));
           const customer = tables.find((table) => table.getValues()[0][0] === "customers");
@@ -414,7 +416,7 @@ describe("Board full-extent visual capture tiling", () => {
                 name: "board-content.png",
                 width: 800,
                 height: 600,
-                scale: 1,
+                scale: input.target.scale ?? 1,
                 bytes: new Uint8Array([137, 80, 78, 71]),
                 contentBounds: { left: -20, top: -10, width: 400, height: 250 },
                 layoutAnalysis: { source: "rendered", routes: [], issues: [] },
@@ -440,6 +442,39 @@ describe("Board full-extent visual capture tiling", () => {
       expect(
         JSON.parse(await readFile(join(directory, "capture-progress.json"), "utf8")).complete,
       ).toBe(true);
+    } finally {
+      expect(dirname(directory)).toBe(parent);
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+  it("rejects silent scale changes while preserving the actual pixels and partial report", async () => {
+    const parent = resolve(tmpdir());
+    const directory = await mkdtemp(join(parent, "board-visual-wrong-scale-"));
+    try {
+      const screenshot = {
+        async capture() {
+          return {
+            images: [
+              {
+                width: 800,
+                height: 600,
+                scale: 1,
+                bytes: new Uint8Array([137, 80, 78, 71]),
+                contentBounds: { left: 0, top: 0, width: 400, height: 250 },
+                layoutAnalysis: { source: "rendered", routes: [], issues: [] },
+              },
+            ],
+          };
+        },
+      };
+      await expect(captureVisualEvidence(screenshot, { id: "host" }, directory)).rejects.toThrow(
+        "Rendered scale 1 differs from requested 0.5",
+      );
+      const progress = JSON.parse(await readFile(join(directory, "capture-progress.json"), "utf8"));
+      expect(progress.complete).toBe(false);
+      expect(progress.outputs).toHaveLength(2);
+      expect(progress.outputs[1]).toMatchObject({ target: { scale: 0.5 }, scale: 1 });
+      expect(await readFile(progress.outputs[1].file)).toEqual(Buffer.from([137, 80, 78, 71]));
     } finally {
       expect(dirname(directory)).toBe(parent);
       await rm(directory, { recursive: true, force: true });
@@ -491,6 +526,10 @@ describe("Board public element catalogue preservation", () => {
         const board = api.createBoard({ id: profile, name: profile });
         const fixture = await realizeElementFixture(board, api, profile);
         fixture.verify();
+        if (profile === "container-grammar")
+          for (const element of Object.values(board.getElements()))
+            if (element.type === "container")
+              expect(element.containerData.behavior.layoutOccupancy ?? "body").toBe("body");
         const plan = board.planGraphLayout(fixture.layoutOptions);
         expect(plan.status).toBe("ready");
         expect(plan.patches).toEqual([]);

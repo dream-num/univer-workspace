@@ -93,6 +93,7 @@ selection/direction/fixed 约束重新 plan、apply、fit
 两套新场景均保存每个 case 的完整 fit 图，以及覆盖整个公开 content extent 的 50%、100%、200%
 重叠分块图和原始 rendered 分析。输出记录真正 apply 的结果与 Undo/Redo/stale 断言，不从非空
 patch 数量推断应用次数。中途失败保留已生成图片、进度和错误；已有证据目录不覆盖。
+每张显式比例图片必须由 renderer 回读确认实际 scale 与请求一致；不一致即停止并保留该次图片及实际比例。
 `visualReview.status` 默认为 `pending`：诊断 clean 不能替代逐图审查文字溢出与字号、内容层次、
 阅读方向、容器留白、标题/角标/边框、箭头和路径间距。公共 content bounds 也不等于完整字形 ink
 测量；需要单独记录实际浏览器字形检查和人工/代理视觉审阅。视觉审阅结果与自动质量结论分开保存。

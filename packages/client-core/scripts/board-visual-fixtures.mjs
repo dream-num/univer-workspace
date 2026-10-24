@@ -741,7 +741,14 @@ export function realizeVisualFixture(board, api, profile, variant) {
       const created = board.getElement(id);
       ensure(
         board.updateElement(id, {
-          element: { ...created, containerData: { ...created.containerData, headerSize: 0 } },
+          element: {
+            ...created,
+            containerData: {
+              ...created.containerData,
+              headerSize: 0,
+              behavior: { ...created.containerData.behavior, layoutOccupancy: "frame" },
+            },
+          },
         }),
         "External caption configuration failed",
       );
@@ -1041,6 +1048,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
       sourceManifest: spec,
       primitiveTypes: [...new Set(Object.values(contentBefore).map((item) => item.type))],
       nativeOwnership: spec.native || profile === "uml-sequence",
+      visualScopeElementIds: Object.values(groups),
     },
     verify() {
       const elements = Object.values(board.getElements());
@@ -1049,6 +1057,12 @@ export function realizeVisualFixture(board, api, profile, variant) {
         expectedRelations,
         "Business relationships lost",
       );
+      for (const id of Object.values(groups))
+        assert.equal(
+          board.getElement(id).containerData.behavior.layoutOccupancy,
+          "frame",
+          "Generated visual scope occupancy changed",
+        );
       for (const item of spec.nodes) {
         if (!ids[item.id]) continue;
         const actual = board.getElement(ids[item.id]);

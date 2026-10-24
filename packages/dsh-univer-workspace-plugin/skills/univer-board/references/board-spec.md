@@ -144,6 +144,10 @@ New ordinary groups with external captions can set `containerData.headerSize` to
 before child insertion, then fit and remeasure. Patch the complete element and preserve source constraints; leave
 existing authored groups, swimlanes and native layout owners unchanged.
 
+For a semantic visual scope, explicitly set native `containerData.behavior.layoutOccupancy` to `frame` so its
+interior remains available while borders and captions are checked; ordinary panels, tables and Embed keep body
+occupancy. Do not replace this native contract with custom metadata or use it to exempt diagnostics.
+
 When the installed rendered report includes `element-text-overflow`, use its `textLayout` content/available ratio
 to grow eligible generated shapes without shrinking type. For a table, use the inclusive zero-based `tableRange`
 to resize only the measured rows/columns, including every row/column in a merged range; preserve values, merges

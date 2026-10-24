@@ -38,6 +38,7 @@ export async function captureVisualEvidence(
   assert.ok(bounds, "No rendered content extent available");
   const captures = [];
   const save = async (name, result, target) => {
+    assert.equal(result.images.length, 1, "Visual case must have one active Board page");
     for (const [index, image] of result.images.entries()) {
       assert.equal(image.layoutAnalysis?.source, "rendered", "Rendered analysis missing");
       const { bytes, ...metadata } = image;
@@ -48,6 +49,13 @@ export async function captureVisualEvidence(
         resolve(directory, "capture-progress.json"),
         `${JSON.stringify({ complete: false, outputs: captures }, null, 2)}\n`,
       );
+      assert.ok(Number.isFinite(image.scale) && image.scale > 0, "Actual rendered scale missing");
+      if (target.scale !== undefined) {
+        assert.ok(
+          Math.abs(image.scale - target.scale) < 1e-8,
+          `Rendered scale ${image.scale} differs from requested ${target.scale}`,
+        );
+      }
     }
   };
   const capture = async (name, region, scale) => {
