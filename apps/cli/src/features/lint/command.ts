@@ -1,9 +1,14 @@
 import { createUnitLayoutLintCommand } from "@univer-cli/unit-layout-lint-command";
-import type { WorkspaceUnitLayoutLintFeature } from "@univerjs/univer-workspace-client-core";
-import { Command } from "commander";
+import type {
+  WorkspaceRuntimeScope,
+  WorkspaceUnitLayoutLintFeature,
+} from "@univerjs/univer-workspace-client-core";
+import { Option, type Command } from "commander";
+import { workspaceError } from "../../errors.js";
 
 interface WorkspaceUnitLayoutLintCommandOptions {
-  readonly worktree: string;
+  readonly trunk?: boolean;
+  readonly worktree?: string;
 }
 
 export function createWorkspaceUnitLayoutLintCommand(
@@ -13,12 +18,27 @@ export function createWorkspaceUnitLayoutLintCommand(
   command = createUnitLayoutLintCommand({
     lint: feature.lint(),
     loadUnit: async ({ unitId }) => {
-      const worktreeId = command.opts<WorkspaceUnitLayoutLintCommandOptions>().worktree.trim();
       return await feature.loadUnit({
-        scope: { kind: "worktree", worktreeId },
+        scope: lintScope(command.opts<WorkspaceUnitLayoutLintCommandOptions>()),
         unitId,
       });
     },
-  }).requiredOption("--worktree <worktree-id>", "Worktree containing the Slide Unit");
+  });
+  command.addOption(
+    new Option("--worktree <worktree-id>", "check the Unit from a Worktree").conflicts("trunk"),
+  );
+  command.addOption(new Option("--trunk", "check the Unit from trunk").conflicts("worktree"));
   return command;
+}
+
+function lintScope(options: WorkspaceUnitLayoutLintCommandOptions): WorkspaceRuntimeScope {
+  if (options.trunk === true) return { kind: "trunk" };
+  const worktreeId = options.worktree?.trim();
+  if (worktreeId !== undefined && worktreeId !== "") {
+    return { kind: "worktree", worktreeId };
+  }
+  throw workspaceError(
+    "workspace-unit-layout-lint-scope-required",
+    "Workspace layout lint requires --worktree <worktree-id> or --trunk.",
+  );
 }

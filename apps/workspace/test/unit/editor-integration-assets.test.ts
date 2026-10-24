@@ -128,7 +128,7 @@ describe("editor integration assets", () => {
     for (const product of ["sheet", "doc", "slide", "board", "base"]) {
       expect(readEditorSource(product, ".mobile")).toContain("mobile: true");
     }
-    // Exchange-enabled mobile editors pair the Mobile exchange client.
+    // Exchange-enabled mobile editors compose the shared exchange client once.
     for (const product of ["doc", "slide", "base"]) {
       const source = readEditorSource(product, ".mobile");
       expect(source).toContain("exchangeProvidedByPreset: true");

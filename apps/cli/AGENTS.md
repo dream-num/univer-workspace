@@ -24,7 +24,7 @@ The CLI owns:
 
 Client Core owns:
 
-- Asset image resolution, render Unit assembly, screenshot capture, PNG output, PDF printing, and Slide layout lint
+- Asset image resolution, render Unit assembly, screenshot capture, PNG output, PDF printing, and Slide and Board layout lint
 - The render-page source, shared worker composition, and the runtime pool
 - Content execution, embedded-image externalization, and the changeset commit workflow
 - Node-hosted Office exchange, and Typst compile, materialize, and apply
@@ -38,8 +38,9 @@ program. The npm package name, `~/.univer-workspace-cli`, the session file, daem
 
 Product commands (`auth`, `repo`, `issue`, `label`, `pr`/`worktree`, `search`, `browse`) only talk HTTP.
 They import the light `@univerjs/univer-workspace-client-core/product` entry and are assembled in
-`src/product-commands.ts`; `main.ts` loads `program.ts` (which pulls in the Univer runtime) only for other
-commands. Do not import the Client Core package root from product-command files. `pr` and `worktree` are
+`src/product-commands.ts`; `main.ts` also assembles `config` and `daemon` through the shared SDK lifecycle
+command factory without importing `program.ts`. Other commands load `program.ts`, which pulls in the Univer
+runtime. Do not import the Client Core package root from product-command or lifecycle-command files. `pr` and `worktree` are
 built from the same handlers and must stay equivalent. Repository context comes from `-R` or `UVW_REPO`
 (`src/repo-context.ts`); there is no stored default. `--json [fields]` prints bare objects, and exit code 4
 means authentication is required.

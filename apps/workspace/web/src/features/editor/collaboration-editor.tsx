@@ -39,8 +39,6 @@ import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { UniverEmbedUIPlugin } from "@univerjs-pro/embed-ui";
 import EmbedUIEnUS from "@univerjs-pro/embed-ui/locale/en-US";
 import EmbedUIZhCN from "@univerjs-pro/embed-ui/locale/zh-CN";
-import ExchangeClientEnUS from "@univerjs-pro/exchange-client/locale/en-US";
-import ExchangeClientZhCN from "@univerjs-pro/exchange-client/locale/zh-CN";
 import { UniverLicensePlugin } from "@univerjs-pro/license";
 import {
   createWorktreeCollaborationConfig,
@@ -395,13 +393,6 @@ export function createCollaborationEditor(
               language === "zh-CN"
                 ? CollaborationClientUIZhCN
                 : CollaborationClientUIEnUS,
-              ...(exchangeEnabled
-                ? [
-                    language === "zh-CN"
-                      ? ExchangeClientZhCN
-                      : ExchangeClientEnUS,
-                  ]
-                : []),
               ...historyLocales(language, definition.history)
             ),
           },

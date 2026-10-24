@@ -38,8 +38,6 @@ import UniverBasesEnUS from "@univerjs-pro/bases/locale/en-US";
 import UniverBasesZhCN from "@univerjs-pro/bases/locale/zh-CN";
 import UniverBasesUIEnUS from "@univerjs-pro/bases-ui/locale/en-US";
 import UniverBasesUIZhCN from "@univerjs-pro/bases-ui/locale/zh-CN";
-import UniverBasesExchangeEnUS from "@univerjs-pro/bases-exchange-client/locale/en-US";
-import UniverBasesExchangeZhCN from "@univerjs-pro/bases-exchange-client/locale/zh-CN";
 import UniverShapeEditorUIEnUS from "@univerjs-pro/shape-editor-ui/locale/en-US";
 import UniverShapeEditorUIZhCN from "@univerjs-pro/shape-editor-ui/locale/zh-CN";
 import UniverInkUIEnUS from "@univerjs-pro/ink-ui/locale/en-US";
@@ -60,8 +58,6 @@ import UniverDocsChartUIEnUS from "@univerjs-pro/docs-chart-ui/locale/en-US";
 import UniverDocsChartUIZhCN from "@univerjs-pro/docs-chart-ui/locale/zh-CN";
 import UniverDocsColumnUIEnUS from "@univerjs-pro/docs-column-ui/locale/en-US";
 import UniverDocsColumnUIZhCN from "@univerjs-pro/docs-column-ui/locale/zh-CN";
-import UniverDocsExchangeEnUS from "@univerjs-pro/docs-exchange-client/locale/en-US";
-import UniverDocsExchangeZhCN from "@univerjs-pro/docs-exchange-client/locale/zh-CN";
 import UniverDocsCodeUIEnUS from "@univerjs-pro/docs-code-ui/locale/en-US";
 import UniverDocsCodeUIZhCN from "@univerjs-pro/docs-code-ui/locale/zh-CN";
 import UniverDocsListUIEnUS from "@univerjs-pro/docs-list-ui/locale/en-US";
@@ -110,8 +106,6 @@ import UniverSheetsPivotEnUS from "@univerjs-pro/sheets-pivot/locale/en-US";
 import UniverSheetsPivotZhCN from "@univerjs-pro/sheets-pivot/locale/zh-CN";
 import UniverSheetsPivotUIEnUS from "@univerjs-pro/sheets-pivot-ui/locale/en-US";
 import UniverSheetsPivotUIZhCN from "@univerjs-pro/sheets-pivot-ui/locale/zh-CN";
-import UniverSheetsExchangeEnUS from "@univerjs-pro/sheets-exchange-client/locale/en-US";
-import UniverSheetsExchangeZhCN from "@univerjs-pro/sheets-exchange-client/locale/zh-CN";
 import UniverSheetsPrintEnUS from "@univerjs-pro/sheets-print/locale/en-US";
 import UniverSheetsPrintZhCN from "@univerjs-pro/sheets-print/locale/zh-CN";
 import UniverSheetsShapeUIEnUS from "@univerjs-pro/sheets-shape-ui/locale/en-US";
@@ -136,8 +130,6 @@ import UniverSlidesChartUIEnUS from "@univerjs-pro/slides-chart-ui/locale/en-US"
 import UniverSlidesChartUIZhCN from "@univerjs-pro/slides-chart-ui/locale/zh-CN";
 import UniverSlidesTableUIEnUS from "@univerjs-pro/slides-table-ui/locale/en-US";
 import UniverSlidesTableUIZhCN from "@univerjs-pro/slides-table-ui/locale/zh-CN";
-import UniverSlidesExchangeEnUS from "@univerjs-pro/slides-exchange-client/locale/en-US";
-import UniverSlidesExchangeZhCN from "@univerjs-pro/slides-exchange-client/locale/zh-CN";
 import UniverSlidesPrintEnUS from "@univerjs-pro/slides-print/locale/en-US";
 import UniverSlidesPrintZhCN from "@univerjs-pro/slides-print/locale/zh-CN";
 import ChartUIEnUS from "@univerjs-pro/chart-ui/locale/en-US";
@@ -205,7 +197,6 @@ const zhCN = [
   UniverEmbedUIZhCN,
   UniverBasesZhCN,
   UniverBasesUIZhCN,
-  UniverBasesExchangeZhCN,
   UniverShapeEditorUIZhCN,
   UniverInkUIZhCN,
   UniverBoardsUIZhCN,
@@ -216,7 +207,6 @@ const zhCN = [
   UniverDocsCalloutUIZhCN,
   UniverDocsChartUIZhCN,
   UniverDocsColumnUIZhCN,
-  UniverDocsExchangeZhCN,
   UniverDocsCodeUIZhCN,
   UniverDocsListUIZhCN,
   UniverDocsQuoteUIZhCN,
@@ -241,7 +231,6 @@ const zhCN = [
   UniverSheetsOutlineUIZhCN,
   UniverSheetsPivotZhCN,
   UniverSheetsPivotUIZhCN,
-  UniverSheetsExchangeZhCN,
   UniverSheetsPrintZhCN,
   UniverSheetsShapeUIZhCN,
   UniverSheetsSortUIZhCN,
@@ -254,7 +243,6 @@ const zhCN = [
   UniverSlidesUIZhCN,
   UniverSlidesChartUIZhCN,
   UniverSlidesTableUIZhCN,
-  UniverSlidesExchangeZhCN,
   UniverSlidesPrintZhCN,
   ChartUIZhCN,
   EngineChartZhCN,
@@ -295,7 +283,6 @@ const enUS = [
   UniverEmbedUIEnUS,
   UniverBasesEnUS,
   UniverBasesUIEnUS,
-  UniverBasesExchangeEnUS,
   UniverShapeEditorUIEnUS,
   UniverInkUIEnUS,
   UniverBoardsUIEnUS,
@@ -306,7 +293,6 @@ const enUS = [
   UniverDocsCalloutUIEnUS,
   UniverDocsChartUIEnUS,
   UniverDocsColumnUIEnUS,
-  UniverDocsExchangeEnUS,
   UniverDocsCodeUIEnUS,
   UniverDocsListUIEnUS,
   UniverDocsQuoteUIEnUS,
@@ -331,7 +317,6 @@ const enUS = [
   UniverSheetsOutlineUIEnUS,
   UniverSheetsPivotEnUS,
   UniverSheetsPivotUIEnUS,
-  UniverSheetsExchangeEnUS,
   UniverSheetsPrintEnUS,
   UniverSheetsShapeUIEnUS,
   UniverSheetsSortUIEnUS,
@@ -344,7 +329,6 @@ const enUS = [
   UniverSlidesUIEnUS,
   UniverSlidesChartUIEnUS,
   UniverSlidesTableUIEnUS,
-  UniverSlidesExchangeEnUS,
   UniverSlidesPrintEnUS,
   ChartUIEnUS,
   EngineChartEnUS,

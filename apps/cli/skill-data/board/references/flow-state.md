@@ -10,6 +10,8 @@ Keep decision conditions on outgoing relations as semantic `condition` text and 
 These distinctions follow [OMG UML activity control nodes](https://www.omg.org/spec/UML/ISO/19505-2/PDF).
 
 Realize fork/join with native `BoardCustomShapeType.StateBar`, not sequence activation bars or a free thick line.
+For requested text inside a dark native glyph, preserve the caption and explicitly set a contrasting text fill,
+for example `shape.getText().setColor('#ffffff')`. Otherwise use an external caption. Verify contrast in the rendered image.
 Use the native initial/final symbols, diamonds for decision/merge, and action shapes for work. An unlabeled merge
 diamond is intentional. Bind each control-flow endpoint to its node; distribute independent branch ports along
 the bar and verify both incoming and outgoing arrows visually. A cross-lane bar can belong to the swimlane pool's

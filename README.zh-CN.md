@@ -178,7 +178,7 @@ Worktree 协议合同；Univer CLI SDK 拥有可复用的 headless runtime、执
 Workspace 拥有产品身份、Space、目录层级、ACL、分享、回收站、最近访问、Blob 存储策略、远程
 workflow 与部署。Client Core 在仓库应用之间共享存储无关的认证、Workspace workflow、本机
 Node-hosted Blob/Asset 传输与 worker-backed 内容 runtime，包括 Node-hosted Office exchange、Typst
-编译/materialize/apply、render Unit 装配、截图、PNG/PDF 输出、Slide layout lint、render-page 源码与
+编译/materialize/apply、render Unit 装配、截图、PNG/PDF 输出、Slide and Board layout lint、render-page 源码与
 SVG 编译/测量/apply workflow；reference-provider package 仍只供 Browser 使用。两者都是私有实现
 模块，不是额外的公开应用或 SDK。
 

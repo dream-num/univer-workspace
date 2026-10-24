@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { basename, dirname, join, resolve } from "node:path";
 import {
   resolveUniverLicense,
   UNIVER_LICENSE_ENV,
@@ -11,29 +12,21 @@ import { UNIVER_LICENSE } from "../src/license.js";
 
 describe("Workspace CLI application paths", () => {
   it("uses the production Workspace CLI home by default", () => {
-    const env = { HOME: "/home/alice" };
+    const env = { HOME: resolve("/users/alice") };
+    const home = join(env.HOME, ".univer-workspace-cli");
 
-    expect(workspaceCliHome(env)).toBe("/home/alice/.univer-workspace-cli");
-    expect(workspaceDaemonSocketPath(env)).toBe(
-      "/home/alice/.univer-workspace-cli/daemon/daemon.sock",
-    );
-    expect(workspaceSessionPath(env)).toBe(
-      "/home/alice/.univer-workspace-cli/workspace-cli/session.json",
-    );
-    expect(workspaceResourceCacheRoot(env)).toBe(
-      "/home/alice/.univer-workspace-cli/cache/resources",
-    );
+    expect(workspaceCliHome(env)).toBe(home);
+    expect(workspaceDaemonSocketPath(env, "linux")).toBe(join(home, "daemon/daemon.sock"));
+    expect(workspaceSessionPath(env)).toBe(join(home, "workspace-cli/session.json"));
+    expect(workspaceResourceCacheRoot(env)).toBe(join(home, "cache/resources"));
   });
 
   it("isolates an explicit UNIVER_HOME as the Workspace CLI distribution", () => {
     const env = { HOME: "/unused", UNIVER_HOME: "/runtime-base" };
 
-    expect(workspaceCliHome(env)).toBe(
-      "/runtime-base/distributions/univer-workspace-cli",
-    );
-    expect(workspaceDaemonSocketPath(env)).toBe(
-      "/runtime-base/distributions/univer-workspace-cli/daemon/daemon.sock",
-    );
+    const home = join(resolve("/runtime-base"), "distributions/univer-workspace-cli");
+    expect(workspaceCliHome(env)).toBe(home);
+    expect(workspaceDaemonSocketPath(env, "linux")).toBe(join(home, "daemon/daemon.sock"));
   });
 
   it("rejects an environment without a user home", () => {
@@ -43,18 +36,18 @@ describe("Workspace CLI application paths", () => {
   });
 
   it("uses a stable fallback when the Unix socket path would be too long", () => {
-    const socketPath = workspaceDaemonSocketPath({
+    const env = {
       UNIVER_HOME: `/tmp/${"long-home-segment-".repeat(6)}`,
-    });
+    };
+    const socketPath = workspaceDaemonSocketPath(env, "linux");
 
-    expect(socketPath).toMatch(/^\/tmp\/univer-[a-f0-9]{16}\.sock$/u);
+    expect(dirname(socketPath)).toBe(join("/tmp"));
+    expect(basename(socketPath)).toMatch(/^univer-[a-f0-9]{16}\.sock$/u);
+    expect(workspaceDaemonSocketPath(env, "linux")).toBe(socketPath);
   });
 
   it("uses a stable named pipe on Windows", () => {
-    const socketPath = workspaceDaemonSocketPath(
-      { HOME: "C:\\Users\\alice" },
-      "win32",
-    );
+    const socketPath = workspaceDaemonSocketPath({ HOME: "C:\\Users\\alice" }, "win32");
 
     expect(socketPath).toMatch(/^\\\\\.\\pipe\\univer-daemon-[a-f0-9]{16}$/u);
   });

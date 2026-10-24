@@ -96,11 +96,19 @@ describe("bundled Workspace Skills", () => {
     expect(slide).toContain("univer_screenshot");
     expect(base).toContain("getFormulaName()");
     expect(board).toContain("insertShape");
+    expect(board).toContain('mode: "model"');
+    expect(board).toContain('mode: "both"');
+    expect(board).toContain("FBoard.planGraphLayout");
+    expect(board).toContain("FBoard.applyLayoutPlan");
+    expect(board).toContain("incomplete");
     expect(embed).toContain("createEmbed");
     expect(crossUnitFormula).toContain("buildReference()");
   });
 });
 
 async function readSkill(name: string): Promise<string> {
-  return (await readFile(new URL(`../skills/${name}/SKILL.md`, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+  return (await readFile(new URL(`../skills/${name}/SKILL.md`, import.meta.url), "utf8")).replace(
+    /\r\n/g,
+    "\n",
+  );
 }

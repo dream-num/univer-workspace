@@ -1,12 +1,16 @@
 import {
   createUnitLayoutLint,
   type UnitLayoutLint,
+  type UnitLayoutLintOptions,
   type UnitLayoutLintSource,
 } from "@univer-cli/unit-layout-lint";
 import {
+  createHeadlessBoardLayoutRuntime,
+  createStandardHeadlessUniverFactory,
+} from "@univer-cli/headless-univer";
+import {
   createUniverRenderRuntime,
   type UniverRenderRuntimeOptions,
-  type UniverSlideLayoutRuntime,
 } from "@univer-cli/univer-render-runtime";
 import { workspaceError } from "./errors.js";
 import type { WorkspaceRenderUnitLoader } from "./render-unit.js";
@@ -19,7 +23,8 @@ export interface WorkspaceUnitLayoutLintFeatureOptions {
   readonly loader: Pick<WorkspaceRenderUnitLoader, "loadUnit">;
   readonly createRuntime?: (
     options: UniverRenderRuntimeOptions,
-  ) => Promise<UniverSlideLayoutRuntime & { close(): Promise<void> }>;
+  ) => Promise<NonNullable<UnitLayoutLintOptions["runtime"]> & { close(): Promise<void> }>;
+  readonly createModelRuntime?: () => NonNullable<UnitLayoutLintOptions["modelRuntime"]>;
 }
 
 export class WorkspaceUnitLayoutLintFeature {
@@ -34,24 +39,45 @@ export class WorkspaceUnitLayoutLintFeature {
     readonly unitId: string;
   }): Promise<UnitLayoutLintSource> {
     const unit = await this.options.loader.loadUnit(input);
-    if (unit.unitType !== "slide") {
+    if (unit.unitType !== "slide" && unit.unitType !== "board") {
       throw workspaceError(
         "workspace-unit-layout-lint-unit-type-unsupported",
-        `Slide layout lint requires a Slide Unit; ${input.unitId} is ${unit.unitType}.`,
+        `Layout lint requires a Slide or Board Unit; ${input.unitId} is ${unit.unitType}.`,
       );
     }
-    return {
-      unitType: "slide",
-      unitData: unit.unitData as UnitLayoutLintSource["unitData"],
+    const references = {
       ...(unit.formulaReferenceUnits === undefined
         ? {}
         : { formulaReferenceUnits: unit.formulaReferenceUnits }),
     };
+    if (unit.unitType === "board") {
+      return {
+        unitType: "board",
+        unitData: unit.unitData,
+        ...references,
+        ...(unit.embeddedUnits === undefined ? {} : { embeddedUnits: unit.embeddedUnits }),
+      };
+    }
+    return { unitType: "slide", unitData: unit.unitData, ...references };
   }
 
   public lint(): UnitLayoutLint {
     return {
       lint: async (input) => {
+        const modelRuntime =
+          input.unitType === "board"
+            ? (this.options.createModelRuntime?.() ??
+              createHeadlessBoardLayoutRuntime({
+                createUniver: createStandardHeadlessUniverFactory({
+                  license: this.options.license,
+                }),
+              }))
+            : undefined;
+        if (input.unitType === "board" && input.mode === "model") {
+          return await createUnitLayoutLint(
+            modelRuntime === undefined ? {} : { modelRuntime },
+          ).lint(input);
+        }
         const runtime = await this.#createRuntime({
           renderPageRoot: this.options.renderPageRoot,
           env: this.options.env,
@@ -59,7 +85,10 @@ export class WorkspaceUnitLayoutLintFeature {
           ...(input.signal === undefined ? {} : { signal: input.signal }),
         });
         try {
-          return await createUnitLayoutLint({ runtime }).lint(input);
+          return await createUnitLayoutLint({
+            runtime,
+            ...(modelRuntime === undefined ? {} : { modelRuntime }),
+          }).lint(input);
         } finally {
           await runtime.close();
         }

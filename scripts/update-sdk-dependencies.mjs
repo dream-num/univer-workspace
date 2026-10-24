@@ -264,9 +264,12 @@ export async function discoverWorkspacePackages(repoRoot = REPO_ROOT) {
   const result = spawnSync("pnpm", ["list", "-r", "--depth", "-1", "--json"], {
     cwd: repoRoot,
     encoding: "utf8",
+    shell: process.platform === "win32",
   });
   if (result.status !== 0) {
-    throw new Error(`Unable to discover pnpm workspace packages: ${result.stderr}`);
+    throw new Error(
+      `Unable to discover pnpm workspace packages: ${result.error?.message ?? result.stderr}`,
+    );
   }
   const entries = JSON.parse(result.stdout);
   return Promise.all(
@@ -343,7 +346,11 @@ function assertExactDependency(packageName, field, name, specifier) {
 }
 
 function run(command, args) {
-  const result = spawnSync(command, args, { cwd: REPO_ROOT, stdio: "inherit" });
+  const result = spawnSync(command, args, {
+    cwd: REPO_ROOT,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status}.`);
   }

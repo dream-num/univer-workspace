@@ -87,8 +87,11 @@ For a generated diagram, follow intent → spec when useful → layout decisions
 
 1. Read back persisted elements/text, ownership and bindings with `describeElements()`, `getElements()`, or
    type-specific inspection. Check the requested meaning, not only counts.
-2. Run `board.analyzeModelLayout(48)`, then a full `uvw screenshot ... --json`. Inspect the image and
-   `outputs[0].layoutAnalysis`; headless analysis cannot establish final font metrics or automatic routes.
+2. Run `uvw lint --worktree <id> --unit <board-id> --mode model --json` for a browser-free model check;
+   use `--trunk` instead of `--worktree` to inspect shared content without creating a draft.
+   finish with the default `--mode both` and a full `uvw screenshot ... --json`. Inspect the report's `status`,
+   `coverage`, raw `analyses`, the image and `outputs[0].layoutAnalysis`. `incomplete` is a blocker to claiming
+   clean layout; model checks cannot establish final font metrics or automatic routes.
 3. Repair implicated elements and recapture. Use [routing](references/connector-routing.md) or
    [label](references/connector-labels.md) guidance for their diagnostics. Never silently discard semantics to pass.
 4. Hand off an overview and any needed readable details. Distinguish clean results, visually reviewed diagnostic
@@ -97,6 +100,22 @@ For a generated diagram, follow intent → spec when useful → layout decisions
 For a localized edit, inspect the changed region and affected relationships; do not regenerate the Board or run
 an unrelated profile matrix. Full drag/menu/Undo/Redo testing belongs to explicit interaction or coverage requests,
 not every authoring task. A static screenshot does not prove UI behavior.
+
+For requested automatic layout, inspect `FBoard.planGraphLayout` and `FBoard.applyLayoutPlan` in the installed
+API. Planning is read-only: review its diagnostics and proposed patches before applying a ready plan to the
+same Board/page. Preserve fixed elements, manual connectors and native structured-layout owners. A stale or
+incomplete plan must be recomputed or reported; never force-apply it or replace the Board snapshot.
+
+For measured label repair, run `uvw lint --worktree <id> --unit <board-id> --mode both --plan-labels --json`.
+This remains read-only. Read `analyses[].labelPlan` in the report (on failure, `error.details.report` on stderr).
+An empty `patches` array needs no write. For a non-empty plan, check that it is ready and
+`plan.pageId === board.getActivePageId()`, then pass that exact plan to `board.applyLayoutPlan(plan)`
+through `execute` on the same Worktree/Unit/current page. Report other-page plans as unapplied; use only an
+installed, supported page-selection API if one is available. Check the boolean result. A stale rejection requires a fresh lint;
+an incomplete or unavailable plan requires resolving its diagnostics. Run lint and capture again after apply.
+For endpoint constraints or `label-layout/no-free-position`, follow the [label spacing repair](references/connector-labels.md#verification-and-repair):
+keep the same selection, fixed elements and direction, increase graph `layerGap` for movable nodes with automatic
+endpoints, then obtain a fresh rendered label plan. Preserve manual/native constraints and report any remaining incomplete result.
 
 ```bash
 uvw screenshot --worktree <id> --unit <board-id> --out ./board-overview --json

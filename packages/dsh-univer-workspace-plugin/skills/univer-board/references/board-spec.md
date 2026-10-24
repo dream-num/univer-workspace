@@ -77,6 +77,56 @@ requires a line: `annotates` can become an Ink underline or a nearby note.
 A profile guides selection, not an all-elements template. Instance-specific meaning belongs here; reusable selection
 rules stay in references. Read a second reference only if that capability participates in the requested result.
 
+## Realize meaning and hierarchy
+
+Preserve every meaningful title, description, tag, explanation card, phase and group from the source. Check
+source-to-element coverage explicitly; an importer accepting a document does not establish that every field was
+represented. Keep source lane/phase constraints and a requested main path in the semantic plan and readback.
+
+Choose a consistent visual vocabulary for responsibilities, storage, messages, decisions and exception paths.
+Use emphasis for the requested primary path while keeping secondary/evidence relations readable. Discover the
+installed text and style APIs: distinguish headings, supporting text and tags with rich-text hierarchy where
+supported. A newline alone does not create that hierarchy. Size for the actual text and verify wrapping and contrast.
+
+Use the shared `univerAPI.newRichText()` builder: a heading span followed by `paragraph()` and supporting/tag spans
+stays editable. Set each span's font family, size, color and bold state explicitly; normal text must not inherit a
+bold heading. For a compact 12/10/8 px title/body/tag hierarchy, native document point sizes are 9/7.5/6 pt.
+Container/lane title styles use pixels directly. Verify the actual render and enlarge text for the requested
+output scale. Rich-text `paragraph()` options style the following paragraph: set heading/body line height and
+spacing before their spans, and set each multiline body paragraph explicitly rather than relying on inheritance.
+Use native text-box wrapping and padding; enlarge for real content rather than clipping or dropping
+words. Apply primary-path color/weight to the actual connectors, not only custom metadata.
+
+Keep class relation names, endpoint roles and multiplicities independent. Render only authored roles; a node ID
+is not a role, and a relation name must not also become an inferred endpoint label. Preserve every explicit role
+and multiplicity when changing layout.
+
+Give actor names and supporting text their own readable region below the glyph. Keep the glyph, text and endpoint
+bindings in one native actor object. If the installed shape needs a larger caption rail, clone that inserted
+instance's geometry and update the complete element through the public API; preserve the glyph proportions and
+verify resizing. Do not copy SDK factory implementation or detach the caption into an unrelated text object.
+Keep authored endpoint sides, fractions and manual guides; bind new unconstrained relations to the glyph rather
+than its caption region.
+
+Start built-in presets at their native default insertion proportions rather than imposing one aspect ratio on every glyph.
+Preserve the native sequence factory's participant kind, geometry and default proportions. Actors, controls,
+entities and other participant variants must retain their own symbols; activations remain narrow bars. Adjust
+lifeline tail height independently of participant shape height, and size captions for their complete text.
+
+For inline native charts, retain the complete source table and declare title rows with
+`setSourceHeader({ band: { startOffset: 0, endOffset: 0 } })` plus category/value fields;
+`setSource(array)` alone is headerless.
+
+For lane/phase workflows, derive a repeatable grid from semantic column order and measured content sizes. Fit lane
+headers to their longest caption and place wrapping explanation cards below the content when a side column makes the
+whole diagram too wide. Preserve phase order and native group/lane ownership. If those constraints fix node frames,
+`planGraphLayout({ elementIds, fixedElementIds: elementIds, direction })` can still assign automatic ports; apply
+only a ready plan and verify every frame stayed fixed. Preserve authored endpoint sides with fixed endpoint bindings.
+Report this constrained placement separately from a free graph layout; a rejected free plan must remain unapplied.
+
+Treat source positions, columns and authored routes as constraints or an import baseline. Report public automatic
+layout separately; reproducing source coordinates is not evidence that the automatic layout algorithm improved.
+
 ## Check before realization
 
 Check in memory or with a short script; no general parser/compiler is needed:
@@ -94,3 +144,79 @@ rendered diagnostics. Preserve a semantic-to-generated ID mapping rather than se
 
 JSON is the exchange form; accept user YAML or fenced Markdown by normalizing to the same object, not by
 maintaining three schemas. Compact notation is fine. Do not duplicate an existing valid spec just to reformat it.
+
+## Compact generated containers
+
+Use real domain text and relationships when reviewing a generated diagram, including long Chinese/English text,
+nested boundaries, table compartments and native ownership. Preserve the source labels, captions, badges and styles.
+Inspect a full fit view and overlapping 100%/200% details covering the whole content extent; check text fit and readable
+type, hierarchy, whitespace, titles, corners, borders, markers and routes. Record visual review separately from model
+and rendered diagnostics. A clean diagnostic or a ready plan is not visual approval; retain unresolved findings and
+explicit refusals caused by fixed/manual/native constraints. Count applications from actual apply results, not patches.
+
+After applying a ready layout to a newly generated diagram, inspect `FBoard.fitContainerToContent` and fit its
+generated ordinary containers deepest-first. This existing write fits frames to their current children; it does
+not solve routes or make an incomplete graph plan applicable. Preserve authored fixed frames, protected elements
+and native layout owners. Re-read leaf world bounds, text, membership and bindings after fitting, then obtain fresh
+rendered label measurements and screenshots. Earlier layout plans can be stale after frame changes.
+
+New ordinary groups with external captions can set `containerData.headerSize` to `0` through `updateElement`
+before child insertion, then fit and remeasure. Patch the complete element and preserve source constraints; leave
+existing authored groups, swimlanes and native layout owners unchanged.
+
+For new scopes with declared membership, create them with `membershipLocked: true`, then update the complete
+container to structural membership with `behavior.autoCapture: false`, `capturePolicy.enabled: false` and
+`behavior.membershipLocked: false` before inserting explicit children. Overlapping seed frames must not capture
+one another. Verify both group parents and node parents against the semantic spec. Reserve external child-caption
+space in the parent padding before fitting; a 24-pixel native caption needs its own rail and a gap from the parent
+border (for example, 48 pixels of top padding), rather than overlaying two titles at the same left/top.
+For a new feedback relation with no authored endpoints or guides, choose exterior return ports before planning
+(bottom in a horizontal flow, right in a vertical flow) so the return avoids top captions. Keep automatic routing
+and real node bindings; preserve existing endpoint and manual-route choices.
+
+For a semantic visual scope, explicitly set native `containerData.behavior.layoutOccupancy` to `frame` so its
+interior remains available while borders and captions are checked; ordinary panels, tables and Embed keep body
+occupancy. Do not replace this native contract with custom metadata or use it to exempt diagnostics.
+
+When the installed rendered report includes `element-text-overflow`, use its `textLayout` content/available ratio
+to grow eligible generated shapes without shrinking type. For a table, use the inclusive zero-based `tableRange`
+to resize only the measured rows/columns, including every row/column in a merged range; preserve values, merges
+and styles. A whole-table native paint measurement without a cell range, whose available size matches the current
+outer frame, can instead grow the Table element frame
+through `setElementsTransform`, preserving every resource row, cell and style; an invalid partial range is refused.
+Keep fixed, locked, unselectable and native/managed owners unchanged, verify each write with Undo/Redo,
+then replan, fit and remeasure. Stop after a bounded number of attempts (at most three); roll back the growth if
+the fresh graph plan is incomplete and retain unresolved/missing measurements instead of guessing sizes.
+
+When newly generated lane capacity, or an explicitly approved repair, allows growth, first use
+`setSwimlaneLaneSize` to make room for the measured child sizes and the generation gutter, then grow children
+and obtain a fresh graph plan. Keep the pool protected from generic graph resizing. Do not alter an authored
+capacity, a fixed pool, a locked/collapsed lane or other native ownership. Verify each capacity write with exact
+Undo/Redo and roll it back together with child growth if replanning is incomplete.
+The native lane-size setter reallocates capacity from the following lane: preflight every affected generated,
+unlocked and unpinned lane, reserve cumulative growth at the last lane first, then expand earlier lanes in reverse
+order so no final lane shrinks below its original or required size.
+
+## Imported label constraints
+
+For an existing Archify document, inspect `FBoard.importArchify` and schema support in the installed API.
+Supported inputs are architecture v1, workflow v1/v2, sequence v1, dataflow v1, lifecycle v3, and
+ERD/class/tree/timeline/waterfall/explainer v1. Preserve native lanes, groups, ordered messages, compartments,
+semantic markers and source constraints; accepting these schemas does not establish free-layout quality.
+Pass the parsed document to that dedicated importer, retain its semantic ID mapping and report unsupported
+decorations. A rejected import must leave the Board unchanged. The importer creates editable native elements;
+verify their text, container membership and connector bindings, then run model and rendered checks. Archify IR
+and BoardSpec have different contracts: do not pass BoardSpec to this importer or send input to a shell renderer.
+
+For verified brand geometry, use the installed async `importArchifyWithAssets(input, { brandAssets })` and provide
+each asset as `{ svg, sha256, source? }`. The importer uses the current Board theme, validates exact UTF-8 SHA256
+and portable SVG paths with solid hex/currentColor fills, and performs no network fallback. Unsupported SVG features or
+an active-page change while awaiting assets reject the import atomically. Preserve synchronous import warnings
+when brand assets were not supplied; do not call that result exact brand fidelity.
+
+Imported source label pins stay fixed by default. When optimizing a newly generated copy is requested,
+retain each chosen label's original placement and source metadata before using `updateConnectorLabel` with
+`placement: { mode: 'auto', anchor: 'auto', side: 'onPath', offset: null }`. Release only selected relative hints
+that still match their imported baseline; preserve absolute `labelAt` and user-edited pins. Obtain a fresh ready
+measured label plan, apply it, and check again. Lint and planning never relax pins implicitly. Keep import-only
+findings separate from the explicitly optimized result.
