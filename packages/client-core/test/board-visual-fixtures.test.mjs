@@ -193,6 +193,36 @@ describe("Board public Facade business fixture preservation", () => {
         const board = api.createBoard({ id: profile, name: profile });
         const fixture = realizeVisualFixture(board, api, profile, variant);
         fixture.verify();
+        if (profile === "erd") {
+          const tables = fixture.nodes.map((id) => board.getTable(id));
+          const customer = tables.find((table) => table.getValues()[0][0] === "customers");
+          expect(customer.getValues()[1]).toEqual(["PK", "customer_id", "UUID"]);
+          expect(customer.getValues()[2]).toEqual(["UNIQUE", "email", "VARCHAR"]);
+          for (const table of tables) {
+            expect(table.getValues().flat()).not.toContain("Field");
+            expect(table.getValues().flat()).not.toContain("Type");
+            const headerStyle = table.getCellRichText(0, 0).getData().body.textRuns[0].ts;
+            expect(headerStyle.bl).toBe(1);
+            expect(headerStyle.cl.rgb.toLowerCase()).toBe("#ffffff");
+          }
+          if (variant === "long-bilingual") {
+            expect(customer.getValues()[4][0]).toContain("外键、唯一性");
+            expect(customer.getCellInfo(4, 0).mergeRange).toMatchObject({
+              startColumn: 0,
+              endColumn: 2,
+            });
+          }
+        }
+        if (profile === "uml-class") {
+          const order = fixture.nodes
+            .map((id) => board.getTable(id))
+            .find((table) => table.getValues()[0][0] === "Order");
+          expect(order.getValues()[1][0]).toContain("+ id: UUID");
+          expect(order.getValues()[1][0]).toContain("+ total: Money");
+          expect(order.getValues()[1][0]).not.toContain("confirm()");
+          expect(order.getValues()[2][0]).toBe("+ confirm(): void");
+          expect(order.getCellRichText(0, 0).getData().body.textRuns[0].ts.bl).toBe(1);
+        }
         const initial = snapshot(board);
         const protectedBefore = JSON.parse(
           JSON.stringify(

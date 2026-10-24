@@ -619,6 +619,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
   const fixed = [];
   const groups = {};
   const expectations = [];
+  const structuredTableText = new Map();
   const ensure = (value, reason) => {
     assert.ok(value, reason);
     return value;
@@ -810,17 +811,68 @@ export function realizeVisualFixture(board, api, profile, variant) {
           "Diagram table insertion failed",
         );
         const lines = item.detail.split("\n");
-        const requiredRows = lines.length + 1;
+        const rows =
+          profile === "uml-class"
+            ? [
+                [item.title],
+                [lines.filter((line) => /^[-+#~]\s/.test(line) && !line.includes("(")).join("\n")],
+                [lines.filter((line) => /^[-+#~]\s/.test(line) && line.includes("(")).join("\n")],
+                ...lines.filter((line) => !/^[-+#~]\s/.test(line)).map((line) => [line]),
+              ]
+            : [
+                [item.title, "", ""],
+                ...lines.map((line) => {
+                  const field = /^([A-Za-z_]\w*)\s+([A-Z][A-Z0-9()]*)\s*(PK|FK|UNIQUE)?$/.exec(
+                    line,
+                  );
+                  return field ? [field[3] ?? "", field[1], field[2]] : [line, "", ""];
+                }),
+              ];
+        const styles = [0, 1].map((row) => {
+          const doc = table.getCellRichText(row, 0).getData();
+          return json(doc.body?.textRuns?.[0]?.ts ?? doc.documentStyle.textStyle);
+        });
+        const requiredRows = rows.length;
         const existingRows = table.getValues().length;
         if (existingRows < requiredRows)
           ensure(
             table.insertRows(existingRows, requiredRows - existingRows),
             "Cannot retain every compartment row",
           );
-        ensure(table.setCellText(0, 0, item.title), "Cannot set table title");
-        for (let row = 1; row < table.getValues().length; row++)
-          ensure(table.setCellText(row, 0, lines[row - 1] ?? ""), "Cannot set table field");
+        const columns = table.getStructure().columnCount;
+        for (let row = 0; row < table.getValues().length; row++) {
+          for (let column = 0; column < columns; column++) {
+            const text = api.newRichText().align({
+              horizontal: row === 0 ? E.HorizontalAlign.CENTER : E.HorizontalAlign.LEFT,
+              vertical: E.VerticalAlign.MIDDLE,
+            });
+            for (const paragraph of (rows[row]?.[column] ?? "").split("\n"))
+              text
+                .paragraph({ lineHeight: 1.2, spaceAfter: 0 })
+                .span(paragraph, styles[row === 0 ? 0 : 1]);
+            ensure(table.setCellRichText(row, column, text), "Cannot retain styled table text");
+          }
+          if (profile === "erd" && row > 0 && rows[row]?.[0] && !rows[row]?.[1])
+            ensure(
+              table.mergeCells({ startRow: row, endRow: row, startColumn: 0, endColumn: 2 }),
+              "Cannot retain entity note",
+            );
+          if (
+            row > 0 &&
+            (rows[row]?.[0]?.includes("\n") ||
+              (profile === "erd" && !rows[row]?.[1]) ||
+              (profile === "uml-class" && row >= 3))
+          )
+            ensure(table.resizeRows(row, row, 88), "Cannot seed a readable multiline compartment");
+        }
         ids[item.id] = table.getId();
+        structuredTableText.set(
+          item.id,
+          rows
+            .flat()
+            .flatMap((text) => text.split("\n"))
+            .filter(Boolean),
+        );
         const values = json(table.getValues());
         expectations.push(() =>
           assert.deepEqual(table.getValues(), values, "Table compartments changed"),
@@ -951,8 +1003,9 @@ export function realizeVisualFixture(board, api, profile, variant) {
       height: 110,
       text: api
         .newRichText()
+        .paragraph({ lineHeight: 1.2, spaceAfter: 5 })
         .span(spec.title, { fontFamily: "Arial", fontSize: 18, bold: true, color: "#0f172a" })
-        .paragraph({ spaceAfter: 5 })
+        .paragraph({ lineHeight: 1.25, spaceAfter: 0 })
         .span(`${profile} · ${variant}`, {
           fontFamily: "Consolas",
           fontSize: 9,
@@ -1013,7 +1066,8 @@ export function realizeVisualFixture(board, api, profile, variant) {
       expectations.forEach((check) => check());
       const encoded = JSON.stringify(board.save());
       for (const item of spec.nodes)
-        for (const fragment of [item.title, ...item.detail.split("\n")].filter(Boolean)) {
+        for (const fragment of structuredTableText.get(item.id) ??
+          [item.title, ...item.detail.split("\n")].filter(Boolean)) {
           assert.ok(
             encoded.includes(JSON.stringify(fragment).slice(1, -1)),
             `Business text lost: ${item.id}`,
