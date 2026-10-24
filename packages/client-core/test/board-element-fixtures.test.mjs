@@ -52,13 +52,18 @@ describe("native catalogue content and measured authoring", () => {
       expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
       expect(await board.redo()).toBe(true);
       expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
-      const fresh = api.createBoard({ ...before, id: "catalogue-chart-family-reopened" });
-      expect(fresh.getCharts()).toHaveLength(7);
-      for (const item of facts) {
-        const info = fresh.getChart(item.elementId).getInfo();
-        expect(info.dataSource).toEqual(item.dataSource);
-        expect(info.sourceHeader).toEqual(item.sourceHeader);
-        expect(info.config).toEqual(item.config);
+      const reopened = await runtime("catalogue-chart-family-reopened-runtime");
+      try {
+        const fresh = reopened.api.createBoard(before);
+        expect(fresh.getCharts()).toHaveLength(7);
+        for (const item of facts) {
+          const info = fresh.getChart(item.elementId).getInfo();
+          expect(info.dataSource).toEqual(item.dataSource);
+          expect(info.sourceHeader).toEqual(item.sourceHeader);
+          expect(info.config).toEqual(item.config);
+        }
+      } finally {
+        reopened.univer.dispose();
       }
       fixture.verify();
     } finally {
