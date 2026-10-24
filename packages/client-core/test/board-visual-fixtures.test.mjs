@@ -513,6 +513,33 @@ describe("Board public element catalogue preservation", () => {
               ),
             ),
           ).toBe(true);
+        if (profile === "transform-style") {
+          for (const item of fixture.semanticCoverage.covered.filter(
+            (item) => item.feature === "transform-and-boundary",
+          )) {
+            const endpoint = board.getElement(item.elementId).connectorData.start;
+            expect(endpoint).toMatchObject({
+              kind: "shapeBoundary",
+              outlineIndex: 0,
+              segmentIndex: 0,
+              segmentT: 0.5,
+            });
+            expect(endpoint).not.toHaveProperty("t");
+          }
+        }
+        if (profile === "table-presets") {
+          const frames = fixture.semanticCoverage.covered.map(
+            (item) => board.getElement(item.elementId).transform,
+          );
+          for (const [index, a] of frames.entries())
+            for (const b of frames.slice(index + 1))
+              expect(
+                a.left < b.left + b.width &&
+                  a.left + a.width > b.left &&
+                  a.top < b.top + b.height &&
+                  a.top + a.height > b.top,
+              ).toBe(false);
+        }
       } finally {
         univer.dispose();
       }

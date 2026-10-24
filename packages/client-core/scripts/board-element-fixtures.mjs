@@ -163,17 +163,15 @@ export async function realizeElementFixture(board, api, profile) {
         );
         if (formula === "external") {
           const source = { unitId: workbookId, formulaQualifier: "Quarterly sales" };
-          const reference = api
-            .getFormula()
-            .buildReference({
-              hostUnitId: board.getId(),
-              unit: source,
-              target: {
-                kind: E.FormulaReferenceType.SHEET_RANGE,
-                sheetName: "Sales",
-                range: { startRow: 1, endRow: 4, startColumn: 1, endColumn: 1 },
-              },
-            });
+          const reference = api.getFormula().buildReference({
+            hostUnitId: board.getId(),
+            unit: source,
+            target: {
+              kind: E.FormulaReferenceType.SHEET_RANGE,
+              sheetName: "Sales",
+              range: { startRow: 1, endRow: 4, startColumn: 1, endColumn: 1 },
+            },
+          });
           ref.setFormula({
             formula: `=SUM(${reference})`,
             externalReferences: [
@@ -241,18 +239,38 @@ export async function realizeElementFixture(board, api, profile) {
       assert.equal(covered.length, types.length, "A public shape preset was skipped"),
     );
   } else if (profile === "table-presets") {
+    let left = 70;
+    let top = 90;
+    let rowHeight = 0;
     for (const [index, preset] of Object.values(E.BoardTableDiagramPreset).entries()) {
-      const p = point(index, 430, 350, 3);
+      if (index && index % 3 === 0) {
+        left = 70;
+        top += rowHeight + 88;
+        rowHeight = 0;
+      }
       const table = ensure(
-        board.insertTable({ left: p.x, top: p.y, diagramPreset: preset }),
+        board.insertTable({ left, top, diagramPreset: preset }),
         `Table preset unavailable: ${preset}`,
       );
-      ensure(table.setCellText(0, 0, `${preset} / 领域数据`), "Table caption failed");
-      caption(preset, p.x, p.y - 38, 400);
-      const values = JSON.parse(JSON.stringify(table.getValues()));
-      expect.push(() =>
-        assert.deepEqual(table.getValues(), values, "Table resource values changed"),
+      const document = table.getCellRichText(0, 0).getData();
+      const style = JSON.parse(
+        JSON.stringify(document.body?.textRuns?.[0]?.ts ?? document.documentStyle?.textStyle ?? {}),
       );
+      ensure(
+        table.setCellRichText(0, 0, api.newRichText().span(`${preset} / 领域数据`, style)),
+        "Table caption failed",
+      );
+      const bounds = board.getElement(table.getId()).transform;
+      caption(preset, left, top - 38, bounds.width);
+      left += bounds.width + 80;
+      rowHeight = Math.max(rowHeight, bounds.height);
+      const values = JSON.parse(JSON.stringify(table.getValues()));
+      expect.push(() => {
+        assert.deepEqual(table.getValues(), values, "Table resource values changed");
+        const actualStyle = table.getCellRichText(0, 0).getData().body.textRuns[0].ts;
+        for (const [key, value] of Object.entries(style))
+          assert.deepEqual(actualStyle[key], value, "Native preset caption style changed");
+      });
       ids.push(table.getId());
       covered.push({ feature: "table-preset", preset, elementId: table.getId() });
     }
@@ -540,7 +558,13 @@ export async function realizeElementFixture(board, api, profile) {
       const p = point(index);
       const c = ensure(
         board.insertConnector({
-          start: { kind: "shapeBoundary", shapeId: a.id, outlineIndex: 0, segmentIndex: 0, t: 0.5 },
+          start: {
+            kind: "shapeBoundary",
+            shapeId: a.id,
+            outlineIndex: 0,
+            segmentIndex: 0,
+            segmentT: 0.5,
+          },
           end: { kind: "free", x: p.x + 190, y: p.y - 20 },
           routing: "orthogonal",
           style: { endMarker: { type: "filledArrow" }, stroke: "#334155" },
