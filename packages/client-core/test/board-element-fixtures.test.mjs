@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createCatalogueChartInfo,
+  createCatalogueChartFamilyInfos,
   realizeElementFixture,
 } from "../scripts/board-element-fixtures.mjs";
 
@@ -17,6 +18,95 @@ async function runtime(id) {
 }
 
 describe("native catalogue content and measured authoring", () => {
+  it("reopens all seven native chart resources and preserves their models through Undo and Redo", async () => {
+    const { univer, api, board } = await runtime("catalogue-chart-family-resources");
+    try {
+      const fixture = await realizeElementFixture(board, api, "text-image-ink-chart");
+      const coverage = fixture.semanticCoverage.chartTypeCoverage;
+      expect(coverage.sampled).toHaveLength(7);
+      expect(coverage.declared).toEqual([...new Set(Object.values(api.Enum.ChartTypeString))]);
+      expect(coverage.unverified).toEqual(
+        coverage.declared.filter((type) => !coverage.sampled.includes(type)),
+      );
+      const entries = fixture.semanticCoverage.covered.filter(
+        (item) => item.feature === "inline-data-chart",
+      );
+      expect(entries).toHaveLength(7);
+      expect(board.getCharts()).toHaveLength(7);
+      const facts = entries.map(({ elementId }) => {
+        const info = board.getChart(elementId).getInfo();
+        return {
+          elementId,
+          dataSource: info.dataSource,
+          sourceHeader: info.sourceHeader,
+          config: info.config,
+        };
+      });
+      const before = JSON.parse(JSON.stringify(board.save()));
+      const first = board.getElement(entries[0].elementId);
+      expect(
+        board.updateElement(first.id, { element: { ...first, name: "Quarterly column" } }),
+      ).toBe(true);
+      const after = JSON.parse(JSON.stringify(board.save()));
+      expect(await board.undo()).toBe(true);
+      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
+      expect(await board.redo()).toBe(true);
+      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
+      const fresh = api.createBoard({ ...before, id: "catalogue-chart-family-reopened" });
+      expect(fresh.getCharts()).toHaveLength(7);
+      for (const item of facts) {
+        const info = fresh.getChart(item.elementId).getInfo();
+        expect(info.dataSource).toEqual(item.dataSource);
+        expect(info.sourceHeader).toEqual(item.sourceHeader);
+        expect(info.config).toEqual(item.config);
+      }
+      fixture.verify();
+    } finally {
+      univer.dispose();
+    }
+  }, 20_000);
+
+  it("uses native category/value mappings and preserves every source row for seven chart families", async () => {
+    const { univer, api, board } = await runtime("catalogue-chart-families");
+    try {
+      const infos = createCatalogueChartFamilyInfos(board, api);
+      expect(infos.map(({ family }) => family)).toEqual([
+        "Column",
+        "Bar",
+        "Line",
+        "Area",
+        "Pie",
+        "Donut",
+        "Scatter",
+      ]);
+      for (const { family, info } of infos) {
+        expect(info.sourceHeader).toEqual({ band: { startOffset: 0, endOffset: 0 } });
+        expect(info.dataSource.values).toHaveLength(5);
+        expect(info.dataSource.values[0]).toEqual([
+          family === "Scatter" ? "Week" : "Quarter",
+          "Orders",
+          "Returns",
+        ]);
+        expect(info.dataSource.values.slice(1).map((row) => row.slice(1))).toEqual([
+          [120, 4],
+          [168, 5],
+          [192, 3],
+          [226, 6],
+        ]);
+        expect(info.config.mapping).toMatchObject({
+          categoryIndex: 0,
+          seriesIndexes: ["Pie", "Donut"].includes(family) ? [1] : [1, 2],
+        });
+        if (family === "Scatter")
+          expect(info.dataSource.values.slice(1).every((row) => typeof row[0] === "number")).toBe(
+            true,
+          );
+      }
+    } finally {
+      univer.dispose();
+    }
+  }, 20_000);
+
   it("declares chart title rows without dropping the original header or any quarterly values", async () => {
     const { univer, api, board } = await runtime("catalogue-chart-source");
     try {

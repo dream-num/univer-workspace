@@ -97,6 +97,8 @@ selection/direction/fixed 约束重新 plan、apply、fit
 未注册的 Media、模板 Placeholder、legacy Group 和 Diagram adapter slot 分别列出，不冒称已渲染。
 SmartArt 使用公开 `insertShape` 创建真实复合 payload，验证逻辑节点、原生子形状和保存历史；当前 Board
 绘制复合几何但不绘制子节点文字，目录明确标为 partial，不将保留的文字数据视为完整文字渲染或子节点编辑。
+图表目录使用声明源表头的 Column、Bar、Line、Area、Pie、Donut、Scatter 七类原生样例，保留完整源数据；
+其他公开图表枚举明确列为未验证，不从枚举注册推断真实渲染可用性。Scatter 使用数值 X 字段，Pie/Donut 显式选择单个值字段。
 
 两套新场景均保存每个 case 的完整 fit 图，以及覆盖整个公开 content extent 的 50%、100%、200%
 重叠分块图和原始 rendered 分析。输出记录真正 apply 的结果与 Undo/Redo/stale 断言，不从非空
