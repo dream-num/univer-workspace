@@ -15,6 +15,9 @@ import { captureVisualEvidence } from "./board-visual-evidence.mjs";
 import { elementProfiles, realizeElementFixture } from "./board-element-fixtures.mjs";
 import { repairMeasuredVisualText } from "./board-visual-repair.mjs";
 
+// Keep SDK runtime notices intact on stderr so stdout remains one machine-readable summary.
+console.log = console.info = console.debug = (...args) => console.error(...args);
+
 // Exercise the installed public SDK in plain Node ESM, as the content worker does.
 const { values } = parseArgs({
   options: {
