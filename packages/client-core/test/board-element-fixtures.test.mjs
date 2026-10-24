@@ -5,11 +5,15 @@ import {
   realizeElementFixture,
 } from "../scripts/board-element-fixtures.mjs";
 
+const licensedIt = it.skipIf(!process.env.UNIVER_LICENSE?.trim());
+
 async function runtime(id) {
   const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
     await import("@univer-cli/headless-univer");
   const { UniverInstanceType } = await import("@univerjs/core");
-  const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+  const univer = await createStandardHeadlessUniverFactory({
+    license: process.env.UNIVER_LICENSE ?? "",
+  })({
     unitId: id,
     unitType: UniverInstanceType.UNIVER_BOARD,
   });
@@ -18,58 +22,63 @@ async function runtime(id) {
 }
 
 describe("native catalogue content and measured authoring", () => {
-  it("reopens all seven native chart resources and preserves their models through Undo and Redo", async () => {
-    const { univer, api, board } = await runtime("catalogue-chart-family-resources");
-    try {
-      const fixture = await realizeElementFixture(board, api, "text-image-ink-chart");
-      const coverage = fixture.semanticCoverage.chartTypeCoverage;
-      expect(coverage.sampled).toHaveLength(7);
-      expect(coverage.declared).toEqual([...new Set(Object.values(api.Enum.ChartTypeString))]);
-      expect(coverage.unverified).toEqual(
-        coverage.declared.filter((type) => !coverage.sampled.includes(type)),
-      );
-      const entries = fixture.semanticCoverage.covered.filter(
-        (item) => item.feature === "inline-data-chart",
-      );
-      expect(entries).toHaveLength(7);
-      expect(board.getCharts()).toHaveLength(7);
-      const facts = entries.map(({ elementId }) => {
-        const info = board.getChart(elementId).getInfo();
-        return {
-          elementId,
-          dataSource: info.dataSource,
-          sourceHeader: info.sourceHeader,
-          config: info.config,
-        };
-      });
-      const before = JSON.parse(JSON.stringify(board.save()));
-      const first = board.getElement(entries[0].elementId);
-      expect(
-        board.updateElement(first.id, { element: { ...first, name: "Quarterly column" } }),
-      ).toBe(true);
-      const after = JSON.parse(JSON.stringify(board.save()));
-      expect(await board.undo()).toBe(true);
-      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
-      expect(await board.redo()).toBe(true);
-      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
-      const reopened = await runtime("catalogue-chart-family-reopened-runtime");
+  // Native chart insertion enforces runtime authorization; compiled application validation supplies its credential.
+  licensedIt(
+    "reopens all seven native chart resources and preserves their models through Undo and Redo",
+    async () => {
+      const { univer, api, board } = await runtime("catalogue-chart-family-resources");
       try {
-        const fresh = reopened.api.createBoard(before);
-        expect(fresh.getCharts()).toHaveLength(7);
-        for (const item of facts) {
-          const info = fresh.getChart(item.elementId).getInfo();
-          expect(info.dataSource).toEqual(item.dataSource);
-          expect(info.sourceHeader).toEqual(item.sourceHeader);
-          expect(info.config).toEqual(item.config);
+        const fixture = await realizeElementFixture(board, api, "text-image-ink-chart");
+        const coverage = fixture.semanticCoverage.chartTypeCoverage;
+        expect(coverage.sampled).toHaveLength(7);
+        expect(coverage.declared).toEqual([...new Set(Object.values(api.Enum.ChartTypeString))]);
+        expect(coverage.unverified).toEqual(
+          coverage.declared.filter((type) => !coverage.sampled.includes(type)),
+        );
+        const entries = fixture.semanticCoverage.covered.filter(
+          (item) => item.feature === "inline-data-chart",
+        );
+        expect(entries).toHaveLength(7);
+        expect(board.getCharts()).toHaveLength(7);
+        const facts = entries.map(({ elementId }) => {
+          const info = board.getChart(elementId).getInfo();
+          return {
+            elementId,
+            dataSource: info.dataSource,
+            sourceHeader: info.sourceHeader,
+            config: info.config,
+          };
+        });
+        const before = JSON.parse(JSON.stringify(board.save()));
+        const first = board.getElement(entries[0].elementId);
+        expect(
+          board.updateElement(first.id, { element: { ...first, name: "Quarterly column" } }),
+        ).toBe(true);
+        const after = JSON.parse(JSON.stringify(board.save()));
+        expect(await board.undo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
+        expect(await board.redo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
+        const reopened = await runtime("catalogue-chart-family-reopened-runtime");
+        try {
+          const fresh = reopened.api.createBoard(before);
+          expect(fresh.getCharts()).toHaveLength(7);
+          for (const item of facts) {
+            const info = fresh.getChart(item.elementId).getInfo();
+            expect(info.dataSource).toEqual(item.dataSource);
+            expect(info.sourceHeader).toEqual(item.sourceHeader);
+            expect(info.config).toEqual(item.config);
+          }
+        } finally {
+          reopened.univer.dispose();
         }
+        fixture.verify();
       } finally {
-        reopened.univer.dispose();
+        univer.dispose();
       }
-      fixture.verify();
-    } finally {
-      univer.dispose();
-    }
-  }, 20_000);
+    },
+    20_000,
+  );
 
   it("uses native category/value mappings and preserves every source row for seven chart families", async () => {
     const { univer, api, board } = await runtime("catalogue-chart-families");
