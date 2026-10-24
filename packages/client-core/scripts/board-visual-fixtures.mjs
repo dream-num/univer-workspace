@@ -844,10 +844,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
           : Math.max(
               ...spec.lanes.map((lane) => {
                 const members = spec.nodes.filter((item) => item.lane === lane.id).map(size);
-                return (
-                  members.reduce((sum, value) => sum + value.width, 0) +
-                  Math.max(0, members.length - 1) * 48
-                );
+                return Math.max(0, ...members.map((member) => member.width));
               }),
             ));
       const lanes = spec.lanes.map((lane) => {
@@ -988,7 +985,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
       const transform = seed(index, item);
       const point = item.lane
         ? {
-            x: 310 + index * 70,
+            x: 310 + (spec.direction === "horizontal" ? index * 70 : 0),
             y:
               210 +
               board

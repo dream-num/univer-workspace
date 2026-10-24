@@ -6,6 +6,62 @@ import {
 } from "../scripts/board-visual-fixtures.mjs";
 
 describe("generated nested business ownership", () => {
+  it("reserves one node column rather than a sum of row widths for vertical swimlane flow", async () => {
+    const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+      await import("@univer-cli/headless-univer");
+    const { UniverInstanceType } = await import("@univerjs/core");
+    const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+      unitId: "vertical-pool-width",
+      unitType: UniverInstanceType.UNIVER_BOARD,
+    });
+    try {
+      const api = createStandardHeadlessUniverFacade(univer);
+      const board = api.createBoard({ id: "vertical-pool-width", name: "Vertical flow" });
+      const fixture = realizeVisualFixture(board, api, "uml-activity", "nested-dense");
+      const pool = board.getElement("visual-pool");
+      const width = Math.max(...fixture.nodes.map((id) => board.getElement(id).transform.width));
+      expect(pool.transform.width).toBe(pool.containerData.swimlane.headerSize + 64 + width);
+      const lanes = structuredClone(pool.containerData.swimlane.lanes);
+      const plan = board.planGraphLayout({
+        ...fixture.layoutOptions,
+        fixedElementIds: fixture.fixed,
+      });
+      expect(plan.status).toBe("ready");
+      expect(board.applyLayoutPlan(plan)).toBe(true);
+      expect(board.getElement(pool.id).containerData.swimlane.lanes).toEqual(lanes);
+      const bounds = board.getElementBounds(pool.id);
+      for (const id of fixture.nodes) {
+        const child = board.getElementBounds(id);
+        expect(child.left).toBeGreaterThanOrEqual(
+          bounds.left + pool.containerData.swimlane.headerSize,
+        );
+        expect(child.left + child.width).toBeLessThanOrEqual(bounds.left + bounds.width);
+      }
+      const beforeGrowth = JSON.parse(JSON.stringify(board.save()));
+      expect(
+        board.setElementsTransform({
+          "visual-pool": { width: pool.transform.width + width },
+          "visual-budget": { width: width * 2 },
+        }),
+      ).toBe(true);
+      const afterGrowth = JSON.parse(JSON.stringify(board.save()));
+      expect(board.getElement("visual-pool").transform.width).toBeGreaterThan(pool.transform.width);
+      expect(await board.undo()).toBe(true);
+      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(beforeGrowth);
+      expect(await board.redo()).toBe(true);
+      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(afterGrowth);
+      const enlarged = board.planGraphLayout({
+        ...fixture.layoutOptions,
+        fixedElementIds: fixture.fixed,
+      });
+      expect(enlarged.status).toBe("ready");
+      expect(board.applyLayoutPlan(enlarged)).toBe(true);
+      fixture.verify();
+    } finally {
+      univer.dispose();
+    }
+  }, 20_000);
+
   it("wraps every existing direct scope along with its nodes without changing source facts", () => {
     for (const profile of Object.keys(visualCases)) {
       const source = getVisualCase(profile, "business");
