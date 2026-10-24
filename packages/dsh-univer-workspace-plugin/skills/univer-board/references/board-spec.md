@@ -144,6 +144,13 @@ New ordinary groups with external captions can set `containerData.headerSize` to
 before child insertion, then fit and remeasure. Patch the complete element and preserve source constraints; leave
 existing authored groups, swimlanes and native layout owners unchanged.
 
+When the installed rendered report includes `element-text-overflow`, use its `textLayout` content/available ratio
+to grow eligible generated shapes without shrinking type. For a table, use the inclusive zero-based `tableRange`
+to resize only the measured rows/columns, including every row/column in a merged range; preserve values, merges
+and styles. Keep fixed, locked, unselectable and native/managed owners unchanged, verify each write with Undo/Redo,
+then replan, fit and remeasure. Stop after a bounded number of attempts (at most three); roll back the growth if
+the fresh graph plan is incomplete and retain unresolved/missing measurements instead of guessing sizes.
+
 ## Imported label constraints
 
 For an existing Archify document, inspect `FBoard.importArchify` and schema support in the installed API.

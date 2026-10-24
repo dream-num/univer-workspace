@@ -127,6 +127,40 @@ describe("Board measured text growth boundaries", () => {
       ).patches,
     ).toEqual({});
   });
+  it("grows only the measured merged table range and preserves all other rows and source content", () => {
+    const element = { ...shape("a"), type: "table" };
+    const structure = {
+      rowCount: 3,
+      columnCount: 3,
+      rowHeights: [40, 50, 60],
+      columnWidths: [100, 180, 120],
+    };
+    const measured = report(["a"], { width: 300, height: 80 }, { width: 450, height: 120 });
+    measured.analyses[0].rendered.issues[0].tableRange = {
+      startRow: 1,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 2,
+    };
+    const proposal = proposeMeasuredTextGrowth(
+      { getElement: () => element, getTable: () => ({ getStructure: () => structure }) },
+      measured,
+      fixture,
+    );
+    expect(proposal.patches).toEqual({});
+    expect(proposal.tablePatches.a.rows).toEqual({ 1: 77, 2: 92 });
+    expect(proposal.tablePatches.a.columns).toEqual({ 0: 152, 1: 272, 2: 182 });
+    expect(structure.rowHeights).toEqual([40, 50, 60]);
+    expect(element.transform).toEqual(shape("a").transform);
+    delete measured.analyses[0].rendered.issues[0].tableRange.endColumn;
+    expect(
+      proposeMeasuredTextGrowth(
+        { getElement: () => element, getTable: () => ({ getStructure: () => structure }) },
+        measured,
+        fixture,
+      ).skipped[0].reason,
+    ).toBe("table-cell-range-unavailable");
+  });
   it("rolls back a measured growth whose fresh public graph plan is incomplete", async () => {
     let value = { id: "board", pages: { p: { elements: { a: shape("a") } } } },
       undo,
@@ -173,6 +207,84 @@ describe("Board measured text growth boundaries", () => {
 });
 
 describe("Board public Facade business fixture preservation", () => {
+  it.each([
+    ["erd", false],
+    ["uml-class", false],
+    ["uml-class", true],
+  ])(
+    "uses actual public %s table resource history for measured cell growth (budget refusal %s)",
+    async (profile, incomplete) => {
+      const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+        await import("@univer-cli/headless-univer");
+      const { UniverInstanceType } = await import("@univerjs/core");
+      const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+        unitId: profile,
+        unitType: UniverInstanceType.UNIVER_BOARD,
+      });
+      try {
+        const api = createStandardHeadlessUniverFacade(univer),
+          board = api.createBoard({ id: profile, name: profile });
+        const fixture = realizeVisualFixture(board, api, profile, "business");
+        const table = board.getTable(fixture.nodes[0]),
+          values = structuredClone(table.getValues()),
+          original = table.getStructure();
+        const before = JSON.parse(JSON.stringify(board.save()));
+        let measurements = 0;
+        const result = await repairMeasuredVisualText(
+          board,
+          {
+            lint: async () => ({
+              analyses: [
+                {
+                  rendered: {
+                    issues: measurements++
+                      ? []
+                      : [
+                          {
+                            rule: "element-text-overflow",
+                            elementIds: [table.getId()],
+                            tableRange: {
+                              startRow: 0,
+                              endRow: 0,
+                              startColumn: 0,
+                              endColumn: original.columnCount - 1,
+                            },
+                            textLayout: {
+                              availableSize: { width: 400, height: 40 },
+                              contentSize: { width: 500, height: 50 },
+                            },
+                          },
+                        ],
+                  },
+                },
+              ],
+            }),
+          },
+          incomplete
+            ? { ...fixture, layoutOptions: { ...fixture.layoutOptions, maxNodes: 1 } }
+            : fixture,
+        );
+        expect(result.status).toBe(incomplete ? "replan-incomplete" : "no-overflow-reported");
+        expect(result.attempts[0].growthApplications.length).toBe(original.columnCount + 1);
+        expect(
+          result.attempts[0].growthApplications.every(
+            (application) =>
+              application.applied &&
+              application.changed &&
+              application.undoExact &&
+              application.redoExact,
+          ),
+        ).toBe(true);
+        expect(table.getValues()).toEqual(values);
+        if (incomplete) expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
+        else expect(table.getStructure().rowHeights[0]).toBeGreaterThan(original.rowHeights[0]);
+        fixture.verify();
+      } finally {
+        univer.dispose();
+      }
+    },
+    20_000,
+  );
   it.each(
     Object.keys(visualCases).flatMap((profile) =>
       visualVariants.map((variant) => [profile, variant]),

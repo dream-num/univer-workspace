@@ -77,15 +77,17 @@ class 使用 `layerGap: 160`；节点尺寸不为消除诊断而预先放大。�
 业务清单保留领域字段、UML 基数、消息时序、原生结构所有权、泳道和嵌套边界；新增普通容器在布局前后
 通过现有 `fitContainerToContent` 收紧，不将手工排好的坐标当作自动布局结果。
 若已安装 renderer 返回 `element-text-overflow` 的公开 `textLayout` 测量，最多三轮按真实内容/可用
-textRect 比例扩大可编辑普通 Shape，再通过相同 selection/direction/fixed 约束重新 plan、apply、fit
+textRect 比例扩大可编辑普通 Shape；Table 使用 inclusive 零基 `tableRange` 仅调整实测行列，合并范围内
+按原行列比例扩展，不改单元格内容、合并或样式。每条公开 resize 写入独立验证 Undo/Redo，再通过相同
+selection/direction/fixed 约束重新 plan、apply、fit
 和测量；不缩字号。固定、locked、不可选和 native/managed 元素保持不变。新的图计划 incomplete
 时回滚该轮尺寸变更并保存诊断。停止边界不代表必然收敛，未报告 overflow 也不代表人工视觉验收通过。
 `--suite elements` 另建元素目录，覆盖已安装 SDK 的全部注册内建/custom/sequence 形状、图表、
 8 类图示表格、文字、图片、Ink、连接线标记与容器。目录使用固定展示坐标，只验证可用性与视觉表现；
 另外以真实本地 Sheet 验证 native BoardFloating Embed 和 constant/cross-Unit 公式 Shape，通过公开
 `embeddedUnits` / `formulaReferenceUnits` 传递源数据。保存、descriptor 或绑定创建成功不代表子文档
-像素、公式结果或交互已经通过；预期源值与实际截图/交互审阅分别记录。图表/表格内部文字不能仅依赖
-普通 Shape 的文字测量，仍须检查其原生本体 bounds 和完整分块截图。
+像素、公式结果或交互已经通过；预期源值与实际截图/交互审阅分别记录。图表文字和缺少原生 cell 测量的
+表格仍须检查其原生本体 bounds 和完整分块截图；cell 测量也不能替代字形 ink 的逐图审阅。
 未注册的 Media、模板 Placeholder、legacy Group 和 Diagram adapter slot 分别列出，不冒称已渲染。
 
 两套新场景均保存每个 case 的完整 fit 图，以及覆盖整个公开 content extent 的 50%、100%、200%

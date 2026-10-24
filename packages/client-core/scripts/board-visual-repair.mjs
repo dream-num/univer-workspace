@@ -4,6 +4,7 @@ const snapshot = (board) => JSON.parse(JSON.stringify(board.save()));
 
 export function proposeMeasuredTextGrowth(board, report, fixture) {
   const patches = {},
+    tablePatches = {},
     skipped = [];
   const protectedIds = new Set([...fixture.fixed, ...fixture.protected]);
   const candidates = new Set(fixture.nodes);
@@ -14,8 +15,8 @@ export function proposeMeasuredTextGrowth(board, report, fixture) {
     for (const id of issue.elementIds) {
       const element = board.getElement(id);
       let reason;
-      if (!element || element.type !== "shape" || !candidates.has(id))
-        reason = "not-an-ordinary-generated-shape";
+      if (!element || !["shape", "table"].includes(element.type) || !candidates.has(id))
+        reason = "not-an-ordinary-generated-shape-or-table";
       else if (protectedIds.has(id)) reason = "fixed-or-native-owner";
       else {
         const seen = new Set();
@@ -46,6 +47,55 @@ export function proposeMeasuredTextGrowth(board, report, fixture) {
         skipped.push({ elementId: id, reason, issue });
         continue;
       }
+      if (element.type === "table") {
+        const table = board.getTable?.(id),
+          structure = table?.getStructure(),
+          range = issue.tableRange;
+        if (
+          !structure ||
+          !range ||
+          ![range.startRow, range.endRow, range.startColumn, range.endColumn].every(
+            Number.isInteger,
+          ) ||
+          range.startRow < 0 ||
+          range.startColumn < 0 ||
+          range.startRow > range.endRow ||
+          range.startColumn > range.endColumn ||
+          range.endRow >= structure.rowCount ||
+          range.endColumn >= structure.columnCount
+        ) {
+          skipped.push({ elementId: id, reason: "table-cell-range-unavailable", issue });
+          continue;
+        }
+        const proposal = (tablePatches[id] ??= { rows: {}, columns: {}, ranges: [] });
+        proposal.ranges.push(range);
+        for (const [axis, start, end, sizes, ratio] of [
+          [
+            "rows",
+            range.startRow,
+            range.endRow,
+            structure.rowHeights,
+            content.height / available.height,
+          ],
+          [
+            "columns",
+            range.startColumn,
+            range.endColumn,
+            structure.columnWidths,
+            content.width / available.width,
+          ],
+        ]) {
+          if (ratio <= 1) continue;
+          for (let index = start; index <= end; index++) {
+            const size = Math.ceil(sizes[index] * ratio + 4 / (end - start + 1));
+            if (!Number.isFinite(size) || size <= 0) continue;
+            proposal[axis][index] = Math.max(proposal[axis][index] ?? 0, size);
+          }
+        }
+        if (!Object.keys(proposal.rows).length && !Object.keys(proposal.columns).length)
+          delete tablePatches[id];
+        continue;
+      }
       const width = element.transform.width * Math.max(1, content.width / available.width);
       const height = element.transform.height * Math.max(1, content.height / available.height);
       if (![width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
@@ -57,7 +107,7 @@ export function proposeMeasuredTextGrowth(board, report, fixture) {
         height: Math.ceil(height + (content.height > available.height ? 4 : 0)),
       };
     }
-  return { patches, skipped, issues };
+  return { patches, tablePatches, skipped, issues };
 }
 
 async function assertHistory(board, before, after, label) {
@@ -81,7 +131,7 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
     const report = await measure();
     reports.push(report);
     const proposal = proposeMeasuredTextGrowth(board, report, fixture);
-    if (!Object.keys(proposal.patches).length)
+    if (!Object.keys(proposal.patches).length && !Object.keys(proposal.tablePatches).length)
       return {
         status: proposal.issues.length ? "blocked" : "no-overflow-reported",
         reports,
@@ -90,14 +140,44 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
         visualApproval: "pending",
       };
     const before = snapshot(board);
-    assert.equal(
-      board.setElementsTransform(proposal.patches),
-      true,
-      "Measured text growth rejected",
-    );
-    fixture.verify();
+    const growthApplications = [];
+    const applyGrowth = async (apply, details) => {
+      const previous = snapshot(board);
+      assert.equal(apply(), true, "Measured text growth rejected");
+      fixture.verify();
+      const after = snapshot(board),
+        changed = JSON.stringify(previous) !== JSON.stringify(after);
+      if (changed) await assertHistory(board, previous, after, "Measured text growth");
+      growthApplications.push({
+        ...details,
+        applied: true,
+        changed,
+        ...(changed ? { undoExact: true, redoExact: true } : {}),
+      });
+    };
+    if (Object.keys(proposal.patches).length)
+      await applyGrowth(() => board.setElementsTransform(proposal.patches), {
+        kind: "shape-size",
+        patches: proposal.patches,
+      });
+    for (const [id, patch] of Object.entries(proposal.tablePatches)) {
+      const table = board.getTable(id);
+      for (const [axis, sizes] of [
+        ["rows", patch.rows],
+        ["columns", patch.columns],
+      ])
+        for (const [position, size] of Object.entries(sizes)) {
+          const index = Number(position);
+          await applyGrowth(
+            () =>
+              axis === "rows"
+                ? table.resizeRows(index, index, size)
+                : table.resizeColumns(index, index, size),
+            { kind: `table-${axis}`, elementId: id, index, size, measuredRanges: patch.ranges },
+          );
+        }
+    }
     const grown = snapshot(board);
-    await assertHistory(board, before, grown, "Measured text growth");
     const plan = board.planGraphLayout({
       ...fixture.layoutOptions,
       fixedElementIds: fixture.fixed,
@@ -106,11 +186,14 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
     if (plan.status === "incomplete") {
       assert.equal(board.applyLayoutPlan(plan), false, "Incomplete growth replan accepted");
       assert.deepEqual(snapshot(board), grown);
-      assert.equal(await board.undo(), true, "Blocked growth rollback failed");
+      for (const application of growthApplications.filter((item) => item.changed).reverse())
+        assert.equal(await board.undo(), true, `Blocked ${application.kind} rollback failed`);
       assert.deepEqual(snapshot(board), before, "Blocked growth rollback lost content");
       attempts.push({
         index,
         patches: proposal.patches,
+        tablePatches: proposal.tablePatches,
+        growthApplications,
         skipped: proposal.skipped,
         growthApplied: true,
         growthRolledBack: true,
@@ -141,6 +224,8 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
     attempts.push({
       index,
       patches: proposal.patches,
+      tablePatches: proposal.tablePatches,
+      growthApplications,
       skipped: proposal.skipped,
       growthApplied: true,
       growthRolledBack: false,
