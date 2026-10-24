@@ -82,6 +82,8 @@ class 使用 `layerGap: 160`；节点尺寸不为消除诊断而预先放大。�
 Architecture、Deployment、Package 和 Use Case 模板为关系文字预留更大的层间距；多区域和用例边界另留
 标题通道。原生 Timeline 使用公开 `setLayout` 的纵向单侧结构，生成标题跟随真实结构范围，保留全部时间顺序、
 文字、字号与原生所有权。上述是新生成模板的展示选择，不自动改动已导入的固定边界或端点。
+生成标题在布局、fit 和文本扩容后对齐实际内容范围，单独验证只改标题及精确 Undo/Redo，避免标题留在旧 seed
+位置而浪费总览宽度。已有至少两层 frame 祖先的 UML Package scope 增加顶部标题通道，普通单层包不受影响。
 若已安装 renderer 返回 `element-text-overflow` 的公开 `textLayout` 测量，最多三轮按真实内容/可用
 textRect 比例扩大可编辑普通 Shape；Table 使用 inclusive 零基 `tableRange` 仅调整实测行列，合并范围内
 按原行列比例扩展，不改单元格内容、合并或样式。无 cell range 的完整原生 Table paint 测量只扩大元素框，

@@ -330,6 +330,37 @@ try {
               fixture,
             )
           : undefined;
+        let headingApplication;
+        if (visualSuite) {
+          const beforeHeading = persistedSnapshot(board);
+          const content = () =>
+            Object.fromEntries(
+              Object.entries(board.getElements()).filter(([id]) => id !== "visual-case-heading"),
+            );
+          const originalContent = JSON.parse(JSON.stringify(content()));
+          assert.equal(fixture.alignHeading(), true, "Generated heading alignment failed");
+          const afterHeading = persistedSnapshot(board);
+          assert.deepEqual(
+            JSON.parse(JSON.stringify(content())),
+            originalContent,
+            "Generated heading alignment changed diagram content",
+          );
+          const changed = !isDeepStrictEqual(beforeHeading, afterHeading);
+          if (changed) {
+            assert.equal(board.undo(), true);
+            assert.deepEqual(persistedSnapshot(board), beforeHeading);
+            assert.equal(board.redo(), true);
+            assert.deepEqual(persistedSnapshot(board), afterHeading);
+          }
+          fixture.verify();
+          headingApplication = {
+            applied: true,
+            changed,
+            diagramUnchanged: true,
+            undoExact: true,
+            redoExact: true,
+          };
+        }
         const analysisAfter = board.analyzeModelLayout(48);
         const hardRules = new Set([
           "element-overlap",
@@ -381,6 +412,7 @@ try {
           graphApplication,
           compactApplications,
           textRepair,
+          headingApplication,
           initialSnapshot: visualEvidence ? initial : undefined,
           beforeRendered,
           analysisBefore,

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { realizeVisualFixture, visualVariants } from "../scripts/board-visual-fixtures.mjs";
+import {
+  realizeVisualFixture,
+  visualVariants,
+  visualCases,
+} from "../scripts/board-visual-fixtures.mjs";
 
 async function withBoard(callback) {
   const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
@@ -18,6 +22,99 @@ async function withBoard(callback) {
 }
 
 describe("Generated business presentation", () => {
+  it.each(Object.keys(visualCases))(
+    "keeps %s content and model findings intact when aligning its heading",
+    async (profile) => {
+      await withBoard((board, api) => {
+        const fixture = realizeVisualFixture(board, api, profile, "business");
+        const plan = board.planGraphLayout({
+          ...fixture.layoutOptions,
+          fixedElementIds: fixture.fixed,
+        });
+        if (plan.status === "ready" && plan.patches.length)
+          expect(board.applyLayoutPlan(plan)).toBe(true);
+        for (const id of fixture.compactContainers)
+          expect(board.fitContainerToContent(id)).toBe(true);
+        const before = board
+          .analyzeModelLayout(48)
+          .issues.filter((issue) => issue.severity === "error");
+        expect(fixture.alignHeading()).toBe(true);
+        fixture.verify();
+        expect(
+          board.analyzeModelLayout(48).issues.filter((issue) => issue.severity === "error").length,
+        ).toBeLessThanOrEqual(before.length);
+      });
+    },
+    20_000,
+  );
+
+  it.each(visualVariants)(
+    "reserves the extra Package caption gutter only below two frame ancestors in %s",
+    async (variant) => {
+      await withBoard((board, api) => {
+        const fixture = realizeVisualFixture(board, api, "uml-package", variant);
+        for (const id of fixture.compactContainers) {
+          const element = board.getElement(id);
+          let depth = 0,
+            parent = element.parentId;
+          while (parent) {
+            depth++;
+            parent = board.getElement(parent).parentId;
+          }
+          if (element.containerData.kind === "uml-package" && depth >= 2)
+            expect(element.containerData.padding.top).toBe(64);
+          else if (element.containerData.kind === "uml-package")
+            expect(element.containerData.padding.top).toBe(depth === 0 ? 48 : 24);
+        }
+        fixture.verify();
+      });
+    },
+    20_000,
+  );
+  it.each(["architecture", "uml-package", "uml-use-case", "flowchart", "timeline"])(
+    "aligns only the generated %s heading after public layout and preserves exact history",
+    async (profile) => {
+      await withBoard((board, api) => {
+        const fixture = realizeVisualFixture(board, api, profile, "nested-dense");
+        const plan = board.planGraphLayout({
+          ...fixture.layoutOptions,
+          fixedElementIds: fixture.fixed,
+        });
+        expect(plan.status).toBe("ready");
+        if (plan.patches.length) expect(board.applyLayoutPlan(plan)).toBe(true);
+        for (const id of fixture.compactContainers)
+          expect(board.fitContainerToContent(id)).toBe(true);
+        const content = () =>
+          JSON.parse(
+            JSON.stringify(
+              Object.fromEntries(
+                Object.entries(board.getElements()).filter(([id]) => id !== "visual-case-heading"),
+              ),
+            ),
+          );
+        const originalContent = content(),
+          before = JSON.parse(JSON.stringify(board.save()));
+        expect(fixture.alignHeading()).toBe(true);
+        expect(content()).toEqual(originalContent);
+        fixture.verify();
+        const after = JSON.parse(JSON.stringify(board.save()));
+        const heading = board.getElement("visual-case-heading");
+        const minimumLeft = Math.min(
+          ...Object.keys(originalContent)
+            .filter((id) => originalContent[id].type !== "connector")
+            .map((id) => board.getElementBounds(id).left),
+        );
+        expect(heading.transform.left).toBe(minimumLeft);
+        if (JSON.stringify(before) !== JSON.stringify(after)) {
+          expect(board.undo()).toBe(true);
+          expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
+          expect(board.redo()).toBe(true);
+          expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
+        }
+      });
+    },
+    20_000,
+  );
   it.each(["architecture", "deployment", "uml-package", "uml-use-case"])(
     "reserves explicit generated label and caption space for %s without changing facts",
     async (profile) => {

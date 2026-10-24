@@ -794,6 +794,15 @@ export function realizeVisualFixture(board, api, profile, variant) {
   } else {
     for (const group of spec.groups ?? []) {
       const id = `visual-${group.id}`;
+      let depth = 0;
+      let parent = group.parent;
+      const ancestors = new Set();
+      while (parent && !ancestors.has(parent)) {
+        ancestors.add(parent);
+        depth++;
+        parent = spec.groups.find((item) => item.id === parent)?.parent;
+      }
+      const nestedPackageCaptionGutter = group.kind === "uml-package" && depth >= 2 ? 64 : 0;
       ensure(
         board.createContainer({
           id,
@@ -827,6 +836,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
                 top: Math.max(
                   24,
                   spec.scopeCaptionGutter ?? 0,
+                  nestedPackageCaptionGutter,
                   spec.groups.some((child) => child.parent === group.id) ? 48 : 12,
                 ),
                 bottom: 48,
@@ -1231,6 +1241,28 @@ export function realizeVisualFixture(board, api, profile, variant) {
         : {}),
     },
     compactContainers: Object.values(groups).reverse(),
+    alignHeading() {
+      const bounds = spec.native
+        ? board.getMindMaps()[0].getBounds()
+        : layoutElementIds
+            .filter((id) => board.getElement(id).type !== "connector")
+            .map((id) => board.getElementBounds(id))
+            .filter(Boolean)
+            .reduce(
+              (result, value) => ({
+                left: Math.min(result.left, value.left),
+                top: Math.min(result.top, value.top),
+              }),
+              { left: Infinity, top: Infinity },
+            );
+      assert.ok(Number.isFinite(bounds.left) && Number.isFinite(bounds.top));
+      const current = board.getElement(heading.id);
+      const captionReserve = Object.keys(groups).length ? 32 : 0;
+      return board.setElementTransform(heading.id, {
+        left: bounds.left,
+        top: bounds.top - current.transform.height - 32 - captionReserve,
+      });
+    },
     semanticCoverage: {
       source: "business-content",
       profile,
