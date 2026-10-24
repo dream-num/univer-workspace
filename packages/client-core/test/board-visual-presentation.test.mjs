@@ -27,6 +27,9 @@ describe("Generated business presentation", () => {
         for (const elementId of fixture.compactContainers) {
           const scope = board.getElement(elementId);
           expect(scope.containerData.behavior.layoutOccupancy).toBe("frame");
+          expect(scope.containerData.padding.left).toBeGreaterThanOrEqual(24);
+          expect(scope.containerData.padding.right).toBeGreaterThanOrEqual(24);
+          expect(scope.containerData.padding.top).toBeGreaterThanOrEqual(24);
           if (fixture.spec.scopeCaptionGutter)
             expect(scope.containerData.padding.top).toBeGreaterThanOrEqual(
               fixture.spec.scopeCaptionGutter,
@@ -46,6 +49,30 @@ describe("Generated business presentation", () => {
         expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
         expect(board.redo()).toBe(true);
         expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
+      });
+    },
+    20_000,
+  );
+
+  it.each([
+    ["architecture", "long-bilingual"],
+    ["flowchart", "nested-dense"],
+  ])(
+    "keeps %s %s bodies clear of the generated rounded frame",
+    async (profile, variant) => {
+      await withBoard((board, api) => {
+        const fixture = realizeVisualFixture(board, api, profile, variant);
+        const plan = board.planGraphLayout({
+          ...fixture.layoutOptions,
+          fixedElementIds: fixture.fixed,
+        });
+        expect(plan.status).toBe("ready");
+        expect(board.applyLayoutPlan(plan)).toBe(true);
+        for (const id of fixture.compactContainers)
+          expect(board.fitContainerToContent(id)).toBe(true);
+        fixture.verify();
+        const issues = board.analyzeModelLayout(48).issues;
+        expect(issues.filter((issue) => issue.rule === "element-overlap")).toEqual([]);
       });
     },
     20_000,

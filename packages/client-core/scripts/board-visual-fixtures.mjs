@@ -822,7 +822,10 @@ export function realizeVisualFixture(board, api, profile, variant) {
               headerSize: 0,
               padding: {
                 ...created.containerData.padding,
+                left: 24,
+                right: 24,
                 top: Math.max(
+                  24,
                   spec.scopeCaptionGutter ?? 0,
                   spec.groups.some((child) => child.parent === group.id) ? 48 : 12,
                 ),
