@@ -108,7 +108,9 @@ try {
         fixture = visualSuite
           ? realizeVisualFixture(board, api, profile, variant)
           : elementsSuite
-            ? await realizeElementFixture(board, api, profile)
+            ? await realizeElementFixture(board, api, profile, {
+                lint: createUnitLayoutLint({ runtime: renderRuntime }),
+              })
             : realize(board, api.Enum, profile, variant, qualitySuite);
         const initial = persistedSnapshot(board);
         const before = semanticElements(board);

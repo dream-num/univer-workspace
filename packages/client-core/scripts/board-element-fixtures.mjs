@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { repairMeasuredVisualText } from "./board-visual-repair.mjs";
 
 export const elementProfiles = [
   "builtin-shapes",
@@ -35,13 +36,34 @@ const point = (index, width = 230, height = 190, columns = 5) => ({
   y: 90 + Math.floor(index / columns) * height,
 });
 
-export async function realizeElementFixture(board, api, profile) {
+export function createCatalogueChartInfo(board, api) {
+  return board
+    .newChart(api.Enum.ChartTypeString.Column)
+    .setSource([
+      ["Quarter", "Orders", "Returns"],
+      ["Q1", 120, 4],
+      ["Q2", 168, 5],
+      ["Q3", 192, 3],
+      ["Q4", 226, 6],
+    ])
+    .setSourceHeader({ band: { startOffset: 0, endOffset: 0 } })
+    .setCategoryField(0)
+    .setValueFields([1, 2])
+    .setAbsolutePosition(410, 220)
+    .setSize(660, 430)
+    .setTitle("Orders and returns / 订单与退货")
+    .build();
+}
+
+export async function realizeElementFixture(board, api, profile, options = {}) {
   assert.ok(elementProfiles.includes(profile), "Unknown element catalogue");
   const E = api.Enum;
   const covered = [];
   const ids = [];
   const expect = [];
   const renderUnits = {};
+  const shapeCaptions = new Map();
+  const authoringTextRepairs = [];
   const ensure = (value, reason) => {
     assert.ok(value, reason);
     return value;
@@ -90,11 +112,27 @@ export async function realizeElementFixture(board, api, profile) {
         `Lifeline height unavailable: ${shapeType}`,
       );
     ids.push(ref.id);
-    if (profile === "sequence-shapes")
-      caption(shapeType.replace(/^sequence_/, "sequence_\n"), p.x - 12, p.y + 180, 244, 60);
-    else caption(shapeType, p.x - 12, p.y + 110);
+    const label =
+      profile === "sequence-shapes"
+        ? caption(shapeType.replace(/^sequence_/, "sequence_\n"), p.x - 12, p.y + 180, 244, 60)
+        : caption(shapeType, p.x - 12, p.y + 110);
+    shapeCaptions.set(ref.id, label.id);
     covered.push({ feature: "shape", shapeType, elementId: ref.id });
     return ref;
+  };
+  const measureGeneratedText = async (nodes) => {
+    if (!options.lint) return;
+    authoringTextRepairs.push(
+      await repairMeasuredVisualText(board, options.lint, {
+        nodes,
+        fixed: [],
+        protected: [],
+        layoutOptions: { elementIds: [], maxNodes: 1000 },
+        verify() {
+          expect.forEach((check) => check());
+        },
+      }),
+    );
   };
   if (["native-sheet-embed", "formula-bound-shapes"].includes(profile)) {
     const workbookId = `catalogue-${profile}-source`,
@@ -251,12 +289,17 @@ export async function realizeElementFixture(board, api, profile) {
       const style = JSON.parse(
         JSON.stringify(document.body?.textRuns?.[0]?.ts ?? document.documentStyle?.textStyle ?? {}),
       );
-      ensure(
-        table.setCellRichText(0, 0, api.newRichText().span(`${preset} / 领域数据`, style)),
-        "Table caption failed",
-      );
+      const nativeOperator = preset.startsWith("uml-sequence-")
+        ? table.getValues()[0][0]
+        : undefined;
+      if (nativeOperator === undefined)
+        ensure(
+          table.setCellRichText(0, 0, api.newRichText().span(`${preset} / 领域数据`, style)),
+          "Table caption failed",
+        );
       const bounds = board.getElement(table.getId()).transform;
-      caption(preset, left, top - 38, bounds.width);
+      const label = caption(`${preset} / 领域数据`, left, top - 38, bounds.width);
+      shapeCaptions.set(table.getId(), label.id);
       left += bounds.width + 80;
       rowHeight = Math.max(rowHeight, bounds.height);
       const values = JSON.parse(JSON.stringify(table.getValues()));
@@ -267,7 +310,28 @@ export async function realizeElementFixture(board, api, profile) {
           assert.deepEqual(actualStyle[key], value, "Native preset caption style changed");
       });
       ids.push(table.getId());
-      covered.push({ feature: "table-preset", preset, elementId: table.getId() });
+      covered.push({ feature: "table-preset", preset, elementId: table.getId(), nativeOperator });
+    }
+    await measureGeneratedText(ids);
+    left = 70;
+    top = 90;
+    rowHeight = 0;
+    for (const [index, id] of ids.entries()) {
+      if (index && index % 3 === 0) {
+        left = 70;
+        top += rowHeight + 90;
+        rowHeight = 0;
+      }
+      const bounds = board.getElement(id).transform;
+      ensure(
+        board.setElementsTransform({
+          [id]: { left, top },
+          [shapeCaptions.get(id)]: { left, top: top - 38, width: bounds.width },
+        }),
+        "Measured table catalogue placement failed",
+      );
+      left += bounds.width + 80;
+      rowHeight = Math.max(rowHeight, bounds.height);
     }
   } else if (profile === "connector-grammar") {
     for (const [index, marker] of markers.entries()) {
@@ -464,22 +528,26 @@ export async function realizeElementFixture(board, api, profile) {
         "Ink overlaps the image caption",
       );
     });
-    const chartInfo = board
-      .newChart(E.ChartTypeString.Column)
-      .setSource([
-        ["Quarter", "Orders", "Returns"],
-        ["Q1", 120, 4],
-        ["Q2", 168, 5],
-        ["Q3", 192, 3],
-        ["Q4", 226, 6],
-      ])
-      .setAbsolutePosition(410, 220)
-      .setSize(660, 430)
-      .setTitle("Orders and returns / 订单与退货")
-      .build();
+    const chartInfo = createCatalogueChartInfo(board, api);
     const chart = ensure(await board.insertChart(chartInfo), "Chart insertion failed");
     ids.push(chart.getElementId());
-    covered.push({ feature: "inline-data-chart", elementId: chart.getElementId() });
+    covered.push({
+      feature: "inline-data-chart",
+      elementId: chart.getElementId(),
+      sourceHeader: chartInfo.sourceHeader,
+    });
+    expect.push(() => {
+      assert.deepEqual(
+        chart.getInfo().dataSource,
+        chartInfo.dataSource,
+        "Chart source facts changed",
+      );
+      assert.deepEqual(
+        chart.getInfo().sourceHeader,
+        chartInfo.sourceHeader,
+        "Chart title-row projection changed",
+      );
+    });
     caption("Editable persistent Ink", 70, inkTop + 65);
   } else if (profile === "container-grammar") {
     for (const [index, kind] of ["generic", "system-boundary", "uml-package"].entries()) {
@@ -543,7 +611,8 @@ export async function realizeElementFixture(board, api, profile) {
       ids.push(id);
     }
   } else if (profile === "transform-style") {
-    for (const [index, options] of [
+    const examples = [];
+    for (const [index, transform] of [
       { rotation: 0 },
       { rotation: 25 },
       { flipX: true },
@@ -553,12 +622,45 @@ export async function realizeElementFixture(board, api, profile) {
     ].entries()) {
       const a = shape(E.ShapeTypeEnum.RightTriangle, index, {
         text: `Asymmetric ${index + 1}`,
+        textBox: {
+          autoFitType: E.ShapeTextAutoFitType.NoAutoFit,
+          textWrap: E.ShapeTextWrapType.None,
+        },
         fillColor: "#fef3c7",
         strokeColor: "#b45309",
         strokeWidth: 2,
       });
-      ensure(board.setElementTransform(a.id, options), "Transform application failed");
-      const p = point(index);
+      ensure(board.setElementTransform(a.id, transform), "Transform application failed");
+      const originalText = JSON.parse(JSON.stringify(board.getElement(a.id).shapeData.shapeText));
+      expect.push(() =>
+        assert.deepEqual(
+          board.getElement(a.id).shapeData.shapeText,
+          originalText,
+          "Transform text/style changed",
+        ),
+      );
+      examples.push({ elementId: a.id, transform, index });
+    }
+    await measureGeneratedText(examples.map((item) => item.elementId));
+    const cellSize =
+      Math.ceil(
+        Math.max(
+          ...examples.map(({ elementId }) => {
+            const frame = board.getElement(elementId).transform;
+            return Math.hypot(frame.width, frame.height);
+          }),
+        ),
+      ) + 100;
+    for (const { elementId, transform, index } of examples) {
+      const p = point(index, cellSize, cellSize, 3);
+      const a = board.getElement(elementId);
+      ensure(
+        board.setElementsTransform({
+          [a.id]: { left: p.x, top: p.y },
+          [shapeCaptions.get(a.id)]: { left: p.x - 12, top: p.y + cellSize - 70 },
+        }),
+        "Measured transform catalogue placement failed",
+      );
       const c = ensure(
         board.insertConnector({
           start: {
@@ -568,13 +670,13 @@ export async function realizeElementFixture(board, api, profile) {
             segmentIndex: 0,
             segmentT: 0.5,
           },
-          end: { kind: "free", x: p.x + 190, y: p.y - 20 },
+          end: { kind: "free", x: p.x + cellSize - 70, y: p.y - 20 },
           routing: "orthogonal",
           style: { endMarker: { type: "filledArrow" }, stroke: "#334155" },
         }),
         "Boundary connector failed",
       );
-      covered.push({ feature: "transform-and-boundary", options, elementId: c.id });
+      covered.push({ feature: "transform-and-boundary", options: transform, elementId: c.id });
     }
   }
   const before = JSON.parse(JSON.stringify(board.save()));
@@ -588,6 +690,7 @@ export async function realizeElementFixture(board, api, profile) {
     semanticCoverage: {
       source: "element-catalogue",
       authoredCatalogueGeometry: true,
+      authoringTextRepairs,
       automatedLayoutQualityClaim: false,
       covered,
       primitiveTypes: [...new Set(Object.values(board.getElements()).map((item) => item.type))],
