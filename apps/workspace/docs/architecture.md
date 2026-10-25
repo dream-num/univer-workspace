@@ -6,19 +6,19 @@ SQLite 数据目录。
 
 ## 技术栈
 
-| 关注点 | 选择 |
-| --- | --- |
-| 前端 | React、TypeScript、Vite |
-| UI | Base UI、Tailwind CSS、应用 UI Primitive |
-| 路由 | TanStack Router 文件路由 |
-| 服务端状态 | TanStack Query |
-| Web 本地状态 | React 本地状态 |
-| HTTP | Express 5 |
-| 产品实时失效 | 认证 WebSocket、TanStack Query invalidation |
-| 产品数据库 | Node `node:sqlite`、显式 SQL schema |
-| API 客户端 | `openapi-typescript`、`openapi-fetch` |
-| API 文档 | OpenAPI 3.1、Redocly CLI、Scalar |
-| 单元与集成测试 | Vitest |
+| 关注点         | 选择                                        |
+| -------------- | ------------------------------------------- |
+| 前端           | React、TypeScript、Vite                     |
+| UI             | Base UI、Tailwind CSS、应用 UI Primitive    |
+| 路由           | TanStack Router 文件路由                    |
+| 服务端状态     | TanStack Query                              |
+| Web 本地状态   | React 本地状态                              |
+| HTTP           | Express 5                                   |
+| 产品实时失效   | 认证 WebSocket、TanStack Query invalidation |
+| 产品数据库     | Node `node:sqlite`、显式 SQL schema         |
+| API 客户端     | `openapi-typescript`、`openapi-fetch`       |
+| API 文档       | OpenAPI 3.1、Redocly CLI、Scalar            |
+| 单元与集成测试 | Vitest                                      |
 
 OpenAPI 是独立的 HTTP 契约，用于文档、Web API 类型生成和契约检查，不参与 Express
 运行时路由。每个服务端业务模块显式注册自己的 Router。
@@ -366,6 +366,7 @@ are Trunk; draft selection and editing belong to the existing file/review routes
 `features/editor/preview.ts` is the public navigation-contract entry; actual
 Facade navigation stays inside the editor frame. Details and the page interface
 are in [native preview](../../../docs/design/html-views/native-preview.md).
+
 ## Collaborator presence lifecycle
 
 The editor observes room membership through the published SDK `MemberService`.
@@ -387,3 +388,15 @@ compaction and Slide zoom are local view configuration, not Unit mutations.
 `integrations/univer/content-permissions.ts` 适配公开 SDK Authz 协议并解析权威文件角色。
 Trunk 与 Worktree Service 开启 `enableUnitPermissionAnalysis`，在 `commitChangeset` 校验
 SDK 生成的权限需求。Browser 为五类 Unit 注册对象权限类型，Worktree 使用 scope Authz URL。
+
+## Modern Markdown authoring
+
+Workspace CLI 的 `compile-markdown` 与 Workspace Agent 的 `univer_compile_markdown` 通过 private
+Client Core 复用 Univer AI SDK 的 `@univer-cli/doc-markdown-facade`。SDK 负责 Markdown/GFM 与
+Univer directive 解析、原生 Facade program、diagnostic 和 source map；application 负责本地授权资源
+目录、Workspace 身份、Worktree Unit 创建和提交。编译产物沿用 Univer SDK Modern 文档的默认
+正文与标题排版，不保存一份 application-specific 默认样式。
+
+创建在临时 headless runtime 中完成，并保存执行后的段落、对象 ID 映射。局部更新使用显式 source
+block ID 和上次执行 source map，执行时校验原生对象映射与 block 边界，失败不提交。读取 revision
+仅作为元信息返回，不是更新前置条件。原生文档是用户编辑后的权威内容，Markdown 不自动反向同步。

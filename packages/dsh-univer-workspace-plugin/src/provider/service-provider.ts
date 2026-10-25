@@ -116,11 +116,18 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     const origin = new URL(client.origin).origin;
     const spaces: WorkspaceSpace[] = [];
     for (const space of remote) {
-      const directory = originSpaceDirectoryPath(this.config.workspaceRoot, origin, userId, space.spaceId);
-      const linked = [...table.entries()].find(([key, record]) =>
-        record.userId === userId && record.spaceId === space.spaceId &&
-        (record.origin === undefined || record.origin === origin) &&
-        this.ctx.workspaceRegistry.get(key as WorkspaceId)?.path === directory,
+      const directory = originSpaceDirectoryPath(
+        this.config.workspaceRoot,
+        origin,
+        userId,
+        space.spaceId,
+      );
+      const linked = [...table.entries()].find(
+        ([key, record]) =>
+          record.userId === userId &&
+          record.spaceId === space.spaceId &&
+          (record.origin === undefined || record.origin === origin) &&
+          this.ctx.workspaceRegistry.get(key as WorkspaceId)?.path === directory,
       );
       spaces.push({
         spaceId: space.spaceId,
@@ -134,19 +141,33 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return { spaces };
   }
 
-  async addSpace(userId: string, spaceId: string): Promise<{ dshWorkspaceId: string; path: string }> {
+  async addSpace(
+    userId: string,
+    spaceId: string,
+  ): Promise<{ dshWorkspaceId: string; path: string }> {
     const client = this.requireClient(userId);
-    const space = (await listSpaces(client)).find(space => space.spaceId === spaceId);
+    const space = (await listSpaces(client)).find((space) => space.spaceId === spaceId);
     if (space === undefined) throw new Error("workspace_space_unavailable");
     const headers = await this.persistedSessionHeaders();
     const assertCurrent = () => {
       const current = this.requireClient(userId);
-      if (current.origin !== client.origin || current.sessionToken !== client.sessionToken || this.requireWorkspaceAuth().switching()) {
+      if (
+        current.origin !== client.origin ||
+        current.sessionToken !== client.sessionToken ||
+        this.requireWorkspaceAuth().switching()
+      ) {
         throw new Error("workspace_connection_changed");
       }
     };
     assertCurrent();
-    const workspace = await this.reconcileSpace(userId, spaceId, space.name, headers, client.origin, assertCurrent);
+    const workspace = await this.reconcileSpace(
+      userId,
+      spaceId,
+      space.name,
+      headers,
+      client.origin,
+      assertCurrent,
+    );
     assertCurrent();
     return { dshWorkspaceId: workspace.id, path: workspace.path };
   }
@@ -160,18 +181,27 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     if (identity === undefined) return undefined;
     const origin = new URL(auth.effectiveOrigin()).origin;
     if (record !== undefined) {
-      if (record.userId !== identity.userId || (record.origin !== undefined && record.origin !== origin))
+      if (
+        record.userId !== identity.userId ||
+        (record.origin !== undefined && record.origin !== origin)
+      )
         return undefined;
       return { userId: record.userId, spaceId: record.spaceId };
     }
     // The account-level workspace is created by the explicit template flow.
     // Its default destination is the authenticated account's personal Space;
     // arbitrary local workspaces never inherit this connection.
-    if (workspace.path !== originUserDirectoryPath(this.config.workspaceRoot, origin, identity.userId))
+    if (
+      workspace.path !== originUserDirectoryPath(this.config.workspaceRoot, origin, identity.userId)
+    )
       return undefined;
     const spaces = await listSpaces(this.requireClient(identity.userId));
-    const personal = spaces.find((space) => space.type === "personal" && space.accessRole === "owner");
-    return personal === undefined ? undefined : { userId: identity.userId, spaceId: personal.spaceId };
+    const personal = spaces.find(
+      (space) => space.type === "personal" && space.accessRole === "owner",
+    );
+    return personal === undefined
+      ? undefined
+      : { userId: identity.userId, spaceId: personal.spaceId };
   }
 
   async listDocuments(
@@ -223,11 +253,20 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await apiListIssues(this.requireClient(userId), query);
   }
 
-  async readIssue(userId: string, spaceId: string, number: number, options: { readonly timeline: boolean }) {
+  async readIssue(
+    userId: string,
+    spaceId: string,
+    number: number,
+    options: { readonly timeline: boolean },
+  ) {
     return await apiReadIssue(this.requireClient(userId), spaceId, number, options);
   }
 
-  async createIssue(userId: string, spaceId: string, input: IssueChange & { readonly title: string }) {
+  async createIssue(
+    userId: string,
+    spaceId: string,
+    input: IssueChange & { readonly title: string },
+  ) {
     return await apiCreateIssue(this.requireClient(userId), spaceId, input);
   }
 
@@ -352,6 +391,25 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await this.runtimeManager.inspect(target, inspectionQuery(input.unitType, input.range));
   }
 
+  async readUnitWithRevision(
+    userId: string,
+    input: EditUnitInput,
+  ): Promise<{ readonly value: CollaborationRuntimeValue; readonly revision: number }> {
+    const client = this.requireClient(userId);
+    return await this.runtimeManager.readWithRevision(
+      {
+        origin: client.origin,
+        revision: input.revision ?? -1,
+        scope: input.scope,
+        unitId: input.unitId,
+        unitType: input.unitType,
+        sessionToken: client.sessionToken,
+        license: this.config.license,
+      },
+      input.code,
+    );
+  }
+
   async exportUnitData(
     userId: string,
     input: {
@@ -421,7 +479,11 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
   private currentClientFor(userId: string): WorkspaceHttpClient | undefined {
     const auth = this.requireWorkspaceAuth();
     const identity = auth.currentIdentity();
-    if (this.ctx.get("workspaceRuntime")?.version !== this.connectionVersion || identity === undefined || identity.userId !== userId) {
+    if (
+      this.ctx.get("workspaceRuntime")?.version !== this.connectionVersion ||
+      identity === undefined ||
+      identity.userId !== userId
+    ) {
       return undefined;
     }
     return auth.currentClient();
@@ -455,9 +517,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
       ) {
         const candidate = registry.get(key as WorkspaceId);
         const workspace =
-          candidate?.path === directory
-            ? candidate
-            : await registry.resolveByPath(directory);
+          candidate?.path === directory ? candidate : await registry.resolveByPath(directory);
         assertCurrent();
         if (workspace !== undefined) {
           if (record.origin !== origin) await table.put(key, { ...record, origin });
@@ -476,7 +536,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     }
     const existing = await registry.resolveByPath(directory);
     assertCurrent();
-    const workspace = existing ?? await registry.create(directory, name);
+    const workspace = existing ?? (await registry.create(directory, name));
     await table.put(workspace.id, { userId, spaceId, origin });
     await this.attachPersistedSessions(workspace, directory, headers);
     return workspace;

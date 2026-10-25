@@ -94,7 +94,7 @@ try {
       resourceCount += 1;
     }
   }
-  assert.equal(resourceCount, 13, "Packed HTML View and Board references must all be available");
+  assert.equal(resourceCount, 14, "Packed HTML View, Board, and Doc references must all be available");
   assert.deepEqual(new Set(executed), new Set(["skill", "univer_skill_resource"]));
   const denied = await ctx.tools.execute({
     callId: ToolCallId("packed-skill-denied"),

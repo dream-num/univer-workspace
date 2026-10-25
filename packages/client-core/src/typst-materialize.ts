@@ -1,125 +1,39 @@
-import {
-  createStandardHeadlessUniverFacade,
-  createStandardHeadlessUniverFactory,
-} from "@univer-cli/headless-univer";
-import { UniverInstanceType } from "@univerjs/core";
-import { workspaceError } from "./errors.js";
+import { createStandardHeadlessUniverFactory } from "@univer-cli/headless-univer";
+import { materializeDocProgram } from "@univer-cli/doc-markdown-facade/node";
 import type {
   WorkspaceTypstMaterializeInput,
   WorkspaceTypstMaterializeResult,
   WorkspaceTypstMaterializer,
 } from "./typst.js";
 
-const UNIT_LIFECYCLE_METHODS = new Set<PropertyKey>([
-  "createBase",
-  "createBoard",
-  "createWorkbook",
-  "createPresentation",
-  "createUniverSheet",
-  "disposeUnit",
-]);
-
-interface DocumentFacade {
-  save(): unknown;
-}
-
-interface TypstFacade {
-  createDocument(data: Readonly<Record<string, unknown>>): DocumentFacade;
-  getDocument(unitId: string): DocumentFacade | null;
-}
-
 /** Workspace adapter that turns a target-neutral Facade program into complete Doc UnitData. */
-export class HeadlessWorkspaceTypstMaterializer implements WorkspaceTypstMaterializer {
+export class HeadlessWorkspaceDocumentMaterializer implements WorkspaceTypstMaterializer {
+  public constructor(
+    private readonly format: "Typst" | "Markdown" = "Typst",
+    private readonly license: string = "",
+  ) {}
   public async materialize(
     input: WorkspaceTypstMaterializeInput,
   ): Promise<WorkspaceTypstMaterializeResult> {
-    const univer = await createStandardHeadlessUniverFactory({ license: "" })({
-      unitId: input.targetUnitId,
-      unitType: UniverInstanceType.UNIVER_DOC,
-    });
-    try {
-      const facade = createStandardHeadlessUniverFacade(univer) as unknown as TypstFacade;
-      const createdUnitIds: string[] = [];
-      let createDocumentCalls = 0;
-      const guarded = new Proxy(facade, {
-        get(target, property, receiver) {
-          if (property === "createDocument") {
-            return (data: unknown): DocumentFacade => {
-              createDocumentCalls += 1;
-              const documentData = isRecord(data) ? data : undefined;
-              const id = nonEmptyString(documentData?.["id"]);
-              if (id !== undefined) createdUnitIds.push(id);
-              if (
-                documentData === undefined ||
-                createDocumentCalls !== 1 ||
-                id !== input.targetUnitId
-              ) {
-                throw workspaceError(
-                  "workspace-typst-runtime-contract",
-                  `Typst program must create exactly one Doc named ${input.targetUnitId}.`,
-                  { createdUnitIds },
-                );
-              }
-              return target.createDocument(documentData);
-            };
-          }
-          if (UNIT_LIFECYCLE_METHODS.has(property)) {
-            return () => {
-              throw workspaceError(
-                "workspace-typst-runtime-contract",
-                `Typst materialization cannot call ${String(property)}.`,
-              );
-            };
-          }
-          return Reflect.get(target, property, receiver) as unknown;
-        },
-      });
-      await withDeterministicRandom(input.javascript, async () => {
-        const execute = new Function("univerAPI", input.javascript) as (
-          api: TypstFacade,
-        ) => Promise<unknown>;
-        await execute(guarded);
-      });
-      if (
-        createDocumentCalls !== 1 ||
-        createdUnitIds.length !== 1 ||
-        createdUnitIds[0] !== input.targetUnitId
-      ) {
-        throw workspaceError(
-          "workspace-typst-runtime-contract",
-          `Typst program must create exactly one Doc named ${input.targetUnitId}.`,
-          { createdUnitIds },
-        );
-      }
-      const document = facade.getDocument(input.targetUnitId);
-      if (document === null) {
-        throw workspaceError(
-          "workspace-typst-runtime-contract",
-          `Typst program did not leave Doc ${input.targetUnitId} in the runtime.`,
-        );
-      }
-      const saved = document.save();
-      if (!isRecord(saved) || saved["id"] !== input.targetUnitId) {
-        throw workspaceError(
-          "workspace-typst-runtime-contract",
-          "Typst program did not produce complete Doc UnitData.",
-          { saved },
-        );
-      }
-      // A newly materialized Workspace Unit starts at revision 1 regardless of the ephemeral
-      // headless runtime's local revision counter.
-      const initialData: Readonly<Record<string, unknown>> = {
-        ...saved,
-        id: input.targetUnitId,
-        rev: 1,
-      };
-      const name = nonEmptyString(initialData["name"]) ?? nonEmptyString(initialData["title"]);
-      return { initialData, ...(name === undefined ? {} : { name }) };
-    } finally {
-      univer.dispose();
-    }
+    const materialized = await withDeterministicRandom(
+      input.javascript,
+      async () =>
+        await materializeDocProgram(input, {
+          createUniver: createStandardHeadlessUniverFactory({ license: this.license }),
+        }),
+    );
+    // Workspace creates Units at revision 1 independently of the ephemeral runtime revision.
+    const initialData: Readonly<Record<string, unknown>> = { ...materialized.data, rev: 1 };
+    const name = nonEmptyString(initialData["name"]) ?? nonEmptyString(initialData["title"]);
+    return {
+      initialData,
+      ...(name === undefined ? {} : { name }),
+      ...(this.format === "Markdown" ? { value: materialized.value } : {}),
+    };
   }
 }
+
+export class HeadlessWorkspaceTypstMaterializer extends HeadlessWorkspaceDocumentMaterializer {}
 
 async function withDeterministicRandom<Result>(
   seedSource: string,
@@ -179,8 +93,4 @@ function stableSeed(value: string): number {
 
 function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -5,7 +5,8 @@ description: "Create, import, read, edit, paginate, chart, inspect, export, and 
 
 # Workspace Doc units
 
-Every content command targets one remote draft explicitly with `--worktree <id>` and `--unit <id>`. `execute` provides `univerAPI`, `api` (an alias of `univerAPI`), and `doc` (the `FDocument` bound by `--unit`). Do not redeclare them. A Doc unit does not provide `workbook` or `presentation`; if one is undefined, verify the selected unit type.
+Commands that read or edit an existing Doc target one remote draft explicitly with `--worktree <id>`
+and `--unit <id>`. Markdown creation allocates the new Unit as described below. `execute` provides `univerAPI`, `api` (an alias of `univerAPI`), and `doc` (the `FDocument` bound by `--unit`). Do not redeclare them. A Doc unit does not provide `workbook` or `presentation`; if one is undefined, verify the selected unit type.
 
 Use `doc.getParagraphs()` and `doc.getParagraph(paragraphId)` to select paragraphs. Use
 `uvw api find <query...>` to discover API symbols, then use
@@ -25,6 +26,31 @@ Both commands return server-owned `unitId`, `resourceId`, and `nodeId`. Use the 
 for every content command; never reuse an imported document's internal id as the Workspace address.
 For original-file preservation without an editable Doc Unit, read the [Blob Skill](../blob/SKILL.md).
 Blob Resources have no `unitId` and cannot use this Skill's commands.
+
+## Modern Docs through Markdown
+
+For new Modern Docs, write Markdown and compile it once into editable native content. Read
+[Markdown authoring](references/markdown.md) with `uvw skills read doc references/markdown.md`
+for valid directives, assets, and full creation/update examples. The compiler is shared through the
+AI SDK; this Skill owns the Workspace target and review workflow.
+
+- Apply with `uvw compile-markdown report.md --apply --worktree <id> --space <space-id>
+--source-map-out review/doc-map.json --json`. It creates the draft Doc; do not create an empty
+  placeholder first. Use the returned server-owned `unit.unitId` for later commands.
+- Preserve SDK default typography, line/paragraph spacing, and callout colors. Use plain
+  `:::callout{#notice}`. Modern columns use native ColumnGroup with 2–5 columns; do not use
+  Traditional section breaks or replace requested columns with layout tables.
+- Assign explicit top-level block IDs and save the **execution** source map. Compile-only maps do
+  not contain native identities and cannot address later edits.
+- Before each partial update, export the selected current native blocks with `export-markdown`,
+  including their resources, refreshed source map, and authoritative revision. Edit that fragment,
+  retain its root IDs, and apply with `--unit`, `--source-map`, and `--blocks` together.
+  Save the new execution map after success. Native content is authoritative; old Markdown does not
+  include subsequent editor changes.
+- On conflicts, read/export again and replan. Unsupported content or diagnostic errors stop the
+  conversion; report the exact limitation instead of flattening content or overwriting the Doc.
+- Inspect and screenshot the result before the normal Worktree review handoff. Generation should
+  finish after compilation and verification; avoid cosmetic Facade patches after conversion.
 
 ## Model essentials
 

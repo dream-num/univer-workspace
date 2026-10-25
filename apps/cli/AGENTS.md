@@ -18,7 +18,7 @@ The CLI owns:
 - Daemon socket/control and process signals
 - The packaged worker entry
 - Browser binary install, probe, and resolve
-- Command presentation, including Office, Typst, and SVG
+- Command presentation, including Office, Markdown, Typst, and SVG
 - Local output writes, daemon transport, and render-page artifact copy
 - Native binding delivery in the installable artifact
 
@@ -27,7 +27,8 @@ Client Core owns:
 - Asset image resolution, render Unit assembly, screenshot capture, PNG output, PDF printing, and Slide layout lint
 - The render-page source, shared worker composition, and the runtime pool
 - Content execution, embedded-image externalization, and the changeset commit workflow
-- Node-hosted Office exchange, and Typst compile, materialize, and apply
+- Node-hosted Office exchange, Markdown compile/create/native-readback/update, and Typst compile,
+  materialize, and apply
 - SVG source/asset compilation, text measurement, Slide page wrapping, and apply orchestration
 
 ## Command surface and startup

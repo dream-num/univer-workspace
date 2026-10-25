@@ -1,3 +1,4 @@
+import { registerDocMarkdownRuntime } from "@univer-cli/doc-markdown-facade/runtime";
 /**
  * The headless collaboration worker: runs in a forked process owned by the
  * runtime pool and materializes one Univer runtime for a target Unit.
@@ -19,6 +20,8 @@ import { createStandardHeadlessUniverFactory } from "@univer-cli/headless-univer
 import { toUniverType, type WorkspaceRuntimeTarget } from "./target.js";
 import { WorkerHttp } from "./worker-http.js";
 import { WorkspaceSnapshotServerAdapter } from "./snapshot-adapter.js";
+
+registerDocMarkdownRuntime();
 
 export default defineUniverCollaborationRuntimeWorker<WorkspaceRuntimeTarget>({
   async createRuntime(init) {

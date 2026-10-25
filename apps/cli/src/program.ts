@@ -16,10 +16,13 @@ import type {
   UniverTextMeasureRuntime,
 } from "@univer-cli/univer-render-runtime";
 import {
+  HeadlessWorkspaceDocumentMaterializer,
   HeadlessWorkspaceTypstMaterializer,
   WorkspaceAssetFeature,
   WorkspaceBlobFeature,
   WorkspaceCompileTypstFeature,
+  WorkspaceCompileMarkdownFeature,
+  WorkspaceExportMarkdownFeature,
   WorkspaceCompileSvgFeature,
   WorkspaceContentExecutionFeature,
   WorkspaceContentSource,
@@ -45,9 +48,16 @@ import { createWorkspaceScreenshotCommand } from "./features/screenshot/command.
 import { createSkillsCommand } from "./features/skills/command.js";
 import { createSpaceCommand } from "./features/space/command.js";
 import { createWorkspaceCompileSvgCommand } from "./features/svg/command.js";
+import { createWorkspaceCompileMarkdownCommand } from "./features/markdown/command.js";
+import { createWorkspaceExportMarkdownCommand } from "./features/markdown/export-command.js";
 import { createWorkspaceCompileTypstCommand } from "./features/typst/command.js";
 import { createUnitCommand } from "./features/unit/command.js";
-import { configureOutput, createProductCommands, createProductServices, createRootCommand } from "./product-commands.js";
+import {
+  configureOutput,
+  createProductCommands,
+  createProductServices,
+  createRootCommand,
+} from "./product-commands.js";
 import { workspaceDaemonIdentity } from "./runtime/daemon-identity.js";
 import { WORKSPACE_CLI_VERSION } from "./version.js";
 
@@ -113,14 +123,33 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
   );
   const units = new WorkspaceUnitFeature(authenticatedHttp);
   const blobs = new WorkspaceBlobFeature(authenticatedHttp);
+  const compileMarkdown = new WorkspaceCompileMarkdownFeature({
+    materializer: new HeadlessWorkspaceDocumentMaterializer(
+      "Markdown",
+      resolveUniverLicense(options.env),
+    ),
+    units,
+    contentExecution,
+  });
   const compileTypst = new WorkspaceCompileTypstFeature({
     materializer: new HeadlessWorkspaceTypstMaterializer(),
     units,
   });
+  const exportMarkdown = new WorkspaceExportMarkdownFeature({
+    assetRequest: async (path) =>
+      await (await auth.authenticatedHttp("client")).request(path, { acceptEncoding: "identity" }),
+    resolveRuntimeTarget: async (input) =>
+      await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveRuntimeTarget(
+        input,
+      ),
+    runtime: runtimeOperations,
+  });
   const exchange = new WorkspaceUnitExchangeFeature({
     runtime: runtimeOperations,
     resolveImageAsset: async (input) =>
-      await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveImageAsset(input),
+      await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveImageAsset(
+        input,
+      ),
     createUnit: async (input) => await units.create(input),
     resolveRuntimeTarget: async (input) =>
       await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveRuntimeTarget(
@@ -185,7 +214,9 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
         runtime: runtimeOperations,
         configuredOrigin: async () => await auth.configuredOrigin(),
         resolveTrunkRuntimeTarget: async (input) =>
-          await new WorkspaceContentSource(await authenticatedHttp()).resolveTrunkRuntimeTarget(input),
+          await new WorkspaceContentSource(await authenticatedHttp()).resolveTrunkRuntimeTarget(
+            input,
+          ),
       }),
     ),
     createAssetCommand(
@@ -199,6 +230,8 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createWorkspaceUnitLayoutLintCommand(unitLayoutLint),
     createContentExecuteCommand(contentExecution),
     createWorkspaceCompileTypstCommand(compileTypst),
+    createWorkspaceCompileMarkdownCommand(compileMarkdown),
+    createWorkspaceExportMarkdownCommand(exportMarkdown),
     createWorkspaceCompileSvgCommand(compileSvg),
     createWorktreeContentInspectionCommand({
       acquireRuntime: async ({ unitId, worktreeID }) => {
@@ -234,7 +267,16 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
 }
 
 const HELP_GROUPS = ["Core commands:", "Content commands:", "Setup commands:"];
-const CORE_COMMANDS = new Set(["auth", "repo", "issue", "label", "pr", "worktree", "search", "browse"]);
+const CORE_COMMANDS = new Set([
+  "auth",
+  "repo",
+  "issue",
+  "label",
+  "pr",
+  "worktree",
+  "search",
+  "browse",
+]);
 const SETUP_COMMANDS = new Set(["config", "daemon", "skills", "resources", "api"]);
 
 function helpGroupOf(name: string): string {

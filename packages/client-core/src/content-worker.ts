@@ -1,3 +1,4 @@
+import { registerDocMarkdownRuntime } from "@univer-cli/doc-markdown-facade/runtime";
 import {
   createCollaborationServerAdapter,
   createUniverCollaborationRuntimeFactory,
@@ -18,6 +19,8 @@ export interface WorkspaceContentWorkerInit {
   readonly license: string;
   readonly target: unknown;
 }
+
+registerDocMarkdownRuntime();
 
 export const workspaceContentRuntimeWorker = defineUniverCollaborationRuntimeWorker<unknown>({
   async createRuntime(value) {

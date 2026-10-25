@@ -168,15 +168,18 @@ describe("Workspace content runtime owner", () => {
       .fn<WorkspaceContentRuntimeOptions["resolveLicense"]>()
       .mockResolvedValueOnce("old-license")
       .mockResolvedValueOnce("new-license");
-    const fetcher = vi.fn<typeof fetch>(async () =>
-      new Response(JSON.stringify({ FileId: "file-1" }), {
-        headers: { "content-type": "application/json" },
-      }),
+    const fetcher = vi.fn<typeof fetch>(
+      async () =>
+        new Response(JSON.stringify({ FileId: "file-1" }), {
+          headers: { "content-type": "application/json" },
+        }),
     );
     vi.stubGlobal("fetch", fetcher);
     const runtime = createRuntime({ acquire, resolveCredential, resolveLicense });
 
-    const failed = runtime.executeAndCommit({ code: "fail", target }).catch((error: unknown) => error);
+    const failed = runtime
+      .executeAndCommit({ code: "fail", target })
+      .catch((error: unknown) => error);
     await oldRunning;
     const preFailureWaiter = runtime.executeAndCommit({ code: "edit", target });
     await Promise.resolve();
@@ -311,7 +314,9 @@ describe("Workspace content runtime owner", () => {
       resolveCredential: async () => "cookie-secret",
       resolveLicense: async () => "",
     });
-    const error = await withoutLicense.exportUnitData({ target }).catch((reason: unknown) => reason);
+    const error = await withoutLicense
+      .exportUnitData({ target })
+      .catch((reason: unknown) => reason);
     expect(error).toMatchObject({ code: "workspace-license-required" });
     expect(JSON.stringify(error)).not.toContain("cookie-secret");
     expect(acquire).not.toHaveBeenCalled();
@@ -428,7 +433,10 @@ describe("Workspace content runtime owner", () => {
 
   it.each([
     ["pending mutations", { pendingMutationCount: 1 }],
-    ["awaiting changeset", { awaitingChangeset: { baseRevision: 7, mutationCount: 1, revision: 8 } }],
+    [
+      "awaiting changeset",
+      { awaitingChangeset: { baseRevision: 7, mutationCount: 1, revision: 8 } },
+    ],
     [
       "conflict state",
       {
@@ -490,9 +498,10 @@ describe("Workspace content runtime owner", () => {
     const current = lease({ writeMutations: [], writeValue: { unchanged: true } });
     const runtime = createRuntime({ acquire: vi.fn(async () => current) });
 
-    await expect(
-      runtime.executeAndCommit({ code: "return value", target }),
-    ).resolves.toEqual({ committed: false, value: { unchanged: true } });
+    await expect(runtime.executeAndCommit({ code: "return value", target })).resolves.toEqual({
+      committed: false,
+      value: { unchanged: true },
+    });
     expect(current.execute).toHaveBeenCalledWith({ code: "return value", mode: "write" });
     expect(current.replacePendingMutations).not.toHaveBeenCalled();
     expect(current.commit).not.toHaveBeenCalled();
@@ -502,7 +511,10 @@ describe("Workspace content runtime owner", () => {
 
   it("externalizes, replaces and confirms mutations exactly once", async () => {
     const mutations = [{ data: JSON.stringify({ value: 1 }), id: "mutation-1" }];
-    const current = lease({ commitResults: [commitResult("confirmed", 9)], writeMutations: mutations });
+    const current = lease({
+      commitResults: [commitResult("confirmed", 9)],
+      writeMutations: mutations,
+    });
     const runtime = createRuntime({ acquire: vi.fn(async () => current) });
 
     await expect(runtime.executeAndCommit({ code: "edit", target })).resolves.toEqual({
@@ -515,21 +527,29 @@ describe("Workspace content runtime owner", () => {
     expect(current.replacePendingMutations).toHaveBeenCalledOnce();
     expect(current.replacePendingMutations).toHaveBeenCalledWith(mutations);
     expect(current.commit).toHaveBeenCalledOnce();
+    expect(current.commit).toHaveBeenCalledWith();
     expect(current.release).toHaveBeenCalledOnce();
     expect(current.invalidate).not.toHaveBeenCalled();
   });
 
   it("retries the same externalized pending changeset without replaying work", async () => {
     const png = `data:image/png;base64,${Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString("base64")}`;
-    const fetcher = vi.fn(async () =>
-      new Response(JSON.stringify({ FileId: "file-1" }), {
-        headers: { "content-type": "application/json" },
-      }),
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ FileId: "file-1" }), {
+          headers: { "content-type": "application/json" },
+        }),
     );
     vi.stubGlobal("fetch", fetcher);
     const current = lease({
-      commitResults: [commitResult("retry", 7), commitResult("unknown", 7), commitResult("confirmed", 8)],
-      writeMutations: [{ data: JSON.stringify({ imageSourceType: "BASE64", source: png }), id: "image" }],
+      commitResults: [
+        commitResult("retry", 7),
+        commitResult("unknown", 7),
+        commitResult("confirmed", 8),
+      ],
+      writeMutations: [
+        { data: JSON.stringify({ imageSourceType: "BASE64", source: png }), id: "image" },
+      ],
       writeValue: "done",
     });
     const runtime = createRuntime({ acquire: vi.fn(async () => current) });
@@ -565,7 +585,9 @@ describe("Workspace content runtime owner", () => {
     });
     const runtime = createRuntime({ acquire: vi.fn(async () => current) });
 
-    await expect(runtime.executeAndCommit({ code: "edit", target })).rejects.toMatchObject({ code });
+    await expect(runtime.executeAndCommit({ code: "edit", target })).rejects.toMatchObject({
+      code,
+    });
     expect(current.commit).toHaveBeenCalledTimes(attempts);
     expect(current.invalidate).toHaveBeenCalledOnce();
     expect(current.release).not.toHaveBeenCalled();
@@ -612,20 +634,22 @@ function createRuntime(
   });
 }
 
-function lease(options: {
-  readonly baseRevision?: number;
-  readonly commitResults?: readonly unknown[];
-  readonly executeError?: Error;
-  readonly executeValue?: unknown;
-  readonly exportError?: Error;
-  readonly malformedWriteResult?: boolean;
-  readonly pullStatus?: "conflict" | "pulled";
-  readonly replaceError?: Error;
-  readonly state?: Partial<CollaborationRuntimeState>;
-  readonly unitData?: unknown;
-  readonly writeMutations?: readonly unknown[];
-  readonly writeValue?: unknown;
-} = {}): UniverCollaborationRuntimeLease {
+function lease(
+  options: {
+    readonly baseRevision?: number;
+    readonly commitResults?: readonly unknown[];
+    readonly executeError?: Error;
+    readonly executeValue?: unknown;
+    readonly exportError?: Error;
+    readonly malformedWriteResult?: boolean;
+    readonly pullStatus?: "conflict" | "pulled";
+    readonly replaceError?: Error;
+    readonly state?: Partial<CollaborationRuntimeState>;
+    readonly unitData?: unknown;
+    readonly writeMutations?: readonly unknown[];
+    readonly writeValue?: unknown;
+  } = {},
+): UniverCollaborationRuntimeLease {
   const state: CollaborationRuntimeState = {
     awaitingChangeset: null,
     baseRevision: options.baseRevision ?? 7,
@@ -679,7 +703,11 @@ function lease(options: {
     release: vi.fn(async () => undefined),
     replacePendingMutations: vi.fn(async () => {
       if (options.replaceError !== undefined) throw options.replaceError;
-      return { pendingMutationCount: options.writeMutations?.length ?? 0, previousMutationCount: 0, state };
+      return {
+        pendingMutationCount: options.writeMutations?.length ?? 0,
+        previousMutationCount: 0,
+        state,
+      };
     }),
     unitId: "unit-1",
     unitType: 2,
@@ -701,7 +729,13 @@ function commitResult(status: string, baseRevision: number): unknown {
   }
   if (status === "retry" || status === "unknown") {
     return {
-      changeset: { baseRevision, mutationCount: 1, reqId: 2, revision: baseRevision + 1, sid: "sid-1" },
+      changeset: {
+        baseRevision,
+        mutationCount: 1,
+        reqId: 2,
+        revision: baseRevision + 1,
+        sid: "sid-1",
+      },
       confirmedChangesets: [],
       state,
       status,
@@ -716,7 +750,13 @@ function commitResult(status: string, baseRevision: number): unknown {
     };
   }
   if (status === "pull-required") {
-    return { baseRevision, confirmedChangesets: [], knownHeadRevision: baseRevision + 1, state, status };
+    return {
+      baseRevision,
+      confirmedChangesets: [],
+      knownHeadRevision: baseRevision + 1,
+      state,
+      status,
+    };
   }
   return { state, status };
 }

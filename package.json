@@ -7,7 +7,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm test:sdk-dependencies && pnpm test:release && pnpm -r test",
-    "test:sdk-dependencies": "node --test scripts/update-sdk-dependencies.test.mjs",
+    "test:sdk-dependencies": "node --test scripts/update-sdk-dependencies.test.mjs scripts/sdk-type-identity.test.mjs",
     "test:release": "node --test scripts/release/*.test.mjs",
     "check": "pnpm typecheck && pnpm test",
     "format": "oxfmt",

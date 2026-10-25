@@ -42,11 +42,11 @@ Agent 在隔离的 Worktree 中工作、验证修改，再把结果交给人类�
 
 ## 选择操作入口
 
-| 入口 | 适用场景 | 开始使用 |
-| --- | --- | --- |
-| **Workspace Browser** | 直接编辑文档、协同、组织 Space 和审阅变更 | [启动 Workspace](#快速开始) |
-| **Workspace Agent** | 在文档旁与 Agent 对话、引用本地或远程文件与文件夹、审查 Worktree 变更 | [安装和使用 Agent](apps/agent/README.zh-CN.md#安装与首次使用) |
-| **Workspace CLI** | 从终端、脚本或已有 Agent 环境自动化处理文档 | [CLI 安装与使用](apps/cli/README.md) |
+| 入口                  | 适用场景                                                              | 开始使用                                                      |
+| --------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **Workspace Browser** | 直接编辑文档、协同、组织 Space 和审阅变更                             | [启动 Workspace](#快速开始)                                   |
+| **Workspace Agent**   | 在文档旁与 Agent 对话、引用本地或远程文件与文件夹、审查 Worktree 变更 | [安装和使用 Agent](apps/agent/README.zh-CN.md#安装与首次使用) |
+| **Workspace CLI**     | 从终端、脚本或已有 Agent 环境自动化处理文档                           | [CLI 安装与使用](apps/cli/README.md)                          |
 
 Workspace Agent 是基于 DSH（DeepSeek Harness）的本地 Web 应用。
 它的本地文件引用指向运行 Agent 的机器，Workspace 文档仍由连接的服务管理。
@@ -177,7 +177,7 @@ Worktree 协议合同；Univer CLI SDK 拥有可复用的 headless runtime、执
 
 Workspace 拥有产品身份、Space、目录层级、ACL、分享、回收站、最近访问、Blob 存储策略、远程
 workflow 与部署。Client Core 在仓库应用之间共享存储无关的认证、Workspace workflow、本机
-Node-hosted Blob/Asset 传输与 worker-backed 内容 runtime，包括 Node-hosted Office exchange、Typst
+Node-hosted Blob/Asset 传输与 worker-backed 内容 runtime，包括 Node-hosted Office exchange、Markdown 编译／创建／原生读取／局部更新、Typst
 编译/materialize/apply、render Unit 装配、截图、PNG/PDF 输出、Slide layout lint、render-page 源码与
 SVG 编译/测量/apply workflow；reference-provider package 仍只供 Browser 使用。两者都是私有实现
 模块，不是额外的公开应用或 SDK。
@@ -234,17 +234,17 @@ CLI 与 Workspace 部署基于同一份源码，但各自独立交付：
 
 ## 文档
 
-| 资源                                                                | 范围                                                       |
-| ------------------------------------------------------------------- | ---------------------------------------------------------- |
-| [Univer Runtime 文档](https://docs.univer.ai/)                      | Browser Runtime、Preset、Plugin、Facade API 与编辑器能力   |
-| [Univer Office SDK 文档](https://office.univer.ai/)                 | Office SDK 技术栈：Runtime、Collaboration、CLI 与 Worktree |
-| [Workspace 应用指南](apps/workspace/README.md)                      | 配置、认证、存储、Docker 与升级                            |
-| [Workspace CLI 指南](apps/cli/README.md)                            | 安装、登录、Agent workflow 与 package 合同                 |
-| [Workspace Agent 指南](apps/agent/README.zh-CN.md)                         | 本地 Profile、浏览器 OAuth、会话、文件、Worktree 与身份切换    |
-| [Client Core package](packages/client-core/README.md)               | 私有 Node-hosted client 能力边界                           |
-| [技术架构](apps/workspace/docs/architecture.md)                     | Browser、Server、存储、OpenAPI 与模块边界                  |
-| [HTTP contract](apps/workspace/contracts/http/README.md)            | 产品 API 源文件与生成流程                                  |
-| [Reference-provider package](packages/reference-provider/README.md) | Browser 私有 referenced-Unit policy                        |
+| 资源                                                                | 范围                                                        |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| [Univer Runtime 文档](https://docs.univer.ai/)                      | Browser Runtime、Preset、Plugin、Facade API 与编辑器能力    |
+| [Univer Office SDK 文档](https://office.univer.ai/)                 | Office SDK 技术栈：Runtime、Collaboration、CLI 与 Worktree  |
+| [Workspace 应用指南](apps/workspace/README.md)                      | 配置、认证、存储、Docker 与升级                             |
+| [Workspace CLI 指南](apps/cli/README.md)                            | 安装、登录、Agent workflow 与 package 合同                  |
+| [Workspace Agent 指南](apps/agent/README.zh-CN.md)                  | 本地 Profile、浏览器 OAuth、会话、文件、Worktree 与身份切换 |
+| [Client Core package](packages/client-core/README.md)               | 私有 Node-hosted client 能力边界                            |
+| [技术架构](apps/workspace/docs/architecture.md)                     | Browser、Server、存储、OpenAPI 与模块边界                   |
+| [HTTP contract](apps/workspace/contracts/http/README.md)            | 产品 API 源文件与生成流程                                   |
+| [Reference-provider package](packages/reference-provider/README.md) | Browser 私有 referenced-Unit policy                         |
 
 ## 参与贡献
 

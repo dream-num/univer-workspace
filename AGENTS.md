@@ -218,6 +218,13 @@ package-metadata repairs, not dev SDK version overrides. Prefer an upstream fix
 that keeps emitted DI types imported from Core; do not routinely add direct Redi
 imports or dependencies to SDK consumers.
 
+Keep shared data-only entry declarations independent of headless runtime types.
+The Markdown file writer uses the SDK's `/files` entry; `/node` also exposes
+materialization and brings its runtime types into TypeScript's dependency graph.
+The SDK type-identity regression checks each application independently and guards
+the Markdown contract boundary. After changing dependency metadata, clean TypeScript
+build state before checking; incremental diagnostics can retain an old graph.
+
 When upgrading the SDK, inspect the published declarations and manifests before
 changing these extensions. Remove obsolete entries only after an isolated clean
 install verifies both Workspace and Agent typechecks and browser startup. Check

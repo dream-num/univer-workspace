@@ -26,7 +26,7 @@ Understand these identities before running a mutation:
 - **Workspace origin**: the remote Workspace service address of the user's own deployment.
   Point the CLI at it with `uvw config set workspace.origin <origin>` before
   connecting.
-- **Space** (a *repository*): the container whose visible tree is made of Nodes. A Team Space is named
+- **Space** (a _repository_): the container whose visible tree is made of Nodes. A Team Space is named
   `<owner>/<slug>`; every Personal Space is `<owner>/personal`. Pass that name as `-R <owner>/<slug>`
   (or set `UVW_REPO`); a Space ID or a Workspace URL is accepted wherever a repository is expected.
   A Team Space created before slugs existed may have no name; use its Space ID.
@@ -214,6 +214,7 @@ to restate it.
 
    The newest comments may change or narrow the request; read them before acting. Without a
    repository, `uvw search issues -a @me --json` shows the work assigned to the user across Team Spaces.
+
 2. `references[]` lists the files the Issue points at. Use `resource.id` as the
    `resourceId` and `nodeId` to stage them. A reference with `available: false` was trashed or
    became unreadable; say so instead of guessing which file was meant.
@@ -283,10 +284,12 @@ uvw unit create \
   --type sheet --name <file-name> [--parent <node-id>] [--idempotency-key <key>] --json
 ```
 
-Use `unit create` for an empty Unit. Use `import --file` when an office file supplies the initial
-content. Do not add an unrelated Unit to an existing task Worktree.
+Use `unit create` for an empty Unit. Use `compile-markdown --apply` for a generated Modern Doc
+without creating a placeholder; load the Doc Skill first. Use `import --file` when an office file
+supplies the initial content. Do not add an unrelated Unit to an existing task Worktree.
 
-`unit create`, `import`, and `compile-typst --apply` allocate all three identities on the server.
+`unit create`, `import`, `compile-markdown --apply`, and `compile-typst --apply` allocate all three
+identities on the server.
 They accept `--idempotency-key <key>`. Normally omit it and let the CLI generate one. If a final
 `workspace-result-unknown` diagnostic returns a key, reuse that exact key only to retry the same
 logical operation; use a new or omitted key for an intentional second copy.
@@ -312,7 +315,8 @@ If it is `merged` or `discarded`, start a new Worktree and stage the current Spa
 
 Before writing Facade code, load the matching versioned Skill:
 
-- Doc: `uvw skills get doc`
+- Doc: `uvw skills get doc` (Modern Docs use `compile-markdown`; export selected current native
+  blocks with `export-markdown` before partial updates)
 - Sheet: `uvw skills get sheet`
 - Slide: `uvw skills get slide`
 - Base: `uvw skills get base`
@@ -406,20 +410,20 @@ same-task correction follows the rework flow above.
 Use `uvw <command> --help` as the syntax authority. `-R <owner>/<slug>` (or `UVW_REPO`) selects the
 repository; there is no stored default repository.
 
-| Intent                    | Commands                                                                    |
-| ------------------------- | --------------------------------------------------------------------------- |
-| Connect                   | `config set workspace.origin`, `auth login`, `auth status`, `auth logout`   |
-| Discover repositories     | `repo list`, `repo view`, `repo create/edit/rename`                         |
-| Discover/organize files   | `space browse`, `space find`, `space node create/rename/move`               |
+| Intent                    | Commands                                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Connect                   | `config set workspace.origin`, `auth login`, `auth status`, `auth logout`                            |
+| Discover repositories     | `repo list`, `repo view`, `repo create/edit/rename`                                                  |
+| Discover/organize files   | `space browse`, `space find`, `space node create/rename/move`                                        |
 | Read and update Issues    | `issue list/view/create/edit/comment/close/reopen`, `label list/create/edit/delete`, `search issues` |
-| Preserve original files   | `blob upload`, `blob get`, `blob download`, `blob replace`                  |
-| Start a task              | `pr create`, `unit create`, `unit add`                                      |
-| Inspect a known task      | `pr view`, `pr list`, `unit list`                                           |
-| Continue same-task rework | `pr ready <n> --undo`                                                       |
-| Write                     | `execute`, `compile-svg`, `compile-typst`, import                           |
-| Verify                    | `inspect`, `screenshot`                                                     |
-| Deliver output            | `export`, `print-pdf`                                                       |
-| Hand off                  | `pr ready`, `browse <n> --unit <id>`                                        |
-| User-authorized lifecycle | `pr merge`, `pr discard` (irreversible)                                     |
-| User-authorized cleanup   | `space node trash`                                                          |
-| Find APIs/assets/guidance | `api find/show`, `resources`, `skills`                                      |
+| Preserve original files   | `blob upload`, `blob get`, `blob download`, `blob replace`                                           |
+| Start a task              | `pr create`, `unit create`, `unit add`                                                               |
+| Inspect a known task      | `pr view`, `pr list`, `unit list`                                                                    |
+| Continue same-task rework | `pr ready <n> --undo`                                                                                |
+| Write                     | `execute`, `compile-markdown`, `compile-svg`, `compile-typst`, import                                |
+| Verify                    | `inspect`, `screenshot`                                                                              |
+| Deliver output            | `export`, `print-pdf`                                                                                |
+| Hand off                  | `pr ready`, `browse <n> --unit <id>`                                                                 |
+| User-authorized lifecycle | `pr merge`, `pr discard` (irreversible)                                                              |
+| User-authorized cleanup   | `space node trash`                                                                                   |
+| Find APIs/assets/guidance | `api find/show`, `resources`, `skills`                                                               |
