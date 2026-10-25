@@ -218,6 +218,13 @@ package-metadata repairs, not dev SDK version overrides. Prefer an upstream fix
 that keeps emitted DI types imported from Core; do not routinely add direct Redi
 imports or dependencies to SDK consumers.
 
+Distinct pnpm paths alone do not prevent TypeScript from redirecting declarations
+between peer graphs. Core's public identifier type must remain the declaration
+anchor when downstream SDK packages infer service identifiers. The SDK
+type-identity regression compiles both hosts together in both loading orders.
+After changing peer metadata, clean TypeScript build state before checking; old
+incremental diagnostics can retain the previous dependency graph.
+
 When upgrading the SDK, inspect the published declarations and manifests before
 changing these extensions. Remove obsolete entries only after an isolated clean
 install verifies both Workspace and Agent typechecks and browser startup. Check
