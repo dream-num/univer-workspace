@@ -4,6 +4,7 @@
   "private": true,
   "description": "Private Univer Workspace policy for lazily materializing referenced Units.",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./src/index.ts",
   "exports": {
@@ -13,23 +14,22 @@
       "default": "./dist/index.js"
     }
   },
-  "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist *.tsbuildinfo",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc -p tsconfig.test.json --noEmit"
   },
-  "peerDependencies": {
-    "@univerjs-pro/collaboration": "1.1.0",
-    "@univerjs-pro/embed": "1.1.0",
-    "@univerjs/core": "1.1.0"
-  },
   "devDependencies": {
-    "@univerjs-pro/collaboration": "1.1.0",
-    "@univerjs-pro/embed": "1.1.0",
-    "@univerjs/core": "1.1.0",
+    "@univerjs-pro/collaboration": "1.2.0",
+    "@univerjs-pro/embed": "1.2.0",
+    "@univerjs/core": "1.2.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
+  },
+  "peerDependencies": {
+    "@univerjs-pro/collaboration": "1.2.0",
+    "@univerjs-pro/embed": "1.2.0",
+    "@univerjs/core": "1.2.0"
   }
 }

@@ -4,6 +4,7 @@
   "private": true,
   "description": "Private Univer Workspace client workflows for Node-hosted agent clients.",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./src/index.ts",
   "exports": {
@@ -21,9 +22,18 @@
       "types": "./src/content-worker.ts",
       "development": "./src/content-worker.ts",
       "default": "./dist/content-worker.js"
+    },
+    "./markdown": {
+      "types": "./src/markdown-source.ts",
+      "development": "./src/markdown-source.ts",
+      "default": "./dist/markdown-source.js"
+    },
+    "./document-materialize": {
+      "types": "./src/document-materialize-contract.ts",
+      "development": "./src/document-materialize.ts",
+      "default": "./dist/document-materialize.js"
     }
   },
-  "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p render-runtime/tsconfig.json --noEmit && vite build --config render-runtime/vite.config.ts",
     "clean": "rm -rf dist *.tsbuildinfo",
@@ -31,22 +41,22 @@
     "typecheck": "tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
-    "@univer-cli/content-execution": "1.1.0",
-    "@univer-cli/doc-typst-facade": "1.1.0",
-    "@univer-cli/headless-univer": "1.1.0",
-    "@univer-cli/svg-facade": "1.1.0",
-    "@univer-cli/unit-layout-lint": "1.1.0",
-    "@univer-cli/unit-pdf-printer": "1.1.0",
-    "@univer-cli/unit-screenshot": "1.1.0",
-    "@univer-cli/univer-collaboration-runtime": "1.1.0",
-    "@univer-cli/univer-collaboration-runtime-pool": "1.1.0",
-    "@univer-cli/univer-render-page": "1.1.0",
-    "@univer-cli/univer-render-runtime": "1.1.0",
-    "@univerjs-pro/collaboration": "1.1.0",
-    "@univerjs-pro/embed": "1.1.0",
-    "@univerjs-pro/exchange-node": "1.1.0",
-    "@univerjs/core": "1.1.0",
-    "@univerjs/protocol": "1.1.0"
+    "@univer-cli/content-execution": "1.2.0",
+    "@univer-cli/doc-typst-facade": "1.2.0",
+    "@univer-cli/headless-univer": "1.2.0",
+    "@univer-cli/svg-facade": "1.2.0",
+    "@univer-cli/unit-layout-lint": "1.2.0",
+    "@univer-cli/unit-pdf-printer": "1.2.0",
+    "@univer-cli/unit-screenshot": "1.2.0",
+    "@univer-cli/univer-collaboration-runtime": "1.2.0",
+    "@univer-cli/univer-collaboration-runtime-pool": "1.2.0",
+    "@univer-cli/univer-render-page": "1.2.0",
+    "@univer-cli/univer-render-runtime": "1.2.0",
+    "@univerjs-pro/collaboration": "1.2.0",
+    "@univerjs-pro/embed": "1.2.0",
+    "@univerjs-pro/exchange-node": "1.2.0",
+    "@univerjs/core": "1.2.0",
+    "@univerjs/protocol": "1.2.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

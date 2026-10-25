@@ -19,8 +19,6 @@ import UniverDocsChartUIZhCN from "@univerjs-pro/docs-chart-ui/locale/zh-CN";
 import UniverDocsCodeUIEnUS from "@univerjs-pro/docs-code-ui/locale/en-US";
 import UniverDocsCodeUIZhCN from "@univerjs-pro/docs-code-ui/locale/zh-CN";
 import { UniverDocsExchangeClientPlugin } from "@univerjs-pro/docs-exchange-client";
-import UniverDocsExchangeClientEnUS from "@univerjs-pro/docs-exchange-client/locale/en-US";
-import UniverDocsExchangeClientZhCN from "@univerjs-pro/docs-exchange-client/locale/zh-CN";
 import { UniverDocsHistoryUIPlugin } from "@univerjs-pro/docs-history-ui";
 import DocsHistoryUIEnUS from "@univerjs-pro/docs-history-ui/locale/en-US";
 import DocsHistoryUIZhCN from "@univerjs-pro/docs-history-ui/locale/zh-CN";
@@ -92,7 +90,6 @@ export const docEditorLocales: Readonly<
     UniverDocsCalloutUIZhCN,
     UniverDocsChartUIZhCN,
     UniverDocsCodeUIZhCN,
-    UniverDocsExchangeClientZhCN,
     UniverDocsLatexUIZhCN,
     UniverDocsPrintZhCN,
     UniverDocsShapeUIZhCN,
@@ -109,7 +106,6 @@ export const docEditorLocales: Readonly<
     UniverDocsCalloutUIEnUS,
     UniverDocsChartUIEnUS,
     UniverDocsCodeUIEnUS,
-    UniverDocsExchangeClientEnUS,
     UniverDocsLatexUIEnUS,
     UniverDocsPrintEnUS,
     UniverDocsShapeUIEnUS,

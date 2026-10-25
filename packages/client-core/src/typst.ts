@@ -29,6 +29,7 @@ export interface WorkspaceTypstMaterializeInput {
 }
 
 export interface WorkspaceTypstMaterializeResult {
+  readonly value?: unknown;
   readonly initialData: Readonly<Record<string, unknown>>;
   readonly name?: string;
 }
@@ -78,9 +79,7 @@ export class WorkspaceCompileTypstFeature {
       type: "doc",
       worktreeId: input.apply.worktreeId,
       initialData: materialized.initialData,
-      ...(input.apply.parentNodeId === undefined
-        ? {}
-        : { parentNodeId: input.apply.parentNodeId }),
+      ...(input.apply.parentNodeId === undefined ? {} : { parentNodeId: input.apply.parentNodeId }),
       ...(input.apply.idempotencyKey === undefined
         ? {}
         : { idempotencyKey: input.apply.idempotencyKey }),

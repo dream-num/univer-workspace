@@ -209,7 +209,7 @@ describe("Workspace mobile unit presets", () => {
       configurable: true,
       value: { location: { origin: "https://workspace.test" } },
     });
-    const [{ UniverExchangeClientMobileUIPlugin }, { createMobileExchangeFeaturePlugins }] =
+    const [{ UniverExchangeClientPlugin }, { createMobileExchangeFeaturePlugins }] =
       await Promise.all([
         import("@univerjs-pro/exchange-client"),
         import("../../web/src/features/editor/features/exchange-plugins.js"),
@@ -222,7 +222,7 @@ describe("Workspace mobile unit presets", () => {
 
     expect(plugins).toEqual([
       [
-        UniverExchangeClientMobileUIPlugin,
+        UniverExchangeClientPlugin,
         expect.objectContaining({
           importServerUrl:
             "https://workspace.test/universer-api/exchange/{type}/import",

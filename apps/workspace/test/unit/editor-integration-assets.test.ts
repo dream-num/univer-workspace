@@ -50,7 +50,6 @@ describe("editor integration assets", () => {
       "@univerjs/design/lib/index.css",
       "@univerjs/ui/lib/index.css",
       "@univerjs-pro/bases-ui/lib/index.css",
-      "@univerjs-pro/bases-exchange-client/lib/index.css",
     ]);
     expectImportsInOrder(editorSources.slide, [
       "@univerjs/design/lib/index.css",
