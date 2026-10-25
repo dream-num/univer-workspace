@@ -642,6 +642,75 @@ describe("Board public Facade business fixture preservation", () => {
 
 describe("Board full-extent visual capture tiling", () => {
   it.each([
+    { name: "narrow portrait", bounds: { left: 1234, top: -167, width: 383, height: 2091 } },
+    { name: "wide landscape", bounds: { left: -100, top: 90, width: 4100, height: 50 } },
+  ])(
+    "tiles the full $name canvas without using cropped Fit dimensions as viewport limits",
+    async ({ bounds }) => {
+      const directory = await mkdtemp(join(resolve(tmpdir()), "board-aspect-tiling-"));
+      const calls = [];
+      const fitScale = Math.min(1, 1400 / bounds.width, 900 / bounds.height);
+      try {
+        const screenshot = {
+          async capture(input) {
+            calls.push(input);
+            expect(
+              calls.length,
+              "Cropped Fit dimensions caused pathological overlapping tiles",
+            ).toBeLessThanOrEqual(32);
+            const scale = input.target.scale ?? fitScale;
+            const region = input.target.region ?? bounds;
+            return {
+              images: [
+                {
+                  width: Math.ceil(region.width * scale),
+                  height: Math.ceil(region.height * scale),
+                  scale,
+                  bytes: new Uint8Array([137, 80, 78, 71]),
+                  contentBounds: region,
+                  layoutAnalysis: {
+                    source: "rendered",
+                    contentBounds: bounds,
+                    routes: [],
+                    issues: [],
+                  },
+                },
+              ],
+            };
+          },
+        };
+        const result = await captureVisualEvidence(screenshot, { id: "aspect-fixture" }, directory);
+        expect(result.coverage.fullNativeScaleTiling).toBe(true);
+        expect(result.contentBounds).toEqual(bounds);
+        for (const scale of [0.5, 1, 2]) {
+          const captures = calls.filter((call) => call.target.scale === scale);
+          expect(captures.length).toBeGreaterThan(0);
+          for (const { target } of captures) {
+            expect(target.region.width * scale).toBeLessThanOrEqual(1000);
+            expect(target.region.height * scale).toBeLessThanOrEqual(720);
+          }
+          for (let column = 0; column < 31; column++)
+            for (let row = 0; row < 29; row++) {
+              const x = bounds.left + ((column + 0.5) * bounds.width) / 31;
+              const y = bounds.top + ((row + 0.5) * bounds.height) / 29;
+              expect(
+                captures.some(
+                  ({ target: { region } }) =>
+                    x >= region.left &&
+                    x < region.left + region.width &&
+                    y >= region.top &&
+                    y < region.top + region.height,
+                ),
+              ).toBe(true);
+            }
+        }
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each([
     {
       name: "labels left of the model",
       measured: { left: -150, top: -20, width: 550, height: 270 },

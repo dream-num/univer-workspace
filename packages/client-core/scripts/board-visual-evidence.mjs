@@ -130,10 +130,10 @@ export async function captureVisualEvidence(
     await save("fit", first, { kind: "board-content" });
   }
   if (!overviewOnly) {
-    // Explicit-scale captures must fit the renderer viewport; use its successful fit image as a conservative budget.
+    // Fit dimensions are cropped content, not viewport limits. Keep each tile within a fixed pixel budget.
     for (const scale of [0.5, 1, 2]) {
-      const tileWidth = Math.max(50, Math.floor((first.images[0].width - 128) / scale));
-      const tileHeight = Math.max(50, Math.floor((first.images[0].height - 128) / scale));
+      const tileWidth = Math.floor(1000 / scale);
+      const tileHeight = Math.floor(720 / scale);
       for (const [index, region] of visualCaptureRegions(bounds, tileWidth, tileHeight).entries()) {
         await capture(
           `tile-${String(index + 1).padStart(3, "0")}-${scale * 100}-percent`,
