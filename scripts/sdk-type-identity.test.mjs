@@ -6,7 +6,7 @@ import ts from "typescript";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
-test("keeps SDK service identifiers compatible in both React host graphs", () => {
+test("keeps SDK service identifiers and Markdown contracts isolated by application host", () => {
   const configPath = resolve(root, "packages/dsh-univer-workspace-plugin/tsconfig.json");
   const config = ts.readConfigFile(configPath, ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(configPath, ".."));
@@ -29,7 +29,13 @@ export function read(univer: Univer) {
         "\\",
         "/",
       ),
-      `import type { Univer } from "@univerjs/core";
+      `export {
+  compileWorkspaceMarkdownFile,
+  readWorkspaceMarkdownImage,
+  writeWorkspaceMarkdownExport,
+} from "@univerjs/univer-workspace-client-core/markdown";
+export { materializeWorkspaceDocument } from "@univerjs/univer-workspace-client-core/document-materialize";
+import type { Univer } from "@univerjs/core";
 import { setDependencies } from "@univerjs/core";
 import { IReferencedUnitManagerService, UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { ISocketService } from "@univerjs/network";
@@ -44,7 +50,8 @@ export function read(univer: Univer) {
 }`,
     ],
   ]);
-  for (const rootNames of [[...fixtures.keys()], [...fixtures.keys()].reverse()]) {
+  // Browser and Agent are separate applications with distinct React peer graphs.
+  for (const fileName of fixtures.keys()) {
     const host = ts.createCompilerHost(parsed.options);
     const getSourceFile = host.getSourceFile.bind(host);
     host.getSourceFile = (file, languageVersion, ...args) => {
@@ -53,7 +60,7 @@ export function read(univer: Univer) {
         ? getSourceFile(file, languageVersion, ...args)
         : ts.createSourceFile(file, source, languageVersion, true);
     };
-    const program = ts.createProgram({ rootNames, options: parsed.options, host });
+    const program = ts.createProgram({ rootNames: [fileName], options: parsed.options, host });
     const diagnostics = ts.getPreEmitDiagnostics(program);
     assert.equal(
       diagnostics.length,
@@ -63,6 +70,11 @@ export function read(univer: Univer) {
         getCanonicalFileName: (file) => file,
         getNewLine: () => "\n",
       }),
+    );
+    assert.equal(
+      program.getSourceFiles().some((file) => file.fileName.includes("/headless-univer/")),
+      false,
+      "The public Markdown data contract must not load headless runtime declarations.",
     );
   }
 });

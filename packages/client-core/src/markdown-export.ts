@@ -2,7 +2,7 @@ import type {
   CompileDocMarkdownReadOptions,
   DocMarkdownReadResult,
 } from "@univer-cli/doc-markdown-facade";
-import { writeDocMarkdownExport } from "@univer-cli/doc-markdown-facade/node";
+import { writeDocMarkdownExport } from "@univer-cli/doc-markdown-facade/files";
 
 export type WorkspaceMarkdownReadOptions = CompileDocMarkdownReadOptions;
 
