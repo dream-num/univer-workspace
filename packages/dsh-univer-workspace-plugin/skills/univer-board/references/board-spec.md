@@ -177,9 +177,10 @@ container to structural membership with `behavior.autoCapture: false`, `captureP
 one another. Verify both group parents and node parents against the semantic spec. Reserve external child-caption
 space in the parent padding before fitting; a 24-pixel native caption needs its own rail and a gap from the parent
 border (for example, 48 pixels of top padding), rather than overlaying two titles at the same left/top.
-For a new feedback relation with no authored endpoints or guides, choose exterior return ports before planning
-(bottom in a horizontal flow, right in a vertical flow) so the return avoids top captions. Keep automatic routing
-and real node bindings; preserve existing endpoint and manual-route choices.
+For a new feedback relation with no authored endpoints or guides, use exterior return ports as initial hints
+(bottom in a horizontal flow, right in a vertical flow) and keep `connectionPositionMode: 'auto'` on both ends.
+The graph planner can choose a shorter clear return corridor. Keep automatic routing and real node bindings;
+preserve existing fixed endpoints and manual-route choices.
 
 For a semantic visual scope, explicitly set native `containerData.behavior.layoutOccupancy` to `frame` so its
 interior remains available while borders and captions are checked; ordinary panels, tables and Embed keep body

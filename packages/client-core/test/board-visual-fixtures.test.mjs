@@ -229,56 +229,62 @@ describe("Board measured text growth boundaries", () => {
 });
 
 describe("Board public Facade business fixture preservation", () => {
-  it("preserves authored feedback endpoints and manual guides instead of imposing an exterior default", async () => {
-    const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
-      await import("@univer-cli/headless-univer");
-    const { UniverInstanceType } = await import("@univerjs/core");
-    const univer = await createStandardHeadlessUniverFactory({ license: "" })({
-      unitId: "authored-feedback",
-      unitType: UniverInstanceType.UNIVER_BOARD,
-    });
-    const original = visualCases["uml-state"].edges;
-    const authored = {
-      start: {
-        kind: "shapeSite",
-        shapeId: "visual-pastdue",
-        connectionSiteId: 0,
-        connectionPosition: 0.2,
-        connectionPositionMode: "fixed",
-      },
-      end: {
-        kind: "shapeSite",
-        shapeId: "visual-active",
-        connectionSiteId: 0,
-        connectionPosition: 0.8,
-        connectionPositionMode: "fixed",
-      },
-      waypoints: [{ id: "authored-guide", x: 800, y: 110, kind: "manual" }],
-      routingMode: "manual",
-    };
-    try {
-      visualCases["uml-state"].edges = original.map((item) =>
-        item.feedback ? { ...item, ...authored } : item,
-      );
-      const api = createStandardHeadlessUniverFacade(univer),
-        board = api.createBoard({ id: "authored-feedback", name: "Authored feedback" }),
-        fixture = realizeVisualFixture(board, api, "uml-state", "business");
-      const connector = Object.values(board.getElements()).find(
-        (item) => item.custom?.visualSource?.feedback,
-      );
-      expect(connector.connectorData).toMatchObject(authored);
-      const plan = board.planGraphLayout({
-        ...fixture.layoutOptions,
-        fixedElementIds: fixture.fixed,
+  it.each(["manual", "auto"])(
+    "preserves authored %s feedback",
+    async (routingMode) => {
+      const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+        await import("@univer-cli/headless-univer");
+      const { UniverInstanceType } = await import("@univerjs/core");
+      const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+        unitId: "authored-feedback",
+        unitType: UniverInstanceType.UNIVER_BOARD,
       });
-      expect(board.applyLayoutPlan(plan)).toBe(plan.status === "ready");
-      fixture.verify();
-      expect(board.getElement(connector.id).connectorData).toMatchObject(authored);
-    } finally {
-      visualCases["uml-state"].edges = original;
-      univer.dispose();
-    }
-  }, 20_000);
+      const original = visualCases["uml-state"].edges;
+      const authored = {
+        start: {
+          kind: "shapeSite",
+          shapeId: "visual-pastdue",
+          connectionSiteId: 0,
+          connectionPosition: 0.2,
+          connectionPositionMode: "fixed",
+        },
+        end: {
+          kind: "shapeSite",
+          shapeId: "visual-active",
+          connectionSiteId: 0,
+          connectionPosition: 0.8,
+          connectionPositionMode: "fixed",
+        },
+        ...(routingMode === "manual"
+          ? { waypoints: [{ id: "authored-guide", x: 800, y: 110, kind: "manual" }] }
+          : {}),
+        routingMode,
+      };
+      try {
+        visualCases["uml-state"].edges = original.map((item) =>
+          item.feedback ? { ...item, ...authored } : item,
+        );
+        const api = createStandardHeadlessUniverFacade(univer),
+          board = api.createBoard({ id: "authored-feedback", name: "Authored feedback" }),
+          fixture = realizeVisualFixture(board, api, "uml-state", "business");
+        const connector = Object.values(board.getElements()).find(
+          (item) => item.custom?.visualSource?.feedback,
+        );
+        expect(connector.connectorData).toMatchObject(authored);
+        const plan = board.planGraphLayout({
+          ...fixture.layoutOptions,
+          fixedElementIds: fixture.fixed,
+        });
+        expect(board.applyLayoutPlan(plan)).toBe(plan.status === "ready");
+        fixture.verify();
+        expect(board.getElement(connector.id).connectorData).toMatchObject(authored);
+      } finally {
+        visualCases["uml-state"].edges = original;
+        univer.dispose();
+      }
+    },
+    20_000,
+  );
   it.each(["deployment", "uml-state"])(
     "keeps declared %s group ancestry and reserves nested external caption space",
     async (profile) => {
@@ -526,8 +532,8 @@ describe("Board public Facade business fixture preservation", () => {
               : api.Enum.BoardConnectorSite.Right;
           expect(item.connectorData).toMatchObject({
             routingMode: "auto",
-            start: { connectionSiteId: side, connectionPositionMode: "fixed" },
-            end: { connectionSiteId: side, connectionPositionMode: "fixed" },
+            start: { connectionSiteId: side, connectionPositionMode: "auto" },
+            end: { connectionSiteId: side, connectionPositionMode: "auto" },
           });
         }
         if (profile === "uml-state")

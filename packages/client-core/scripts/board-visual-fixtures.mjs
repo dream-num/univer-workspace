@@ -1060,6 +1060,13 @@ export function realizeVisualFixture(board, api, profile, variant) {
       }
     });
     for (const item of spec.edges) {
+      const outerFeedback =
+        item.feedback &&
+        item.start === undefined &&
+        item.end === undefined &&
+        item.waypoints === undefined &&
+        item.routing === undefined &&
+        item.routingMode !== "manual";
       let ref;
       if (profile === "uml-class")
         ref = board.insertClassRelation({
@@ -1087,13 +1094,6 @@ export function realizeVisualFixture(board, api, profile, variant) {
         const primary = spec.mainPath?.some(
           (id, index) => id === item.from && spec.mainPath[index + 1] === item.to,
         );
-        const outerFeedback =
-          item.feedback &&
-          item.start === undefined &&
-          item.end === undefined &&
-          item.waypoints === undefined &&
-          item.routing === undefined &&
-          item.routingMode !== "manual";
         const feedbackSite =
           spec.direction === "horizontal"
             ? E.BoardConnectorSite.Bottom
@@ -1134,14 +1134,14 @@ export function realizeVisualFixture(board, api, profile, variant) {
                   shapeId: ids[item.from],
                   connectionSiteId: feedbackSite,
                   connectionPosition: 0.5,
-                  connectionPositionMode: "fixed",
+                  connectionPositionMode: "auto",
                 },
                 end: {
                   kind: "shapeSite",
                   shapeId: ids[item.to],
                   connectionSiteId: feedbackSite,
                   connectionPosition: 0.5,
-                  connectionPositionMode: "fixed",
+                  connectionPositionMode: "auto",
                 },
               }
             : {}),
@@ -1175,7 +1175,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
         for (const id of [ids[item.from], ids[item.to]]) if (!fixed.includes(id)) fixed.push(id);
         protectedIds.push(ref.id);
       }
-      if (item.feedback) {
+      if (item.feedback && !outerFeedback) {
         const bindings = (data) => {
           const { start, end, waypoints } = json(data);
           delete start.fallbackPoint;
