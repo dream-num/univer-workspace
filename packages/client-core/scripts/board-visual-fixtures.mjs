@@ -1241,7 +1241,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
         : {}),
     },
     compactContainers: Object.values(groups).reverse(),
-    alignHeading() {
+    alignHeading(measurement) {
       const bounds = spec.native
         ? board.getMindMaps()[0].getBounds()
         : layoutElementIds
@@ -1257,10 +1257,31 @@ export function realizeVisualFixture(board, api, profile, variant) {
             );
       assert.ok(Number.isFinite(bounds.left) && Number.isFinite(bounds.top));
       const current = board.getElement(heading.id);
+      const available = measurement?.availableSize,
+        content = measurement?.contentSize;
+      if (
+        measurement?.status === "ready" &&
+        (!available ||
+          !content ||
+          ![available.width, available.height, content.width, content.height].every(
+            (value) => Number.isFinite(value) && value > 0,
+          ) ||
+          available.width > current.transform.width ||
+          available.height > current.transform.height)
+      )
+        return false;
+      const size =
+        measurement?.status === "ready"
+          ? {
+              width: Math.ceil(current.transform.width - available.width + content.width + 4),
+              height: Math.ceil(current.transform.height - available.height + content.height + 4),
+            }
+          : {};
       const captionReserve = Object.keys(groups).length ? 32 : 0;
       return board.setElementTransform(heading.id, {
         left: bounds.left,
-        top: bounds.top - current.transform.height - 32 - captionReserve,
+        top: bounds.top - (size.height ?? current.transform.height) - 32 - captionReserve,
+        ...size,
       });
     },
     semanticCoverage: {

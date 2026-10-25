@@ -338,7 +338,15 @@ try {
               Object.entries(board.getElements()).filter(([id]) => id !== "visual-case-heading"),
             );
           const originalContent = JSON.parse(JSON.stringify(content()));
-          assert.equal(fixture.alignHeading(), true, "Generated heading alignment failed");
+          const headingMeasurement = textRepair?.reports
+            .at(-1)
+            ?.analyses.find((page) => page.pageId === board.getActivePageId())?.rendered
+            ?.elementTextLayouts?.["visual-case-heading"];
+          assert.equal(
+            fixture.alignHeading(headingMeasurement),
+            true,
+            "Generated heading alignment failed",
+          );
           const afterHeading = persistedSnapshot(board);
           assert.deepEqual(
             JSON.parse(JSON.stringify(content())),
@@ -357,6 +365,7 @@ try {
             applied: true,
             changed,
             diagramUnchanged: true,
+            textMeasurement: headingMeasurement?.status ?? "unavailable",
             undoExact: true,
             redoExact: true,
           };

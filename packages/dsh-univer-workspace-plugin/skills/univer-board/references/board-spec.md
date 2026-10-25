@@ -97,6 +97,13 @@ spacing before their spans, and set each multiline body paragraph explicitly rat
 Use native text-box wrapping and padding; enlarge for real content rather than clipping or dropping
 words. Apply primary-path color/weight to the actual connectors, not only custom metadata.
 
+For a generated heading or annotation, inspect ready `elementTextLayouts[elementId]` in the installed rendered
+analysis. Its local available/content sizes also cover text without overflow, so a wide seed frame need not dictate
+the finished diagram's extent. Fit only the generated frame while preserving its insets, readable font sizes,
+rich-text content and alignment to the diagram; use the normal transform API and verify Undo/Redo. Remeasure and
+review the full result afterward. Missing measurements or pending fonts are unresolved; do not guess smaller sizes
+or change authored frames merely to improve a screenshot.
+
 Keep class relation names, endpoint roles and multiplicities independent. Render only authored roles; a node ID
 is not a role, and a relation name must not also become an inferred endpoint label. Preserve every explicit role
 and multiplicity when changing layout.

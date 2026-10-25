@@ -22,6 +22,60 @@ async function withBoard(callback) {
 }
 
 describe("Generated business presentation", () => {
+  it.each(["architecture", "deployment", "uml-state", "uml-sequence", "mindmap", "timeline"])(
+    "fits only the generated %s heading to ready native measurements with exact history",
+    async (profile) => {
+      await withBoard((board, api) => {
+        const fixture = realizeVisualFixture(board, api, profile, "nested-dense");
+        const before = JSON.parse(JSON.stringify(board.save())),
+          heading = board.getElement("visual-case-heading"),
+          content = Object.fromEntries(
+            Object.entries(board.getElements()).filter(([id]) => id !== heading.id),
+          );
+        const expectedContent = JSON.parse(JSON.stringify(content));
+        expect(
+          fixture.alignHeading({
+            status: "ready",
+            availableSize: { width: heading.transform.width, height: heading.transform.height },
+            contentSize: { width: 300.25, height: 42.5 },
+          }),
+        ).toBe(true);
+        expect(board.getElement(heading.id).transform).toMatchObject({ width: 305, height: 47 });
+        expect(
+          JSON.parse(
+            JSON.stringify(
+              Object.fromEntries(
+                Object.entries(board.getElements()).filter(([id]) => id !== heading.id),
+              ),
+            ),
+          ),
+        ).toEqual(expectedContent);
+        fixture.verify();
+        const after = JSON.parse(JSON.stringify(board.save()));
+        expect(board.undo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
+        expect(board.redo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
+      });
+    },
+    20_000,
+  );
+
+  it("refuses invalid measured heading sizes without editing content", async () => {
+    await withBoard((board, api) => {
+      const fixture = realizeVisualFixture(board, api, "architecture", "business"),
+        before = JSON.parse(JSON.stringify(board.save()));
+      expect(
+        fixture.alignHeading({
+          status: "ready",
+          availableSize: { width: 1100, height: 110 },
+          contentSize: { width: NaN, height: 42 },
+        }),
+      ).toBe(false);
+      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
+    });
+  }, 20_000);
+
   it.each(Object.keys(visualCases))(
     "keeps %s content and model findings intact when aligning its heading",
     async (profile) => {
