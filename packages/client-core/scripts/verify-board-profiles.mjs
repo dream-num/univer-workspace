@@ -340,7 +340,7 @@ try {
           const originalContent = JSON.parse(JSON.stringify(content()));
           const headingMeasurement = textRepair?.reports
             .at(-1)
-            ?.analyses.find((page) => page.pageId === board.getActivePageId())?.rendered
+            ?.analyses.find((page) => page.pageId === board.getElementLayout().subUnitId)?.rendered
             ?.elementTextLayouts?.["visual-case-heading"];
           assert.equal(
             fixture.alignHeading(headingMeasurement),
