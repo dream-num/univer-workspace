@@ -50,8 +50,7 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
    Workspace cookies stay in Host memory: SDK HTTP uses the existing owner Connection;
    WebSocket connects directly to Workspace using its one-time session ticket.
    Slides/Canvas/Relational Table keep detached previews. Pages maps specifically to Server
-   `.univer.html` Blobs, using the Fork's shared formal sandbox and binding engine (up to 1 MiB source). It supports scripts, authenticated Sheet bindings, inspection, and save-before-leave with resume after a failed connection change. License uses the Fork's existing source through official SDK initialization. Comments and History are
-   not exposed: their additional datasource/viewer authentication remains unaccepted.
+   `.univer.html` Blobs, using the Fork's shared formal sandbox and binding engine (up to 1 MiB source). It supports scripts, authenticated Sheet bindings, inspection, and save-before-leave with resume after a failed connection change. License uses the Fork's existing source through official SDK initialization. Docs/Sheets Comments use the formal presets and remote datasource; the document toolbar opens the native panel. Docs supports selection anchors, replies, Resolve/Reopen and retained discussions when original text is removed. History remains unaccepted.
 5. Floating chat provides compact-message, expanded and minimized states. Move
    its grip, resize either side, restore it, create a Host Conversation or choose
    an existing one from History. It is one DSH composer/transcript, with DSH-owned
@@ -74,7 +73,7 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
 
 Create / New keeps all eight entries: Doc, Sheet, Slide, Canvas, Relational Table, Page, Folder, Space. All uses the Personal Space; Space / Folder uses the current directory. All six content types open automatically after Server persistence. Folder stays in its parent and Space navigates to the new Space. Restricted destinations retain disabled entries with permission feedback. Node rename/move and Trash/restore reuse the Browser product workflows; file identity and the native Session stay stable.
 
-Direct sharing, Favorites and subpages remain unavailable. Trash/Restore, Rename and same-Space folder moves are available through shared row, right-click and file-identity menus. Space supports Create/Open/Rename; Space Move/Trash/Restore need a separate lifecycle extension and are not implemented. Disabled controls explain feature availability separately from Server permissions. Suggested has
+Space Share manages actual Team membership. File Share distinguishes Team inheritance from Personal direct/ancestor grants and formal link access. Viewer/Editor (and Team Admin) are the existing Server roles; optional creation invites activate membership immediately. Favorites and subpages remain unavailable. Trash/Restore, Rename and same-Space folder moves are available through shared row, right-click and file-identity menus. Space supports Create/Open/Rename; Space Move/Trash/Restore need a separate lifecycle extension and are not implemented. Disabled controls explain feature availability separately from Server permissions. Suggested has
 local pinned metadata cards, with no fabricated templates or recommendations.
 The native DSH composer is taller than Space's 52px input capsule; it is kept
 intact.
@@ -168,3 +167,10 @@ consumer peers, rather than linking a second SDK/React graph. Browser JSX uses
 automatic transformation for that shared component. All coupled SDKs stay at
 1.1.0. The build also reads the existing Fork license source without printing it.
 Run build/install from this repository, preserving those source directories.
+
+Run `node scripts/check-human-collaboration-live.mjs` and
+`node scripts/check-sharing-live.mjs` with two independently configured DSH Hosts,
+each authenticated as a different Workspace test user. Supply `SPACE_SECOND_DSH_LOG`
+and `SPACE_SECOND_LOGIN_FILE` in addition to the Host/browser/evidence variables.
+These scripts cover comments, identities, permissions, grants and sharing.
+Keep credentials outside the repository and generated evidence.

@@ -327,7 +327,7 @@ export function apply(ctx: any) {
       pins: [],
       trash: [],
       action: null,
-    sharing: null,
+      sharing: null,
       chatMode: 'compact',
     });
   }
@@ -442,7 +442,9 @@ export function apply(ctx: any) {
     }
   }
   const face = {
-    sharing: (input: import('./sharing.js').SharingInput) => api('sharing', input),
+    metadata: (node: string) => api('metadata', { node }),
+    sharing: (input: import('./sharing.js').SharingInput) =>
+      api('sharing', input),
     htmlSource: (unit: string) =>
       api<{ editorMode: 'edit' | 'readOnly' }>('html-source', { unit }),
     readDirectory: (space: string, parent = '', cursor = '') =>
@@ -533,7 +535,7 @@ export function apply(ctx: any) {
           update({ trash: (await api('trash')).items });
         update({
           action: null,
-    sharing: null,
+          sharing: null,
           notice:
             input.action === 'delete'
               ? 'Moved to Trash'
@@ -660,15 +662,33 @@ export function apply(ctx: any) {
           await directory(result.space.id);
           if (input.invite) {
             try {
-              await api('sharing', { action: 'set-member', id: result.space.id, user: input.invite.user.id, role: input.invite.role });
+              await api('sharing', {
+                action: 'set-member',
+                id: result.space.id,
+                user: input.invite.user.id,
+                role: input.invite.role,
+              });
               update({ notice: 'Space created · Member added' });
             } catch (error) {
               // Space creation already succeeded. Retry only the membership write.
-              update({ sharing: { kind: 'space', id: result.space.id, name: result.space.name, invite: input.invite, error: error instanceof Error ? error.message : 'Member could not be added.' }, notice: 'Space created. Member could not be added; retry in Share.', error: '' });
+              update({
+                sharing: {
+                  kind: 'space',
+                  id: result.space.id,
+                  name: result.space.name,
+                  invite: input.invite,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : 'Member could not be added.',
+                },
+                notice:
+                  'Space created. Member could not be added; retry in Share.',
+                error: '',
+              });
             }
           }
-        }
-        else {
+        } else {
           await directory(input.space, input.parent);
           update({ spaceTab: 'Content' });
           if (input.kind !== 'folder') {
@@ -924,6 +944,7 @@ export function apply(ctx: any) {
   });
 }
 export type Face = {
+  metadata(node: string): Promise<{ node: import('./model.js').Node }>;
   sharing(input: import('./sharing.js').SharingInput): Promise<any>;
   htmlSource(unit: string): Promise<{ editorMode: 'edit' | 'readOnly' }>;
   readDirectory(space: string, parent?: string, cursor?: string): Promise<Page>;

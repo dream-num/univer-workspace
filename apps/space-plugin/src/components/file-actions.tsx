@@ -38,8 +38,17 @@ export function FileActions({
         <Icon name="pin" />
         {v.pins.includes(node.id) ? 'Unpin' : 'Pin'}
       </button>
-      <button role="menuitem" className={button + ' tw-w-full'} onClick={() => face.update({ sharing: { kind: 'node', id: node.id, name: node.name } })}>
-        <Icon name="share" />Share
+      <button
+        role="menuitem"
+        className={button + ' tw-w-full'}
+        onClick={() =>
+          face.update({
+            sharing: { kind: 'node', id: node.id, name: node.name },
+          })
+        }
+      >
+        <Icon name="share" />
+        Share
       </button>
       {(
         [

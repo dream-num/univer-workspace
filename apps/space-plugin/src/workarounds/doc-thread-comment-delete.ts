@@ -1,28 +1,28 @@
-import { UniverThreadCommentDataSourcePlugin } from "@univerjs-pro/thread-comment-datasource";
+import { UniverThreadCommentDataSourcePlugin } from '@univerjs-pro/thread-comment-datasource';
 import {
   ICommandService,
   ILogService,
   type ICommandInfo,
-} from "@univerjs/core";
+} from '@univerjs/core';
 import {
   DeleteDocCommentComment,
   type IDeleteDocCommentComment,
-} from "@univerjs/docs-thread-comment-ui";
-import type { IPresetPlugin } from "@univerjs/presets";
+} from '@univerjs/docs-thread-comment-ui';
+import type { IPresetPlugin } from '@univerjs/presets';
 import {
   IThreadCommentDataSourceService,
   ThreadCommentModel,
-} from "@univerjs/thread-comment";
+} from '@univerjs/thread-comment';
 
-const DEFAULT_DOC_SUBUNIT_ID = "default_doc";
+const DEFAULT_DOC_SUBUNIT_ID = 'default_doc';
 
 type DocCommentDeleteDependencies = {
-  dataSource: Pick<IThreadCommentDataSourceService, "deleteComment">;
+  dataSource: Pick<IThreadCommentDataSourceService, 'deleteComment'>;
   model: {
     getComment(
       unitId: string,
       subUnitId: string,
-      commentId: string
+      commentId: string,
     ):
       | {
           id: string;
@@ -40,7 +40,7 @@ type DocCommentDeleteDependencies = {
  */
 export async function deleteDocRootCommentBody(
   commandInfo: Readonly<ICommandInfo>,
-  { dataSource, model }: DocCommentDeleteDependencies
+  { dataSource, model }: DocCommentDeleteDependencies,
 ): Promise<boolean> {
   if (commandInfo.id !== DeleteDocCommentComment.id) {
     return false;
@@ -50,8 +50,8 @@ export async function deleteDocRootCommentBody(
     | Partial<IDeleteDocCommentComment>
     | undefined;
   if (
-    typeof params?.unitId !== "string" ||
-    typeof params.commentId !== "string"
+    typeof params?.unitId !== 'string' ||
+    typeof params.commentId !== 'string'
   ) {
     return false;
   }
@@ -59,7 +59,7 @@ export async function deleteDocRootCommentBody(
   const comment = model.getComment(
     params.unitId,
     DEFAULT_DOC_SUBUNIT_ID,
-    params.commentId
+    params.commentId,
   );
   if (!comment || comment.parentId) {
     return false;
@@ -69,15 +69,15 @@ export async function deleteDocRootCommentBody(
     params.unitId,
     DEFAULT_DOC_SUBUNIT_ID,
     comment.threadId,
-    comment.id
+    comment.id,
   );
 }
 
 /** Single registration entry for the temporary Docs delete workaround. */
 export class UniverWorkspaceDocsThreadCommentDataSourcePlugin extends UniverThreadCommentDataSourcePlugin {
   static override pluginName =
-    "UNIVER_WORKSPACE_DOC_THREAD_COMMENT_DATA_SOURCE_PLUGIN";
-  static override packageName = "@univerjs/univer-workspace";
+    'UNIVER_WORKSPACE_DOC_THREAD_COMMENT_DATA_SOURCE_PLUGIN';
+  static override packageName = '@univerjs/univer-workspace';
   static override version = UniverThreadCommentDataSourcePlugin.version;
 
   override onReady(): void {
@@ -95,11 +95,11 @@ export class UniverWorkspaceDocsThreadCommentDataSourcePlugin extends UniverThre
           model,
         }).catch((error: unknown) => {
           logService.error(
-            "[Workspace] Failed to delete the document comment body",
-            error
+            '[Workspace] Failed to delete the document comment body',
+            error,
           );
         });
-      })
+      }),
     );
   }
 }

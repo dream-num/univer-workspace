@@ -1,6 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Face } from '../client.js';
-import { contentKinds, kindName, nodeKind, type State, type Node } from '../model.js';
+import {
+  contentKinds,
+  kindName,
+  nodeKind,
+  type State,
+  type Node,
+} from '../model.js';
 import {
   CreateMenu,
   Icon,
@@ -62,7 +68,9 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
       (v.location !== 'home' ||
         v.discovery !== 'Your items' ||
         node.accessRole === 'owner') &&
-      (v.discovery !== 'Shared with you' || v.location !== 'home' || node.accessRole !== 'owner') &&
+      (v.discovery !== 'Shared with you' ||
+        v.location !== 'home' ||
+        node.accessRole !== 'owner') &&
       node.name.toLowerCase().includes(v.query.toLowerCase()) &&
       (v.filter === 'all' || nodeKind(node) === v.filter) &&
       (kind === 'all' || nodeKind(node) === kind),
@@ -110,7 +118,14 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
               Rename
             </button>
           </Menu>
-          <button className={button} onClick={() => face.update({ sharing: { kind: 'space', id: v.space, name: title } })}>
+          <button
+            className={button}
+            onClick={() =>
+              face.update({
+                sharing: { kind: 'space', id: v.space, name: title },
+              })
+            }
+          >
             <Icon name="share" />
             Share Space
           </button>

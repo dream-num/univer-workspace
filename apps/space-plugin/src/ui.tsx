@@ -84,7 +84,22 @@ export function SpaceView(
           SessionProvider={props.SessionProvider}
           renderSlot={props.renderSlot}
         />
-        {v.sharing && (v.sharing.kind === 'space' ? <SpaceShareDialog key={v.sharing.id} face={props} v={v} target={v.sharing} /> : <FileShareDialog key={v.sharing.id} face={props} v={v} target={v.sharing} />)}
+        {v.sharing &&
+          (v.sharing.kind === 'space' ? (
+            <SpaceShareDialog
+              key={v.sharing.id}
+              face={props}
+              v={v}
+              target={v.sharing}
+            />
+          ) : (
+            <FileShareDialog
+              key={v.sharing.id}
+              face={props}
+              v={v}
+              target={v.sharing}
+            />
+          ))}
         {v.settings && <Settings face={props} v={v} />}
         {v.action && (
           <FileActionDialog

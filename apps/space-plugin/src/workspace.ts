@@ -226,12 +226,15 @@ export class WorkspaceConnection {
     // Discover their authorized roots through the same Browser Shared view API.
     let sharedCursor = '';
     do {
-      const page = await read(`/api/shared-with-me?${new URLSearchParams({ limit: '100', ...(sharedCursor ? { cursor: sharedCursor } : {}) })}`);
+      const page = await read(
+        `/api/shared-with-me?${new URLSearchParams({ limit: '100', ...(sharedCursor ? { cursor: sharedCursor } : {}) })}`,
+      );
       for (const { node } of page.items) {
         if (seen.has(node.id)) continue;
         seen.add(node.id);
         nodes.push(node);
-        if (!node.resource && node.capabilities?.browseChildren) queue.push({ space: node.spaceId, parent: node.id });
+        if (!node.resource && node.capabilities?.browseChildren)
+          queue.push({ space: node.spaceId, parent: node.id });
       }
       sharedCursor = page.nextCursor ?? '';
     } while (sharedCursor);
@@ -308,7 +311,7 @@ export class WorkspaceConnection {
       );
     // Accept relative SDK routes only. Never accept authority, traversal, Worktree or product writes.
     if (
-      !/^\/universer-api\/(?:snapshot\/|comb(?:\/|$)|authz(?:\/|$)|comment\/unit\/[^/?]+\/(?:list|add|reply|solved|delete)(?:\?|$)|user\/(?:session-ticket|list)(?:\?|$))/.test(
+      !/^\/universer-api\/(?:snapshot\/|comb(?:\/|$)|authz(?:\/|$)|comment\/unit\/[^/?]+\/(?:list|add|reply|solved|edit|delete)(?:\?|$)|user\/(?:session-ticket|list)(?:\?|$))/.test(
         input.path,
       ) ||
       input.path.includes('..') ||
@@ -345,56 +348,156 @@ export class WorkspaceConnection {
   }
 
   /** Existing membership workflow. Identity and ACL are always Server-owned. */
-  async sharing(input: import('./sharing.js').SharingInput, signal: AbortSignal) {
-    const id = encodeURIComponent(input.id ?? ''), user = encodeURIComponent(input.user ?? '');
+  async sharing(
+    input: import('./sharing.js').SharingInput,
+    signal: AbortSignal,
+  ) {
+    const id = encodeURIComponent(input.id ?? ''),
+      user = encodeURIComponent(input.user ?? '');
     const options = { signal };
     switch (input.action) {
       case 'file': {
         const metadata = await this.json(`/api/nodes/${id}`, options);
         let space;
-        try { space = await this.json(`/api/spaces/${encodeURIComponent(metadata.node.spaceId)}`, options); }
-        catch (cause) { if (!(cause instanceof SpaceError && [403, 404].includes(cause.status))) throw cause; }
+        try {
+          space = await this.json(
+            `/api/spaces/${encodeURIComponent(metadata.node.spaceId)}`,
+            options,
+          );
+        } catch (cause) {
+          if (
+            !(cause instanceof SpaceError && [403, 404].includes(cause.status))
+          )
+            throw cause;
+        }
         // Team Nodes deliberately have no direct-grant model. Never fall through
         // to Personal grant endpoints or invent a per-file permission override.
-        if (metadata.space.type === 'team') return {
-          node: metadata.node, space, owner: space?.owner, grants: [], inherited: [],
-          members: space ? await this.json(`/api/team-spaces/${encodeURIComponent(space.id)}/members`, options) : undefined,
-        };
-        if (!metadata.node.capabilities.share) return { node: metadata.node, space: space ?? null, owner: space?.owner, grants: [], inherited: [] };
+        if (metadata.space.type === 'team')
+          return {
+            node: metadata.node,
+            space,
+            owner: space?.owner,
+            grants: [],
+            inherited: [],
+            members: space
+              ? await this.json(
+                  `/api/team-spaces/${encodeURIComponent(space.id)}/members`,
+                  options,
+                )
+              : undefined,
+          };
+        if (!metadata.node.capabilities.share)
+          return {
+            node: metadata.node,
+            space: space ?? null,
+            owner: space?.owner,
+            grants: [],
+            inherited: [],
+          };
         const grants = await this.json(`/api/nodes/${id}/grants`, options);
         const link = await this.json(`/api/nodes/${id}/link-sharing`, options);
         const inherited = [];
-        for (const ancestor of metadata.breadcrumbs.filter((a: any) => a.id !== metadata.node.id)) {
+        for (const ancestor of metadata.breadcrumbs.filter(
+          (a: any) => a.id !== metadata.node.id,
+        )) {
           const ancestorId = encodeURIComponent(ancestor.id);
-          inherited.push({ ...ancestor, ...(await this.json(`/api/nodes/${ancestorId}/grants`, options)), link: await this.json(`/api/nodes/${ancestorId}/link-sharing`, options) });
+          inherited.push({
+            ...ancestor,
+            ...(await this.json(`/api/nodes/${ancestorId}/grants`, options)),
+            link: await this.json(
+              `/api/nodes/${ancestorId}/link-sharing`,
+              options,
+            ),
+          });
         }
-        return { node: metadata.node, space: space ?? null, owner: space?.owner, ...grants, inherited, link };
+        return {
+          node: metadata.node,
+          space: space ?? null,
+          owner: space?.owner,
+          ...grants,
+          inherited,
+          link,
+        };
       }
       case 'set-grant':
-        if (!['viewer', 'editor'].includes(input.role ?? '')) throw new SpaceError(400, 'Invalid file role.');
-        return this.json(`/api/nodes/${id}/grants/${user}`, { ...options, method: 'PUT', body: JSON.stringify({ role: input.role }) });
+        if (!['viewer', 'editor'].includes(input.role ?? ''))
+          throw new SpaceError(400, 'Invalid file role.');
+        return this.json(`/api/nodes/${id}/grants/${user}`, {
+          ...options,
+          method: 'PUT',
+          body: JSON.stringify({ role: input.role }),
+        });
       case 'remove-grant':
-        return this.json(`/api/nodes/${id}/grants/${user}`, { ...options, method: 'DELETE' });
+        return this.json(`/api/nodes/${id}/grants/${user}`, {
+          ...options,
+          method: 'DELETE',
+        });
       case 'link-access':
-        if (typeof input.enabled !== 'boolean' || !['viewer', 'editor'].includes(input.role ?? '')) throw new SpaceError(400, 'Invalid link access.');
-        return this.json(`/api/nodes/${id}/link-sharing`, { ...options, method: 'PUT', body: JSON.stringify({ enabled: input.enabled, role: input.role }) });
+        if (
+          typeof input.enabled !== 'boolean' ||
+          !['viewer', 'editor'].includes(input.role ?? '')
+        )
+          throw new SpaceError(400, 'Invalid link access.');
+        return this.json(`/api/nodes/${id}/link-sharing`, {
+          ...options,
+          method: 'PUT',
+          body: JSON.stringify({ enabled: input.enabled, role: input.role }),
+        });
       case 'users':
-        if (!input.query?.trim() || input.query.length > 100) throw new SpaceError(400, 'Enter a name or username (up to 100 characters).');
-        return this.json(`/api/users/search?${new URLSearchParams({ query: input.query.trim() })}`, options);
+        if (!input.query?.trim() || input.query.length > 100)
+          throw new SpaceError(
+            400,
+            'Enter a name or username (up to 100 characters).',
+          );
+        return this.json(
+          `/api/users/search?${new URLSearchParams({ query: input.query.trim() })}`,
+          options,
+        );
       case 'members': {
         const space = await this.json(`/api/spaces/${id}`, options);
-        return { space, ...(await this.json(`/api/team-spaces/${id}/members`, options)) };
+        if (space.type === 'personal') {
+          const session = await this.status();
+          return {
+            space,
+            owner: {
+              ...space.owner,
+              displayName:
+                session.user?.id === space.owner.id
+                  ? session.user.displayName
+                  : space.owner.username,
+            },
+            members: [],
+          };
+        }
+        return {
+          space,
+          ...(await this.json(`/api/team-spaces/${id}/members`, options)),
+        };
       }
       case 'set-member':
-        if (!['admin', 'editor', 'viewer'].includes(input.role ?? '')) throw new SpaceError(400, 'Invalid member role.');
-        return this.json(`/api/team-spaces/${id}/members/${user}`, { ...options, method: 'PUT', body: JSON.stringify({ role: input.role }) });
+        if (!['admin', 'editor', 'viewer'].includes(input.role ?? ''))
+          throw new SpaceError(400, 'Invalid member role.');
+        return this.json(`/api/team-spaces/${id}/members/${user}`, {
+          ...options,
+          method: 'PUT',
+          body: JSON.stringify({ role: input.role }),
+        });
       case 'remove-member':
-        await this.request(`/api/team-spaces/${id}/members/${user}`, { ...options, method: 'DELETE' });
+        await this.request(`/api/team-spaces/${id}/members/${user}`, {
+          ...options,
+          method: 'DELETE',
+        });
         return { removed: true };
       case 'space-access':
-        if (typeof input.publicRead !== 'boolean') throw new SpaceError(400, 'Invalid access setting.');
-        return this.json(`/api/spaces/${id}`, { ...options, method: 'PATCH', body: JSON.stringify({ publicRead: input.publicRead }) });
-      default: throw new SpaceError(400, 'Unsupported sharing operation.');
+        if (typeof input.publicRead !== 'boolean')
+          throw new SpaceError(400, 'Invalid access setting.');
+        return this.json(`/api/spaces/${id}`, {
+          ...options,
+          method: 'PATCH',
+          body: JSON.stringify({ publicRead: input.publicRead }),
+        });
+      default:
+        throw new SpaceError(400, 'Unsupported sharing operation.');
     }
   }
 

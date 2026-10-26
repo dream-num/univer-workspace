@@ -6,10 +6,16 @@ import { Viewer } from '../viewer.js';
 import { Icon, Menu, button, iconButton } from './primitives.js';
 import { FileActions } from './file-actions.js';
 import { contentType } from '../content-types.js';
+import { Collaborators } from './collaborators.js';
+import type { IMember } from '@univerjs/protocol';
 import { HtmlViewer } from '../html-viewer.js';
 export function PageViewer({ face, v }: { face: Face; v: State }) {
   const file = v.content!;
-  const [comments, setComments] = useState<{ toggle(): void; visible: boolean } | null>(null);
+  const [members, setMembers] = useState<readonly IMember[]>([]);
+  const [comments, setComments] = useState<{
+    toggle(): void;
+    visible: boolean;
+  } | null>(null);
   return (
     <>
       <header className="sp-page-toolbar" data-window-drag>
@@ -37,7 +43,21 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
           )}
         </Menu>
         <div className="tw-ml-auto tw-flex tw-items-center tw-gap-1">
-          {(file.type === 'doc' || file.type === 'sheet') && <button className={button} disabled={!comments} aria-label={comments?.visible ? 'Hide comments' : 'Show all comments'} aria-pressed={comments?.visible ?? false} onClick={() => comments?.toggle()}><Icon name="chat" size={16} />Comments</button>}
+          <Collaborators members={members} currentUserId={v.status.user?.id} />
+          {(file.type === 'doc' || file.type === 'sheet') && (
+            <button
+              className={button}
+              disabled={!comments}
+              aria-label={
+                comments?.visible ? 'Hide comments' : 'Show all comments'
+              }
+              aria-pressed={comments?.visible ?? false}
+              onClick={() => comments?.toggle()}
+            >
+              <Icon name="chat" size={16} />
+              Comments
+            </button>
+          )}
           <button
             className={button}
             aria-label="Chat about this document"
@@ -47,7 +67,11 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
             Chat
           </button>
           <button
-            onClick={() => face.update({ sharing: { kind: 'node', id: file.nodeId, name: file.name } })}
+            onClick={() =>
+              face.update({
+                sharing: { kind: 'node', id: file.nodeId, name: file.name },
+              })
+            }
             className={button}
           >
             <Icon name="share" size={16} />
@@ -76,6 +100,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
               user={v.status.user}
               face={face}
               onCommentsReady={setComments}
+              onCollaborators={setMembers}
             />
           ) : file.type === 'site' ? (
             <HtmlViewer

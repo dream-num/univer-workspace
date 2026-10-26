@@ -80,7 +80,12 @@ export interface State {
   status: {
     state: string;
     endpoint: string;
-    user?: { id?: string; username?: string; displayName?: string };
+    user?: {
+      id?: string;
+      username?: string;
+      displayName?: string;
+      avatarUrl?: string | null;
+    };
   };
   spaces: Space[];
   all: Node[];
@@ -89,7 +94,7 @@ export interface State {
   page: Page | null;
   location: 'home' | 'recent' | 'folder' | 'space' | 'trash';
   trash: TrashBatch[];
-  sharing: import("./sharing.js").ShareTarget | null;
+  sharing: import('./sharing.js').ShareTarget | null;
   action: {
     kind: 'rename' | 'move' | 'delete' | 'rename-space';
     node?: Node;

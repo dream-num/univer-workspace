@@ -2393,3 +2393,61 @@ it("resolves comment authors through the existing authenticated Identity project
   for (let i = 0; i < 101; i++) oversized.append("userIDs", author.view.user.id);
   expect((await fetch(`${origin}/universer-api/user/list?${oversized}`, { headers })).status).toBe(400);
 });
+
+it('closes existing collaboration sockets when Team membership is removed', async () => {
+  const { application, origin } = await startApplication();
+  const owner = await application.identity.registerWithPassword({
+    username: 'revoke-owner',
+    displayName: 'Revoke Owner',
+    password: 'correct horse battery staple',
+  });
+  const member = await application.identity.registerWithPassword({
+    username: 'revoke-member',
+    displayName: 'Revoke Member',
+    password: 'correct horse battery staple',
+  });
+  const space = application.spaces.createTeamSpace(owner.view.user.id, {
+    name: 'Revoke access',
+  });
+  application.permissions.upsertTeamMember(
+    owner.view.user.id,
+    space.id,
+    member.view.user.id,
+    { role: 'editor' },
+  );
+  const created = await application.resources.create(
+    owner.view.user.id,
+    'revocation-unit-0001',
+    {
+      kind: 'univer',
+      unitType: 'doc',
+      spaceId: space.id,
+      parentNodeId: null,
+      name: 'Private discussion',
+    },
+  );
+  if (created.status === 202 || created.body.node.resource?.kind !== 'univer')
+    throw new Error('Missing Doc');
+  const cookie = `${application.identity.cookieName}=${member.cookieValue}`;
+  const connection = await joinUnit(
+    origin,
+    cookie,
+    created.body.node.resource.unitId,
+  );
+  const closed = new Promise<CloseEvent>((resolve) =>
+    connection.socket.addEventListener('close', resolve, { once: true }),
+  );
+  application.permissions.removeTeamMember(
+    owner.view.user.id,
+    space.id,
+    member.view.user.id,
+  );
+  expect((await closed).code).toBe(1008);
+  expect(
+    (
+      await fetch(`${origin}/api/nodes/${created.body.node.id}`, {
+        headers: { cookie },
+      })
+    ).status,
+  ).toBe(404);
+});

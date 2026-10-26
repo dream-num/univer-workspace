@@ -19,9 +19,14 @@ export type EditorRequest = (
  */
 export function editorHTTP(
   requestRemote: EditorRequest,
-): IHTTPImplementation & { drain(): Promise<void>; track: HTTPInterceptorFn } {
+): IHTTPImplementation & {
+  drain(): Promise<void>;
+  isIdle(): boolean;
+  track: HTTPInterceptorFn;
+} {
   const pending = new Set<Promise<void>>();
   return {
+    isIdle: () => pending.size === 0,
     track: (request, next) =>
       new Observable((subscriber) => {
         let settled!: () => void;

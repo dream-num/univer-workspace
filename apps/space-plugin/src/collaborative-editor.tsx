@@ -1,8 +1,17 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
+import { IRenderManagerService } from '@univerjs/engine-render';
+import { DocSelectionRenderService } from '@univerjs/docs-ui';
+import { UniverUIPlugin, ISidebarService } from '@univerjs/ui';
+import { ShowCommentPanelOperation } from '@univerjs/preset-docs-thread-comment';
+import { ToggleSheetCommentPanelOperation } from '@univerjs/preset-sheets-thread-comment';
 import { UserManagerService, LifecycleStages } from '@univerjs/core';
 import { DocStateChangeManagerService } from '@univerjs/docs';
 import { CommandType } from '@univerjs/core';
+import { UniverDocsDrawingPreset } from '@univerjs/preset-docs-drawing';
+import docsDrawingLocale from '@univerjs/preset-docs-drawing/locales/zh-CN';
+import { UniverSheetsDrawingPreset } from '@univerjs/preset-sheets-drawing';
+import sheetsDrawingLocale from '@univerjs/preset-sheets-drawing/locales/zh-CN';
 import { UniverDocsThreadCommentPreset } from '@univerjs/preset-docs-thread-comment';
 import { UniverSheetsThreadCommentPreset } from '@univerjs/preset-sheets-thread-comment';
 import docCommentLocale from '@univerjs/preset-docs-thread-comment/locales/zh-CN';
@@ -22,6 +31,7 @@ import {
   CollaborationUIEventId,
   ILocalCacheService,
   CollaborationSessionService,
+  MemberService,
 } from '@univerjs-pro/collaboration-client';
 import {
   UniverCollaborationClientUIPlugin,
@@ -34,12 +44,14 @@ import {
   IHTTPImplementation,
   HTTPService,
 } from '@univerjs/network';
-import { UnitObject } from '@univerjs/protocol';
+import { subscribeWorkspaceCollaborators } from './workarounds/collaboration-members.js';
+import { UnitObject, type IMember } from '@univerjs/protocol';
 import '@univerjs-pro/collaboration-client/facade';
 import { UniverLicensePlugin } from '@univerjs-pro/license';
 import type { Content, State } from './model.js';
 import type { Face } from './client.js';
 import { editorHTTP } from './editor-http.js';
+import { installDocCommentRetention } from './workarounds/doc-comment-retention.js';
 import { workspaceLicense } from './license.js';
 
 let closingEditor: Promise<void> = Promise.resolve();
@@ -50,16 +62,17 @@ export function CollaborativeEditor({
   user,
   face,
   onCommentsReady,
+  onCollaborators,
 }: {
   file: Content;
   user: State['status']['user'];
   face: Face;
+  onCollaborators(members: readonly IMember[]): void;
   onCommentsReady(binding: { toggle(): void; visible: boolean } | null): void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('loading'),
-    [error, setError] = useState(''),
-    [members, setMembers] = useState<string[]>([]);
+    [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0),
     [loaded, setLoaded] = useState(false);
   useEffect(() => {
@@ -67,6 +80,9 @@ export function CollaborativeEditor({
     let initialized = false;
     let disconnected = false;
     let recovering = false;
+    let accessDenied = false;
+    let lastMembers: readonly IMember[] = [];
+    let accessCheckRunning = false;
     let startup: Promise<void>;
     let runtime: ReturnType<typeof createUniver> | undefined;
     let transport: ReturnType<typeof editorHTTP> | undefined;
@@ -75,10 +91,11 @@ export function CollaborativeEditor({
     const abort = new AbortController();
     setStatus('loading');
     setError('');
-    setMembers([]);
+    onCollaborators([]);
     setLoaded(false);
     const syncState = (state: CollaborationStatus) => {
-      if (canceled || !initialized) return;
+      if (canceled || !initialized || accessDenied) return;
+      onCollaborators(state === CollaborationStatus.OFFLINE ? [] : lastMembers);
       if (state === CollaborationStatus.OFFLINE && !disconnected) {
         disconnected = true;
         runtime?.univer
@@ -149,7 +166,20 @@ export function CollaborativeEditor({
               UniverNetworkPlugin,
               { override: [[IHTTPImplementation, { useValue: transport }]] },
             ]
-          : entry,
+          : (Array.isArray(entry) ? entry[0] : entry) === UniverUIPlugin
+            ? [
+                UniverUIPlugin,
+                {
+                  ...(Array.isArray(entry) ? entry[1] : {}),
+                  // Original neutral fallback for authors without a profile image.
+                  avatarFallback:
+                    'data:image/svg+xml,' +
+                    encodeURIComponent(
+                      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="16" fill="#ededed"/><circle cx="16" cy="12" r="5" fill="#888"/><path d="M6 29a10 10 0 0 1 20 0" fill="#888"/></svg>',
+                    ),
+                },
+              ]
+            : entry,
       );
       runtime = createUniver({
         locale: LocaleType.ZH_CN,
@@ -161,13 +191,23 @@ export function CollaborativeEditor({
             collabLocale,
             collabUILocale,
             docCommentLocale,
+            docsDrawingLocale,
+            sheetsDrawingLocale,
             sheetCommentLocale,
           ),
         },
         presets: [
           { plugins: [[UniverLicensePlugin, { license: workspaceLicense }]] },
           corePreset,
-          file.type === 'doc' ? UniverDocsThreadCommentPreset() : UniverSheetsThreadCommentPreset(),
+          ...(file.type === 'doc'
+            ? [
+                UniverDocsDrawingPreset({ collaboration: true }),
+                UniverDocsThreadCommentPreset(),
+              ]
+            : [
+                UniverSheetsDrawingPreset({ collaboration: true }),
+                UniverSheetsThreadCommentPreset(),
+              ]),
         ],
         plugins: [
           UniverCollaborationPlugin,
@@ -199,7 +239,9 @@ export function CollaborativeEditor({
             UniverCollaborationClientUIPlugin,
             { enableDocumentCollaborationUI: true, enableUrlUnitLoader: false },
           ],
-          ...(file.type === 'doc' ? getDocThreadCommentCollaborationPlugins() : [UniverThreadCommentDataSourcePlugin]),
+          ...(file.type === 'doc'
+            ? getDocThreadCommentCollaborationPlugins()
+            : [UniverThreadCommentDataSourcePlugin]),
         ],
       });
       const { univer, univerAPI: api } = runtime;
@@ -219,7 +261,7 @@ export function CollaborativeEditor({
         .setCurrentUser({
           userID: user.id,
           name: user.displayName ?? user.username ?? user.id,
-          avatar: '',
+          avatar: user.avatarUrl ?? '',
           anonymous: false,
           canBindAnonymous: false,
           phone: '',
@@ -233,8 +275,11 @@ export function CollaborativeEditor({
           .event$.subscribe((event) => {
             if (canceled) return;
             if (event.id === CollaborationUIEventId.PERMISSION_DENIED) {
-              setStatus('error');
-              setError('Workspace 拒绝编辑权限，请检查权限后重新打开。');
+              accessDenied = true;
+              setStatus('denied');
+              setError(
+                'Workspace 拒绝编辑权限。请重新打开文件以检查当前访问权限。',
+              );
             }
             if (event.id === CollaborationUIEventId.CONFLICT) {
               setStatus('conflict');
@@ -248,14 +293,14 @@ export function CollaborativeEditor({
           if (event.unitId === file.unitId) syncState(event.status);
         }),
       );
-      disposables.push(
-        collaboration.subscribeCollaborators(file.unitId, (people) => {
-          if (!canceled) setMembers(people.map((p) => p.name));
-        }),
-      );
       const docState = univer.__getInjector().get(DocStateChangeManagerService);
       const flush = async () => {
         await startup;
+        await transport!.drain();
+        docState.flushPendingChanges(file.unitId);
+        await collaboration.flush(file.unitId, { timeout: 20000 });
+        // A committed Comment body can schedule its anchor mutation afterwards.
+        await transport!.drain();
         docState.flushPendingChanges(file.unitId);
         await collaboration.flush(file.unitId, { timeout: 20000 });
       };
@@ -278,6 +323,7 @@ export function CollaborativeEditor({
         isSaved: () =>
           !docState.getStateCache(file.unitId).collaboration.length &&
           initialized &&
+          transport!.isIdle() &&
           collaboration.getCollaborationStatus(file.unitId) ===
             CollaborationStatus.SYNCED,
       });
@@ -301,11 +347,113 @@ export function CollaborativeEditor({
         });
       if (canceled) return;
       api.setCurrent(file.unitId);
-      const commentPanel = univer.__getInjector().get(ThreadCommentPanelService);
-      subscriptions.push(commentPanel.panelVisible$.subscribe(visible => {
-        if (!canceled) onCommentsReady({ visible, toggle: () => commentPanel.setPanelVisible(!commentPanel.panelVisible) });
-      }));
-      onCommentsReady({ visible: commentPanel.panelVisible, toggle: () => commentPanel.setPanelVisible(!commentPanel.panelVisible) });
+      disposables.push(
+        subscribeWorkspaceCollaborators(
+          univer.__getInjector().get(MemberService),
+          file.unitId,
+          (people) => {
+            lastMembers = people;
+            if (!canceled)
+              onCollaborators(
+                collaboration.getCollaborationStatus(file.unitId) ===
+                  CollaborationStatus.OFFLINE || accessDenied
+                  ? []
+                  : people,
+              );
+          },
+        ),
+      );
+      // Product ACL writes are outside the collaboration document. Recheck the
+      // authoritative Resource capability on focus and at a bounded interval.
+      const checkAccess = async () => {
+        if (canceled || accessCheckRunning || accessDenied) return;
+        accessCheckRunning = true;
+        try {
+          const metadata = await face.metadata(file.nodeId);
+          if (
+            !canceled &&
+            metadata.node.resource?.capabilities.editContent !==
+              file.node?.resource?.capabilities.editContent
+          ) {
+            accessDenied = true;
+            setStatus('denied');
+            setError('文件权限已更改。请重新打开文件以使用当前权限。');
+          }
+        } catch (cause) {
+          if (
+            !canceled &&
+            cause instanceof Error &&
+            /not found|forbidden|access denied|permission/i.test(cause.message)
+          ) {
+            accessDenied = true;
+            onCollaborators([]);
+            setStatus('denied');
+            setError('你已无权访问此文件。请联系 Space 所有者。');
+          }
+        } finally {
+          accessCheckRunning = false;
+        }
+      };
+      const timer = window.setInterval(() => {
+        void checkAccess();
+      }, 5000);
+      window.addEventListener('focus', checkAccess);
+      disposables.push({
+        dispose() {
+          clearInterval(timer);
+          window.removeEventListener('focus', checkAccess);
+        },
+      });
+      const retention =
+        file.type === 'doc'
+          ? installDocCommentRetention(univer.__getInjector(), file.unitId)
+          : undefined;
+      if (retention) {
+        disposables.push(retention);
+        await retention.refresh();
+      }
+      const commentPanel = univer
+        .__getInjector()
+        .get(ThreadCommentPanelService);
+      const toggleComments = () => {
+        if (!commentPanel.panelVisible)
+          void retention?.refresh().catch((cause) => setError(cause.message));
+        if (file.type === 'sheet') {
+          void api.executeCommand(ToggleSheetCommentPanelOperation.id);
+        } else if (commentPanel.panelVisible) {
+          univer.__getInjector().get(ISidebarService).close();
+          commentPanel.setPanelVisible(false);
+        } else {
+          api.setCurrent(file.unitId);
+          void api.executeCommand(ShowCommentPanelOperation.id);
+        }
+      };
+      let commentsWereVisible = commentPanel.panelVisible;
+      subscriptions.push(
+        commentPanel.panelVisible$.subscribe((visible) => {
+          if (canceled) return;
+          if (!visible && commentsWereVisible && file.type === 'doc') {
+            // RichTextEditor uses its own internal Doc and reserves the host
+            // range. Restore the existing document input when the panel closes.
+            api.setCurrent(file.unitId);
+            const selection = univer
+              .__getInjector()
+              .get(IRenderManagerService)
+              .getRenderUnitById(file.unitId)
+              ?.with(DocSelectionRenderService);
+            selection?.setReserveRangesStatus(false);
+            queueMicrotask(() => {
+              if (!canceled && !commentPanel.panelVisible) selection?.focus();
+            });
+          }
+          commentsWereVisible = visible;
+          onCommentsReady({ visible, toggle: toggleComments });
+        }),
+      );
+      onCommentsReady({
+        visible: commentPanel.panelVisible,
+        toggle: toggleComments,
+      });
       initialized = true;
       setLoaded(true);
       syncState(collaboration.getCollaborationStatus(file.unitId));
@@ -331,6 +479,7 @@ export function CollaborativeEditor({
     return () => {
       canceled = true;
       onCommentsReady(null);
+      onCollaborators([]);
       face.bindEditor(file.nodeId, null);
       disposables.forEach((d) => d.dispose());
       const active = runtime;
@@ -381,7 +530,8 @@ export function CollaborativeEditor({
     // Suspend the actual input surface during a disconnect. The native inert
     // boundary prevents text/IME input before the SDK creates a local mutation.
     // Do not cancel a mutation after the SDK has already changed its input state.
-    if (container.current) container.current.inert = status === 'offline';
+    if (container.current)
+      container.current.inert = status === 'offline' || status === 'denied';
   }, [status]);
   return (
     <div
@@ -399,13 +549,12 @@ export function CollaborativeEditor({
                 ? '连接已断开 · 正在重连，暂时无法编辑'
                 : status === 'conflict'
                   ? '同步冲突'
-                  : status === 'error'
-                    ? '保存或加载失败'
-                    : 'Saving…'}
+                  : status === 'denied'
+                    ? '访问权限已更改'
+                    : status === 'error'
+                      ? '保存或加载失败'
+                      : 'Saving…'}
         </span>
-        {members.length > 0 && (
-          <span aria-label="Online collaborators">{members.join(' · ')}</span>
-        )}
       </div>
       <div className="sp-sdk" ref={container} />
       {status === 'loading' && (

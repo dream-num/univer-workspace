@@ -239,6 +239,7 @@ export function createWorkspaceApplication(
     repository: new PermissionsRepository(database),
     access,
     onLinkSharingUpdated: () => invalidateRealtimeNodeAccess(),
+    onAccessRevoked: () => invalidateRealtimeNodeAccess(),
   });
   const trash = createTrashModule({
     repository: new TrashRepository(database),
