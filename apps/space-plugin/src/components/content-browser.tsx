@@ -109,7 +109,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
               Rename
             </button>
           </Menu>
-          <button className={button} disabled>
+          <button className={button} onClick={() => face.update({ sharing: { kind: 'space', id: v.space, name: title } })}>
             <Icon name="share" />
             Share Space
           </button>

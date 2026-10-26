@@ -98,6 +98,9 @@ export function apply(ctx: Context) {
           });
           break;
         }
+        case 'sharing':
+          value = await workspace.sharing(input as any, signal);
+          break;
         case 'spaces':
           value = await workspace.json('/api/spaces', { signal });
           break;
@@ -219,6 +222,7 @@ export function apply(ctx: Context) {
     'configure',
     'login',
     'spaces',
+    'sharing',
     'recent',
     'nodes',
     'content',

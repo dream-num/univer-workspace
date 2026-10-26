@@ -4,9 +4,13 @@ export interface Space {
   id: string;
   name: string;
   type: string;
+  accessRole?: string;
+  publicRead?: boolean;
+  owner?: { id: string; username: string };
   capabilities?: {
     createAtRoot?: boolean;
     renameSpace?: boolean;
+    manageMembers?: boolean;
     viewTrash?: boolean;
   };
 }
@@ -85,6 +89,7 @@ export interface State {
   page: Page | null;
   location: 'home' | 'recent' | 'folder' | 'space' | 'trash';
   trash: TrashBatch[];
+  sharing: import("./sharing.js").ShareTarget | null;
   action: {
     kind: 'rename' | 'move' | 'delete' | 'rename-space';
     node?: Node;

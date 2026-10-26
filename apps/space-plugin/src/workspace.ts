@@ -331,6 +331,31 @@ export class WorkspaceConnection {
     return { status: response.status, statusText: response.statusText, body };
   }
 
+  /** Existing membership workflow. Identity and ACL are always Server-owned. */
+  async sharing(input: import('./sharing.js').SharingInput, signal: AbortSignal) {
+    const id = encodeURIComponent(input.id ?? ''), user = encodeURIComponent(input.user ?? '');
+    const options = { signal };
+    switch (input.action) {
+      case 'users':
+        if (!input.query?.trim() || input.query.length > 100) throw new SpaceError(400, 'Enter a name or username (up to 100 characters).');
+        return this.json(`/api/users/search?${new URLSearchParams({ query: input.query.trim() })}`, options);
+      case 'members': {
+        const space = await this.json(`/api/spaces/${id}`, options);
+        return { space, ...(await this.json(`/api/team-spaces/${id}/members`, options)) };
+      }
+      case 'set-member':
+        if (!['admin', 'editor', 'viewer'].includes(input.role ?? '')) throw new SpaceError(400, 'Invalid member role.');
+        return this.json(`/api/team-spaces/${id}/members/${user}`, { ...options, method: 'PUT', body: JSON.stringify({ role: input.role }) });
+      case 'remove-member':
+        await this.request(`/api/team-spaces/${id}/members/${user}`, { ...options, method: 'DELETE' });
+        return { removed: true };
+      case 'space-access':
+        if (typeof input.publicRead !== 'boolean') throw new SpaceError(400, 'Invalid access setting.');
+        return this.json(`/api/spaces/${id}`, { ...options, method: 'PATCH', body: JSON.stringify({ publicRead: input.publicRead }) });
+      default: throw new SpaceError(400, 'Unsupported sharing operation.');
+    }
+  }
+
   /** Human creation only. Server resolves identity, parent capabilities and ACL. */
   async create(
     input: {

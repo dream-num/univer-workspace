@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { InvitePicker } from './sharing.js';
 import { createTypes, creationName } from '../content-types.js';
 import {
   LayoutGrid,
@@ -190,6 +191,8 @@ export function CreateMenu({
     key: string;
   } | null>(null);
   const [name, setName] = React.useState('');
+  const [inviting, setInviting] = React.useState(false);
+  const [invite, setInvite] = React.useState<import('../sharing.js').Invite | undefined>();
   const inDirectory = v.location === 'folder' || v.location === 'space';
   const destination = inDirectory
     ? v.spaces.find((s) => s.id === v.space)
@@ -225,6 +228,8 @@ export function CreateMenu({
             }
             onClick={() => {
               setName('');
+              setInviting(false);
+              setInvite(undefined);
               setDraft({
                 kind,
                 space: destination?.id ?? '',
@@ -247,7 +252,7 @@ export function CreateMenu({
             className="sp-create-dialog"
             onSubmit={async (e) => {
               e.preventDefault();
-              await face.create({ ...draft, name });
+              await face.create({ ...draft, name, invite: draft.kind === 'space' ? invite : undefined });
               if (!face.store.getSnapshot().error) setDraft(null);
             }}
           >
@@ -270,6 +275,10 @@ export function CreateMenu({
                 }}
               />
             </label>
+            {draft.kind === 'space' && <>
+              <button type="button" className={button} aria-expanded={inviting} onClick={() => setInviting(!inviting)}>Invite people (optional)</button>
+              {inviting && <><InvitePicker face={face} value={invite} onChange={setInvite} roles={['viewer', 'editor', 'admin']} disabled={v.busy} /><p>Members can access all content in this Space. Existing Workspace accounts receive access immediately.</p></>}
+            </>}
             {v.error && <p role="alert">{v.error}</p>}
             <div className="tw-flex tw-justify-end tw-gap-2">
               <button
