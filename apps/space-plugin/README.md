@@ -10,6 +10,7 @@ Agent and tool logs. Official host source is unchanged.
 Use Node >=24.9.0 and this application's isolated npm graph:
 
 ```sh
+pnpm --filter @univerjs/univer-workspace-agent-runtime build
 npm ci
 npm run build
 npm test
@@ -108,9 +109,7 @@ The read tools are `univer_spaces`, `univer_documents`, `univer_open`, and
 `univer_inspect`. They use Session-scoped association routing and current Host
 Workspace login; the real Server rechecks ACLs. Inspection reads current Server
 content, returns revision/hash and bounded text/cell/structured-Unit/HTML-source lines, and exposes
-`nextOffset` for paging. These are deliberately read-only subsets; they do not
-promise the complete old plugin's Facade/Worktree interface. No write/merge tool
-is registered. Removing the current-document association does not erase a durable message or
+`nextOffset` for paging. The discovery/read operations remain bounded and Session-scoped; draft inspection uses the existing headless inspection runtime. They do not promise the complete old plugin interface. The plugin also registers `univer_edit` and `univer_worktree` for actual isolated draft changes through the shared original Headless Facade runtime. Agent tools cannot merge. The document shows Editing with AI / Changes ready, then Review compares the shared content captured at review with the exact proposed SDK merge candidate. Apply requires the displayed Server review token and rechecks revisions/ACL atomically; Reject/Cancel discard the draft. Docs and Sheets share this workflow. No write goes directly to trunk. Removing the current-document association does not erase a durable message or
 revoke historical read grants; change identity/disconnect to clear grants.
 
 DSH Tools is a type-only development dependency. Four public JSON Schema
@@ -174,3 +173,5 @@ each authenticated as a different Workspace test user. Supply `SPACE_SECOND_DSH_
 and `SPACE_SECOND_LOGIN_FILE` in addition to the Host/browser/evidence variables.
 These scripts cover comments, identities, permissions, grants and sharing.
 Keep credentials outside the repository and generated evidence.
+
+`check-coediting-live.mjs` performs real native Agent editing, current-document Review/Apply/Reject, two-user synchronization and reopen checks for Docs and Sheets, concurrent human edits, cancel/switch races and Viewer/revoked-member denial. It requires two independent owner Hosts and both private fixture-login files; those files and Host logs never enter the evidence package. Browser evidence identifies the official DSH Web carrier and does not certify the Electron window.

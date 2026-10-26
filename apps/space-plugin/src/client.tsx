@@ -442,6 +442,11 @@ export function apply(ctx: any) {
     }
   }
   const face = {
+    editingStatus: (sessionId: string, nodeId: string) => api('editing-status', { sessionId, nodeId }),
+    editingAction: async (input: { sessionId: string; nodeId: string; action: string; proposalId: string; reviewToken?: string }) => {
+      if (input.action === 'review' || input.action === 'apply') await flushEditor();
+      return api('editing-action', input);
+    },
     metadata: (node: string) => api('metadata', { node }),
     sharing: (input: import('./sharing.js').SharingInput) =>
       api('sharing', input),
@@ -944,6 +949,9 @@ export function apply(ctx: any) {
   });
 }
 export type Face = {
+  editingStatus(sessionId: string, nodeId: string): Promise<import('./editing.js').Proposal | null>;
+  editingAction(input: { sessionId: string; nodeId: string; action: string; proposalId: string; reviewToken?: string }): Promise<any>;
+
   metadata(node: string): Promise<{ node: import('./model.js').Node }>;
   sharing(input: import('./sharing.js').SharingInput): Promise<any>;
   htmlSource(unit: string): Promise<{ editorMode: 'edit' | 'readOnly' }>;

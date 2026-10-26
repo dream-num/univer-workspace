@@ -9,6 +9,7 @@ import { contentType } from '../content-types.js';
 import { Collaborators } from './collaborators.js';
 import type { IMember } from '@univerjs/protocol';
 import { HtmlViewer } from '../html-viewer.js';
+import { AIChanges } from './ai-changes.js';
 export function PageViewer({ face, v }: { face: Face; v: State }) {
   const file = v.content!;
   const [members, setMembers] = useState<readonly IMember[]>([]);
@@ -86,6 +87,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
           </button>
         </div>
       </header>
+      {(file.type === 'doc' || file.type === 'sheet') && <AIChanges key={file.nodeId + v.sessionId} face={face} file={file} sessionId={v.sessionId} />}
       <div
         className={
           'sp-page-body ' +

@@ -42,6 +42,7 @@ function OfficeViewer({ file }: { file: Content }) {
     let fitObserver: ResizeObserver | undefined;
     let fitFrame = 0;
     let lifecycle: { dispose(): void } | undefined;
+    let steadyLifecycle: { dispose(): void } | undefined;
     setStatus('loading');
     setError('');
     const timer = setTimeout(
@@ -54,6 +55,7 @@ function OfficeViewer({ file }: { file: Content }) {
         header: false,
         toolbar: false,
         contextMenu: false,
+        disableAutoFocus: true,
       } as const;
       runtime = createPreview({
         locale: LocaleType.ZH_CN,
@@ -159,7 +161,15 @@ function OfficeViewer({ file }: { file: Content }) {
                   },
                 );
             });
-      void Promise.all([permission, mounted])
+      const settled = new Promise<void>((resolve) => {
+        const finish = () => {
+          steadyLifecycle?.dispose(); steadyLifecycle = undefined;
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        };
+        if (api.getCurrentLifecycleStage() >= LifecycleStages.Steady) finish();
+        else steadyLifecycle = api.addEvent(api.Event.LifeCycleChanged, ({ stage }) => { if (stage >= LifecycleStages.Steady) finish(); });
+      });
+      void Promise.all([permission, mounted, settled])
         .then(() => {
           clearTimeout(timer);
           if (!canceled) {
@@ -208,6 +218,7 @@ function OfficeViewer({ file }: { file: Content }) {
       canceled = true;
       clearTimeout(timer);
       lifecycle?.dispose();
+      steadyLifecycle?.dispose();
       fitObserver?.disconnect();
       cancelAnimationFrame(fitFrame);
       queueMicrotask(() => runtime?.univer.dispose());
