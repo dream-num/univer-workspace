@@ -147,11 +147,13 @@ export class WorkspaceWorktreeFeature {
   public async transition(
     worktreeId: string,
     action: "ready" | "reopen" | "merge" | "discard",
+    reviewToken?: string,
   ): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");
     const http = await this.authenticatedHttp();
     const current = await getWorktree(http, id);
     assertTransition(current, action);
+    if (action === "merge" && !reviewToken) throw workspaceError("workspace-review-required", "Render the Server Worktree review and provide its reviewToken before merging.");
     const expected: Record<typeof action, WorkspaceWorktreeState> = {
       discard: "discarded",
       merge: "merged",
@@ -164,6 +166,7 @@ export class WorkspaceWorktreeFeature {
           ? { idempotencyKey: stableKey(action, id) }
           : {}),
         method: "POST",
+        ...(action === "merge" ? { body: { reviewToken } } : {}),
       });
       const result = parseWorktree(body["worktree"], id);
       if (result.state !== expected[action]) {

@@ -292,6 +292,7 @@ export function createWorkspaceApplication(
           identity,
           worktrees,
         }),
+        reviewCommit: collaboration.reviewCommit,
         service: collaboration.service,
         commentService: collaboration.commentService,
         historyService: collaboration.historyService,

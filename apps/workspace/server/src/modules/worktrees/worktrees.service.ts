@@ -652,17 +652,26 @@ export function createWorktreesModule(options: {
       };
     },
 
-    async merge(userId, worktreeId, operationIdValue) {
+    async merge(userId, worktreeId, operationIdValue, inputValue) {
+      const rawReview = (inputValue as { reviewToken?: unknown } | undefined)?.reviewToken;
+      let reviewToken = typeof rawReview === "string" ? rawReview : undefined;
+      if (rawReview !== undefined && !reviewToken)
+        throw conflict("Review these changes before applying.");
       const operationId = validOperationId(operationIdValue);
       const value = await context(userId, worktreeId);
       const existing = options.repository.getOperation(operationId);
       if (existing) {
-        const input = operationPayload<{ readonly worktreeId: string }>(
+        const input = operationPayload<{ readonly worktreeId: string;
+          readonly reviewToken?: string;
+        }>(
           existing,
           "merge_worktree",
           userId,
         );
         if (input.worktreeId !== worktreeId) throw idempotencyConflict();
+        // An already merged operation may finish/replay product finalization
+        // after restart. It does not submit additional Collaboration content.
+        if (reviewToken === undefined && value.state === "merged") reviewToken = input.reviewToken;
       }
       const resumeMerged = existing !== null && value.state === "merged";
       const resumeMerging = existing !== null && value.state === "merging";
@@ -675,7 +684,7 @@ export function createWorktreesModule(options: {
       if (existing?.state !== "completed" && value.row.processed_at === null) {
         validateAllTargets(userId, value.row, value.units, options);
       }
-      const payload = { worktreeId };
+      const payload = { worktreeId, reviewToken };
       const reserved = options.repository.reserveOperation({
         id: operationId,
         kind: "merge_worktree",
@@ -688,7 +697,7 @@ export function createWorktreesModule(options: {
         "merge_worktree",
         userId
       );
-      if (stable.worktreeId !== worktreeId) throw idempotencyConflict();
+      if (stable.worktreeId !== worktreeId || stable.reviewToken !== reviewToken) throw idempotencyConflict();
       let operation = reserved.row;
       if (operation.state !== "completed") {
         operation = await executeReserved(operationId, async () => {
@@ -702,7 +711,7 @@ export function createWorktreesModule(options: {
           const data = await backendCall(() =>
             resumeMerged
               ? options.backend.getWorktree(worktreeId, userId)
-              : options.backend.merge(worktreeId, userId),
+              : options.backend.merge(worktreeId, userId, reviewToken),
           );
           const mergedUnitIds = activateSuccessfulUnits(
             value.row,
@@ -1697,10 +1706,7 @@ function canonicalJson(value: unknown): string {
     const record = value as Readonly<Record<string, unknown>>;
     return `{${Object.keys(record)
       .sort()
-      .map(
-        (key) =>
-          `${JSON.stringify(key)}:${canonicalJson(record[key])}`
-      )
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
       .join(",")}}`;
   }
   return JSON.stringify(value);
@@ -1768,6 +1774,7 @@ async function backendCall<T>(operation: () => Promise<T>): Promise<T> {
     ) {
       throw notFound();
     }
+    if (code === "PERMISSION_DENIED") throw new ApplicationError("FORBIDDEN", 403, message);
     throw new ApplicationError("CONFLICT", 409, message);
   }
 }

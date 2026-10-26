@@ -2646,6 +2646,60 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /universer-api/worktrees/{worktreeId}/review:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Worktrees
+      operationId: reviewWorktree
+      summary: Capture the shared content and exact proposed merge result for human review.
+      description: Captures all Worktree Units and an actor-bound opaque review token while excluding concurrent Collaboration mutations. Requires merge permission and ready state. Does not write content. Token expires after 30 minutes or on Server restart.
+      responses:
+        '200':
+          description: Version-bound preview. Render these comparison sides before applying this token.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - reviewToken
+                  - comparisons
+                properties:
+                  reviewToken:
+                    type: string
+                  comparisons:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - unitId
+                        - resourceId
+                        - name
+                        - comparison
+                      properties:
+                        unitId:
+                          type: string
+                        resourceId:
+                          type: string
+                        name:
+                          type: string
+                        comparison:
+                          type: object
+                          additionalProperties: true
+                          description: Existing SDK comparison payload with decoded left and right Unit data and change details.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/worktrees/{worktreeId}/merge:
     parameters:
       - name: worktreeId
@@ -2658,6 +2712,20 @@ paths:
         - Worktrees
       operationId: mergeWorktree
       summary: Merge Worktree Units and activate successful local Units.
+      description: Requires the opaque review token returned with the exact Server merge preview. The Server atomically validates actor, target, draft and shared revisions under the same mutation lease as merge. Missing or stale review returns 409. Restart invalidates outstanding reviews.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - reviewToken
+              properties:
+                reviewToken:
+                  type: string
+                  minLength: 1
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyParameter'
       responses:

@@ -1452,6 +1452,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/universer-api/worktrees/{worktreeId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Capture the shared content and exact proposed merge result for human review.
+         * @description Captures all Worktree Units and an actor-bound opaque review token while excluding concurrent Collaboration mutations. Requires merge permission and ready state. Does not write content. Token expires after 30 minutes or on Server restart.
+         */
+        post: operations["reviewWorktree"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/worktrees/{worktreeId}/merge": {
         parameters: {
             query?: never;
@@ -1463,7 +1485,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Merge Worktree Units and activate successful local Units. */
+        /**
+         * Merge Worktree Units and activate successful local Units.
+         * @description Requires the opaque review token returned with the exact Server merge preview. The Server atomically validates actor, target, draft and shared revisions under the same mutation lease as merge. Missing or stale review returns 409. Restart invalidates outstanding reviews.
+         */
         post: operations["mergeWorktree"];
         delete?: never;
         options?: never;
@@ -5074,6 +5099,43 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    reviewWorktree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                worktreeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Version-bound preview. Render these comparison sides before applying this token. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        reviewToken: string;
+                        comparisons: {
+                            unitId: string;
+                            resourceId: string;
+                            name: string;
+                            /** @description Existing SDK comparison payload with decoded left and right Unit data and change details. */
+                            comparison: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     mergeWorktree: {
         parameters: {
             query?: never;
@@ -5086,7 +5148,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    reviewToken: string;
+                };
+            };
+        };
         responses: {
             /** @description Merge attempt reached a stable result. */
             200: {

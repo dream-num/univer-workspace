@@ -1,5 +1,6 @@
 import type { ContentPermissions } from "./content-permissions.js";
 import type { Server } from "node:http";
+import { createRequire } from "node:module";
 import {
   MemorySessionTicketStore,
   UniverCollabEndpoint,
@@ -51,6 +52,8 @@ import {
 import { setFinalMutationSize } from "./changeset-observation.js";
 import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.js";
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
+import type { ReviewCommitCoordinator } from "./review-commit.js";
+import { ApplicationError } from "../../middleware/errors.js";
 
 const OK_ERROR = { code: ErrorCode.OK, message: "" };
 // Transport middleware runs before route matching. Allow only these SDK read paths.
@@ -69,6 +72,7 @@ export interface CollaborationGateway {
 }
 
 export function createCollaborationGateway(options: {
+  readonly reviewCommit: ReviewCommitCoordinator;
   readonly contentPermissions: ContentPermissions;
   readonly service: UniverCollabService;
   readonly commentService: IUniverCommentService;
@@ -91,6 +95,62 @@ export function createCollaborationGateway(options: {
     worktrees,
     worktreeChangeFeed,
   } = options;
+  const reviewCommit = options.reviewCommit;
+  // Runtime is intentionally instantiated through the package's CJS export.
+  // Use the same public error class so SDK middleware preserves the reason.
+  const { CollabError: RuntimeCollabError } = createRequire(import.meta.url)(
+    "@univerjs-pro/collaboration-service",
+  ) as typeof import("@univerjs-pro/collaboration-service");
+  // Every authoritative version, identity and deletion intent is captured while
+  // holding the runtime mutation lease, including when merge validates it.
+  async function reviewedVersion(userId: string, worktreeId: string) {
+    const detail = await worktrees.get(userId, worktreeId);
+    if (!detail.worktree.capabilities.merge)
+      throw new ApplicationError("FORBIDDEN", 403, "You cannot apply these changes.");
+    const worktree = (
+      await worktreeService.getWorktree(
+        { worktreeID: worktreeId },
+        { userID: userId, customData: { source: "product-api" } },
+      )
+    ).worktree;
+    const versions = [];
+    for (const unit of worktree.units) {
+      const mapped = detail.worktree.units.find((entry) => entry.unitId === unit.unitID);
+      if (!mapped) throw new ApplicationError("CONFLICT", 409, "Document identity changed.");
+      if (mapped.source === "trunk") requireUnitEdit(access, userId, unit.unitID);
+      const trunk =
+        mapped.source === "trunk"
+          ? await service.getUnitLoadData(
+              { unitID: unit.unitID, type: unit.type, revision: 0 },
+              { userID: userId, customData: { source: "product-api" } },
+            )
+          : undefined;
+      versions.push({
+        resourceId: mapped.resourceId,
+        nodeId: mapped.nodeId,
+        unit,
+        trunkRevision: trunk?.targetRevision,
+      });
+    }
+    return { detail, version: JSON.stringify({ worktreeId, state: worktree.status, versions }) };
+  }
+  worktreeService.use("mergeWorktree", async (context, next) => {
+    // The coordinator is registered before this middleware and SDK locks.
+    const token = context.customData.reviewToken;
+    try {
+      const { version } = await reviewedVersion(context.userID, context.request.worktreeID);
+      reviewCommit.validate(token, context.userID, context.request.worktreeID, version);
+    } catch (error) {
+      if (error instanceof ApplicationError)
+        throw new RuntimeCollabError(
+          error.status === 403 ? "PERMISSION_DENIED" : "REVISION_MISMATCH",
+          error.message,
+        );
+      throw error;
+    }
+    await next();
+    reviewCommit.consume(String(token));
+  });
   const ticketStore = new MemorySessionTicketStore();
   const endpoint = new UniverCollabEndpoint(service, { ticketStore });
   const commentEndpoint = new UniverCommentEndpoint({
@@ -139,6 +199,7 @@ export function createCollaborationGateway(options: {
     await next();
   });
   service.use("commitChangeset", async (context, next) => {
+    requireUnitEdit(access, context.userID, context.request.changeset.unitID);
     for (const requirement of context.requiredUnitPermissions) {
       if (!contentPermissions.allowed(context.userID, requirement)) {
         throw new CollabError("PERMISSION_DENIED", "Content permission denied.");
@@ -186,8 +247,7 @@ export function createCollaborationGateway(options: {
   historyService.use("getHistoryChangesets", authorizeHistoryRead);
 
   endpoint.use("connect", async (context, next) => {
-    const user = context.session.customData.user as
-      | ReturnType<typeof protocolUser>
+    const user = context.session.customData.user as ReturnType<typeof protocolUser>
       | undefined;
     context.member.name = user?.name ?? context.session.userID;
     context.member.avatar = user?.avatar ?? "";
@@ -291,8 +351,7 @@ export function createCollaborationGateway(options: {
       worktreeId: context.worktreeID,
       write: false,
     });
-    const user = context.session.customData.user as
-      | ReturnType<typeof protocolUser>
+    const user = context.session.customData.user as ReturnType<typeof protocolUser>
       | undefined;
     context.member.name = user?.name ?? context.session.userID;
     context.member.avatar = user?.avatar ?? "";
@@ -370,6 +429,38 @@ export function createCollaborationGateway(options: {
   });
   router.use("/authz", contentPermissions.router);
   router.use("/worktrees/:worktreeId/authz", contentPermissions.router);
+  router.post("/worktrees/:worktreeId/review", async (request, response) => {
+    const userId = identity.requireSession(request.headers.cookie).user.id;
+    response.json(
+      await reviewCommit.run(async () => {
+        const worktreeId = request.params.worktreeId;
+        const { detail, version } = await reviewedVersion(userId, worktreeId);
+        const comparisons = [];
+        for (const unit of detail.worktree.units) {
+          comparisons.push({
+            unitId: unit.unitId,
+            resourceId: unit.resourceId,
+            name: unit.name,
+            comparison: await createWorkspaceUnitComparison({
+              service,
+              worktreeService,
+              materializer: options.snapshotMaterializer,
+              userId,
+              worktreeId,
+              unitId: unit.unitId,
+              unitName: unit.name,
+              unitType: unit.unitType,
+              source: unit.source,
+              change: unit.change,
+              baseMode: "trunk",
+              view: "preview",
+            }),
+          });
+        }
+        return { reviewToken: reviewCommit.issue(userId, worktreeId, version), comparisons };
+      }),
+    );
+  });
   router.get(
     "/worktrees/:worktreeId/units/:unitId/comparison",
     async (request, response) => {

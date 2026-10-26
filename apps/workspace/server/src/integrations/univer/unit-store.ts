@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ReviewCommitCoordinator } from "./review-commit.js";
 import { createRequire } from "node:module";
 import type * as BoardsModule from "@univerjs-pro/boards";
 import type * as CommentDatabaseModule from "@univerjs-pro/collaboration-comment-database-sqlite";
@@ -107,6 +108,7 @@ export interface UnitSnapshotStore {
 }
 
 export interface CollaborationRuntime {
+  readonly reviewCommit: ReviewCommitCoordinator;
   readonly unitStore: UnitStore;
   readonly unitSnapshotStore: UnitSnapshotStore;
   /** Shared, lazily started materializer; disposed with the runtime. */
@@ -131,6 +133,17 @@ export function createCollaborationRuntime(
     enableUnitPermissionAnalysis: true,
     runtime: UNIT_RUNTIME,
   });
+  const reviewCommit = new ReviewCommitCoordinator();
+  for (const action of [
+    "createUnit",
+    "deleteUnits",
+    "recoverUnits",
+    "submitChangeset",
+    "applyChangeset",
+    "commitChangeset",
+  ] as const) {
+    service.use(action, (_context: unknown, next: () => Promise<void>) => reviewCommit.run(next));
+  }
   const historyDatabase = new SQLiteHistoryDatabaseAdapter({ filename });
   const historyService = new UniverHistoryService({
     collabService: service,
@@ -157,6 +170,23 @@ export function createCollaborationRuntime(
     dbAdapter: worktreeDatabase,
     runtime: UNIT_RUNTIME,
   });
+  for (const action of [
+    "createWorktree",
+    "addWorktreeUnit",
+    "createWorktreeUnit",
+    "setWorktreeUnitRemoved",
+    "markWorktreeReady",
+    "reopenWorktree",
+    "discardWorktree",
+    "mergeWorktree",
+    "submitChangeset",
+    "applyChangeset",
+    "commitChangeset",
+  ] as const) {
+    worktreeService.use(action, (_context: unknown, next: () => Promise<void>) =>
+      reviewCommit.run(next),
+    );
+  }
   const unitStore: UnitStore = {
     async createUnit(input) {
       try {
@@ -225,6 +255,7 @@ export function createCollaborationRuntime(
   };
 
   return {
+    reviewCommit,
     unitStore,
     unitSnapshotStore,
     snapshotMaterializer,

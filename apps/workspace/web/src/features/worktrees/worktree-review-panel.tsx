@@ -36,6 +36,7 @@ import { cn } from "../../shared/utils/cn";
 import type { MergeReviewStatus } from "../editor/merge-review";
 import { createComparisonUniver } from "../editor/comparison-univer";
 import {
+  type WorktreeUnitComparisonPayload,
   worktreeUnitComparisonQueryOptions,
   worktreeUnitMergeReviewQueryOptions,
 } from "./worktrees.queries";
@@ -47,6 +48,8 @@ import {
   reviewViewForMode,
 } from "./worktree-review-presentation";
 import { DEFAULT_WORKTREE_REVIEW_VIEW, type WorktreeReviewView } from "./worktree-review-search";
+import { api } from "../../shared/api/client";
+import { apiError } from "../../shared/api/errors";
 import { WorktreeReviewHeader } from "./worktree-review-header";
 
 type WorktreeDetailModel = components["schemas"]["WorktreeDetail"];
@@ -67,7 +70,10 @@ export function WorktreeReviewPanel({
   readonly selectedUnitId?: string | null;
   readonly selectedView?: WorktreeReviewView;
   readonly onSelectedViewChange?: (view: WorktreeReviewView) => void;
-  readonly layout?: (parts: { readonly review: ReactNode; readonly actions: ReactNode }) => ReactNode;
+  readonly layout?: (parts: {
+    readonly review: ReactNode;
+    readonly actions: ReactNode;
+  }) => ReactNode;
 }) {
   const { t } = useI18n();
   const selectedUnit =
@@ -90,17 +96,37 @@ export function WorktreeReviewPanel({
   );
   const mergeReviewPending = mergeReviewQueries.some((query) => query.isPending);
   const hasMergeConflict = mergeReviewQueries.some((query) => query.data === "conflict");
+  // One immutable capture supplies both what is rendered and what is applied.
+  // It deliberately does not auto-refresh underneath an open human review.
+  const capturedReview = useQuery({
+    queryKey: ["worktree-safe-review", worktree.id],
+    enabled: worktree.state === "ready" && worktree.capabilities.merge,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    queryFn: async () => {
+      const { data, error } = await api.POST("/universer-api/worktrees/{worktreeId}/review", {
+        params: { path: { worktreeId: worktree.id } },
+      });
+      if (error) throw apiError(error);
+      return data;
+    },
+  });
   const selectedMergeReviewQuery = selectedUnit
     ? mergeReviewByUnitId.get(selectedUnit.unitId)
     : undefined;
-  const activeView = selectedUnit
-    ? resolveReviewView(worktree, selectedUnit, selectedView, selectedMergeReviewQuery?.data)
-    : selectedView;
+  const activeView = capturedReview.data
+    ? "comparison"
+    : selectedUnit
+      ? resolveReviewView(worktree, selectedUnit, selectedView, selectedMergeReviewQuery?.data)
+      : selectedView;
   const showReviewViewControl = worktree.capabilities.review && selectedUnit !== undefined;
 
   const removal = useToggleUnitRemoval(worktree.id);
-  const action = useWorktreeLifecycle(worktree.id);
-  const onError = (error: Error) => toast.error(error.message);
+  const action = useWorktreeLifecycle(worktree.id, capturedReview.data?.reviewToken);
+  const onError = (error: Error) => {
+    toast.error(error.message);
+  };
   const runAction = (value: ReviewAction) =>
     action.mutate(value, {
       onSuccess: ({ action: value, state }) => {
@@ -150,7 +176,10 @@ export function WorktreeReviewPanel({
           cancelText={t("cancel")}
           onConfirm={() => runAction("merge")}
           trigger={
-            <Button size="sm" disabled={action.isPending || mergeReviewPending}>
+            <Button
+              size="sm"
+              disabled={action.isPending || mergeReviewPending || !capturedReview.data}
+            >
               <CheckCircle2 />
               {t("confirmMerge")}
             </Button>
@@ -207,6 +236,19 @@ export function WorktreeReviewPanel({
         }
       />
 
+      {worktree.state === "ready" && worktree.capabilities.merge && (
+        <div className="flex items-center gap-2 px-5 py-2 text-sm">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={capturedReview.isFetching || action.isPending}
+            onClick={() => void capturedReview.refetch()}
+          >
+            Refresh review
+          </Button>
+          {capturedReview.isError ? <span role="alert">{capturedReview.error.message}</span> : null}
+        </div>
+      )}
       {!worktree.capabilities.review ? (
         <Empty className="my-auto" title={t("noReviewPermission")} />
       ) : selectedUnitMissing ? (
@@ -224,6 +266,13 @@ export function WorktreeReviewPanel({
           mergeReviewStatus={selectedMergeReviewQuery?.data}
           mergeReviewPending={selectedMergeReviewQuery?.isPending ?? false}
           mergeReviewFailed={selectedMergeReviewQuery?.isError ?? false}
+          {...(capturedReview.data
+            ? {
+                capturedComparison: capturedReview.data.comparisons.find(
+                  (entry) => entry.unitId === selectedUnit.unitId,
+                )?.comparison as unknown as WorktreeUnitComparisonPayload,
+              }
+            : {})}
           {...(onSelectedViewChange === undefined ? {} : { onSelectedViewChange })}
         />
       )}
@@ -239,6 +288,7 @@ function UnitReview({
   mergeReviewStatus,
   mergeReviewPending,
   mergeReviewFailed,
+  capturedComparison,
   onSelectedViewChange,
 }: {
   readonly worktree: WorktreeDetailModel;
@@ -247,24 +297,26 @@ function UnitReview({
   readonly mergeReviewStatus: MergeReviewStatus | undefined;
   readonly mergeReviewPending: boolean;
   readonly mergeReviewFailed: boolean;
+  readonly capturedComparison?: WorktreeUnitComparisonPayload;
   readonly onSelectedViewChange?: (view: WorktreeReviewView) => void;
 }) {
   const { language, t } = useI18n();
   const { resolvedTheme } = useTheme();
   const comparisonQuery = useQuery({
     ...worktreeUnitComparisonQueryOptions(worktree.id, unit.unitId),
-    enabled: activeView === "comparison",
+    enabled: activeView === "comparison" && !capturedComparison,
   });
-  const comparison = comparisonQuery.data
+  const comparisonData = capturedComparison ?? comparisonQuery.data;
+  const comparison = comparisonData
     ? ({
-        result: comparisonQuery.data.result,
+        result: comparisonData.result,
         left: {
           label: t("officialVersion"),
-          ...comparisonQuery.data.left,
+          ...comparisonData.left,
         },
         right: {
           label: t("agentVersion"),
-          ...comparisonQuery.data.right,
+          ...comparisonData.right,
         },
       } as UnitComparisonViewerValue)
     : null;
@@ -321,11 +373,11 @@ function UnitReview({
       ) : null}
       {activeView === "comparison" ? (
         <div className="flex min-h-[480px] flex-1 flex-col overflow-hidden">
-          {comparisonQuery.isPending ? (
+          {!capturedComparison && comparisonQuery.isPending ? (
             <div className="grid h-full place-items-center">
               <Spinner />
             </div>
-          ) : comparisonQuery.isError || comparison === null ? (
+          ) : (!capturedComparison && comparisonQuery.isError) || comparison === null ? (
             <Empty className="my-auto" title={t("comparisonFailed")} />
           ) : (
             <UnitComparisonViewer

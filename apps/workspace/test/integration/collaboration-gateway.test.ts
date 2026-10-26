@@ -1,3 +1,4 @@
+import { captureReviewToken } from "./review-token.js";
 import { getDocsEmptySnapshot, JSONX, TextXActionType, getBasesEmptySnapshot } from "@univerjs/core";
 import { getSlidesEmptySnapshot, PageTypeEnum, PageElementTypeEnum } from "@univerjs-pro/slides";
 import { getBoardsEmptySnapshot, BoardElementType } from "@univerjs-pro/boards";
@@ -787,7 +788,7 @@ describe("collaboration gateway", () => {
         const preview = await fetch(`${endpoint}?baseMode=base&view=preview`, { headers: { cookie } });
         expect(preview.status).toBe(200);
         expect(await preview.json()).toMatchObject({ baseMode: "base", view: "preview" });
-        await application.worktrees.merge(userId, worktreeId, "history-merge-0001");
+        await application.worktrees.merge(userId, worktreeId, "history-merge-0001", { reviewToken: await captureReviewToken(origin, cookie, worktreeId) });
       } else {
         await application.worktrees.discard(userId, worktreeId, "history-discard-0001");
       }
@@ -1393,7 +1394,8 @@ describe("collaboration gateway", () => {
     const merged = await application.worktrees.merge(
       issued.view.user.id,
       worktree.body.id,
-      "gateway-merge-worktree-0001"
+      "gateway-merge-worktree-0001",
+      { reviewToken: await captureReviewToken(origin, cookie, worktree.body.id) }
     );
     expect(merged.operation.state).toBe("completed");
     expect(
@@ -2259,7 +2261,7 @@ describe("content permission integration", () => {
     ).toMatchObject({ status: "committed" });
     await f.application.worktrees.markReady(f.editor.id, worktreeId);
     expect(
-      await f.application.worktrees.merge(f.editor.id, worktreeId, "protected-draft-merge-0001"),
+      await f.application.worktrees.merge(f.editor.id, worktreeId, "protected-draft-merge-0001", { reviewToken: await captureReviewToken(f.origin, f.editor.cookie, worktreeId) }),
     ).toMatchObject({ worktree: { state: "merged" }, operation: { state: "completed" } });
   });
 
@@ -2348,6 +2350,7 @@ describe("content permission integration", () => {
       f.editor.id,
       worktreeId,
       "revoked-draft-merge-0001",
+      { reviewToken: await captureReviewToken(f.origin, f.editor.cookie, worktreeId) },
     );
     expect(merged.worktree.state).not.toBe("merged");
     const database = new DatabaseSync(f.collaborationDatabaseFilename, { readOnly: true });

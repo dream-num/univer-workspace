@@ -387,3 +387,9 @@ compaction and Slide zoom are local view configuration, not Unit mutations.
 `integrations/univer/content-permissions.ts` 适配公开 SDK Authz 协议并解析权威文件角色。
 Trunk 与 Worktree Service 开启 `enableUnitPermissionAnalysis`，在 `commitChangeset` 校验
 SDK 生成的权限需求。Browser 为五类 Unit 注册对象权限类型，Worktree 使用 scope Authz URL。
+
+## Version-bound human Worktree review (TASK-009D)
+
+`POST /universer-api/worktrees/:id/review` captures the existing SDK comparison/merge-preview for every Unit and returns an opaque actor/Worktree/version token. `POST /api/worktrees/:id/merge` accepts that token. A runtime-scoped `ReviewCommitCoordinator` serializes review capture and all trunk/draft SDK mutations, including HTTP and WebSocket entry points, before SDK locks are acquired. Nested Worktree-to-trunk calls reenter the active lease. Merge validates the complete authoritative Unit descriptors, Resource/Node identities, draft/ready/baseline revisions and current trunk revisions inside that lease, and retains it through the SDK merge. The server checks live ACL/content permissions again at commit. This is a Server commit precondition, not a client GET-then-merge check.
+
+The SQLite deployment remains one writer Server per database (AGENTS.md). Tokens are process-local, actor-bound, expire after 30 minutes and fail closed across restart; a user must review again. Completed Collaboration merges retain existing durable product-operation finalization/retry semantics. No snapshot replacement or cross-database transaction is claimed. Legacy merge callers must pass an explicitly reviewed token; they cannot mint one silently while accepting older displayed content. Browser review renders the same captured comparison that supplied its token. The Space app uses its current-document Review surface.

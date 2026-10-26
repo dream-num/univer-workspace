@@ -188,6 +188,8 @@ paths:
     $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1ready
   /api/worktrees/{worktreeId}/reopen:
     $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1reopen
+  /universer-api/worktrees/{worktreeId}/review:
+    $ref: ./paths/worktrees.yaml#/~1universer-api~1worktrees~1{worktreeId}~1review
   /api/worktrees/{worktreeId}/merge:
     $ref: ./paths/worktrees.yaml#/~1api~1worktrees~1{worktreeId}~1merge
   /api/worktrees/{worktreeId}/discard:

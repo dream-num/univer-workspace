@@ -168,7 +168,8 @@ export function createWorktreesRouter(options: {
         await options.worktrees.merge(
           user.id,
           request.params.worktreeId,
-          request.headers["idempotency-key"]
+          request.headers["idempotency-key"],
+          request.body
         )
       );
     }

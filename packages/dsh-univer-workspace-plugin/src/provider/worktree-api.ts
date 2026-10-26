@@ -689,11 +689,13 @@ export async function discardWorktree(
 export async function mergeWorktree(
   client: WorkspaceHttpClient,
   worktreeId: string,
+  reviewToken?: string,
 ): Promise<WorktreeSummary> {
+  if (!reviewToken) throw new Error("Review the Server merge preview and explicitly provide its reviewToken before applying.");
   const raw = await readJson(
     await client.request(
       `/api/worktrees/${encodeURIComponent(worktreeId)}/merge`,
-      jsonWithIdempotency({}),
+      jsonWithIdempotency({ reviewToken }),
     ),
     "worktree merge",
   );

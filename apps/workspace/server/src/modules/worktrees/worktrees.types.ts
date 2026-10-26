@@ -145,7 +145,7 @@ export interface WorktreeBackend {
     userId: string,
   ): Promise<WorktreeData>;
   reopen(worktreeId: string, userId: string): Promise<WorktreeData>;
-  merge(worktreeId: string, userId: string): Promise<WorktreeData>;
+  merge(worktreeId: string, userId: string, reviewToken?: string): Promise<WorktreeData>;
   discard(worktreeId: string, userId: string): Promise<WorktreeData>;
   submitChangeset(
     worktreeId: string,
@@ -253,7 +253,8 @@ export interface WorktreesModule {
   merge(
     userId: string,
     worktreeId: string,
-    operationId: unknown
+    operationId: unknown,
+    input?: unknown
   ): Promise<{
     readonly operation: WorktreeOperationView;
     readonly worktree: WorktreeSummary;

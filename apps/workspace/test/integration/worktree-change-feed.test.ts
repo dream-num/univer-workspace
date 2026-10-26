@@ -1,3 +1,4 @@
+import { captureReviewToken } from "./review-token.js";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -156,7 +157,8 @@ describe("worktree change feed", () => {
         await application.worktrees.merge(
           creator.view.user.id,
           created.body.id,
-          "worktree-feed-merge-operation-0001"
+          "worktree-feed-merge-operation-0001",
+          { reviewToken: await captureReviewToken(origin, `${application.identity.cookieName}=${creator.cookieValue}`, created.body.id) }
         );
       });
       await expect(
