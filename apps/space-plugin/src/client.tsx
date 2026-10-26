@@ -13,7 +13,7 @@ const PANEL = 'space-plugin';
 
 /** Only content/navigation state lives here. Chat history remains in DSH. */
 export function apply(ctx: any) {
-  let view: State = { status: { state: 'unconfigured', endpoint: '' }, spaces: [], all: [], recent: [], recentCursor: null, page: null, location: 'home', space: '', parent: '', content: null, context: null, sessionId: null, sessionTitle: '', sessions: [], experience: 'unverified', error: '', busy: false, settings: false, ai: false, rail: true, query: '', filter: 'all', discovery: 'Your items', nav: true, notice: '' };
+  let view: State = { status: { state: 'unconfigured', endpoint: '' }, spaces: [], all: [], recent: [], recentCursor: null, page: null, location: 'home', space: '', parent: '', content: null, context: null, sessionId: null, sessionTitle: '', sessions: [], experience: 'unverified', error: '', busy: false, settings: false, ai: false, rail: true, query: '', filter: 'all', discovery: 'Suggested', pins: [], flyout: false, spaceTab: 'Overview', nav: true, notice: '' };
   const listeners = new Set<() => void>();
   const lifetime = new AbortController();
   let disposed = false;
@@ -58,7 +58,7 @@ export function apply(ctx: any) {
   }
   function clearContent() {
     generation++; contentRequest++; directoryRequest++;
-    update({ content: null, context: null });
+    update({ content: null, context: null, pins: [] });
   }
   async function directory(space: string, parent = '', cursor = '') {
     const request = ++directoryRequest;
@@ -66,7 +66,7 @@ export function apply(ctx: any) {
     const page = await api<Page>('nodes', { space, parent, cursor });
     if (before !== generation || request !== directoryRequest) return;
     contentRequest++;
-    update({ location: 'folder', space, parent, page: cursor && view.page ? { ...page, nodes: [...view.page.nodes, ...page.nodes] } : page, content: null, query: '', filter: 'all' });
+    update({ location: parent ? 'folder' : 'space', space, parent, spaceTab: 'Overview', flyout: false, page: cursor && view.page ? { ...page, nodes: [...view.page.nodes, ...page.nodes] } : page, content: null, query: '', filter: 'all' });
   }
   function observeSubmission(binding: any) {
     unobserve?.();
@@ -108,6 +108,7 @@ export function apply(ctx: any) {
     await nativeChat(true);
   }
   const face = {
+    pin: (id: string) => { const pins = view.pins.includes(id) ? view.pins.filter(p => p !== id) : [...view.pins,id]; update({pins}); },
     store, update,
     reference: () => retained,
     refresh: () => run(refresh),
@@ -115,9 +116,9 @@ export function apply(ctx: any) {
     login: (username: string, password: string) => run(async () => { clearContent(); await api('login', { username, password }); await refresh(); if (view.status.state === 'connected') update({ settings: false }); }),
     disconnect: () => run(async () => { clearContent(); await api('configure', { endpoint: '' }); await refresh(); }),
     directory: (space: string, parent = '', cursor = '') => run(() => directory(space, parent, cursor)),
-    home: (location: 'home' | 'recent' = 'home') => { contentRequest++; directoryRequest++; update({ location, content: null, query: '', filter: 'all' }); void run(() => recents()); },
+    home: (location: 'home' | 'recent' = 'home') => { contentRequest++; directoryRequest++; update({ location, content: null, flyout: false, query: '', filter: 'all' }); void run(() => recents()); },
     moreRecent: () => run(() => recents(view.recentCursor ?? '')),
-    open: (node: string) => run(async () => { const request = ++contentRequest; const before = generation; const content = await api<Content>('content', { node }); if (before === generation && request === contentRequest) { update({ content }); await recents(); } }),
+    open: (node: string) => run(async () => { const request = ++contentRequest; const before = generation; const content = await api<Content>('content', { node }); if (before === generation && request === contentRequest) { update({ content, flyout: false }); await recents(); } }),
     close: () => { contentRequest++; update({ content: null }); },
     select: () => { if (view.content) update({ context: { file: selectedReference(view.content), state: 'selected' }, ai: true }); },
     removeContext: () => update({ context: null }),
@@ -151,4 +152,4 @@ export function apply(ctx: any) {
   ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: PANEL, order: -10, label: () => 'Space' }, ({ size }: any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 9h18M9 9v12"/></svg>)));
   ctx.effect(() => ctx.slots.inject('space.conversation', () => ctx.slots.register({ name: 'space.conversation' }, NativeConversation)));
 }
-export type Face = { reference(): any; store: { getSnapshot(): State; subscribe(fn: () => void): () => void }; update(patch: Partial<State>): void; refresh(): void; configure(endpoint: string): void; login(username: string, password: string): void; disconnect(): void; directory(space: string, parent?: string, cursor?: string): void; home(location?: 'home' | 'recent'): void; moreRecent(): void; open(node: string): void; close(): void; select(): void; removeContext(): void; draft(): void; chat(): void; back(): void; link(id: string): void };
+export type Face = { pin(id: string): void; reference(): any; store: { getSnapshot(): State; subscribe(fn: () => void): () => void }; update(patch: Partial<State>): void; refresh(): void; configure(endpoint: string): void; login(username: string, password: string): void; disconnect(): void; directory(space: string, parent?: string, cursor?: string): void; home(location?: 'home' | 'recent'): void; moreRecent(): void; open(node: string): void; close(): void; select(): void; removeContext(): void; draft(): void; chat(): void; back(): void; link(id: string): void };

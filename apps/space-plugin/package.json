@@ -1,12 +1,13 @@
 {
   "name": "dsh-space-plugin",
-  "version": "0.4.6",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Space content workspace for official DeepSeek Harness Desktop",
   "files": [
     "lib",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "THIRD_PARTY_NOTICES.txt"
   ],
   "main": "./lib/index.js",
   "exports": {
@@ -55,11 +56,11 @@
     "@univerjs/preset-sheets-core": "1.1.0",
     "@univerjs/presets": "1.1.0",
     "esbuild": "0.27.7",
+    "postcss": "8.5.31",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "tailwindcss": "3.4.17",
-    "typescript": "5.9.3",
-    "postcss": "8.5.31"
+    "typescript": "5.9.3"
   },
   "engines": {
     "node": ">=24.9.0"
@@ -68,6 +69,7 @@
     "@deepseek-ai/dsh-tools": "0.2.1-rc.3",
     "@univerjs-pro/collaboration": "1.1.0",
     "@univerjs-pro/collaboration-service": "1.1.0",
+    "lucide-react": "0.468.0",
     "rxjs": "7.8.2"
   },
   "license": "Apache-2.0"

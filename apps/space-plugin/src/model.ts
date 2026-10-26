@@ -13,10 +13,11 @@ export interface Content {
 export interface State {
   status: { state: string; endpoint: string; user?: { id?: string; username?: string; displayName?: string } };
   spaces: Space[]; all: Node[]; recent: Recent[]; recentCursor: string | null;
-  page: Page | null; location: 'home' | 'recent' | 'folder'; space: string; parent: string;
+  page: Page | null; location: 'home' | 'recent' | 'folder' | 'space'; space: string; parent: string;
   content: Content | null; context: { file: FileReference; state: 'selected' | 'draft' | 'submitted'; afterSeq?: number } | null;
   sessionId: string | null; sessionTitle: string; sessions: { id: string; title: string }[];
   experience: 'unverified' | 'requested' | 'reduced'; error: string; busy: boolean; settings: boolean; ai: boolean; rail: boolean;
+  pins: string[]; flyout: boolean; spaceTab: 'Overview' | 'Content';
   query: string; filter: string; discovery: string; nav: boolean; notice: string;
 }
 export function nodeKind(node: Node) { return node.resource?.unitType ?? (node.resource?.kind === 'blob' ? 'file' : 'folder'); }
