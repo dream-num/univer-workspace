@@ -33,8 +33,8 @@ export function WorkspaceReference({
         type="button"
         data-workspace-reference={file.nodeId}
         disabled={!interactive || busy}
-        aria-label={`Open Workspace file: ${file.label}`}
-        title={`Workspace file · ${file.resourceId} · ${file.unitId}`}
+        aria-label={`Open Space file: ${file.label}`}
+        title={`Space file · ${file.resourceId} · ${file.unitId}`}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -56,7 +56,7 @@ export function WorkspaceReference({
               setError(
                 e instanceof Error
                   ? e.message
-                  : 'Unable to open Workspace file.',
+                  : 'Unable to open Space file.',
               ),
             )
             .finally(() => setBusy(false));
@@ -72,7 +72,7 @@ export function WorkspaceReference({
         >
           {file.label}
         </span>
-        <small>Workspace</small>
+        <small>Space</small>
       </button>
       {error && <span role="alert">{error}</span>}
     </span>

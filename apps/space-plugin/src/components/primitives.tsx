@@ -177,10 +177,12 @@ export function CreateMenu({
   folder = false,
   space = false,
   allowed = true,
+  sidebar = false,
 }: {
   folder?: boolean;
   space?: boolean;
   allowed?: boolean;
+  sidebar?: boolean;
 }) {
   const label = folder || space ? 'New' : 'Create';
   const reason = allowed
@@ -194,8 +196,9 @@ export function CreateMenu({
       aria-label={label}
       title={reason}
     >
+      {sidebar && <Icon name="plus" size={18} />}
       <span>{label}</span>
-      <Icon name="down" size={12} />
+      {!sidebar && <Icon name="down" size={12} />}
     </button>
   );
 }

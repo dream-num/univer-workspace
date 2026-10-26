@@ -17,77 +17,19 @@ export function HostNavigation(
       data-space-sidebar
       data-wide={props.wide}
     >
-      <Navigation
-        face={props}
-        v={v}
-        wide={props.wide}
-        expand={props.expandSidebar}
-      />
+      <Navigation face={props} v={v} />
     </div>
   );
 }
-export function Navigation({
-  face,
-  v,
-  wide,
-  expand,
-}: {
-  face: Face;
-  v: State;
-  wide: boolean;
-  expand(): void;
-}) {
+export function Navigation({ face, v }: { face: Face; v: State }) {
   const row = button + ' sp-nav-row';
-  if (!wide)
-    return (
-      <nav className="sp-navigation-rail" aria-label="Space navigation">
-        <button
-          className={iconButton}
-          aria-label="Expand Space navigation"
-          title="Space navigation"
-          onClick={expand}
-        >
-          <Icon name="workspace" />
-        </button>
-        {contentKinds.map(([filter, label]) => (
-          <button
-            key={filter}
-            className={iconButton}
-            aria-label={label}
-            title={label}
-            onClick={() => {
-              face.home();
-              face.update({ filter });
-            }}
-          >
-            <Icon name={filter} />
-          </button>
-        ))}
-        <button
-          className={iconButton}
-          aria-label="Back to Chat"
-          title="Back to Chat"
-          onClick={face.back}
-        >
-          <Icon name="arrow" />
-        </button>
-        <button
-          className={iconButton}
-          aria-label="Workspace settings"
-          title="Workspace settings"
-          onClick={() => face.update({ settings: true })}
-        >
-          <Icon name="settings" />
-        </button>
-      </nav>
-    );
   return (
-    <nav key="wide" aria-label="Space navigation" className="sp-navigation">
+    <nav aria-label="Content types" className="sp-navigation">
       <div className="sp-nav-heading">
         <strong>Space</strong>
         <button
           className={iconButton}
-          aria-label="Search Space content"
+          aria-label="Search content"
           onClick={() => {
             face.home();
             requestAnimationFrame(() =>
@@ -101,7 +43,7 @@ export function Navigation({
         </button>
       </div>
       <div className="sp-nav-create">
-        <CreateMenu />
+        <CreateMenu sidebar />
       </div>
       <div className="sp-nav-scroll">
         {([['all', 'All'], ...contentKinds] as const).map(([filter, label]) => (
@@ -180,20 +122,14 @@ export function Navigation({
           </button>
         ))}
       </div>
-      <button className={row} onClick={face.back}>
-        <Icon name="arrow" />
-        Back to Chat
-      </button>
       <button
         className={row + ' tw-text-muted'}
-        aria-label="Workspace settings"
+        aria-label="Space settings"
         onClick={() => face.update({ settings: true })}
       >
         <Icon name="settings" />
         <span className="tw-truncate">
-          {v.status.user?.displayName ??
-            v.status.user?.username ??
-            'Connect Workspace'}
+          {v.status.user?.displayName ?? v.status.user?.username ?? 'Connect'}
         </span>
       </button>
     </nav>

@@ -162,3 +162,71 @@ test('slow old association and identity changes cannot overwrite the latest Page
   await assert.rejects(canceled, /identity changed/);
   assert.equal(b.contextText('s'), '');
 });
+
+test('all six current file types bind without reading bodies and expose current real content on demand', async () => {
+  for (const type of ['doc', 'sheet', 'slide', 'board', 'base', 'site']) {
+    let reads = 0;
+    const w = {
+      status: async () => ({
+        state: 'connected',
+        endpoint: 'http://localhost',
+        user: { id: 'u' },
+      }),
+      json: async (path) =>
+        path.startsWith('/api/resources/')
+          ? { resource: { originalFilename: 'view.univer.html' } }
+          : {
+              node: {
+                id: 'n',
+                name: type,
+                resource: {
+                  kind: type === 'site' ? 'blob' : 'univer',
+                  id: 'r',
+                  unitId: type === 'site' ? undefined : 'unit',
+                  unitType: type,
+                  capabilities: { openContent: true },
+                },
+              },
+            },
+      read: async () => {
+        reads++;
+        return {
+          endpoint: 'http://localhost',
+          resourceId: 'r',
+          unitId: type === 'site' ? '' : 'unit',
+          type,
+          revision: 1,
+          sha256: 'hash',
+          data: { name: 'real content' },
+          html: '<h1>Site content</h1>',
+          content: {
+            text: 'Doc content',
+            sheets:
+              type === 'sheet'
+                ? [
+                    {
+                      id: 's',
+                      name: 'Budget',
+                      cells: [{ row: 0, column: 0, value: '4270' }],
+                    },
+                  ]
+                : [],
+          },
+        };
+      },
+    };
+    const bindings = new ToolBindings(w);
+    await bindings.setCurrent('s', 'n', 'surface', 1);
+    assert.equal(reads, 0);
+    assert.equal(bindings.currentFile('s').type, type);
+    const result = await bindings.inspect(
+      's',
+      'n',
+      new AbortController().signal,
+    );
+    assert.equal(reads, 1);
+    assert.ok(result.lines.length > 0);
+    assert.equal(result.file.type, type);
+    assert.ok(result.format);
+  }
+});

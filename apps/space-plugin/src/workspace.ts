@@ -291,7 +291,7 @@ export class WorkspaceConnection {
       if (!opened.originalFilename?.toLowerCase().endsWith('.univer.html'))
         throw new SpaceError(
           400,
-          'This file has no supported preview. Pages / Sites are .univer.html Blobs.',
+          'This file has no supported preview. Sites require a .univer.html file.',
         );
       if (opened.byteSize > 1024 * 1024)
         throw new SpaceError(

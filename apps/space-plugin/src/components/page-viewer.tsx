@@ -7,7 +7,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
   const file = v.content!;
   return (
     <>
-      <header className="sp-page-toolbar">
+      <header className="sp-page-toolbar" data-window-drag>
         <Menu
           label="File menu"
           align="left"

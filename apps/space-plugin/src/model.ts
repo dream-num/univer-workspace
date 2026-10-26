@@ -62,6 +62,7 @@ export interface Content {
   };
 }
 export interface State {
+  hostNavigation: 'checking' | 'active' | 'unsupported';
   status: {
     state: string;
     endpoint: string;
@@ -106,9 +107,9 @@ export const contentKinds = [
   ['doc', 'Docs'],
   ['sheet', 'Sheets'],
   ['slide', 'Slides'],
-  ['board', 'Boards / Canvas'],
-  ['base', 'Bases / Databases'],
-  ['site', 'Pages / Sites'],
+  ['board', 'Canvas'],
+  ['base', 'Databases'],
+  ['site', 'Sites'],
 ] as const;
 export function kindName(kind: string) {
   return (
@@ -119,16 +120,14 @@ export function kindName(kind: string) {
         folder: 'Folder',
         slide: 'Slides',
         file: 'File',
-        board: 'Board',
-        base: 'Base',
-        site: 'Page / Site',
+        board: 'Canvas',
+        base: 'Database',
+        site: 'Site',
       } as Record<string, string>
     )[kind] ?? kind
   );
 }
 export function selectedReference(file: Content): FileReference {
-  if (file.type !== 'doc' && file.type !== 'sheet')
-    throw new Error('Chat reading currently supports Docs and Sheets.');
   return {
     endpoint: file.endpoint,
     nodeId: file.nodeId,

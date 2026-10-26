@@ -4,6 +4,7 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/remote';
 import { SpaceView, NativeConversation } from './ui.js';
 import { PageContextDock } from './components/page-context.js';
 import { HostNavigation } from './components/navigation.js';
+import { HostNavigationBridge } from './components/host-navigation.js';
 import { WorkspaceReference } from './components/file-reference.js';
 import { workspaceReferenceRule } from './file-reference.js';
 import { Icon } from './components/primitives.js';
@@ -61,6 +62,7 @@ export function apply(ctx: any) {
     pins: [],
     spaceTab: 'Overview',
     notice: '',
+    hostNavigation: 'checking',
   };
   const listeners = new Set<() => void>();
   const lifetime = new AbortController();
@@ -95,7 +97,7 @@ export function apply(ctx: any) {
       update({ context: null });
       return;
     }
-    if (!file || !['doc', 'sheet'].includes(file.type)) {
+    if (!file) {
       await clearCurrent();
       update({ context: null });
       return;
@@ -610,6 +612,24 @@ export function apply(ctx: any) {
       ),
     ),
   );
+  ctx.effect(() =>
+    ctx.slots.inject('sidebar.footer.action', () =>
+      ctx.slots.register(
+        {
+          name: 'sidebar.footer.action',
+          id: 'space-host-navigation',
+          order: -100,
+          inject: () => ({
+            ...face,
+            toggleSidebar: () => ctx.layout.toggleSidebar(),
+            currentPanel: () =>
+              ctx.layout.panelInfo.getSnapshot().activePanelId,
+          }),
+        },
+        HostNavigationBridge,
+      ),
+    ),
+  );
   // Public region override, registered only while Space is selected. Host stores,
   // outer controls, drag width and the original navigation registration stay owned by DSH.
   ctx.effect(() =>
@@ -617,7 +637,8 @@ export function apply(ctx: any) {
       let release: (() => void) | undefined;
       const sync = () => {
         const active =
-          ctx.layout.panelInfo.getSnapshot().activePanelId === PANEL;
+          ctx.layout.panelInfo.getSnapshot().activePanelId === PANEL &&
+          view.hostNavigation === 'active';
         if (active && !release)
           release = ctx.slots.register(
             { name: 'sidebar.workspaces', priority: -100, inject: () => face },
@@ -629,9 +650,11 @@ export function apply(ctx: any) {
         }
       };
       const unsubscribe = ctx.layout.panelInfo.subscribe(sync);
+      const unsubscribeView = store.subscribe(sync);
       sync();
       return () => {
         unsubscribe();
+        unsubscribeView();
         release?.();
       };
     }),
@@ -669,6 +692,10 @@ export function apply(ctx: any) {
       ctx.slots.register({ name: 'space.conversation' }, NativeConversation),
     ),
   );
+  ctx.effect(() => () => {
+    if (ctx.layout.panelInfo.getSnapshot().activePanelId === PANEL)
+      ctx.layout.selectPanel(null);
+  });
 }
 export type Face = {
   newConversation(): void;

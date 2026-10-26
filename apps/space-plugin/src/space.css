@@ -1,11 +1,14 @@
 /* Plugin-owned layout seats only. DSH and Univer descendants keep their own styles. */
 .sp-shell {
-  --sp-canvas: #fff;
-  --sp-sidebar: #f9f9f9;
-  --sp-ink: #0d0d0d;
-  --sp-muted: #5d5d5d;
-  --sp-line: #ededed;
-  --sp-hover: rgba(0, 0, 0, 0.05);
+  --sp-canvas: var(--dsw-alias-bg-base, #fff);
+  --sp-sidebar: var(
+    --sp-secondary-fill,
+    var(--dsw-specific-sidebar-fill, #f9f9f9)
+  );
+  --sp-ink: var(--dsw-alias-label-primary, #0d0d0d);
+  --sp-muted: var(--dsw-alias-label-secondary, #5d5d5d);
+  --sp-line: var(--dsw-alias-border-l3, #ededed);
+  --sp-hover: color-mix(in srgb, var(--sp-ink) 7%, transparent);
   --sp-nav-width: 288px;
   --sp-content-pad: 48px;
   --sp-row-height: 50px;
@@ -177,7 +180,7 @@
   border-radius: 24px;
   padding: 0 16px;
   background: var(--sp-ink);
-  color: white;
+  color: var(--sp-canvas);
 }
 .sp-library-toolbar {
   display: flex;
@@ -311,7 +314,7 @@
   border: 1px solid var(--sp-line);
   border-radius: 16px;
   padding: 16px;
-  background: white;
+  background: var(--sp-canvas);
   font: 14px/20px inherit;
   cursor: pointer;
   color: var(--sp-ink);
@@ -454,8 +457,8 @@
   justify-content: center;
   align-items: center;
   gap: 12px;
-  background: #fff;
-  color: #777;
+  background: var(--sp-canvas);
+  color: var(--sp-muted);
   font: 12px/1.5 sans-serif;
   text-align: center;
   padding: 24px;
@@ -644,7 +647,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: white;
+  background: var(--sp-canvas);
   border: 1px solid var(--sp-line);
   box-shadow: 0 2px 8px #0001;
   pointer-events: auto;
@@ -713,7 +716,7 @@
   border: 0;
   flex: 1;
   width: 100%;
-  background: white;
+  background: var(--sp-canvas);
 }
 .sp-html-preview p {
   padding: 8px 16px;
@@ -721,7 +724,7 @@
   font-size: 12px;
 }
 
-/* Public DSH Sidebar region; no Host selectors, CSS overrides or synthetic clicks. */
+/* Public DSH Sidebar region content. The Host adapter is isolated below. */
 .sp-host-navigation {
   font-family:
     -apple-system,
@@ -738,42 +741,20 @@
   background: transparent;
   padding: 0;
 }
-.sp-host-navigation .sp-nav-heading {
-  height: 36px;
-  padding-left: 10px;
-}
-.sp-host-navigation .sp-nav-heading strong {
-  font-size: 13px;
-  color: var(--sp-muted);
-  font-weight: 500;
-}
 .sp-host-navigation .sp-nav-create {
-  height: 44px;
-  padding: 4px 0;
   box-sizing: border-box;
 }
 .sp-host-navigation .sp-nav-create > button {
   width: 100%;
   height: 35px;
-  justify-content: center;
-  background: var(--sp-hover);
 }
 .sp-host-navigation .sp-nav-section {
   padding-top: 12px;
-}
-.sp-navigation-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  overflow: auto;
-  height: 100%;
 }
 .sp-page-body.sp-sheet-body {
   padding: 0;
 }
 .sp-page-toolbar {
-  padding: 8px 16px;
   border-bottom: 1px solid var(--sp-line);
 }
 .sp-page-toolbar > .sp-menu > summary {
@@ -792,4 +773,252 @@
   padding: 6px 10px;
   min-height: 36px;
   border-radius: 10px;
+}
+
+/* DSH 0.2.1-rc.3 / be72761 only: version + native artifact + structure gated.
+   The activity rail is outside the native frame's measured width in every mode. */
+[data-space-host-frame='0.2.1-rc.3'] {
+  margin-inline-start: 52px;
+  width: calc(100% - 52px);
+  box-sizing: border-box;
+}
+[data-space-host-frame='0.2.1-rc.3'] > .PIRFFq_sidebarCol {
+  border-right: 0;
+  box-shadow: inset -1px 0 var(--dsw-alias-border-l3, #ededed);
+}
+[data-space-host-frame='0.2.1-rc.3'][data-space-secondary-collapsed='true'],
+[data-space-host-frame='0.2.1-rc.3'][data-space-mode='panel'] {
+  grid-template-columns: var(--space-closed-columns) !important;
+}
+[data-space-host-frame='0.2.1-rc.3'][data-space-mode='panel']
+  > [data-side='sidebar'],
+[data-space-host-frame='0.2.1-rc.3'] > [data-shell-leading] {
+  display: none !important;
+}
+[data-space-host-navigation='0.2.1-rc.3'] {
+  --sp-rail-fill: color-mix(
+    in srgb,
+    var(--dsw-alias-bg-base, #fff) 97%,
+    var(--dsw-alias-label-primary, #17191a) 3%
+  );
+  --sp-secondary-fill: color-mix(
+    in srgb,
+    var(--dsw-alias-bg-base, #fff) 99%,
+    var(--dsw-alias-label-primary, #17191a) 1%
+  );
+  --sp-rail-muted: var(--dsw-alias-label-secondary, #858a8e);
+  --sp-rail-ink: var(--dsw-alias-label-primary, #17191a);
+  padding: 0 !important;
+  width: 100% !important;
+  position: relative;
+  display: block !important;
+  background: var(--sp-secondary-fill) !important;
+}
+[data-space-host-navigation='0.2.1-rc.3'] .kB3qhq_logoRow,
+[data-space-host-navigation='0.2.1-rc.3'] .kB3qhq_topStrip {
+  display: none !important;
+}
+[data-space-host-navigation='0.2.1-rc.3'] > .kB3qhq_panelList {
+  position: fixed;
+  z-index: 22;
+  left: 0;
+  top: var(--dsh-frame-top-clearance, 0px);
+  bottom: 52px;
+  width: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: var(--sp-rail-fill);
+}
+[data-space-host-navigation='0.2.1-rc.3'] > .kB3qhq_panelList::before {
+  content: '';
+  position: fixed;
+  left: 0;
+  top: var(--dsh-frame-top-clearance, 0px);
+  bottom: 0;
+  width: 52px;
+  background: var(--sp-rail-fill);
+  pointer-events: none;
+  z-index: -1;
+}
+[data-space-host-navigation='0.2.1-rc.3'] .kB3qhq_panelList .kB3qhq_panelTitle {
+  display: none !important;
+}
+[data-space-host-navigation='0.2.1-rc.3'] .kB3qhq_panelList .kB3qhq_panelRow {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  margin: 0;
+  justify-content: center;
+  gap: 0;
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  color: var(--sp-rail-muted);
+  border-radius: 10px;
+}
+[data-space-host-navigation='0.2.1-rc.3']
+  .kB3qhq_panelList
+  .kB3qhq_panelRow[aria-current='page'],
+[data-space-host-navigation='0.2.1-rc.3']
+  .sp-activity-chat[aria-current='page'] {
+  color: var(--sp-rail-ink);
+  background: color-mix(in srgb, var(--sp-rail-ink) 7%, transparent);
+}
+[data-space-host-navigation='0.2.1-rc.3'] .sp-activity-chat {
+  color: var(--sp-rail-muted);
+  border-radius: 10px;
+}
+[data-space-host-navigation='0.2.1-rc.3'] .kB3qhq_panelList .kB3qhq_moreAnchor {
+  width: 36px;
+}
+[data-space-host-navigation='0.2.1-rc.3'] .kB3qhq_panelList .kB3qhq_panelGlyph {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-space-host-navigation='0.2.1-rc.3'] .kB3qhq_panelList svg,
+[data-space-host-navigation='0.2.1-rc.3'] [data-space-system-settings] svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+[data-space-host-navigation='0.2.1-rc.3'] > .kB3qhq_footArea {
+  position: fixed;
+  z-index: 23;
+  left: 0;
+  bottom: 0;
+  width: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  box-sizing: border-box;
+  background: var(--sp-rail-fill);
+}
+[data-space-host-navigation='0.2.1-rc.3'] .kB3qhq_footerActions {
+  display: contents;
+}
+[data-space-host-navigation='0.2.1-rc.3'] [data-space-system-settings] {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+  font-size: 0;
+  color: var(--sp-rail-muted);
+}
+[data-space-host-navigation='0.2.1-rc.3'] > .kB3qhq_regionArea {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 104px;
+  bottom: 8px;
+  min-height: 0;
+  margin: 0;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+[data-space-host-navigation='0.2.1-rc.3'][data-space-mode='space']
+  > .kB3qhq_regionArea {
+  top: 0;
+  padding: 0;
+}
+[data-space-host-navigation='0.2.1-rc.3'] > .kB3qhq_newSession {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 56px;
+  width: calc(100% - 16px);
+  height: 36px;
+  min-height: 36px;
+  margin: 0;
+}
+[data-space-host-navigation='0.2.1-rc.3']:not([data-space-mode='chat'])
+  > .kB3qhq_newSession,
+[data-space-host-navigation='0.2.1-rc.3'][data-space-mode='panel']
+  > .kB3qhq_regionArea,
+[data-space-host-navigation='0.2.1-rc.3'][data-space-mode='panel']
+  > [data-space-toggle-mount],
+[data-space-host-navigation='0.2.1-rc.3'][data-space-secondary-collapsed='true']
+  > [data-space-toggle-mount],
+[data-space-host-navigation='0.2.1-rc.3'][data-space-secondary-collapsed='true']
+  > .kB3qhq_newSession,
+[data-space-host-navigation='0.2.1-rc.3'][data-space-secondary-collapsed='true']
+  > .kB3qhq_regionArea {
+  display: none !important;
+}
+.sp-global-activities {
+  height: auto;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+[data-space-toggle-mount] {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 52px;
+  z-index: 25;
+  pointer-events: none;
+}
+.sp-secondary-controls {
+  height: 52px;
+  pointer-events: none;
+  overflow: visible;
+}
+.sp-secondary-controls > button {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  pointer-events: auto;
+  color: var(--sp-rail-muted);
+}
+.sp-host-navigation .sp-nav-heading {
+  height: 52px;
+  padding-left: 16px;
+  padding-right: 54px;
+  box-sizing: border-box;
+}
+.sp-host-navigation .sp-nav-heading strong {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--sp-ink);
+}
+.sp-page-toolbar {
+  padding: 8px;
+}
+
+/* Measured reference: 52px header, Create at y52, first row at y104. */
+.sp-host-navigation .sp-nav-heading strong {
+  line-height: 24px;
+}
+.sp-host-navigation .sp-nav-create {
+  height: 52px;
+  padding: 0 6px;
+}
+.sp-host-navigation .sp-nav-create > button {
+  justify-content: flex-start;
+  background: transparent;
+}
+.sp-host-navigation .sp-nav-scroll {
+  padding: 0 6px;
+  box-sizing: border-box;
+}
+.sp-host-navigation .sp-navigation > button[aria-label='Space settings'] {
+  margin-inline: 6px;
+  width: calc(100% - 12px);
 }

@@ -19,3 +19,17 @@ test('native receipt requires a newer human event; older history and assistant t
  assert.equal(submittedReference([row(10),row(21)],file,20),true);
  assert.equal(submittedReference([{type:'transient',event:{seq:22,type:'user/message',data}}],file,20),false);
 });
+
+
+test('every supported file keeps a body-free current identity, including a Site without a Unit', () => {
+  for (const type of ['doc', 'sheet', 'slide', 'board', 'base', 'site']) {
+    const ref = selectedReference({
+      ...document(),
+      type,
+      unitId: type === 'site' ? '' : 'unit',
+    });
+    assert.equal(ref.type, type);
+    assert.equal('data' in ref, false);
+    assert.equal('content' in ref, false);
+  }
+});

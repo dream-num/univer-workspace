@@ -17,7 +17,7 @@ export function Settings({ face, v }: { face: Face; v: State }) {
       requestAnimationFrame(() =>
         document
           .querySelector<HTMLButtonElement>(
-            '[data-space-sidebar] button[aria-label="Workspace settings"]',
+            '[data-space-sidebar] button[aria-label="Space settings"]',
           )
           ?.focus(),
       );
@@ -40,7 +40,7 @@ export function Settings({ face, v }: { face: Face; v: State }) {
         ref={modal}
         role="dialog"
         aria-modal="true"
-        aria-label="Workspace Settings"
+        aria-label="Space settings"
         className="tw-box-border tw-flex tw-max-h-full tw-w-[440px] tw-flex-col tw-gap-5 tw-overflow-y-auto tw-rounded-2xl tw-border tw-border-solid tw-border-line tw-bg-canvas tw-p-6 tw-shadow-xl"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
@@ -63,7 +63,7 @@ export function Settings({ face, v }: { face: Face; v: State }) {
         }}
       >
         <header className="tw-flex tw-items-center tw-justify-between">
-          <h1 className="tw-m-0 tw-text-lg tw-font-semibold">连接 Workspace</h1>
+          <h1 className="tw-m-0 tw-text-lg tw-font-semibold">Space settings</h1>
           <button
             autoFocus
             className={iconButton}
@@ -155,6 +155,17 @@ export function Settings({ face, v }: { face: Face; v: State }) {
             </button>
           </form>
         )}
+        <div
+          className="tw-text-xs tw-text-muted"
+          data-host-navigation-status={v.hostNavigation}
+        >
+          Activity Bar:{' '}
+          {v.hostNavigation === 'active'
+            ? '已启用'
+            : v.hostNavigation === 'checking'
+              ? '检查兼容性…'
+              : '当前 Host 构建未验证，保留原生导航'}
+        </div>
         {v.error && (
           <p role="alert" className="tw-m-0 tw-text-xs tw-text-red-700">
             {v.error}

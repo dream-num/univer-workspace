@@ -47,14 +47,21 @@ export function SpaceView(
               className="tw-absolute tw-inset-x-0 tw-top-0 tw-z-30 tw-h-0.5 tw-bg-neutral-300"
             />
           )}
-          {v.status.state !== 'connected' && !v.content ? (
-            <Empty title="连接你的 Workspace">
+          {v.hostNavigation === 'unsupported' ? (
+            <Empty title="This Host build needs navigation verification">
+              <p>Space 导航尚未支持当前构建，原生会话保持可用。</p>
+              <button className={button} onClick={props.back}>
+                Back to Chat
+              </button>
+            </Empty>
+          ) : v.status.state !== 'connected' && !v.content ? (
+            <Empty title="连接 Space">
               <p>浏览文档与表格，在已有对话中一起工作。</p>
               <button
                 className={button + ' tw-bg-hover'}
                 onClick={() => props.update({ settings: true })}
               >
-                连接 Workspace
+                Settings
               </button>
             </Empty>
           ) : v.content ? (

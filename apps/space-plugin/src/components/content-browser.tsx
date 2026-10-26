@@ -257,7 +257,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                         </span>
                         <span className="tw-text-xs tw-text-muted">
                           {v.spaces.find((s) => s.id === node.spaceId)?.name ??
-                            'Workspace'}
+                            'Space'}
                         </span>
                         <span className="tw-mt-auto tw-text-xs tw-text-muted">
                           Open {nodeKind(node)}
@@ -333,7 +333,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                     {v.discovery === 'Suggested' && !folder && !space && (
                       <span className="sp-source">
                         {v.spaces.find((s) => s.id === node.spaceId)?.name ??
-                          'Workspace'}
+                          'Space'}
                       </span>
                     )}
                     <span className="sp-activity">

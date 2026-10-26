@@ -31,7 +31,7 @@ export const workspaceReferenceRule: UserTextRule<'workspace-file'> = {
           url.protocol !== 'workspace-file:' ||
           !resourceId ||
           !nodeId ||
-          !unitId ||
+          unitId === null ||
           url.username ||
           url.password ||
           url.port ||

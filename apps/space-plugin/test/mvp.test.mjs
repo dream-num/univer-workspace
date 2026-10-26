@@ -66,3 +66,17 @@ test('file reference labels preserve brackets and backslashes without breaking i
     file.name,
   );
 });
+
+test('Site reference preserves Blob identity without inventing a Univer Unit', () => {
+  const file = {
+    endpoint: 'http://localhost',
+    nodeId: 'node',
+    resourceId: 'blob',
+    unitId: '',
+    name: 'Site',
+    type: 'site',
+  };
+  const parsed = workspaceReferenceRule.match(referenceText(file), 0);
+  assert.equal(parsed.data.unitId, '');
+  assert.equal(parsed.data.resourceId, 'blob');
+});

@@ -1,6 +1,6 @@
 # Space plugin for official DeepSeek Harness
 
-Space-style content navigation, genuine read-only Univer Docs/Sheets/Slides/Boards/Bases and sandbox HTML previews, and the
+Space-style content navigation, genuine read-only Univer Docs/Sheets/Slides/Canvas/Databases and sandbox HTML previews, and the
 native DSH Conversation in a floating overlay. DSH owns Session history, composer, model,
 Agent and tool logs. Official host source is unchanged.
 
@@ -25,34 +25,39 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
 ## Use
 
 1. Open an existing native DSH Conversation and select the Space global entry.
-   Space immediately supplies navigation through the public `sidebar.workspaces`
-   region Slot. DSH retains its outer column, width, collapse controls and original
-   Chat navigation. Back to Chat restores that registration without a drawer.
-2. Open Workspace settings at the navigation bottom, set an HTTP(S) origin and
+   A persistent 52px Activity Bar selects Chat, Space and native global panels.
+   Chat has the native Session list; Space supplies the public `sidebar.workspaces`
+   content with the Space heading. The top secondary button collapses it; the selected Activity entry
+   restores it. Plugins/Automation have no Session list or unused secondary track.
+   This controlled DOM/CSS integration is gated to official Web release
+   `0.2.1-rc.3` / commit `be72761` and tested native structure. Unknown builds keep
+   native navigation and show an explicit unsupported state. Host controls,
+   width preference and Sessions stay Host-owned; uninstall removes the adapter.
+2. Open Space settings at the navigation bottom, set an HTTP(S) origin and
    sign in. Credentials remain only in Host memory. Local HTTP is allowed;
    remote connections require HTTPS.
 3. All / Your items lists real ACL-checked metadata. Pinned is a separate local
    navigation and Suggested section; it does not imply Favorites. Space opens
    Overview / Content; Folder opens its own breadcrumb and content list.
 4. Docs uses a detached Modern layout projection with one body title; the top
-   file menu remains. Docs/Sheets/Slides/Boards/Bases all use published SDKs and
+   file menu remains. Docs/Sheets/Slides/Canvas/Databases all use published SDKs and
    read-only permissions. Pro previews show the SDK license watermark in the
    current test environment; advanced embedded objects are not bundled.
-   Pages / Sites maps specifically to the Server HTML Views directory
+   Sites maps specifically to the Server HTML Views directory
    (`.univer.html` Blobs), with a sandboxed, script-free preview up to 1 MiB.
    Ordinary HTML files remain Files. Full HTML Sheet bindings stay in Workspace.
 5. Floating chat provides compact-message, expanded and minimized states. Move
    its grip, resize either side, restore it, create a Host Conversation or choose
    an existing one from History. It is one DSH composer/transcript, with DSH-owned
    messages, model, running state and tools. It never reserves editor width.
-6. Opening a Doc or Sheet visibly associates its stable identity with the selected
+6. Opening any of the six supported file types visibly associates its stable identity with the selected
    native Session in `conversation.input.dock`. Remove/reassociate there. Ask
    “总结当前文档”; the native Agent receives a short runtime-context identity and
-   reads current Server content through `univer_inspect`. No body or large JSON
+   reads current Server content through `univer_inspect` (Docs text, Sheets cells,
+   Slides/Canvas/Databases structured SDK Unit data, Sites HTML source). No body or large JSON
    is inserted into ordinary user messages. Page association is frozen at native
    message admission, including queued requests; stale association responses are
-   rejected. Slides/Boards/Bases/Sites previews do not yet have Agent read tools;
-   opening them clears the previous current-document pointer.
+   rejected.
 7. Existing durable Workspace references remain clickable through the public
    UserText rule/keyed Slot. Clicks recheck current ACL and Node/Resource/Unit,
    open the file, preserve its native Session and show the current association.
@@ -96,7 +101,7 @@ multi-user editing or offline persistence.
 The read tools are `univer_spaces`, `univer_documents`, `univer_open`, and
 `univer_inspect`. They use Session-scoped association routing and current Host
 Workspace login; the real Server rechecks ACLs. Inspection reads current Server
-content, returns revision/hash and bounded line/cell entries, and exposes
+content, returns revision/hash and bounded text/cell/structured-Unit/HTML-source lines, and exposes
 `nextOffset` for paging. These are deliberately read-only subsets; they do not
 promise the complete old plugin's Facade/Worktree interface. No write/merge tool
 is registered. Removing the current-document association does not erase a durable message or
@@ -118,3 +123,28 @@ Additional read-only UI check: `node scripts/check-readonly-live.mjs` with the
 same Host/browser/MVP-fixture variables, after connecting Workspace. It verifies
 that Base create controls are disabled and a Slides insertion is rejected by
 the SDK permission guard. Source snapshots remain unchanged.
+
+Run `node scripts/check-navigation-live.mjs` to exercise Chat/Space/Plugins/Automation,
+narrow navigation, six file types and a Tool read in the existing Session.
+`node scripts/check-navigation-lifecycle-live.mjs` also requires
+`SPACE_PLUGIN_TARBALL=/absolute/path/to/exact-built-package.tgz` and removes and
+reinstalls that bundle through the official manager. Preserve any Host diagnostics.
+
+Use `SPACE_LIFECYCLE_REMOVE_ONLY=1` with the lifecycle script to verify actual
+uninstall restoration alone. This deliberately leaves the bundle uninstalled;
+reinstall the exact tarball through the manager afterwards.
+
+On macOS, the native Host drag marker is applied to existing secondary/file
+header rows. Chat leaves the existing top row blank except for the sidebar
+control; Space keeps its Space heading. No extra chrome row, white strip or top
+padding is added. The Host excludes interactive controls from drag geometry.
+
+The shell uses Host theme tokens for surfaces, text, muted labels, borders and
+selected/hover states. `check-navigation-theme-live.mjs` changes themes through
+actual native Settings controls and restores the previous preference; it captures
+both Chat and Space in light/dark. `check-all-context-live.mjs` exercises all six
+file identities, remove/reassociate and new formal Tool reads in the existing
+Session. No document bodies are injected into ordinary prompts. Structured Unit
+inspection is bounded JSON data returned by a Tool, not a full editor or write
+capability. Schemas/names stay unchanged; the inspect description now documents
+these added read formats in the checked contract fixture.

@@ -30,6 +30,7 @@ await build({
     'src/file-reference.ts',
     'src/tools.ts',
     'src/viewer-data.ts',
+    'src/host-layout.ts',
   ],
   outdir: 'lib',
   bundle: true,
