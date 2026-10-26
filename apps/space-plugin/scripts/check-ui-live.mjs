@@ -436,6 +436,9 @@ try {
   assert.equal((await panel().boundingBox()).width, 560);
   await page.setViewportSize({ width: 768, height: 900 });
   await page.getByRole('button', { name: 'Toggle sidebar' }).click();
+  if ((await panel().getAttribute('data-mode')) === 'compact')
+    await page.getByRole('button', { name: 'Expand floating chat' }).click();
+  await mode('expanded');
   await measure('chat-768', '.sp-page-title,.sp-floating-chat');
   await shot('chat-768', ['E34']);
   assert.ok((await panel().boundingBox()).x >= 56);

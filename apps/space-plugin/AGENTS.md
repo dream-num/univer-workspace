@@ -7,3 +7,6 @@
 - Associate explicit stable file identities to an existing Session. Send references only; fetch bodies on demand through registered Workspace tools using authenticated Server ACLs. Opening is not selecting; submitting a reference is not proof of tool use.
 - This phase exposes read tools only. Future Agent writes require Worktree isolation, user Review and explicit merge authorization. Never write directly to trunk.
 - Preserve isolated npm/React 18 and exact coupled Univer SDK versions. Do not patch node_modules, add skipLibCheck, import unpublished SDK paths or unify this graph with Workspace Browser React 19.
+
+- DSH Tools must remain a type-only development dependency here. Register the existing public JSON Schema ToolDefinitions without installing a second Tools service in the Host profile. Preserve the checked contract fixture and packaging test; do not copy a Host registry, scheduler or runtime into the plugin.
+- Floating chat geometry is plugin-owned; its transcript, composer, model controls, running state and durable messages remain DSH-owned. Keep one native Conversation tree through compact/minimized states.
