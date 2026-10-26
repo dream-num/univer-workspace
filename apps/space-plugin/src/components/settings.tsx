@@ -155,17 +155,6 @@ export function Settings({ face, v }: { face: Face; v: State }) {
             </button>
           </form>
         )}
-        <div
-          className="tw-text-xs tw-text-muted"
-          data-host-navigation-status={v.hostNavigation}
-        >
-          Activity Bar:{' '}
-          {v.hostNavigation === 'active'
-            ? '已启用'
-            : v.hostNavigation === 'checking'
-              ? '检查兼容性…'
-              : '当前 Host 构建未验证，保留原生导航'}
-        </div>
         {v.error && (
           <p role="alert" className="tw-m-0 tw-text-xs tw-text-red-700">
             {v.error}

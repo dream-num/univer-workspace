@@ -42,12 +42,13 @@ p.on('console', (message) => {
     consoleErrors.push(message.text().slice(0, 600));
 });
 const stamp = Date.now();
-const ready = () =>
-  p
-    .locator(
-      '[data-editor-state="saved"], [data-viewer-state="ready"], .sp-html-preview iframe',
-    )
-    .waitFor();
+const ready = async () => {
+  await p.locator('[data-editor-state="saved"], [data-viewer-state="ready"], .sp-html-preview iframe').waitFor();
+  // Facade readiness precedes the Base table's first UI frame.
+  if (await p.locator('[aria-label="base 阅读视图"]').count())
+    await p.locator('.sp-sdk').getByText('Table 1', { exact: true }).waitFor();
+  await p.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+};
 const metadata = (node) => h.request('space/metadata', { node });
 const content = (node) => h.request('space/content', { node });
 const fingerprint = (file) =>

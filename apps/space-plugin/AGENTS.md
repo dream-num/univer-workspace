@@ -14,6 +14,8 @@ Agent 的职责是实现已经确定的产品契约，而不是通过改变产�
 
 - Preserve the approved menu and interaction contract even when a capability is incomplete. Technical constraints require a product decision, not unilateral deletion, hiding, renaming, moving, global View Only or disabled-button test passes. Reuse existing Workspace APIs, workflows, Hooks, SDKs and Facades; the old Workspace Agent UI remains excluded as a design reference.
 - UI types are Docs, Sheets, Slides, Canvas, Relational Table and Pages; Pages retain the Workspace HTML View identity.
+- All content UI names, creation labels and runtime classifications come from `src/content-types.ts`. Row More, right-click and file identity menus share `FileActions`. Human lifecycle writes reuse Server Node/Resource/Blob/Trash workflows; retain fresh Server capabilities and stable Resource/Unit identities.
+- Pages use the Fork's shared formal HTML Viewer/engine in this application's isolated peer graph, not a script-free replacement iframe. Run its prepare-to-leave protocol even before pending drafts reach the host, drain the complete HTTP pipeline and resume the same sandbox if departure is cancelled. Keep the public pointer services needed by globally loaded Sheets UI Facade observers in the headless source runtime.
 - Keep the application here, in the Univer Workspace fork. Never modify official DSH source.
 - Use React function components, TypeScript and scoped Tailwind utilities for the shell. Disable Tailwind preflight. Shell resets must not reach Univer or native Conversation descendants. Keep the SDK global-reset scoping build step and published-CSS isolation test.
 - Keep Docs / Sheets on published, version-matched Univer UI presets; no static-preview replacement.

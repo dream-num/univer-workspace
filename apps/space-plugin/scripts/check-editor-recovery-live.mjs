@@ -122,7 +122,7 @@ try {
   await p.locator('[data-editor-state="offline"]').waitFor();
   const rect = await p.locator('.sp-sdk canvas').last().boundingBox();
   await p.mouse.click(
-    (await p.locator('.sp-sdk canvas').last().boundingBox()).x + 190,
+    (await p.locator('.sp-sdk canvas').last().boundingBox()).x + 300,
     (await p.locator('.sp-sdk canvas').last().boundingBox()).y + 100,
   );
   await p.keyboard.type(token, { delay: 30 });
@@ -149,7 +149,7 @@ try {
   );
   await p.bringToFront();
   await p.mouse.click(
-    (await p.locator('.sp-sdk canvas').last().boundingBox()).x + 190,
+    (await p.locator('.sp-sdk canvas').last().boundingBox()).x + 300,
     (await p.locator('.sp-sdk canvas').last().boundingBox()).y + 100,
   );
   await p.keyboard.type(token, { delay: 30 });
@@ -176,7 +176,7 @@ try {
       new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
   );
   await p.mouse.click(
-    (await p.locator('.sp-sdk canvas').last().boundingBox()).x + 190,
+    (await p.locator('.sp-sdk canvas').last().boundingBox()).x + 300,
     (await p.locator('.sp-sdk canvas').last().boundingBox()).y + 100,
   );
   await p.keyboard.press('Meta+a');

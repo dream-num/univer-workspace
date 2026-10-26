@@ -83,7 +83,7 @@ async function open(p, node) {
 async function docFocus(p) {
   await p.bringToFront();
   const rect = await p.locator('.sp-sdk canvas').last().boundingBox();
-  await p.mouse.click(rect.x + 190, rect.y + 100);
+  await p.mouse.click(rect.x + 300, rect.y + 100);
 }
 async function copyDoc(p) {
   await docFocus(p);

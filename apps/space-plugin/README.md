@@ -1,7 +1,7 @@
 # Space plugin for official DeepSeek Harness
 
 Space-style content navigation, writable collaborative Univer Docs/Sheets,
-read-only Slides/Canvas/Databases and sandbox HTML previews, and the
+formal Slides/Canvas/Relational Table viewers and the shared Workspace HTML Viewer for Pages, and the
 native DSH Conversation in a floating overlay. DSH owns Session history, composer, model,
 Agent and tool logs. Official host source is unchanged.
 
@@ -49,9 +49,8 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
    writing is not enabled. The SDK's queued-online-change recovery remains enabled.
    Workspace cookies stay in Host memory: SDK HTTP uses the existing owner Connection;
    WebSocket connects directly to Workspace using its one-time session ticket.
-   Slides/Canvas/Databases keep detached previews. Sites maps specifically to Server
-   `.univer.html` Blobs, with a sandboxed, script-free preview up to 1 MiB. The current
-   local SDK environment may display a license watermark. Comments and History are
+   Slides/Canvas/Relational Table keep detached previews. Pages maps specifically to Server
+   `.univer.html` Blobs, using the Fork's shared formal sandbox and binding engine (up to 1 MiB source). It supports scripts, authenticated Sheet bindings, inspection, and save-before-leave with resume after a failed connection change. License uses the Fork's existing source through official SDK initialization. Comments and History are
    not exposed: their additional datasource/viewer authentication remains unaccepted.
 5. Floating chat provides compact-message, expanded and minimized states. Move
    its grip, resize either side, restore it, create a Host Conversation or choose
@@ -61,7 +60,7 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
    native Session in `conversation.input.dock`. Remove/reassociate there. Ask
    “总结当前文档”; the native Agent receives a short runtime-context identity and
    reads current Server content through `univer_inspect` (Docs text, Sheets cells,
-   Slides/Canvas/Databases structured SDK Unit data, Sites HTML source). No body or large JSON
+   Slides/Canvas/Relational Table structured SDK Unit data, Pages HTML source). No body or large JSON
    is inserted into ordinary user messages. Page association is frozen at native
    message admission, including queued requests; stale association responses are
    rejected.
@@ -73,12 +72,9 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
    Close viewer returns to its source list. Reconnecting the same endpoint keeps
    authentication; an invalid/unreachable replacement keeps the existing service.
 
-Create / New creates real Spaces, Folders, Docs and Sheets using the current
-Workspace identity and Server capabilities. All defaults to the Personal Space;
-Space / Folder creates in that directory. New Docs and Sheets open automatically.
+Create / New keeps all eight entries: Doc, Sheet, Slide, Canvas, Relational Table, Page, Folder, Space. All uses the Personal Space; Space / Folder uses the current directory. All six content types open automatically after Server persistence. Folder stays in its parent and Space navigates to the new Space. Restricted destinations retain disabled entries with permission feedback. Node rename/move and Trash/restore reuse the Browser product workflows; file identity and the native Session stay stable.
 
-Direct sharing, Favorites, Trash, subpages, moves and deletes are
-unavailable in this release. Disabled controls explain feature availability separately from Server permissions. Suggested has
+Direct sharing, Favorites and subpages remain unavailable. Trash/Restore, Rename and same-Space folder moves are available through shared row, right-click and file-identity menus. Space supports Create/Open/Rename; Space Move/Trash/Restore need a separate lifecycle extension and are not implemented. Disabled controls explain feature availability separately from Server permissions. Suggested has
 local pinned metadata cards, with no fabricated templates or recommendations.
 The native DSH composer is taller than Space's 52px input capsule; it is kept
 intact.
@@ -159,3 +155,16 @@ Session. No document bodies are injected into ordinary prompts. Structured Unit
 inspection is bounded JSON data returned by a Tool, not a full editor or write
 capability. Schemas/names stay unchanged; the inspect description now documents
 these added read formats in the checked contract fixture.
+
+The taxonomy in `src/content-types.ts` owns every UI name and creation entry.
+`node scripts/check-crud-live.mjs` covers all eight object types against the Server,
+including content/identity after restore and unauthorized-write rejection.
+`node scripts/check-html-live.mjs` covers Page scripts, Sheet binding reads/writes,
+persisted reopen, inspection and resume after a rejected connection change.
+
+The formal HTML Viewer is a build-time `file:` dependency on the Fork's existing
+`packages/workspace-html-viewer`; `.npmrc` materializes its sources with isolated
+consumer peers, rather than linking a second SDK/React graph. Browser JSX uses
+automatic transformation for that shared component. All coupled SDKs stay at
+1.1.0. The build also reads the existing Fork license source without printing it.
+Run build/install from this repository, preserving those source directories.

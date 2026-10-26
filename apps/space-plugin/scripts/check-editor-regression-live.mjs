@@ -7,7 +7,12 @@ const { chromium } = await import(
 );
 const h = await connectHost(),
   f = JSON.parse(await readFile(process.env.SPACE_TEST_LOGIN_FILE, 'utf8')),
-  x = JSON.parse(await readFile('/tmp/task009b-fixtures.json', 'utf8')),
+  x = JSON.parse(
+    await readFile(
+      process.env.SPACE_COLLAB_FIXTURES ?? '/tmp/task009b-fixtures.json',
+      'utf8',
+    ),
+  ),
   extra = JSON.parse(await readFile(process.env.SPACE_MVP_FIXTURES, 'utf8'));
 const out = resolve(process.env.SPACE_EVIDENCE_DIR ?? '/tmp/task009b-evidence');
 await mkdir(out, { recursive: true });
@@ -85,7 +90,7 @@ try {
   await p
     .locator('.sp-sdk canvas')
     .last()
-    .click({ position: { x: 190, y: 100 }, button: 'right' });
+    .click({ position: { x: 300, y: 100 }, button: 'right' });
   await p.locator('.univer-shadow-md[tabindex="-1"]').waitFor();
   assert.ok(
     (await p.locator('.univer-shadow-md[tabindex="-1"]').innerText()).length >
@@ -122,14 +127,14 @@ try {
   await p
     .locator('.sp-sdk canvas')
     .last()
-    .click({ position: { x: 190, y: 100 } });
+    .click({ position: { x: 300, y: 100 } });
   await p.keyboard.type(quickToken, { delay: 5 });
   await p.getByRole('button', { name: 'Close viewer', exact: true }).click();
   await open(x.doc);
   await p
     .locator('.sp-sdk canvas')
     .last()
-    .click({ position: { x: 190, y: 100 } });
+    .click({ position: { x: 300, y: 100 } });
   await p.keyboard.press('Meta+a');
   await p.evaluate(() => navigator.clipboard.writeText('__pending_copy__'));
   await p.keyboard.press('Meta+c');

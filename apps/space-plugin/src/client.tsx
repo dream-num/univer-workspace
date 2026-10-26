@@ -423,13 +423,14 @@ export function apply(ctx: any) {
     if (!view.sessionId) await newConversation();
     else if (view.content) await associateCurrent();
   }
-  let editor: {
+  type EditorBinding = {
     node: string;
     flush(): Promise<void>;
     isSaved(): boolean;
     resume?(): Promise<void>;
-  } | null = null;
-  let pausedEditor: typeof editor = null;
+  };
+  let editor: EditorBinding | null = null;
+  let pausedEditor: EditorBinding | null = null;
   async function flushEditor() {
     // HTML drafts may still be inside the sandbox before the host sees pending
     // state. Its formal departure protocol must run even while Saved is true.

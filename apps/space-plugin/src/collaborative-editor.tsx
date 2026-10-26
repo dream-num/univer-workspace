@@ -33,6 +33,7 @@ import { UniverLicensePlugin } from '@univerjs-pro/license';
 import type { Content, State } from './model.js';
 import type { Face } from './client.js';
 import { editorHTTP } from './editor-http.js';
+import { workspaceLicense } from './license.js';
 
 let closingEditor: Promise<void> = Promise.resolve();
 
@@ -152,7 +153,10 @@ export function CollaborativeEditor({
             collabUILocale,
           ),
         },
-        presets: [{ plugins: [UniverLicensePlugin] }, corePreset],
+        presets: [
+          { plugins: [[UniverLicensePlugin, { license: workspaceLicense }]] },
+          corePreset,
+        ],
         plugins: [
           UniverCollaborationPlugin,
           [
