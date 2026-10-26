@@ -3,7 +3,7 @@ import { connectHtmlView, type HtmlViewHostOptions } from "./connection.js";
 
 export type WorkspaceHtmlViewerHandle = Pick<
   ReturnType<typeof connectHtmlView>,
-  "prepareToLeave" | "inspect" | "hasPendingChanges"
+  "prepareToLeave" | "resume" | "inspect" | "hasPendingChanges"
 >;
 
 export interface WorkspaceHtmlViewerProps extends HtmlViewHostOptions {
@@ -28,6 +28,9 @@ export const WorkspaceHtmlViewer = forwardRef<WorkspaceHtmlViewerHandle, Workspa
       () => ({
         async prepareToLeave() {
           await connection.current?.prepareToLeave();
+        },
+        async resume() {
+          await connection.current?.resume();
         },
         inspect: {
           async open() {

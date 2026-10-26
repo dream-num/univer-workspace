@@ -17,6 +17,8 @@ source engines, and exposes the view's save and inspection controls through a re
 - `onInspectChanged(boolean)` keeps the host's toolbar toggle in sync.
 - `prepareToLeave()` commits drafts, waits for saving and pauses page writes; hosts
   keep the component mounted until it succeeds. Failures leave the page usable.
+- `resume()` resumes the same sandbox after a later host operation cancels departure;
+  it preserves the current page and source engines.
 - `hasPendingChanges()` includes drafts, writes and collaboration confirmation.
 
 Applications supply HTML source, an accessible title, `locale` (`zh-CN` or `en-US`),

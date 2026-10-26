@@ -56,6 +56,7 @@ export function connectHtmlView(
   });
   return {
     prepareToLeave: view.prepareToLeave,
+    resume: view.resume,
     hasPendingChanges: () => pending,
     inspect: {
       open: () =>
