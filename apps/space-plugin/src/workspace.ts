@@ -137,7 +137,7 @@ export class WorkspaceConnection {
     };
     const frozen = { endpoint, nodeId, resourceId: resource.id, unitId: resource.unitId, type: resource.unitType, name: node.name, revision, content };
     const sha256 = createHash('sha256').update(JSON.stringify(frozen)).digest('hex');
-    return { ...frozen, sha256, capturedAt: new Date().toISOString(), notice: 'Read-only text/cell projection. Rich layout, embedded objects and formula recalculation are outside this slice.' };
+    return { ...frozen, sha256, capturedAt: new Date().toISOString(), data, notice: 'Read-only frozen snapshot. Core Docs / Sheets UI; advanced embedded objects may require additional presets.' };
   }
 }
 

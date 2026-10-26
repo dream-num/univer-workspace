@@ -1,66 +1,71 @@
 import type { Context } from '@deepseek-ai/cordis';
-import type {} from '@deepseek-ai/dsh-host-webserver';
 import type {} from '@deepseek-ai/dsh-client-connection';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
 
 export const name = 'space-plugin';
-export const inject = ['webServer', 'connection'];
+export const inject = ['connection'];
 
+/** Use the public Connection carrier; no webServer or Desktop-private IPC. */
 export function apply(ctx: Context) {
   const workspace = new WorkspaceConnection();
   ctx.effect(() => () => workspace.dispose());
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'prefix', path: '/space-plugin/api',
-    async handler(req, res) {
-      // Same public trust fence used by official DSH HTTP extensions.
-      const rejection = ctx.connection.requestRejection(req);
-      if (rejection !== undefined) { res.writeHead(rejection); res.end(); return; }
-      res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('Content-Type', 'application/json');
-      try {
-        const url = new URL(req.url!, 'http://localhost');
-        const path = url.pathname.slice('/space-plugin/api'.length);
-        let result: unknown;
-        if (req.method === 'GET' && path === '/status') result = await workspace.status();
-        else if (req.method === 'POST' && path === '/configure') {
-          const { endpoint } = await body(req);
-          if (typeof endpoint !== 'string') throw new SpaceError(400, 'Endpoint is required.');
-          workspace.configure(endpoint); result = await workspace.status();
-        } else if (req.method === 'POST' && path === '/login') {
-          const { username, password } = await body(req);
-          if (typeof username !== 'string' || typeof password !== 'string') throw new SpaceError(400, 'Username and password are required.');
-          result = await workspace.login(username, password);
-        } else if (req.method === 'GET' && path === '/spaces') result = await workspace.json('/api/spaces');
-        else if (req.method === 'GET' && path === '/nodes') {
-          const parent = url.searchParams.get('parent');
-          const space = url.searchParams.get('space');
-          if (!parent && !space) throw new SpaceError(400, 'Space or parent Node required.');
-          const upstream = parent ? `/api/nodes/${encodeURIComponent(parent)}/children` : `/api/spaces/${encodeURIComponent(space!)}/nodes`;
+  const handle = async (operation: string, payload: unknown, signal: AbortSignal) => {
+    try {
+      signal.throwIfAborted();
+      const input = payload as Record<string, unknown> | null;
+      const string = (key: string, optional = false): string => {
+        const value = input?.[key];
+        if (optional && value === undefined) return '';
+        if (typeof value !== 'string' || value.length > 4096) throw new SpaceError(400, `Invalid ${key}.`);
+        return value;
+      };
+      let value: unknown;
+      switch (operation) {
+        case 'status': value = await workspace.status(); break;
+        case 'configure': workspace.configure(string('endpoint')); value = await workspace.status(); break;
+        case 'login': value = await workspace.login(string('username'), string('password')); break;
+        case 'recent': {
           const query = new URLSearchParams({ limit: '100' });
-          if (url.searchParams.get('cursor')) query.set('cursor', url.searchParams.get('cursor')!);
-          result = await workspace.json(`${upstream}?${query}`);
-        } else if (req.method === 'GET' && path === '/content') {
-          const node = url.searchParams.get('node');
-          if (!node) throw new SpaceError(400, 'Node required.');
-          result = await workspace.read(node);
-        } else throw new SpaceError(404, 'Unknown Space plugin operation.');
-        res.end(JSON.stringify(result));
-      } catch (error) {
-        res.statusCode = error instanceof SpaceError ? error.status : 500;
-        res.end(JSON.stringify({ error: error instanceof SpaceError ? error.message : 'Space request failed or was canceled.' }));
+          const cursor = string('cursor', true); if (cursor) query.set('cursor', cursor);
+          value = await workspace.json(`/api/recent-resources?${query}`, { signal }); break;
+        }
+        case 'spaces': value = await workspace.json('/api/spaces', { signal }); break;
+        case 'nodes': {
+          const parent = string('parent', true);
+          const space = string('space', true);
+          if (!parent && !space) throw new SpaceError(400, 'Space or parent required.');
+          const upstream = parent ? `/api/nodes/${encodeURIComponent(parent)}/children` : `/api/spaces/${encodeURIComponent(space)}/nodes`;
+          const query = new URLSearchParams({ limit: '100' });
+          const cursor = string('cursor', true);
+          if (cursor) query.set('cursor', cursor);
+          value = await workspace.json(`${upstream}?${query}`, { signal });
+          break;
+        }
+        case 'content': value = await workspace.read(string('node')); break;
+        default: throw new SpaceError(404, 'Unknown Space operation.');
       }
-    },
-  }), 'Space: authenticated read-only Workspace routes');
-}
-
-async function body(req: import('node:http').IncomingMessage): Promise<any> {
-  if (!req.headers['content-type']?.startsWith('application/json')) throw new SpaceError(415, 'JSON required.');
-  const chunks: Buffer[] = []; let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > 8192) throw new SpaceError(413, 'Request too large.');
-    chunks.push(chunk);
+      signal.throwIfAborted();
+      return { ok: true, value };
+    } catch (error) {
+      return { ok: false, error: { code: String(error instanceof SpaceError ? error.status : 500), message: error instanceof SpaceError ? error.message : 'Space request failed or was canceled.', details: {} } };
+    }
+  };
+  // rpc.handle in DSH 0.2.1-rc.3 accesses the caller's webServer directly.
+  // Public exact Fetch routes use the shared authenticated carrier and admit
+  // owner peers only. They are also supported by Desktop's dsh-app forwarding.
+  for (const operation of ['status', 'configure', 'login', 'spaces', 'recent', 'nodes', 'content']) {
+    ctx.effect(() => ctx.connection.fetch.register({
+      path: `/api/space/${operation}`, methods: ['POST'], requestBody: 'buffered',
+      async fetch(request) {
+        if (!request.headers.get('content-type')?.startsWith('application/json')) return new Response('JSON required', { status: 415 });
+        const raw = await request.text();
+        if (raw.length > 16384) return new Response('Request too large', { status: 413 });
+        let message;
+        try { message = JSON.parse(raw); } catch { return new Response('Invalid JSON', { status: 400 }); }
+        if (message?.type !== 'client-request' || typeof message.rpcId !== 'string' || message.method !== `space/${operation}`) return new Response('Invalid RPC envelope', { status: 400 });
+        const result = await handle(operation, message.payload, request.signal);
+        return Response.json({ type: 'server-response', rpcId: message.rpcId, result }, { headers: { 'cache-control': 'no-store' } });
+      },
+    }), `Space: ${operation} Connection route`);
   }
-  try { return JSON.parse(Buffer.concat(chunks).toString()); }
-  catch { throw new SpaceError(400, 'Invalid JSON.'); }
 }

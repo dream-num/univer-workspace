@@ -1,0 +1,25 @@
+import { writeEvidence } from './evidence-output.mjs';
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+const path=process.argv[2];
+if(!path) throw new Error('Pass the official session.v4.jsonl.zstd path.');
+const decoded=spawnSync('zstd',['-dc',path],{encoding:'utf8',maxBuffer:32*1024*1024});
+if(decoded.status!==0) throw new Error('Native Session decompression failed.');
+const rows=decoded.stdout.trim().split('\n').map(line=>JSON.parse(line));const header=rows[0];
+assert.equal(header.type,'session');
+const textOf=parts=>Array.isArray(parts)?parts.filter(part=>part.type==='text').map(part=>part.text).join('\n'):'';
+const users=rows.filter(row=>row.type==='user/message'&&row.data.source?.kind==='user'&&textOf(row.data.content).includes('<workspace_snapshot token="space-context:')&&textOf(row.data.content).includes('TASK-005'));
+assert.ok(users.length>=2,'Expected legacy and readable TASK-005 native submissions.');
+const first=users[0].seq;const last=users.at(-1).seq;
+const events=rows.filter(row=>row.seq>=first&&(['assistant/message','turn/end'].includes(row.type)||users.includes(row))).map(row=>{
+ if(row.type==='user/message') return {seq:row.seq,type:row.type,time:row.time,text:textOf(row.data.content)};
+ if(row.type==='assistant/message') return {seq:row.seq,type:row.type,time:row.time,turn:row.data.turn,text:textOf(row.data.message.content),provider:row.data.message.source?.provider,model:row.data.message.source?.model};
+ return {seq:row.seq,type:row.type,time:row.time};
+});
+assert.ok(events.some(row=>row.type==='assistant/message'&&row.text.includes('SESSION-S-READY')),'Original Session continuity was not established.');
+assert.ok(events.some(row=>row.seq>last&&row.type==='assistant/message'&&row.text.includes('Space 发布计划')&&row.text.includes('SPACE-ORBIT-7419')&&row.text.includes('在官方 Desktop 完成 UX 验收后，再评审编辑与 Agent 写入。')),'Latest actual reply did not demonstrate reading the selected document.');
+assert.ok(events.some(row=>row.seq>last&&row.type==='turn/end'));
+await writeEvidence('session-context.json',{sessionId:header.id,compressedLogSha256:createHash('sha256').update(await readFile(path)).digest('hex'),carrier:'Official Electron-owned native Session; submissions exercised through supplementary Web UI. Not Electron window UX evidence.',source:'Whitelisted human user and assistant text, model attribution and turn/end only. No headers, system/developer prompts, environment or credentials.',events});
+console.log(JSON.stringify({sessionId:header.id,task005Submissions:users.length,latestUserSeq:last,verifiedActualReply:true}));
