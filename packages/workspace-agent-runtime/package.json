@@ -1,0 +1,55 @@
+{
+  "name": "@univerjs/univer-workspace-agent-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "lib",
+    "src"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/manager.ts",
+      "default": "./lib/index.js"
+    },
+    "./worker": {
+      "types": "./src/worker.ts",
+      "default": "./lib/worker.js"
+    },
+    "./manager": {
+      "types": "./src/manager.ts",
+      "default": "./lib/manager.js"
+    },
+    "./target": {
+      "types": "./src/target.ts",
+      "default": "./lib/target.js"
+    },
+    "./worker-http": {
+      "types": "./src/worker-http.ts",
+      "default": "./lib/worker-http.js"
+    },
+    "./snapshot-adapter": {
+      "types": "./src/snapshot-adapter.ts",
+      "default": "./lib/snapshot-adapter.js"
+    },
+    "./worker-child": "./lib/worker-child.mjs",
+    "./worker-child-upstream": "./lib/worker-child-upstream.mjs"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@univer-cli/content-execution": "1.1.0",
+    "@univer-cli/content-inspection": "1.1.0",
+    "@univer-cli/headless-univer": "1.1.0",
+    "@univer-cli/univer-collaboration-runtime": "1.1.0",
+    "@univer-cli/univer-collaboration-runtime-pool": "1.1.0",
+    "@univerjs-pro/collaboration": "1.1.0",
+    "@univerjs-pro/engine-formula-rust": "1.1.0",
+    "@univerjs-pro/exchange-node": "1.1.0",
+    "@univerjs/protocol": "1.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.7"
+  }
+}

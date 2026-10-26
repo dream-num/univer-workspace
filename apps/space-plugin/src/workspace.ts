@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { RuntimeManager } from '@univerjs/univer-workspace-agent-runtime';
+import { workspaceLicense } from './license.js';
 import {
   transformSnapshotToDocumentData,
   transformSnapshotToWorkbookData,
@@ -48,6 +50,20 @@ export function normalizeEndpoint(value: string): string {
 /** Plugin-owned connection only; no credentials, second Agent, or chat history in the client. */
 export class WorkspaceConnection {
   endpoint = '';
+  private runtime = new RuntimeManager(new URL('./workspace-content-worker.js', import.meta.url));
+  /** Host-only credential boundary. No credential enters Tool results or UI. */
+  private draftTarget(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string) {
+    const token = this.cookie.match(/(?:^|; )workspace_session=([^;]+)/)?.[1];
+    if (!token || this.endpoint !== file.endpoint) throw new SpaceError(401, 'Workspace identity changed.');
+    return { origin: this.endpoint, sessionToken: token, license: workspaceLicense, revision: -1, scope: { kind: 'worktree' as const, worktreeId }, unitId: file.unitId, unitType: file.type };
+  }
+  async executeDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, code: string) {
+    return this.runtime.writeAndCommit(this.draftTarget(file, worktreeId), code);
+  }
+  async inspectDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, sheet?: string, range?: string) {
+    if (range && (!sheet || file.type !== 'sheet')) throw new SpaceError(400, 'A worksheet name is required for a Sheet range.');
+    return this.runtime.inspect(this.draftTarget(file, worktreeId), file.type === 'doc' ? { kind: 'document' } : range ? { kind: 'worksheet-range', ranges: [{ worksheet: { name: sheet! }, range }] } : { kind: 'workbook' });
+  }
   private cookie = '';
   private lifetime = new AbortController();
   private connectAttempt = 0;
@@ -114,6 +130,7 @@ export class WorkspaceConnection {
     this.lifetime.abort();
     this.cookie = '';
     await Promise.allSettled([...this.pending]);
+    await this.runtime.close();
     await this.materializer.dispose();
   }
 

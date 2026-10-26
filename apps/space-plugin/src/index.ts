@@ -3,6 +3,7 @@ import type {} from '@deepseek-ai/dsh-client-connection';
 import type {} from '@deepseek-ai/dsh-agent';
 import type {} from '@deepseek-ai/dsh-system-prompt';
 import { ToolBindings, registerReadTools } from './tools.js';
+import { AgentEditing, registerEditingTools } from './editing.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
 
 export const name = 'space-plugin';
@@ -12,7 +13,9 @@ export const inject = ['connection', 'tools', 'systemPrompt'];
 export function apply(ctx: Context) {
   const workspace = new WorkspaceConnection();
   const bindings = new ToolBindings(workspace);
-  ctx.effect(() => registerReadTools(ctx, workspace, bindings));
+  const editing = new AgentEditing(workspace, bindings);
+  ctx.effect(() => registerEditingTools(ctx, editing));
+  ctx.effect(() => registerReadTools(ctx, workspace, bindings, (session, args, signal) => editing.inspect(session, args, signal)));
   ctx.effect(() =>
     ctx.systemPrompt.context({
       name: 'space:current-document',
@@ -55,6 +58,12 @@ export function apply(ctx: Context) {
       };
       let value: unknown;
       switch (operation) {
+        case 'editing-status':
+          value = await editing.status(string('sessionId'), string('nodeId'));
+          break;
+        case 'editing-action':
+          value = await editing.action(string('sessionId'), string('nodeId'), string('action'), string('proposalId'), string('reviewToken', true));
+          break;
         case 'status':
           value = await workspace.status();
           break;
@@ -219,6 +228,8 @@ export function apply(ctx: Context) {
   // owner peers only. They are also supported by Desktop's dsh-app forwarding.
   for (const operation of [
     'status',
+    'editing-status',
+    'editing-action',
     'configure',
     'login',
     'spaces',

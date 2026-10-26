@@ -290,3 +290,5 @@ to override it.
 ## License
 
 Univer Workspace is licensed under [Apache-2.0](LICENSE).
+
+Space 和原 Workspace Agent 共用 `packages/workspace-agent-runtime` 的既有 Headless Facade / Worktree changeset 实现。它只负责内容 worker，不提供另一个 DSH Runtime。先运行 `pnpm --filter @univerjs/univer-workspace-agent-runtime build`，再构建相应消费者；Space 将该公开入口与 worker 内联/复制到自己的安装包，不把 file: 开发依赖带入 Host。

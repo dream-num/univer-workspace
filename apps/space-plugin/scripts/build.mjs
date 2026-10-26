@@ -1,7 +1,9 @@
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { scopeSdkCss } from './scope-sdk-css.mjs';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, copyFile, rm } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+await rm('lib', { recursive: true, force: true });
 await mkdir('lib', { recursive: true });
 const sdkCss = await Promise.all(
   [
@@ -39,6 +41,7 @@ await build({
     'src/model.ts',
     'src/file-reference.ts',
     'src/tools.ts',
+    'src/editing.ts',
     'src/viewer-data.ts',
     'src/host-layout.ts',
     'src/editor-http.ts',
@@ -48,6 +51,10 @@ await build({
   platform: 'node',
   format: 'esm',
   packages: 'external',
+  splitting: true,
+  plugins: [{ name: 'bundle-shared-content-runtime', setup(build) {
+    build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime$/ }, () => ({ path: fileURLToPath(import.meta.resolve('@univerjs/univer-workspace-agent-runtime')) }));
+  } }],
   target: 'node24',
   logLevel: 'info',
 });
@@ -67,3 +74,9 @@ await build({
   footer: { js: 'return module.exports;}});' },
   logLevel: 'info',
 });
+
+// Public shared runtime artifacts are packaged with the plugin. No file: path
+// or second DSH cohort is required in an installed Host profile.
+await copyFile(fileURLToPath(import.meta.resolve('@univerjs/univer-workspace-agent-runtime/worker')), 'lib/workspace-content-worker.js');
+await copyFile(fileURLToPath(import.meta.resolve('@univerjs/univer-workspace-agent-runtime/worker-child')), 'lib/worker-child.mjs');
+await copyFile(fileURLToPath(import.meta.resolve('@univerjs/univer-workspace-agent-runtime/worker-child-upstream')), 'lib/worker-child-upstream.mjs');

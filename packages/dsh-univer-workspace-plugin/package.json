@@ -46,7 +46,8 @@
     "@univerjs-pro/slides-print": "1.1.0",
     "@univerjs-pro/slides-thread-comment": "1.1.0",
     "@univerjs/docs-thread-comment": "1.1.0",
-    "ws": "8.21.3"
+    "ws": "8.21.3",
+    "@univerjs/univer-workspace-agent-runtime": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.2",

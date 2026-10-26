@@ -21,7 +21,6 @@ Agent 的职责是实现已经确定的产品契约，而不是通过改变产�
 - Keep Docs / Sheets on published, version-matched Univer UI presets; no static-preview replacement.
 - DSH owns all Agent sessions, messages, composer, tool execution and tool logs. Use public slots, SessionProvider and the Conversation factory; no second chat, Agent or generic gateway.
 - Current Page identity is automatically and visibly associated with the selected native Session, with a remove action. Use the public DSH runtime-context and native Composer slots; read bodies only through registered Workspace tools and current Server ACLs. Association is not proof of an actual read.
-- This phase exposes read tools only. Future Agent writes require Worktree isolation, user Review and explicit merge authorization. Never write directly to trunk.
 - Preserve isolated npm/React 18 and exact coupled Univer SDK versions. Do not patch node_modules, add skipLibCheck, import unpublished SDK paths or unify this graph with Workspace Browser React 19.
 
 - DSH Tools must remain a type-only development dependency here. Register the existing public JSON Schema ToolDefinitions without installing a second Tools service in the Host profile. Preserve the checked contract fixture and packaging test; do not copy a Host registry, scheduler or runtime into the plugin.

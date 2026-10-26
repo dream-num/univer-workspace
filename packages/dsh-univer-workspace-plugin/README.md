@@ -347,3 +347,5 @@ sign-in button. A successful status request with `connected: false` remains a
 sign-in state, while permission and network failures retain their own errors.
 Desktop delegates sign-in to its default-browser bridge; browser deployments
 keep the local OAuth navigation. Settings also offers **Switch account**.
+
+The original headless implementation now lives in the private `@univerjs/univer-workspace-agent-runtime` package. Build it first; the existing runtime paths re-export that shared implementation. This extraction supplies no external product UI or DSH service to the Space app.

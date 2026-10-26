@@ -1247,6 +1247,9 @@ importers:
       '@univerjs/docs-thread-comment':
         specifier: 1.1.0
         version: 1.1.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/univer-workspace-agent-runtime':
+        specifier: workspace:*
+        version: link:../workspace-agent-runtime
       ws:
         specifier: 8.21.3
         version: 8.21.3
@@ -2017,6 +2020,40 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.10.1)(@vitest/coverage-v8@4.1.11(vitest@4.1.11))(jsdom@30.0.1(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@24.10.1)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.89.2)(tsx@4.23.12))
+
+  packages/workspace-agent-runtime:
+    dependencies:
+      '@univer-cli/content-execution':
+        specifier: 1.1.0
+        version: 1.1.0
+      '@univer-cli/content-inspection':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
+      '@univer-cli/headless-univer':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
+      '@univer-cli/univer-collaboration-runtime':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
+      '@univer-cli/univer-collaboration-runtime-pool':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/collaboration':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/engine-formula-rust':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-pro/exchange-node':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/protocol':
+        specifier: 1.1.0
+        version: 1.1.0
+    devDependencies:
+      esbuild:
+        specifier: 0.27.7
+        version: 0.27.7
 
   packages/workspace-file-browser:
     dependencies:
@@ -5020,31 +5057,37 @@ packages:
     resolution: {integrity: sha512-minb6rFjJNHvFF8DpuWFAAYcH2prelrfkpqYeYYWzjajBbdB911eSUNHcToPPiiUNYRAA4S+A2axcnJPtnHN7A==, tarball: https://registry.npmjs.org/@univerjs-pro/doc-typst-native-binding-darwin-arm64/-/doc-typst-native-binding-darwin-arm64-1.0.0-insiders.20260723-c21613b.tgz}
     cpu: [arm64]
     os: [darwin]
+    deprecated: Insiders releases are no longer supported. Please use a stable release.
 
   '@univerjs-pro/doc-typst-native-binding-darwin-x64@1.0.0-insiders.20260723-c21613b':
     resolution: {integrity: sha512-kkjuhKHd6BenslxpDfRJl+93V1JpYhFPZQuWnCMvbJQ05X3OEZzJrM9DakpM1c0o07EvqG5RPI2x7VgCFU/gpA==, tarball: https://registry.npmjs.org/@univerjs-pro/doc-typst-native-binding-darwin-x64/-/doc-typst-native-binding-darwin-x64-1.0.0-insiders.20260723-c21613b.tgz}
     cpu: [x64]
     os: [darwin]
+    deprecated: Insiders releases are no longer supported. Please use a stable release.
 
   '@univerjs-pro/doc-typst-native-binding-linux-arm64-gnu@1.0.0-insiders.20260723-c21613b':
     resolution: {integrity: sha512-74261peO1VLe54tA8h27v5ySfr2Oad7OYwhkUcjhrfyPQA3CyTxXF6Dd3sBO72iZr7SUhWNLUD4sXIRvTxyneg==, tarball: https://registry.npmjs.org/@univerjs-pro/doc-typst-native-binding-linux-arm64-gnu/-/doc-typst-native-binding-linux-arm64-gnu-1.0.0-insiders.20260723-c21613b.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
+    deprecated: Insiders releases are no longer supported. Please use a stable release.
 
   '@univerjs-pro/doc-typst-native-binding-linux-x64-gnu@1.0.0-insiders.20260723-c21613b':
     resolution: {integrity: sha512-4ot4wDNCkI1r6pXK6WW0hRPTgmqPoZ1P2I4Y3SbZQQA/4ycvCOR82uGsj7Xe5zSIxH52WT8NBb0IN1Y5Px1vFA==, tarball: https://registry.npmjs.org/@univerjs-pro/doc-typst-native-binding-linux-x64-gnu/-/doc-typst-native-binding-linux-x64-gnu-1.0.0-insiders.20260723-c21613b.tgz}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+    deprecated: Insiders releases are no longer supported. Please use a stable release.
 
   '@univerjs-pro/doc-typst-native-binding-win32-x64-msvc@1.0.0-insiders.20260723-c21613b':
     resolution: {integrity: sha512-zOM5XI9Zu5tpv0EavpkqPcaAZ/b86HAamcLh0+SiGmlxbobWftNaWIhFDiRb8XEeK942/1gamsrb+4MboTHXcQ==, tarball: https://registry.npmjs.org/@univerjs-pro/doc-typst-native-binding-win32-x64-msvc/-/doc-typst-native-binding-win32-x64-msvc-1.0.0-insiders.20260723-c21613b.tgz}
     cpu: [x64]
     os: [win32]
+    deprecated: Insiders releases are no longer supported. Please use a stable release.
 
   '@univerjs-pro/doc-typst-native-binding@1.0.0-insiders.20260723-c21613b':
     resolution: {integrity: sha512-Zo4aCepdEnCzM1h/utV5HS8qcGWz/QlwAq7V0HavyufEXNdxsueda9K72YiUAn+KvGwJNcI7ntGcTOuNubQcqA==, tarball: https://registry.npmjs.org/@univerjs-pro/doc-typst-native-binding/-/doc-typst-native-binding-1.0.0-insiders.20260723-c21613b.tgz}
+    deprecated: Insiders releases are no longer supported. Please use a stable release.
 
   '@univerjs-pro/docs-callout-ui@1.1.0':
     resolution: {integrity: sha512-1nqGpc9IrtAWTmob5SIV0z3+xYG3qWXCHlEcP5+alfB7PsXBgSuOpeqbqdNf0DpKkip86gtq8aloH0ia6yn4Nw==, tarball: https://registry.npmjs.org/@univerjs-pro/docs-callout-ui/-/docs-callout-ui-1.1.0.tgz}

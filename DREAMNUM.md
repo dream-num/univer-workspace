@@ -31,6 +31,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   the same repository source in separate React/Univer peer contexts; Agent bundles its copy into its browser artifact. Until an application-level shared component home is
   available, changes remain synchronized with the copies in `dream-num/univer-cli` and the DSH plugin.
 
+- The private `packages/workspace-agent-runtime` headless content runtime, extracted from the existing Workspace Agent plugin. It supplies the same Facade worker and Worktree changeset path to that plugin and the isolated Space application. It owns no DSH Agent, conversation, document authority or permission model.
+
 - The private shared HTML View host under `packages/workspace-html-viewer`, consumed by Browser and Agent.
   It owns sandbox rendering and Binding Host lifecycle; applications own source authorization,
   runtime assembly, and leave/save behavior.
