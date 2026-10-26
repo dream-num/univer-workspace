@@ -23,20 +23,12 @@ import {
   SetSlideZoomRatioOperation,
 } from './office-presets.js';
 import { viewerData } from './viewer-data.js';
+import { UniverLicensePlugin } from '@univerjs-pro/license';
+import { workspaceLicense } from './license.js';
+import { contentType } from './content-types.js';
 
 /** One disposable, disconnected SDK viewer. No collaboration/write transport. */
 export function Viewer({ file }: { file: Content }) {
-  if (file.type === 'site')
-    return (
-      <div className="sp-html-preview">
-        <iframe
-          title={file.name}
-          sandbox=""
-          referrerPolicy="no-referrer"
-          srcDoc={`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: https:;">${file.html ?? ''}`}
-        />
-      </div>
-    );
   return <OfficeViewer file={file} />;
 }
 function OfficeViewer({ file }: { file: Content }) {
@@ -73,6 +65,7 @@ function OfficeViewer({ file }: { file: Content }) {
           ),
         },
         presets: [
+          { plugins: [[UniverLicensePlugin, { license: workspaceLicense }]] },
           file.type === 'doc'
             ? UniverDocsCorePreset({ ...config, footer: false })
             : file.type === 'sheet'
@@ -236,7 +229,7 @@ function OfficeViewer({ file }: { file: Content }) {
           {status === 'loading' ? (
             <>
               <span className="sp-spinner" />
-              正在打开 {file.type === 'doc' ? 'Document' : 'Sheet'}…
+              正在打开 {contentType(file.type)?.createLabel ?? 'File'}…
             </>
           ) : (
             <>
@@ -258,14 +251,12 @@ function OfficeViewer({ file }: { file: Content }) {
 function createPreview(options: Parameters<typeof createUniver>[0]) {
   const { presets, plugins, ...config } = options;
   const univer = new Univer(config);
-  univer
-    .__getInjector()
-    .add([
-      CollaborationController,
-      {
-        useValue: { entityInit$: EMPTY } as unknown as CollaborationController,
-      },
-    ]);
+  univer.__getInjector().add([
+    CollaborationController,
+    {
+      useValue: { entityInit$: EMPTY } as unknown as CollaborationController,
+    },
+  ]);
   const registry = new Map<string, import('@univerjs/presets').IPresetPlugin>();
   for (const preset of presets ?? [])
     for (const entry of (Array.isArray(preset) ? preset[0] : preset).plugins) {

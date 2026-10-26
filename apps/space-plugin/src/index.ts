@@ -149,6 +149,49 @@ export function apply(ctx: Context) {
         case 'content':
           value = await workspace.read(string('node'), signal);
           break;
+        case 'metadata':
+          value = await workspace.json(
+            `/api/nodes/${encodeURIComponent(string('node'))}`,
+            { signal },
+          );
+          break;
+        case 'html-source': {
+          const unit = string('unit');
+          const resolved = await workspace.json(
+            `/api/unit-resources/${encodeURIComponent(unit)}`,
+            { signal },
+          );
+          const opened = await workspace.json(
+            `/api/resources/${encodeURIComponent(resolved.resource.id)}/open`,
+            { method: 'POST', signal },
+          );
+          if (
+            opened.resource.kind !== 'univer' ||
+            opened.resource.unitType !== 'sheet' ||
+            opened.resource.unitId !== unit ||
+            !['edit', 'readOnly'].includes(opened.resource.editorMode)
+          )
+            throw new SpaceError(
+              403,
+              'This Page source must be an accessible Sheet.',
+            );
+          value = { editorMode: opened.resource.editorMode };
+          break;
+        }
+        case 'trash':
+          value = await workspace.trash(signal);
+          break;
+        case 'mutate':
+          value = await workspace.mutate(
+            {
+              action: string('action'),
+              id: string('id'),
+              name: string('name', true),
+              parent: string('parent', true),
+            },
+            signal,
+          );
+          break;
         default:
           throw new SpaceError(404, 'Unknown Space operation.');
       }
@@ -184,6 +227,10 @@ export function apply(ctx: Context) {
     'associate',
     'index',
     'current',
+    'metadata',
+    'html-source',
+    'mutate',
+    'trash',
   ]) {
     ctx.effect(
       () =>

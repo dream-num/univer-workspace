@@ -122,6 +122,13 @@ export function Navigation({ face, v }: { face: Face; v: State }) {
         ))}
       </div>
       <button
+        className={row + (v.location === 'trash' ? ' sp-selected' : '')}
+        onClick={() => face.showTrash()}
+      >
+        <Icon name="trash" />
+        Trash
+      </button>
+      <button
         className={row + ' tw-text-muted'}
         aria-label="Space settings"
         onClick={() => face.update({ settings: true })}

@@ -53,6 +53,7 @@ await build({
   bundle: true,
   format: 'cjs',
   platform: 'browser',
+  jsx: 'automatic',
   external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'],
   target: 'es2022',
   loader: { '.css': 'text' },

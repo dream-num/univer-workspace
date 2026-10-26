@@ -7,6 +7,7 @@ import {
   transformSnapshotToBaseData,
 } from '@univerjs-pro/collaboration';
 import { UnitSnapshotMaterializer } from '@univerjs-pro/collaboration-service';
+import { contentType } from './content-types.js';
 
 export class SpaceError extends Error {
   constructor(
@@ -364,10 +365,56 @@ export class WorkspaceConnection {
           body: JSON.stringify(location),
         }),
       };
-    if (!['doc', 'sheet'].includes(input.kind))
+    if (input.kind === 'site') {
+      // Same reserve -> stream -> complete workflow as Browser node-transfers.ts.
+      const html =
+        '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>';
+      const filename = `${name}.univer.html`;
+      const reserved = await this.json('/api/blob-upload-sessions', {
+        ...init,
+        headers: { 'Idempotency-Key': input.key },
+        body: JSON.stringify({
+          ...location,
+          originalFilename: filename,
+          byteSize: Buffer.byteLength(html),
+          declaredMediaType: 'text/html',
+        }),
+      });
+      if (reserved.operation.state === 'completed')
+        return this.createdResult(reserved, signal);
+      if (!reserved.uploadTarget)
+        throw new SpaceError(
+          409,
+          'Page upload is not ready. Retry this creation.',
+        );
+      const target = new URL(reserved.uploadTarget.contentUrl, this.endpoint);
+      const expected = `/api/blob-upload-sessions/${encodeURIComponent(reserved.upload.id)}/content`;
+      if (
+        target.origin !== this.endpoint ||
+        target.pathname !== expected ||
+        target.search ||
+        target.hash
+      )
+        throw new SpaceError(
+          502,
+          'Workspace returned an invalid upload target.',
+        );
+      await this.request(expected, {
+        method: 'PUT',
+        signal,
+        headers: { 'content-type': 'application/octet-stream' },
+        body: html,
+      });
+      const result = await this.json(
+        `/api/blob-upload-sessions/${encodeURIComponent(reserved.upload.id)}/complete`,
+        init,
+      );
+      return this.createdResult(result, signal);
+    }
+    if (contentType(input.kind)?.resource !== 'univer')
       throw new SpaceError(400, 'Unsupported creation type.');
     // The product resource workflow owns default data, Unit identity and recovery.
-    return this.json('/api/resources', {
+    const result = await this.json('/api/resources', {
       ...init,
       headers: { 'Idempotency-Key': input.key },
       body: JSON.stringify({
@@ -376,6 +423,93 @@ export class WorkspaceConnection {
         unitType: input.kind,
       }),
     });
+    return this.createdResult(result, signal);
+  }
+
+  /** Browser wait-for-created-resource semantics, including durable async recovery. */
+  private async createdResult(result: any, signal: AbortSignal) {
+    if (result.node) return result;
+    let operation = result.operation;
+    for (let attempt = 0; attempt <= 60; attempt++) {
+      signal.throwIfAborted();
+      if (operation?.state === 'failed')
+        throw new SpaceError(
+          409,
+          operation.error?.message || 'Creation failed.',
+        );
+      if (operation?.state === 'completed' && operation.result?.nodeId)
+        return this.json(
+          `/api/nodes/${encodeURIComponent(operation.result.nodeId)}`,
+          { signal },
+        );
+      if (!operation?.id || attempt === 60)
+        throw new SpaceError(
+          409,
+          'Creation is still processing. Retry with the same name to recover its result.',
+        );
+      await new Promise<void>((resolve) => setTimeout(resolve, 2000));
+      operation = await this.json(
+        `/api/operations/${encodeURIComponent(operation.id)}`,
+        { signal },
+      );
+    }
+  }
+
+  /** Existing product workflows; Server resolves ACL, cycles, Trash and recovery. */
+  async mutate(
+    input: { action: string; id: string; name?: string; parent?: string },
+    signal: AbortSignal,
+  ) {
+    const id = encodeURIComponent(input.id);
+    switch (input.action) {
+      case 'rename':
+      case 'rename-space': {
+        const name = input.name?.trim();
+        if (
+          !name ||
+          name.length > (input.action === 'rename-space' ? 100 : 255)
+        )
+          throw new SpaceError(400, 'Enter a valid name.');
+        return this.json(
+          `/api/${input.action === 'rename-space' ? 'spaces' : 'nodes'}/${id}`,
+          { method: 'PATCH', signal, body: JSON.stringify({ name }) },
+        );
+      }
+      case 'move':
+        if (typeof input.parent !== 'string')
+          throw new SpaceError(400, 'Choose a destination.');
+        return this.json(`/api/nodes/${id}`, {
+          method: 'PATCH',
+          signal,
+          body: JSON.stringify({ parentNodeId: input.parent || null }),
+        });
+      case 'delete':
+        return this.json(`/api/nodes/${id}/trash`, { method: 'POST', signal });
+      case 'restore':
+        return this.json(`/api/trash-batches/${id}/restore`, {
+          method: 'POST',
+          signal,
+        });
+      default:
+        throw new SpaceError(400, 'Unsupported file operation.');
+    }
+  }
+
+  async trash(signal: AbortSignal) {
+    const { spaces } = await this.json('/api/spaces', { signal });
+    const items: any[] = [];
+    for (const space of spaces.filter((s: any) => s.capabilities?.viewTrash)) {
+      let cursor = '';
+      do {
+        const page = await this.json(
+          `/api/spaces/${encodeURIComponent(space.id)}/trash?${new URLSearchParams({ limit: '100', ...(cursor ? { cursor } : {}) })}`,
+          { signal },
+        );
+        items.push(...page.items);
+        cursor = page.nextCursor ?? '';
+      } while (cursor);
+    }
+    return { items };
   }
 
   /** Track materialization so unload waits until all SDK work has settled. */
@@ -414,7 +548,7 @@ export class WorkspaceConnection {
       if (!opened.originalFilename?.toLowerCase().endsWith('.univer.html'))
         throw new SpaceError(
           400,
-          'This file has no supported preview. Sites require a .univer.html file.',
+          'This file has no supported preview. Pages require a .univer.html file.',
         );
       if (opened.byteSize > 1024 * 1024)
         throw new SpaceError(
@@ -439,6 +573,9 @@ export class WorkspaceConnection {
         unitId: '',
         type: 'site',
         name: node.name,
+        node,
+        space: nodeResult.space,
+        breadcrumbs: nodeResult.breadcrumbs,
         revision: 0,
         sha256: createHash('sha256').update(html).digest('hex'),
         capturedAt: new Date().toISOString(),
@@ -560,6 +697,9 @@ export class WorkspaceConnection {
       unitId: resource.unitId,
       type: resource.unitType,
       name: node.name,
+      node,
+      space: nodeResult.space,
+      breadcrumbs: nodeResult.breadcrumbs,
       revision,
       content,
     };

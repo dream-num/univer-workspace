@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createTypes, creationName } from '../content-types.js';
 import {
   LayoutGrid,
   FileText,
@@ -172,7 +173,7 @@ export function GapAction({ children }: { children: React.ReactNode }) {
     </button>
   );
 }
-/** Only actions available at the current Server-provided destination are offered. */
+/** Complete contract menu. Permission limits affect availability, never membership. */
 export function CreateMenu({
   face,
   v,
@@ -211,21 +212,17 @@ export function CreateMenu({
           </>
         }
       >
-        {[
-          ...(allowed
-            ? [
-                ['doc', 'Doc'],
-                ['sheet', 'Sheet'],
-                ['folder', 'Folder'],
-              ]
-            : []),
-          ['space', 'Space'],
-        ].map(([kind, label]) => (
+        {createTypes.map(({ kind, createLabel: label }) => (
           <button
             key={kind}
             role="menuitem"
             className={button + ' tw-w-full'}
-            disabled={v.busy}
+            disabled={v.busy || (kind !== 'space' && !allowed)}
+            title={
+              kind !== 'space' && !allowed
+                ? 'You do not have permission to create here'
+                : undefined
+            }
             onClick={() => {
               setName('');
               setDraft({
@@ -254,16 +251,7 @@ export function CreateMenu({
               if (!face.store.getSnapshot().error) setDraft(null);
             }}
           >
-            <h2>
-              Create{' '}
-              {draft.kind === 'doc'
-                ? 'Doc'
-                : draft.kind === 'sheet'
-                  ? 'Sheet'
-                  : draft.kind === 'space'
-                    ? 'Space'
-                    : 'Folder'}
-            </h2>
+            <h2>Create {creationName(draft.kind)}</h2>
             {draft.kind !== 'space' && (
               <p>
                 In {draft.parent ? v.page?.parentNode?.name : destination?.name}
@@ -276,7 +264,10 @@ export function CreateMenu({
                 required
                 maxLength={draft.kind === 'space' ? 100 : 255}
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setDraft({ ...draft, key: crypto.randomUUID() });
+                }}
               />
             </label>
             {v.error && <p role="alert">{v.error}</p>}

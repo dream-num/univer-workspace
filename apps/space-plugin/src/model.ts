@@ -1,21 +1,27 @@
 import type { FileReference } from './tools.js';
+import { contentTypes, contentType, creationName } from './content-types.js';
 export interface Space {
   id: string;
   name: string;
   type: string;
-  capabilities?: { createAtRoot?: boolean };
+  capabilities?: {
+    createAtRoot?: boolean;
+    renameSpace?: boolean;
+    viewTrash?: boolean;
+  };
 }
 export interface Resource {
   id: string;
   kind: string;
   unitType?: string;
-  capabilities: { openContent: boolean };
+  capabilities: { openContent: boolean; editContent?: boolean };
   htmlView?: boolean;
 }
 export interface Node {
   id: string;
   name: string;
   spaceId?: string;
+  parentNodeId?: string | null;
   resource: Resource | null;
   capabilities?: {
     browseChildren?: boolean;
@@ -52,6 +58,9 @@ export interface Content {
   revision: number;
   sha256: string;
   capturedAt: string;
+  node?: Node;
+  space?: Space;
+  breadcrumbs?: { id: string; name: string }[];
   data: any;
   content: {
     text: string;
@@ -74,7 +83,13 @@ export interface State {
   recent: Recent[];
   recentCursor: string | null;
   page: Page | null;
-  location: 'home' | 'recent' | 'folder' | 'space';
+  location: 'home' | 'recent' | 'folder' | 'space' | 'trash';
+  trash: TrashBatch[];
+  action: {
+    kind: 'rename' | 'move' | 'delete' | 'rename-space';
+    node?: Node;
+    space?: Space;
+  } | null;
   space: string;
   parent: string;
   content: Content | null;
@@ -104,29 +119,21 @@ export function nodeKind(node: Node) {
     (node.resource?.kind === 'blob' ? 'file' : 'folder')
   );
 }
-export const contentKinds = [
-  ['doc', 'Docs'],
-  ['sheet', 'Sheets'],
-  ['slide', 'Slides'],
-  ['board', 'Canvas'],
-  ['base', 'Databases'],
-  ['site', 'Sites'],
-] as const;
+export const contentKinds = contentTypes.map(
+  (type) => [type.kind, type.label] as const,
+);
 export function kindName(kind: string) {
   return (
-    (
-      {
-        doc: 'Document',
-        sheet: 'Sheet',
-        folder: 'Folder',
-        slide: 'Slides',
-        file: 'File',
-        board: 'Canvas',
-        base: 'Database',
-        site: 'Site',
-      } as Record<string, string>
-    )[kind] ?? kind
+    contentType(kind)?.label ?? (kind === 'file' ? 'File' : creationName(kind))
   );
+}
+export interface TrashBatch {
+  id: string;
+  spaceId: string;
+  root: { id: string; name: string };
+  capabilities: { restore: boolean };
+  restoreBlockedBy?: { name?: string } | null;
+  originalLocation: { breadcrumbs: { id: string; name: string }[] };
 }
 export function selectedReference(file: Content): FileReference {
   return {

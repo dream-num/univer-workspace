@@ -3,6 +3,7 @@ import type { Face } from './client.js';
 import { PageViewer } from './components/page-viewer.js';
 import { ContentBrowser } from './components/content-browser.js';
 import { Settings } from './components/settings.js';
+import { FileActionDialog, TrashBrowser } from './components/file-actions.js';
 import { Icon, button, iconButton, Empty } from './components/primitives.js';
 
 export { NativeConversation } from './components/floating-chat.js';
@@ -66,6 +67,8 @@ export function SpaceView(
             </Empty>
           ) : v.content ? (
             <PageViewer face={props} v={v} />
+          ) : v.location === 'trash' ? (
+            <TrashBrowser face={props} v={v} />
           ) : (
             <ContentBrowser
               key={`${v.location}:${v.space}:${v.parent}`}
@@ -81,6 +84,13 @@ export function SpaceView(
           renderSlot={props.renderSlot}
         />
         {v.settings && <Settings face={props} v={v} />}
+        {v.action && (
+          <FileActionDialog
+            key={`${v.action.kind}:${v.action.node?.id ?? v.action.space?.id}`}
+            face={props}
+            v={v}
+          />
+        )}
       </div>
     </div>
   );

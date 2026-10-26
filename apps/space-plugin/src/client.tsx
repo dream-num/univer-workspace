@@ -44,6 +44,8 @@ export function apply(ctx: any) {
     recentCursor: null,
     page: null,
     location: 'home',
+    trash: [],
+    action: null,
     space: '',
     parent: '',
     content: null,
@@ -230,7 +232,7 @@ export function apply(ctx: any) {
   let pending = 0;
   async function run(operation: () => Promise<void>) {
     pending++;
-    update({ busy: true, error: '' });
+    update({ busy: true, error: '', notice: '' });
     try {
       await operation();
     } catch (error) {
@@ -240,6 +242,25 @@ export function apply(ctx: any) {
         });
     } finally {
       pending--;
+      const resume = pausedEditor;
+      if (
+        !pending &&
+        resume &&
+        resume === editor &&
+        view.content?.nodeId === resume.node
+      ) {
+        pausedEditor = null;
+        try {
+          await resume.resume?.();
+        } catch (error) {
+          update({
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Cannot resume this page.',
+          });
+        }
+      }
       update({ busy: pending > 0 });
     }
   }
@@ -303,6 +324,8 @@ export function apply(ctx: any) {
       content: null,
       context: null,
       pins: [],
+      trash: [],
+      action: null,
       chatMode: 'compact',
     });
   }
@@ -404,11 +427,118 @@ export function apply(ctx: any) {
     node: string;
     flush(): Promise<void>;
     isSaved(): boolean;
+    resume?(): Promise<void>;
   } | null = null;
+  let pausedEditor: typeof editor = null;
   async function flushEditor() {
-    if (editor && !editor.isSaved()) await editor.flush();
+    // HTML drafts may still be inside the sandbox before the host sees pending
+    // state. Its formal departure protocol must run even while Saved is true.
+    if (editor) {
+      if (editor.resume) pausedEditor = editor;
+      await editor.flush();
+    }
   }
   const face = {
+    htmlSource: (unit: string) =>
+      api<{ editorMode: 'edit' | 'readOnly' }>('html-source', { unit }),
+    readDirectory: (space: string, parent = '', cursor = '') =>
+      api<Page>('nodes', { space, parent, cursor }),
+    showTrash: () =>
+      run(async () => {
+        await flushEditor();
+        await clearCurrent();
+        contentRequest++;
+        directoryRequest++;
+        sessionRequest++;
+        const result = await api('trash');
+        update({
+          location: 'trash',
+          content: null,
+          trash: result.items,
+          query: '',
+        });
+      }),
+    mutate: (input: {
+      action: string;
+      id: string;
+      name?: string;
+      parent?: string;
+    }) =>
+      run(async () => {
+        if (input.action === 'delete') await flushEditor();
+        const result = await api('mutate', input);
+        if (input.action === 'delete') {
+          const deleted = new Set([input.id]);
+          // A trashed Folder can contain the open document or current location.
+          for (const node of view.all) {
+            let current: typeof node | undefined = node;
+            const visited = new Set<string>();
+            while (current && !visited.has(current.id)) {
+              visited.add(current.id);
+              if (current.id === input.id) {
+                deleted.add(node.id);
+                break;
+              }
+              current = view.all.find(
+                (item) => item.id === current?.parentNodeId,
+              );
+            }
+          }
+          if (view.content && deleted.has(view.content.nodeId)) {
+            await clearCurrent();
+            contentRequest++;
+            update({ content: null, context: null });
+          }
+          update({ pins: view.pins.filter((id) => !deleted.has(id)) });
+          if (deleted.has(view.parent)) {
+            const original = view.all.find((node) => node.id === input.id);
+            update({
+              parent: original?.parentNodeId ?? '',
+              location: original?.parentNodeId ? 'folder' : 'space',
+            });
+          }
+        }
+        await refresh();
+        if (view.content) {
+          const metadata = await api('metadata', { node: view.content.nodeId });
+          update({
+            content: {
+              ...view.content,
+              name: metadata.node.name,
+              node: metadata.node,
+              space: metadata.space,
+              breadcrumbs: metadata.breadcrumbs,
+            },
+          });
+          await associateCurrent();
+        }
+        if (view.location === 'folder' || view.location === 'space') {
+          const page = await api<Page>('nodes', {
+            space: view.space,
+            parent: view.parent,
+          });
+          page.nodes = page.nodes.map((node) => ({
+            ...node,
+            resource:
+              view.all.find((item) => item.id === node.id)?.resource ??
+              node.resource,
+          }));
+          update({ page });
+        }
+        if (view.location === 'trash')
+          update({ trash: (await api('trash')).items });
+        update({
+          action: null,
+          notice:
+            input.action === 'delete'
+              ? 'Moved to Trash'
+              : input.action === 'restore'
+                ? 'Restored'
+                : input.action === 'move'
+                  ? 'Moved'
+                  : 'Renamed',
+        });
+      }),
     editorRequest: async (
       file: Content,
       userId: string,
@@ -426,10 +556,17 @@ export function apply(ctx: any) {
     },
     bindEditor: (
       node: string,
-      binding: { flush(): Promise<void>; isSaved(): boolean } | null,
+      binding: {
+        flush(): Promise<void>;
+        isSaved(): boolean;
+        resume?(): Promise<void>;
+      } | null,
     ) => {
       if (binding) editor = { node, ...binding };
-      else if (editor?.node === node) editor = null;
+      else if (editor?.node === node) {
+        editor = null;
+        pausedEditor = null;
+      }
     },
     pin: (id: string) => {
       const pins = view.pins.includes(id)
@@ -487,6 +624,7 @@ export function apply(ctx: any) {
     moreRecent: () => run(() => recents(view.recentCursor ?? '')),
     open: (node: string) =>
       run(async () => {
+        if (view.content?.nodeId === node) return;
         await flushEditor();
         const request = ++contentRequest;
         directoryRequest++;
@@ -769,6 +907,15 @@ export function apply(ctx: any) {
   });
 }
 export type Face = {
+  htmlSource(unit: string): Promise<{ editorMode: 'edit' | 'readOnly' }>;
+  readDirectory(space: string, parent?: string, cursor?: string): Promise<Page>;
+  showTrash(): Promise<void>;
+  mutate(input: {
+    action: string;
+    id: string;
+    name?: string;
+    parent?: string;
+  }): Promise<void>;
   editorRequest(
     file: Content,
     userId: string,
@@ -777,7 +924,11 @@ export type Face = {
   ): Promise<{ status: number; statusText: string; body: string }>;
   bindEditor(
     node: string,
-    binding: { flush(): Promise<void>; isSaved(): boolean } | null,
+    binding: {
+      flush(): Promise<void>;
+      isSaved(): boolean;
+      resume?(): Promise<void>;
+    } | null,
   ): void;
   newConversation(): void;
   pin(id: string): void;

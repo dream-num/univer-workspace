@@ -1,16 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Face } from '../client.js';
 import { contentKinds, nodeKind, type State, type Node } from '../model.js';
 import {
   CreateMenu,
-  GapAction,
   Icon,
   Menu,
   button,
   iconButton,
   Empty,
 } from './primitives.js';
+import { FileActions } from './file-actions.js';
 export function ContentBrowser({ face, v }: { face: Face; v: State }) {
+  const [context, setContext] = useState<{
+    node: Node;
+    x: number;
+    y: number;
+  } | null>(null);
+  const contextRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!context) return;
+    contextRef.current
+      ?.querySelector<HTMLButtonElement>('button:not(:disabled)')
+      ?.focus();
+    const close = (event: PointerEvent) => {
+      if (!contextRef.current?.contains(event.target as globalThis.Node))
+        setContext(null);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [context]);
   const [selected, setSelected] = useState<string[]>([]),
     [grid, setGrid] = useState(false),
     [kind, setKind] = useState('all');
@@ -60,10 +78,37 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
     <div className="sp-browser">
       {space && (
         <div className="sp-space-top">
-          <span className={button}>
-            <Icon name="all" />
-            {title}
-          </span>
+          <Menu
+            label="Space menu"
+            align="left"
+            trigger={
+              <>
+                <Icon name="all" />
+                {title}
+                <Icon name="down" size={12} />
+              </>
+            }
+          >
+            <button
+              role="menuitem"
+              className={button + ' tw-w-full'}
+              disabled={
+                !v.spaces.find((s) => s.id === v.space)?.capabilities
+                  ?.renameSpace
+              }
+              onClick={() =>
+                face.update({
+                  action: {
+                    kind: 'rename-space',
+                    space: v.spaces.find((s) => s.id === v.space),
+                  },
+                  error: '',
+                })
+              }
+            >
+              Rename
+            </button>
+          </Menu>
           <button className={button} disabled>
             <Icon name="share" />
             Share Space
@@ -79,6 +124,26 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                   All
                 </button>
                 <Icon name="chevron" />
+                <button
+                  className={button}
+                  onClick={() => face.directory(v.space)}
+                >
+                  {v.spaces.find((item) => item.id === v.space)?.name ??
+                    v.page?.space?.name ??
+                    'Space'}
+                </button>
+                <Icon name="chevron" />
+                {v.page?.breadcrumbs?.slice(0, -1).map((crumb) => (
+                  <React.Fragment key={crumb.id}>
+                    <button
+                      className={button}
+                      onClick={() => face.directory(v.space, crumb.id)}
+                    >
+                      {crumb.name}
+                    </button>
+                    <Icon name="chevron" />
+                  </React.Fragment>
+                ))}
               </>
             )}
             {title}
@@ -298,6 +363,14 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                       'sp-file-row' +
                       (selected.includes(node.id) ? ' sp-selected' : '')
                     }
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setContext({
+                        node,
+                        x: Math.min(event.clientX, window.innerWidth - 240),
+                        y: Math.min(event.clientY, window.innerHeight - 310),
+                      });
+                    }}
                   >
                     <span className="sp-file-name">
                       <input
@@ -340,24 +413,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                       label={'Actions for ' + node.name}
                       trigger={<Icon name="more" size={17} />}
                     >
-                      <button
-                        role="menuitem"
-                        className={button + ' tw-w-full'}
-                        onClick={() => face.pin(node.id)}
-                      >
-                        <Icon name="pin" />
-                        {v.pins.includes(node.id) ? 'Unpin' : 'Pin'}
-                      </button>
-                      <GapAction>
-                        <Icon name="share" />
-                        Share
-                      </GapAction>
-                      <GapAction>Rename</GapAction>
-                      <GapAction>Move to folder</GapAction>
-                      <GapAction>
-                        <Icon name="trash" />
-                        Delete {node.resource ? 'page' : 'folder'}
-                      </GapAction>
+                      <FileActions face={face} v={v} node={node} />
                     </Menu>
                   </div>
                 ))}
@@ -402,6 +458,25 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
           </>
         )}
       </div>
+      {context && (
+        <div
+          ref={contextRef}
+          role="menu"
+          aria-label={`Actions for ${context.node.name}`}
+          className="sp-menu-body sp-context-menu"
+          style={{
+            position: 'fixed',
+            left: Math.max(0, context.x),
+            top: Math.max(0, context.y),
+          }}
+          onClick={() => setContext(null)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') setContext(null);
+          }}
+        >
+          <FileActions face={face} v={v} node={context.node} />
+        </div>
+      )}
       {selected.length > 0 && (
         <div role="toolbar" aria-label="Selection" className="sp-selection">
           <span>{selected.length} selected</span>
