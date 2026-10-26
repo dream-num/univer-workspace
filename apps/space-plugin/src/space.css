@@ -708,3 +708,10 @@
   flex: 1;
   flex-direction: column;
 }
+/* Space has a second title tier and more air before its content tabs (E22/E43). */
+.sp-space-library { padding:28px 56px 40px; }
+.sp-space-library .sp-library-heading h1 { font-size:28px; }
+.sp-space-library .sp-library-toolbar { margin-top:44px; margin-bottom:32px; }
+@container sp-main (max-width:650px) {
+  .sp-library:not(.sp-space-library) .sp-library-toolbar { margin-top:17px; margin-bottom:23px; }
+}
