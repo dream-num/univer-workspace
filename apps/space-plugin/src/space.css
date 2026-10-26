@@ -425,6 +425,10 @@
 .sp-menu[open] > summary {
   background: var(--sp-hover);
 }
+.sp-primary .sp-menu[open] > summary {
+  background: var(--sp-ink);
+  color: var(--sp-canvas);
+}
 .sp-editor {
   display: flex;
   flex: 1;

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Face } from '../client.js';
-import { contentKinds, nodeKind, type State, type Node } from '../model.js';
+import { contentKinds, kindName, nodeKind, type State, type Node } from '../model.js';
 import {
   CreateMenu,
   Icon,
@@ -317,7 +317,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                             'Space'}
                         </span>
                         <span className="tw-mt-auto tw-text-xs tw-text-muted">
-                          Open {nodeKind(node)}
+                          Open {kindName(nodeKind(node))}
                         </span>
                       </button>
                     ))}
@@ -391,7 +391,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                           )?.[1] ??
                             (nodeKind(node) === 'file'
                               ? 'File · Preview unavailable'
-                              : nodeKind(node))}
+                              : kindName(nodeKind(node)))}
                         </span>
                       </button>
                     </span>

@@ -203,7 +203,7 @@ export function CreateMenu({
     <>
       <Menu
         label={inDirectory ? 'New' : 'Create'}
-        align="left"
+        align={sidebar ? 'left' : 'right'}
         trigger={
           <>
             {sidebar && <Icon name="plus" size={18} />}

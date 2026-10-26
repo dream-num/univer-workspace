@@ -42,12 +42,22 @@ p.on('console', (message) => {
     consoleErrors.push(message.text().slice(0, 600));
 });
 const stamp = Date.now();
+const folderCreation = [];
 const ready = async () => {
-  await p.locator('[data-editor-state="saved"], [data-viewer-state="ready"], .sp-html-preview iframe').waitFor();
+  await p
+    .locator(
+      '[data-editor-state="saved"], [data-viewer-state="ready"], .sp-html-preview iframe',
+    )
+    .waitFor();
   // Facade readiness precedes the Base table's first UI frame.
   if (await p.locator('[aria-label="base 阅读视图"]').count())
     await p.locator('.sp-sdk').getByText('Table 1', { exact: true }).waitFor();
-  await p.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await p.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      ),
+  );
 };
 const metadata = (node) => h.request('space/metadata', { node });
 const content = (node) => h.request('space/content', { node });
@@ -56,9 +66,21 @@ const fingerprint = (file) =>
   createHash('sha256')
     .update(file.html ?? JSON.stringify(file.data))
     .digest('hex');
+const identity = (node) => ({
+  id: node.id,
+  name: node.name,
+  spaceId: node.spaceId,
+  parentNodeId: node.parentNodeId,
+  resourceId: node.resource?.id ?? null,
+  unitId: node.resource?.unitId ?? null,
+});
+const visibleFile = () =>
+  p.locator('summary[aria-label="File menu"]').innerText();
 async function create(kind, label, name) {
   await p.locator('.sp-primary summary').click();
   const menu = p.locator('.sp-primary [role="menu"]');
+  const bounds = await menu.boundingBox();
+  assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= p.viewportSize().width, 'Create menu stays fully inside the viewport');
   assert.deepEqual(await menu.getByRole('menuitem').allTextContents(), [
     'Doc',
     'Sheet',
@@ -124,10 +146,14 @@ try {
     .getByRole('navigation', { name: 'Activity bar', exact: true })
     .getByRole('button', { name: 'Space', exact: true })
     .click();
+  const spacesBeforeCreate = (await h.request('space/spaces')).spaces.map(
+    (space) => ({ id: space.id, name: space.name }),
+  );
   await create('space', 'Space', `CRUD ${stamp}`);
   records.space = (await h.request('space/spaces')).spaces.find(
     (space) => space.name === `CRUD ${stamp}`,
   );
+  const spaceBeforeRename = { ...records.space };
   await p.locator('summary[aria-label="Space menu"]').click();
   await p.getByRole('menuitem', { name: 'Rename', exact: true }).click();
   const renameSpace = p.getByRole('dialog', { name: 'Rename', exact: true });
@@ -151,14 +177,55 @@ try {
     move: 'not applicable; separate lifecycle investigation',
     delete: 'not implemented; separate lifecycle investigation',
     restore: 'not implemented; separate lifecycle investigation',
+    steps: [
+      {
+        operation: 'Create/Open',
+        before: { spaces: spacesBeforeCreate },
+        after: { space: spaceBeforeRename, navigation: 'new Space' },
+      },
+      {
+        operation: 'Rename',
+        before: { id: spaceBeforeRename.id, name: spaceBeforeRename.name },
+        after: {
+          server: (await h.request('space/spaces')).spaces.find(
+            (space) => space.id === records.space.id,
+          ),
+          visibleTitle: await p.getByRole('heading', { level: 1 }).innerText(),
+        },
+      },
+    ],
   });
   for (const key of ['folder', 'destination']) {
+    const before = (
+      await h.request('space/nodes', { space: records.space.id })
+    ).nodes.map(identity);
     await create('folder', 'Folder', `${key} ${stamp}`);
     records[key] = (
       await h.request('space/nodes', { space: records.space.id })
     ).nodes.find((node) => node.name === `${key} ${stamp}`);
+    if (key === 'folder')
+      folderCreation.push({
+        operation: 'Create',
+        before: { spaceId: records.space.id, nodes: before },
+        after: {
+          server: identity(records[key]),
+          rowVisible: await p
+            .locator('.sp-file-open')
+            .filter({ hasText: records[key].name })
+            .isVisible(),
+        },
+      });
   }
   await directory(records.folder);
+  folderCreation.push({
+    operation: 'Open',
+    before: { nodeId: records.folder.id },
+    after: {
+      visibleHeading: await p.getByRole('heading', { level: 1 }).innerText(),
+      page: (await h.request('space/nodes', { parent: records.folder.id }))
+        .breadcrumbs,
+    },
+  });
   for (const [kind, label] of [
     ['doc', 'Doc'],
     ['sheet', 'Sheet'],
@@ -168,6 +235,10 @@ try {
     ['site', 'Page'],
   ]) {
     const name = `${label} ${stamp}`;
+    const steps = [];
+    const beforeCreate = (
+      await h.request('space/nodes', { parent: records.folder.id })
+    ).nodes.map(identity);
     await create(kind, label, name);
     await ready();
     const node = (
@@ -178,6 +249,15 @@ try {
     const digest = fingerprint(original);
     assert.equal(original.type, kind);
     assert.equal(node.parentNodeId, records.folder.id);
+    steps.push({
+      operation: 'Create',
+      before: { parent: records.folder.id, nodes: beforeCreate },
+      after: {
+        server: identity(node),
+        visibleFile: await visibleFile(),
+        contentHash: digest,
+      },
+    });
     const geometry = await p.locator('.sp-page-body').evaluate((element) => ({
       padding: getComputedStyle(element).padding,
       width: element.getBoundingClientRect().width,
@@ -190,10 +270,32 @@ try {
     let after = await metadata(node.id);
     assert.equal(after.node.name, node.name);
     assert.equal(after.node.resource.id, node.resource.id);
+    const renameHash = fingerprint(await content(node.id));
+    assert.equal(renameHash, digest);
+    steps.push({
+      operation: 'Rename',
+      before: { name, identity: identity(original.node) },
+      after: {
+        server: identity(after.node),
+        visibleFile: await visibleFile(),
+        contentHash: renameHash,
+      },
+    });
+    const beforeMove = identity(after.node);
     await action('Move to folder', records.destination.name);
     after = await metadata(node.id);
     assert.equal(after.node.parentNodeId, records.destination.id);
     assert.equal(fingerprint(await content(node.id)), digest);
+    steps.push({
+      operation: 'Move',
+      before: beforeMove,
+      after: {
+        server: identity(after.node),
+        breadcrumbs: after.breadcrumbs,
+        visibleFile: await visibleFile(),
+        contentHash: digest,
+      },
+    });
     await p.getByRole('button', { name: 'Close viewer', exact: true }).click();
     assert.equal(
       await p.locator('.sp-file-open').filter({ hasText: node.name }).count(),
@@ -202,6 +304,14 @@ try {
     await directory(records.destination);
     await rowAction(node, 'Open', kind === 'site');
     await ready();
+    steps.push({
+      operation: 'Open',
+      before: { location: records.destination.id, nodeId: node.id },
+      after: {
+        visibleFile: await visibleFile(),
+        server: identity((await metadata(node.id)).node),
+      },
+    });
     await action('Delete');
     assert.equal(await p.locator('.sp-page-toolbar').count(), 0);
     await assert.rejects(metadata(node.id));
@@ -209,6 +319,16 @@ try {
       (item) => item.root.id === node.id,
     );
     assert.ok(batch?.capabilities.restore);
+    steps.push({
+      operation: 'Delete',
+      before: { openFile: identity(after.node) },
+      after: {
+        viewerVisible: false,
+        nodeAccessible: false,
+        batchId: batch.id,
+        trashRoot: batch.root,
+      },
+    });
     await p
       .getByRole('navigation', { name: 'Content types', exact: true })
       .getByRole('button', { name: 'Trash', exact: true })
@@ -221,10 +341,21 @@ try {
     after = await metadata(node.id);
     assert.equal(after.node.parentNodeId, records.destination.id);
     assert.equal(after.node.resource.id, node.resource.id);
-    assert.equal(fingerprint(await content(node.id)), digest);
+    const restoredHash = fingerprint(await content(node.id));
+    assert.equal(restoredHash, digest);
     await directory(records.destination);
     await p.locator('.sp-file-open').filter({ hasText: node.name }).click();
     await ready();
+    steps.push({
+      operation: 'Restore',
+      before: { batchId: batch.id, nodeAccessible: false },
+      after: {
+        server: identity(after.node),
+        contentHash: restoredHash,
+        visibleFile: await visibleFile(),
+        trashRowVisible: false,
+      },
+    });
     if (kind === 'doc' || kind === 'base' || kind === 'site')
       await p.screenshot({ path: resolve(out, `crud-${kind}.png`) });
     await p.getByRole('button', { name: 'Close viewer', exact: true }).click();
@@ -241,6 +372,7 @@ try {
       restore: true,
       contentHash: digest,
       geometry,
+      steps,
     });
     console.log(
       `${label}: Create / Open / Rename / Move / Delete / Restore verified`,
@@ -253,12 +385,26 @@ try {
     await h.request('space/nodes', { parent: records.folder.id })
   ).nodes.find((node) => node.name === `child ${stamp}`);
   await directory();
+  const folderSteps = [...folderCreation];
+  const folderBeforeRename = identity((await metadata(records.folder.id)).node);
   await rowAction(records.folder, 'Rename', true);
   const rename = p.getByRole('dialog', { name: 'Rename', exact: true });
   records.folder.name += ' renamed';
   await rename.getByLabel('Name', { exact: true }).fill(records.folder.name);
   await rename.getByRole('button', { name: 'Save', exact: true }).click();
   await rename.waitFor({ state: 'hidden' });
+  folderSteps.push({
+    operation: 'Rename',
+    before: folderBeforeRename,
+    after: {
+      server: identity((await metadata(records.folder.id)).node),
+      rowVisible: await p
+        .locator('.sp-file-open')
+        .filter({ hasText: records.folder.name })
+        .isVisible(),
+    },
+  });
+  const folderBeforeMove = identity((await metadata(records.folder.id)).node);
   await rowAction(records.folder, 'Move to folder');
   const move = p.getByRole('dialog', { name: 'Move to folder', exact: true });
   await move
@@ -266,6 +412,11 @@ try {
     .click();
   await move.getByRole('button', { name: 'Move here', exact: true }).click();
   await move.waitFor({ state: 'hidden' });
+  folderSteps.push({
+    operation: 'Move',
+    before: folderBeforeMove,
+    after: { server: identity((await metadata(records.folder.id)).node) },
+  });
   await directory(records.destination);
   await rowAction(records.folder, 'Delete');
   await p
@@ -276,6 +427,25 @@ try {
     .getByRole('dialog', { name: 'Delete', exact: true })
     .waitFor({ state: 'hidden' });
   await assert.rejects(metadata(child.id));
+  const folderBatch = (await h.request('space/trash')).items.find(
+    (item) => item.root.id === records.folder.id,
+  );
+  folderSteps.push({
+    operation: 'Delete',
+    before: {
+      parentNodeId: records.destination.id,
+      nodeId: records.folder.id,
+      childId: child.id,
+    },
+    after: {
+      childAccessible: false,
+      batch: folderBatch,
+      rowVisible: await p
+        .locator('.sp-file-open')
+        .filter({ hasText: records.folder.name })
+        .isVisible(),
+    },
+  });
   await p
     .getByRole('navigation', { name: 'Content types', exact: true })
     .getByRole('button', { name: 'Trash', exact: true })
@@ -294,6 +464,15 @@ try {
     records.destination.id,
   );
   assert.equal((await metadata(child.id)).node.parentNodeId, records.folder.id);
+  folderSteps.push({
+    operation: 'Restore',
+    before: { batchId: folderBatch.id, childAccessible: false },
+    after: {
+      server: identity((await metadata(records.folder.id)).node),
+      child: identity((await metadata(child.id)).node),
+      trashRowVisible: false,
+    },
+  });
   matrix.push({
     type: 'Folder',
     create: true,
@@ -303,6 +482,7 @@ try {
     delete: true,
     restore: true,
     descendantRestored: true,
+    steps: folderSteps,
   });
   // Server must reject strangers' writes; verify no metadata changes afterwards.
   const stranger = new WorkspaceConnection();
@@ -347,6 +527,7 @@ try {
     JSON.stringify(
       {
         carrier: 'Official DSH 0.2.1-rc.3 Web / Microsoft Edge',
+        pluginVersion: JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version,
         at: new Date().toISOString(),
         matrix,
         checks,
