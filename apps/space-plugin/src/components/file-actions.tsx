@@ -38,10 +38,9 @@ export function FileActions({
         <Icon name="pin" />
         {v.pins.includes(node.id) ? 'Unpin' : 'Pin'}
       </button>
-      <GapAction>
-        <Icon name="share" />
-        Share
-      </GapAction>
+      <button role="menuitem" className={button + ' tw-w-full'} onClick={() => face.update({ sharing: { kind: 'node', id: node.id, name: node.name } })}>
+        <Icon name="share" />Share
+      </button>
       {(
         [
           ['rename', 'Rename', 'rename'],

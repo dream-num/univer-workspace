@@ -62,6 +62,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
       (v.location !== 'home' ||
         v.discovery !== 'Your items' ||
         node.accessRole === 'owner') &&
+      (v.discovery !== 'Shared with you' || v.location !== 'home' || node.accessRole !== 'owner') &&
       node.name.toLowerCase().includes(v.query.toLowerCase()) &&
       (v.filter === 'all' || nodeKind(node) === v.filter) &&
       (kind === 'all' || nodeKind(node) === kind),
@@ -194,9 +195,9 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
             ).map((tab) => (
               <button
                 role="tab"
-                disabled={['Favorites', 'Shared with you'].includes(tab)}
+                disabled={tab === 'Favorites'}
                 title={
-                  ['Favorites', 'Shared with you'].includes(tab)
+                  tab === 'Favorites'
                     ? `${tab} is not available in Space yet`
                     : undefined
                 }

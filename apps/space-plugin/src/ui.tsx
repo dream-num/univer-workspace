@@ -2,7 +2,7 @@ import React, { useSyncExternalStore } from 'react';
 import type { Face } from './client.js';
 import { PageViewer } from './components/page-viewer.js';
 import { ContentBrowser } from './components/content-browser.js';
-import { SpaceShareDialog } from './components/sharing.js';
+import { SpaceShareDialog, FileShareDialog } from './components/sharing.js';
 import { Settings } from './components/settings.js';
 import { FileActionDialog, TrashBrowser } from './components/file-actions.js';
 import { Icon, button, iconButton, Empty } from './components/primitives.js';
@@ -84,7 +84,7 @@ export function SpaceView(
           SessionProvider={props.SessionProvider}
           renderSlot={props.renderSlot}
         />
-        {v.sharing && <SpaceShareDialog key={v.sharing.id} face={props} v={v} target={v.sharing} />}
+        {v.sharing && (v.sharing.kind === 'space' ? <SpaceShareDialog key={v.sharing.id} face={props} v={v} target={v.sharing} /> : <FileShareDialog key={v.sharing.id} face={props} v={v} target={v.sharing} />)}
         {v.settings && <Settings face={props} v={v} />}
         {v.action && (
           <FileActionDialog

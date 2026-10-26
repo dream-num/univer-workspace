@@ -222,6 +222,19 @@ export class WorkspaceConnection {
         space: space.id,
       }),
     );
+    // Direct Personal shares do not grant browseRoot on the owner's Space.
+    // Discover their authorized roots through the same Browser Shared view API.
+    let sharedCursor = '';
+    do {
+      const page = await read(`/api/shared-with-me?${new URLSearchParams({ limit: '100', ...(sharedCursor ? { cursor: sharedCursor } : {}) })}`);
+      for (const { node } of page.items) {
+        if (seen.has(node.id)) continue;
+        seen.add(node.id);
+        nodes.push(node);
+        if (!node.resource && node.capabilities?.browseChildren) queue.push({ space: node.spaceId, parent: node.id });
+      }
+      sharedCursor = page.nextCursor ?? '';
+    } while (sharedCursor);
     while (queue.length) {
       const location = queue.shift()!;
       let cursor = '';
@@ -336,6 +349,35 @@ export class WorkspaceConnection {
     const id = encodeURIComponent(input.id ?? ''), user = encodeURIComponent(input.user ?? '');
     const options = { signal };
     switch (input.action) {
+      case 'file': {
+        const metadata = await this.json(`/api/nodes/${id}`, options);
+        let space;
+        try { space = await this.json(`/api/spaces/${encodeURIComponent(metadata.node.spaceId)}`, options); }
+        catch (cause) { if (!(cause instanceof SpaceError && [403, 404].includes(cause.status))) throw cause; }
+        // Team Nodes deliberately have no direct-grant model. Never fall through
+        // to Personal grant endpoints or invent a per-file permission override.
+        if (metadata.space.type === 'team') return {
+          node: metadata.node, space, owner: space?.owner, grants: [], inherited: [],
+          members: space ? await this.json(`/api/team-spaces/${encodeURIComponent(space.id)}/members`, options) : undefined,
+        };
+        if (!metadata.node.capabilities.share) return { node: metadata.node, space: space ?? null, owner: space?.owner, grants: [], inherited: [] };
+        const grants = await this.json(`/api/nodes/${id}/grants`, options);
+        const link = await this.json(`/api/nodes/${id}/link-sharing`, options);
+        const inherited = [];
+        for (const ancestor of metadata.breadcrumbs.filter((a: any) => a.id !== metadata.node.id)) {
+          const ancestorId = encodeURIComponent(ancestor.id);
+          inherited.push({ ...ancestor, ...(await this.json(`/api/nodes/${ancestorId}/grants`, options)), link: await this.json(`/api/nodes/${ancestorId}/link-sharing`, options) });
+        }
+        return { node: metadata.node, space: space ?? null, owner: space?.owner, ...grants, inherited, link };
+      }
+      case 'set-grant':
+        if (!['viewer', 'editor'].includes(input.role ?? '')) throw new SpaceError(400, 'Invalid file role.');
+        return this.json(`/api/nodes/${id}/grants/${user}`, { ...options, method: 'PUT', body: JSON.stringify({ role: input.role }) });
+      case 'remove-grant':
+        return this.json(`/api/nodes/${id}/grants/${user}`, { ...options, method: 'DELETE' });
+      case 'link-access':
+        if (typeof input.enabled !== 'boolean' || !['viewer', 'editor'].includes(input.role ?? '')) throw new SpaceError(400, 'Invalid link access.');
+        return this.json(`/api/nodes/${id}/link-sharing`, { ...options, method: 'PUT', body: JSON.stringify({ enabled: input.enabled, role: input.role }) });
       case 'users':
         if (!input.query?.trim() || input.query.length > 100) throw new SpaceError(400, 'Enter a name or username (up to 100 characters).');
         return this.json(`/api/users/search?${new URLSearchParams({ query: input.query.trim() })}`, options);

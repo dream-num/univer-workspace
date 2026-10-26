@@ -1179,3 +1179,6 @@
 .sp-person strong { font-weight: 500; overflow-wrap: anywhere; }
 .sp-person small, .sp-selected-person small, .sp-user-results small { color: var(--sp-muted); }
 .sp-share-dialog footer { display: flex; justify-content: end; margin-top: 16px; }
+.sp-owner-row { display: flex; justify-content: space-between; padding: 10px 0; }
+.sp-share-dialog footer { gap: 12px; }
+.sp-share-dialog footer > button:first-child:not(:last-child) { margin-right: auto; }

@@ -45,8 +45,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
             Chat
           </button>
           <button
-            disabled
-            title="Sharing is not available in Space yet"
+            onClick={() => face.update({ sharing: { kind: 'node', id: file.nodeId, name: file.name } })}
             className={button}
           >
             <Icon name="share" size={16} />
