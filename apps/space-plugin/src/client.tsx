@@ -400,7 +400,37 @@ export function apply(ctx: any) {
     if (!view.sessionId) await newConversation();
     else if (view.content) await associateCurrent();
   }
+  let editor: {
+    node: string;
+    flush(): Promise<void>;
+    isSaved(): boolean;
+  } | null = null;
+  async function flushEditor() {
+    if (editor && !editor.isSaved()) await editor.flush();
+  }
   const face = {
+    editorRequest: async (
+      file: Content,
+      userId: string,
+      input: { path: string; method: string; body: string | null },
+      signal: AbortSignal,
+    ) => {
+      const result = await ctx.connection.rpc.call(
+        '/api',
+        'space/editor-http',
+        { ...input, endpoint: file.endpoint, userId },
+        AbortSignal.any([signal, lifetime.signal]),
+      );
+      if (!result.ok) throw new Error(result.error.message);
+      return result.value;
+    },
+    bindEditor: (
+      node: string,
+      binding: { flush(): Promise<void>; isSaved(): boolean } | null,
+    ) => {
+      if (binding) editor = { node, ...binding };
+      else if (editor?.node === node) editor = null;
+    },
     pin: (id: string) => {
       const pins = view.pins.includes(id)
         ? view.pins.filter((p) => p !== id)
@@ -414,6 +444,7 @@ export function apply(ctx: any) {
     refresh: () => run(refresh),
     configure: (endpoint: string) =>
       run(async () => {
+        await flushEditor();
         const status = await api('configure', { endpoint });
         if (status.endpoint !== view.status.endpoint) clearContent();
         update({ status });
@@ -421,34 +452,42 @@ export function apply(ctx: any) {
       }),
     login: (username: string, password: string) =>
       run(async () => {
+        await flushEditor();
         await api('login', { username, password });
         await refresh();
         if (view.status.state === 'connected') update({ settings: false });
       }),
     disconnect: () =>
       run(async () => {
+        await flushEditor();
         clearContent();
         await api('configure', { endpoint: '' });
         await refresh();
       }),
     directory: (space: string, parent = '', cursor = '') =>
-      run(() => directory(space, parent, cursor)),
-    home: (location: 'home' | 'recent' = 'home') => {
-      void run(clearCurrent);
-      sessionRequest++;
-      contentRequest++;
-      directoryRequest++;
-      update({
-        location,
-        content: null,
-        query: '',
-        filter: 'all',
-      });
-      void run(() => recents());
-    },
+      run(async () => {
+        await flushEditor();
+        await directory(space, parent, cursor);
+      }),
+    home: (location: 'home' | 'recent' = 'home', filter = 'all') =>
+      run(async () => {
+        await flushEditor();
+        void run(clearCurrent);
+        sessionRequest++;
+        contentRequest++;
+        directoryRequest++;
+        update({
+          location,
+          content: null,
+          query: '',
+          filter,
+        });
+        await recents();
+      }),
     moreRecent: () => run(() => recents(view.recentCursor ?? '')),
     open: (node: string) =>
       run(async () => {
+        await flushEditor();
         const request = ++contentRequest;
         directoryRequest++;
         sessionRequest++;
@@ -460,8 +499,15 @@ export function apply(ctx: any) {
           await recents();
         }
       }),
-    create: (input: {kind: string; name: string; space: string; parent: string; key: string}) =>
+    create: (input: {
+      kind: string;
+      name: string;
+      space: string;
+      parent: string;
+      key: string;
+    }) =>
       run(async () => {
+        await flushEditor();
         const before = generation;
         const result = await api('create', input);
         if (before !== generation) return;
@@ -471,21 +517,25 @@ export function apply(ctx: any) {
           await directory(input.space, input.parent);
           update({ spaceTab: 'Content' });
           if (input.kind !== 'folder') {
-            const content = await api<Content>('content', { node: result.node.id });
+            const content = await api<Content>('content', {
+              node: result.node.id,
+            });
             update({ content });
             await restoreSession();
             await recents();
           }
         }
       }),
-    close: () => {
-      void run(clearCurrent);
-      sessionRequest++;
-      contentRequest++;
-      directoryRequest++;
-      update({ content: null });
-      if (view.location === 'space') void run(restoreSession);
-    },
+    close: () =>
+      run(async () => {
+        await flushEditor();
+        void run(clearCurrent);
+        sessionRequest++;
+        contentRequest++;
+        directoryRequest++;
+        update({ content: null });
+        if (view.location === 'space') await restoreSession();
+      }),
     removeContext: () => {
       if (view.content && view.sessionId) {
         removedContexts.add(`${view.content.nodeId}/${view.sessionId}`);
@@ -499,17 +549,19 @@ export function apply(ctx: any) {
       }
     },
     chat: () => run(() => nativeChat(Boolean(view.content))),
-    back: () => {
-      ctx.layout.selectPanel(null);
-      const target = defaultSessionId && references.get(defaultSessionId);
-      if (target)
-        void target.ready.then((binding: any) =>
-          requestAnimationFrame(() => {
-            if (ctx.layout.panelInfo.getSnapshot().activePanelId === null)
-              ctx.conversation.input.for(binding.ctx).focus();
-          }),
-        );
-    },
+    back: () =>
+      run(async () => {
+        await flushEditor();
+        ctx.layout.selectPanel(null);
+        const target = defaultSessionId && references.get(defaultSessionId);
+        if (target)
+          void target.ready.then((binding: any) =>
+            requestAnimationFrame(() => {
+              if (ctx.layout.panelInfo.getSnapshot().activePanelId === null)
+                ctx.conversation.input.for(binding.ctx).focus();
+            }),
+          );
+      }),
     link: (id: string) => run(() => linkSession(id)),
   };
   ctx.effect(() => {
@@ -590,6 +642,7 @@ export function apply(ctx: any) {
               unit: string,
               session: string,
             ) => {
+              await flushEditor();
               const before = generation,
                 request = ++contentRequest;
               directoryRequest++;
@@ -716,6 +769,16 @@ export function apply(ctx: any) {
   });
 }
 export type Face = {
+  editorRequest(
+    file: Content,
+    userId: string,
+    input: { path: string; method: string; body: string | null },
+    signal: AbortSignal,
+  ): Promise<{ status: number; statusText: string; body: string }>;
+  bindEditor(
+    node: string,
+    binding: { flush(): Promise<void>; isSaved(): boolean } | null,
+  ): void;
   newConversation(): void;
   pin(id: string): void;
   reference(): any;
@@ -726,10 +789,16 @@ export type Face = {
   login(username: string, password: string): void;
   disconnect(): void;
   directory(space: string, parent?: string, cursor?: string): void;
-  home(location?: 'home' | 'recent'): void;
+  home(location?: 'home' | 'recent', filter?: string): void;
   moreRecent(): void;
   open(node: string): void;
-  create(input: {kind: string; name: string; space: string; parent: string; key: string}): Promise<void>;
+  create(input: {
+    kind: string;
+    name: string;
+    space: string;
+    parent: string;
+    key: string;
+  }): Promise<void>;
   close(): void;
   removeContext(): void;
   reconnectContext(): void;

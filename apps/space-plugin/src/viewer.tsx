@@ -12,6 +12,10 @@ import {
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
 import docsLocale from '@univerjs/preset-docs-core/locales/zh-CN';
 import sheetsLocale from '@univerjs/preset-sheets-core/locales/zh-CN';
+import { Univer } from '@univerjs/core';
+import { FUniver } from '@univerjs/core/facade';
+import { CollaborationController } from '@univerjs-pro/collaboration-client';
+import { EMPTY } from 'rxjs';
 import type { Content } from './model.js';
 import {
   officePreset,
@@ -59,7 +63,7 @@ function OfficeViewer({ file }: { file: Content }) {
         toolbar: false,
         contextMenu: false,
       } as const;
-      runtime = createUniver({
+      runtime = createPreview({
         locale: LocaleType.ZH_CN,
         locales: {
           [LocaleType.ZH_CN]: mergeLocales(
@@ -245,4 +249,32 @@ function OfficeViewer({ file }: { file: Content }) {
       )}
     </div>
   );
+}
+
+/** Keep the other detached previews compatible with process-global Facade mixins.
+ * Same pre-Facade registration used by Browser comparison-univer.ts. This stub
+ * only disables the global event source; it creates no transport or editing grant.
+ */
+function createPreview(options: Parameters<typeof createUniver>[0]) {
+  const { presets, plugins, ...config } = options;
+  const univer = new Univer(config);
+  univer
+    .__getInjector()
+    .add([
+      CollaborationController,
+      {
+        useValue: { entityInit$: EMPTY } as unknown as CollaborationController,
+      },
+    ]);
+  const registry = new Map<string, import('@univerjs/presets').IPresetPlugin>();
+  for (const preset of presets ?? [])
+    for (const entry of (Array.isArray(preset) ? preset[0] : preset).plugins) {
+      const ctor = Array.isArray(entry) ? entry[0] : entry;
+      registry.set(ctor.pluginName, entry);
+    }
+  for (const entry of [...registry.values(), ...(plugins ?? [])]) {
+    if (Array.isArray(entry)) univer.registerPlugin(entry[0], entry[1]);
+    else univer.registerPlugin(entry);
+  }
+  return { univer, univerAPI: FUniver.newAPI(univer) };
 }

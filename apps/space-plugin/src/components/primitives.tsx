@@ -173,34 +173,129 @@ export function GapAction({ children }: { children: React.ReactNode }) {
   );
 }
 /** Only actions available at the current Server-provided destination are offered. */
-export function CreateMenu({ face, v, sidebar = false }: {
-  face: import('../client.js').Face; v: import('../model.js').State; sidebar?: boolean;
+export function CreateMenu({
+  face,
+  v,
+  sidebar = false,
+}: {
+  face: import('../client.js').Face;
+  v: import('../model.js').State;
+  sidebar?: boolean;
 }) {
-  const [draft, setDraft] = React.useState<{kind: string; space: string; parent: string; key: string} | null>(null);
+  const [draft, setDraft] = React.useState<{
+    kind: string;
+    space: string;
+    parent: string;
+    key: string;
+  } | null>(null);
   const [name, setName] = React.useState('');
   const inDirectory = v.location === 'folder' || v.location === 'space';
-  const destination = inDirectory ? v.spaces.find(s => s.id === v.space) : v.spaces.find(s => s.type === 'personal');
-  const allowed = inDirectory && v.parent
-    ? v.page?.parentNode?.capabilities?.createChildren === true
-    : destination?.capabilities?.createAtRoot === true;
+  const destination = inDirectory
+    ? v.spaces.find((s) => s.id === v.space)
+    : v.spaces.find((s) => s.type === 'personal');
+  const allowed =
+    inDirectory && v.parent
+      ? v.page?.parentNode?.capabilities?.createChildren === true
+      : destination?.capabilities?.createAtRoot === true;
   if (v.status.state !== 'connected') return null;
-  return <>
-    <Menu label={inDirectory ? 'New' : 'Create'} align="left" trigger={<>{sidebar && <Icon name="plus" size={18}/>}<span>{inDirectory ? 'New' : 'Create'}</span><Icon name="down" size={12}/></>}>
-      {[...(allowed ? [['doc','Doc'],['sheet','Sheet'],['folder','Folder']] : []), ['space','Space']].map(([kind,label]) =>
-        <button key={kind} role="menuitem" className={button + ' tw-w-full'} disabled={v.busy} onClick={() => {
-          setName(''); setDraft({kind, space: destination?.id ?? '', parent: inDirectory ? v.parent : '', key: crypto.randomUUID()});
-        }}><Icon name={kind === 'space' ? 'all' : kind}/>{label}</button>)}
-    </Menu>
-    {draft && <div className="sp-create-backdrop"><form role="dialog" aria-modal="true" aria-label={`Create ${draft.kind}`} className="sp-create-dialog" onSubmit={async e => {
-      e.preventDefault();
-      await face.create({...draft, name});
-      if (!face.store.getSnapshot().error) setDraft(null);
-    }}>
-      <h2>Create {draft.kind === 'doc' ? 'Doc' : draft.kind === 'sheet' ? 'Sheet' : draft.kind === 'space' ? 'Space' : 'Folder'}</h2>
-      {draft.kind !== 'space' && <p>In {draft.parent ? v.page?.parentNode?.name : destination?.name}</p>}
-      <label>Name<input autoFocus required maxLength={draft.kind === 'space' ? 100 : 255} value={name} onChange={e => setName(e.target.value)}/></label>
-      {v.error && <p role="alert">{v.error}</p>}
-      <div className="tw-flex tw-justify-end tw-gap-2"><button type="button" className={button} disabled={v.busy} onClick={() => setDraft(null)}>Cancel</button><button className={button} disabled={v.busy || !name.trim()}>{v.busy ? 'Creating…' : 'Create'}</button></div>
-    </form></div>}
-  </>;
+  return (
+    <>
+      <Menu
+        label={inDirectory ? 'New' : 'Create'}
+        align="left"
+        trigger={
+          <>
+            {sidebar && <Icon name="plus" size={18} />}
+            <span>{inDirectory ? 'New' : 'Create'}</span>
+            <Icon name="down" size={12} />
+          </>
+        }
+      >
+        {[
+          ...(allowed
+            ? [
+                ['doc', 'Doc'],
+                ['sheet', 'Sheet'],
+                ['folder', 'Folder'],
+              ]
+            : []),
+          ['space', 'Space'],
+        ].map(([kind, label]) => (
+          <button
+            key={kind}
+            role="menuitem"
+            className={button + ' tw-w-full'}
+            disabled={v.busy}
+            onClick={() => {
+              setName('');
+              setDraft({
+                kind,
+                space: destination?.id ?? '',
+                parent: inDirectory ? v.parent : '',
+                key: crypto.randomUUID(),
+              });
+            }}
+          >
+            <Icon name={kind === 'space' ? 'all' : kind} />
+            {label}
+          </button>
+        ))}
+      </Menu>
+      {draft && (
+        <div className="sp-create-backdrop">
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Create ${draft.kind}`}
+            className="sp-create-dialog"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await face.create({ ...draft, name });
+              if (!face.store.getSnapshot().error) setDraft(null);
+            }}
+          >
+            <h2>
+              Create{' '}
+              {draft.kind === 'doc'
+                ? 'Doc'
+                : draft.kind === 'sheet'
+                  ? 'Sheet'
+                  : draft.kind === 'space'
+                    ? 'Space'
+                    : 'Folder'}
+            </h2>
+            {draft.kind !== 'space' && (
+              <p>
+                In {draft.parent ? v.page?.parentNode?.name : destination?.name}
+              </p>
+            )}
+            <label>
+              Name
+              <input
+                autoFocus
+                required
+                maxLength={draft.kind === 'space' ? 100 : 255}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            {v.error && <p role="alert">{v.error}</p>}
+            <div className="tw-flex tw-justify-end tw-gap-2">
+              <button
+                type="button"
+                className={button}
+                disabled={v.busy}
+                onClick={() => setDraft(null)}
+              >
+                Cancel
+              </button>
+              <button className={button} disabled={v.busy || !name.trim()}>
+                {v.busy ? 'Creating…' : 'Create'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  );
 }

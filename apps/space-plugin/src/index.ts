@@ -118,8 +118,33 @@ export function apply(ctx: Context) {
         case 'index':
           value = await workspace.index(signal);
           break;
+        case 'editor-http': {
+          const body = input?.body;
+          if (body !== null && typeof body !== 'string')
+            throw new SpaceError(400, 'Invalid editor body.');
+          value = await workspace.editorRequest(
+            {
+              endpoint: string('endpoint'),
+              userId: string('userId'),
+              path: string('path'),
+              method: string('method'),
+              body,
+            },
+            signal,
+          );
+          break;
+        }
         case 'create':
-          value = await workspace.create({ kind: string('kind'), name: string('name'), space: string('space', true), parent: string('parent', true), key: string('key') }, signal);
+          value = await workspace.create(
+            {
+              kind: string('kind'),
+              name: string('name'),
+              space: string('space', true),
+              parent: string('parent', true),
+              key: string('key'),
+            },
+            signal,
+          );
           break;
         case 'content':
           value = await workspace.read(string('node'), signal);
@@ -155,6 +180,7 @@ export function apply(ctx: Context) {
     'nodes',
     'content',
     'create',
+    'editor-http',
     'associate',
     'index',
     'current',
@@ -173,7 +199,10 @@ export function apply(ctx: Context) {
             )
               return new Response('JSON required', { status: 415 });
             const raw = await request.text();
-            if (raw.length > 16384)
+            if (
+              raw.length >
+              (operation === 'editor-http' ? 8 * 1024 * 1024 : 16384)
+            )
               return new Response('Request too large', { status: 413 });
             let message;
             try {

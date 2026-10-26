@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Face } from '../client.js';
 import type { State } from '../model.js';
+import { CollaborativeEditor } from '../collaborative-editor.js';
 import { Viewer } from '../viewer.js';
 import { GapAction, Icon, Menu, button, iconButton } from './primitives.js';
 export function PageViewer({ face, v }: { face: Face; v: State }) {
@@ -45,7 +46,9 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
             Delete
           </GapAction>
         </Menu>
-        <span className="tw-ml-2 tw-text-xs tw-text-muted">View only</span>
+        <span className="tw-ml-2 tw-text-xs tw-text-muted">
+          {file.type === 'doc' || file.type === 'sheet' ? '' : 'View only'}
+        </span>
         <div className="tw-ml-auto tw-flex tw-items-center tw-gap-1">
           <button
             className={button}
@@ -79,7 +82,16 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
         }
       >
         <div className="sp-editor">
-          <Viewer key={file.nodeId + file.sha256} file={file} />
+          {file.type === 'doc' || file.type === 'sheet' ? (
+            <CollaborativeEditor
+              key={file.nodeId}
+              file={file}
+              user={v.status.user}
+              face={face}
+            />
+          ) : (
+            <Viewer key={file.nodeId + file.sha256} file={file} />
+          )}
         </div>
       </div>
     </>

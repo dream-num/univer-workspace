@@ -121,14 +121,93 @@ test('resource creation preserves idempotency and never masks a Server permissio
   const received = [];
   const server = createServer((req, res) => {
     received.push({ path: req.url, key: req.headers['idempotency-key'] });
-    res.writeHead(403, {'content-type':'application/json'});
-    res.end(JSON.stringify({error:{message:'Cannot create in this folder.'}}));
+    res.writeHead(403, { 'content-type': 'application/json' });
+    res.end(
+      JSON.stringify({ error: { message: 'Cannot create in this folder.' } }),
+    );
   });
-  server.listen(0,'127.0.0.1'); await once(server,'listening');
-  const connection=new WorkspaceConnection();
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const connection = new WorkspaceConnection();
   try {
     connection.configure(`http://127.0.0.1:${server.address().port}`);
-    await assert.rejects(connection.create({kind:'doc', name:'Denied', space:'s', parent:'p', key:'stable-attempt'},new AbortController().signal),e=>e.status===403&&e.message==='Cannot create in this folder.');
-    assert.deepEqual(received,[{path:'/api/resources',key:'stable-attempt'}]);
-  } finally { await connection.dispose();await new Promise(resolve=>server.close(resolve)); }
+    await assert.rejects(
+      connection.create(
+        {
+          kind: 'doc',
+          name: 'Denied',
+          space: 's',
+          parent: 'p',
+          key: 'stable-attempt',
+        },
+        new AbortController().signal,
+      ),
+      (e) => e.status === 403 && e.message === 'Cannot create in this folder.',
+    );
+    assert.deepEqual(received, [
+      { path: '/api/resources', key: 'stable-attempt' },
+    ]);
+  } finally {
+    await connection.dispose();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('editor transport binds Workspace identity and denies snapshot replacement or path escapes', async () => {
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    if (req.url === '/api/auth/password/login') {
+      res.setHeader('set-cookie', 'workspace_test=owner; HttpOnly; Path=/');
+      res.end('{}');
+      return;
+    }
+    res.end(
+      JSON.stringify({ authenticated: true, user: { id: 'workspace-owner' } }),
+    );
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const connection = new WorkspaceConnection(),
+    endpoint = `http://127.0.0.1:${server.address().port}`;
+  try {
+    connection.configure(endpoint);
+    await connection.login('owner', 'test');
+    const input = {
+        endpoint,
+        userId: 'workspace-owner',
+        path: '/universer-api/user/session-ticket',
+        method: 'GET',
+        body: null,
+      },
+      signal = new AbortController().signal;
+    assert.equal((await connection.editorRequest(input, signal)).status, 200);
+    await assert.rejects(
+      connection.editorRequest({ ...input, userId: 'dsh-owner' }, signal),
+      (e) => e.status === 401,
+    );
+    for (const path of [
+      'https://foreign.example/api',
+      '/api/resources',
+      '/universer-api/worktrees/a/merge',
+      '/universer-api/snapshot/%2e%2e/%2e%2e/api/resources',
+    ])
+      await assert.rejects(
+        connection.editorRequest({ ...input, path }, signal),
+      );
+    await assert.rejects(
+      connection.editorRequest(
+        {
+          ...input,
+          path: '/universer-api/snapshot/1/unit/u',
+          method: 'POST',
+          body: '{}',
+        },
+        signal,
+      ),
+      (e) => e.status === 400,
+    );
+  } finally {
+    await connection.dispose();
+    await new Promise((r) => server.close(r));
+  }
 });

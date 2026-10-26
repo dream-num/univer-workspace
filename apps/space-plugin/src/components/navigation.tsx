@@ -56,8 +56,7 @@ export function Navigation({ face, v }: { face: Face; v: State }) {
                 : '')
             }
             onClick={() => {
-              face.home();
-              face.update({ filter });
+              face.home('home', filter);
             }}
           >
             <Icon name={filter} />

@@ -1,6 +1,7 @@
 # Space plugin for official DeepSeek Harness
 
-Space-style content navigation, genuine read-only Univer Docs/Sheets/Slides/Canvas/Databases and sandbox HTML previews, and the
+Space-style content navigation, writable collaborative Univer Docs/Sheets,
+read-only Slides/Canvas/Databases and sandbox HTML previews, and the
 native DSH Conversation in a floating overlay. DSH owns Session history, composer, model,
 Agent and tool logs. Official host source is unchanged.
 
@@ -39,13 +40,19 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
 3. All / Your items lists real ACL-checked metadata. Pinned is a separate local
    navigation and Suggested section; it does not imply Favorites. Space opens
    Overview / Content; Folder opens its own breadcrumb and content list.
-4. Docs uses a detached Modern layout projection with one body title; the top
-   file menu remains. Docs/Sheets/Slides/Canvas/Databases all use published SDKs and
-   read-only permissions. Pro previews show the SDK license watermark in the
-   current test environment; advanced embedded objects are not bundled.
-   Sites maps specifically to the Server HTML Views directory
-   (`.univer.html` Blobs), with a sandboxed, script-free preview up to 1 MiB.
-   Ordinary HTML files remain Files. Full HTML Sheet bindings stay in Workspace.
+4. Docs and Sheets use the formal published Core presets, Collaboration Client,
+   browser collaboration UI and Facade Server loaders. Toolbars, selection/context
+   menus and collaborative Undo/Redo stay SDK-owned. SDK changesets save remotely;
+   other clients receive edits over the real Server WebSocket. File switches drain
+   pending changes before disposal; failed flush leaves the current editor open.
+   While disconnected, new content edits pause until reconnection. Reliable offline
+   writing is not enabled. The SDK's queued-online-change recovery remains enabled.
+   Workspace cookies stay in Host memory: SDK HTTP uses the existing owner Connection;
+   WebSocket connects directly to Workspace using its one-time session ticket.
+   Slides/Canvas/Databases keep detached previews. Sites maps specifically to Server
+   `.univer.html` Blobs, with a sandboxed, script-free preview up to 1 MiB. The current
+   local SDK environment may display a license watermark. Comments and History are
+   not exposed: their additional datasource/viewer authentication remains unaccepted.
 5. Floating chat provides compact-message, expanded and minimized states. Move
    its grip, resize either side, restore it, create a Host Conversation or choose
    an existing one from History. It is one DSH composer/transcript, with DSH-owned

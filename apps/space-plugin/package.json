@@ -1,6 +1,6 @@
 {
   "name": "dsh-space-plugin",
-  "version": "0.11.2",
+  "version": "0.14.0",
   "private": true,
   "type": "module",
   "description": "Space content workspace for official DeepSeek Harness Desktop",
@@ -81,7 +81,12 @@
   },
   "dependencies": {
     "@univerjs-pro/collaboration": "1.1.0",
+    "@univerjs-pro/collaboration-client": "1.1.0",
+    "@univerjs-pro/collaboration-client-ui": "1.1.0",
     "@univerjs-pro/collaboration-service": "1.1.0",
+    "@univerjs-pro/license": "1.1.0",
+    "@univerjs/network": "1.1.0",
+    "@univerjs/protocol": "1.1.0",
     "lucide-react": "0.468.0",
     "rxjs": "7.8.2"
   },
