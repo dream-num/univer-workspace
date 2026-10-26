@@ -104,6 +104,9 @@
   z-index: 21;
   left: 8px;
   top: 8px;
+  width: auto;
+  padding: 0 10px;
+  gap: 8px;
   background: var(--sp-sidebar);
 }
 .sp-navigation-flyout {
@@ -715,3 +718,14 @@
 @container sp-main (max-width:650px) {
   .sp-library:not(.sp-space-library) .sp-library-toolbar { margin-top:17px; margin-bottom:23px; }
 }
+
+/* The Host navigation is untouched; Space uses an explicit overlay drawer. */
+.sp-shell .sp-library-heading { padding-left: 96px; }
+.sp-shell .sp-page-toolbar { padding-left: 104px; }
+.sp-doc-body { padding-top: 24px; }
+.sp-file-kind { margin-left:auto; color:var(--sp-muted); font-size:11px; white-space:nowrap; }
+.sp-html-preview { display:flex; flex:1; min-height:0; flex-direction:column; }
+.sp-html-preview iframe { border:0; flex:1; width:100%; background:white; }
+.sp-html-preview p { padding:8px 16px; margin:0; font-size:12px; }
+
+.sp-preview-notice { padding:8px 16px; font-size:12px; color:var(--sp-muted); border-bottom:1px solid var(--sp-line); }

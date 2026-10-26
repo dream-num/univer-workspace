@@ -25,7 +25,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
             onClick={() => face.close()}
           >
             <Icon name="all" />
-            Show pages
+            Show files
           </button>
           <button
             role="menuitem"
@@ -61,12 +61,25 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
           </button>
         </div>
       </header>
+      {!['doc', 'sheet', 'site'].includes(file.type) && (
+        <div className="sp-preview-notice">
+          Core SDK preview · advanced embedded objects are not included.{' '}
+          <a
+            href={`${file.endpoint}/nodes/${encodeURIComponent(file.nodeId)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open in Workspace
+          </a>
+        </div>
+      )}
       <div
         className={
-          'sp-page-body ' + (file.type === 'sheet' ? 'sp-sheet-body' : '')
+          'sp-page-body ' +
+          (file.type !== 'doc' ? 'sp-sheet-body' : 'sp-doc-body')
         }
       >
-        <h1 className="sp-page-title">{file.name}</h1>
+        {file.type !== 'doc' && <h1 className="sp-page-title">{file.name}</h1>}
         <div className="sp-editor">
           <Viewer key={file.nodeId + file.sha256} file={file} />
         </div>

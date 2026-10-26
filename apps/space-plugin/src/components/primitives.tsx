@@ -31,10 +31,16 @@ import {
   Check,
   Copy,
   File,
+  PanelsTopLeft,
+  Database,
+  SquareMousePointer,
   type LucideIcon,
 } from 'lucide-react';
 const icons: Record<string, LucideIcon> = {
   all: LayoutGrid,
+  workspace: PanelsTopLeft,
+  base: Database,
+  board: SquareMousePointer,
   doc: FileText,
   sheet: Table2,
   folder: Folder,

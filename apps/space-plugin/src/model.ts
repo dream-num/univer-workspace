@@ -9,6 +9,7 @@ export interface Resource {
   kind: string;
   unitType?: string;
   capabilities: { openContent: boolean };
+  htmlView?: boolean;
 }
 export interface Node {
   id: string;
@@ -38,7 +39,8 @@ export interface Content {
   resourceId: string;
   unitId: string;
   name: string;
-  type: 'doc' | 'sheet';
+  type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' | 'site';
+  html?: string;
   revision: number;
   sha256: string;
   capturedAt: string;
@@ -93,10 +95,18 @@ export interface State {
 }
 export function nodeKind(node: Node) {
   return (
-    node.resource?.unitType ??
+    (node.resource?.htmlView ? 'site' : node.resource?.unitType) ??
     (node.resource?.kind === 'blob' ? 'file' : 'folder')
   );
 }
+export const contentKinds = [
+  ['doc', 'Docs'],
+  ['sheet', 'Sheets'],
+  ['slide', 'Slides'],
+  ['board', 'Boards / Canvas'],
+  ['base', 'Bases / Databases'],
+  ['site', 'Pages / Sites'],
+] as const;
 export function kindName(kind: string) {
   return (
     (
@@ -108,11 +118,14 @@ export function kindName(kind: string) {
         file: 'File',
         board: 'Board',
         base: 'Base',
+        site: 'Page / Site',
       } as Record<string, string>
     )[kind] ?? kind
   );
 }
 export function selectedReference(file: Content): FileReference {
+  if (file.type !== 'doc' && file.type !== 'sheet')
+    throw new Error('Chat reading currently supports Docs and Sheets.');
   return {
     endpoint: file.endpoint,
     nodeId: file.nodeId,
@@ -133,7 +146,7 @@ export function userText(data: any): string {
       : '';
 }
 export function referenceText(file: FileReference): string {
-  return `[${file.name}](workspace-file://${encodeURIComponent(file.resourceId)}?nodeId=${encodeURIComponent(file.nodeId)}&unitId=${encodeURIComponent(file.unitId)})`;
+  return `[${file.name.replace(/[\\[\]]/g, '\\$&')}](workspace-file://${encodeURIComponent(file.resourceId)}?nodeId=${encodeURIComponent(file.nodeId)}&unitId=${encodeURIComponent(file.unitId)})`;
 }
 
 export function submittedReference(

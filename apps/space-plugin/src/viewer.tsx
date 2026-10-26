@@ -13,10 +13,40 @@ import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
 import docsLocale from '@univerjs/preset-docs-core/locales/zh-CN';
 import sheetsLocale from '@univerjs/preset-sheets-core/locales/zh-CN';
 import type { Content } from './model.js';
+import {
+  officePreset,
+  officeLocales,
+  SetSlideZoomRatioOperation,
+} from './office-presets.js';
 import { viewerData } from './viewer-data.js';
 
 /** One disposable, disconnected SDK viewer. No collaboration/write transport. */
 export function Viewer({ file }: { file: Content }) {
+  if (file.type === 'site')
+    return (
+      <div className="sp-html-preview">
+        <p>
+          Read-only HTML preview · scripts and live Sheet bindings are
+          unavailable here.{' '}
+          <a
+            href={`${file.endpoint}/nodes/${encodeURIComponent(file.nodeId)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open in Workspace
+          </a>
+        </p>
+        <iframe
+          title={file.name}
+          sandbox=""
+          referrerPolicy="no-referrer"
+          srcDoc={`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: https:;">${file.html ?? ''}`}
+        />
+      </div>
+    );
+  return <OfficeViewer file={file} />;
+}
+function OfficeViewer({ file }: { file: Content }) {
   const container = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -24,6 +54,8 @@ export function Viewer({ file }: { file: Content }) {
     const element = container.current!;
     let canceled = false;
     let runtime: ReturnType<typeof createUniver> | undefined;
+    let fitObserver: ResizeObserver | undefined;
+    let fitFrame = 0;
     let lifecycle: { dispose(): void } | undefined;
     setStatus('loading');
     setError('');
@@ -40,22 +72,30 @@ export function Viewer({ file }: { file: Content }) {
       } as const;
       runtime = createUniver({
         locale: LocaleType.ZH_CN,
-        locales: { [LocaleType.ZH_CN]: mergeLocales(docsLocale, sheetsLocale) },
+        locales: {
+          [LocaleType.ZH_CN]: mergeLocales(
+            docsLocale,
+            sheetsLocale,
+            ...officeLocales,
+          ),
+        },
         presets: [
           file.type === 'doc'
             ? UniverDocsCorePreset({ ...config, footer: false })
-            : UniverSheetsCorePreset({
-                ...config,
-                disableAutoFocus: true,
-                formulaBar: true,
-                footer: {
-                  sheetBar: true,
-                  statisticBar: false,
-                  menus: false,
-                  zoomSlider: true,
-                  addSheetButtonConfig: { show: false },
-                },
-              }),
+            : file.type === 'sheet'
+              ? UniverSheetsCorePreset({
+                  ...config,
+                  disableAutoFocus: true,
+                  formulaBar: true,
+                  footer: {
+                    sheetBar: true,
+                    statisticBar: false,
+                    menus: false,
+                    zoomSlider: true,
+                    addSheetButtonConfig: { show: false },
+                  },
+                })
+              : officePreset(file.type as 'slide' | 'base' | 'board', element),
           ...(file.type === 'doc'
             ? [
                 {
@@ -91,11 +131,20 @@ export function Viewer({ file }: { file: Content }) {
               )
               .getPermission()
               .setReadOnly()
-          : Promise.resolve(
-              api
-                .createWorkbook({ ...data, name: file.name })
-                .setEditable(false),
-            );
+          : file.type === 'sheet'
+            ? Promise.resolve(
+                api
+                  .createWorkbook({ ...data, name: file.name })
+                  .setEditable(false),
+              )
+            : (file.type === 'slide'
+                ? api.createPresentation(data)
+                : file.type === 'base'
+                  ? api.createBase(data)
+                  : api.createBoard(data)
+              )
+                .getPermission()
+                .setReadOnly();
       // Activate Docs after the SDK workbench has a sized render container.
       // Immediate activation can publish the first layout into a zero-size
       // canvas in a host slot. setCurrent is the public SDK activation API.
@@ -127,7 +176,34 @@ export function Viewer({ file }: { file: Content }) {
       void Promise.all([permission, mounted])
         .then(() => {
           clearTimeout(timer);
-          if (!canceled) setStatus('ready');
+          if (!canceled) {
+            setStatus('ready');
+            if (file.type === 'slide') {
+              const size = api.getPresentation(file.unitId)?.getPageSize();
+              if (size) {
+                const fit = () => {
+                  cancelAnimationFrame(fitFrame);
+                  fitFrame = requestAnimationFrame(() => {
+                    if (canceled) return;
+                    void api.executeCommand(SetSlideZoomRatioOperation.id, {
+                      unitId: file.unitId,
+                      zoomRatio: Math.max(
+                        0.1,
+                        Math.min(
+                          1,
+                          (element.clientWidth - 390) / size.width,
+                          (element.clientHeight - 90) / size.height,
+                        ),
+                      ),
+                    });
+                  });
+                };
+                fitObserver = new ResizeObserver(fit);
+                fitObserver.observe(element);
+                fit();
+              }
+            }
+          }
         })
         .catch(fail);
     } catch (cause) {
@@ -146,14 +222,17 @@ export function Viewer({ file }: { file: Content }) {
       canceled = true;
       clearTimeout(timer);
       lifecycle?.dispose();
+      fitObserver?.disconnect();
+      cancelAnimationFrame(fitFrame);
       queueMicrotask(() => runtime?.univer.dispose());
     };
   }, [file.nodeId, file.sha256]);
   return (
     <div
       className="sp-viewer"
+      data-viewer-state={status}
       data-document-flavor={file.type === 'doc' ? 'modern' : undefined}
-      aria-label={`${file.type === 'doc' ? 'Document' : 'Sheet'} 阅读视图`}
+      aria-label={`${file.type} 阅读视图`}
     >
       <div className="sp-sdk" ref={container} />
       {status !== 'ready' && (

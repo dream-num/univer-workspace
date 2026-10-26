@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Face } from '../client.js';
-import { nodeKind, type State, type Node } from '../model.js';
+import { contentKinds, nodeKind, type State, type Node } from '../model.js';
 import {
   CreateMenu,
   GapAction,
@@ -24,16 +24,18 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
         'Space')
       : v.location === 'recent'
         ? 'Recents'
-        : v.filter === 'doc'
-          ? 'Pages'
-          : 'All';
+        : (contentKinds.find(([key]) => key === v.filter)?.[1] ?? 'All');
   const source =
     folder || space
       ? (v.page?.nodes ?? [])
       : v.location === 'recent'
         ? v.recent.map((item) => ({
             ...item.node,
-            resource: item.resource,
+            resource: {
+              ...item.resource,
+              htmlView: v.all.find((node) => node.id === item.node.id)?.resource
+                ?.htmlView,
+            },
             spaceId: item.location.space.id,
           }))
         : v.all;
@@ -168,8 +170,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                 </span>
                 {[
                   ['all', 'All types'],
-                  ['doc', 'Pages'],
-                  ['sheet', 'Spreadsheets'],
+                  ...contentKinds,
                   ['folder', 'Folders'],
                 ].map(([value, label]) => (
                   <button
@@ -255,8 +256,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                             'Workspace'}
                         </span>
                         <span className="tw-mt-auto tw-text-xs tw-text-muted">
-                          Open{' '}
-                          {nodeKind(node) === 'sheet' ? 'spreadsheet' : 'page'}
+                          Open {nodeKind(node)}
                         </span>
                       </button>
                     ))}
@@ -316,6 +316,14 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                       >
                         <Icon name={nodeKind(node)} />
                         <span className="tw-truncate">{node.name}</span>
+                        <span className="sp-file-kind">
+                          {contentKinds.find(
+                            ([key]) => key === nodeKind(node),
+                          )?.[1] ??
+                            (nodeKind(node) === 'file'
+                              ? 'File · Preview unavailable'
+                              : nodeKind(node))}
+                        </span>
                       </button>
                     </span>
                     {v.discovery === 'Suggested' && !folder && !space && (

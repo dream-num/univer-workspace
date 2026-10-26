@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { transformSnapshotToDocumentData, transformSnapshotToWorkbookData } from '@univerjs-pro/collaboration';
+import { transformSnapshotToDocumentData, transformSnapshotToWorkbookData, transformSnapshotToSlideData, transformSnapshotToBoardData, transformSnapshotToBaseData } from '@univerjs-pro/collaboration';
 import { UnitSnapshotMaterializer } from '@univerjs-pro/collaboration-service';
 
 export class SpaceError extends Error {
@@ -105,6 +105,14 @@ export class WorkspaceConnection {
         cursor = page.nextCursor ?? '';
       } while (cursor);
     }
+    const htmlIds = new Set<string>();
+    let htmlCursor = '';
+    do {
+      const page = await read(`/api/html-views?${new URLSearchParams({limit:'100', ...(htmlCursor ? {cursor:htmlCursor} : {})})}`);
+      for (const item of page.items) htmlIds.add(item.node.id);
+      htmlCursor = page.nextCursor ?? '';
+    } while (htmlCursor);
+    for (const node of nodes) if (htmlIds.has(node.id) && node.resource?.kind === 'blob') node.resource = {...node.resource, htmlView:true};
     lifetime.signal.throwIfAborted();
     return { nodes, scope: 'accessible-spaces', complete: true };
   }
@@ -127,11 +135,20 @@ export class WorkspaceConnection {
     const nodeResult = await json(`/api/nodes/${encodeURIComponent(nodeId)}`);
     const node = nodeResult.node ?? nodeResult;
     const resource = node.resource;
-    if (resource?.kind !== 'univer' || !['doc', 'sheet'].includes(resource.unitType))
-      throw new SpaceError(400, 'This slice opens Document and Sheet only.');
-    if (!resource.capabilities.openContent) throw new SpaceError(403, 'No permission to open this content.');
-    await json(`/api/resources/${encodeURIComponent(resource.id)}/open`, { method: 'POST' });
-    const type = resource.unitType === 'doc' ? 1 : 2;
+    if (!resource?.capabilities?.openContent) throw new SpaceError(403, 'No permission to open this content.');
+    const opened = (await json(`/api/resources/${encodeURIComponent(resource.id)}/open`, { method: 'POST' })).resource;
+    if (resource.kind === 'blob') {
+      if (!opened.originalFilename?.toLowerCase().endsWith('.univer.html')) throw new SpaceError(400, 'This file has no supported preview. Pages / Sites are .univer.html Blobs.');
+      if (opened.byteSize > 1024 * 1024) throw new SpaceError(413, 'HTML preview exceeds 1 MiB. Open this file in Workspace.');
+      const html = await (await this.request(`/api/blob-resources/${encodeURIComponent(resource.id)}/content`, {signal: signal ? AbortSignal.any([signal,lifetime.signal]) : lifetime.signal})).text();
+      lifetime.signal.throwIfAborted();
+      return { endpoint, nodeId, resourceId:resource.id, unitId:'', type:'site', name:node.name, revision:0,
+        sha256: createHash('sha256').update(html).digest('hex'), capturedAt:new Date().toISOString(),
+        data:null, html, content:{text:'',sheets:[]} };
+    }
+    const types: Record<string, number> = {doc:1,sheet:2,slide:3,base:5,board:6};
+    const type = types[resource.unitType];
+    if (resource.kind !== 'univer' || !type) throw new SpaceError(400, 'This content type has no supported preview.');
     const prefix = `/universer-api/snapshot/${type}/unit/${encodeURIComponent(resource.unitId)}`;
     const body = await json(`${prefix}/rev/0`);
     const snapshot = decodeSnapshot(body.snapshot);
@@ -144,12 +161,17 @@ export class WorkspaceConnection {
       const { block } = await json(`${prefix}/block/${encodeURIComponent(String(id))}`);
       sheetBlocks.push({ ...block, data: bytes(block.data) });
     }
+    // Hash persisted input before SDK materialization; legacy Docs may synthesize
+    // different section IDs on each transformation without changing Server data.
+    const sourceSha256 = createHash('sha256').update(JSON.stringify({ snapshot: body.snapshot, changesets: body.changesets, sheetBlocks })).digest('hex');
     const materialized = await this.materializer.materializeSnapshot({ snapshot, changesets: body.changesets, targetRevision: revision, sheetBlocks });
-    const data: any = type === 1
-      ? await transformSnapshotToDocumentData(materialized.snapshot)
-      : await transformSnapshotToWorkbookData(materialized.snapshot, materialized.sheetBlocks);
+    const data: any = type === 1 ? transformSnapshotToDocumentData(materialized.snapshot)
+      : type === 2 ? await transformSnapshotToWorkbookData(materialized.snapshot, materialized.sheetBlocks)
+      : type === 3 ? transformSnapshotToSlideData(materialized.snapshot)
+      : type === 5 ? await transformSnapshotToBaseData(materialized.snapshot, materialized.sheetBlocks)
+      : transformSnapshotToBoardData(materialized.snapshot);
     lifetime.signal.throwIfAborted();
-    const content = type === 1 ? { text: data.body?.dataStream ?? '', sheets: [] } : {
+    const content = type === 1 ? { text: data.body?.dataStream ?? '', sheets: [] } : type !== 2 ? {text:'',sheets:[]} : {
       text: '', sheets: (data.sheetOrder ?? Object.keys(data.sheets)).map((id: string) => {
         const sheet = data.sheets[id];
         const cells: { row: number; column: number; value: string }[] = [];
@@ -163,15 +185,15 @@ export class WorkspaceConnection {
       }),
     };
     const frozen = { endpoint, nodeId, resourceId: resource.id, unitId: resource.unitId, type: resource.unitType, name: node.name, revision, content };
-    const sha256 = createHash('sha256').update(JSON.stringify(frozen)).digest('hex');
-    return { ...frozen, sha256, capturedAt: new Date().toISOString(), data, notice: 'Read-only frozen snapshot. Core Docs / Sheets UI; advanced embedded objects may require additional presets.' };
+    const sha256 = createHash('sha256').update(JSON.stringify({ ...frozen, sourceSha256 })).digest('hex');
+    return { ...frozen, sha256, sourceSha256, capturedAt: new Date().toISOString(), data, notice: 'Read-only frozen snapshot. Core SDK preview; advanced embedded objects may require additional plugins.' };
   }
 }
 
 function bytes(value: string): Uint8Array { return Uint8Array.from(Buffer.from(value, 'base64')); }
 function decodeSnapshot(value: any): any {
   const snapshot = structuredClone(value);
-  for (const key of ['doc', 'workbook', 'slide', 'board']) {
+  for (const key of ['doc', 'workbook', 'slide', 'board', 'base']) {
     if (snapshot[key]?.originalMeta !== undefined) snapshot[key].originalMeta = bytes(snapshot[key].originalMeta);
   }
   for (const sheet of Object.values(snapshot.workbook?.sheets ?? {}) as any[]) sheet.originalMeta = bytes(sheet.originalMeta);

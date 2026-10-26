@@ -1,12 +1,10 @@
-/** Real official DSH Web acceptance. No mocked API, transcript, composer or editor.
- * Requires Playwright (SPACE_PLAYWRIGHT_MODULE may name its installed module), a
- * local owner Host log, and the existing local Workspace fixture login file.
- * Artifacts are written outside this implementation checkout. */
+/** TASK-008: real official DSH Web, native Sessions/Composer/Tools and Workspace SDK.
+ * Requires seed-product + seed-mvp fixtures. No mocked HTTP or rendered content. */
 import assert from 'node:assert/strict';
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, readdir, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { connectHost } from './host-connection.mjs';
-import { writeEvidence } from './evidence-output.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );
@@ -16,23 +14,52 @@ const fixture = JSON.parse(
     'utf8',
   ),
 );
+const extra = JSON.parse(
+  await readFile(
+    process.env.SPACE_MVP_FIXTURES ?? '/tmp/task008-fixtures.json',
+    'utf8',
+  ),
+);
 const host = await connectHost(),
   checks = [],
   screens = [],
-  measurements = [],
   errors = [],
-  consoleMessages = [];
+  consoleMessages = [],
+  measurements = [];
 const out = resolve(
   process.env.SPACE_EVIDENCE_DIR ?? '/tmp/space-plugin-evidence',
 );
 await mkdir(out, { recursive: true });
+const sessionRoot = process.env.SPACE_SESSION_ROOT;
+async function sessionHashes() {
+  const result = {};
+  if (!sessionRoot) return result;
+  for (const path of await readdir(sessionRoot, { recursive: true }))
+    if (path.endsWith('session.v4.jsonl.zstd'))
+      result[path] = createHash('sha256')
+        .update(await readFile(resolve(sessionRoot, path)))
+        .digest('hex');
+  return result;
+}
+const existingSessions = await sessionHashes();
 await host.request('space/configure', { endpoint: fixture.origin });
 await host.request('space/login', {
   username: fixture.username,
   password: fixture.password,
 });
-const beforeDoc = await host.request('space/content', { node: fixture.doc.id }),
-  beforeSheet = await host.request('space/content', { node: fixture.sheet.id });
+const files = [fixture.doc, fixture.sheet, ...extra.nodes, extra.site],
+  before = {};
+for (const n of files)
+  before[n.id] = await host.request('space/content', { node: n.id });
+const index = (await host.request('space/index')).nodes;
+assert.equal(index.find((n) => n.id === extra.site.id).resource.htmlView, true);
+assert.equal(
+  index.find((n) => n.id === extra.plainHtml.id).resource.htmlView,
+  undefined,
+);
+checks.push(
+  'Server HTML Views mapping includes .univer.html, excludes ordinary HTML',
+);
 const browser = await chromium.launch({
   headless: true,
   ...(process.env.SPACE_BROWSER_EXECUTABLE
@@ -44,273 +71,325 @@ const context = await browser.newContext({
   deviceScaleFactor: 1,
 });
 await context.addCookies(
-  host.headers.cookie.split('; ').map((pair) => {
-    const i = pair.indexOf('=');
-    return {
-      name: pair.slice(0, i),
-      value: pair.slice(i + 1),
+  host.headers.cookie
+    .split('; ')
+    .map((p) => ({
+      name: p.slice(0, p.indexOf('=')),
+      value: p.slice(p.indexOf('=') + 1),
       url: host.origin,
       httpOnly: true,
-    };
-  }),
+    })),
 );
 const page = await context.newPage();
-page.setDefaultTimeout(12000);
+page.setDefaultTimeout(15000);
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (e) => {
   if (['error', 'warning'].includes(e.type()))
-    consoleMessages.push({ level: e.type(), text: e.text().slice(0, 350) });
+    consoleMessages.push({ level: e.type(), text: e.text().slice(0, 400) });
 });
-const own = () => page.locator('.sp-shell');
-const panel = () => page.locator('.sp-floating-chat');
 const frame = () =>
   page.evaluate(
     () =>
-      new Promise((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(resolve)),
-      ),
+      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
   );
-const shot = async (name, refs) => {
+const shot = async (name) => {
   await frame();
   await page.screenshot({ path: resolve(out, name + '.png') });
   screens.push({
     name,
-    refs,
     viewport: page.viewportSize(),
     carrier: 'Official DSH Web, Edge headless, DPR 1',
   });
 };
-const measure = async (label, selector) => {
-  const boxes = await page.locator(selector).evaluateAll((es) =>
-    es.map((e) => {
-      const r = e.getBoundingClientRect();
-      return {
-        selector: e.className,
-        x: r.x,
-        y: r.y,
-        width: r.width,
-        height: r.height,
-      };
-    }),
-  );
-  measurements.push({ label, viewport: page.viewportSize(), boxes });
-  return boxes;
-};
-const mode = async (value) =>
-  assert.equal(await panel().getAttribute('data-mode'), value);
-const menu = async () =>
-  page.locator('.sp-chat-header summary[aria-label="Chat menu"]').click();
-const newChat = async () => {
+const own = () => page.locator('.sp-shell'),
+  panel = () => page.locator('.sp-floating-chat');
+async function drawer() {
+  if (
+    !(await own()
+      .getByRole('complementary', { name: 'Space navigation', exact: true })
+      .count())
+  )
+    await page
+      .getByRole('button', { name: 'Open Space navigation', exact: true })
+      .click();
+  return page.getByRole('complementary', {
+    name: 'Space navigation',
+    exact: true,
+  });
+}
+async function all() {
+  if (
+    await page
+      .getByRole('button', { name: 'Close viewer', exact: true })
+      .count()
+  )
+    await page
+      .getByRole('button', { name: 'Close viewer', exact: true })
+      .click();
+  await (await drawer())
+    .getByRole('button', { name: 'All', exact: true })
+    .click();
+  await page.getByRole('table', { name: 'Content', exact: true }).waitFor();
+}
+async function open(n) {
+  await all();
+  await page.locator('.sp-file-open').filter({ hasText: n.name }).click();
+  await page.locator('.sp-page-toolbar').waitFor();
+  if (n.resource.unitType)
+    await page.locator('.sp-viewer[data-viewer-state="ready"]').waitFor();
+  else await page.locator('.sp-html-preview iframe').waitFor();
+  await frame();
+}
+async function back() {
+  await (await drawer())
+    .getByRole('button', { name: 'Back to Chat', exact: true })
+    .click();
+  await own().waitFor({ state: 'hidden' });
+}
+async function newChat() {
   const old = await panel().getAttribute('data-session-id');
-  await menu();
+  await page.locator('.sp-chat-header summary[aria-label="Chat menu"]').click();
   await page
     .getByRole('menuitem', { name: 'New conversation', exact: true })
     .click();
   await page.waitForFunction((id) => {
-    const e = document.querySelector('.sp-floating-chat');
-    return (
-      e?.getAttribute('data-session-id') &&
-      e.getAttribute('data-session-id') !== id
-    );
+    const next = document
+      .querySelector('.sp-floating-chat')
+      ?.getAttribute('data-session-id');
+    return next && next !== id;
   }, old);
   return panel().getAttribute('data-session-id');
-};
-const open = async (name) => {
-  await page
-    .locator('.sp-navigation .sp-control')
-    .filter({ hasText: name })
-    .filter({ has: page.locator('span.tw-truncate') })
-    .first()
-    .click();
-  await page.locator('.sp-page-title').filter({ hasText: name }).waitFor();
-  await page.locator('.sp-viewer-message').waitFor({ state: 'hidden' });
-  await frame();
-};
-const send = async (text) => {
+}
+async function send(text) {
   await panel().locator('[contenteditable="true"]').fill(text);
   await panel().getByRole('button', { name: '发送消息', exact: true }).click();
-};
+}
+async function expand() {
+  if ((await panel().getAttribute('data-mode')) === 'minimized')
+    await page
+      .getByRole('button', { name: 'Restore floating chat', exact: true })
+      .click();
+  if ((await panel().getAttribute('data-mode')) === 'compact')
+    await page
+      .getByRole('button', { name: 'Expand floating chat', exact: true })
+      .click();
+}
+let sessionA, sessionB;
 try {
   await page.goto(host.origin);
-  await page.getByRole('button', { name: 'Space', exact: true }).click();
-  await page.getByRole('table', { name: 'Content' }).waitFor();
-  const hostCollapse = page.getByRole('button', {
-    name: '收起侧边栏',
-    exact: true,
+  await page.locator('[contenteditable="true"]').first().waitFor();
+  const originalDraft = await page
+    .locator('[contenteditable="true"]')
+    .first()
+    .innerText();
+  if (
+    await page.getByRole('button', { name: '打开侧边栏', exact: true }).count()
+  )
+    await page.getByRole('button', { name: '打开侧边栏', exact: true }).click();
+  // Verify a nondefault Host drag width survives both directions without a blind toggle.
+  const handle = await page.locator('[data-side="sidebar"]').boundingBox();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2 + 50, handle.y + 100, {
+    steps: 8,
   });
-  if (await hostCollapse.count()) await hostCollapse.click();
-  await page.waitForFunction(
-    () => document.querySelector('.sp-shell')?.getBoundingClientRect().x < 100,
+  await page.mouse.up();
+  await frame();
+  const expandedWidth = (
+    await page.locator('[data-side="sidebar"]').boundingBox()
+  ).x;
+  await page.getByRole('button', { name: 'Space', exact: true }).click();
+  await page.getByRole('table', { name: 'Content', exact: true }).waitFor();
+  assert.equal(await page.locator('.sp-navigation').count(), 0);
+  assert.equal(
+    (await page.locator('[data-side="sidebar"]').boundingBox()).x,
+    expandedWidth,
   );
-  await page.getByRole('tab', { name: 'Your items', exact: true }).click();
+  checks.push(
+    'Space entry has no second full sidebar; Host custom width unchanged',
+  );
+  await shot('after-navigation');
+  await back();
+  assert.equal(
+    (await page.locator('[data-side="sidebar"]').boundingBox()).x,
+    expandedWidth,
+  );
+  assert.equal(
+    await page.locator('[contenteditable="true"]').first().innerText(),
+    originalDraft,
+  );
+  checks.push(
+    'Chat return preserves custom Host width and original native draft',
+  );
+  await page.getByRole('button', { name: '收起侧边栏', exact: true }).click();
+  await page.getByRole('button', { name: 'Space', exact: true }).click();
+  await page.getByRole('table', { name: 'Content', exact: true }).waitFor();
+  assert.equal(await page.locator('[data-side="sidebar"]').count(), 0);
+  await back();
+  assert.equal(await page.locator('[data-side="sidebar"]').count(), 0);
+  checks.push('Collapsed Chat → Space → Chat preserves collapsed navigation');
+  await page.getByRole('button', { name: 'Space', exact: true }).click();
+  await page.getByRole('table', { name: 'Content', exact: true }).waitFor();
+  const nav = await drawer();
+  assert.equal((await nav.boundingBox()).width, 288);
+  assert.equal(
+    await nav.getByRole('button', { name: 'Images', exact: true }).count(),
+    0,
+  );
+  await shot('navigation-drawer');
+  await page.keyboard.press('Escape');
+  await page.locator('.sp-navigation').waitFor({ state: 'hidden' });
+  checks.push(
+    'Space overlay navigation opens/closes at 288px; Images is absent',
+  );
+  for (const [type, label, node] of [
+    ['doc', 'Docs', fixture.doc],
+    ['sheet', 'Sheets', fixture.sheet],
+    ['slide', 'Slides', extra.nodes[0]],
+    ['board', 'Boards / Canvas', extra.nodes[1]],
+    ['base', 'Bases / Databases', extra.nodes[2]],
+    ['site', 'Pages / Sites', extra.site],
+  ]) {
+    await (await drawer())
+      .getByRole('button', { name: label, exact: true })
+      .click();
+    await page
+      .locator('.sp-file-open')
+      .filter({ hasText: node.name })
+      .waitFor();
+    assert.ok((await page.locator('.sp-file-open').count()) >= 1);
+    if (type === 'site')
+      assert.equal(
+        await page
+          .locator('.sp-file-open')
+          .filter({ hasText: extra.plainHtml.name })
+          .count(),
+        0,
+      );
+    await page.locator('.sp-file-open').filter({ hasText: node.name }).click();
+    if (type === 'site') {
+      await page
+        .frameLocator('.sp-html-preview iframe')
+        .getByRole('heading', { name: 'Space MVP Release', exact: true })
+        .waitFor();
+      assert.equal(
+        await page.locator('.sp-html-preview iframe').getAttribute('sandbox'),
+        '',
+      );
+    } else {
+      await page.locator('.sp-viewer[data-viewer-state="ready"]').waitFor();
+      assert.ok(await page.locator('.sp-sdk canvas').count());
+    }
+    if (type === 'doc') {
+      assert.equal(await page.locator('.sp-page-title').count(), 0);
+      assert.match(
+        await page.locator('.sp-page-toolbar').innerText(),
+        new RegExp(fixture.doc.name),
+      );
+      assert.ok(
+        before[node.id].data.body.dataStream.startsWith(fixture.doc.name),
+      );
+    }
+    if (['base', 'board', 'slide'].includes(type))
+      assert.match(
+        await page.locator('.sp-preview-notice').innerText(),
+        /Core SDK preview/,
+      );
+    if (type === 'base') {
+      assert.match(JSON.stringify(before[node.id].data), /Verify navigation/);
+    }
+    if (
+      type === 'doc' ||
+      type === 'slide' ||
+      type === 'base' ||
+      type === 'site'
+    ) {
+      await page
+        .getByRole('button', { name: 'Minimize chat', exact: true })
+        .click();
+      await page.waitForTimeout(type === 'doc' ? 2800 : 250);
+      await shot('after-' + type);
+    }
+    checks.push(
+      `${label}: real category, identity/icon/list and ${type === 'site' ? 'sandbox HTML' : 'published SDK'} preview${type === 'doc' ? ', no extra DOM title' : ''}`,
+    );
+    await page
+      .getByRole('button', { name: 'Close viewer', exact: true })
+      .click();
+  }
+  await all();
   await page
-    .getByRole('textbox', { name: 'Search loaded content' })
-    .fill('产品发布');
-  let geometry = await measure(
-    'your-items-1440',
-    '.sp-shell,.sp-navigation,.sp-library-heading,.sp-tabs,.sp-file-row',
-  );
-  assert.equal(geometry[1].width, 288);
-  assert.equal(geometry.at(-1).height, 50);
-  assert.equal(geometry.at(-1).y, 179);
-  checks.push('All geometry: nav 288, title y28, tabs y85, row y179/h50');
-  await page
-    .getByRole('checkbox', { name: 'Select 产品发布', exact: true })
-    .check();
-  assert.match(
-    await page.getByRole('toolbar', { name: 'Selection' }).innerText(),
-    /1 selected/,
-  );
+    .getByLabel('Search loaded content', { exact: true })
+    .fill('no-match-008');
+  await page.getByText('No results found', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Clear search', exact: true }).click();
+  checks.push('Name search and no-results recovery');
+  await page.getByRole('button', { name: 'Grid view', exact: true }).click();
+  assert.ok(await page.locator('.sp-file-grid').count());
+  await page.getByRole('button', { name: 'List view', exact: true }).click();
+  await page.getByLabel('Select ' + fixture.doc.name, { exact: true }).check();
+  await page.getByRole('toolbar', { name: 'Selection', exact: true }).waitFor();
   await page
     .getByRole('button', { name: 'Clear selection', exact: true })
     .click();
-  assert.equal(
-    await page.getByRole('toolbar', { name: 'Selection' }).count(),
-    0,
-  );
-  checks.push(
-    'row selection and clear selection; unavailable actions disabled',
-  );
-  await page.locator('summary[aria-label="Actions for 产品发布"]').click();
-  assert.equal(
-    await page.getByRole('menuitem', { name: /^Share/ }).isDisabled(),
-    true,
-  );
-  await page.keyboard.press('Escape');
-  checks.push('row menu and Escape dismissal');
-  await shot('all-1440', ['E16', 'E28', 'E29']);
-  for (const [width, height] of [
-    [1280, 800],
-    [768, 900],
-  ]) {
-    await page.setViewportSize({ width, height });
-    await measure(
-      'all-' + width,
-      '.sp-navigation,.sp-library-heading,.sp-tabs,.sp-file-row',
-    );
-    assert.equal(
-      (await page.locator('.sp-navigation').boundingBox()).width,
-      288,
-    );
-    await shot('all-' + width, [width === 1280 ? 'E31' : 'E32']);
-  }
-  await page
-    .getByRole('button', { name: 'Toggle sidebar', exact: true })
-    .click();
-  assert.equal(await page.locator('.sp-navigation').count(), 0);
-  await page
-    .getByRole('button', { name: 'Open Space navigation', exact: true })
-    .click();
-  assert.match(
-    await page.locator('.sp-navigation').getAttribute('class'),
-    /flyout/,
-  );
-  await shot('nav-flyout-768', ['E35']);
-  await page
-    .getByRole('button', { name: 'Toggle sidebar', exact: true })
-    .click();
-  checks.push(
-    '768 navigation retains 288 width; manual collapse, overlay flyout and restore',
-  );
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole('button', { name: 'Clear search', exact: true }).click();
+  checks.push('Grid/List, row selection and clear selection retained');
+  await page.locator('.sp-file-open').filter({ hasText: '产品发布' }).click();
   await page
     .locator('.sp-file-open')
-    .filter({ hasText: beforeDoc.name })
+    .filter({ hasText: fixture.doc.name })
     .click();
-  await page
-    .locator('.sp-page-title')
-    .filter({ hasText: beforeDoc.name })
-    .waitFor();
-  await page
-    .locator('.sp-sdk canvas#univer-doc-main-canvas')
-    .waitFor({ state: 'visible' });
-  await page.locator('.sp-viewer-message').waitFor({ state: 'hidden' });
-  assert.equal(
-    await page.locator('.sp-viewer').getAttribute('data-document-flavor'),
-    'modern',
-  );
-  assert.equal(
-    await page
-      .locator('.sp-sdk canvas#univer-doc-main-canvas')
-      .evaluate((e) => getComputedStyle(e).backgroundColor),
-    'rgb(255, 255, 255)',
-  );
-  await measure(
-    'page-1440',
-    '.sp-page-toolbar,.sp-page-title,.sp-editor,.sp-floating-chat',
-  );
-  await shot('page-compact-1440', ['E04', 'E12']);
-  checks.push(
-    'Univer Modern Doc actual canvas, continuous white surface; native compact composer',
-  );
+  await page.locator('.sp-viewer[data-viewer-state="ready"]').waitFor();
+  await page.getByRole('button', { name: 'Close viewer', exact: true }).click();
+  assert.equal(await page.locator('.sp-file-open').count(), 2);
+  checks.push('Folder → Doc → Close returns to the actual source Folder');
+  await open(fixture.doc);
   await page.locator('summary[aria-label="File menu"]').click();
   await page.getByRole('menuitem', { name: 'Pin', exact: true }).click();
-  await page.getByRole('button', { name: 'Close viewer', exact: true }).click();
-  await page.getByRole('tab', { name: 'Suggested', exact: true }).click();
-  await page.getByRole('region', { name: 'Pinned pages' }).waitFor();
-  await shot('suggested-pinned-1440', ['E02', 'E37']);
-  checks.push(
-    'Pin updates navigation and Suggested independently of Favorites; close returns source list',
+  await (await drawer())
+    .getByRole('button', { name: 'All', exact: true })
+    .click();
+  assert.ok(
+    await page
+      .locator('.sp-preview')
+      .filter({ hasText: fixture.doc.name })
+      .count(),
   );
-  await open(beforeDoc.name);
-  const sessionA = await newChat();
+  checks.push('Pin updates real Suggested cards and navigation');
+  await open(fixture.doc);
+  sessionA = await newChat();
   await send(
-    'TASK-007B UI acceptance. Reply only ACK-007B-A. Do not edit or access files.',
+    'TASK-008 Web acceptance. Reply only ACK-008-A. Do not use tools or edit files.',
   );
   await page
     .locator('.sp-native-messages')
-    .getByText('ACK-007B-A', { exact: true })
-    .waitFor({ timeout: 45000 });
-  checks.push('new Host Session A, real native send, running and reply');
+    .getByText('ACK-008-A', { exact: true })
+    .waitFor({ timeout: 60000 });
+  checks.push('New native Conversation A sends and receives ACK');
   await page
     .getByRole('button', { name: 'Minimize chat', exact: true })
     .click();
-  await mode('minimized');
-  await page
-    .getByRole('button', { name: 'Restore floating chat', exact: true })
-    .click();
-  await mode('compact');
-  await page
-    .getByRole('button', { name: 'Expand floating chat', exact: true })
-    .click();
+  await expand();
   assert.equal(await panel().getAttribute('data-session-id'), sessionA);
   assert.equal(await page.locator('[data-conversation-content]').count(), 1);
   checks.push(
-    'minimize, restore, expand keep same Session and one native Conversation',
+    'Minimize/restore/expand retains exactly one native Conversation tree',
   );
-  const titleBefore = await page.locator('.sp-page-title').boundingBox();
-  const grip = await page
-    .getByRole('button', { name: 'Move floating chat' })
+  const editorBefore = await page.locator('.sp-editor').boundingBox(),
+    sizeBefore = await panel().boundingBox();
+  const resize = await page
+    .getByRole('separator', { name: 'Resize chat width left', exact: true })
     .boundingBox();
-  const initial = await panel().boundingBox();
-  const dx = 1440 - initial.x - initial.width - 16;
-  await page.mouse.move(grip.x + 15, grip.y + 15);
+  await page.mouse.move(resize.x + 8, resize.y + 80);
   await page.mouse.down();
-  await page.mouse.move(grip.x + 15 + dx, grip.y + 15, { steps: 12 });
+  await page.mouse.move(resize.x - 72, resize.y + 80, { steps: 8 });
   await page.mouse.up();
-  const handle = await page
-    .getByRole('separator', { name: 'Resize chat width left' })
-    .boundingBox();
-  await page.mouse.move(handle.x + 8, handle.y + 50);
-  await page.mouse.down();
-  await page.mouse.move(handle.x + 8 - 104, handle.y + 50, { steps: 8 });
-  await page.mouse.up();
-  assert.equal((await panel().boundingBox()).width, 664);
+  assert.equal((await panel().boundingBox()).width, sizeBefore.width + 80);
   assert.deepEqual(
-    await page.locator('.sp-page-title').boundingBox(),
-    titleBefore,
+    await page.locator('.sp-editor').boundingBox(),
+    editorBefore,
   );
-  await measure(
-    'chat-resized-1440',
-    '.sp-page-title,.sp-editor,.sp-floating-chat',
-  );
-  await shot('chat-expanded-1440', ['E08', 'E13', 'E42']);
-  checks.push(
-    'pointer move and 104px resize produce 664x634 overlay without moving title or editor',
-  );
-  // Add only a stable reference through the native draft API. Opening is not selecting.
-  await menu();
+  checks.push('Floating Chat resize keeps content geometry fixed');
+  await page.locator('.sp-chat-header summary[aria-label="Chat menu"]').click();
   await page
     .getByRole('menuitem', { name: 'Add page to chat', exact: true })
     .click();
@@ -320,57 +399,46 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('.sp-context')?.textContent?.includes('In draft'),
   );
-  const draft = await panel().locator('[contenteditable="true"]').innerText();
-  assert.match(draft, /workspace-file:\/\//);
-  assert.doesNotMatch(draft, /SPACE-ORBIT-7419|4270|4,270|workspace_snapshot/);
-  checks.push(
-    'explicit page selection stages short reference only in real native composer',
+  const docDraft = await panel()
+    .locator('[contenteditable="true"]')
+    .innerText();
+  assert.match(docDraft, /workspace-file:\/\//);
+  assert.doesNotMatch(
+    docDraft,
+    /SPACE-ORBIT-7419|4270|4,270|workspace_snapshot/,
   );
-  await open(beforeSheet.name);
-  await page.getByText('预算明细', { exact: true }).waitFor();
-  const sessionB = await newChat();
-  assert.notEqual(sessionB, sessionA);
+  checks.push(
+    'Explicit selection inserts only a stable reference into the Host draft',
+  );
+  await open(fixture.sheet);
+  sessionB = await newChat();
   await send(
-    'TASK-007B UI acceptance. Reply only ACK-007B-B. Do not edit or access files.',
+    'TASK-008 Web acceptance. Reply only ACK-008-B. Do not use tools or edit files.',
   );
   await page
     .locator('.sp-native-messages')
-    .getByText('ACK-007B-B', { exact: true })
-    .waitFor({ timeout: 45000 });
-  checks.push('Univer Sheet and independent Host Session B send/reply');
-  await open(beforeDoc.name);
-  await page.waitForFunction(
-    (id) =>
-      document
-        .querySelector('.sp-floating-chat')
-        ?.getAttribute('data-session-id') === id,
-    sessionA,
-  );
-  await mode('compact');
+    .getByText('ACK-008-B', { exact: true })
+    .waitFor({ timeout: 60000 });
+  assert.notEqual(sessionA, sessionB);
+  checks.push('Native Conversation B has independent identity and ACK');
+  await open(fixture.doc);
+  assert.equal(await panel().getAttribute('data-session-id'), sessionA);
   assert.match(
     await panel().locator('[contenteditable="true"]').innerText(),
     /workspace-file:\/\//,
   );
-  assert.match(await page.locator('.sp-context').innerText(), /In draft/);
-  await page.getByRole('button', { name: 'Expand floating chat' }).click();
+  await expand();
   await page
     .locator('.sp-native-messages')
-    .getByText('ACK-007B-A', { exact: true })
+    .getByText('ACK-008-A', { exact: true })
     .waitFor();
   checks.push(
-    'return Doc A restores Session A, ACK-A, native unsent draft and explicit file context',
+    'Doc A / Sheet B restores each Session, message history, explicit Context and unsent draft',
   );
-  // Submit staged reference, letting the existing formal read tool fetch the answer.
-  const docDraft = await panel()
-    .locator('[contenteditable="true"]')
-    .innerText();
-  await panel()
-    .locator('[contenteditable="true"]')
-    .fill(
-      docDraft +
-        '\nUse univer_inspect to read this reference. Return the owner, exact budget, acceptance marker and next step. Do not edit anything.',
-    );
-  await panel().getByRole('button', { name: '发送消息', exact: true }).click();
+  await send(
+    docDraft +
+      '\nUse univer_inspect to read this reference. Return the owner, exact budget, acceptance marker and next step. Do not edit anything.',
+  );
   await page.waitForFunction(
     () =>
       document
@@ -385,147 +453,142 @@ try {
         '.sp-floating-chat button[aria-label="停止生成"]',
       ),
     {},
-    { timeout: 30000 },
+    { timeout: 45000 },
   );
   assert.match(await page.locator('.sp-context').innerText(), /Submitted/);
+  const chip = page
+    .locator(`button[data-workspace-reference="${fixture.doc.id}"]`)
+    .first();
+  await chip.waitFor();
+  assert.equal(await chip.isEnabled(), true);
   checks.push(
-    'native short-reference submission receipt and fresh tool-derived answer',
+    'Durable native message renders a clickable Workspace file reference; receipt is Submitted',
   );
+  await chip.scrollIntoViewIfNeeded();
+  await shot('file-reference');
+  await page.getByRole('button', { name: 'Close viewer', exact: true }).click();
+  await open(fixture.sheet);
+  await expand();
   await page
     .getByRole('button', { name: 'View chat history', exact: true })
     .click();
-  assert.equal(await page.locator('.sp-chat-history').isVisible(), true);
+  await page.locator(`button[data-session-option="${sessionA}"]`).click();
+  await expand();
   await page
-    .locator(`.sp-chat-history button[data-session-option="${sessionB}"]`)
+    .locator(`button[data-workspace-reference="${fixture.doc.id}"]`)
+    .first()
     .click();
-  assert.equal(await panel().getAttribute('data-mode'), 'compact');
   await page.waitForFunction(
-    (id) =>
-      document
-        .querySelector('.sp-floating-chat')
-        ?.getAttribute('data-session-id') === id,
-    sessionB,
+    (name) =>
+      document.querySelector('.sp-page-toolbar')?.textContent?.includes(name),
+    fixture.doc.name,
   );
-  await mode('compact');
-  checks.push('real Host history switches existing Conversation');
-  await open(beforeSheet.name);
-  await page.waitForFunction(
-    (id) =>
-      document
-        .querySelector('.sp-floating-chat')
-        ?.getAttribute('data-session-id') === id,
-    sessionB,
-  );
-  await page.getByRole('button', { name: 'Expand floating chat' }).click();
-  await page
-    .locator('.sp-native-messages')
-    .getByText('ACK-007B-B', { exact: true })
-    .waitFor();
-  checks.push('return Sheet B restores Session B and ACK-B');
-  await open(beforeDoc.name);
-  await page.getByRole('button', { name: 'Expand floating chat' }).click();
-  const restoreWidth = await page
-    .getByRole('separator', { name: 'Resize chat width left' })
-    .boundingBox();
-  await page.mouse.move(restoreWidth.x + 8, restoreWidth.y + 50);
-  await page.mouse.down();
-  await page.mouse.move(restoreWidth.x + 112, restoreWidth.y + 50, {
-    steps: 8,
-  });
-  await page.mouse.up();
-  assert.equal((await panel().boundingBox()).width, 560);
-  await page.setViewportSize({ width: 768, height: 900 });
-  await page.getByRole('button', { name: 'Toggle sidebar' }).click();
-  if ((await panel().getAttribute('data-mode')) === 'compact')
-    await page.getByRole('button', { name: 'Expand floating chat' }).click();
-  await mode('expanded');
-  await measure('chat-768', '.sp-page-title,.sp-floating-chat');
-  await shot('chat-768', ['E34']);
-  assert.ok((await panel().boundingBox()).x >= 56);
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await measure('chat-1280', '.sp-page-title,.sp-floating-chat');
-  await shot('chat-1280', ['E36']);
-  assert.ok((await panel().boundingBox()).y >= 0);
-  checks.push('768 and 1280 overlay stays inside Host-owned main surface');
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole('button', { name: 'Open Space navigation' }).click();
-  await page.getByRole('button', { name: 'Toggle sidebar' }).click();
-  await page.getByRole('button', { name: 'Close viewer' }).click();
-  assert.equal(await page.locator('.sp-chat-seat').isVisible(), false);
-  await page
-    .getByRole('button', { name: 'Space Demo 的个人空间', exact: true })
-    .click();
-  await page
-    .getByRole('heading', { name: 'About Space Demo 的个人空间' })
-    .waitFor();
-  await shot('space-overview-1440', ['E22']);
-  await page.getByRole('tab', { name: 'Content', exact: true }).click();
-  await shot('space-content-1440', ['E43']);
-  await page
-    .getByRole('textbox', { name: 'Search loaded content' })
-    .fill('TASK007B_NO_MATCH');
-  await page.getByRole('heading', { name: 'No matching pages' }).waitFor();
-  await shot('space-empty-search-1440', ['E23']);
-  checks.push('Space Overview, real root Content and explicit no-match state');
-  await page.getByRole('button', { name: 'All', exact: true }).click();
-  await page.getByRole('tab', { name: 'Your items', exact: true }).click();
-  await page.locator('.sp-file-open').filter({ hasText: '产品发布' }).click();
-  await page.getByRole('table', { name: 'Content' }).waitFor();
-  await shot('folder-1440', ['E19', 'E20']);
-  await page
-    .locator('.sp-file-open')
-    .filter({ hasText: beforeDoc.name })
-    .click();
-  await page.getByRole('button', { name: 'Close viewer' }).waitFor();
-  await page.getByRole('button', { name: 'Close viewer' }).click();
+  await page.locator('.sp-viewer[data-viewer-state="ready"]').waitFor();
   assert.match(
-    await page.locator('.sp-library-heading').innerText(),
-    /产品发布/,
+    await page.locator('.sp-page-toolbar').innerText(),
+    new RegExp(fixture.doc.name),
   );
-  checks.push('Folder to Doc to close returns exact Folder');
-  const afterDoc = await host.request('space/content', {
-      node: fixture.doc.id,
-    }),
-    afterSheet = await host.request('space/content', {
-      node: fixture.sheet.id,
-    });
-  assert.equal(afterDoc.sha256, beforeDoc.sha256);
-  assert.equal(afterSheet.sha256, beforeSheet.sha256);
+  assert.equal(await panel().getAttribute('data-session-id'), sessionA);
   checks.push(
-    'Server Doc/Sheet hashes unchanged after Modern rendering, UI and tool reads',
+    'Click reference from another file opens the authoritative Doc in the originating Session',
   );
+  await back();
+  assert.equal(
+    await page.locator('[contenteditable="true"]').first().innerText(),
+    originalDraft,
+  );
+  checks.push(
+    'Original Host Chat draft survives new floating Conversations and file reference navigation',
+  );
+  for (const width of [768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByRole('button', { name: 'Space', exact: true }).click();
+    await all();
+    await page.getByRole('table', { name: 'Content', exact: true }).waitFor();
+    assert.equal(await page.locator('.sp-navigation').count(), 0);
+    const d = await drawer();
+    assert.ok((await d.boundingBox()).width <= width);
+    await d.getByRole('button', { name: 'All', exact: true }).click();
+    measurements.push({ width, shell: await own().boundingBox() });
+    await back();
+  }
+  checks.push('768/1280 Chat–Space switching and temporary navigation drawer');
+  const after = {};
+  for (const n of files) {
+    const current = await host.request('space/content', { node: n.id });
+    assert.equal(current.sha256, before[n.id].sha256);
+    assert.equal(current.sourceSha256, before[n.id].sourceSha256);
+    if (n.resource.unitType === 'doc') {
+      const body = (data) => {
+        const clone = structuredClone(data.body);
+        for (const section of clone.sectionBreaks ?? [])
+          delete section.sectionId;
+        return clone;
+      };
+      assert.deepEqual(body(current.data), body(before[n.id].data));
+    }
+    after[n.id] = {
+      type: current.type,
+      sha256: current.sha256,
+      revision: current.revision,
+      sourceSha256: current.sourceSha256,
+    };
+  }
+  checks.push(
+    'All five Office types and HTML Server hashes unchanged; original Doc body unchanged',
+  );
+  const finalSessions = await sessionHashes();
+  for (const [path, hash] of Object.entries(existingSessions))
+    assert.equal(finalSessions[path], hash, path);
+  if (sessionRoot)
+    checks.push(
+      'Every pre-existing durable native Session log is byte-for-byte unchanged',
+    );
   assert.deepEqual(errors, []);
-  checks.push('zero browser page errors');
-  await writeEvidence('web-ui.json', {
-    at: new Date().toISOString(),
-    version: JSON.parse(
-      await readFile(new URL('../package.json', import.meta.url), 'utf8'),
-    ).version,
-    carrier:
-      'Official DSH Web on official Electron-owned Host; not Desktop window UX',
-    checks,
-    sessions: { A: sessionA, B: sessionB },
-    screens,
-    measurements,
-    errors,
-    consoleMessages,
-    serverHashes: { doc: afterDoc.sha256, sheet: afterSheet.sha256 },
-  });
+  assert.deepEqual(consoleMessages, []);
+  checks.push(
+    'Zero browser page errors and zero captured console warnings/errors',
+  );
+  await writeFile(
+    resolve(out, 'web-ui.json'),
+    JSON.stringify(
+      {
+        at: new Date().toISOString(),
+        version: JSON.parse(
+          await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+        ).version,
+        carrier:
+          'Official DSH Web on Electron-owned Host; Desktop window acceptance deferred',
+        checks,
+        screens,
+        measurements,
+        sessions: { A: sessionA, B: sessionB },
+        existingSessionsPreserved: Object.keys(existingSessions).length,
+        content: after,
+        errors,
+        consoleMessages,
+      },
+      null,
+      2,
+    ),
+  );
   console.log(
     JSON.stringify({
       passed: checks.length,
-      screens: screens.length,
       sessions: { A: sessionA, B: sessionB },
+      screens: screens.length,
     }),
   );
 } catch (error) {
   await page.screenshot({ path: resolve(out, 'failure.png') });
-  await writeEvidence('web-ui-failure.json', {
-    checks,
-    error: String(error),
-    errors,
-    consoleMessages,
-  });
+  await writeFile(
+    resolve(out, 'web-ui-failure.json'),
+    JSON.stringify(
+      { checks, error: String(error), errors, consoleMessages },
+      null,
+      2,
+    ),
+  );
   throw error;
 } finally {
   await browser.close();

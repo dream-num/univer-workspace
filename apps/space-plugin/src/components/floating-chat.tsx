@@ -226,7 +226,7 @@ export function FloatingChat({
             {v.content && (
               <button
                 role="menuitem"
-                disabled={!v.sessionId}
+                disabled={!v.sessionId || !v.content || !['doc','sheet'].includes(v.content.type)}
                 className={button + ' tw-w-full'}
                 onClick={() => face.select()}
               >

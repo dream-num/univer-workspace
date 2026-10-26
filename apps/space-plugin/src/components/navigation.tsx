@@ -1,17 +1,25 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { Face } from '../client.js';
 import { nodeKind, type State } from '../model.js';
 import { CreateMenu, Icon, button, iconButton } from './primitives.js';
 export function Navigation({ face, v }: { face: Face; v: State }) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (v.flyout)
+      ref.current
+        ?.querySelector<HTMLButtonElement>('button:not(:disabled)')
+        ?.focus();
+  }, [v.flyout]);
   const row = button + ' sp-nav-row';
   if (!v.nav && !v.flyout)
     return (
       <button
-        className={iconButton + ' sp-nav-restore'}
+        className={button + ' sp-nav-restore'}
         aria-label="Open Space navigation"
         onClick={() => face.update({ flyout: true })}
       >
         <Icon name="panel" />
+        <span>Space</span>
       </button>
     );
   const go = () => {
@@ -20,6 +28,10 @@ export function Navigation({ face, v }: { face: Face; v: State }) {
   return (
     <>
       <aside
+        ref={ref}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') face.update({ flyout: false });
+        }}
         aria-label="Space navigation"
         className={'sp-navigation' + (!v.nav ? ' sp-navigation-flyout' : '')}
       >
@@ -41,8 +53,8 @@ export function Navigation({ face, v }: { face: Face; v: State }) {
           </button>
           <button
             className={iconButton}
-            aria-label="Toggle sidebar"
-            onClick={() => face.update({ nav: !v.nav, flyout: false })}
+            aria-label="Close Space navigation"
+            onClick={() => face.update({ flyout: false })}
           >
             <Icon name="panel" />
           </button>
@@ -54,20 +66,16 @@ export function Navigation({ face, v }: { face: Face; v: State }) {
           {(
             [
               ['all', 'All', 'all'],
-              ['doc', 'Pages', 'doc'],
+              ['doc', 'Docs', 'doc'],
+              ['sheet', 'Sheets', 'sheet'],
               ['slide', 'Slides', 'slide'],
-              ['site', 'Sites', 'site'],
-              ['image', 'Images', 'image'],
+              ['board', 'Boards / Canvas', 'board'],
+              ['base', 'Bases / Databases', 'base'],
+              ['site', 'Pages / Sites', 'site'],
             ] as const
           ).map(([filter, label, icon]) => (
             <button
               key={filter}
-              disabled={['slide', 'site', 'image'].includes(filter)}
-              title={
-                ['slide', 'site', 'image'].includes(filter)
-                  ? 'Not available in this release'
-                  : undefined
-              }
               className={
                 row +
                 (v.location === 'home' && v.filter === filter && !v.content
@@ -152,6 +160,10 @@ export function Navigation({ face, v }: { face: Face; v: State }) {
             </button>
           ))}
         </div>
+        <button className={row} onClick={() => face.back()}>
+          <Icon name="arrow" />
+          Back to Chat
+        </button>
         <button
           disabled
           title="Trash is not available"

@@ -2,6 +2,8 @@ import React from 'react';
 import type {} from '@deepseek-ai/dsh-api-session-controller/client';
 import type {} from '@deepseek-ai/dsh-api-session-controller/remote';
 import { SpaceView, NativeConversation } from './ui.js';
+import { WorkspaceReference } from './components/file-reference.js';
+import { workspaceReferenceRule } from './file-reference.js';
 import { Icon } from './components/primitives.js';
 import {
   selectedReference,
@@ -26,6 +28,7 @@ export const inject = [
   'sessions',
   'uiWorkspace',
   'conversation',
+  'uiConversation',
   'connection',
 ];
 const PANEL = 'space-plugin';
@@ -60,7 +63,7 @@ export function apply(ctx: any) {
     pins: [],
     flyout: false,
     spaceTab: 'Overview',
-    nav: true,
+    nav: false,
     notice: '',
   };
   const listeners = new Set<() => void>();
@@ -218,6 +221,14 @@ export function apply(ctx: any) {
     const before = generation;
     const page = await api<Page>('nodes', { space, parent, cursor });
     if (before !== generation || request !== directoryRequest) return;
+    page.nodes = page.nodes.map((node) => ({
+      ...node,
+      resource:
+        node.resource &&
+        view.all.find((item) => item.id === node.id)?.resource?.htmlView
+          ? { ...node.resource, htmlView: true }
+          : node.resource,
+    }));
     rememberContext();
     contentRequest++;
     update({
@@ -432,7 +443,10 @@ export function apply(ctx: any) {
     removeContext: () => update({ context: null }),
     draft: () => run(addDraft),
     chat: () => run(() => nativeChat(Boolean(view.content))),
-    back: () => ctx.layout.selectPanel(PANEL),
+    back: () => {
+      update({ flyout: false });
+      ctx.layout.selectPanel(null);
+    },
     link: (id: string) => run(() => linkSession(id)),
   };
   ctx.effect(() => {
@@ -471,7 +485,10 @@ export function apply(ctx: any) {
   syncSessions();
   ctx.effect(() =>
     ctx.layout.panelInfo.subscribe(() => {
-      if (ctx.layout.panelInfo.getSnapshot().activePanelId !== PANEL) return;
+      if (ctx.layout.panelInfo.getSnapshot().activePanelId !== PANEL) {
+        update({ flyout: false });
+        return;
+      }
       if (!view.sessionId) {
         const rows: any[] = Object.values(ctx.sessions.list.getSnapshot().byId);
         const active = rows.filter((row) => row.retainedBy.mainView > 0);
@@ -482,6 +499,51 @@ export function apply(ctx: any) {
       }
       void run(refresh);
     }),
+  );
+  ctx.effect(() =>
+    ctx.uiConversation.userText.register(workspaceReferenceRule),
+  );
+  ctx.effect(() =>
+    ctx.slots.inject('conversation.user.text.node', () =>
+      ctx.slots.register(
+        {
+          name: 'conversation.user.text.node',
+          key: 'workspace-file',
+          inject: () => ({
+            openFile: async (
+              node: string,
+              resource: string,
+              unit: string,
+              session: string,
+            ) => {
+              const before = generation,
+                request = ++contentRequest;
+              directoryRequest++;
+              sessionRequest++;
+              const file = await api<Content>('content', { node });
+              if (before !== generation || request !== contentRequest) return;
+              if (file.resourceId !== resource || file.unitId !== unit)
+                throw new Error(
+                  'This file reference no longer matches its Workspace identity.',
+                );
+              // Same scoped Session and existing ACL; opening does not grant Agent access.
+              ctx.layout.selectPanel(PANEL);
+              rememberContext();
+              contentRequest++;
+              directoryRequest++;
+              update({
+                content: file,
+                ai: true,
+                chatMode: 'expanded',
+                flyout: false,
+              });
+              await linkSession(session);
+            },
+          }),
+        },
+        WorkspaceReference,
+      ),
+    ),
   );
   ctx.effect(() =>
     ctx.slots.inject('main', () =>
@@ -507,7 +569,7 @@ export function apply(ctx: any) {
           order: -10,
           label: () => 'Space',
         },
-        ({ size }: any) => <Icon name="all" size={size} />,
+        ({ size }: any) => <Icon name="workspace" size={size} />,
       ),
     ),
   );

@@ -4,8 +4,8 @@ import { scopeSdkCss } from './scope-sdk-css.mjs';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 await mkdir('lib', { recursive: true });
 const sdkCss = await Promise.all(
-  ['preset-docs-core', 'preset-sheets-core'].map((name) =>
-    readFile(`node_modules/@univerjs/${name}/lib/index.css`, 'utf8'),
+  ['@univerjs/preset-docs-core', '@univerjs/preset-sheets-core', '@univerjs/drawing-ui', '@univerjs-pro/slides-ui', '@univerjs-pro/boards-ui', '@univerjs-pro/bases-ui'].map((name) =>
+    readFile(`node_modules/${name}/lib/index.css`, 'utf8'),
   ),
 );
 await writeFile('lib/univer-scoped.css', sdkCss.map(scopeSdkCss).join('\n'));
@@ -27,6 +27,7 @@ await build({
     'src/index.ts',
     'src/workspace.ts',
     'src/model.ts',
+    'src/file-reference.ts',
     'src/tools.ts',
     'src/viewer-data.ts',
   ],
