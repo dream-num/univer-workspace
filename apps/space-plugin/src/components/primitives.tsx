@@ -166,67 +166,36 @@ export function GapAction({ children }: { children: React.ReactNode }) {
       role="menuitem"
       disabled
       className={button + ' tw-w-full tw-justify-start'}
-      title="Not available in this read-only release"
+      title="This action is not available in Space yet"
     >
       {children}
-      <span className="tw-ml-auto tw-text-[10px]">Unavailable</span>
     </button>
   );
 }
+/** Creation is not wired in this phase; it is not inferred from Viewer permissions. */
 export function CreateMenu({
   folder = false,
   space = false,
+  allowed = true,
 }: {
   folder?: boolean;
   space?: boolean;
+  allowed?: boolean;
 }) {
+  const label = folder || space ? 'New' : 'Create';
+  const reason = allowed
+    ? 'Creation is not available in Space yet'
+    : 'You do not have permission to create here';
   return (
-    <Menu
-      label={folder || space ? 'New' : 'Create'}
-      trigger={
-        <>
-          <span>{folder || space ? 'New' : 'Create'}</span>
-          <Icon name="down" size={12} />
-        </>
-      }
+    <button
+      type="button"
+      disabled
+      className={button}
+      aria-label={label}
+      title={reason}
     >
-      <span className="tw-block tw-px-3 tw-py-2 tw-text-xs tw-text-muted">
-        Create new · read-only release
-      </span>
-      {!folder && (
-        <>
-          <GapAction>
-            <Icon name="doc" />
-            Page
-          </GapAction>
-          <GapAction>
-            <Icon name="sheet" />
-            Sheet
-          </GapAction>
-          <GapAction>
-            <Icon name="slide" />
-            Slides
-          </GapAction>
-        </>
-      )}
-      {!space && (
-        <>
-          <GapAction>
-            <Icon name="folder" />
-            Folder
-          </GapAction>
-          {!folder && (
-            <GapAction>
-              <Icon name="all" />
-              Space
-            </GapAction>
-          )}
-          <GapAction>
-            <Icon name="plus" />
-            Upload files
-          </GapAction>
-        </>
-      )}
-    </Menu>
+      <span>{label}</span>
+      <Icon name="down" size={12} />
+    </button>
   );
 }

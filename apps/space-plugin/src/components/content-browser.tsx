@@ -56,9 +56,6 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
     setSelected((s) =>
       s.includes(id) ? s.filter((n) => n !== id) : [...s, id],
     );
-  const discoveryGap =
-    v.location === 'home' &&
-    ['Favorites', 'Shared with you'].includes(v.discovery);
   return (
     <div className="sp-browser">
       {space && (
@@ -112,7 +109,15 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
               )}
             </label>
             <div className="sp-primary">
-              <CreateMenu folder={folder} space={space} />
+              <CreateMenu
+                folder={folder}
+                space={space}
+                allowed={
+                  folder
+                    ? v.page?.parentNode?.capabilities?.createChildren !== false
+                    : true
+                }
+              />
             </div>
           </div>
         </header>
@@ -132,6 +137,12 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
             ).map((tab) => (
               <button
                 role="tab"
+                disabled={['Favorites', 'Shared with you'].includes(tab)}
+                title={
+                  ['Favorites', 'Shared with you'].includes(tab)
+                    ? `${tab} is not available in Space yet`
+                    : undefined
+                }
                 aria-selected={
                   (space ? v.spaceTab : v.discovery) === tab ||
                   (v.filter === 'doc' &&
@@ -215,9 +226,6 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
               This Space contains {v.page?.nodes.length ?? 0} items you can
               access.
             </p>
-            <p className="tw-text-muted">
-              Space descriptions are not available in this release.
-            </p>
             <button
               className={button + ' tw-bg-hover'}
               onClick={() => face.update({ spaceTab: 'Content' })}
@@ -225,10 +233,6 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
               Browse content <Icon name="chevron" size={14} />
             </button>
           </section>
-        ) : discoveryGap ? (
-          <Empty title={v.discovery + ' is not available'}>
-            <p>This view is not connected to Workspace data yet.</p>
-          </Empty>
         ) : (
           <>
             {v.location === 'home' &&
@@ -379,13 +383,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                         : 'No results found'
                 }
               >
-                <p>
-                  {folder
-                    ? 'Upload is not available in this release.'
-                    : v.query
-                      ? 'Try a different search.'
-                      : ''}
-                </p>
+                <p>{v.query ? 'Try a different search.' : ''}</p>
               </Empty>
             )}
             {(folder || space

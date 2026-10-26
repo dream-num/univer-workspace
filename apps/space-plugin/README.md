@@ -25,8 +25,9 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
 ## Use
 
 1. Open an existing native DSH Conversation and select the Space global entry.
-   Space uses an explicit overlay navigation drawer; it does not toggle or
-   inspect the Host sidebar. Back to Chat preserves its width/collapse state.
+   Space immediately supplies navigation through the public `sidebar.workspaces`
+   region Slot. DSH retains its outer column, width, collapse controls and original
+   Chat navigation. Back to Chat restores that registration without a drawer.
 2. Open Workspace settings at the navigation bottom, set an HTTP(S) origin and
    sign in. Credentials remain only in Host memory. Local HTTP is allowed;
    remote connections require HTTPS.
@@ -44,19 +45,24 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
    its grip, resize either side, restore it, create a Host Conversation or choose
    an existing one from History. It is one DSH composer/transcript, with DSH-owned
    messages, model, running state and tools. It never reserves editor width.
-6. Chat menu → Add page to chat → Add reference stages a stable short file
-   reference in the native draft. Enter a question and send there. Opening a
-   file, selecting it, submitting its reference and actual Tool reading are
-   different states. No body, cell JSON or Snapshot is injected. Submitted user
-   messages render the stable reference as a clickable Workspace file card via
-   the public UserText rule/keyed Slot; clicks recheck ACL and file identity and
-   preserve the originating Session. Composer still uses editable short wire text.
-7. Switching files restores the last chosen Host Session, its native draft and
-   explicit selection. Routing/pins last for this plugin lifetime and clear on
-   identity change. Close viewer returns to its source list.
+6. Opening a Doc or Sheet visibly associates its stable identity with the selected
+   native Session in `conversation.input.dock`. Remove/reassociate there. Ask
+   “总结当前文档”; the native Agent receives a short runtime-context identity and
+   reads current Server content through `univer_inspect`. No body or large JSON
+   is inserted into ordinary user messages. Page association is frozen at native
+   message admission, including queued requests; stale association responses are
+   rejected. Slides/Boards/Bases/Sites previews do not yet have Agent read tools;
+   opening them clears the previous current-document pointer.
+7. Existing durable Workspace references remain clickable through the public
+   UserText rule/keyed Slot. Clicks recheck current ACL and Node/Resource/Unit,
+   open the file, preserve its native Session and show the current association.
+   File switches retain each selected native Session and unsent draft. Workspace
+   identity/endpoint changes clear Workspace grants/content, not DSH references.
+   Close viewer returns to its source list. Reconnecting the same endpoint keeps
+   authentication; an invalid/unreachable replacement keeps the existing service.
 
 Creation, direct sharing, Favorites, Trash, subpages, moves and deletes are
-unavailable in this release. Menus label these disabled actions. Suggested has
+unavailable in this release. Disabled controls explain feature availability separately from Server permissions. Suggested has
 local pinned metadata cards, with no fabricated templates or recommendations.
 The native DSH composer is taller than Space's 52px input capsule; it is kept
 intact.
@@ -72,11 +78,20 @@ SPACE_MVP_FIXTURES=/path/to/private-fixtures.json \
 SPACE_SESSION_ROOT=/path/to/actual-host/sessions \
 SPACE_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
 SPACE_BROWSER_EXECUTABLE=/path/to/browser \
-node scripts/check-ui-live.mjs
+node scripts/check-recovery-live.mjs
 ```
 
-The test uses the real native Composer to send two ACK requests and one explicit
-read-only file question. It never sends a stored body in the prompt.
+The recovery check exercises settings, connection failures, six viewers and
+current-document questions in an existing native Conversation.
+`node scripts/check-context-races-live.mjs` checks superseded associations,
+Composer preservation, floating geometry, references and disabled menus.
+
+For the original Workspace Browser's minimum assembly check, serve it with its
+own Vite config against the same Server, set `SPACE_WORKSPACE_BROWSER_ORIGIN`,
+and run `node scripts/check-editor-assembly-live.mjs`. It observes the real
+collaboration WebSocket and current History version, performs no edits, and
+compares persisted Snapshot hashes. This does not certify Comments writes,
+multi-user editing or offline persistence.
 
 The read tools are `univer_spaces`, `univer_documents`, `univer_open`, and
 `univer_inspect`. They use Session-scoped association routing and current Host
@@ -84,8 +99,8 @@ Workspace login; the real Server rechecks ACLs. Inspection reads current Server
 content, returns revision/hash and bounded line/cell entries, and exposes
 `nextOffset` for paging. These are deliberately read-only subsets; they do not
 promise the complete old plugin's Facade/Worktree interface. No write/merge tool
-is registered. Removing local selection does not erase a durable message or
-revoke a previously associated file; change identity/disconnect to clear grants.
+is registered. Removing the current-document association does not erase a durable message or
+revoke historical read grants; change identity/disconnect to clear grants.
 
 DSH Tools is a type-only development dependency. Four public JSON Schema
 registrations match the previous defineTool builder output exactly. Installing

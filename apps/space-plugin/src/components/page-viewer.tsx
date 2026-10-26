@@ -35,7 +35,6 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
             <Icon name="pin" />
             {v.pins.includes(file.nodeId) ? 'Unpin' : 'Pin'}
           </button>
-          <GapAction>Add subpage</GapAction>
           <GapAction>
             <Icon name="share" />
             Share
@@ -46,9 +45,21 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
             Delete
           </GapAction>
         </Menu>
-        <span className="tw-ml-2 tw-text-xs tw-text-muted">Read only</span>
+        <span className="tw-ml-2 tw-text-xs tw-text-muted">View only</span>
         <div className="tw-ml-auto tw-flex tw-items-center tw-gap-1">
-          <button disabled className={button}>
+          <button
+            className={button}
+            aria-label="Chat about this document"
+            onClick={() => face.chat()}
+          >
+            <Icon name="chat" size={16} />
+            Chat
+          </button>
+          <button
+            disabled
+            title="Sharing is not available in Space yet"
+            className={button}
+          >
             <Icon name="share" size={16} />
             Share
           </button>
@@ -61,25 +72,12 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
           </button>
         </div>
       </header>
-      {!['doc', 'sheet', 'site'].includes(file.type) && (
-        <div className="sp-preview-notice">
-          Core SDK preview · advanced embedded objects are not included.{' '}
-          <a
-            href={`${file.endpoint}/nodes/${encodeURIComponent(file.nodeId)}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open in Workspace
-          </a>
-        </div>
-      )}
       <div
         className={
           'sp-page-body ' +
           (file.type !== 'doc' ? 'sp-sheet-body' : 'sp-doc-body')
         }
       >
-        {file.type !== 'doc' && <h1 className="sp-page-title">{file.name}</h1>}
         <div className="sp-editor">
           <Viewer key={file.nodeId + file.sha256} file={file} />
         </div>

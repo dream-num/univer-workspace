@@ -25,17 +25,6 @@ export function Viewer({ file }: { file: Content }) {
   if (file.type === 'site')
     return (
       <div className="sp-html-preview">
-        <p>
-          Read-only HTML preview · scripts and live Sheet bindings are
-          unavailable here.{' '}
-          <a
-            href={`${file.endpoint}/nodes/${encodeURIComponent(file.nodeId)}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open in Workspace
-          </a>
-        </p>
         <iframe
           title={file.name}
           sandbox=""

@@ -56,7 +56,7 @@ export function FloatingChat({
   const expanded = v.chatMode === 'expanded',
     minimized = v.chatMode === 'minimized';
   const hidden =
-    v.status.state !== 'connected' || (!v.content && v.location !== 'space');
+    (!v.content && v.location !== 'space') || (!v.sessionId && !v.ai);
   const positioned = useRef(false);
   const clamp = () => {
     const box = seat.current?.getBoundingClientRect();
@@ -68,7 +68,7 @@ export function FloatingChat({
         width,
         right: positioned.current
           ? Math.min(g.right, Math.max(16, box.width - width - 16))
-          : Math.max(16, (box.width - (v.nav ? 288 : 0) - width) / 2),
+          : Math.max(16, (box.width - width) / 2),
         bottom: Math.min(
           g.bottom,
           Math.max(16, box.height - (expanded ? 634 : 180) - 16),
@@ -81,7 +81,7 @@ export function FloatingChat({
     const o = new ResizeObserver(clamp);
     if (seat.current) o.observe(seat.current);
     return () => o.disconnect();
-  }, [expanded, hidden, v.nav]);
+  }, [expanded, hidden]);
   useEffect(() => {
     setHistory(false);
   }, [v.content?.nodeId, v.space, v.sessionId]);
@@ -223,17 +223,6 @@ export function FloatingChat({
               <Icon name="history" />
               View chat history
             </button>
-            {v.content && (
-              <button
-                role="menuitem"
-                disabled={!v.sessionId || !v.content || !['doc','sheet'].includes(v.content.type)}
-                className={button + ' tw-w-full'}
-                onClick={() => face.select()}
-              >
-                <Icon name="plus" />
-                Add page to chat
-              </button>
-            )}
             <button
               role="menuitem"
               className={button + ' tw-w-full'}
@@ -262,6 +251,7 @@ export function FloatingChat({
               if (d) {
                 positioned.current = true;
                 e.preventDefault();
+                e.stopPropagation();
                 setGeometry((g) => ({
                   ...g,
                   right: Math.max(16, g.right + d[0]),
@@ -305,37 +295,6 @@ export function FloatingChat({
                 {v.sessionId === session.id && <Icon name="check" size={14} />}
               </button>
             ))}
-          </div>
-        )}
-        {v.content && v.context && (
-          <div className="sp-context">
-            <Icon name={v.context.file.type} size={14} />
-            <span className="tw-truncate">{v.context.file.name}</span>
-            <span className="tw-text-xs tw-text-muted">
-              {
-                {
-                  selected: 'Selected',
-                  draft: 'In draft',
-                  submitted: 'Submitted',
-                }[v.context.state]
-              }
-            </span>
-            {v.context.state === 'selected' && (
-              <button
-                className={button + ' tw-py-1 tw-text-xs'}
-                disabled={v.busy}
-                onClick={() => face.draft()}
-              >
-                Add reference
-              </button>
-            )}
-            <button
-              className={iconButton}
-              aria-label="Remove page selection"
-              onClick={() => face.removeContext()}
-            >
-              <Icon name="close" size={12} />
-            </button>
           </div>
         )}
         <div hidden={history} className="sp-native-conversation">
@@ -387,6 +346,7 @@ export function FloatingChat({
             onKeyDown={(e) => {
               if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
                 e.preventDefault();
+                e.stopPropagation();
                 setGeometry((g) => ({
                   ...g,
                   width: Math.max(

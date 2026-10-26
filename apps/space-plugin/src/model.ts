@@ -16,7 +16,14 @@ export interface Node {
   name: string;
   spaceId?: string;
   resource: Resource | null;
-  capabilities?: { browseChildren?: boolean };
+  capabilities?: {
+    browseChildren?: boolean;
+    createChildren?: boolean;
+    rename?: boolean;
+    move?: boolean;
+    trash?: boolean;
+    share?: boolean;
+  };
   updatedAt?: string;
   accessRole?: string;
 }
@@ -71,26 +78,22 @@ export interface State {
   content: Content | null;
   context: {
     file: FileReference;
-    state: 'selected' | 'draft' | 'submitted';
+    state: 'linking' | 'linked' | 'removed' | 'failed';
     afterSeq?: number;
   } | null;
   sessionId: string | null;
   sessionTitle: string;
   sessions: { id: string; title: string }[];
-  experience: 'unverified' | 'requested' | 'reduced';
   error: string;
   busy: boolean;
   settings: boolean;
   ai: boolean;
-  rail: boolean;
   chatMode: 'compact' | 'expanded' | 'minimized';
   pins: string[];
-  flyout: boolean;
   spaceTab: 'Overview' | 'Content';
   query: string;
   filter: string;
   discovery: string;
-  nav: boolean;
   notice: string;
 }
 export function nodeKind(node: Node) {
