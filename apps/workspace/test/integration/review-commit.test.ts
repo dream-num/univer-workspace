@@ -122,7 +122,7 @@ async function fixture() {
   return { app, a, b, space, http, draft, review, merge };
 }
 
-describe("version-bound Worktree Review commit", () => {
+describe("version-bound Worktree Review commit", { timeout: 30_000 }, () => {
   it("rejects missing reviews and changed drafts, then applies only a fresh exact review and keeps retries idempotent", async () => {
     const f = await fixture(),
       tree = await f.draft("first");

@@ -160,10 +160,11 @@ export class WorkspaceWorktreeFeature {
       ready: "ready",
       reopen: "draft",
     };
+    const operationKey = action === "merge" ? stableKey(action, id, reviewToken!) : stableKey(action, id);
     try {
       const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}/${action}`, {
         ...(action === "merge" || action === "discard"
-          ? { idempotencyKey: stableKey(action, id) }
+          ? { idempotencyKey: operationKey }
           : {}),
         method: "POST",
         ...(action === "merge" ? { body: { reviewToken } } : {}),
@@ -182,6 +183,18 @@ export class WorkspaceWorktreeFeature {
       return result;
     } catch (error) {
       if (!isWorkspaceResultUnknown(error)) throw error;
+      if (action === "merge") {
+        // A current merged state cannot prove which reviewed request committed.
+        // Confirm this review-bound durable Operation before reading its result.
+        let confirmed = false;
+        try {
+          const operation = await http.json(`/api/operations/${encodeURIComponent(operationKey)}`);
+          const result = operation["result"];
+          confirmed = operation["id"] === operationKey && operation["kind"] === "mergeWorktree" && operation["state"] === "completed" &&
+            typeof result === "object" && result !== null && "worktreeId" in result && result.worktreeId === id && "state" in result && result.state === "merged";
+        } catch { /* An unconfirmed operation stays unknown; never choose latest. */ }
+        if (!confirmed) throw workspaceError("workspace-result-unknown", "The reviewed merge operation could not be confirmed.", { operationId: operationKey, expectedState: "merged", worktreeId: id });
+      }
       const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}`);
       const confirmed = parseWorktree(body["worktree"]);
       if (confirmed.id === id && confirmed.state === expected[action]) return confirmed;

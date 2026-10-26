@@ -186,8 +186,7 @@ export class AgentEditing {
       } catch (error) {
         if (!p.cancelRequested) {
           p.phase = 'failed';
-          p.message =
-            error instanceof Error ? error.message : 'Editing failed.';
+          p.message = '未能生成修改，请在聊天中查看反馈后重试。';
         }
         throw error;
       } finally {
@@ -249,6 +248,7 @@ export class AgentEditing {
       if (p.phase === 'ready' || p.phase === 'conflict')
         await this.post(`/api/worktrees/${id}/reopen`);
       p.phase = 'editing';
+      p.message = '';
       p.review = undefined;
       const result = await this.workspace.executeDraft(
         p.file as FileReference & { type: 'doc' | 'sheet' },

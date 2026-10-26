@@ -169,6 +169,9 @@ export function AIChanges({
               </button>
             </div>
           </header>
+          {file.type === 'sheet' && (
+            <SheetChangeDetails result={review.result} />
+          )}
           <div className="sp-ai-review-sides">
             {(['left', 'right'] as const).map((side) => (
               <div className="sp-ai-review-side" key={side}>
@@ -197,6 +200,38 @@ export function AIChanges({
         </section>
       )}
     </>
+  );
+}
+/** Present the existing comparison's cell values, including formulas that a
+ * calculated grid alone cannot distinguish from constants. No extra diff is
+ * computed and this remains bound to the same captured Review. */
+function SheetChangeDetails({ result }: { result: any }) {
+  const cells = result?.items?.filter((item: any) => item.entityType === 'cell') ?? [];
+  if (!cells.length) return null;
+  const describe = (cell: any) => {
+    if (cell == null) return '空白';
+    if (typeof cell.formula === 'string') return cell.formula;
+    if (cell.value != null) return String(cell.value);
+    return '空白（格式或属性变更，见预览）';
+  };
+  return (
+    <details className="sp-ai-cell-changes" open>
+      <summary>单元格变更与公式</summary>
+      <ul>
+        {cells.map((item: any) => {
+          const sheet = result.productContext?.sheets?.find(
+            (entry: any) => entry.id === item.parentStableId,
+          );
+          return (
+            <li key={item.id}>
+              <strong>{sheet?.name ?? '工作表'}!{item.stableId}</strong>
+              <span>{describe(item.values?.left)} → {describe(item.values?.right)}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {result.page?.hasMore && <p>更多变更请在下方完整表格预览中检查。</p>}
+    </details>
   );
 }
 function ReviewSide({ file, onReady }: { file: Content; onReady(): void }) {

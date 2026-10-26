@@ -282,13 +282,15 @@ function build(
   ): Command => {
     const command = new Command(commandName).description(text).argument("<pr>").option(...REPO_OPTION);
     if (undoOption) command.option("--undo", "move a ready pull request back to draft");
+    if (action === "merge") command.option("--review-token <token>", "apply the exact Server preview explicitly reviewed by the user");
     return command.addOption(jsonFieldsOption(PR_JSON_FIELDS)).action(
-      async (argument: string, options: JsonFieldsOption & RepoOption & { undo?: boolean }) => {
+      async (argument: string, options: JsonFieldsOption & RepoOption & { undo?: boolean; reviewToken?: string }) => {
         const { worktree, url } = await executeCommand(command, async () => {
           const target = await writeTarget(argument, options);
           const worktree = await worktrees.transition(
             target.id,
             options.undo === true ? "reopen" : action,
+            ...(options.reviewToken === undefined ? [] : [options.reviewToken]),
           );
           return { worktree, url: target.url };
         });

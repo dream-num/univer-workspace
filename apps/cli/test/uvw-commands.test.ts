@@ -302,6 +302,7 @@ describe("uvw pr and the worktree alias", () => {
     [["ready", "12", "-R", "alice/docs"], ["ready", "12", "-R", "alice/docs"]],
     [["ready", "12", "-R", "alice/docs", "--undo"], ["reopen", "12", "-R", "alice/docs"]],
     [["merge", "12", "-R", "alice/docs"], ["merge", "12", "-R", "alice/docs"]],
+    [["merge", "12", "-R", "alice/docs", "--review-token", "review-test"], ["merge", "12", "-R", "alice/docs", "--review-token", "review-test"]],
     [["discard", "12", "-R", "alice/docs"], ["discard", "12", "-R", "alice/docs"]],
   ];
 
@@ -313,6 +314,12 @@ describe("uvw pr and the worktree alias", () => {
     expect(viaWorktree.calls).toEqual(viaPr.calls);
     expect(worktreeOutput).toBe(prOutput);
     expect(viaPr.calls.length).toBeGreaterThan(0);
+  });
+
+  it("forwards an explicit review token without generating a new review while merging", async () => {
+    const { calls, pr } = pullRequestCommands();
+    await run(pr, ["merge", "12", "-R", "alice/docs", "--review-token", "review-test"]);
+    expect(calls).toEqual([["getByNumber", "space-1", 12], ["transition", "wt-1", "merge", "review-test"]]);
   });
 
   it("addresses by number, maps lifecycle verbs and treats owner/personal as User Worktrees", async () => {

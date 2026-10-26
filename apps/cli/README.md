@@ -156,3 +156,7 @@ The channel is derived from the version; there is no channel input.
 `dry_run` defaults to true. Explicitly set `dry_run=false` to publish the
 verified tarball to insider-npm. The source manifest remains `0.0.0`; public npm promotion
 and Workspace deployment are separate operations.
+
+## Reviewed merge precondition
+
+`uvw pr merge <pr> --review-token <token>` (and the equivalent `worktree merge`) applies only the exact Server merge preview that the user reviewed. Capture/render the response from `POST /universer-api/worktrees/{id}/review` before supplying its token. The command does not fetch a newer preview or authorize one automatically. Missing, expired or stale reviews fail closed. A new review has a distinct idempotency identity; an unknown merge is confirmed only through that review's durable Operation, never from the latest Worktree state alone. Normal Space users review and apply inside the document and do not enter these identifiers.

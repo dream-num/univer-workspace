@@ -13,6 +13,7 @@ import {
   type State,
   type Content,
   type Page,
+  type Node,
 } from './model.js';
 import css from './space.css';
 import tailwind from '../lib/tailwind.css';
@@ -148,7 +149,11 @@ export function apply(ctx: any) {
         request === sessionRequest
       ) {
         update({ context: { file: selectedReference(file), state: 'failed' } });
-        if (ownBlock) ctx.conversation.blocks.set(sessionId, ownBlock.block);
+        if (ownBlock) {
+          const failedBlock = { reason: '无法关联这份文档，请重试或移除引用。' };
+          ownBlock = { session: sessionId, block: failedBlock };
+          ctx.conversation.blocks.set(sessionId, failedBlock);
+        }
       }
       throw error;
     } finally {
@@ -227,7 +232,7 @@ export function apply(ctx: any) {
     );
     if (before !== generation)
       throw new DOMException('Request superseded', 'AbortError');
-    if (!result.ok) throw new Error(result.error.message);
+    if (!result.ok) throw Object.assign(new Error(result.error.message), { code: result.error.code });
     return result.value;
   }
   let pending = 0;
@@ -444,7 +449,20 @@ export function apply(ctx: any) {
   const face = {
     editingStatus: (sessionId: string, nodeId: string) => api('editing-status', { sessionId, nodeId }),
     editingAction: async (input: { sessionId: string; nodeId: string; action: string; proposalId: string; reviewToken?: string }) => {
-      if (input.action === 'review' || input.action === 'apply') await flushEditor();
+      if (input.action === 'review' || input.action === 'apply') {
+        // UX preflight only; the Server still verifies the review and ACL
+        // atomically at merge. Avoid flushing an editor after access revocation.
+        try {
+          const { node } = await api<{ node: Node }>('metadata', { node: input.nodeId });
+          if (!node.resource?.capabilities.editContent) throw Object.assign(new Error('Access denied'), { code: '403' });
+        } catch (error) {
+          if (['403', '404'].includes(String((error as { code?: string }).code)))
+            throw new Error('你已无权应用这份文档的修改，请联系所有者。');
+          throw error;
+        }
+        try { await flushEditor(); }
+        catch (error) { throw new Error('文档尚未完成同步。请恢复连接后重试。', { cause: error }); }
+      }
       return api('editing-action', input);
     },
     metadata: (node: string) => api('metadata', { node }),

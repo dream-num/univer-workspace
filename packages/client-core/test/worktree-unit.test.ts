@@ -197,12 +197,12 @@ describe("Workspace Worktree model and workflow", () => {
           ? Response.json({ worktree: rawWorktree("wt-1", initial) })
           : Response.json({ worktree: rawWorktree("wt-1", expected) });
       });
-      await expect(feature.transition("wt-1", action)).resolves.toMatchObject({
+      await expect(feature.transition("wt-1", action, action === "merge" ? "review-test" : undefined)).resolves.toMatchObject({
         state: expected,
       });
       expect(requests.map((request) => request.method)).toEqual(["GET", "POST"]);
       expect(requests[1]!.headers.get("idempotency-key")).toBe(
-        idempotent ? stableKey(action, "wt-1") : null,
+        idempotent ? stableKey(action, "wt-1", ...(action === "merge" ? ["review-test"] : [])) : null,
       );
     },
   );
@@ -239,7 +239,7 @@ describe("Workspace Worktree model and workflow", () => {
         ? Response.json({ worktree: rawWorktree("wt-1", "ready") })
         : Response.json({ worktree: rawWorktree("wt-1", "ready") }),
     );
-    await expect(worktrees(fetcher).transition("wt-1", "merge")).rejects.toMatchObject({
+    await expect(worktrees(fetcher).transition("wt-1", "merge", "review-test")).rejects.toMatchObject({
       code: "workspace-result-mismatch",
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
@@ -249,7 +249,7 @@ describe("Workspace Worktree model and workflow", () => {
         ? Response.json({ worktree: rawWorktree("wt-1", "ready") })
         : Response.json({ worktree: rawWorktree("wt-other", "merged") }),
     );
-    await expect(worktrees(wrongId).transition("wt-1", "merge")).rejects.toMatchObject({
+    await expect(worktrees(wrongId).transition("wt-1", "merge", "review-test")).rejects.toMatchObject({
       code: "workspace-result-mismatch",
     });
     expect(wrongId).toHaveBeenCalledTimes(2);
@@ -259,6 +259,7 @@ describe("Workspace Worktree model and workflow", () => {
     let getCount = 0;
     let postCount = 0;
     const confirmed = worktrees(async (_input, init) => {
+      if (String(_input).includes("/api/operations/")) return Response.json({ id: stableKey("merge", "wt-1", "review-test"), kind: "mergeWorktree", state: "completed", result: { worktreeId: "wt-1", state: "merged" } });
       if ((init?.method ?? "GET") === "POST") {
         postCount += 1;
         throw new Error("response lost");
@@ -268,7 +269,7 @@ describe("Workspace Worktree model and workflow", () => {
         worktree: rawWorktree("wt-1", getCount === 1 ? "ready" : "merged"),
       });
     });
-    await expect(confirmed.transition("wt-1", "merge")).resolves.toMatchObject({
+    await expect(confirmed.transition("wt-1", "merge", "review-test")).resolves.toMatchObject({
       state: "merged",
     });
     expect({ getCount, postCount }).toEqual({ getCount: 2, postCount: 1 });
@@ -276,6 +277,7 @@ describe("Workspace Worktree model and workflow", () => {
     getCount = 0;
     postCount = 0;
     const unconfirmed = worktrees(async (_input, init) => {
+      if (String(_input).includes("/api/operations/")) return Response.json({ id: stableKey("merge", "wt-1", "review-test"), kind: "mergeWorktree", state: "completed", result: { worktreeId: "wt-1", state: "merged" } });
       if ((init?.method ?? "GET") === "POST") {
         postCount += 1;
         throw new Error("response lost");
@@ -283,7 +285,7 @@ describe("Workspace Worktree model and workflow", () => {
       getCount += 1;
       return Response.json({ worktree: rawWorktree("wt-1", "ready") });
     });
-    await expect(unconfirmed.transition("wt-1", "merge")).rejects.toMatchObject({
+    await expect(unconfirmed.transition("wt-1", "merge", "review-test")).rejects.toMatchObject({
       code: "workspace-result-unknown",
       detail: { actualState: "ready", expectedState: "merged", worktreeId: "wt-1" },
     });
@@ -293,16 +295,32 @@ describe("Workspace Worktree model and workflow", () => {
   it("keeps a wrong-identity read-back in result-unknown semantics", async () => {
     let getCount = 0;
     const feature = worktrees(async (_input, init) => {
+      if (String(_input).includes("/api/operations/")) return Response.json({ id: stableKey("merge", "wt-1", "review-test"), kind: "mergeWorktree", state: "completed", result: { worktreeId: "wt-1", state: "merged" } });
       if ((init?.method ?? "GET") === "POST") throw new Error("response lost");
       getCount += 1;
       return Response.json({
         worktree: rawWorktree(getCount === 1 ? "wt-1" : "wt-other", "ready"),
       });
     });
-    await expect(feature.transition("wt-1", "merge")).rejects.toMatchObject({
+    await expect(feature.transition("wt-1", "merge", "review-test")).rejects.toMatchObject({
       code: "workspace-result-unknown",
       detail: { actualId: "wt-other", expectedState: "merged", worktreeId: "wt-1" },
     });
+  });
+
+  it("requires explicit review and never confirms an unknown merge from the latest Worktree alone", async () => {
+    const requests: string[] = [];
+    const feature = worktrees(async (input, init) => {
+      const path = new URL(String(input)).pathname; requests.push(path);
+      if ((init?.method ?? "GET") === "POST") throw new Error("response lost");
+      if (path.startsWith("/api/operations/")) return Response.json({ state: "failed" });
+      return Response.json({ worktree: rawWorktree("wt-1", "ready") });
+    });
+    await expect(feature.transition("wt-1", "merge")).rejects.toMatchObject({ code: "workspace-review-required" });
+    expect(requests).toHaveLength(1); requests.length = 0;
+    await expect(feature.transition("wt-1", "merge", "review-test")).rejects.toMatchObject({ code: "workspace-result-unknown" });
+    expect(requests).toEqual(["/api/worktrees/wt-1", "/api/worktrees/wt-1/merge", `/api/operations/${stableKey("merge", "wt-1", "review-test")}`]);
+    expect(stableKey("merge", "wt-1", "review-one")).not.toBe(stableKey("merge", "wt-1", "review-two"));
   });
 
   it("derives stable lifecycle identities without collisions", () => {
