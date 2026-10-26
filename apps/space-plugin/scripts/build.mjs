@@ -12,6 +12,8 @@ const sdkCss = await Promise.all(
     '@univerjs-pro/boards-ui',
     '@univerjs-pro/bases-ui',
     '@univerjs-pro/collaboration-client-ui',
+    '@univerjs/preset-docs-thread-comment',
+    '@univerjs/preset-sheets-thread-comment',
   ].map((name) => readFile(`node_modules/${name}/lib/index.css`, 'utf8')),
 );
 await writeFile('lib/univer-scoped.css', sdkCss.map(scopeSdkCss).join('\n'));

@@ -3,6 +3,13 @@ import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
 import { UserManagerService, LifecycleStages } from '@univerjs/core';
 import { DocStateChangeManagerService } from '@univerjs/docs';
 import { CommandType } from '@univerjs/core';
+import { UniverDocsThreadCommentPreset } from '@univerjs/preset-docs-thread-comment';
+import { UniverSheetsThreadCommentPreset } from '@univerjs/preset-sheets-thread-comment';
+import docCommentLocale from '@univerjs/preset-docs-thread-comment/locales/zh-CN';
+import sheetCommentLocale from '@univerjs/preset-sheets-thread-comment/locales/zh-CN';
+import { UniverThreadCommentDataSourcePlugin } from '@univerjs-pro/thread-comment-datasource';
+import { ThreadCommentPanelService } from '@univerjs/thread-comment-ui';
+import { getDocThreadCommentCollaborationPlugins } from './workarounds/doc-thread-comment-delete.js';
 import { UniverDocsCorePreset } from '@univerjs/preset-docs-core';
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
 import docsLocale from '@univerjs/preset-docs-core/locales/zh-CN';
@@ -42,10 +49,12 @@ export function CollaborativeEditor({
   file,
   user,
   face,
+  onCommentsReady,
 }: {
   file: Content;
   user: State['status']['user'];
   face: Face;
+  onCommentsReady(binding: { toggle(): void; visible: boolean } | null): void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('loading'),
@@ -151,11 +160,14 @@ export function CollaborativeEditor({
             sheetsLocale,
             collabLocale,
             collabUILocale,
+            docCommentLocale,
+            sheetCommentLocale,
           ),
         },
         presets: [
           { plugins: [[UniverLicensePlugin, { license: workspaceLicense }]] },
           corePreset,
+          file.type === 'doc' ? UniverDocsThreadCommentPreset() : UniverSheetsThreadCommentPreset(),
         ],
         plugins: [
           UniverCollaborationPlugin,
@@ -187,6 +199,7 @@ export function CollaborativeEditor({
             UniverCollaborationClientUIPlugin,
             { enableDocumentCollaborationUI: true, enableUrlUnitLoader: false },
           ],
+          ...(file.type === 'doc' ? getDocThreadCommentCollaborationPlugins() : [UniverThreadCommentDataSourcePlugin]),
         ],
       });
       const { univer, univerAPI: api } = runtime;
@@ -288,6 +301,11 @@ export function CollaborativeEditor({
         });
       if (canceled) return;
       api.setCurrent(file.unitId);
+      const commentPanel = univer.__getInjector().get(ThreadCommentPanelService);
+      subscriptions.push(commentPanel.panelVisible$.subscribe(visible => {
+        if (!canceled) onCommentsReady({ visible, toggle: () => commentPanel.setPanelVisible(!commentPanel.panelVisible) });
+      }));
+      onCommentsReady({ visible: commentPanel.panelVisible, toggle: () => commentPanel.setPanelVisible(!commentPanel.panelVisible) });
       initialized = true;
       setLoaded(true);
       syncState(collaboration.getCollaborationStatus(file.unitId));
@@ -312,6 +330,7 @@ export function CollaborativeEditor({
     window.addEventListener('beforeunload', beforeUnload);
     return () => {
       canceled = true;
+      onCommentsReady(null);
       face.bindEditor(file.nodeId, null);
       disposables.forEach((d) => d.dispose());
       const active = runtime;

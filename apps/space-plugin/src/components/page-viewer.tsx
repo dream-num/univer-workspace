@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { Face } from '../client.js';
 import type { State } from '../model.js';
 import { CollaborativeEditor } from '../collaborative-editor.js';
@@ -9,6 +9,7 @@ import { contentType } from '../content-types.js';
 import { HtmlViewer } from '../html-viewer.js';
 export function PageViewer({ face, v }: { face: Face; v: State }) {
   const file = v.content!;
+  const [comments, setComments] = useState<{ toggle(): void; visible: boolean } | null>(null);
   return (
     <>
       <header className="sp-page-toolbar" data-window-drag>
@@ -36,6 +37,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
           )}
         </Menu>
         <div className="tw-ml-auto tw-flex tw-items-center tw-gap-1">
+          {(file.type === 'doc' || file.type === 'sheet') && <button className={button} disabled={!comments} aria-label={comments?.visible ? 'Hide comments' : 'Show all comments'} aria-pressed={comments?.visible ?? false} onClick={() => comments?.toggle()}><Icon name="chat" size={16} />Comments</button>}
           <button
             className={button}
             aria-label="Chat about this document"
@@ -73,6 +75,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
               file={file}
               user={v.status.user}
               face={face}
+              onCommentsReady={setComments}
             />
           ) : file.type === 'site' ? (
             <HtmlViewer

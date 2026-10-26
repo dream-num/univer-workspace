@@ -308,7 +308,7 @@ export class WorkspaceConnection {
       );
     // Accept relative SDK routes only. Never accept authority, traversal, Worktree or product writes.
     if (
-      !/^\/universer-api\/(?:snapshot\/|comb(?:\/|$)|authz(?:\/|$)|user\/session-ticket$)/.test(
+      !/^\/universer-api\/(?:snapshot\/|comb(?:\/|$)|authz(?:\/|$)|comment\/unit\/[^/?]+\/(?:list|add|reply|solved|delete)(?:\?|$)|user\/(?:session-ticket|list)(?:\?|$))/.test(
         input.path,
       ) ||
       input.path.includes('..') ||
