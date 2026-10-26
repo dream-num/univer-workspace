@@ -1,27 +1,430 @@
 import React, { useState } from 'react';
 import type { Face } from '../client.js';
 import { nodeKind, type State, type Node } from '../model.js';
-import { CreateMenu, GapAction, Icon, Menu, button, iconButton, Empty } from './primitives.js';
+import {
+  CreateMenu,
+  GapAction,
+  Icon,
+  Menu,
+  button,
+  iconButton,
+  Empty,
+} from './primitives.js';
 export function ContentBrowser({ face, v }: { face: Face; v: State }) {
-  const [selected,setSelected]=useState<string[]>([]),[grid,setGrid]=useState(false),[kind,setKind]=useState('all');
-  const folder=v.location==='folder',space=v.location==='space';
-  const title = folder ? v.page?.parentNode?.name ?? 'Folder' : space ? v.page?.space?.name ?? v.spaces.find(s=>s.id===v.space)?.name??'Space' : v.location === 'recent' ? 'Recents' : v.filter==='doc'?'Pages':'All';
-  const source = folder||space ? v.page?.nodes ?? [] : v.location === 'recent' ? v.recent.map(item => ({ ...item.node, resource:item.resource,spaceId:item.location.space.id })) : v.all;
-  const items = source.filter(node => (v.location !== 'home' || v.discovery !== 'Your items' || node.accessRole === 'owner') && node.name.toLowerCase().includes(v.query.toLowerCase()) && (v.filter === 'all' || nodeKind(node) === v.filter) && (kind==='all'||nodeKind(node)===kind));
-  const go = (node: Node) => node.resource ? face.open(node.id) : face.directory(node.spaceId ?? v.space,node.id);
-  const toggle=(id:string)=>setSelected(s=>s.includes(id)?s.filter(n=>n!==id):[...s,id]);
-  const discoveryGap=v.location==='home'&&['Favorites','Shared with you'].includes(v.discovery);
-  return <div className="sp-browser">
-    {space&&<div className="sp-space-top"><span className={button}><Icon name="all"/>{title}</span><button className={button} disabled><Icon name="share"/>Share Space</button></div>}
-    <div className={'sp-library'+(space?' sp-space-library':'')}>
-    <header className="sp-library-heading"><h1>{folder&&<><button className={button} onClick={()=>face.home()}>All</button><Icon name="chevron"/></>}{title}</h1><div className="sp-heading-actions"><label className="sp-search"><Icon name="search" size={16}/><input aria-label="Search loaded content" placeholder="Search" value={v.query} onChange={e => {face.update({query:e.target.value});setSelected([]);}}/>{v.query&&<button className={iconButton} aria-label="Clear search" onClick={()=>{face.update({query:''});setSelected([]);}}><Icon name="close" size={14}/></button>}</label><div className="sp-primary"><CreateMenu folder={folder} space={space}/></div></div></header>
-    <div className="sp-library-toolbar"><div className="sp-tabs" role="tablist" aria-label={space?'Space views':'Content views'}>{(space?['Overview','Content']:folder?[]:v.filter==='doc'?['All','Your items','Shared with you']:['Suggested','Favorites','Your items','Shared with you']).map(tab=><button role="tab" aria-selected={(space?v.spaceTab:v.discovery)===tab||(v.filter==='doc'&&tab==='All'&&v.discovery==='Suggested')} key={tab} className={button+(((space?v.spaceTab:v.discovery)===tab||(v.filter==='doc'&&tab==='All'&&v.discovery==='Suggested'))?' sp-selected':'')} onClick={()=>{space?face.update({spaceTab:tab as 'Overview'|'Content'}):face.update({discovery:tab});setSelected([]);}}>{tab==='Suggested'&&v.query?'All results':tab}</button>)}</div>{(!space||v.spaceTab==='Content')&&<div className="sp-view-actions"><Menu label="Open filters" trigger={<Icon name="filter" size={16}/>}><span className="tw-block tw-p-3 tw-text-xs tw-text-muted">File type</span>{[['all','All types'],['doc','Pages'],['sheet','Spreadsheets'],['folder','Folders']].map(([value,label])=><button role="menuitemradio" aria-checked={kind===value} className={button+' tw-w-full'} key={value} onClick={()=>{setKind(value);setSelected([]);}}><Icon name={value}/>{label}{kind===value&&<Icon name="check" size={14}/>}</button>)}</Menu><button className={iconButton+(grid?' sp-selected':'')} aria-label="Grid view" aria-pressed={grid} onClick={()=>setGrid(true)}><Icon name="grid" size={16}/></button><button className={iconButton+(!grid?' sp-selected':'')} aria-label="List view" aria-pressed={!grid} onClick={()=>setGrid(false)}><Icon name="list" size={16}/></button></div>}</div>
-    {space&&v.spaceTab==='Overview'?<section className="sp-about"><h2>About {title}</h2><p>This Space contains {v.page?.nodes.length??0} items you can access.</p><p className="tw-text-muted">Space descriptions are not available in this release.</p><button className={button+' tw-bg-hover'} onClick={()=>face.update({spaceTab:'Content'})}>Browse content <Icon name="chevron" size={14}/></button></section>:discoveryGap?<Empty title={v.discovery+' is not available'}><p>This view is not connected to Workspace data yet.</p></Empty>:<>
-      {v.location==='home'&&v.discovery==='Suggested'&&!v.query&&v.pins.length>0&&<section aria-label="Pinned pages" className="sp-pins">{v.all.filter(n=>v.pins.includes(n.id)).map(node=><button className="sp-preview" key={node.id} onClick={()=>go(node)}><span className="tw-flex tw-items-center tw-gap-2"><Icon name={nodeKind(node)} size={16}/><strong className="tw-truncate tw-font-medium">{node.name}</strong><Icon name="pin" size={13}/></span><span className="tw-text-xs tw-text-muted">{v.spaces.find(s=>s.id===node.spaceId)?.name??'Workspace'}</span><span className="tw-mt-auto tw-text-xs tw-text-muted">Open {nodeKind(node)==='sheet'?'spreadsheet':'page'}</span></button>)}</section>}
-      {items.length>0&&<div className={'sp-file-table'+(grid?' sp-file-grid':'')} role="table" aria-label="Content"><div className="sp-file-columns" role="row"><span className="tw-flex tw-items-center tw-gap-3"><input type="checkbox" aria-label="Select all loaded rows" checked={items.every(n=>selected.includes(n.id))} ref={el=>{if(el)el.indeterminate=items.some(n=>selected.includes(n.id))&&!items.every(n=>selected.includes(n.id));}} onChange={e=>setSelected(e.target.checked?items.map(n=>n.id):[])}/>Name</span>{v.discovery==='Suggested'&&!folder&&!space&&<span className="sp-source">Source</span>}<span className="sp-activity">Last activity</span><span/></div>{items.map(node=><div key={node.id} role="row" className={'sp-file-row'+(selected.includes(node.id)?' sp-selected':'')}><span className="sp-file-name"><input type="checkbox" aria-label={'Select '+node.name} checked={selected.includes(node.id)} onChange={()=>toggle(node.id)}/><button className={button+' sp-file-open'} onClick={()=>go(node)}><Icon name={nodeKind(node)}/><span className="tw-truncate">{node.name}</span></button></span>{v.discovery==='Suggested'&&!folder&&!space&&<span className="sp-source">{v.spaces.find(s=>s.id===node.spaceId)?.name??'Workspace'}</span>}<span className="sp-activity">{node.updatedAt?new Date(node.updatedAt).toLocaleDateString('en',{month:'short',day:'numeric'}):'—'}</span><Menu label={'Actions for '+node.name} trigger={<Icon name="more" size={17}/>}><button role="menuitem" className={button+' tw-w-full'} onClick={()=>face.pin(node.id)}><Icon name="pin"/>{v.pins.includes(node.id)?'Unpin':'Pin'}</button><GapAction><Icon name="share"/>Share</GapAction><GapAction>Rename</GapAction><GapAction>Move to folder</GapAction><GapAction><Icon name="trash"/>Delete {node.resource?'page':'folder'}</GapAction></Menu></div>)}</div>}
-      {!items.length&&<Empty title={v.busy?'Loading content…':folder?'This folder is empty':space?'No matching pages':'No results found'}><p>{folder?'Upload is not available in this release.':v.query?'Try a different search.':''}</p></Empty>}
-      {(folder||space?v.page?.nextCursor:v.location==='recent'?v.recentCursor:null)&&<button className={button+' tw-mx-auto tw-mt-4'} disabled={v.busy} onClick={()=>folder||space?face.directory(v.space,v.parent,v.page?.nextCursor??''):face.moreRecent()}>Load more</button>}
-    </>}
-    </div>{selected.length>0&&<div role="toolbar" aria-label="Selection" className="sp-selection"><span>{selected.length} selected</span><button disabled className={button}>Start chat</button><button disabled className={button}>Move</button><button disabled className={button}>Delete</button><button className={iconButton} aria-label="Clear selection" onClick={()=>setSelected([])}><Icon name="close" size={15}/></button></div>}
-  </div>;
+  const [selected, setSelected] = useState<string[]>([]),
+    [grid, setGrid] = useState(false),
+    [kind, setKind] = useState('all');
+  const folder = v.location === 'folder',
+    space = v.location === 'space';
+  const title = folder
+    ? (v.page?.parentNode?.name ?? 'Folder')
+    : space
+      ? (v.page?.space?.name ??
+        v.spaces.find((s) => s.id === v.space)?.name ??
+        'Space')
+      : v.location === 'recent'
+        ? 'Recents'
+        : v.filter === 'doc'
+          ? 'Pages'
+          : 'All';
+  const source =
+    folder || space
+      ? (v.page?.nodes ?? [])
+      : v.location === 'recent'
+        ? v.recent.map((item) => ({
+            ...item.node,
+            resource: item.resource,
+            spaceId: item.location.space.id,
+          }))
+        : v.all;
+  const items = source.filter(
+    (node) =>
+      (v.location !== 'home' ||
+        v.discovery !== 'Your items' ||
+        node.accessRole === 'owner') &&
+      node.name.toLowerCase().includes(v.query.toLowerCase()) &&
+      (v.filter === 'all' || nodeKind(node) === v.filter) &&
+      (kind === 'all' || nodeKind(node) === kind),
+  );
+  const go = (node: Node) =>
+    node.resource
+      ? face.open(node.id)
+      : face.directory(node.spaceId ?? v.space, node.id);
+  const toggle = (id: string) =>
+    setSelected((s) =>
+      s.includes(id) ? s.filter((n) => n !== id) : [...s, id],
+    );
+  const discoveryGap =
+    v.location === 'home' &&
+    ['Favorites', 'Shared with you'].includes(v.discovery);
+  return (
+    <div className="sp-browser">
+      {space && (
+        <div className="sp-space-top">
+          <span className={button}>
+            <Icon name="all" />
+            {title}
+          </span>
+          <button className={button} disabled>
+            <Icon name="share" />
+            Share Space
+          </button>
+        </div>
+      )}
+      <div className={'sp-library' + (space ? ' sp-space-library' : '')}>
+        <header className="sp-library-heading">
+          <h1>
+            {folder && (
+              <>
+                <button className={button} onClick={() => face.home()}>
+                  All
+                </button>
+                <Icon name="chevron" />
+              </>
+            )}
+            {title}
+          </h1>
+          <div className="sp-heading-actions">
+            <label className="sp-search">
+              <Icon name="search" size={16} />
+              <input
+                aria-label="Search loaded content"
+                placeholder="Search"
+                value={v.query}
+                onChange={(e) => {
+                  face.update({ query: e.target.value });
+                  setSelected([]);
+                }}
+              />
+              {v.query && (
+                <button
+                  className={iconButton}
+                  aria-label="Clear search"
+                  onClick={() => {
+                    face.update({ query: '' });
+                    setSelected([]);
+                  }}
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              )}
+            </label>
+            <div className="sp-primary">
+              <CreateMenu folder={folder} space={space} />
+            </div>
+          </div>
+        </header>
+        <div className="sp-library-toolbar">
+          <div
+            className="sp-tabs"
+            role="tablist"
+            aria-label={space ? 'Space views' : 'Content views'}
+          >
+            {(space
+              ? ['Overview', 'Content']
+              : folder
+                ? []
+                : v.filter === 'doc'
+                  ? ['All', 'Your items', 'Shared with you']
+                  : ['Suggested', 'Favorites', 'Your items', 'Shared with you']
+            ).map((tab) => (
+              <button
+                role="tab"
+                aria-selected={
+                  (space ? v.spaceTab : v.discovery) === tab ||
+                  (v.filter === 'doc' &&
+                    tab === 'All' &&
+                    v.discovery === 'Suggested')
+                }
+                key={tab}
+                className={
+                  button +
+                  ((space ? v.spaceTab : v.discovery) === tab ||
+                  (v.filter === 'doc' &&
+                    tab === 'All' &&
+                    v.discovery === 'Suggested')
+                    ? ' sp-selected'
+                    : '')
+                }
+                onClick={() => {
+                  space
+                    ? face.update({ spaceTab: tab as 'Overview' | 'Content' })
+                    : face.update({ discovery: tab });
+                  setSelected([]);
+                }}
+              >
+                {tab === 'Suggested' && v.query ? 'All results' : tab}
+              </button>
+            ))}
+          </div>
+          {(!space || v.spaceTab === 'Content') && (
+            <div className="sp-view-actions">
+              <Menu
+                label="Open filters"
+                trigger={<Icon name="filter" size={16} />}
+              >
+                <span className="tw-block tw-p-3 tw-text-xs tw-text-muted">
+                  File type
+                </span>
+                {[
+                  ['all', 'All types'],
+                  ['doc', 'Pages'],
+                  ['sheet', 'Spreadsheets'],
+                  ['folder', 'Folders'],
+                ].map(([value, label]) => (
+                  <button
+                    role="menuitemradio"
+                    aria-checked={kind === value}
+                    className={button + ' tw-w-full'}
+                    key={value}
+                    onClick={() => {
+                      setKind(value);
+                      setSelected([]);
+                    }}
+                  >
+                    <Icon name={value} />
+                    {label}
+                    {kind === value && <Icon name="check" size={14} />}
+                  </button>
+                ))}
+              </Menu>
+              <button
+                className={iconButton + (grid ? ' sp-selected' : '')}
+                aria-label="Grid view"
+                aria-pressed={grid}
+                onClick={() => setGrid(true)}
+              >
+                <Icon name="grid" size={16} />
+              </button>
+              <button
+                className={iconButton + (!grid ? ' sp-selected' : '')}
+                aria-label="List view"
+                aria-pressed={!grid}
+                onClick={() => setGrid(false)}
+              >
+                <Icon name="list" size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+        {space && v.spaceTab === 'Overview' ? (
+          <section className="sp-about">
+            <h2>About {title}</h2>
+            <p>
+              This Space contains {v.page?.nodes.length ?? 0} items you can
+              access.
+            </p>
+            <p className="tw-text-muted">
+              Space descriptions are not available in this release.
+            </p>
+            <button
+              className={button + ' tw-bg-hover'}
+              onClick={() => face.update({ spaceTab: 'Content' })}
+            >
+              Browse content <Icon name="chevron" size={14} />
+            </button>
+          </section>
+        ) : discoveryGap ? (
+          <Empty title={v.discovery + ' is not available'}>
+            <p>This view is not connected to Workspace data yet.</p>
+          </Empty>
+        ) : (
+          <>
+            {v.location === 'home' &&
+              v.discovery === 'Suggested' &&
+              !v.query &&
+              v.pins.length > 0 && (
+                <section aria-label="Pinned pages" className="sp-pins">
+                  {v.all
+                    .filter((n) => v.pins.includes(n.id))
+                    .map((node) => (
+                      <button
+                        className="sp-preview"
+                        key={node.id}
+                        onClick={() => go(node)}
+                      >
+                        <span className="tw-flex tw-items-center tw-gap-2">
+                          <Icon name={nodeKind(node)} size={16} />
+                          <strong className="tw-truncate tw-font-medium">
+                            {node.name}
+                          </strong>
+                          <Icon name="pin" size={13} />
+                        </span>
+                        <span className="tw-text-xs tw-text-muted">
+                          {v.spaces.find((s) => s.id === node.spaceId)?.name ??
+                            'Workspace'}
+                        </span>
+                        <span className="tw-mt-auto tw-text-xs tw-text-muted">
+                          Open{' '}
+                          {nodeKind(node) === 'sheet' ? 'spreadsheet' : 'page'}
+                        </span>
+                      </button>
+                    ))}
+                </section>
+              )}
+            {items.length > 0 && (
+              <div
+                className={'sp-file-table' + (grid ? ' sp-file-grid' : '')}
+                role="table"
+                aria-label="Content"
+              >
+                <div className="sp-file-columns" role="row">
+                  <span className="tw-flex tw-items-center tw-gap-3">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all loaded rows"
+                      checked={items.every((n) => selected.includes(n.id))}
+                      ref={(el) => {
+                        if (el)
+                          el.indeterminate =
+                            items.some((n) => selected.includes(n.id)) &&
+                            !items.every((n) => selected.includes(n.id));
+                      }}
+                      onChange={(e) =>
+                        setSelected(
+                          e.target.checked ? items.map((n) => n.id) : [],
+                        )
+                      }
+                    />
+                    Name
+                  </span>
+                  {v.discovery === 'Suggested' && !folder && !space && (
+                    <span className="sp-source">Source</span>
+                  )}
+                  <span className="sp-activity">Last activity</span>
+                  <span />
+                </div>
+                {items.map((node) => (
+                  <div
+                    key={node.id}
+                    role="row"
+                    className={
+                      'sp-file-row' +
+                      (selected.includes(node.id) ? ' sp-selected' : '')
+                    }
+                  >
+                    <span className="sp-file-name">
+                      <input
+                        type="checkbox"
+                        aria-label={'Select ' + node.name}
+                        checked={selected.includes(node.id)}
+                        onChange={() => toggle(node.id)}
+                      />
+                      <button
+                        className={button + ' sp-file-open'}
+                        onClick={() => go(node)}
+                      >
+                        <Icon name={nodeKind(node)} />
+                        <span className="tw-truncate">{node.name}</span>
+                      </button>
+                    </span>
+                    {v.discovery === 'Suggested' && !folder && !space && (
+                      <span className="sp-source">
+                        {v.spaces.find((s) => s.id === node.spaceId)?.name ??
+                          'Workspace'}
+                      </span>
+                    )}
+                    <span className="sp-activity">
+                      {node.updatedAt
+                        ? new Date(node.updatedAt).toLocaleDateString('en', {
+                            month: 'short',
+                            day: 'numeric',
+                          })
+                        : '—'}
+                    </span>
+                    <Menu
+                      label={'Actions for ' + node.name}
+                      trigger={<Icon name="more" size={17} />}
+                    >
+                      <button
+                        role="menuitem"
+                        className={button + ' tw-w-full'}
+                        onClick={() => face.pin(node.id)}
+                      >
+                        <Icon name="pin" />
+                        {v.pins.includes(node.id) ? 'Unpin' : 'Pin'}
+                      </button>
+                      <GapAction>
+                        <Icon name="share" />
+                        Share
+                      </GapAction>
+                      <GapAction>Rename</GapAction>
+                      <GapAction>Move to folder</GapAction>
+                      <GapAction>
+                        <Icon name="trash" />
+                        Delete {node.resource ? 'page' : 'folder'}
+                      </GapAction>
+                    </Menu>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!items.length && (
+              <Empty
+                title={
+                  v.busy
+                    ? 'Loading content…'
+                    : folder
+                      ? 'This folder is empty'
+                      : space
+                        ? 'No matching pages'
+                        : 'No results found'
+                }
+              >
+                <p>
+                  {folder
+                    ? 'Upload is not available in this release.'
+                    : v.query
+                      ? 'Try a different search.'
+                      : ''}
+                </p>
+              </Empty>
+            )}
+            {(folder || space
+              ? v.page?.nextCursor
+              : v.location === 'recent'
+                ? v.recentCursor
+                : null) && (
+              <button
+                className={button + ' tw-mx-auto tw-mt-4'}
+                disabled={v.busy}
+                onClick={() =>
+                  folder || space
+                    ? face.directory(
+                        v.space,
+                        v.parent,
+                        v.page?.nextCursor ?? '',
+                      )
+                    : face.moreRecent()
+                }
+              >
+                Load more
+              </button>
+            )}
+          </>
+        )}
+      </div>
+      {selected.length > 0 && (
+        <div role="toolbar" aria-label="Selection" className="sp-selection">
+          <span>{selected.length} selected</span>
+          <button disabled className={button}>
+            Start chat
+          </button>
+          <button disabled className={button}>
+            Move
+          </button>
+          <button disabled className={button}>
+            Delete
+          </button>
+          <button
+            className={iconButton}
+            aria-label="Clear selection"
+            onClick={() => setSelected([])}
+          >
+            <Icon name="close" size={15} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
