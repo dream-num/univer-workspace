@@ -1,0 +1,32 @@
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+import { connectHost } from './host-connection.mjs';
+import { writeEvidence } from './evidence-output.mjs';
+const path=process.argv[2];if(!path)throw new Error('Pass the native TASK-006 session.v4.jsonl.zstd path.');
+const decoded=spawnSync('zstd',['-dc',path],{encoding:'utf8',maxBuffer:32*1024*1024});assert.equal(decoded.status,0);
+const rows=decoded.stdout.trim().split('\n').map(line=>JSON.parse(line));
+const text=blocks=>Array.isArray(blocks)?blocks.filter(p=>p.type==='text').map(p=>p.text).join('\n'):'';
+const users=rows.filter(r=>r.type==='user/message'&&r.data.source?.kind==='user');
+assert.ok(users.some(r=>text(r.data.content).includes('workspace-file://')));
+for(const row of users){const value=text(row.data.content);assert.ok(!/workspace_snapshot|space-reference:|SPACE-ORBIT-7419|4,270|4270/.test(value),'User prompt must not contain document answer/body.');}
+const calls=rows.filter(r=>r.type==='tool/call');const results=rows.filter(r=>r.type==='tool/result');
+assert.ok(calls.some(r=>r.data.name==='univer_inspect'));
+const latestReference=users.filter(r=>text(r.data.content).includes('workspace-file://')).at(-1);
+const inspect=calls.find(r=>r.seq>latestReference.seq&&r.data.name==='univer_inspect');assert.ok(inspect,'Latest submitted reference must trigger an actual new tool call.');const result=results.find(r=>r.data.message.toolCallId===inspect.data.callId);assert.equal(result.data.message.isError,false);
+const value=JSON.parse(text(result.data.message.content));assert.ok(value.lines.some(l=>l.text.includes('SPACE-ORBIT-7419')));
+const host=await connectHost();const status=await host.request('space/status');assert.equal(value.userId,status.user.id);assert.equal(value.file.endpoint,status.endpoint);
+const answer=rows.find(r=>r.type==='assistant/message'&&r.seq>result.seq&&text(r.data.message.content).includes('SPACE-ORBIT-7419'));assert.ok(answer);assert.ok(text(answer.data.message.content).includes('4,270'));assert.ok(rows.some(r=>r.type==='turn/end'&&r.seq>answer.seq));
+const events=rows.flatMap(r=>{
+ const common={seq:r.seq,type:r.type,time:r.time};
+ if(users.includes(r))return [{...common,text:text(r.data.content)}];
+ if(r.type==='tool/call')return [{...common,callId:r.data.callId,name:r.data.name,arguments:r.data.arguments}];
+ if(r.type==='tool/result')return [{...common,callId:r.data.message.toolCallId,isError:r.data.message.isError,content:r.data.message.content}];
+ if(r.type==='assistant/message')return [{...common,text:text(r.data.message.content),provider:r.data.message.source?.provider,model:r.data.message.source?.model}];
+ if(r.type==='turn/end')return [common];
+ if(r.type==='request/context')return [{...common,provider:r.data.provider,model:r.data.model}];
+ return [];
+});
+await writeEvidence('native-tool-session.json',{sessionId:rows[0].id,carrier:'Official DSH native Session, exercised through Web UI on official Electron-owned Host',compressedLogSha256:createHash('sha256').update(await readFile(path)).digest('hex'),verified:{noDocumentBodyInHumanMessages:true,noInternalReceiptMarkers:true,actualNativeToolCallAndResult:true,currentServerUserMatchesToolUser:true,correctAnswer:true,turnEnded:true},identity:{endpoint:status.endpoint,userId:status.user.id},events});
+console.log(JSON.stringify({verified:true,sessionId:rows[0].id,tools:calls.map(r=>r.data.name),userId:value.userId,revision:value.revision,sha256:value.sha256}));

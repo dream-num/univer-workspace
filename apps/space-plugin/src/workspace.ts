@@ -82,20 +82,47 @@ export class WorkspaceConnection {
     }
   }
 
+  /** Aggregate metadata using existing ACL-checked product endpoints; never load bodies. */
+  async index(signal: AbortSignal) {
+    const lifetime = this.lifetime;
+    const read = (path: string) => this.json(path, { signal: AbortSignal.any([signal, lifetime.signal]) });
+    const { spaces } = await read('/api/spaces');
+    const nodes: any[] = [];
+    const seen = new Set<string>();
+    const queue: { space: string; parent?: string }[] = spaces.map((space: any) => ({ space: space.id }));
+    while (queue.length) {
+      const location = queue.shift()!;
+      let cursor = '';
+      do {
+        const path = location.parent ? `/api/nodes/${encodeURIComponent(location.parent)}/children` : `/api/spaces/${encodeURIComponent(location.space)}/nodes`;
+        const page = await read(`${path}?${new URLSearchParams({limit:'100', ...(cursor ? {cursor} : {})})}`);
+        for (const node of page.nodes) {
+          if (seen.has(node.id)) continue;
+          seen.add(node.id); nodes.push(node);
+          if (nodes.length > 2000) throw new SpaceError(413, 'All index exceeds 2,000 items. Browse individual Spaces instead.');
+          if (!node.resource && node.capabilities?.browseChildren) queue.push({ space: location.space, parent: node.id });
+        }
+        cursor = page.nextCursor ?? '';
+      } while (cursor);
+    }
+    lifetime.signal.throwIfAborted();
+    return { nodes, scope: 'accessible-spaces', complete: true };
+  }
+
   /** Track materialization so unload waits until all SDK work has settled. */
-  read(nodeId: string) {
-    const operation = this.readContent(nodeId);
+  read(nodeId: string, signal?: AbortSignal) {
+    const operation = this.readContent(nodeId, signal);
     this.pending.add(operation);
     void operation.finally(() => this.pending.delete(operation)).catch(() => {});
     return operation;
   }
 
-  private async readContent(nodeId: string) {
+  private async readContent(nodeId: string, signal?: AbortSignal) {
     const lifetime = this.lifetime;
     const endpoint = this.endpoint;
     const json = (path: string, init: RequestInit = {}) => {
       lifetime.signal.throwIfAborted();
-      return this.json(path, { ...init, signal: lifetime.signal });
+      return this.json(path, { ...init, signal: signal ? AbortSignal.any([lifetime.signal, signal]) : lifetime.signal });
     };
     const nodeResult = await json(`/api/nodes/${encodeURIComponent(nodeId)}`);
     const node = nodeResult.node ?? nodeResult;

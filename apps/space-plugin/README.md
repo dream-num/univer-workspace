@@ -1,21 +1,14 @@
-# Space for DeepSeek Harness Desktop
+# Space plugin for official DeepSeek Harness
 
-An independent content workspace inside the official DSH application. Browse real
-Workspace Spaces and Folders, read frozen Documents and Sheets with Univer's UI,
-and explicitly add selected content to an existing native DSH conversation.
-There is no plugin chat system or Agent runtime, and no modification to DSH.
+Space-style content navigation, genuine read-only Univer Docs/Sheets, and the
+native DSH Conversation on the right. DSH owns Session history, composer, model,
+Agent and tool logs. Official host source is unchanged.
 
-## Build and package
+## Build / install
 
-Node >=24.9.0, npm, and the repository's existing Workspace Server environment are
-required. This application has an isolated npm dependency graph. Do not add it to
-the repository pnpm graph: DSH uses React 18 and the Workspace Browser uses React
-19. The browser bundle uses the host's published React and ReactDOM singletons.
-UI SDKs are build dependencies; only collaboration/materialization dependencies
-are installed into the plugin's Host profile.
+Use Node >=24.9.0 and this application's isolated npm graph:
 
 ```sh
-cd apps/space-plugin
 npm ci
 npm run build
 npm test
@@ -23,82 +16,38 @@ npm run typecheck
 npm pack --pack-destination /tmp
 ```
 
-All coupled Univer packages are pinned to 1.1.0. `skipLibCheck` is not enabled.
+Install the resulting tarball with the official DSH Plugins manager. Coupled
+Univer dependencies are pinned to 1.1.0; React 18 is resolved by the official
+host module loader. Tailwind utilities are prefixed/scoped with preflight off.
+Build-time PostCSS confines SDK global reset blocks and unprefixed utilities to
+the editor and Univer namespace portal roots; published SDK files stay intact.
 
-## Install in official Desktop
+## Use
 
-1. Download and launch the official DSH application.
-2. Open **Plugins** and install the generated tarball using its absolute local path.
-   The manager may require approval for the `protobufjs@7.6.6` package build.
-3. Fully quit and reopen Desktop after installing or updating the plugin.
-4. Desktop owns its plugin profile; use the official Desktop manager.
+1. Open an existing native DSH Conversation and select the Space global entry.
+2. Open Workspace settings at the navigation bottom, set an HTTP(S) origin and
+   sign in. Credentials remain only in Host memory. Local HTTP is allowed;
+   remote connections require HTTPS.
+3. Browse Spaces/Folder or recent content. All aggregates ACL-checked Space/Folder metadata (up to 2,000 items);
+   Your items filters owner access and Recents uses the real recent-resource API. Suggested/Favorites/direct-shared discovery do not yet
+   have corresponding data integrations. Their missing state is displayed.
+4. Open a Document or Sheet. The published Univer UI preset renders it read only.
+   Close/back restores its source list. Navigation uses one sidebar; no extra
+   sibling-file panel or internal Page tabs are inferred from video chrome.
+5. Work with AI opens the native Conversation beside the Page. Pick an existing
+   conversation if needed; a compact selector can change that association.
+6. Select this file, then associate to Conversation. The original native draft
+   receives a short stable `workspace-file://` reference and request to use
+   `univer_inspect`. No document text, cell JSON or snapshot is injected.
+7. Enter a question and send in the native composer. Reference submission and
+   actual tool use are distinct. Native Tool Call/Tool Result records are proof
+   of reading; an ordinary chat answer alone is not.
 
-For a separate test home, launch the application executable with `DSH_HOME` set
-to an isolated directory. Desktop owns its `profiles/desktop` plugin profile.
-
-## Run the Workspace Server
-
-Use the repository's normal Server setup from `apps/workspace/README.md`.
-Preserve the existing database and Blob storage locations when restarting:
-
-```sh
-cd apps/workspace
-PORT=3020 DATABASE_FILE=/path/to/workspace/product.sqlite \
-COLLABORATION_DATABASE_FILE=/path/to/workspace/collab.sqlite \
-BLOB_DIRECTORY=/path/to/workspace/blobs \
-node --import tsx server/src/main.ts
-```
-
-Never run `db:reset` to start or upgrade a database. The plugin directly calls
-existing Workspace HTTP APIs; this change does not alter the Server contract.
-
-`npm run seed:product` creates a new local test account, a Folder named 产品发布,
-and genuine persisted Document / Sheet resources. It never deletes existing
-content. The demo is authored acceptance data, not production content or mocked
-UI. Credentials are written mode 0600 to `/tmp/task005-workspace-login.json`;
-`SPACE_TEST_ENDPOINT` and `SPACE_TEST_LOGIN_FILE` override the local target/file.
-The script refuses remote hosts.
-
-## Product workflow
-
-- Open an existing DSH conversation, then select **Space**. Its identity is fixed
-  for this Space visit. Independently entering Space allows explicit selection of
-  an existing conversation; the plugin never creates one.
-- Open **Settings** in the content navigation to set a Workspace origin and sign
-  in. Password authentication is supported. Credentials stay in Host memory;
-  restart/uninstall requires signing in again.
-- Overview combines server Spaces with recent content. Open a Space, browse a
-  Folder, or open a recent file. Name/type filtering explicitly covers the loaded
-  page only. There is no fabricated global All/search/recommendation endpoint.
-- Documents and Sheets use version-matched core Univer UI presets. They are
-  disconnected, read-only snapshots. Advanced embedded objects and full
-  collaboration are not promised. Close returns to the source list; changing
-  files does not change the linked native Session or an earlier Context.
-- **Use AI → Select this file** freezes the current text/cell projection. This is
-  separate from merely opening a file. **Add to original draft** preserves the
-  existing native draft by appending readable context, then opens that same
-  conversation with a native right-sidebar document tab.
-- Send using DSH's native composer. Selected, added-to-draft, and submitted are
-  distinct. Submitted is displayed only after the matching full snapshot and
-  unique marker appear in a durable native `user/message` event. It does not
-  claim the Agent read it. Context is capped at 64,000 characters and is never
-  silently truncated.
-- **Back to Space** restores content/navigation state during the plugin lifetime.
-  If native side-by-side opening fails, Reduced Experience is displayed and the
-  Space visit remains available. No second chat UI is substituted.
-
-Disable and uninstall through **Plugins**. Registrations, reads, observers and
-Univer instances belong to the plugin lifecycle; native Session history remains
-in DSH. Removing a local Context does not delete an already-created native draft
-or a durable message; those are managed in the original conversation.
-
-## Validation
-
-`npm test` covers connection/credential lifetime and frozen context contracts.
-Use `npm run test:live` against an isolated Workspace Server and
-`npm run test:host` against a running official Desktop Host.
-Keep fixture credentials and generated evidence outside the repository.
-
-Browser checks do not establish native Desktop support. Agent writes, merge,
-manual editing, OAuth-only login, cross-restart layout persistence, large files
-and offline writes are outside this version's supported scope.
+The read tools are `univer_spaces`, `univer_documents`, `univer_open`, and
+`univer_inspect`. They use Session-scoped association routing and current Host
+Workspace login; the real Server rechecks ACLs. Inspection reads current Server
+content, returns revision/hash and bounded line/cell entries, and exposes
+`nextOffset` for paging. These are deliberately read-only subsets; they do not
+promise the complete old plugin's Facade/Worktree interface. No write/merge tool
+is registered. Removing local selection does not erase a durable message or
+revoke a previously associated file; change identity/disconnect to clear grants.

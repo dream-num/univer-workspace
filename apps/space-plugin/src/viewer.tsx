@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createUniver, LocaleType, LifecycleStages, mergeLocales } from '@univerjs/presets';
-import { UniverDocsCorePreset } from '@univerjs/preset-docs-core';
+import { UniverDocsCorePreset, UniverDocsUIPlugin } from '@univerjs/preset-docs-core';
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
 import docsLocale from '@univerjs/preset-docs-core/locales/zh-CN';
 import sheetsLocale from '@univerjs/preset-sheets-core/locales/zh-CN';
@@ -23,7 +23,7 @@ export function Viewer({ file }: { file: Content }) {
       runtime = createUniver({
         locale: LocaleType.ZH_CN,
         locales: { [LocaleType.ZH_CN]: mergeLocales(docsLocale, sheetsLocale) },
-        presets: [file.type === 'doc' ? UniverDocsCorePreset({ ...config, footer: false }) : UniverSheetsCorePreset({ ...config, disableAutoFocus: true, formulaBar: true, footer: { sheetBar: true, statisticBar: false, menus: false, zoomSlider: true, addSheetButtonConfig: { show: false } } })],
+        presets: [file.type === 'doc' ? UniverDocsCorePreset({ ...config, footer: false }) : UniverSheetsCorePreset({ ...config, disableAutoFocus: true, formulaBar: true, footer: { sheetBar: true, statisticBar: false, menus: false, zoomSlider: true, addSheetButtonConfig: { show: false } } }), ...(file.type === 'doc' ? [{ plugins: [[UniverDocsUIPlugin, { fitToWidth: { mode: 'fit-width', target: 'container', paddingX: 24, minScale: 0.25, maxScale: 1, align: 'center' } }]] } as import('@univerjs/presets').IPreset] : [])],
       });
       const api = runtime.univerAPI;
       const data = structuredClone(file.data);

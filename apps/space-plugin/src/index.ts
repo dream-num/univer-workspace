@@ -1,13 +1,16 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-client-connection';
+import { ToolBindings, registerReadTools } from './tools.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
 
 export const name = 'space-plugin';
-export const inject = ['connection'];
+export const inject = ['connection', 'tools'];
 
 /** Use the public Connection carrier; no webServer or Desktop-private IPC. */
 export function apply(ctx: Context) {
   const workspace = new WorkspaceConnection();
+  const bindings = new ToolBindings(workspace);
+  ctx.effect(() => registerReadTools(ctx, workspace, bindings));
   ctx.effect(() => () => workspace.dispose());
   const handle = async (operation: string, payload: unknown, signal: AbortSignal) => {
     try {
@@ -22,8 +25,9 @@ export function apply(ctx: Context) {
       let value: unknown;
       switch (operation) {
         case 'status': value = await workspace.status(); break;
-        case 'configure': workspace.configure(string('endpoint')); value = await workspace.status(); break;
-        case 'login': value = await workspace.login(string('username'), string('password')); break;
+        case 'associate': value = await bindings.bind(string('sessionId'), string('nodeId')); break;
+        case 'configure': bindings.clear(); workspace.configure(string('endpoint')); value = await workspace.status(); break;
+        case 'login': bindings.clear(); value = await workspace.login(string('username'), string('password')); break;
         case 'recent': {
           const query = new URLSearchParams({ limit: '100' });
           const cursor = string('cursor', true); if (cursor) query.set('cursor', cursor);
@@ -41,6 +45,7 @@ export function apply(ctx: Context) {
           value = await workspace.json(`${upstream}?${query}`, { signal });
           break;
         }
+        case 'index': value = await workspace.index(signal); break;
         case 'content': value = await workspace.read(string('node')); break;
         default: throw new SpaceError(404, 'Unknown Space operation.');
       }
@@ -53,7 +58,7 @@ export function apply(ctx: Context) {
   // rpc.handle in DSH 0.2.1-rc.3 accesses the caller's webServer directly.
   // Public exact Fetch routes use the shared authenticated carrier and admit
   // owner peers only. They are also supported by Desktop's dsh-app forwarding.
-  for (const operation of ['status', 'configure', 'login', 'spaces', 'recent', 'nodes', 'content']) {
+  for (const operation of ['status', 'configure', 'login', 'spaces', 'recent', 'nodes', 'content', 'associate', 'index']) {
     ctx.effect(() => ctx.connection.fetch.register({
       path: `/api/space/${operation}`, methods: ['POST'], requestBody: 'buffered',
       async fetch(request) {

@@ -1,20 +1,21 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { selectedSnapshot, contextText, userText } from '../lib/model.js';
+import { selectedReference, referenceText, userText, submittedReference } from '../lib/model.js';
+const document = () => ({ endpoint:'https://workspace.example',nodeId:'n1',resourceId:'r1',unitId:'u1',name:'发布计划',type:'doc',revision:3,sha256:'digest',data:{body:{dataStream:'PRIVATE-BODY'}},content:{text:'PRIVATE-BODY',sheets:[]} });
+test('native file reference has stable identities and never contains content/snapshot', () => {
+ const open=document(); const ref=selectedReference(open);open.name='other';
+ assert.equal(ref.name,'发布计划'); assert.equal('content' in ref,false); assert.equal('data' in ref,false);
+ const text=referenceText(ref);assert.match(text,/workspace-file:\/\/r1\?nodeId=n1&unitId=u1/);assert.equal(text.includes('PRIVATE-BODY'),false);
+});
+test('submission receipt reads durable user blocks only', () => {
+ assert.equal(userText({content:[{type:'text',text:'reference'},{type:'image',data:'hidden'}]}),'reference');
+ assert.equal(userText({message:{content:[{type:'text',text:'assistant'}]}}),'');
+});
 
-const document = () => ({ endpoint:'https://workspace.example',nodeId:'private-node-id',resourceId:'private-resource-id',unitId:'private-unit-id',name:'发布计划',type:'doc',revision:3,sha256:'snapshot-digest',capturedAt:'2026-10-26T00:00:00Z',data:{body:{dataStream:'renderer'}},content:{text:'负责人：Lin\r下一步：评审\r\n',sheets:[]} });
-test('a selected snapshot stays frozen while the open document changes', () => {
- const open=document(); const selected=selectedSnapshot(open);
- open.content.text='changed after selection';open.data.body.dataStream='changed render data';
- assert.equal(selected.content.text,'负责人：Lin\r下一步：评审\r\n');assert.equal('data' in selected,false);
-});
-test('native context is readable and does not expose opaque server identities', () => {
- const text=contextText(selectedSnapshot(document()));
- assert.match(text,/《发布计划》/);assert.match(text,/版本：3/);assert.match(text,/负责人：Lin\n下一步：评审/);
- for(const hidden of ['private-node-id','private-resource-id','private-unit-id','workspace.example','renderer']) assert.equal(text.includes(hidden),false);
- assert.match(text,/snapshot-digest/);
-});
-test('durable native user text is read from text blocks, without treating an assistant response as a receipt', () => {
- assert.equal(userText({content:[{type:'text',text:'selected document'},{type:'image',data:'not text'},{type:'text',text:'user question'}]}),'selected document\nuser question');
- assert.equal(userText({message:{content:[{type:'text',text:'assistant text'}]}}),'');
+test('native receipt requires a newer human event; older history and assistant text cannot submit a draft',()=>{
+ const file=selectedReference(document());const data={source:{kind:'user'},content:[{type:'text',text:referenceText(file)}]};
+ const row=(seq,type='user/message')=>({type:'event',event:{seq,type,data}});
+ assert.equal(submittedReference([row(10),row(21,'assistant/message')],file,20),false);
+ assert.equal(submittedReference([row(10),row(21)],file,20),true);
+ assert.equal(submittedReference([{type:'transient',event:{seq:22,type:'user/message',data}}],file,20),false);
 });
