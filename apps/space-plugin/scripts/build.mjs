@@ -6,7 +6,7 @@ await mkdir('lib', { recursive: true });
 const sdkCss = await Promise.all(['preset-docs-core','preset-sheets-core'].map(name => readFile(`node_modules/@univerjs/${name}/lib/index.css`, 'utf8')));
 await writeFile('lib/univer-scoped.css', sdkCss.map(scopeSdkCss).join('\n'));
 execFileSync(process.execPath, ['node_modules/tailwindcss/lib/cli.js', '-i', 'src/tailwind.css', '-o', 'lib/tailwind.css', '--minify'], { stdio: 'inherit' });
-await build({ entryPoints: ['src/index.ts', 'src/workspace.ts', 'src/model.ts', 'src/tools.ts'], outdir: 'lib', bundle: true, platform: 'node', format: 'esm', packages: 'external', target: 'node24', logLevel: 'info' });
+await build({ entryPoints: ['src/index.ts', 'src/workspace.ts', 'src/model.ts', 'src/tools.ts', 'src/viewer-data.ts'], outdir: 'lib', bundle: true, platform: 'node', format: 'esm', packages: 'external', target: 'node24', logLevel: 'info' });
 await build({ entryPoints: ['src/client.tsx'], outfile: 'lib/client.js', bundle: true, format: 'cjs', platform: 'browser', external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'], target: 'es2022', loader: { '.css': 'text' },
   banner: { js: 'window.__ModuleLoader__.load({id:"dsh-space-plugin",factory:(require)=>{var module={exports:{}};var exports=module.exports;' },
   footer: { js: 'return module.exports;}});' }, logLevel: 'info' });
