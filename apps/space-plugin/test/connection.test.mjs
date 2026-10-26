@@ -116,3 +116,19 @@ test('reconnecting and failed replacement never discard an authenticated Workspa
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('resource creation preserves idempotency and never masks a Server permission denial', async () => {
+  const received = [];
+  const server = createServer((req, res) => {
+    received.push({ path: req.url, key: req.headers['idempotency-key'] });
+    res.writeHead(403, {'content-type':'application/json'});
+    res.end(JSON.stringify({error:{message:'Cannot create in this folder.'}}));
+  });
+  server.listen(0,'127.0.0.1'); await once(server,'listening');
+  const connection=new WorkspaceConnection();
+  try {
+    connection.configure(`http://127.0.0.1:${server.address().port}`);
+    await assert.rejects(connection.create({kind:'doc', name:'Denied', space:'s', parent:'p', key:'stable-attempt'},new AbortController().signal),e=>e.status===403&&e.message==='Cannot create in this folder.');
+    assert.deepEqual(received,[{path:'/api/resources',key:'stable-attempt'}]);
+  } finally { await connection.dispose();await new Promise(resolve=>server.close(resolve)); }
+});

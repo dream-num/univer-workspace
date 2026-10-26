@@ -460,6 +460,24 @@ export function apply(ctx: any) {
           await recents();
         }
       }),
+    create: (input: {kind: string; name: string; space: string; parent: string; key: string}) =>
+      run(async () => {
+        const before = generation;
+        const result = await api('create', input);
+        if (before !== generation) return;
+        await refresh();
+        if (result.space) await directory(result.space.id);
+        else {
+          await directory(input.space, input.parent);
+          update({ spaceTab: 'Content' });
+          if (input.kind !== 'folder') {
+            const content = await api<Content>('content', { node: result.node.id });
+            update({ content });
+            await restoreSession();
+            await recents();
+          }
+        }
+      }),
     close: () => {
       void run(clearCurrent);
       sessionRequest++;
@@ -711,6 +729,7 @@ export type Face = {
   home(location?: 'home' | 'recent'): void;
   moreRecent(): void;
   open(node: string): void;
+  create(input: {kind: string; name: string; space: string; parent: string; key: string}): Promise<void>;
   close(): void;
   removeContext(): void;
   reconnectContext(): void;

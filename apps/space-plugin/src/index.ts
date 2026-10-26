@@ -118,6 +118,9 @@ export function apply(ctx: Context) {
         case 'index':
           value = await workspace.index(signal);
           break;
+        case 'create':
+          value = await workspace.create({ kind: string('kind'), name: string('name'), space: string('space', true), parent: string('parent', true), key: string('key') }, signal);
+          break;
         case 'content':
           value = await workspace.read(string('node'), signal);
           break;
@@ -151,6 +154,7 @@ export function apply(ctx: Context) {
     'recent',
     'nodes',
     'content',
+    'create',
     'associate',
     'index',
     'current',

@@ -43,7 +43,7 @@ export function Navigation({ face, v }: { face: Face; v: State }) {
         </button>
       </div>
       <div className="sp-nav-create">
-        <CreateMenu sidebar />
+        <CreateMenu face={face} v={v} sidebar />
       </div>
       <div className="sp-nav-scroll">
         {([['all', 'All'], ...contentKinds] as const).map(([filter, label]) => (

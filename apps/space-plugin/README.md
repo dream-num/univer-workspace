@@ -66,7 +66,11 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
    Close viewer returns to its source list. Reconnecting the same endpoint keeps
    authentication; an invalid/unreachable replacement keeps the existing service.
 
-Creation, direct sharing, Favorites, Trash, subpages, moves and deletes are
+Create / New creates real Spaces, Folders, Docs and Sheets using the current
+Workspace identity and Server capabilities. All defaults to the Personal Space;
+Space / Folder creates in that directory. New Docs and Sheets open automatically.
+
+Direct sharing, Favorites, Trash, subpages, moves and deletes are
 unavailable in this release. Disabled controls explain feature availability separately from Server permissions. Suggested has
 local pinned metadata cards, with no fabricated templates or recommendations.
 The native DSH composer is taller than Space's 52px input capsule; it is kept

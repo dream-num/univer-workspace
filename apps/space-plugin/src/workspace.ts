@@ -131,14 +131,15 @@ export class WorkspaceConnection {
         signal,
         headers: {
           'content-type': 'application/json',
+          ...Object.fromEntries(new Headers(init.headers)),
           ...(this.cookie ? { cookie: this.cookie } : {}),
         },
       });
-      if (!response.ok)
-        throw new SpaceError(
-          response.status,
-          `Workspace returned HTTP ${response.status}.`,
-        );
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new SpaceError(response.status,
+          body?.error?.message ?? body?.message ?? `Workspace returned HTTP ${response.status}.`);
+      }
       return response;
     } catch (error) {
       if (error instanceof SpaceError) throw error;
@@ -253,6 +254,26 @@ export class WorkspaceConnection {
         node.resource = { ...node.resource, htmlView: true };
     lifetime.signal.throwIfAborted();
     return { nodes, scope: 'accessible-spaces', complete: true };
+  }
+
+  /** Human creation only. Server resolves identity, parent capabilities and ACL. */
+  async create(input: { kind: string; name: string; space: string; parent: string; key: string }, signal: AbortSignal) {
+    const name = input.name.trim();
+    if (!name || name.length > (input.kind === 'space' ? 100 : 255))
+      throw new SpaceError(400, 'Enter a valid name.');
+    const init = { method: 'POST', signal };
+    if (input.kind === 'space')
+      return { space: await this.json('/api/team-spaces', { ...init, body: JSON.stringify({ name }) }) };
+    const location = { spaceId: input.space, parentNodeId: input.parent || null, name };
+    if (input.kind === 'folder')
+      return { node: await this.json('/api/nodes', { ...init, body: JSON.stringify(location) }) };
+    if (!['doc', 'sheet'].includes(input.kind))
+      throw new SpaceError(400, 'Unsupported creation type.');
+    // The product resource workflow owns default data, Unit identity and recovery.
+    return this.json('/api/resources', { ...init,
+      headers: { 'Idempotency-Key': input.key },
+      body: JSON.stringify({ ...location, kind: 'univer', unitType: input.kind }),
+    });
   }
 
   /** Track materialization so unload waits until all SDK work has settled. */

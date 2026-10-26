@@ -109,15 +109,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
               )}
             </label>
             <div className="sp-primary">
-              <CreateMenu
-                folder={folder}
-                space={space}
-                allowed={
-                  folder
-                    ? v.page?.parentNode?.capabilities?.createChildren !== false
-                    : true
-                }
-              />
+              <CreateMenu face={face} v={v} />
             </div>
           </div>
         </header>

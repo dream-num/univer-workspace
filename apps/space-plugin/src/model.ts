@@ -3,6 +3,7 @@ export interface Space {
   id: string;
   name: string;
   type: string;
+  capabilities?: { createAtRoot?: boolean };
 }
 export interface Resource {
   id: string;
