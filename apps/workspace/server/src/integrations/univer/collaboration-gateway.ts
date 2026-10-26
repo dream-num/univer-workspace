@@ -354,6 +354,20 @@ export function createCollaborationGateway(options: {
         : anonymousProtocolUser,
     });
   });
+  // The formal Comment datasource resolves authors through this SDK route,
+  // including authors who are no longer present in the collaboration room.
+  // Reuse the existing Identity repository and protocol projection only.
+  router.get("/user/list", (request, response) => {
+    identity.requireSession(request.headers.cookie);
+    const raw = request.query.userIDs ?? request.query["userIDs[]"];
+    const ids = typeof raw === "string" ? [raw] : raw;
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100 ||
+        ids.some((id) => typeof id !== "string" || !id || id.length > 100)) {
+      response.status(400).json({ message: "Provide between 1 and 100 user IDs." });
+      return;
+    }
+    response.json({ error: OK_ERROR, users: identity.findUsers([...new Set(ids as string[])]).map(protocolUser) });
+  });
   router.use("/authz", contentPermissions.router);
   router.use("/worktrees/:worktreeId/authz", contentPermissions.router);
   router.get(
