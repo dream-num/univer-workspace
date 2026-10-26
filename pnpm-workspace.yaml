@@ -6,6 +6,8 @@ packages:
   # committed lockfile: sharing the root graph re-resolves consumers' optional
   # peers and splits branded types across the workspace.
   - "!packages/dsh-runtime"
+  # TASK-004 uses the current official DSH in an isolated npm dependency graph.
+  - "!apps/space-plugin"
 
 # Like DSH's signer patch, skip Framework symlinks; also bound file probing
 # for the external runtime. Remove once osx-sign fixes both in a release.
