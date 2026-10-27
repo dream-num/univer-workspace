@@ -51,6 +51,10 @@ review. Humans can continue editing and stay in control of what gets merged.
 | **Workspace Agent** | Chat with an agent beside your documents, reference local or remote files and folders, and review Worktree changes | [Install and use Agent](apps/agent/README.md#installation-and-first-use) |
 | **Workspace CLI** | Automate document tasks from a terminal, scripts, or an existing agent environment | [CLI installation and usage](apps/cli/README.md) |
 
+The [Space Plugin candidate](apps/space-plugin/README.md) installs into the unchanged
+official DeepSeek Harness Desktop through Plugins → Add plugin. It is separate from
+Workspace Agent above and is not yet certified for Public Preview; see its release gates.
+
 Workspace Agent is a local web application built on DSH (DeepSeek Harness). Its
 local file references point to the machine running Agent; Workspace documents
 remain on the connected service. Both Agent and CLI can connect to your existing

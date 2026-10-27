@@ -202,8 +202,13 @@ async function create(page, kind, label, name, invite = false) {
       .click();
     await dialog.getByLabel('Invitation role').selectOption('editor');
   }
+  const membership = invite ? page.waitForResponse(response => {
+    if (!response.url().endsWith('/api/space/sharing')) return false;
+    try { return response.request().postDataJSON().payload?.action === 'set-member'; } catch { return false; }
+  }) : undefined;
   await dialog.getByRole('button', { name: 'Create', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
+  if (membership) assert.equal((await (await membership).json()).result.ok, true);
 }
 async function ready(page) {
   await page.locator('[data-editor-state=saved]').waitFor({ timeout: 60000 });

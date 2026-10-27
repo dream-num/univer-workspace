@@ -63,6 +63,14 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   backend-owned PKCE/session storage, with an isolated embedded-browser fallback when the
   operating system cannot open the default browser. Contract: [Agent README](apps/agent/README.md).
 
+- **Space Plugin release candidate** — `apps/space-plugin` packages a standard Cordis/DSH
+  plugin for the unchanged official DSH Desktop. This is an extension, not an Electron fork,
+  a new Agent runtime, a managed Workspace Server, or a public SDK. Its isolated React 18/npm
+  graph bundles the private content worker and supplies no runtime development credential.
+  The current candidate targets DSH 0.2.1-rc.3 on macOS arm64; native acceptance and safe
+  recovery after a Server crash in SDK `merging` remain release gates. Contract and install
+  requirements: [Space Plugin README](apps/space-plugin/README.md).
+
 ## Depends on
 
 - [`dream-num/univer`](https://github.com/dream-num/univer) — owns the core Unit model, Facade APIs, mutations,
