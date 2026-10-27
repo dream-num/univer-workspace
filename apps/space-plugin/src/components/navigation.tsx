@@ -128,16 +128,6 @@ export function Navigation({ face, v }: { face: Face; v: State }) {
         <Icon name="trash" />
         Trash
       </button>
-      <button
-        className={row + ' tw-text-muted'}
-        aria-label="Space settings"
-        onClick={() => face.update({ settings: true })}
-      >
-        <Icon name="settings" />
-        <span className="tw-truncate">
-          {v.status.user?.displayName ?? v.status.user?.username ?? 'Connect'}
-        </span>
-      </button>
     </nav>
   );
 }

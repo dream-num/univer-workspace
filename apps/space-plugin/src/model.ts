@@ -97,6 +97,7 @@ export interface State {
   status: {
     state: string;
     endpoint: string;
+    oauth?: { phase: string; message: string };
     user?: {
       id?: string;
       username?: string;
@@ -130,7 +131,6 @@ export interface State {
   sessions: { id: string; title: string }[];
   error: string;
   busy: boolean;
-  settings: boolean;
   ai: boolean;
   chatMode: 'compact' | 'expanded' | 'minimized';
   pins: string[];

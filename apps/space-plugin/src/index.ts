@@ -4,16 +4,24 @@ import type {} from '@deepseek-ai/dsh-agent';
 import type {} from '@deepseek-ai/dsh-system-prompt';
 import { ToolBindings, registerReadTools } from './tools.js';
 import { AgentEditing, registerEditingTools } from './editing.js';
+import type { CredentialKey } from '@deepseek-ai/dsh-credentials';
+import { WorkspaceOAuth } from './oauth.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
 
 export const name = 'space-plugin';
-export const inject = ['connection', 'tools', 'systemPrompt'];
+export const inject = ['connection', 'tools', 'systemPrompt', 'credentials'];
 
 /** Use the public Connection carrier; no webServer or Desktop-private IPC. */
 export function apply(ctx: Context) {
   const workspace = new WorkspaceConnection();
   const bindings = new ToolBindings(workspace);
   const editing = new AgentEditing(workspace, bindings);
+  const key = 'dsh-space-plugin/workspace' as CredentialKey;
+  const auth = new WorkspaceOAuth(workspace, {
+    read: async () => { const record = await ctx.credentials.readRecord(key); return record?.kind === 'grant' ? record.payload : undefined; },
+    write: async (payload) => { await ctx.credentials.modifyRecord(key, async () => ({ kind: 'grant', payload })); },
+  }, () => bindings.clear());
+  ctx.effect(() => () => auth.dispose());
   ctx.effect(() => registerEditingTools(ctx, editing));
   ctx.effect(() => registerReadTools(ctx, workspace, bindings, (session, args, signal) => editing.inspect(session, args, signal)));
   ctx.effect(() =>
@@ -68,27 +76,23 @@ export function apply(ctx: Context) {
           value = await editing.action(string('sessionId'), string('nodeId'), string('action'), string('proposalId'), string('reviewToken', true));
           break;
         case 'status':
-          value = await workspace.status();
+          value = await auth.status();
           break;
         case 'associate':
           value = await bindings.bind(string('sessionId'), string('nodeId'));
           break;
-        case 'configure': {
-          const before = workspace.endpoint;
-          value = await workspace.connect(string('endpoint'), signal);
-          if (before !== workspace.endpoint) bindings.clear();
+        case 'configure':
+          value = await auth.configure(string('endpoint'));
           break;
-        }
-        case 'login': {
-          const before = await workspace.status();
-          const after = await workspace.login(
-            string('username'),
-            string('password'),
-          );
-          if (before.user?.id !== after.user?.id) bindings.clear();
-          value = after;
+        case 'oauth-start':
+          value = await auth.start(input?.desktop === true);
           break;
-        }
+        case 'oauth-cancel':
+          auth.cancel(); value = await auth.status();
+          break;
+        case 'sign-out':
+          value = await auth.signOut();
+          break;
         case 'current': {
           const sequence = input?.sequence;
           if (!Number.isSafeInteger(sequence) || Number(sequence) < 0)
@@ -235,7 +239,9 @@ export function apply(ctx: Context) {
     'editing-status',
     'editing-action',
     'configure',
-    'login',
+    'oauth-start',
+    'oauth-cancel',
+    'sign-out',
     'spaces',
     'sharing',
     'recent',

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { connectHost } from './host-connection.mjs';
+import { connectHost, authorizeWorkspace } from './host-connection.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );
@@ -10,7 +10,7 @@ const h = await connectHost(),
 const out = resolve(process.env.SPACE_EVIDENCE_DIR ?? '/tmp/task009b-evidence');
 await mkdir(out, { recursive: true });
 await h.request('space/configure', { endpoint: f.origin });
-await h.request('space/login', { username: f.username, password: f.password });
+await authorizeWorkspace(h, f);
 const b = await chromium.launch({
   headless: true,
   executablePath: process.env.SPACE_BROWSER_EXECUTABLE,

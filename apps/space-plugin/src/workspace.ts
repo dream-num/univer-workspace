@@ -50,6 +50,22 @@ export function normalizeEndpoint(value: string): string {
 export class WorkspaceConnection {
   readonly license = process.env.UNIVER_LICENSE ?? '';
   endpoint = '';
+  get sessionCookie() { return this.cookie; }
+  /** Activate only a server-verified Workspace credential; never a DSH identity. */
+  activateSession(endpoint: string, token: string) {
+    if (!/^[A-Za-z0-9._~-]{16,4096}$/.test(token)) throw new SpaceError(400, 'Invalid Workspace session.');
+    this.configure(endpoint);
+    this.lifetime.abort();
+    this.lifetime = new AbortController();
+    this.cookie = `workspace_session=${token}`;
+  }
+  clearSession() {
+    this.loginAttempt++;
+    this.loginAbort?.abort();
+    this.lifetime.abort();
+    this.lifetime = new AbortController();
+    this.cookie = '';
+  }
   private runtime = new RuntimeManager(new URL('./workspace-content-worker.js', import.meta.url));
   /** Host-only credential boundary. No credential enters Tool results or UI. */
   private draftTarget(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string) {

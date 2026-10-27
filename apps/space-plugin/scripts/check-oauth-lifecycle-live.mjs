@@ -1,0 +1,72 @@
+/** Real issuer lifecycle regression, Node/Server boundary; Desktop UI is separate. */
+import assert from 'node:assert/strict';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { WorkspaceConnection } from '../lib/workspace.js';
+import { WorkspaceOAuth } from '../lib/oauth.js';
+import { authorizeWorkspace } from './host-connection.mjs';
+const alice = JSON.parse(await readFile(process.env.SPACE_TEST_LOGIN_FILE, 'utf8'));
+const bob = JSON.parse(await readFile(process.env.SPACE_SECOND_LOGIN_FILE, 'utf8'));
+const secondOrigin = process.env.SPACE_SECOND_ENDPOINT;
+const output = process.env.SPACE_EVIDENCE_DIR;
+if (!secondOrigin || !output) throw new Error('Second isolated Server and evidence directory are required.');
+if (!['127.0.0.1', 'localhost'].includes(new URL(secondOrigin).hostname)) throw new Error('Use an isolated local Server.');
+let workspace, auth, saved, now = Date.now();
+const checks = [];
+const storage = { read: async () => saved, write: async value => { saved = structuredClone(value); } };
+const open = () => { workspace = new WorkspaceConnection(); auth = new WorkspaceOAuth(workspace, storage, () => {}, 3101, () => now); };
+const close = async () => { await auth.dispose(); await workspace.dispose(); };
+const host = { request: async (operation, payload = {}) => {
+  switch (operation) {
+    case 'space/configure': return auth.configure(payload.endpoint);
+    case 'space/oauth-start': return auth.start(false);
+    case 'space/oauth-cancel': auth.cancel(); return auth.status();
+    case 'space/status': return auth.status();
+    default: throw new Error('Unexpected lifecycle operation.');
+  }
+} };
+open();
+try {
+  const a = await authorizeWorkspace(host, alice);
+  const pending = new URL((await auth.start(false)).authorizationUrl);
+  const forged = new URL(pending.searchParams.get('redirect_uri'));
+  forged.search = new URLSearchParams({ state: 'forged', code: 'not-an-authorization-code' });
+  assert.equal((await fetch(forged)).status, 400);
+  assert.equal((await auth.status()).user.id, a.user.id);
+  auth.cancel();
+  assert.equal((await auth.status()).user.id, a.user.id);
+  checks.push('Forged callback and cancel retain the previously authenticated real account');
+  const b = await authorizeWorkspace(host, bob);
+  assert.notEqual(b.user.id, a.user.id);
+  await assert.rejects(workspace.read(alice.doc.id), error => [401, 403, 404].includes(error.status));
+  checks.push('Real second account activates and cannot read first account private content');
+  await close(); open();
+  assert.equal((await auth.status()).user.id, b.user.id);
+  checks.push('New controller/process state revalidates and reuses the real persisted Session');
+  const expiring = new URL((await auth.start(false)).authorizationUrl);
+  const expired = new URL(expiring.searchParams.get('redirect_uri'));
+  expired.search = new URLSearchParams({ state: expiring.searchParams.get('state'), code: 'not-an-authorization-code' });
+  now += 11 * 60_000;
+  assert.equal((await fetch(expired)).status, 400);
+  assert.equal((await auth.status()).user.id, b.user.id);
+  now = Date.now();
+  checks.push('Expired request cannot replace the current real account');
+  await assert.rejects(auth.configure('http://127.0.0.1:1'));
+  assert.equal((await auth.status()).user.id, b.user.id);
+  await auth.configure(secondOrigin);
+  assert.equal((await auth.status()).state, 'unauthenticated');
+  assert.equal(workspace.sessionCookie, ''); assert.equal(saved.token, undefined);
+  await close(); open();
+  assert.equal((await auth.status()).endpoint, secondOrigin);
+  assert.equal((await auth.status()).state, 'unauthenticated');
+  checks.push('Unreachable Server preserves current service; actual Server switch clears old grant and survives restart');
+  await authorizeWorkspace(host, bob);
+  const cookie = workspace.sessionCookie;
+  await auth.signOut();
+  const remote = await fetch(new URL('/api/session', bob.origin), { headers: { cookie } });
+  assert.equal((await remote.json()).authenticated, false);
+  assert.equal(saved.token, undefined);
+  checks.push('Sign Out revokes exactly the issued real Workspace grant and removes durable local credentials');
+  await mkdir(output, { recursive: true });
+  await writeFile(`${output}/oauth-lifecycle-live.json`, JSON.stringify({ status: 'PASS', carrier: 'real isolated issuers + production Node auth controller; no Desktop UI claim', checks }, null, 2));
+  console.log('PASS OAuth real-Server lifecycle', checks.length);
+} finally { await close(); }

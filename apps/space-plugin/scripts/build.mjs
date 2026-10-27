@@ -38,6 +38,7 @@ execFileSync(
 await build({
   entryPoints: [
     'src/index.ts',
+    'src/oauth.ts',
     'src/workspace.ts',
     'src/model.ts',
     'src/file-reference.ts',

@@ -20,9 +20,9 @@ try {
   }, null, 2) + '\n');
   for (const file of ['lib', 'cordis.patch.yml']) await cp(file, join(stage, file), { recursive: true });
   const readme = await readFile('README.md', 'utf8');
-  const instructions = readme.split('## TASK-010 release candidate\n')[1];
+  const instructions = readme.split('## Release candidate\n')[1];
   if (!instructions) throw new Error('Missing customer installation instructions.');
-  await writeFile(join(stage, 'README.md'), '# Space Plugin 0.17.3 release candidate\n\n' + instructions.trim() + '\n');
+  await writeFile(join(stage, 'README.md'), `# Space Plugin ${version} release candidate\n\n` + instructions.trim() + '\n');
   await cp('../../LICENSE', join(stage, 'LICENSE'));
   const notices = ['Space Plugin third-party notices', '', 'DSH and React are provided by the official Host. Univer Pro features require the operator\'s valid runtime license. No runtime license is included.', ''];
   for (const name of Object.keys({ ...source.devDependencies, ...dependencies }).filter(name => /^@univer|^lucide|^rxjs|^zustand|^immer/.test(name)).sort()) {

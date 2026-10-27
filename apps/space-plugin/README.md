@@ -36,11 +36,13 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
    restores it. Plugins/Automation have no Session list or unused secondary track.
    This controlled DOM/CSS integration is gated to official Web release
    `0.2.1-rc.3` / commit `be72761` and tested native structure. Unknown builds keep
-   native navigation and show an explicit unsupported state. Host controls,
+   native navigation without applying this adapter. Host controls,
    width preference and Sessions stay Host-owned; uninstall removes the adapter.
-2. Open Space settings at the navigation bottom, set an HTTP(S) origin and
-   sign in. The validated endpoint is persisted through the official DSH client store. Credentials remain only in Host memory and require sign-in after Host restart. Local HTTP is allowed;
-   remote connections require HTTPS.
+2. Select **Sign in to Univer**. The default service is `https://space.univer.ai/`;
+   the system browser completes the existing Workspace authorization and the plugin
+   exchanges its one-use code with PKCE. DSH Settings → Workspace owns account,
+   Switch Account, Sign Out and Custom Workspace URL. The Host credential provider
+   persists only the plugin's own grant; the client receives no cookie or token.
 3. All / Your items lists real ACL-checked metadata. Pinned is a separate local
    navigation and Suggested section; it does not imply Favorites. Space opens
    Overview / Content; Folder opens its own breadcrumb and content list.
@@ -51,7 +53,7 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
    pending changes before disposal; failed flush leaves the current editor open.
    While disconnected, new content edits pause until reconnection. Reliable offline
    writing is not enabled. The SDK's queued-online-change recovery remains enabled.
-   Workspace cookies stay in Host memory: SDK HTTP uses the existing owner Connection;
+   Workspace cookies stay Host-only; an isolated grant is persisted by the official credential provider: SDK HTTP uses the existing owner Connection;
    WebSocket connects directly to Workspace using its one-time session ticket.
    Slides/Canvas/Relational Table keep detached previews. Pages maps specifically to Server
    `.univer.html` Blobs, using the Fork's shared formal sandbox and binding engine (up to 1 MiB source). It supports scripts, authenticated Sheet bindings, inspection, and save-before-leave with resume after a failed connection change. License uses the Fork's existing source through official SDK initialization. Docs/Sheets Comments use the formal presets and remote datasource; the document toolbar opens the native panel. Docs supports selection anchors, replies, Resolve/Reopen and retained discussions when original text is removed. History remains unaccepted.
@@ -82,24 +84,18 @@ local pinned metadata cards, with no fabricated templates or recommendations.
 The native DSH composer is taller than Space's 52px input capsule; it is kept
 intact.
 
-Run the Web checks against a local owner Host and isolated product fixture.
-Use `node scripts/seed-mvp.mjs` to create nonempty test resources:
+Current protocol and real Server regression (use an isolated local Server with the exact OAuth callback registered):
 
 ```sh
-SPACE_DSH_LOG=/path/to/private-launcher.log \
 SPACE_TEST_LOGIN_FILE=/path/to/private-fixture-login.json \
-SPACE_EVIDENCE_DIR=/tmp/space-ui-evidence \
-SPACE_MVP_FIXTURES=/path/to/private-fixtures.json \
-SPACE_SESSION_ROOT=/path/to/actual-host/sessions \
-SPACE_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
-SPACE_BROWSER_EXECUTABLE=/path/to/browser \
-node scripts/check-recovery-live.mjs
+SPACE_EVIDENCE_DIR=/path/to/evidence/outside/source \
+node scripts/check-oauth-api-live.mjs
 ```
 
-The recovery check exercises settings, connection failures, six viewers and
-current-document questions in an existing native Conversation.
-`node scripts/check-context-races-live.mjs` checks superseded associations,
-Composer preservation, floating geometry, references and disabled menus.
+The protocol check covers consent, code exchange, PKCE, callback, identity,
+eight creation kinds and six file lifecycle paths. CRUD, collaboration, sharing
+and human-collaboration Web scripts use `authorizeWorkspace` through the same
+OAuth flow. Run native Desktop checks separately.
 
 For the original Workspace Browser's minimum assembly check, serve it with its
 own Vite config against the same Server, set `SPACE_WORKSPACE_BROWSER_ORIGIN`,
@@ -191,9 +187,11 @@ On a fresh profile pnpm blocks the transitive protobufjs@7.6.6 postinstall until
 
 Before starting DSH, its launching environment must supply the operator's valid UNIVER_LICENSE for the existing Univer Pro capabilities. Credentials are never built into the tarball, saved in the client preference store, or included in Agent context. The LicensePlugin receives this value through an authenticated owner-only Host route. A Finder launch does not necessarily inherit a terminal environment; verify licensing with the deployment operator. No development credential is supplied to external testers.
 
-The Server must run the matching release commit (including the Review/Apply fixes), as one writer process against persistent product SQLite, collaboration SQLite and Blob storage. Back up those stores together. Stop the old writer before upgrading; never reset the database. Remote services require HTTPS/WSS, password sign-in enabled for the current connection flow, and reverse-proxy support for /api, /universer-api and collaboration WebSocket upgrade. The plugin expects a service origin, not an API path. Outstanding Review tokens expire after 30 minutes and require fresh Review after a Server restart. Multi-Unit SDK merges are per-Unit, not a cross-Unit transaction; Space's current-document Agent edit targets one Doc or Sheet.
+The Server must run the matching release commit (including the Review/Apply fixes), as one writer process against persistent product SQLite, collaboration SQLite and Blob storage. Back up those stores together. Stop the old writer before upgrading; never reset the database. Remote services require HTTPS/WSS, the registered public OAuth client `univer-workspace-harness` with consent and `identity session` scopes, and reverse-proxy support for /api, /universer-api and collaboration WebSocket upgrade. The plugin expects a service origin, not an API path. Outstanding Review tokens expire after 30 minutes and require fresh Review after a Server restart. Multi-Unit SDK merges are per-Unit, not a cross-Unit transaction; Space's current-document Agent edit targets one Doc or Sheet.
 
-First use: open a native DSH conversation, select Space, open Settings, enter the service origin, connect and sign in with an existing Workspace account. Successful login opens Space Home. Settings remains at the Sidebar bottom for later endpoint changes, retry or disconnect. Only the endpoint persists; the Host owns the in-memory authentication cookie. DSH must have an independently configured working model before the Agent demo.
+First use: select Space and choose Sign in to Univer. Sign in and authorize in the system browser; successful authorization loads Space Home. DSH Settings → Workspace manages the current account and server, Switch Account, Sign Out and Custom Workspace URL. Session reuse uses the official Host credential provider's isolated `dsh-space-plugin/workspace` grant record. Only that record is changed; DSH model credentials and native Sessions remain owned by DSH. A denied, cancelled or expired request can be retried. Switching accounts uses the browser's Workspace account; sign out or choose the desired account there before authorizing.
+
+The existing cloud registration accepts the exact loopback return `http://127.0.0.1:3101/auth/oauth/callback`. The plugin binds only IPv4 loopback for the pending authorization and closes it on completion, cancellation or timeout. Keep that port free; a conflicting listener produces a retryable sign-in error, never a fallback credential form. Custom Server administrators must register the same exact callback. The authenticated public DSH Connection starts/cancels requests; the loopback listener accepts only bounded, state-matched OAuth callbacks. Official Desktop 0.2.1-rc.3 forwards external HTTP(S) window opens to the system browser; its installed `dsh://open` handler focuses the app without carrying any credential. An OS/browser confirmation may appear for the return link. No `univer-workspace://` scheme or DSH account grant is used.
 
 Reproduce the demo with a disposable Team Space and two accounts: create a Folder and all six content types; rename/move/trash/restore a file; edit Docs/Sheets from both clients; share with the second account and add a comment. Associate a Doc with the native conversation, ask the Agent to append a unique paragraph to a private Worktree and mark it ready, inspect Review, explicitly Apply, and verify the already-open second client and a reopen. Repeat with a Sheet formula, then with Reject and a shared edit after Review (the old Apply must conflict). Viewer / removed-member writes must fail. No test fixture, model credential or private Session archive is included.
 

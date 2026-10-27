@@ -1,3 +1,4 @@
+import { WorkspaceCollaborationSocketService } from './collaboration-socket.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
 import { IRenderManagerService } from '@univerjs/engine-render';
@@ -35,7 +36,6 @@ import {
 } from '@univerjs-pro/collaboration-client';
 import {
   UniverCollaborationClientUIPlugin,
-  BrowserCollaborationSocketService,
 } from '@univerjs-pro/collaboration-client-ui';
 import collabLocale from '@univerjs-pro/collaboration-client/locale/zh-CN';
 import collabUILocale from '@univerjs-pro/collaboration-client-ui/locale/zh-CN';
@@ -214,7 +214,7 @@ export function CollaborativeEditor({
           [
             UniverCollaborationClientPlugin,
             {
-              socketService: BrowserCollaborationSocketService,
+              socketService: WorkspaceCollaborationSocketService,
               enableOfflineEditing: true,
               // Independent clients must not be locked out when they share a browser profile.
               enableSingleActiveInstanceLock: false,

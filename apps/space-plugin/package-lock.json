@@ -1,12 +1,12 @@
 {
   "name": "dsh-space-plugin",
-  "version": "0.17.3",
+  "version": "0.18.3",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
       "name": "dsh-space-plugin",
-      "version": "0.17.3",
+      "version": "0.18.3",
       "license": "Apache-2.0",
       "dependencies": {
         "@univerjs-pro/collaboration": "1.1.0",

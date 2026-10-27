@@ -1,5 +1,5 @@
 import { writeEvidence } from './evidence-output.mjs';
-import { connectHost } from './host-connection.mjs';
+import { connectHost, authorizeWorkspace } from './host-connection.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 const host = await connectHost();
@@ -43,14 +43,11 @@ assert.equal(
 );
 assert.equal(
   (
-    await host.request('space/login', {
-      username: login.username,
-      password: login.password,
-    })
+    await authorizeWorkspace(host, login)
   ).state,
   'connected',
 );
-checks.push('real Workspace endpoint and password authentication');
+checks.push('real Workspace endpoint and browser OAuth authorization');
 assert.ok(
   (await host.request('space/spaces')).spaces.some(
     (s) => s.id === login.spaceId,
