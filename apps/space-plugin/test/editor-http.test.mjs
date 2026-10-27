@@ -75,3 +75,23 @@ test('teardown drain includes HTTP requests deferred by an SDK interceptor', asy
   assert.equal(drained, true);
   service.dispose();
 });
+
+test('SDK multipart uploads use the authenticated streaming carrier', async () => {
+  const form = new FormData();
+  form.append('file', new Blob(['image'], { type: 'image/png' }), 'image.png');
+  let sent;
+  const http = editorHTTP(
+    async () => { throw new Error('JSON carrier must not receive multipart data'); },
+    async (input) => {
+      sent = input;
+      return { status: 201, statusText: 'Created', body: '{"FileId":"asset-1"}' };
+    },
+  );
+  const result = await firstValueFrom(http.send(new HTTPRequest('POST', '/universer-api/stream/file/upload?source=3', {
+    headers: new HTTPHeaders(), body: form, responseType: 'json',
+  })));
+  assert.equal(sent.body, form);
+  assert.equal(sent.path, '/universer-api/stream/file/upload?source=3');
+  assert.deepEqual(result.body, { FileId: 'asset-1' });
+  await http.drain();
+});

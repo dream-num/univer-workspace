@@ -395,7 +395,7 @@ export class WorkspaceConnection {
       );
     // Accept relative SDK routes only. Never accept authority, traversal, Worktree or product writes.
     if (
-      !/^\/universer-api\/(?:snapshot\/|comb(?:\/|$)|authz(?:\/|$)|comment\/unit\/[^/?]+\/(?:list|add|reply|solved|edit|delete)(?:\?|$)|user\/(?:session-ticket|list)(?:\?|$))/.test(
+      !/^\/universer-api\/(?:snapshot\/|history\/[^/?]+\/(?:list|creators|cs)(?:\?|$)|file\/[^/?]+\/sign-url(?:\?|$)|exchange\/(?:import|[^/?]+\/(?:import|export)|task\/[^/?]+)(?:\?|$)|comb(?:\/|$)|authz(?:\/|$)|comment\/unit\/[^/?]+\/(?:list|add|reply|solved|edit|delete)(?:\?|$)|user\/(?:session-ticket|list)(?:\?|$))/.test(
         input.path,
       ) ||
       input.path.includes('..') ||
@@ -408,8 +408,11 @@ export class WorkspaceConnection {
     if (
       !target.pathname.startsWith('/universer-api/') ||
       target.pathname !== input.path.split('?')[0] ||
-      (target.pathname.startsWith('/universer-api/snapshot/') &&
-        input.method !== 'GET')
+      ((target.pathname.startsWith('/universer-api/snapshot/') ||
+        target.pathname.startsWith('/universer-api/history/') ||
+        target.pathname.startsWith('/universer-api/file/')) && input.method !== 'GET') ||
+      (target.pathname.startsWith('/universer-api/exchange/task/') && input.method !== 'GET') ||
+      (target.pathname.startsWith('/universer-api/exchange/') && !target.pathname.startsWith('/universer-api/exchange/task/') && input.method !== 'POST')
     )
       throw new SpaceError(
         400,
@@ -426,9 +429,55 @@ export class WorkspaceConnection {
         AbortSignal.timeout(30000),
       ]),
     });
-    const body = await response.text();
+    let body = await response.text();
+    const asset = /^\/universer-api\/file\/([^/]+)\/sign-url$/.exec(target.pathname);
+    if (asset && response.ok) {
+      const value = JSON.parse(body) as { url?: unknown };
+      if (value.url !== `/universer-api/file/${asset[1]}/content`) throw new SpaceError(502, 'Workspace returned an invalid asset URL.');
+      const query = new URLSearchParams({ endpoint: input.endpoint, userId: input.userId, fileId: decodeURIComponent(asset[1]!) });
+      value.url = `/api/space/editor-asset?${query}`;
+      body = JSON.stringify(value);
+    }
     lifetime.signal.throwIfAborted();
     return { status: response.status, statusText: response.statusText, body };
+  }
+
+  /** Stream an SDK multipart upload through the existing owner Connection. */
+  async editorUpload(input: { endpoint: string; userId: string; path: string }, request: Request) {
+    const identity = this.lifetime;
+    if (input.endpoint !== this.endpoint) throw new SpaceError(409, 'Workspace connection changed.');
+    const status = await this.status();
+    if (identity !== this.lifetime || status.state !== 'connected' || status.user?.id !== input.userId) throw new SpaceError(401, 'Workspace identity changed.');
+    if (!/^\/universer-api\/stream\/file\/upload(?:\?|$)/.test(input.path) || input.path.includes('..') || input.path.includes('\\') || input.path.includes('#')) throw new SpaceError(400, 'Unsupported editor upload path.');
+    const target = new URL(input.path, this.endpoint);
+    if (target.origin !== this.endpoint || target.pathname !== '/universer-api/stream/file/upload') throw new SpaceError(400, 'Unsupported editor upload path.');
+    const contentType = request.headers.get('content-type') ?? '';
+    if (!contentType.startsWith('multipart/form-data; boundary=') || !request.body) throw new SpaceError(400, 'Multipart upload required.');
+    const response = await fetch(target, {
+      method: 'POST', headers: { 'content-type': contentType, cookie: this.cookie }, body: request.body,
+      duplex: 'half', redirect: 'error', signal: AbortSignal.any([request.signal, identity.signal, AbortSignal.timeout(120000)]),
+    } as RequestInit & { duplex: 'half' });
+    identity.signal.throwIfAborted();
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers: { 'content-type': response.headers.get('content-type') ?? 'application/json', 'cache-control': 'no-store' } });
+  }
+
+  /** Forward only a Server-authorized image/export file; cookies remain in Host memory. */
+  async editorAsset(input: { endpoint: string; userId: string; fileId: string }, request: Request) {
+    const identity = this.lifetime;
+    if (input.endpoint !== this.endpoint) throw new SpaceError(409, 'Workspace connection changed.');
+    const status = await this.status();
+    if (identity !== this.lifetime || status.state !== 'connected' || status.user?.id !== input.userId) throw new SpaceError(401, 'Workspace identity changed.');
+    if (!input.fileId || input.fileId.length > 256 || /[\\/]/.test(input.fileId)) throw new SpaceError(400, 'Invalid asset identity.');
+    const path = `/universer-api/file/${encodeURIComponent(input.fileId)}/content`;
+    const range = request.headers.get('range');
+    const response = await fetch(new URL(path, this.endpoint), { headers: { cookie: this.cookie, ...(range ? { range } : {}) }, redirect: 'error', signal: AbortSignal.any([request.signal, identity.signal, AbortSignal.timeout(120000)]) });
+    identity.signal.throwIfAborted();
+    const headers = new Headers();
+    for (const name of ['content-type', 'content-length', 'content-disposition', 'content-range', 'accept-ranges', 'etag', 'content-security-policy', 'cross-origin-resource-policy', 'x-content-type-options']) {
+      const value = response.headers.get(name); if (value) headers.set(name, value);
+    }
+    headers.set('cache-control', 'private, no-store');
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   }
 
   /** Existing membership workflow. Identity and ACL are always Server-owned. */

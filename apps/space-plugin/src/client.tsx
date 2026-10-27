@@ -629,6 +629,12 @@ export function apply(ctx: any) {
       if (!result.ok) throw new Error(result.error.message);
       return result.value;
     },
+    editorUpload: async (file: Content, userId: string, input: { path: string; method: string; body: FormData }, signal: AbortSignal) => {
+      if (input.method !== 'POST') throw new Error('Unsupported editor upload method.');
+      const query = new URLSearchParams({ endpoint: file.endpoint, userId, path: input.path });
+      const response = await fetch(`/api/space/editor-upload?${query}`, { method: 'POST', body: input.body, signal: AbortSignal.any([signal, lifetime.signal]), credentials: 'same-origin' });
+      return { status: response.status, statusText: response.statusText, body: await response.text() };
+    },
     bindEditor: (
       node: string,
       binding: {
@@ -1069,6 +1075,7 @@ export type Face = {
     input: { path: string; method: string; body: string | null },
     signal: AbortSignal,
   ): Promise<{ status: number; statusText: string; body: string }>;
+  editorUpload(file: Content, userId: string, input: { path: string; method: string; body: FormData }, signal: AbortSignal): Promise<{ status: number; statusText: string; body: string }>;
   bindEditor(
     node: string,
     binding: {

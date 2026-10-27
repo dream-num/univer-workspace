@@ -168,6 +168,7 @@ export function CollaborativeEditor({
           input,
           AbortSignal.any([signal, abort.signal]),
         ),
+        (input, signal) => face.editorUpload(file, user.id!, input, AbortSignal.any([signal, abort.signal])),
       );
       const endpoint = file.endpoint,
         socketURL = new URL('/universer-api/comb/connect', endpoint);
@@ -184,6 +185,8 @@ export function CollaborativeEditor({
         collabWebSocketUrl: socketURL.href,
         wsSessionTicketUrl: '/universer-api/user/session-ticket',
         authzUrl: '/universer-api/authz',
+        uploadFileServerUrl: '/universer-api/stream/file/upload',
+        signUrlServerUrl: '/universer-api/file/{fileID}/sign-url',
         objectPermissionTypes: [
           UnitObject.Worksheet,
           UnitObject.SelectRange,
@@ -211,6 +214,11 @@ export function CollaborativeEditor({
         if (plugin === UniverNetworkPlugin) return [UniverNetworkPlugin, { ...config, override: [[IHTTPImplementation, { useValue: transport }]] }];
         if (plugin === UniverCollaborationClientPlugin) return [UniverCollaborationClientPlugin, { ...config, ...collaborationConfig }];
         if (plugin === UniverCollaborationClientUIPlugin) return [UniverCollaborationClientUIPlugin, { ...config, enableDocumentCollaborationUI: true, enableUrlUnitLoader: false }];
+        if (plugin === UniverExchangeClientPlugin) return [UniverExchangeClientPlugin, { ...config,
+          uploadFileServerUrl: '/universer-api/stream/file/upload', getTaskServerUrl: '/universer-api/exchange/task/{taskID}',
+          signUrlServerUrl: '/universer-api/file/{fileID}/sign-url', importServerUrl: '/universer-api/exchange/{type}/import',
+          exportServerUrl: '/universer-api/exchange/{type}/export', downloadEndpointUrl: '/',
+        }];
         if (plugin === UniverSheetsHistoryUIPlugin) return [UniverSheetsHistoryUIPlugin, { ...config, historyServerUrl: '/universer-api/history', univerContainerId: element.id }];
         if (plugin === UniverUIPlugin) return [UniverUIPlugin, { ...config,
           avatarFallback: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="16" fill="#ededed"/><circle cx="16" cy="12" r="5" fill="#888"/><path d="M6 29a10 10 0 0 1 20 0" fill="#888"/></svg>'),

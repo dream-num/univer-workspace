@@ -45,6 +45,24 @@ export function apply(ctx: Context) {
       });
     },
   }));
+  for (const kind of ['editor-upload', 'editor-asset'] as const) {
+    ctx.effect(() => ctx.connection.fetch.register({
+      path: `/api/space/${kind}`, methods: [kind === 'editor-upload' ? 'POST' : 'GET'],
+      requestBody: kind === 'editor-upload' ? 'streaming' : 'buffered',
+      async fetch(request) {
+        try {
+          const query = new URL(request.url).searchParams;
+          const endpoint = query.get('endpoint') ?? '', userId = query.get('userId') ?? '';
+          return kind === 'editor-upload'
+            ? await workspace.editorUpload({ endpoint, userId, path: query.get('path') ?? '' }, request)
+            : await workspace.editorAsset({ endpoint, userId, fileId: query.get('fileId') ?? '' }, request);
+        } catch (error) {
+          const status = error instanceof SpaceError ? error.status : 502;
+          return Response.json({ error: { message: error instanceof SpaceError ? error.message : 'Workspace transfer failed.' } }, { status, headers: { 'cache-control': 'no-store' } });
+        }
+      },
+    }));
+  }
   ctx.effect(() => registerApiTool(ctx));
   ctx.effect(() => registerCreationTools(ctx, workspace, bindings));
   ctx.effect(() => registerExchangeTools(ctx, workspace, bindings, editing));

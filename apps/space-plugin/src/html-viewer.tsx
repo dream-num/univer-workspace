@@ -46,6 +46,7 @@ export function HtmlViewer({
           input,
           AbortSignal.any([combined, requestSignal]),
         ),
+        (input, requestSignal) => face.editorUpload(file, user.id!, input, AbortSignal.any([combined, requestSignal])),
       );
       transports.current.push(transport);
       const socketURL = new URL('/universer-api/comb/connect', file.endpoint);

@@ -8,6 +8,8 @@ import {
   type HTTPInterceptorFn,
 } from '@univerjs/network';
 
+export type EditorUpload = (input: { path: string; method: string; body: FormData }, signal: AbortSignal) => Promise<{ status: number; statusText: string; body: string }>;
+
 export type EditorRequest = (
   input: { path: string; method: string; body: string | null },
   signal: AbortSignal,
@@ -19,6 +21,7 @@ export type EditorRequest = (
  */
 export function editorHTTP(
   requestRemote: EditorRequest,
+  uploadRemote?: EditorUpload,
 ): IHTTPImplementation & {
   drain(): Promise<void>;
   isIdle(): boolean;
@@ -48,16 +51,15 @@ export function editorHTTP(
       return new Observable((subscriber) => {
         const abort = new AbortController();
         const body = request.getBody();
-        if (body !== null && typeof body !== 'string') {
-          subscriber.error(
-            new Error('This editor does not support binary uploads yet.'),
-          );
+        if (body !== null && typeof body !== 'string' && !uploadRemote) {
+          subscriber.error(new Error('This editor upload transport is unavailable.'));
           return;
         }
-        const operation = requestRemote(
-          { path: request.getUrlWithParams(), method: request.method, body },
-          abort.signal,
-        )
+        const input = { path: request.getUrlWithParams(), method: request.method, body };
+        const sent = body !== null && typeof body !== 'string'
+          ? uploadRemote!({ ...input, body }, abort.signal)
+          : requestRemote({ ...input, body }, abort.signal);
+        const operation = sent
           .then((result) => {
             if (abort.signal.aborted) return;
             const headers = new HTTPHeaders({

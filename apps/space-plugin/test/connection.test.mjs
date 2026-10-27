@@ -181,6 +181,8 @@ test('editor transport binds Workspace identity and denies snapshot replacement 
       },
       signal = new AbortController().signal;
     assert.equal((await connection.editorRequest(input, signal)).status, 200);
+    assert.equal((await connection.editorRequest({ ...input, path: '/universer-api/history/unit-1/list?length=20' }, signal)).status, 200);
+    await assert.rejects(connection.editorRequest({ ...input, path: '/universer-api/history/unit-1/list', method: 'POST', body: '{}' }, signal), (e) => e.status === 400);
     await assert.rejects(
       connection.editorRequest({ ...input, userId: 'dsh-owner' }, signal),
       (e) => e.status === 401,
