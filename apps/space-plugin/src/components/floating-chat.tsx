@@ -9,9 +9,22 @@ import type { Face } from '../client.js';
 import type { State } from '../model.js';
 import { Icon, Menu, button, iconButton } from './primitives.js';
 export const ExpandedChat = createContext(false);
+const ChatInteraction = createContext(() => {});
 /** One native Conversation tree. Hiding chrome never clones a composer or transcript. */
 export function NativeConversation(props: any) {
   const session = props.useSession((s: any) => s);
+  const expand = useContext(ChatInteraction);
+  const submitting = session.running || session.pendingSubmissions?.length > 0;
+  const previous = useRef({ sessionId: props.sessionId, submitting });
+  useEffect(() => {
+    if (
+      previous.current.sessionId === props.sessionId &&
+      submitting &&
+      !previous.current.submitting
+    )
+      expand();
+    previous.current = { sessionId: props.sessionId, submitting };
+  }, [props.sessionId, submitting, expand]);
   return props.renderFactorySlot(
     'conversation.content',
     {
@@ -56,23 +69,22 @@ export function FloatingChat({
   const expanded = v.chatMode === 'expanded',
     minimized = v.chatMode === 'minimized';
   const hidden =
-    (!v.content && !v.opening && v.location !== 'space') || (!v.sessionId && !v.ai);
+    (!v.content && !v.opening && v.location !== 'space') ||
+    (!v.sessionId && !v.ai);
   const positioned = useRef(false);
   const clamp = () => {
     const box = seat.current?.getBoundingClientRect();
     if (!box || hidden || box.width <= 0) return;
     setGeometry((g) => {
-      const width = Math.min(g.width, Math.max(280, box.width - 32));
+      const width = Math.min(g.width, Math.max(0, box.width - 32));
+      const height = panel.current?.getBoundingClientRect().height ?? 52;
       return {
         ...g,
         width,
         right: positioned.current
-          ? Math.min(g.right, Math.max(16, box.width - width - 16))
+          ? Math.max(16, Math.min(g.right, box.width - width - 16))
           : Math.max(16, (box.width - width) / 2),
-        bottom: Math.min(
-          g.bottom,
-          Math.max(16, box.height - (expanded ? 634 : 180) - 16),
-        ),
+        bottom: Math.min(g.bottom, Math.max(16, box.height - height - 16)),
       };
     });
   };
@@ -80,11 +92,15 @@ export function FloatingChat({
     clamp();
     const o = new ResizeObserver(clamp);
     if (seat.current) o.observe(seat.current);
+    if (panel.current) o.observe(panel.current);
     return () => o.disconnect();
   }, [expanded, hidden]);
   useEffect(() => {
     setHistory(false);
   }, [v.content?.nodeId, v.space, v.sessionId]);
+  useEffect(() => {
+    if (!expanded) setHistory(false);
+  }, [expanded]);
   useEffect(() => {
     if (!expanded) return;
     const collapse = (e: PointerEvent) => {
@@ -112,6 +128,11 @@ export function FloatingChat({
     if (!d || !box) return;
     const dx = e.clientX - d.x,
       dy = e.clientY - d.y;
+    const minWidth = Math.min(280, Math.max(0, box.width - 32));
+    const rightWidth = Math.max(
+      minWidth,
+      Math.min(d.width + d.right - 16, d.width + dx),
+    );
     setGeometry(
       d.mode === 'move'
         ? {
@@ -122,30 +143,45 @@ export function FloatingChat({
             ),
             bottom: Math.max(
               16,
-              Math.min(box.height - (expanded ? 634 : 180) - 16, d.bottom - dy),
+              Math.min(
+                box.height -
+                  (panel.current?.getBoundingClientRect().height ?? 52) -
+                  16,
+                d.bottom - dy,
+              ),
             ),
           }
         : d.mode === 'left'
           ? {
               ...geometry,
               width: Math.max(
-                280,
+                minWidth,
                 Math.min(box.width - d.right - 16, d.width - dx),
               ),
             }
           : {
               ...geometry,
-              right: Math.max(16, d.right - dx),
-              width: Math.max(
-                280,
-                Math.min(box.width - 16, d.width + Math.min(dx, d.right - 16)),
-              ),
+              right: d.right + d.width - rightWidth,
+              width: rightWidth,
             },
     );
   }
   const end = () => {
     drag.current = undefined;
   };
+  async function newChat() {
+    const before = face.store.getSnapshot();
+    await face.newConversation();
+    const after = face.store.getSnapshot();
+    if (
+      after.sessionId !== before.sessionId &&
+      after.content?.nodeId === before.content?.nodeId &&
+      after.space === before.space
+    ) {
+      setHistory(false);
+      face.update({ chatMode: 'compact' });
+    }
+  }
 
   return (
     <div ref={seat} className="sp-chat-seat" hidden={hidden}>
@@ -186,7 +222,7 @@ export function FloatingChat({
             <Icon name="down" size={12} />
           </button>
           <button
-            className={iconButton}
+            className={iconButton + ' sp-chat-expand'}
             aria-label={expanded ? 'Collapse messages' : 'Expand floating chat'}
             onClick={() => {
               setHistory(false);
@@ -196,21 +232,21 @@ export function FloatingChat({
             <Icon name={expanded ? 'minimize' : 'expand'} size={15} />
           </button>
           <button
-            className={iconButton}
+            className={iconButton + ' sp-chat-minimize'}
             aria-label="Minimize chat"
             onClick={() => face.update({ chatMode: 'minimized' })}
           >
-            <Icon name="close" size={15} />
+            <Icon name="minimize" size={16} />
           </button>
-          <Menu label="Chat menu" trigger={<Icon name="more" size={17} />}>
+          <Menu label="Chat menu" trigger={<Icon name="grip" size={16} />}>
             <button
               role="menuitem"
               disabled={v.busy}
               className={button + ' tw-w-full'}
-              onClick={() => face.newConversation()}
+              onClick={newChat}
             >
               <Icon name="plus" />
-              New conversation
+              New chat
             </button>
             <button
               role="menuitem"
@@ -269,10 +305,10 @@ export function FloatingChat({
             <button
               className={button + ' tw-w-full'}
               disabled={v.busy}
-              onClick={() => face.newConversation()}
+              onClick={newChat}
             >
               <Icon name="plus" />
-              New conversation
+              New chat
             </button>
             {v.sessions.map((session) => (
               <button
@@ -297,13 +333,30 @@ export function FloatingChat({
             ))}
           </div>
         )}
-        <div hidden={history} className="sp-native-conversation">
+        <div
+          hidden={history}
+          className="sp-native-conversation"
+          onFocusCapture={(e) => {
+            if (
+              (e.target as HTMLElement).matches('[role="textbox"],textarea')
+            ) {
+              face.update({ chatMode: 'expanded' });
+            }
+          }}
+        >
           {v.sessionId ? (
-            <ExpandedChat.Provider value={expanded}>
-              <SessionProvider session={face.reference()}>
-                {renderSlot('space.conversation', {})}
-              </SessionProvider>
-            </ExpandedChat.Provider>
+            <ChatInteraction.Provider
+              value={() => {
+                setHistory(false);
+                face.update({ chatMode: 'expanded' });
+              }}
+            >
+              <ExpandedChat.Provider value={expanded}>
+                <SessionProvider session={face.reference()}>
+                  {renderSlot('space.conversation', {})}
+                </SessionProvider>
+              </ExpandedChat.Provider>
+            </ChatInteraction.Provider>
           ) : (
             <div className="tw-flex tw-flex-col tw-gap-2 tw-p-4">
               <p className="tw-m-0 tw-text-sm">
@@ -312,7 +365,7 @@ export function FloatingChat({
               <button
                 className={button + ' tw-bg-hover'}
                 disabled={v.busy}
-                onClick={() => face.newConversation()}
+                onClick={newChat}
               >
                 <Icon name="plus" />
                 New conversation
@@ -336,7 +389,7 @@ export function FloatingChat({
             role="separator"
             aria-orientation="vertical"
             aria-label={'Resize chat width ' + side}
-            aria-valuemin={280}
+            aria-valuemin={Math.min(280, Math.round(geometry.width))}
             aria-valuenow={Math.round(geometry.width)}
             className={'sp-chat-resize sp-chat-resize-' + side}
             onPointerDown={(e) => start(e, side)}

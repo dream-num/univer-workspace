@@ -1,4 +1,4 @@
-/* Plugin-owned layout seats only. DSH and Univer descendants keep their own styles. */
+/* Plugin layout, plus the explicitly scoped native Floating Chat adapter below. */
 .sp-shell {
   --sp-canvas: var(--dsw-alias-bg-base, #fff);
   --sp-sidebar: var(
@@ -566,7 +566,7 @@
   border-radius: 20px;
   box-shadow: 0 4px 22px #0002;
   pointer-events: auto;
-  min-height: 100px;
+  min-height: 52px;
   max-height: calc(100% - 32px);
 }
 .sp-chat-header {
@@ -578,13 +578,43 @@
   padding: 4px 8px;
   box-sizing: border-box;
 }
+.sp-floating-chat[data-mode='compact'] {
+  border: 0;
+  border-radius: 28px;
+  box-shadow:
+    0 2px 12px #0000000d,
+    0 0 1px #00000026;
+}
+.sp-floating-chat[data-mode='compact'] .sp-chat-header {
+  position: absolute;
+  z-index: 10;
+  right: 44px;
+  bottom: 10px;
+  height: 32px;
+  padding: 0;
+}
+.sp-floating-chat[data-mode='compact'] .sp-chat-header > .sp-chat-title,
+.sp-floating-chat[data-mode='compact'] .sp-chat-minimize,
+.sp-floating-chat[data-mode='compact'] .sp-chat-grip {
+  display: none;
+}
+.sp-chat-header .sp-chat-expand,
+.sp-chat-header .sp-menu > summary {
+  width: 28px;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+}
+.sp-chat-header .sp-control:hover {
+  background: color-mix(in srgb, var(--sp-ink) 5%, transparent);
+}
 .sp-chat-header .sp-control {
   height: 32px;
 }
 .sp-chat-title {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--sp-muted);
   padding: 4px 8px;
 }
@@ -664,6 +694,10 @@
   cursor: ew-resize;
   touch-action: none;
 }
+.sp-floating-chat[data-mode='compact'] .sp-chat-resize {
+  top: 12px;
+  bottom: 12px;
+}
 .sp-chat-resize-left {
   left: -8px;
 }
@@ -680,6 +714,113 @@
   display: flex;
   flex: 1;
   flex-direction: column;
+}
+/* Published DSH 0.2.1-rc.3 native Composer structure only. No copied editor,
+   event handlers or Session state: unknown native structures keep native UI.
+   Scope every override to this floating occurrence, never the global Chat. */
+.sp-floating-chat[data-mode='compact']:has(.uV2eYG_card)
+  .sp-native-conversation {
+  flex: none;
+  overflow: visible;
+  border-radius: inherit;
+}
+.sp-floating-chat[data-mode='compact'] .wSkVaW_embeddedBody {
+  flex: none;
+  overflow: visible;
+}
+.sp-floating-chat[data-mode='compact'] .wSkVaW_scrollBody {
+  flex: none;
+  margin: 0;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+.sp-floating-chat[data-mode='compact'] .wSkVaW_composerSeat {
+  background: transparent;
+  position: relative;
+  --dsh-composer-text-max-height: 168px;
+}
+.sp-floating-chat[data-mode='compact'] .wSkVaW_composerStack {
+  position: relative;
+  gap: 0;
+}
+.sp-floating-chat[data-mode='compact'] .uV2eYG_root {
+  padding: 0;
+}
+.sp-floating-chat[data-mode='compact'] .uV2eYG_card {
+  min-height: 52px;
+  max-width: 100%;
+  border-radius: 28px;
+  background: var(--sp-canvas);
+  box-shadow: none;
+  gap: 0;
+  padding: 0;
+}
+.sp-floating-chat[data-mode='compact'] .uV2eYG_scroll {
+  margin: 0 108px 0 72px;
+  padding: 10px 0;
+}
+.sp-floating-chat[data-mode='compact'] .uV2eYG_input {
+  min-height: 32px;
+  padding: 4px 0;
+  font-size: 14px;
+  line-height: 24px;
+}
+.sp-floating-chat[data-mode='compact'] .uV2eYG_placeholder {
+  inset: 4px 0 auto;
+  font-size: 14px;
+  line-height: 24px;
+}
+.sp-floating-chat[data-mode='compact'] .uV2eYG_row {
+  display: contents;
+}
+.sp-floating-chat[data-mode='compact'] .uV2eYG_tools {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+}
+.sp-floating-chat[data-mode='compact'] .uV2eYG_trailing {
+  position: absolute;
+  right: 8px;
+  bottom: 10px;
+}
+.sp-floating-chat[data-mode='compact'] .uV2eYG_modes,
+.sp-floating-chat[data-mode='compact'] .uV2eYG_standardControls,
+.sp-floating-chat[data-mode='compact'] .uV2eYG_dock {
+  display: none;
+}
+.sp-floating-chat[data-mode='compact'] .sp-context-dock {
+  position: absolute;
+  left: 42px;
+  bottom: 10px;
+  width: auto;
+  z-index: 11;
+}
+.sp-context-compact > summary {
+  list-style: none;
+  width: 28px;
+  height: 32px;
+}
+.sp-context-compact > summary::-webkit-details-marker {
+  display: none;
+}
+.sp-context-compact[data-context-state='removed'] > summary {
+  opacity: 0.5;
+}
+.sp-context-compact[data-context-state='failed'] > summary {
+  color: var(--sp-danger, #b42318);
+}
+.sp-context-compact .sp-context {
+  position: absolute;
+  bottom: 42px;
+  left: -26px;
+  width: min(360px, calc(100cqw - 64px));
+  box-sizing: border-box;
+  background: var(--sp-canvas);
+  box-shadow: 0 4px 16px #0002;
+}
+.sp-floating-chat[data-mode='compact']:focus-within {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
 }
 /* Space has a second title tier and more air before its content tabs (E22/E43). */
 .sp-space-library {
