@@ -1,16 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
-import type { Content } from './model.js';
+import type { Content, FileReference } from './model.js';
+export type { FileReference } from './model.js';
 import { SpaceError, type WorkspaceConnection } from './workspace.js';
 
-export type FileReference = {
-  endpoint: string;
-  nodeId: string;
-  resourceId: string;
-  unitId: string;
-  name: string;
-  type: Content['type'];
-};
 interface Binding {
   endpoint: string;
   userId: string;

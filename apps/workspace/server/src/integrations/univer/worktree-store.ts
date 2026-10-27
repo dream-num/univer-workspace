@@ -92,13 +92,13 @@ export function createWorktreeBackend(service: UniverCollabWorktreeService): Wor
         )
       ).worktree;
     },
-    async merge(worktreeId, userId, reviewToken) {
+    async merge(worktreeId, userId, reviewToken, onReviewValidated) {
       return (
         await service.mergeWorktree(
           { worktreeID: worktreeId },
           {
             ...collaborationCallOptions(userId),
-            customData: { source: "product-api", reviewToken: reviewToken ?? "" },
+            customData: { source: "product-api", reviewToken: reviewToken ?? "", onReviewValidated },
           },
         )
       ).worktree;

@@ -1,5 +1,22 @@
-import type { FileReference } from './tools.js';
 import { contentTypes, contentType, creationName } from './content-types.js';
+export interface FileReference {
+  endpoint: string;
+  nodeId: string;
+  resourceId: string;
+  unitId: string;
+  name: string;
+  type: Content['type'];
+}
+export interface Proposal {
+  id: string;
+  file: FileReference;
+  userId: string;
+  sessionId: string;
+  turn: number;
+  phase: 'editing' | 'applying' | 'ready' | 'canceling' | 'canceled' | 'rejected' | 'applied' | 'conflict' | 'failed';
+  message: string;
+  revision?: number;
+}
 export interface Space {
   id: string;
   name: string;

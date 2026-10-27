@@ -58,6 +58,9 @@ export function apply(ctx: Context) {
       };
       let value: unknown;
       switch (operation) {
+        case 'runtime-config':
+          value = { license: workspace.license };
+          break;
         case 'editing-status':
           value = await editing.status(string('sessionId'), string('nodeId'));
           break;
@@ -227,6 +230,7 @@ export function apply(ctx: Context) {
   // Public exact Fetch routes use the shared authenticated carrier and admit
   // owner peers only. They are also supported by Desktop's dsh-app forwarding.
   for (const operation of [
+    'runtime-config',
     'status',
     'editing-status',
     'editing-action',

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { Face } from '../client.js';
 import type { Content } from '../model.js';
-import type { Proposal } from '../editing.js';
+import type { Proposal } from '../model.js';
 import { Viewer } from '../viewer.js';
 import { button, iconButton, Icon } from './primitives.js';
 

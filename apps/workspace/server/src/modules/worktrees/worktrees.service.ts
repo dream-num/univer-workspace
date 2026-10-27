@@ -675,6 +675,10 @@ export function createWorktreesModule(options: {
       }
       const resumeMerged = existing !== null && value.state === "merged";
       const resumeMerging = existing !== null && value.state === "merging";
+      if ((resumeMerged || resumeMerging) && existing.state !== "completed" &&
+          existing.step !== "review_validated") {
+        throw conflict("This Operation has no validated merge receipt. Its result cannot be inferred from another merge.");
+      }
       if (
         !value.capabilities.merge &&
         !((resumeMerged || resumeMerging) && canMergeAsActor(userId, value.row))
@@ -711,7 +715,8 @@ export function createWorktreesModule(options: {
           const data = await backendCall(() =>
             resumeMerged
               ? options.backend.getWorktree(worktreeId, userId)
-              : options.backend.merge(worktreeId, userId, reviewToken),
+              : options.backend.merge(worktreeId, userId, reviewToken, () =>
+                  options.repository.markReviewValidated(operationId, worktreeId)),
           );
           const mergedUnitIds = activateSuccessfulUnits(
             value.row,

@@ -140,6 +140,10 @@ export function createCollaborationGateway(options: {
     try {
       const { version } = await reviewedVersion(context.userID, context.request.worktreeID);
       reviewCommit.validate(token, context.userID, context.request.worktreeID, version);
+      // Server-only callback, supplied by the product backend after reserving
+      // the exact Operation. Network input never supplies customData functions.
+      if (typeof context.customData.onReviewValidated === "function")
+        context.customData.onReviewValidated();
     } catch (error) {
       if (error instanceof ApplicationError)
         throw new RuntimeCollabError(

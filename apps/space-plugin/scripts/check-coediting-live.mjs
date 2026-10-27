@@ -58,7 +58,7 @@ try {
  const tag=Date.now().toString(36);const space=(await hosts[0].request('space/create',{kind:'space',name:'TASK-009D '+tag,space:'',parent:'',key:crypto.randomUUID()})).space;
  await hosts[0].request('space/sharing',{action:'set-member',id:space.id,user:users[1].user.id,role:'editor'});
  const files=[];for(const type of ['doc','sheet']) {const created=await hosts[0].request('space/create',{kind:type,name:'TASK-009D '+type+' '+tag,space:space.id,parent:'',key:crypto.randomUUID()});files.push({...created.node,type});}
- await writeFile('/tmp/task009d-live-fixtures.json',JSON.stringify({space,files,users:users.map(u=>u.user)},null,2));
+ await writeFile(process.env.SPACE_COEDIT_FIXTURES ?? '/tmp/task009d-live-fixtures.json',JSON.stringify({space,files,users:users.map(u=>u.user)},null,2));
  const a=await client(0),b=await client(1);record('Two distinct Workspace identities',{users:users.map(u=>({id:u.user.id,username:u.user.username}))});
  for(const node of files) {
   stage=node.type+' open';await open(a,node);await open(b,node);const initial=await hosts[0].request('space/content',{node:node.id});

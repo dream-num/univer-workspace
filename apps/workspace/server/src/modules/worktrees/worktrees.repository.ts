@@ -588,6 +588,20 @@ export class WorktreesRepository {
     });
   }
 
+  /** Called inside the runtime's merge lease, after Review/ACL validation and
+   * before the SDK can write. A subsequent validated attempt can supersede an
+   * earlier failed attempt only while the SDK Worktree is still ready. */
+  markReviewValidated(operationId: string, worktreeId: string): void {
+    this._database.transaction((database) => {
+      database.prepare(`UPDATE operations SET step = 'superseded'
+        WHERE kind = 'merge_worktree' AND step = 'review_validated'
+          AND json_extract(payload_json, '$.worktreeId') = ? AND id <> ?`)
+        .run(worktreeId, operationId);
+      database.prepare("UPDATE operations SET step = 'review_validated' WHERE id = ?")
+        .run(operationId);
+    });
+  }
+
   completeOperation(
     operationId: string,
     result: Readonly<Record<string, unknown>>,

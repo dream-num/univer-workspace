@@ -145,7 +145,7 @@ export interface WorktreeBackend {
     userId: string,
   ): Promise<WorktreeData>;
   reopen(worktreeId: string, userId: string): Promise<WorktreeData>;
-  merge(worktreeId: string, userId: string, reviewToken?: string): Promise<WorktreeData>;
+  merge(worktreeId: string, userId: string, reviewToken?: string, onReviewValidated?: () => void): Promise<WorktreeData>;
   discard(worktreeId: string, userId: string): Promise<WorktreeData>;
   submitChangeset(
     worktreeId: string,

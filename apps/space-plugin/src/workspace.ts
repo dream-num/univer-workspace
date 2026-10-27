@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { RuntimeManager } from '@univerjs/univer-workspace-agent-runtime';
-import { workspaceLicense } from './license.js';
 import {
   transformSnapshotToDocumentData,
   transformSnapshotToWorkbookData,
@@ -49,13 +48,14 @@ export function normalizeEndpoint(value: string): string {
 
 /** Plugin-owned connection only; no credentials, second Agent, or chat history in the client. */
 export class WorkspaceConnection {
+  readonly license = process.env.UNIVER_LICENSE ?? '';
   endpoint = '';
   private runtime = new RuntimeManager(new URL('./workspace-content-worker.js', import.meta.url));
   /** Host-only credential boundary. No credential enters Tool results or UI. */
   private draftTarget(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string) {
     const token = this.cookie.match(/(?:^|; )workspace_session=([^;]+)/)?.[1];
     if (!token || this.endpoint !== file.endpoint) throw new SpaceError(401, 'Workspace identity changed.');
-    return { origin: this.endpoint, sessionToken: token, license: workspaceLicense, revision: -1, scope: { kind: 'worktree' as const, worktreeId }, unitId: file.unitId, unitType: file.type };
+    return { origin: this.endpoint, sessionToken: token, license: this.license, revision: -1, scope: { kind: 'worktree' as const, worktreeId }, unitId: file.unitId, unitType: file.type };
   }
   async executeDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, code: string) {
     return this.runtime.writeAndCommit(this.draftTarget(file, worktreeId), code);

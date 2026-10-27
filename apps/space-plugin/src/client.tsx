@@ -1,6 +1,7 @@
 import React from 'react';
 import type {} from '@deepseek-ai/dsh-api-session-controller/client';
 import type {} from '@deepseek-ai/dsh-api-session-controller/remote';
+import type {} from '@deepseek-ai/dsh-api-workspace-controller/remote';
 import { SpaceView, NativeConversation } from './ui.js';
 import { PageContextDock } from './components/page-context.js';
 import { HostNavigation } from './components/navigation.js';
@@ -18,6 +19,8 @@ import {
 import css from './space.css';
 import tailwind from '../lib/tailwind.css';
 import sdkCss from '../lib/univer-scoped.css';
+import { configureLicense } from './license.js';
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
@@ -37,6 +40,11 @@ const PANEL = 'space-plugin';
 
 /** Only content/navigation state lives here. Chat history remains in DSH. */
 export function apply(ctx: any) {
+  // Only the non-secret service origin is persisted through the official DSH
+  // store. Passwords, cookies, runtime licenses and Sessions stay out of it.
+  const connectionPreferences = createSnapshotStore({ endpoint: '' }, {
+    persist: { name: 'dsh-space-plugin.connection.v1' },
+  });
   let view: State = {
     status: { state: 'unconfigured', endpoint: '' },
     spaces: [],
@@ -71,6 +79,7 @@ export function apply(ctx: any) {
   const listeners = new Set<() => void>();
   const lifetime = new AbortController();
   let disposed = false;
+  let licenseReady = false;
   let generation = 0;
   let contentRequest = 0;
   let directoryRequest = 0;
@@ -280,8 +289,16 @@ export function apply(ctx: any) {
       });
   }
   async function refresh() {
+    if (!licenseReady) {
+      const config = await api('runtime-config');
+      configureLicense(config.license);
+      licenseReady = true;
+    }
     let before = generation;
-    const status = await api('status');
+    let status = await api('status');
+    if (status.state === 'unconfigured' && connectionPreferences.getSnapshot().endpoint) {
+      status = await api('configure', { endpoint: connectionPreferences.getSnapshot().endpoint });
+    }
     if (before !== generation) return;
     if (
       status.endpoint !== view.status.endpoint ||
@@ -613,6 +630,7 @@ export function apply(ctx: any) {
       run(async () => {
         await flushEditor();
         const status = await api('configure', { endpoint });
+        connectionPreferences.set({ endpoint: status.endpoint });
         if (status.endpoint !== view.status.endpoint) clearContent();
         update({ status });
         await refresh();
@@ -629,6 +647,7 @@ export function apply(ctx: any) {
         await flushEditor();
         clearContent();
         await api('configure', { endpoint: '' });
+        connectionPreferences.set({ endpoint: '' });
         await refresh();
       }),
     directory: (space: string, parent = '', cursor = '') =>
@@ -967,7 +986,7 @@ export function apply(ctx: any) {
   });
 }
 export type Face = {
-  editingStatus(sessionId: string, nodeId: string): Promise<import('./editing.js').Proposal | null>;
+  editingStatus(sessionId: string, nodeId: string): Promise<import('./model.js').Proposal | null>;
   editingAction(input: { sessionId: string; nodeId: string; action: string; proposalId: string; reviewToken?: string }): Promise<any>;
 
   metadata(node: string): Promise<{ node: import('./model.js').Node }>;

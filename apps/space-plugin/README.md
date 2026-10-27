@@ -15,7 +15,7 @@ npm ci
 npm run build
 npm test
 npm run typecheck
-npm pack --pack-destination /tmp
+npm run package:release -- /absolute/output/outside/repository
 ```
 
 Install the resulting tarball with the official DSH Plugins manager. Coupled
@@ -36,7 +36,7 @@ the editor and Univer namespace portal roots; published SDK files stay intact.
    native navigation and show an explicit unsupported state. Host controls,
    width preference and Sessions stay Host-owned; uninstall removes the adapter.
 2. Open Space settings at the navigation bottom, set an HTTP(S) origin and
-   sign in. Credentials remain only in Host memory. Local HTTP is allowed;
+   sign in. The validated endpoint is persisted through the official DSH client store. Credentials remain only in Host memory and require sign-in after Host restart. Local HTTP is allowed;
    remote connections require HTTPS.
 3. All / Your items lists real ACL-checked metadata. Pinned is a separate local
    navigation and Suggested section; it does not imply Favorites. Space opens
@@ -164,7 +164,7 @@ The formal HTML Viewer is a build-time `file:` dependency on the Fork's existing
 `packages/workspace-html-viewer`; `.npmrc` materializes its sources with isolated
 consumer peers, rather than linking a second SDK/React graph. Browser JSX uses
 automatic transformation for that shared component. All coupled SDKs stay at
-1.1.0. The build also reads the existing Fork license source without printing it.
+1.1.0. Runtime licensing is supplied by the Host owner through UNIVER_LICENSE; the build does not read or embed the Fork development credential.
 Run build/install from this repository, preserving those source directories.
 
 Run `node scripts/check-human-collaboration-live.mjs` and
@@ -175,3 +175,21 @@ These scripts cover comments, identities, permissions, grants and sharing.
 Keep credentials outside the repository and generated evidence.
 
 `check-coediting-live.mjs` performs real native Agent editing, current-document Review/Apply/Reject, two-user synchronization and reopen checks for Docs and Sheets, concurrent human edits, cancel/switch races and Viewer/revoked-member denial. It requires two independent owner Hosts and both private fixture-login files; those files and Host logs never enter the evidence package. Browser evidence identifies the official DSH Web carrier and does not certify the Electron window.
+
+## Release candidate
+
+This package is a release candidate and is not certified for Public Preview.
+The target platform is official DSH Desktop 0.2.1-rc.3 on macOS arm64 (macOS 13+).
+The compatible official Web build is 0.2.1-rc.3 / be72761.
+
+Install the generated npm tarball through the official Plugins manager's local-package installation capability, then cold-restart DSH. Update by installing the new exact tarball in place of the existing bundle and cold-restarting; verify the package checksum first. Uninstall by removing dsh-space-plugin in Plugins and restarting. Workspace documents remain on the Server; native conversation history stays DSH-owned. Hot reinstall can encounter official Host module-identity diagnostics, so it is not the supported update procedure. The package contains no second DSH runtime or local Workspace Server.
+
+Before starting DSH, its launching environment must supply the operator's valid UNIVER_LICENSE for the existing Univer Pro capabilities. Credentials are never built into the tarball, saved in the client preference store, or included in Agent context. The LicensePlugin receives this value through an authenticated owner-only Host route. A Finder launch does not necessarily inherit a terminal environment; verify licensing with the deployment operator. No development credential is supplied to external testers.
+
+The Server must run the matching release commit (including the Review/Apply fixes), as one writer process against persistent product SQLite, collaboration SQLite and Blob storage. Back up those stores together. Stop the old writer before upgrading; never reset the database. Remote services require HTTPS/WSS, password sign-in enabled for the current connection flow, and reverse-proxy support for /api, /universer-api and collaboration WebSocket upgrade. The plugin expects a service origin, not an API path. Outstanding Review tokens expire after 30 minutes and require fresh Review after a Server restart. Multi-Unit SDK merges are per-Unit, not a cross-Unit transaction; Space's current-document Agent edit targets one Doc or Sheet.
+
+First use: open a native DSH conversation, select Space, open Settings, enter the service origin, connect and sign in with an existing Workspace account. Successful login opens Space Home. Settings remains at the Sidebar bottom for later endpoint changes, retry or disconnect. Only the endpoint persists; the Host owns the in-memory authentication cookie. DSH must have an independently configured working model before the Agent demo.
+
+Reproduce the demo with a disposable Team Space and two accounts: create a Folder and all six content types; rename/move/trash/restore a file; edit Docs/Sheets from both clients; share with the second account and add a comment. Associate a Doc with the native conversation, ask the Agent to append a unique paragraph to a private Worktree and mark it ready, inspect Review, explicitly Apply, and verify the already-open second client and a reopen. Repeat with a Sheet formula, then with Reject and a shared edit after Review (the old Apply must conflict). Viewer / removed-member writes must fail. No test fixture, model credential or private Session archive is included.
+
+The release script stages only runtime files, a production-only manifest, notices and npm-shrinkwrap.json. npm consumers honor that lock; DSH's pnpm manager owns its profile lock and needs registry access. Preserve the profile lock for exact reinstall. Run the release scan and actual clean-profile install before distributing a new artifact.

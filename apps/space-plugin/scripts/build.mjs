@@ -1,6 +1,7 @@
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { scopeSdkCss } from './scope-sdk-css.mjs';
+import { releaseSdkDefaults } from './release-sdk-defaults.mjs';
 import { readFile, writeFile, mkdir, copyFile, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 await rm('lib', { recursive: true, force: true });
@@ -67,6 +68,7 @@ await build({
   jsx: 'automatic',
   external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'],
   target: 'es2022',
+  plugins: [releaseSdkDefaults()],
   loader: { '.css': 'text' },
   banner: {
     js: 'window.__ModuleLoader__.load({id:"dsh-space-plugin",factory:(require)=>{var module={exports:{}};var exports=module.exports;',

@@ -968,7 +968,8 @@ class MemoryWorktreeBackend implements WorktreeBackend {
     return this._transition(worktreeId, "draft");
   }
 
-  async merge(worktreeId: string): Promise<WorktreeData> {
+  async merge(worktreeId: string, _userId?: string, _reviewToken?: string, onReviewValidated?: () => void): Promise<WorktreeData> {
+    onReviewValidated?.();
     const current = this._require(worktreeId);
     return this._set(worktreeId, {
       ...current,

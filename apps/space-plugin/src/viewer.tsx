@@ -110,15 +110,10 @@ function OfficeViewer({ file }: { file: Content }) {
       const api = runtime.univerAPI;
       const data = viewerData(file);
       // Node name is the authoritative product title; snapshot owns rich content.
-      const permission =
-        file.type === 'doc'
-          ? api
-              .createDocument(
-                { ...data, title: file.name },
-                { makeCurrent: false },
-              )
-              .getPermission()
-              .setReadOnly()
+      const document = file.type === 'doc'
+        ? api.createDocument({ ...data, title: file.name }, { makeCurrent: false })
+        : undefined;
+      const permission = file.type === 'doc' ? Promise.resolve()
           : file.type === 'sheet'
             ? Promise.resolve(
                 api
@@ -170,6 +165,13 @@ function OfficeViewer({ file }: { file: Content }) {
         else steadyLifecycle = api.addEvent(api.Event.LifeCycleChanged, ({ stage }) => { if (stage >= LifecycleStages.Steady) finish(); });
       });
       void Promise.all([permission, mounted, settled])
+        .then(async () => {
+          // Docs UI refreshes header/footer fields during activation. Applying
+          // read-only before that initialization emits a real permission error.
+          // This disconnected Viewer cannot write to Server; autofocus is off
+          // and its loading cover remains until permission has been installed.
+          if (!canceled) await document?.getPermission().setReadOnly();
+        })
         .then(() => {
           clearTimeout(timer);
           if (!canceled) {

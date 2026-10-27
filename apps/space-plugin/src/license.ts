@@ -1,2 +1,6 @@
-// Reuse the Fork's existing formal license source. Never log or export it in evidence.
-export { UNIVER_LICENSE as workspaceLicense } from '../../workspace/web/src/features/editor/features/license.js';
+// Supplied at runtime by the owner-only Host route. No development credential
+// or build-time secret is embedded in a distributable plugin.
+export let workspaceLicense = '';
+export function configureLicense(value: string) {
+  workspaceLicense = value;
+}

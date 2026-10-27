@@ -1,26 +1,33 @@
 import { createServer, type Server } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
 import { ReviewCommitCoordinator } from "../../server/src/integrations/univer/review-commit.js";
 
 const apps: WorkspaceApplication[] = [],
-  servers: Server[] = [];
+  servers: Server[] = [], directories: string[] = [];
 afterEach(async () => {
   for (const server of servers.splice(0))
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
   for (const app of apps.splice(0)) await app.close();
+  for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true });
 });
-async function fixture() {
-  const app = createWorkspaceApplication({
+async function fixture(persistent = false) {
+  const directory = persistent ? await mkdtemp(join(tmpdir(), "review-audit-")) : undefined;
+  if (directory) directories.push(directory);
+  const config = {
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: ":memory:",
-    collaborationDatabaseFilename: ":memory:",
+    databaseFilename: directory ? join(directory, "product.sqlite") : ":memory:",
+    collaborationDatabaseFilename: directory ? join(directory, "collaboration.sqlite") : ":memory:",
     secureCookies: false,
     sessionTtlMs: 60_000,
-  });
+  };
+  let app = createWorkspaceApplication(config);
   apps.push(app);
   const a = await app.identity.registerWithPassword({
     username: "review-owner",
@@ -43,13 +50,13 @@ async function fixture() {
   });
   if (created.status !== 201 || !created.body.node.resource) throw new Error("Resource pending");
   const resourceId = created.body.node.resource.id;
-  const server = createServer(app.app);
+  let server = createServer(app.app);
   servers.push(server);
   app.attachWebSocket(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const addr = server.address();
   if (!addr || typeof addr === "string") throw new Error("No address");
-  const origin = `http://127.0.0.1:${addr.port}`;
+  let origin = `http://127.0.0.1:${addr.port}`;
   const cookie = (actor = a) => `${app.identity.cookieName}=${actor.cookieValue}`;
   async function http(path: string, body?: unknown, actor = a, key?: string) {
     const response = await fetch(origin + path, {
@@ -119,10 +126,78 @@ async function fixture() {
   ) {
     return http(`/api/worktrees/${tree.id}/merge`, { reviewToken }, tree.actor, key);
   }
-  return { app, a, b, space, http, draft, review, merge };
+  async function restart() {
+    if (!persistent) throw new Error("Disk fixture required");
+    servers.splice(servers.indexOf(server), 1);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    apps.splice(apps.indexOf(app), 1);
+    await app.close();
+    app = createWorkspaceApplication(config); apps.push(app);
+    server = createServer(app.app); servers.push(server); app.attachWebSocket(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  }
+  return { get app() { return app; }, a, b, space, http, draft, review, merge, restart };
 }
 
 describe("version-bound Worktree Review commit", { timeout: 30_000 }, () => {
+  it("recovers the validated exact intent after a real SDK commit and product-receipt failure across restart", async () => {
+    const f = await fixture(true), tree = await f.draft("durable ambiguous result");
+    const review = await f.review(tree), key = crypto.randomUUID();
+    f.app.database.connection.exec(`CREATE TEMP TRIGGER fail_merge_receipt BEFORE UPDATE OF state ON operations
+      WHEN NEW.kind = 'merge_worktree' AND NEW.state = 'completed'
+      BEGIN SELECT RAISE(ABORT, 'Injected receipt failure'); END;`);
+    expect((await f.merge(tree, review.reviewToken, key)).status).toBe(500);
+    expect((await f.app.worktrees.get(f.a.view.user.id, tree.id)).worktree.state).toBe("merged");
+    expect(f.app.operations.get(f.a.view.user.id, key).state).toBe("failed");
+    await f.restart();
+    await expect(f.app.operations.retry(f.a.view.user.id, key)).resolves.toMatchObject({ state: "completed", result: { worktreeId: tree.id, state: "merged" } });
+    expect((await f.merge(tree, review.reviewToken, key)).status).toBe(200);
+  });
+  it("invalidates unsubmitted Reviews after a real disk-backed restart but replays a completed exact Operation", async () => {
+    const f = await fixture(true), tree = await f.draft("restart proposal");
+    const old = await f.review(tree), rejectedKey = crypto.randomUUID();
+    await f.restart();
+    expect((await f.merge(tree, old.reviewToken, rejectedKey)).status).toBe(409);
+    expect((await f.app.worktrees.get(f.a.view.user.id, tree.id)).worktree.state).toBe("ready");
+    const fresh = await f.review(tree), acceptedKey = crypto.randomUUID();
+    expect((await f.merge(tree, fresh.reviewToken, acceptedKey)).status).toBe(200);
+    await f.restart();
+    expect((await f.merge(tree, fresh.reviewToken, acceptedKey)).status).toBe(200);
+    expect((await f.merge(tree, old.reviewToken, rejectedKey)).status).toBe(409);
+  });
+  it("expires exactly at 30 minutes and never leaks a rejected or detached lease", async () => {
+    const gate = new ReviewCommitCoordinator();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+    try {
+      const token = gate.issue("a", "w", "v");
+      clock.mockReturnValue(1000 + 30 * 60 * 1000 - 1);
+      expect(() => gate.validate(token, "a", "w", "v")).not.toThrow();
+      clock.mockReturnValue(1000 + 30 * 60 * 1000);
+      expect(() => gate.validate(token, "a", "w", "v")).toThrow();
+    } finally { clock.mockRestore(); }
+    await expect(gate.run(async () => { throw new Error("canceled"); })).rejects.toThrow("canceled");
+    const order: string[] = [];
+    let continueDetached!: () => void;
+    const later = new Promise<void>((resolve) => { continueDetached = resolve; });
+    let detached!: Promise<void>;
+    await gate.run(async () => { detached = later.then(() => gate.run(async () => { order.push("detached"); })); });
+    await gate.run(async () => { continueDetached(); await Promise.resolve(); order.push("current"); });
+    await detached;
+    expect(order).toEqual(["current", "detached"]);
+  });
+  it("never attributes another reviewed intent's merge to an earlier rejected Operation", async () => {
+    const f = await fixture(), tree = await f.draft("reviewed intent");
+    const badKey = crypto.randomUUID();
+    expect((await f.merge(tree, "invalid-review", badKey)).status).toBe(409);
+    expect(f.app.operations.get(f.a.view.user.id, badKey).state).toBe("failed");
+    const review = await f.review(tree), goodKey = crypto.randomUUID();
+    expect((await f.merge(tree, review.reviewToken, goodKey)).status).toBe(200);
+    expect((await f.merge(tree, "invalid-review", badKey)).status).toBe(409);
+    expect(f.app.operations.get(f.a.view.user.id, badKey).state).toBe("failed");
+    await expect(f.app.operations.retry(f.a.view.user.id, badKey)).rejects.toThrow();
+    expect(f.app.operations.get(f.a.view.user.id, goodKey).state).toBe("completed");
+  });
   it("rejects missing reviews and changed drafts, then applies only a fresh exact review and keeps retries idempotent", async () => {
     const f = await fixture(),
       tree = await f.draft("first");

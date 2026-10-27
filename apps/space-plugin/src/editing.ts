@@ -3,27 +3,9 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
 import { SpaceError, type WorkspaceConnection } from './workspace.js';
 import type { FileReference, ToolBindings } from './tools.js';
-
-type Phase =
-  | 'editing'
-  | 'applying'
-  | 'ready'
-  | 'canceling'
-  | 'canceled'
-  | 'rejected'
-  | 'applied'
-  | 'conflict'
-  | 'failed';
-export interface Proposal {
-  id: string;
-  file: FileReference;
-  userId: string;
-  sessionId: string;
-  turn: number;
-  phase: Phase;
-  message: string;
-  revision?: number;
-}
+import type { Proposal } from './model.js';
+export type { Proposal } from './model.js';
+type Phase = Proposal['phase'];
 interface Pending extends Proposal {
   worktreeId?: string;
   unitAdded?: boolean;
