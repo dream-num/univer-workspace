@@ -97,7 +97,7 @@ eight creation kinds and six file lifecycle paths. CRUD, collaboration, sharing
 and human-collaboration Web scripts use `authorizeWorkspace` through the same
 OAuth flow. Run native Desktop checks separately.
 
-Sheet, Slides, Canvas and Relational Table now use shared Browser preset
+Docs, Sheets, Slides, Canvas and Relational Table now use shared Browser preset
 sources, including their existing collaboration and feature plugins. The Base
 formula Worker is packaged and served through the owner Connection.
 

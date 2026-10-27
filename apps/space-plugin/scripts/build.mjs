@@ -9,6 +9,14 @@ await mkdir('lib', { recursive: true });
 const sdkCss = await Promise.all(
   [
     '@univerjs/preset-docs-core',
+    '@univerjs/preset-docs-hyper-link',
+    '@univerjs-pro/docs-callout-ui',
+    '@univerjs-pro/docs-chart-ui',
+    '@univerjs-pro/docs-code-ui',
+    '@univerjs-pro/docs-latex-ui',
+    '@univerjs-pro/docs-print',
+    '@univerjs-pro/docs-shape-ui',
+    '@univerjs-pro/docs-table-ui',
     '@univerjs/preset-sheets-core',
     '@univerjs/preset-sheets-conditional-formatting',
     '@univerjs/preset-sheets-data-validation',

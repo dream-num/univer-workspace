@@ -1,6 +1,6 @@
 {
   "name": "@univerjs/univer-workspace-editor-presets",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "private": true,
   "type": "module",
   "exports": {
@@ -9,7 +9,9 @@
     "./referenced-sheets": "./src/referenced-sheets.ts",
     "./boards": "./src/boards.ts",
     "./bases": "./src/bases.ts",
-    "./base-worker": "./src/base-worker.ts"
+    "./base-worker": "./src/base-worker.ts",
+    "./docs": "./src/docs.ts",
+    "./doc-features": "./src/doc-features.ts"
   },
   "files": [
     "src"
@@ -94,7 +96,24 @@
     "@univerjs-pro/bases-thread-comment-ui": "1.1.0",
     "@univerjs/rpc": "1.1.0",
     "@univerjs-pro/bases": "1.1.0",
-    "@univerjs/engine-formula": "1.1.0"
+    "@univerjs/engine-formula": "1.1.0",
+    "@univerjs-pro/docs-chart-ui": "1.1.0",
+    "@univerjs/preset-docs-hyper-link": "1.1.0",
+    "@univerjs-pro/docs-shape-ui": "1.1.0",
+    "@univerjs/preset-docs-thread-comment": "1.1.0",
+    "@univerjs-pro/docs-exchange-client": "1.1.0",
+    "@univerjs-pro/docs-callout": "1.1.0",
+    "@univerjs/preset-docs-drawing": "1.1.0",
+    "@univerjs-pro/docs-code-ui": "1.1.0",
+    "@univerjs-pro/docs-table": "1.1.0",
+    "@univerjs/preset-docs-core": "1.1.0",
+    "@univerjs-pro/docs-shape": "1.1.0",
+    "@univerjs-pro/docs-chart": "1.1.0",
+    "@univerjs-pro/docs-table-ui": "1.1.0",
+    "@univerjs-pro/docs-callout-ui": "1.1.0",
+    "@univerjs-pro/docs-history-ui": "1.1.0",
+    "@univerjs-pro/docs-code": "1.1.0",
+    "@univerjs-pro/docs-print": "1.1.0"
   },
   "devDependencies": {
     "react": "19.2.8",

@@ -9,17 +9,20 @@ import { ToggleSheetCommentPanelOperation } from '@univerjs/preset-sheets-thread
 import { UserManagerService, LifecycleStages } from '@univerjs/core';
 import { DocStateChangeManagerService } from '@univerjs/docs';
 import { CommandType } from '@univerjs/core';
-import { UniverDocsDrawingPreset } from '@univerjs/preset-docs-drawing';
 import docsDrawingLocale from '@univerjs/preset-docs-drawing/locales/zh-CN';
 import sheetsDrawingLocale from '@univerjs/preset-sheets-drawing/locales/zh-CN';
-import { UniverDocsThreadCommentPreset } from '@univerjs/preset-docs-thread-comment';
 import docCommentLocale from '@univerjs/preset-docs-thread-comment/locales/zh-CN';
 import sheetCommentLocale from '@univerjs/preset-sheets-thread-comment/locales/zh-CN';
 import { UniverThreadCommentDataSourcePlugin } from '@univerjs-pro/thread-comment-datasource';
 import { ThreadCommentPanelService } from '@univerjs/thread-comment-ui';
 import { getDocThreadCommentCollaborationPlugins } from './workarounds/doc-thread-comment-delete.js';
-import { UniverDocsCorePreset } from '@univerjs/preset-docs-core';
 import { createSheetEditorPresets, sheetEditorLocales } from '@univerjs/univer-workspace-editor-presets/sheets';
+import { createDocEditorPresets, docEditorLocales } from '@univerjs/univer-workspace-editor-presets/docs';
+import { UniverDocsHistoryUIPlugin } from '@univerjs-pro/docs-history-ui';
+import docHistoryLocale from '@univerjs-pro/docs-history-ui/locale/zh-CN';
+import { UniverDocsExchangeClientPlugin } from '@univerjs-pro/docs-exchange-client';
+import { UniverDocsPrintPlugin } from '@univerjs-pro/docs-print';
+
 import { createSlideEditorPresets, slideEditorLocales } from '@univerjs/univer-workspace-editor-presets/slides';
 import { createBoardEditorPresets, boardEditorLocales } from '@univerjs/univer-workspace-editor-presets/boards';
 import { createBaseEditorPresets, baseEditorLocales } from '@univerjs/univer-workspace-editor-presets/bases';
@@ -194,8 +197,7 @@ export function CollaborativeEditor({
       };
       if (file.type === 'base') editorWorker = new Worker('/api/space/base-worker', { type: 'module' });
       const editorPresets: IPreset[] = file.type === 'doc'
-        ? [UniverDocsCorePreset({ container: element, ribbonType: 'grid' }),
-            UniverDocsDrawingPreset({ collaboration: true }), UniverDocsThreadCommentPreset()]
+        ? createDocEditorPresets(element)
         : file.type === 'sheet'
           ? createSheetEditorPresets({ container: element, license: workspaceLicense, universerEndpoint: endpoint })
           : file.type === 'slide' ? createSlideEditorPresets(element)
@@ -220,7 +222,15 @@ export function CollaborativeEditor({
         : [UniverCollaborationPlugin,
             [UniverCollaborationClientPlugin, collaborationConfig],
             [UniverCollaborationClientUIPlugin, { enableDocumentCollaborationUI: true, enableUrlUnitLoader: false }],
-            ...(file.type === 'doc' ? getDocThreadCommentCollaborationPlugins()
+            ...(file.type === 'doc' ? [...getDocThreadCommentCollaborationPlugins(),
+                  [UniverDocsHistoryUIPlugin, { historyServerUrl: '/universer-api/history', univerContainerId: element.id }],
+                  [UniverExchangeClientPlugin, {
+                    uploadFileServerUrl: '/universer-api/stream/file/upload',
+                    getTaskServerUrl: '/universer-api/exchange/task/{taskID}',
+                    signUrlServerUrl: '/universer-api/file/{fileID}/sign-url',
+                    importServerUrl: '/universer-api/exchange/{type}/import',
+                    exportServerUrl: '/universer-api/exchange/{type}/export', downloadEndpointUrl: '/',
+                  }], UniverDocsExchangeClientPlugin, UniverDocsPrintPlugin] as IPresetPlugin[]
               : file.type === 'board' ? [UniverBoardsThreadCommentUIPlugin, UniverThreadCommentDataSourcePlugin,
                   [UniverBoardsHistoryUIPlugin, { historyServerUrl: '/universer-api/history', univerContainerId: element.id }],
                   UniverBoardsPrintPlugin] as IPresetPlugin[]
@@ -251,6 +261,7 @@ export function CollaborativeEditor({
         locales: {
           [LocaleType.ZH_CN]: mergeLocales(
             docsLocale,
+            ...(file.type === 'doc' ? [docEditorLocales['zh-CN'], docHistoryLocale] : []),
             sheetsLocale,
             sheetEditorLocales['zh-CN'],
             ...(file.type === 'slide' ? [slideEditorLocales['zh-CN'], slideHistoryLocale] : file.type === 'board' ? [boardEditorLocales['zh-CN'], boardHistoryLocale] : file.type === 'base' ? [baseEditorLocales['zh-CN'], baseHistoryLocale] : []),
