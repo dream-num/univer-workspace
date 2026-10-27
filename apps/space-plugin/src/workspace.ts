@@ -73,29 +73,46 @@ export class WorkspaceConnection {
   }
   private runtime = new RuntimeManager(new URL('./workspace-content-worker.js', import.meta.url));
   /** Host-only credential boundary. No credential enters Tool results or UI. */
-  private draftTarget(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string) {
+  private draftTarget(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, revision = -1) {
     const token = this.cookie.match(/(?:^|; )workspace_session=([^;]+)/)?.[1];
     if (!token || this.endpoint !== file.endpoint) throw new SpaceError(401, 'Workspace identity changed.');
-    return { origin: this.endpoint, sessionToken: token, license: this.license, revision: -1, scope: { kind: 'worktree' as const, worktreeId }, unitId: file.unitId, unitType: file.type };
+    return { origin: this.endpoint, sessionToken: token, license: this.license, revision, scope: { kind: 'worktree' as const, worktreeId }, unitId: file.unitId, unitType: file.type };
   }
-  async executeDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, code: string) {
-    return this.runtime.writeAndCommit(this.draftTarget(file, worktreeId), code);
+  async executeDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, code: string, revision = -1) {
+    return this.runtime.writeAndCommit(this.draftTarget(file, worktreeId, revision), code);
   }
   /** Commit through the original collaboration runtime and authenticated trunk endpoints. */
   async executeTrunk(
     file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' },
     code: string,
     signal: AbortSignal,
+    revision = -1,
   ) {
     const token = this.cookie.match(/(?:^|; )workspace_session=([^;]+)/)?.[1];
     if (!token || this.endpoint !== file.endpoint) throw new SpaceError(401, 'Workspace identity changed.');
     const identity = this.lifetime.signal;
     const result = await this.runtime.writeTrunkAndCommit({
-      origin: this.endpoint, sessionToken: token, license: this.license, revision: -1,
+      origin: this.endpoint, sessionToken: token, license: this.license, revision,
       scope: { kind: 'trunk' }, unitId: file.unitId, unitType: file.type,
     }, code, AbortSignal.any([signal, identity]));
     if (result.committed) this.noteContentChanged();
     return result;
+  }
+  async readUnit(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, code: string, revision = -1) {
+    return this.runtime.read(this.unitTarget(file, undefined, revision), code);
+  }
+  async readUnitDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, code: string, revision = -1) {
+    return this.runtime.read(this.unitTarget(file, worktreeId, revision), code);
+  }
+  async exportUnitData(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, worktreeId?: string, revision = -1) {
+    return this.runtime.exportUnitData(this.unitTarget(file, worktreeId, revision));
+  }
+  private unitTarget(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, worktreeId?: string, revision = -1) {
+    const token = this.cookie.match(/(?:^|; )workspace_session=([^;]+)/)?.[1];
+    if (!token || this.endpoint !== file.endpoint) throw new SpaceError(401, 'Workspace identity changed.');
+    return { origin: this.endpoint, sessionToken: token, license: this.license, revision,
+      scope: worktreeId ? { kind: 'worktree' as const, worktreeId } : { kind: 'trunk' as const },
+      unitId: file.unitId, unitType: file.type };
   }
   async inspectDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, sheet?: string, range?: string) {
     if (range && (!sheet || file.type !== 'sheet')) throw new SpaceError(400, 'A worksheet name is required for a Sheet range.');

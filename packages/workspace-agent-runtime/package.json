@@ -57,6 +57,14 @@
     "./workspace-json": {
       "types": "./src/workspace/json-value.ts",
       "default": "./lib/workspace/json-value.js"
+    },
+    "./workspace-exchange": {
+      "types": "./src/workspace/local-exchange.ts",
+      "default": "./lib/workspace/local-exchange.js"
+    },
+    "./workspace-session-path": {
+      "types": "./src/workspace/session-path.ts",
+      "default": "./lib/workspace/session-path.js"
     }
   },
   "scripts": {
@@ -71,7 +79,8 @@
     "@univerjs-pro/collaboration": "1.1.0",
     "@univerjs-pro/engine-formula-rust": "1.1.0",
     "@univerjs-pro/exchange-node": "1.1.0",
-    "@univerjs/protocol": "1.1.0"
+    "@univerjs/protocol": "1.1.0",
+    "@univerjs/core": "1.1.0"
   },
   "devDependencies": {
     "@univer-cli/api-reference": "1.1.0",

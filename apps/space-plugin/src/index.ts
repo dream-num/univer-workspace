@@ -6,6 +6,7 @@ import { ToolBindings, registerReadTools } from './tools.js';
 import { AgentEditing, registerEditingTools } from './editing.js';
 import { registerApiTool } from './api-tool.js';
 import { registerCreationTools } from './creation-tools.js';
+import { registerExchangeTools } from './exchange-tools.js';
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials';
 import { WorkspaceOAuth } from './oauth.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
@@ -26,6 +27,7 @@ export function apply(ctx: Context) {
   ctx.effect(() => () => auth.dispose());
   ctx.effect(() => registerApiTool(ctx));
   ctx.effect(() => registerCreationTools(ctx, workspace, bindings));
+  ctx.effect(() => registerExchangeTools(ctx, workspace, bindings, editing));
   ctx.effect(() => registerEditingTools(ctx, editing));
   ctx.effect(() => registerReadTools(ctx, workspace, bindings, (session, args, signal) => editing.inspect(session, args, signal)));
   ctx.effect(() =>

@@ -2047,6 +2047,9 @@ importers:
       '@univerjs-pro/exchange-node':
         specifier: 1.1.0
         version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs/core':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/protocol':
         specifier: 1.1.0
         version: 1.1.0

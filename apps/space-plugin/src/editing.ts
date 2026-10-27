@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { authorizedSessionPath } from '@univerjs/univer-workspace-agent-runtime/workspace-session-path';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
 import { SpaceError, type WorkspaceConnection } from './workspace.js';
@@ -216,19 +218,35 @@ export class AgentEditing {
   }
   async edit(session: string, args: any, signal: AbortSignal) {
     if (
-      args.mode !== 'write' ||
+      !['read', 'write'].includes(args.mode) ||
       typeof args.code !== 'string' ||
       !args.code.trim() ||
       args.code.length > 64000
     )
       throw new SpaceError(
         400,
-        'mode=write and bounded Facade code are required.',
+        'mode=read or write and bounded Facade code are required.',
       );
+    if (args.revision !== undefined && (!Number.isSafeInteger(args.revision) || args.revision < 0)) throw new SpaceError(400, 'Invalid revision.');
     const explicit = args.nodeId || args.resourceId || args.unitId;
     const admitted = explicit ? undefined : this.bindings.writingTurn(session);
     const file = explicit ? await this.bindings.resolve(session, args, signal) : admitted?.file;
     if (!file) throw new SpaceError(403, 'No document was associated when this request was sent.');
+    if (args.mode === 'read') {
+      if (!['doc', 'sheet', 'slide', 'board', 'base'].includes(file.type)) throw new SpaceError(400, 'This content is not a Univer Unit.');
+      if (args.worktreeId) {
+        const p = await this.target(session, args);
+        if (p.worktreeId !== args.worktreeId || p.operation) throw new SpaceError(409, 'No completed draft is available.');
+        await this.authorize(p);
+        const value = await this.workspace.readUnitDraft(p.file as FileReference & { type: 'doc' | 'sheet' }, args.worktreeId, args.code, args.revision);
+        signal.throwIfAborted();
+        return { committed: false, value, file, worktreeId: args.worktreeId };
+      }
+      const identity = this.workspace.identitySignal;
+      const value = await this.workspace.readUnit(file as FileReference & { type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, args.code, args.revision);
+      signal.throwIfAborted(); identity.throwIfAborted();
+      return { committed: false, value, file };
+    }
     const existing = this.proposals.get(this.key(session, file.nodeId));
     const turn = this.bindings.activeTurn(session);
     // A Worktree is explicit: either supplied by the caller or created earlier
@@ -248,6 +266,7 @@ export class AgentEditing {
         p.file as FileReference & { type: 'doc' | 'sheet' },
         id,
         args.code,
+        args.revision,
       );
       await this.authorize(p);
       p.revision = result.revision;
@@ -278,9 +297,17 @@ export class AgentEditing {
     if (!node.resource.capabilities.editContent)
       throw new SpaceError(403, 'You do not have permission to edit this document.');
     const result = await this.workspace.executeTrunk(
-      file as FileReference & { type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, args.code, signal,
+      file as FileReference & { type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, args.code, signal, args.revision,
     );
     return { ...result, value: result.value ?? null, file, committedToSharedDocument: result.committed };
+  }
+  async exportDraft(session: string, args: any, signal: AbortSignal) {
+    const p = await this.target(session, args);
+    if (!p.worktreeId || p.worktreeId !== args.worktreeId || p.operation) throw new SpaceError(409, 'No completed draft is available.');
+    await this.authorize(p);
+    const value = await this.workspace.exportUnitData(p.file as FileReference & { type: 'doc' | 'sheet' }, p.worktreeId, args.revision);
+    signal.throwIfAborted();
+    return value;
   }
   async inspect(session: string, args: any, signal: AbortSignal) {
     signal.throwIfAborted();
@@ -448,13 +475,14 @@ export function registerEditingTools(ctx: Context, editing: AgentEditing) {
     ctx.tools.register({
       name: 'univer_edit',
       description:
-        'Execute Univer Facade API code for the admitted current Workspace Unit or an explicit authorized nodeId, resourceId, or unitId. With no worktreeId, commits changes to the shared trunk through collaboration. When an explicit Worktree is created for this turn, writes go to its draft for Review. Read first with univer_inspect. Variables include api/univerAPI and the type-specific Unit handle.',
+        'Read or write using Univer Facade API code for the admitted current Workspace Unit or an explicit authorized nodeId, resourceId, or unitId. With no worktreeId, commits changes to the shared trunk through collaboration. When an explicit Worktree is created for this turn, writes go to its draft for Review. Read first with univer_inspect. Variables include api/univerAPI and the type-specific Unit handle.',
       parameters: {
         type: 'object',
         properties: {
           ...identity,
-          mode: { type: 'string', enum: ['write'] },
+          mode: { type: 'string', enum: ['read', 'write'] },
           code: { type: 'string' },
+          revision: { type: 'integer' },
         },
         required: ['mode', 'code'],
       },
@@ -466,6 +494,22 @@ export function registerEditingTools(ctx: Context, editing: AgentEditing) {
         title: 'Edit Workspace content',
         kind: 'edit',
       }),
+    }),
+    ctx.tools.register({
+      name: 'univer_execute',
+      description: 'Execute Facade code in the admitted or explicitly identified Workspace Unit. Provide exactly one of code or codeFile in the native Session workspace. Writes commit to trunk unless the current request has an explicit Worktree.',
+      parameters: { type: 'object', properties: { ...identity, revision: { type: 'integer' }, code: { type: 'string' }, codeFile: { type: 'string' } } },
+      output,
+      async execute(args: any, exec: ToolRunContext) {
+        if (!args || (typeof args.code === 'string') === (typeof args.codeFile === 'string')) throw new SpaceError(400, 'Provide exactly one of code or codeFile.');
+        let code = args.code;
+        if (args.codeFile !== undefined) {
+          const source = await authorizedSessionPath(exec.agent?.session.header.cwd, args.codeFile, true);
+          code = await readFile(source.path, 'utf8');
+        }
+        return editing.edit(session(exec), { ...args, mode: 'write', code }, exec.signal);
+      },
+      presentCall: () => ({ card: 'generic', title: 'Execute Univer Facade code', kind: 'execute' }),
     }),
   ];
   return () => disposers.forEach((dispose) => dispose());

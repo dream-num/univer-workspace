@@ -268,6 +268,7 @@ export async function createDocument(
     name: string;
     unitType: "sheet" | "doc" | "slide" | "board" | "base";
     initialData?: JsonValue;
+    idempotencyKey?: string;
   },
 ): Promise<CreatedDocument> {
   const body = JSON.stringify({
@@ -280,7 +281,7 @@ export async function createDocument(
   });
   const headers = {
     "content-type": "application/json",
-    "Idempotency-Key": newIdempotencyKey(),
+    "Idempotency-Key": input.idempotencyKey ?? newIdempotencyKey(),
   };
   let created: { resourceId: string; nodeId: string } | undefined;
   for (let attempt = 1; ; attempt++) {
