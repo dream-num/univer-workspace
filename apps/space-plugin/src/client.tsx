@@ -20,7 +20,7 @@ import css from './space.css';
 import tailwind from '../lib/tailwind.css';
 import sdkCss from '../lib/univer-scoped.css';
 import { configureLicense } from './license.js';
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';
+import { Settings } from './components/settings.js';
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
@@ -40,11 +40,6 @@ const PANEL = 'space-plugin';
 
 /** Only content/navigation state lives here. Chat history remains in DSH. */
 export function apply(ctx: any) {
-  // Only the non-secret service origin is persisted through the official DSH
-  // store. Passwords, cookies, runtime licenses and Sessions stay out of it.
-  const connectionPreferences = createSnapshotStore({ endpoint: '' }, {
-    persist: { name: 'dsh-space-plugin.connection.v1' },
-  });
   let view: State = {
     status: { state: 'unconfigured', endpoint: '' },
     spaces: [],
@@ -65,7 +60,6 @@ export function apply(ctx: any) {
     sessions: [],
     error: '',
     busy: false,
-    settings: false,
     ai: false,
     query: '',
     filter: 'all',
@@ -253,7 +247,9 @@ export function apply(ctx: any) {
     } catch (error) {
       if (!(error instanceof Error && error.name === 'AbortError'))
         update({
-          error: error instanceof Error ? error.message : '请求失败，请重试。',
+          error: error instanceof Error && error.message.startsWith('[FCollaboration]:')
+            ? '尚未保存到 Workspace。请检查连接后重试，当前文档将保持打开。'
+            : error instanceof Error ? error.message : '请求失败，请重试。',
         });
     } finally {
       pending--;
@@ -296,9 +292,6 @@ export function apply(ctx: any) {
     }
     let before = generation;
     let status = await api('status');
-    if (status.state === 'unconfigured' && connectionPreferences.getSnapshot().endpoint) {
-      status = await api('configure', { endpoint: connectionPreferences.getSnapshot().endpoint });
-    }
     if (before !== generation) return;
     if (
       status.endpoint !== view.status.endpoint ||
@@ -311,7 +304,7 @@ export function apply(ctx: any) {
     update({
       status:
         status.state === 'network-error'
-          ? { ...status, user: view.status.user }
+          ? { ...status, user: status.endpoint === view.status.endpoint ? view.status.user : undefined }
           : status,
     });
     if (status.state === 'connected') {
@@ -346,6 +339,8 @@ export function apply(ctx: any) {
     update({
       content: null,
       context: null,
+      spaces: [], all: [], recent: [], page: null, space: '', parent: '',
+      location: 'home', query: '',
       pins: [],
       trash: [],
       action: null,
@@ -630,26 +625,35 @@ export function apply(ctx: any) {
       run(async () => {
         await flushEditor();
         const status = await api('configure', { endpoint });
-        connectionPreferences.set({ endpoint: status.endpoint });
         if (status.endpoint !== view.status.endpoint) clearContent();
         update({ status });
         await refresh();
       }),
-    login: (username: string, password: string) =>
-      run(async () => {
-        await flushEditor();
-        await api('login', { username, password });
-        await refresh();
-        if (view.status.state === 'connected') update({ settings: false });
-      }),
-    disconnect: () =>
-      run(async () => {
-        await flushEditor();
-        clearContent();
-        await api('configure', { endpoint: '' });
-        connectionPreferences.set({ endpoint: '' });
-        await refresh();
-      }),
+    signIn: () => {
+      const desktop = window.location.protocol === 'dsh-app:';
+      // Web popup is reserved in the click. Official Desktop forwards external
+      // window.open HTTP(S) URLs to its system browser and returns null.
+      const popup = desktop ? null : window.open('about:blank', '_blank');
+      if (popup) popup.opener = null;
+      return run(async () => {
+        try {
+          await flushEditor();
+          clearContent();
+          const result = await api('oauth-start', { desktop });
+          if (desktop) window.open(result.authorizationUrl, '_blank', 'noopener,noreferrer');
+          else if (popup) popup.location.replace(result.authorizationUrl);
+          else throw new Error('请允许打开登录窗口，然后重试。');
+          await refresh();
+        } catch (error) { popup?.close(); await api('oauth-cancel'); throw error; }
+      });
+    },
+    cancelSignIn: () => run(async () => { await api('oauth-cancel'); await refresh(); }),
+    disconnect: () => run(async () => {
+      await flushEditor();
+      await api('sign-out');
+      clearContent();
+      await refresh();
+    }),
     directory: (space: string, parent = '', cursor = '') =>
       run(async () => {
         await flushEditor();
@@ -975,6 +979,25 @@ export function apply(ctx: any) {
       ),
     ),
   );
+  ctx.effect(() => ctx.slots.inject('settings.section', () =>
+    ctx.slots.register({ name: 'settings.section', id: 'univer-workspace', order: 25,
+      label: () => 'Workspace', inject: () => ({ face }) }, Settings)));
+  ctx.effect(() => {
+    let polling = false;
+    const timer = setInterval(async () => {
+      if (polling || lifetime.signal.aborted) return;
+      polling = true;
+      try {
+        const status = await api('status');
+        const changed = status.state !== view.status.state || status.endpoint !== view.status.endpoint || status.user?.id !== view.status.user?.id;
+        if (changed || status.oauth?.phase !== view.status.oauth?.phase) {
+          await run(refresh);
+        }
+      } catch { /* Connection reset owns retry; never surface raw transport details. */ }
+      finally { polling = false; }
+    }, 1000);
+    return () => clearInterval(timer);
+  });
   ctx.effect(() =>
     ctx.slots.inject('space.conversation', () =>
       ctx.slots.register({ name: 'space.conversation' }, NativeConversation),
@@ -1021,7 +1044,8 @@ export type Face = {
   update(patch: Partial<State>): void;
   refresh(): void;
   configure(endpoint: string): void;
-  login(username: string, password: string): void;
+  signIn(): void;
+  cancelSignIn(): void;
   disconnect(): void;
   directory(space: string, parent?: string, cursor?: string): void;
   home(location?: 'home' | 'recent', filter?: string): void;

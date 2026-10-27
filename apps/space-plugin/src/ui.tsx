@@ -3,7 +3,7 @@ import type { Face } from './client.js';
 import { PageViewer } from './components/page-viewer.js';
 import { ContentBrowser } from './components/content-browser.js';
 import { SpaceShareDialog, FileShareDialog } from './components/sharing.js';
-import { Settings } from './components/settings.js';
+import { Welcome } from './components/settings.js';
 import { FileActionDialog, TrashBrowser } from './components/file-actions.js';
 import { Icon, button, iconButton, Empty } from './components/primitives.js';
 
@@ -49,23 +49,8 @@ export function SpaceView(
               className="tw-absolute tw-inset-x-0 tw-top-0 tw-z-30 tw-h-0.5 tw-bg-neutral-300"
             />
           )}
-          {v.hostNavigation === 'unsupported' ? (
-            <Empty title="This Host build needs navigation verification">
-              <p>Space 导航尚未支持当前构建，原生会话保持可用。</p>
-              <button className={button} onClick={props.back}>
-                Back to Chat
-              </button>
-            </Empty>
-          ) : v.status.state !== 'connected' && !v.content ? (
-            <Empty title="连接 Space">
-              <p>浏览文档与表格，在已有对话中一起工作。</p>
-              <button
-                className={button + ' tw-bg-hover'}
-                onClick={() => props.update({ settings: true })}
-              >
-                Settings
-              </button>
-            </Empty>
+          {v.status.state !== 'connected' && !v.content ? (
+            <Welcome face={props} v={v} />
           ) : v.content ? (
             <PageViewer face={props} v={v} />
           ) : v.location === 'trash' ? (
@@ -100,7 +85,6 @@ export function SpaceView(
               target={v.sharing}
             />
           ))}
-        {v.settings && <Settings face={props} v={v} />}
         {v.action && (
           <FileActionDialog
             key={`${v.action.kind}:${v.action.node?.id ?? v.action.space?.id}`}

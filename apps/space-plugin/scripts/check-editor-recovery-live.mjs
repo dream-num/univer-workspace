@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { WorkspaceConnection } from '../lib/workspace.js';
-import { connectHost } from './host-connection.mjs';
+import { connectHost, authorizeWorkspace } from './host-connection.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );
@@ -13,7 +13,7 @@ const h = await connectHost(),
   out = resolve(process.env.SPACE_EVIDENCE_DIR ?? '/tmp/task009b-evidence');
 await mkdir(out, { recursive: true });
 await h.request('space/configure', { endpoint: f.origin });
-await h.request('space/login', { username: f.username, password: f.password });
+await authorizeWorkspace(h, f);
 const checks = [],
   errors = [];
 const status = await h.request('space/status');

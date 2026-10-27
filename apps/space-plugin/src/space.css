@@ -843,7 +843,8 @@
   content: '';
   position: fixed;
   left: 0;
-  top: var(--dsh-frame-top-clearance, 0px);
+  /* Paint the macOS titlebar reservation too; controls still start below it. */
+  top: 0;
   bottom: 0;
   width: 52px;
   background: var(--sp-rail-fill);

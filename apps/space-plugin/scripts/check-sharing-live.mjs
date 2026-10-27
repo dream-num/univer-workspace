@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { connectHost } from './host-connection.mjs';
+import { connectHost, authorizeWorkspace } from './host-connection.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );
@@ -19,10 +19,7 @@ const f = await Promise.all(
 );
 for (let i = 0; i < 2; i++) {
   await hosts[i].request('space/configure', { endpoint: f[i].origin });
-  await hosts[i].request('space/login', {
-    username: f[i].username,
-    password: f[i].password,
-  });
+  await authorizeWorkspace(hosts[i], f[i]);
 }
 const b = await chromium.launch({
     headless: true,

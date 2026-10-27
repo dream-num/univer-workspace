@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, readdir, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { connectHost } from './host-connection.mjs';
+import { connectHost, authorizeWorkspace } from './host-connection.mjs';
 const { chromium } = await import(process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright');
 const out = resolve(process.env.SPACE_EVIDENCE_DIR ?? '/tmp/space-coediting'); await mkdir(out, { recursive: true });
 const hosts = [await connectHost(), await connectHost(process.env.SPACE_SECOND_DSH_LOG)];
 const logins = await Promise.all([process.env.SPACE_TEST_LOGIN_FILE, process.env.SPACE_SECOND_LOGIN_FILE].map(async file => JSON.parse(await readFile(file, 'utf8'))));
-for (let i=0;i<2;i++) { await hosts[i].request('space/configure',{endpoint:logins[i].origin}); await hosts[i].request('space/login',{username:logins[i].username,password:logins[i].password}); }
+for (let i=0;i<2;i++) { await hosts[i].request('space/configure',{endpoint:logins[i].origin}); await authorizeWorkspace(hosts[i], logins[i]); }
 const users = await Promise.all(hosts.map(h=>h.request('space/status'))); assert.notEqual(users[0].user.id,users[1].user.id);
 const session='session-f5a52ca5-3458-4d0e-ac46-cc8a5701edc0', root=process.env.SPACE_SESSION_ROOT;
 const logFile=(await readdir(root,{recursive:true})).find(x=>x.includes(session)&&x.endsWith('session.v4.jsonl.zstd')); assert.ok(logFile);

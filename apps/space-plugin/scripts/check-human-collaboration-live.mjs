@@ -9,7 +9,7 @@ import {
 } from '@univerjs-pro/collaboration-client';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { connectHost } from './host-connection.mjs';
+import { connectHost, authorizeWorkspace } from './host-connection.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );
@@ -44,10 +44,7 @@ const browser = await chromium.launch({
 });
 for (let i = 0; i < 2; i++) {
   await hosts[i].request('space/configure', { endpoint: logins[i].origin });
-  await hosts[i].request('space/login', {
-    username: logins[i].username,
-    password: logins[i].password,
-  });
+  await authorizeWorkspace(hosts[i], logins[i]);
 }
 const identities = await Promise.all(
   hosts.map((h) => h.request('space/status')),

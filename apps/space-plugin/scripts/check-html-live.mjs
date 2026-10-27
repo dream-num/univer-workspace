@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { WorkspaceConnection } from '../lib/workspace.js';
-import { connectHost } from './host-connection.mjs';
+import { connectHost, authorizeWorkspace, openWorkspaceSettings } from './host-connection.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );
@@ -14,7 +14,7 @@ const fixtures = JSON.parse(
   await readFile('/tmp/task009b-r2-fixtures.json', 'utf8'),
 );
 await h.request('space/configure', { endpoint: f.origin });
-await h.request('space/login', { username: f.username, password: f.password });
+await authorizeWorkspace(h, f);
 const out = resolve(
   process.env.SPACE_EVIDENCE_DIR ?? '/tmp/space-html-evidence',
 );
@@ -134,17 +134,11 @@ try {
   );
   await p.getByRole('button', { name: 'Inspect page', exact: true }).click();
   await p.locator('.sp-html-inspect[aria-pressed="false"]').waitFor();
-  await p.getByRole('button', { name: 'Space settings', exact: true }).click();
-  const settings = p.getByRole('dialog', {
-    name: 'Space settings',
-    exact: true,
-  });
-  await settings
-    .getByLabel('Workspace Endpoint', { exact: true })
-    .fill('http://127.0.0.1:1');
-  await settings.getByRole('button', { name: '重新连接', exact: true }).click();
+  const settings = await openWorkspaceSettings(p);
+  await settings.getByLabel('Custom Workspace URL', { exact: true }).fill('http://127.0.0.1:1');
+  await settings.getByRole('button', { name: 'Change Server', exact: true }).click();
   await settings.getByRole('alert').waitFor();
-  await settings.getByRole('button', { name: '关闭设置', exact: true }).click();
+  await p.getByRole('button', { name: '关闭', exact: true }).click();
   const recovered = `${token}_RESUMED`;
   await input.fill(recovered);
   await frame.getByRole('heading', { name: 'Live Page', exact: true }).click();
