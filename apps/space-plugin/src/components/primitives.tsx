@@ -4,6 +4,7 @@ import { createTypes, creationName } from '../content-types.js';
 import {
   LayoutGrid,
   FileText,
+  FileMinus,
   Table2,
   Folder,
   Search,
@@ -57,6 +58,7 @@ const icons: Record<string, LucideIcon> = {
   settings: Settings2,
   image: Image,
   site: Globe,
+  page: FileMinus,
   trash: Trash2,
   pin: Pin,
   more: Ellipsis,
@@ -179,10 +181,13 @@ export function CreateMenu({
   face,
   v,
   sidebar = false,
+  target,
 }: {
   face: import('../client.js').Face;
   v: import('../model.js').State;
   sidebar?: boolean;
+  /** Navigation shortcuts reuse the existing creation form and Server workflow. */
+  target?: { kind: 'site'; parent: import('../model.js').Node } | { kind: 'space' };
 }) {
   const [draft, setDraft] = React.useState<{
     kind: string;
@@ -198,23 +203,46 @@ export function CreateMenu({
     import('../sharing.js').Invite | undefined
   >();
   const inDirectory = v.location === 'folder' || v.location === 'space';
-  const destination = inDirectory
+  const parentNode = target?.kind === 'site' ? target.parent : undefined;
+  const destination = parentNode
+    ? v.spaces.find((s) => s.id === parentNode.spaceId)
+    : inDirectory
     ? v.spaces.find((s) => s.id === v.space)
     : v.spaces.find((s) => s.type === 'personal');
-  const allowed =
-    inDirectory && v.parent
+  const allowed = parentNode
+    ? parentNode.capabilities?.createChildren === true
+    : inDirectory && v.parent
       ? v.page?.parentNode?.capabilities?.createChildren === true
       : destination?.capabilities?.createAtRoot === true;
   if (v.status.state !== 'connected') return null;
+  const prepare = (kind: string) => {
+    setName('');
+    setInviting(false);
+    setInvite(undefined);
+    setDraft({
+      kind,
+      space: parentNode?.spaceId ?? destination?.id ?? '',
+      parent: parentNode?.id ?? (inDirectory ? v.parent : ''),
+      key: crypto.randomUUID(),
+    });
+  };
   return (
     <>
-      <Menu
-        label={inDirectory ? 'New' : 'Create'}
+      {target ? (
+        <button
+          className={iconButton}
+          aria-label={parentNode ? `Add subpage to ${parentNode.name}` : 'New space'}
+          title={parentNode && !allowed ? 'You do not have permission to create here' : parentNode ? 'Add subpage' : 'New space'}
+          disabled={!!parentNode && !allowed}
+          onClick={() => prepare(target.kind)}
+        ><Icon name="plus" size={14} /></button>
+      ) : <Menu
+        label={!sidebar && inDirectory ? 'New' : 'Create'}
         align={sidebar ? 'left' : 'right'}
         trigger={
           <>
             {sidebar && <Icon name="plus" size={18} />}
-            <span>{inDirectory ? 'New' : 'Create'}</span>
+            <span>{!sidebar && inDirectory ? 'New' : 'Create'}</span>
             <Icon name="down" size={12} />
           </>
         }
@@ -230,23 +258,13 @@ export function CreateMenu({
                 ? 'You do not have permission to create here'
                 : undefined
             }
-            onClick={() => {
-              setName('');
-              setInviting(false);
-              setInvite(undefined);
-              setDraft({
-                kind,
-                space: destination?.id ?? '',
-                parent: inDirectory ? v.parent : '',
-                key: crypto.randomUUID(),
-              });
-            }}
+            onClick={() => prepare(kind)}
           >
             <Icon name={kind === 'space' ? 'all' : kind} />
             {label}
           </button>
         ))}
-      </Menu>
+      </Menu>}
       {draft && (
         <div className="sp-create-backdrop">
           <form
@@ -275,7 +293,7 @@ export function CreateMenu({
             <h2>Create {creationName(draft.kind)}</h2>
             {draft.kind !== 'space' && (
               <p>
-                In {draft.parent ? v.page?.parentNode?.name : destination?.name}
+                In {draft.parent ? parentNode?.name ?? v.page?.parentNode?.name : destination?.name}
               </p>
             )}
             <label>

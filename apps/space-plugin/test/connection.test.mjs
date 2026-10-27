@@ -213,3 +213,25 @@ test('editor transport binds Workspace identity and denies snapshot replacement 
     await new Promise((r) => server.close(r));
   }
 });
+
+test('the metadata index discovers a Page under another Page without inventing a Folder or duplicating roots', async () => {
+  const connection = new WorkspaceConnection();
+  const page = (id, parentNodeId) => ({ id, parentNodeId, spaceId: 's', name: `${id}.univer.html`, resource: { id: `r-${id}`, kind: 'blob' } });
+  const parent = page('parent', null), child = page('child', 'parent');
+  const reads = [];
+  connection.json = async (path) => {
+    reads.push(path.split('?')[0]);
+    if (path === '/api/spaces') return { spaces: [{ id: 's' }] };
+    if (path.startsWith('/api/shared-with-me?')) return { items: [], nextCursor: null };
+    if (path.startsWith('/api/spaces/s/nodes?')) return { nodes: [parent], nextCursor: null };
+    if (path.startsWith('/api/html-views?')) return { items: [parent, child].map(node => ({ node, resource: node.resource })), nextCursor: null };
+    throw new Error(`Unexpected content/body read: ${path}`);
+  };
+  try {
+    const result = await connection.index(new AbortController().signal);
+    assert.equal(result.nodes.length, 2);
+    assert.equal(result.nodes.find(node => node.id === child.id).parentNodeId, parent.id);
+    assert.ok(result.nodes.every(node => node.resource.htmlView));
+    assert.deepEqual(reads, ['/api/spaces', '/api/shared-with-me', '/api/spaces/s/nodes', '/api/html-views']);
+  } finally { await connection.dispose(); }
+});

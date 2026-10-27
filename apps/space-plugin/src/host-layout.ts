@@ -62,6 +62,9 @@ export function installHostNavigation(
   const previousColumns = frame.style.getPropertyValue(
     '--space-closed-columns',
   );
+  const previousOpenColumns = frame.style.getPropertyValue(
+    '--space-open-columns',
+  );
   function attr(element: HTMLElement, name: string, value: string) {
     let saved = previous.get(element);
     if (!saved) {
@@ -84,6 +87,30 @@ export function installHostNavigation(
   let closed = false,
     disposed = false;
   function sync() {
+    // Mark the known artifact once at its boundary; no generated classes leak
+    // into navigation CSS. These lookups remain private, version-gated risks.
+    const parts = [
+      'logoRow',
+      'topStrip',
+      'panelList',
+      'panelRow',
+      'panelTitle',
+      'panelGlyph',
+      'moreAnchor',
+      'footArea',
+      'footerActions',
+      'regionArea',
+      'newSession',
+    ];
+    for (const part of parts)
+      for (const element of root!.querySelectorAll<HTMLElement>(
+        `.${prefix}_${part}`,
+      ))
+        attr(element, 'data-space-host-part', part);
+    const sidebarCol = frame!.querySelector<HTMLElement>(
+      `.${artifact!.layout}_sidebarCol`,
+    );
+    if (sidebarCol) attr(sidebarCol, 'data-space-host-part', 'sidebarCol');
     closed = frame!.dataset.sidebarCollapsed === 'true';
     attr(root!, 'data-space-secondary-collapsed', String(closed));
     attr(
@@ -118,6 +145,14 @@ export function installHostNavigation(
     const rendered = columns.replace(/^[0-9.]+px/, '0px');
     if (frame!.style.getPropertyValue('--space-closed-columns') !== rendered)
       frame!.style.setProperty('--space-closed-columns', rendered);
+    // The public layout API exposes toggle, not width. Raise only Space's
+    // default 280px track to the reference 288px; keep larger user sizes.
+    const openColumns = columns.replace(
+      /^[0-9.]+px/,
+      (width) => `${Math.max(288, parseFloat(width))}px`,
+    );
+    if (frame!.style.getPropertyValue('--space-open-columns') !== openColumns)
+      frame!.style.setProperty('--space-open-columns', openColumns);
     const trigger = foot!.querySelector<HTMLElement>(
       `.${prefix}_settingsArea button[aria-haspopup="menu"]`,
     );
@@ -154,7 +189,7 @@ export function installHostNavigation(
     }
   };
   const navObserver = new MutationObserver(sync);
-  navObserver.observe(nav, {
+  navObserver.observe(root, {
     subtree: true,
     childList: true,
     attributes: true,
@@ -176,6 +211,9 @@ export function installHostNavigation(
       if (previousColumns)
         frame!.style.setProperty('--space-closed-columns', previousColumns);
       else frame!.style.removeProperty('--space-closed-columns');
+      if (previousOpenColumns)
+        frame!.style.setProperty('--space-open-columns', previousOpenColumns);
+      else frame!.style.removeProperty('--space-open-columns');
       for (const [element, attrs] of previous)
         for (const [name, value] of attrs)
           value === null

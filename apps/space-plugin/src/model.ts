@@ -142,6 +142,13 @@ export interface State {
   ai: boolean;
   chatMode: 'compact' | 'expanded' | 'minimized';
   pins: string[];
+  navigation: {
+    pinned: boolean;
+    recent: boolean;
+    spaces: boolean;
+    recentLimit: number;
+    expandedPages: string[];
+  };
   spaceTab: 'Overview' | 'Content';
   query: string;
   filter: string;

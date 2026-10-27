@@ -360,7 +360,17 @@ export class WorkspaceConnection {
       const page = await read(
         `/api/html-views?${new URLSearchParams({ limit: '100', ...(htmlCursor ? { cursor: htmlCursor } : {}) })}`,
       );
-      for (const item of page.items) htmlIds.add(item.node.id);
+      for (const item of page.items) {
+        htmlIds.add(item.node.id);
+        // Pages can parent Pages. The directory scan above walks Folders only;
+        // retain authorized nested Pages from the existing HTML Views index.
+        if (!seen.has(item.node.id)) {
+          seen.add(item.node.id);
+          nodes.push({ ...item.node, resource: item.resource });
+          if (nodes.length > 2000)
+            throw new SpaceError(413, 'All index exceeds 2,000 items. Browse individual Spaces instead.');
+        }
+      }
       htmlCursor = page.nextCursor ?? '';
     } while (htmlCursor);
     for (const node of nodes)
