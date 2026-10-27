@@ -85,6 +85,10 @@
     "./workspace-skill-resources": {
       "types": "./src/workspace/skill-resources.ts",
       "default": "./lib/workspace/skill-resources.js"
+    },
+    "./workspace-resource-library": {
+      "types": "./src/workspace/resource-library.ts",
+      "default": "./lib/workspace/resource-library.js"
     }
   },
   "scripts": {
@@ -102,7 +106,8 @@
     "@univerjs/protocol": "1.1.0",
     "@univerjs/core": "1.1.0",
     "@univerjs-labs/html-view": "1.0.0-dev.6518eb0",
-    "@univer-cli/svg-facade": "1.1.0"
+    "@univer-cli/svg-facade": "1.1.0",
+    "@univer-cli/resource-library": "1.1.0"
   },
   "devDependencies": {
     "@univer-cli/api-reference": "1.1.0",

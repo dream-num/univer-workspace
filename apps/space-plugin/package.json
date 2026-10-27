@@ -79,6 +79,7 @@
     "@univerjs-pro/boards-ui": "1.1.0",
     "@univerjs-pro/chart-embed": "1.1.0",
     "@univerjs-pro/chart-ui": "1.1.0",
+    "@univerjs-pro/cli-assets": "0.1.0",
     "@univerjs-pro/collaboration-client": "1.1.0",
     "@univerjs-pro/collaboration-embed": "1.1.0",
     "@univerjs-pro/docs-callout": "1.1.0",

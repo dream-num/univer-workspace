@@ -7,7 +7,7 @@ for (const [entry, outfile] of [['src/api-reference.ts', 'lib/api-reference.js']
   await build({ entryPoints: [entry], outfile, bundle: true, platform: 'node', format: 'esm', target: 'node24', external, logLevel: 'info' });
 }
 await build({
-  entryPoints: ['src/workspace/index.ts', 'src/workspace/api-errors.ts', 'src/workspace/wire.ts', 'src/workspace/resources-api.ts', 'src/workspace/json-value.ts', 'src/workspace/local-exchange.ts', 'src/workspace/session-path.ts', 'src/workspace/inspection.ts', 'src/workspace/blob-api.ts', 'src/workspace/html-view.ts', 'src/workspace/svg-operations.ts', 'src/workspace/skill-resources.ts'],
+  entryPoints: ['src/workspace/index.ts', 'src/workspace/api-errors.ts', 'src/workspace/wire.ts', 'src/workspace/resources-api.ts', 'src/workspace/json-value.ts', 'src/workspace/local-exchange.ts', 'src/workspace/session-path.ts', 'src/workspace/inspection.ts', 'src/workspace/blob-api.ts', 'src/workspace/html-view.ts', 'src/workspace/svg-operations.ts', 'src/workspace/skill-resources.ts', 'src/workspace/resource-library.ts'],
   outdir: 'lib/workspace', bundle: true, splitting: true, platform: 'node', format: 'esm', target: 'node24', external, logLevel: 'info',
 });
 const pool = import.meta.resolve('@univer-cli/univer-collaboration-runtime-pool');

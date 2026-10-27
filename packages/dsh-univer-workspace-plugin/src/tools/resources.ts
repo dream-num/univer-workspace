@@ -10,22 +10,14 @@
  * @module dsh-univer-workspace-plugin/tools/resources
  */
 
-import {
-  FilesystemResourceCache,
-  FilesystemResourceOutput,
-  HttpsResourceDownloader,
-  createResourceLibrary,
-  loadResourceManifestFromPath,
-} from "@univer-cli/resource-library";
+import { runResourceOperation, ResourceOperationError } from "@univerjs/univer-workspace-agent-runtime/workspace-resource-library";
+import { SessionPathError } from "@univerjs/univer-workspace-agent-runtime/workspace-session-path";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm";
 import type { JsonValue } from "../json-value.ts";
-import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
 import { resolveToolScope } from "./tool-scope.ts";
-import { newSessionPath } from "./workspace-path.ts";
 import { registerUniverTool } from "./presentation.ts";
 import { UniverError } from "./errors.ts";
 
@@ -33,19 +25,6 @@ const MANIFEST_PATH = fileURLToPath(new URL("./resource-manifest.json", import.m
 
 function text(value: string): ContentBlock[] {
   return [{ type: "text", text: value }];
-}
-
-function libraryFor(cwd: string) {
-  const cacheRoot = join(cwd, ".dsh-univer-resource-cache");
-  return {
-    cacheRoot,
-    library: createResourceLibrary({
-      manifest: loadResourceManifestFromPath(MANIFEST_PATH),
-      cache: new FilesystemResourceCache(cacheRoot),
-      downloader: new HttpsResourceDownloader(),
-      output: new FilesystemResourceOutput(),
-    }),
-  };
 }
 
 /** Register the bundled, read-only resource-library tool. */
@@ -96,80 +75,14 @@ export function registerResourcesTool(ctx: Context): () => void {
       },
       async execute(args, exec) {
         const { cwd } = await resolveToolScope(ctx, exec);
-        const { cacheRoot, library } = libraryFor(cwd);
-        // The resource-library adapters expect their cache root to exist even
-        // for a first `read` (a read may populate a remote asset before an
-        // explicit export).  Create it for every operation, not only export,
-        // while keeping it below the authenticated session workspace.
-        await mkdir(cacheRoot, { recursive: true });
-        if (args.action === "registries") {
-          return {
-            ok: true as const,
-            operation: "resources" as const,
-            result: library.listRegistries() as unknown as JsonValue,
-          };
-        }
-        if (args.action === "clear-cache") {
-          const result = await library.clearCache();
-          return {
-            ok: true as const,
-            operation: "resources" as const,
-            result: result as unknown as JsonValue,
-          };
-        }
-        if (args.action === "find") {
-          const queries = nonEmptyList(args.queries, "queries", "find");
-          if (args.registries?.some((registry) => registry.trim() === "")) {
-            throw new UniverError(
-              "univer_resources find registries must be non-empty strings.",
-              "RESOURCE_INPUT_INVALID",
-            );
+        try {
+          return await runResourceOperation(args, cwd, MANIFEST_PATH, exec.signal) as { ok: true; operation: "resources"; result: JsonValue };
+        } catch (error) {
+          if (error instanceof ResourceOperationError || error instanceof SessionPathError) {
+            throw new UniverError(error.message, error.code, { cause: error });
           }
-          if (args.limit !== undefined && (!Number.isInteger(args.limit) || args.limit < 1)) {
-            throw new UniverError(
-              "univer_resources find limit must be a positive integer.",
-              "RESOURCE_INPUT_INVALID",
-            );
-          }
-          const result = library.find({
-            queries,
-            ...(args.registries === undefined ? {} : { registries: args.registries }),
-            ...(args.limit === undefined ? {} : { limit: args.limit }),
-          });
-          return {
-            ok: true as const,
-            operation: "resources" as const,
-            result: result as unknown as JsonValue,
-          };
+          throw error;
         }
-        if (args.action === "read") {
-          if (args.handle === undefined || args.handle.trim() === "") {
-            throw new UniverError(
-              "univer_resources read requires a non-empty handle.",
-              "RESOURCE_INPUT_INVALID",
-            );
-          }
-          const result = await library.read({ handle: args.handle });
-          return {
-            ok: true as const,
-            operation: "resources" as const,
-            result: result as unknown as JsonValue,
-          };
-        }
-        const handles = nonEmptyList(args.handles, "handles", "export");
-        if (args.output === undefined || args.output.trim() === "") {
-          throw new UniverError(
-            "univer_resources export requires a non-empty output directory.",
-            "RESOURCE_INPUT_INVALID",
-          );
-        }
-        const output = await newSessionPath(exec, args.output);
-        const result = await library.export({ handles, destination: output.path });
-        return {
-          ok: true as const,
-          operation: "resources" as const,
-          result: result as unknown as JsonValue,
-        };
       },
       presentCall: (args) => ({
         card: "generic",
@@ -179,18 +92,4 @@ export function registerResourcesTool(ctx: Context): () => void {
       }),
     }),
   );
-}
-
-function nonEmptyList(
-  value: readonly string[] | undefined,
-  name: string,
-  action: string,
-): readonly string[] {
-  if (value === undefined || value.length === 0 || value.some((item) => item.trim() === "")) {
-    throw new UniverError(
-      `univer_resources ${action} requires at least one non-empty ${name}.`,
-      "RESOURCE_INPUT_INVALID",
-    );
-  }
-  return value;
 }

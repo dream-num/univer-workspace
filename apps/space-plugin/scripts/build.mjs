@@ -93,6 +93,7 @@ await build({
     'src/html-view-tool.ts',
     'src/svg-tool.ts',
     'src/skills.ts',
+    'src/resources-tool.ts',
     'src/viewer-data.ts',
     'src/host-layout.ts',
     'src/editor-http.ts',
@@ -104,7 +105,7 @@ await build({
   packages: 'external',
   splitting: true,
   plugins: [{ name: 'bundle-shared-content-runtime', setup(build) {
-    build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime(?:\/(?:api-reference|workspace-spaces|workspace-resources|workspace-exchange|workspace-session-path|workspace-inspection|workspace-blob|workspace-html-view|workspace-svg|workspace-skill-resources))?$/ }, (args) => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
+    build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime(?:\/(?:api-reference|workspace-spaces|workspace-resources|workspace-exchange|workspace-session-path|workspace-inspection|workspace-blob|workspace-html-view|workspace-svg|workspace-skill-resources|workspace-resource-library))?$/ }, (args) => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
   } }],
   target: 'node24',
   logLevel: 'info',
@@ -138,3 +139,5 @@ await build({ entryPoints: ['src/base-worker.ts'], outfile: 'lib/base-editor-wor
 
 // Preserve the original Workspace Skill bodies, references and templates in the installed plugin.
 await cp('../../packages/dsh-univer-workspace-plugin/skills', 'lib/skills', { recursive: true });
+
+await copyFile(fileURLToPath(import.meta.resolve('@univerjs-pro/cli-assets/manifest.json')), 'lib/resource-manifest.json');
