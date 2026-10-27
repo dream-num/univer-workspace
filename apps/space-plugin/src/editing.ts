@@ -4,6 +4,9 @@ import { authorizedSessionPath } from '@univerjs/univer-workspace-agent-runtime/
 import type { Context } from '@deepseek-ai/cordis';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
 import { SpaceError, type WorkspaceConnection } from './workspace.js';
+import { resolveDraftTarget } from './draft-target.js';
+import { createWorktree, addWorktreeTrunkUnit, getWorktreeDetail, worktreeSummaryFromDetail, markWorktreeReady, reopenWorktree } from '@univerjs/univer-workspace-agent-runtime/workspace-worktree-api';
+import { openResource } from '@univerjs/univer-workspace-agent-runtime/workspace-resources';
 import type { FileReference, ToolBindings } from './tools.js';
 import type { Proposal } from './model.js';
 export type { Proposal } from './model.js';
@@ -195,7 +198,33 @@ export class AgentEditing {
     }
   }
   async worktree(session: string, args: any, signal: AbortSignal) {
-    if (!['create', 'ready'].includes(args.action))
+    const current = this.bindings.currentFile(session);
+    const general = (args.action === 'create' && (!current || (args.resourceId && args.resourceId !== current.resourceId))) ||
+      (args.action === 'ready' && args.worktreeId && !this.matchingProposal(session, args)) || (args.action === 'reopen' && !this.matchingProposal(session, args));
+    if (general) {
+      const identity = this.workspace.identitySignal;
+      const status = await this.workspace.status();
+      identity.throwIfAborted();
+      if (status.state !== 'connected' || !status.user?.id) throw new SpaceError(401, 'Sign in to Workspace first.');
+      const lifetime = AbortSignal.any([signal, identity]);
+      const client = { origin: status.endpoint, sessionToken: '', request: (path: string, init: RequestInit = {}) => this.workspace.rawRequest(path, {
+        ...init, signal: init.signal ? AbortSignal.any([lifetime, init.signal]) : lifetime,
+      }) };
+      if (args.action === 'create') {
+        if (args.resourceId !== undefined && (typeof args.resourceId !== 'string' || !args.resourceId.trim())) throw new SpaceError(400, 'Provide a valid Resource id.');
+        if (args.name !== undefined && (typeof args.name !== 'string' || !args.name.trim())) throw new SpaceError(400, 'Provide a valid Worktree name.');
+        if (args.resourceId) await openResource(client, args.resourceId);
+        const created = await createWorktree(client, { name: args.name ?? 'Univer worktree', summary: args.summary ?? null });
+        if (!args.resourceId) return created;
+        const added = await addWorktreeTrunkUnit(client, created.id, args.resourceId);
+        const detail = await getWorktreeDetail(client, created.id);
+        if (!detail.units.some(unit => unit.unitId === added.unitId && unit.resourceId === args.resourceId)) throw new SpaceError(502, 'The Worktree was created but its Unit was not registered.');
+        return worktreeSummaryFromDetail(detail);
+      }
+      if (typeof args.worktreeId !== 'string' || !args.worktreeId.trim()) throw new SpaceError(400, 'A Worktree id is required.');
+      return args.action === 'ready' ? markWorktreeReady(client, args.worktreeId) : reopenWorktree(client, args.worktreeId);
+    }
+    if (!['create', 'ready', 'reopen'].includes(args.action))
       throw new SpaceError(
         403,
         'Apply or reject changes in the document Review controls.',
@@ -203,6 +232,11 @@ export class AgentEditing {
     const p = await this.target(session, args);
     return this.perform(p, signal, async () => {
       const id = await this.ensureDraft(p);
+      if (args.action === 'reopen') {
+        await this.post(`/api/worktrees/${id}/reopen`);
+        p.phase = 'editing';
+        p.review = undefined;
+      }
       if (args.action === 'ready') {
         if (p.revision === undefined)
           throw new SpaceError(409, 'No draft changes were committed.');
@@ -216,6 +250,31 @@ export class AgentEditing {
       };
     });
   }
+  /** Existing current-document proposals keep their Review state; other explicit Worktrees use Server identities. */
+  private matchingProposal(session: string, args: any) {
+    const file = this.bindings.currentFile(session);
+    if (!file) return undefined;
+    const p = this.proposals.get(this.key(session, file.nodeId));
+    if (!p?.worktreeId || p.worktreeId !== args.worktreeId) return undefined;
+    if ((args.nodeId && args.nodeId !== file.nodeId) || (args.resourceId && args.resourceId !== file.resourceId) || (args.unitId && args.unitId !== file.unitId) || (args.unitType && args.unitType !== file.type)) return undefined;
+    return p;
+  }
+  async draftTarget(session: string, args: any, signal: AbortSignal, write = false) {
+    return resolveDraftTarget(this.workspace, this.bindings, session, args, signal, write);
+  }
+  private async editExplicitDraft(session: string, args: any, signal: AbortSignal) {
+    const identity = this.workspace.identitySignal;
+    const target = await this.draftTarget(session, args, signal, args.mode === 'write');
+    identity.throwIfAborted();
+    if (args.mode === 'read') {
+      const value = await this.workspace.readUnitDraft(target, target.worktreeId, args.code, args.revision);
+      signal.throwIfAborted(); identity.throwIfAborted();
+      return { committed: false, value, file: target, worktreeId: target.worktreeId };
+    }
+    const result = await this.workspace.executeDraft(target, target.worktreeId, args.code, args.revision, signal);
+    signal.throwIfAborted(); identity.throwIfAborted();
+    return { ...result, value: result.value ?? null, file: target, worktreeId: target.worktreeId, committedToSharedDocument: false };
+  }
   async edit(session: string, args: any, signal: AbortSignal) {
     if (
       !['read', 'write'].includes(args.mode) ||
@@ -228,6 +287,7 @@ export class AgentEditing {
         'mode=read or write and bounded Facade code are required.',
       );
     if (args.revision !== undefined && (!Number.isSafeInteger(args.revision) || args.revision < 0)) throw new SpaceError(400, 'Invalid revision.');
+    if (args.worktreeId && !this.matchingProposal(session, args)) return this.editExplicitDraft(session, args, signal);
     const explicit = args.nodeId || args.resourceId || args.unitId;
     const admitted = explicit ? undefined : this.bindings.writingTurn(session);
     const file = explicit ? await this.bindings.resolve(session, args, signal) : admitted?.file;
@@ -302,6 +362,14 @@ export class AgentEditing {
     return { ...result, value: result.value ?? null, file, committedToSharedDocument: result.committed };
   }
   async exportDraft(session: string, args: any, signal: AbortSignal) {
+    if (!this.matchingProposal(session, args)) {
+      const identity = this.workspace.identitySignal;
+      const target = await this.draftTarget(session, args, signal);
+      identity.throwIfAborted();
+      const value = await this.workspace.exportUnitData(target, target.worktreeId, args.revision);
+      signal.throwIfAborted(); identity.throwIfAborted();
+      return value;
+    }
     const p = await this.target(session, args);
     if (!p.worktreeId || p.worktreeId !== args.worktreeId || p.operation) throw new SpaceError(409, 'No completed draft is available.');
     await this.authorize(p);
@@ -311,6 +379,29 @@ export class AgentEditing {
   }
   async inspect(session: string, args: any, signal: AbortSignal) {
     signal.throwIfAborted();
+    if (!this.matchingProposal(session, args)) {
+      const identity = this.workspace.identitySignal;
+      const target = await this.draftTarget(session, args, signal);
+      identity.throwIfAborted();
+      const range = args.range && args.sheet && !args.range.includes('!') ? `'${args.sheet.replace(/'/g, "''")}'!${args.range}` : args.range;
+      if (target.type === 'board' || target.type === 'base') {
+        if (range) throw new SpaceError(400, 'Range inspection requires a Sheet Unit.');
+        const offset = args.offset ?? 0, limit = args.limit ?? 120;
+        if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 400) throw new SpaceError(400, 'offset >= 0 and 1 <= limit <= 400 are required.');
+        const rows = JSON.stringify(await this.workspace.exportUnitData(target, target.worktreeId, args.revision), null, 2).split('\n');
+        const lines: { index: number; text: string }[] = []; let length = 0;
+        for (let i = offset; i < Math.min(rows.length, offset + limit); i++) {
+          if (rows[i]!.length > 24000) throw new SpaceError(413, 'A content line exceeds the read limit.');
+          if (length + rows[i]!.length > 24000) break;
+          length += rows[i]!.length; lines.push({ index: i, text: rows[i]! });
+        }
+        signal.throwIfAborted(); identity.throwIfAborted();
+        return { file: target, worktreeId: target.worktreeId, scope: 'draft', format: 'univer-unit-json', offset, total: rows.length, lines, nextOffset: offset + lines.length < rows.length ? offset + lines.length : null };
+      }
+      const result = await this.workspace.inspectUnit(target, range, args.revision, target.worktreeId);
+      signal.throwIfAborted(); identity.throwIfAborted();
+      return { file: target, worktreeId: target.worktreeId, scope: 'draft', result };
+    }
     const p = await this.target(session, args);
     if (!p.worktreeId || p.operation)
       throw new SpaceError(409, 'No completed draft is available to inspect.');
@@ -453,12 +544,13 @@ export function registerEditingTools(ctx: Context, editing: AgentEditing) {
     ctx.tools.register({
       name: 'univer_worktree',
       description:
-        'Create an isolated draft of the document fixed when this request was sent, then mark it ready for human Review. Never merges or publishes. The user applies/rejects in the current document.',
+        'Create or ready an isolated Workspace Worktree, or reopen a ready draft. The current Docs or Sheets document uses the existing in-document Review controls. Other Worktree Review surfaces are not connected in this host; this tool never merges or publishes.',
       parameters: {
         type: 'object',
         properties: {
           ...identity,
-          action: { type: 'string', enum: ['create', 'ready'] },
+          action: { type: 'string', enum: ['create', 'ready', 'reopen'] },
+          name: { type: 'string' }, summary: { type: 'string' },
         },
         required: ['action'],
       },

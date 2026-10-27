@@ -74,13 +74,13 @@ export class WorkspaceConnection {
   }
   private runtime = new RuntimeManager(new URL('./workspace-content-worker.js', import.meta.url));
   /** Host-only credential boundary. No credential enters Tool results or UI. */
-  private draftTarget(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, revision = -1) {
+  private draftTarget(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, worktreeId: string, revision = -1) {
     const token = this.cookie.match(/(?:^|; )workspace_session=([^;]+)/)?.[1];
     if (!token || this.endpoint !== file.endpoint) throw new SpaceError(401, 'Workspace identity changed.');
     return { origin: this.endpoint, sessionToken: token, license: this.license, revision, scope: { kind: 'worktree' as const, worktreeId }, unitId: file.unitId, unitType: file.type };
   }
-  async executeDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, code: string, revision = -1) {
-    return this.runtime.writeAndCommit(this.draftTarget(file, worktreeId, revision), code);
+  async executeDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, worktreeId: string, code: string, revision = -1, signal?: AbortSignal) {
+    return this.runtime.writeAndCommit(this.draftTarget(file, worktreeId, revision), code, signal ? AbortSignal.any([signal, this.identitySignal]) : this.identitySignal);
   }
   /** Commit through the original collaboration runtime and authenticated trunk endpoints. */
   async executeTrunk(
@@ -102,7 +102,7 @@ export class WorkspaceConnection {
   async readUnit(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, code: string, revision = -1) {
     return this.runtime.read(this.unitTarget(file, undefined, revision), code);
   }
-  async readUnitDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, code: string, revision = -1) {
+  async readUnitDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, worktreeId: string, code: string, revision = -1) {
     return this.runtime.read(this.unitTarget(file, worktreeId, revision), code);
   }
   async exportUnitData(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, worktreeId?: string, revision = -1) {

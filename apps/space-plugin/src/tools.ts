@@ -408,12 +408,12 @@ export function registerReadTools(
         if (!args || typeof args !== 'object' || Array.isArray(args)) throw new SpaceError(400, 'Invalid inspection request.');
         if (['nodeId', 'resourceId', 'unitId', 'unitType', 'sheet', 'range', 'worktreeId'].some(key => args[key] !== undefined && (typeof args[key] !== 'string' || !args[key].trim()))) throw new SpaceError(400, 'Invalid inspection selector.');
         if (args.revision !== undefined && (!Number.isSafeInteger(args.revision) || args.revision < 0)) throw new SpaceError(400, 'Invalid revision.');
+        if (args.worktreeId && inspectDraft) return inspectDraft(id, args, exec.signal);
+        if (args.worktreeId) throw new SpaceError(400, 'Draft inspection is unavailable.');
         const explicit = args.nodeId || args.resourceId || args.unitId;
         const file = explicit ? await bindings.resolve(id, args, exec.signal) : bindings.currentFile(id);
         if (!file) throw new SpaceError(403, 'No document is associated with this request.');
         if (args.unitType && args.unitType !== file.type) throw new SpaceError(409, 'The supplied Unit type does not match this document.');
-        if (args.worktreeId && inspectDraft) return inspectDraft(id, { ...args, nodeId: file.nodeId }, exec.signal);
-        if (args.worktreeId) throw new SpaceError(400, 'Draft inspection is unavailable.');
         if (['doc', 'sheet', 'slide'].includes(file.type) && (args.unitId || args.range || args.revision !== undefined)) {
           const range = args.range && args.sheet && !args.range.includes('!') ? `'${args.sheet.replace(/'/g, "''")}'!${args.range}` : args.range;
           const identity = workspace.identitySignal;

@@ -53,7 +53,7 @@ export function apply(ctx: Context) {
   ctx.effect(() => registerSvgTool(ctx, editing));
   ctx.effect(() => registerResourcesTool(ctx, workspace));
   ctx.effect(() => registerIssueTool(ctx, workspace, bindings));
-  ctx.effect(() => registerLintTool(ctx, workspace, bindings));
+  ctx.effect(() => registerLintTool(ctx, workspace, bindings, editing));
   ctx.effect(() => registerStatusTool(ctx, workspace));
   ctx.effect(() => registerUnitTool(ctx, workspace, bindings));
   ctx.inject(['attachments'], (imageContext) => { imageContext.effect(() => registerScreenshotTool(imageContext, workspace, bindings, editing)); });

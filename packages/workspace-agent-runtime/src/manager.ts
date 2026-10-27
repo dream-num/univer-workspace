@@ -206,11 +206,12 @@ export class RuntimeManager {
   public async writeAndCommit(
     target: WorkspaceRuntimeTarget,
     code: string,
+    signal?: AbortSignal,
   ): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }> {
     if (target.scope.kind !== "worktree") {
       throw new Error("workspace target is not editable: execute requires a Worktree target");
     }
-    return await this.commitWrite(target, code);
+    return await this.commitWrite(target, code, signal);
   }
 
   /** Explicit product opt-in: commit normal Agent edits to the shared trunk. */

@@ -25,7 +25,7 @@ export function registerScreenshotTool(ctx: Context, workspace: WorkspaceConnect
       const attachments = ctx.get('attachments') as AttachmentStoreLike | undefined;
       const llm = ctx.get('llm') as LlmServiceLike | undefined;
       return screenshotWithAttachments(args, { agent: exec.agent, signal }, attachments, llm, async () => {
-        const file = await bindings.resolve(sessionId, { unitId: args.unitId, unitType: args.unitType }, signal);
+        const file = args.worktreeId ? await editing.draftTarget(sessionId, args, signal) : await bindings.resolve(sessionId, { unitId: args.unitId, unitType: args.unitType }, signal);
         if (file.type === 'site') throw new SpaceError(400, 'A Univer Unit is required.');
         const unitData = args.worktreeId
           ? await editing.exportDraft(sessionId, args, signal)
