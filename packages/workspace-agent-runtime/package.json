@@ -73,6 +73,10 @@
     "./workspace-blob": {
       "types": "./src/workspace/blob-api.ts",
       "default": "./lib/workspace/blob-api.js"
+    },
+    "./workspace-html-view": {
+      "types": "./src/workspace/html-view.ts",
+      "default": "./lib/workspace/html-view.js"
     }
   },
   "scripts": {
@@ -88,7 +92,8 @@
     "@univerjs-pro/engine-formula-rust": "1.1.0",
     "@univerjs-pro/exchange-node": "1.1.0",
     "@univerjs/protocol": "1.1.0",
-    "@univerjs/core": "1.1.0"
+    "@univerjs/core": "1.1.0",
+    "@univerjs-labs/html-view": "1.0.0-dev.6518eb0"
   },
   "devDependencies": {
     "@univer-cli/api-reference": "1.1.0",
