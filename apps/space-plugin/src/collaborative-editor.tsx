@@ -1,6 +1,6 @@
 import { WorkspaceCollaborationSocketService } from './collaboration-socket.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createUniver, LocaleType, mergeLocales } from '@univerjs/presets';
+import { createUniver, LocaleType, mergeLocales, type IPreset, type IPresetPlugin } from '@univerjs/presets';
 import { IRenderManagerService } from '@univerjs/engine-render';
 import { DocSelectionRenderService } from '@univerjs/docs-ui';
 import { UniverUIPlugin, ISidebarService } from '@univerjs/ui';
@@ -11,17 +11,16 @@ import { DocStateChangeManagerService } from '@univerjs/docs';
 import { CommandType } from '@univerjs/core';
 import { UniverDocsDrawingPreset } from '@univerjs/preset-docs-drawing';
 import docsDrawingLocale from '@univerjs/preset-docs-drawing/locales/zh-CN';
-import { UniverSheetsDrawingPreset } from '@univerjs/preset-sheets-drawing';
 import sheetsDrawingLocale from '@univerjs/preset-sheets-drawing/locales/zh-CN';
 import { UniverDocsThreadCommentPreset } from '@univerjs/preset-docs-thread-comment';
-import { UniverSheetsThreadCommentPreset } from '@univerjs/preset-sheets-thread-comment';
 import docCommentLocale from '@univerjs/preset-docs-thread-comment/locales/zh-CN';
 import sheetCommentLocale from '@univerjs/preset-sheets-thread-comment/locales/zh-CN';
 import { UniverThreadCommentDataSourcePlugin } from '@univerjs-pro/thread-comment-datasource';
 import { ThreadCommentPanelService } from '@univerjs/thread-comment-ui';
 import { getDocThreadCommentCollaborationPlugins } from './workarounds/doc-thread-comment-delete.js';
 import { UniverDocsCorePreset } from '@univerjs/preset-docs-core';
-import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
+import { createSheetEditorPresets, sheetEditorLocales } from '@univerjs/univer-workspace-editor-presets/sheets';
+import { UniverSheetsHistoryUIPlugin } from '@univerjs-pro/sheets-history-ui';
 import docsLocale from '@univerjs/preset-docs-core/locales/zh-CN';
 import sheetsLocale from '@univerjs/preset-sheets-core/locales/zh-CN';
 import { UniverCollaborationPlugin } from '@univerjs-pro/collaboration';
@@ -151,36 +150,51 @@ export function CollaborativeEditor({
       const endpoint = file.endpoint,
         socketURL = new URL('/universer-api/comb/connect', endpoint);
       socketURL.protocol = socketURL.protocol === 'https:' ? 'wss:' : 'ws:';
-      const corePreset =
-        file.type === 'doc'
-          ? UniverDocsCorePreset({ container: element, ribbonType: 'grid' })
-          : UniverSheetsCorePreset({
-              container: element,
-              ribbonType: 'classic',
-            });
-      // Configure the Network plugin in its existing preset position. Registering
-      // a separate preset first gets overwritten by the core preset's entry.
-      corePreset.plugins = corePreset.plugins.map((entry) =>
-        (Array.isArray(entry) ? entry[0] : entry) === UniverNetworkPlugin
-          ? [
-              UniverNetworkPlugin,
-              { override: [[IHTTPImplementation, { useValue: transport }]] },
-            ]
-          : (Array.isArray(entry) ? entry[0] : entry) === UniverUIPlugin
-            ? [
-                UniverUIPlugin,
-                {
-                  ...(Array.isArray(entry) ? entry[1] : {}),
-                  // Original neutral fallback for authors without a profile image.
-                  avatarFallback:
-                    'data:image/svg+xml,' +
-                    encodeURIComponent(
-                      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="16" fill="#ededed"/><circle cx="16" cy="12" r="5" fill="#888"/><path d="M6 29a10 10 0 0 1 20 0" fill="#888"/></svg>',
-                    ),
-                },
-              ]
-            : entry,
-      );
+      const collaborationConfig = {
+        socketService: WorkspaceCollaborationSocketService,
+        enableOfflineEditing: true,
+        enableSingleActiveInstanceLock: false,
+        enableAuthServer: true,
+        sendChangesetTimeout: 200,
+        retryConnectingInterval: 1000,
+        snapshotServerUrl: '/universer-api/snapshot',
+        collabSubmitChangesetUrl: '/universer-api/comb',
+        collabWebSocketUrl: socketURL.href,
+        wsSessionTicketUrl: '/universer-api/user/session-ticket',
+        authzUrl: '/universer-api/authz',
+        objectPermissionTypes: [
+          UnitObject.Worksheet,
+          UnitObject.SelectRange,
+          UnitObject.DocumentSection,
+          UnitObject.DocumentParagraph,
+          UnitObject.DocumentEntity,
+        ],
+      };
+      const editorPresets: IPreset[] = file.type === 'doc'
+        ? [UniverDocsCorePreset({ container: element, ribbonType: 'grid' }),
+            UniverDocsDrawingPreset({ collaboration: true }), UniverDocsThreadCommentPreset()]
+        : createSheetEditorPresets({ container: element, license: workspaceLicense, universerEndpoint: endpoint });
+      // Preserve Browser's original plugin order, replacing only the Host transport
+      // and credential-bound collaboration endpoints at their existing positions.
+      const presets: IPreset[] = editorPresets.map((preset) => ({ ...preset, plugins: preset.plugins.map((entry): IPresetPlugin => {
+        const plugin = Array.isArray(entry) ? entry[0] : entry;
+        const config = Array.isArray(entry) ? entry[1] : {};
+        if (plugin === UniverNetworkPlugin) return [UniverNetworkPlugin, { ...config, override: [[IHTTPImplementation, { useValue: transport }]] }];
+        if (plugin === UniverCollaborationClientPlugin) return [UniverCollaborationClientPlugin, { ...config, ...collaborationConfig }];
+        if (plugin === UniverCollaborationClientUIPlugin) return [UniverCollaborationClientUIPlugin, { ...config, enableDocumentCollaborationUI: true, enableUrlUnitLoader: false }];
+        if (plugin === UniverSheetsHistoryUIPlugin) return [UniverSheetsHistoryUIPlugin, { ...config, historyServerUrl: '/universer-api/history', univerContainerId: element.id }];
+        if (plugin === UniverUIPlugin) return [UniverUIPlugin, { ...config,
+          avatarFallback: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="16" fill="#ededed"/><circle cx="16" cy="12" r="5" fill="#888"/><path d="M6 29a10 10 0 0 1 20 0" fill="#888"/></svg>'),
+        }];
+        return entry;
+      }) }));
+      const collaborationPlugins: IPresetPlugin[] = file.type === 'doc'
+        ? [UniverCollaborationPlugin,
+            [UniverCollaborationClientPlugin, collaborationConfig],
+            [UniverCollaborationClientUIPlugin, { enableDocumentCollaborationUI: true, enableUrlUnitLoader: false }],
+            ...getDocThreadCommentCollaborationPlugins()]
+        : [UniverThreadCommentDataSourcePlugin];
+      const licensePreset: IPreset = { plugins: [[UniverLicensePlugin, { license: workspaceLicense }]] };
       runtime = createUniver({
         locale: LocaleType.ZH_CN,
         collaboration: true,
@@ -188,6 +202,7 @@ export function CollaborativeEditor({
           [LocaleType.ZH_CN]: mergeLocales(
             docsLocale,
             sheetsLocale,
+            sheetEditorLocales['zh-CN'],
             collabLocale,
             collabUILocale,
             docCommentLocale,
@@ -197,52 +212,10 @@ export function CollaborativeEditor({
           ),
         },
         presets: [
-          { plugins: [[UniverLicensePlugin, { license: workspaceLicense }]] },
-          corePreset,
-          ...(file.type === 'doc'
-            ? [
-                UniverDocsDrawingPreset({ collaboration: true }),
-                UniverDocsThreadCommentPreset(),
-              ]
-            : [
-                UniverSheetsDrawingPreset({ collaboration: true }),
-                UniverSheetsThreadCommentPreset(),
-              ]),
+          ...(file.type === 'doc' ? [licensePreset] : []),
+          ...presets,
         ],
-        plugins: [
-          UniverCollaborationPlugin,
-          [
-            UniverCollaborationClientPlugin,
-            {
-              socketService: WorkspaceCollaborationSocketService,
-              enableOfflineEditing: true,
-              // Independent clients must not be locked out when they share a browser profile.
-              enableSingleActiveInstanceLock: false,
-              enableAuthServer: true,
-              sendChangesetTimeout: 200,
-              retryConnectingInterval: 1000,
-              snapshotServerUrl: '/universer-api/snapshot',
-              collabSubmitChangesetUrl: '/universer-api/comb',
-              collabWebSocketUrl: socketURL.href,
-              wsSessionTicketUrl: '/universer-api/user/session-ticket',
-              authzUrl: '/universer-api/authz',
-              objectPermissionTypes: [
-                UnitObject.Worksheet,
-                UnitObject.SelectRange,
-                UnitObject.DocumentSection,
-                UnitObject.DocumentParagraph,
-                UnitObject.DocumentEntity,
-              ],
-            },
-          ],
-          [
-            UniverCollaborationClientUIPlugin,
-            { enableDocumentCollaborationUI: true, enableUrlUnitLoader: false },
-          ],
-          ...(file.type === 'doc'
-            ? getDocThreadCommentCollaborationPlugins()
-            : [UniverThreadCommentDataSourcePlugin]),
-        ],
+        plugins: collaborationPlugins,
       });
       const { univer, univerAPI: api } = runtime;
       // Track the full public HTTP pipeline before the SDK's merge interceptor,

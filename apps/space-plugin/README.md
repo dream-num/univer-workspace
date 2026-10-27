@@ -97,6 +97,10 @@ eight creation kinds and six file lifecycle paths. CRUD, collaboration, sharing
 and human-collaboration Web scripts use `authorizeWorkspace` through the same
 OAuth flow. Run native Desktop checks separately.
 
+The Sheet editor now uses the same shared Browser preset source for its core,
+advanced features, and collaboration stack. Its Workspace Host transport is
+configured in place.
+
 For the original Workspace Browser's minimum assembly check, serve it with its
 own Vite config against the same Server, set `SPACE_WORKSPACE_BROWSER_ORIGIN`,
 and run `node scripts/check-editor-assembly-live.mjs`. It observes the real
