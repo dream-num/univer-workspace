@@ -37,6 +37,18 @@
     "./api-reference": {
       "types": "./src/api-reference.d.ts",
       "default": "./lib/api-reference.js"
+    },
+    "./workspace-spaces": {
+      "types": "./src/workspace/index.ts",
+      "default": "./lib/workspace/index.js"
+    },
+    "./workspace-api-errors": {
+      "types": "./src/workspace/api-errors.ts",
+      "default": "./lib/workspace/api-errors.js"
+    },
+    "./workspace-wire": {
+      "types": "./src/workspace/wire.ts",
+      "default": "./lib/workspace/wire.js"
     }
   },
   "scripts": {

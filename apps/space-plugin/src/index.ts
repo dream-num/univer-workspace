@@ -104,6 +104,7 @@ export function apply(ctx: Context) {
             string('nodeId', true),
             string('owner'),
             Number(sequence),
+            string('space', true),
           );
           break;
         }

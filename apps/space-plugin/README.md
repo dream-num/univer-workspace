@@ -104,10 +104,12 @@ collaboration WebSocket and current History version, performs no edits, and
 compares persisted Snapshot hashes. This does not certify Comments writes,
 multi-user editing or offline persistence.
 
-The Workspace read tools are `univer_spaces`, `univer_documents`, `univer_open`,
-and `univer_inspect`. A native Session can list Spaces or open an authorized Node,
-Resource or Unit without a current file; inspection uses its Session association.
-The Server rechecks access. `univer_api` reuses the original version-matched
+The Workspace read tools are `univer_spaces`, `univer_documents`, `univer_list`,
+`univer_open`, and `univer_inspect`. Directory discovery uses the original
+recursive Workspace implementation and filters, defaulting to the Space captured
+when the native request was admitted. A native Session can open an authorized
+Node, Resource or Unit without a current file; inspection uses its Session
+association. The Server rechecks access. `univer_api` reuses the original version-matched
 Facade reference lookup without needing document access. Inspection reads current Server
 content, returns revision/hash and bounded text/cell/structured-Unit/HTML-source lines, and exposes
 `nextOffset` for paging. The discovery/read operations remain bounded and Session-scoped; draft inspection uses the existing headless inspection runtime. They do not yet provide the complete old plugin interface. Ordinary `univer_edit` calls select the document admitted with the native request, or an explicitly identified authorized Unit, and commit Facade mutations to trunk through the original collaboration runtime. An explicitly created Worktree retains the existing Docs/Sheets draft and Review workflow. Apply requires the displayed Server review token and rechecks revisions/ACL atomically; Reject/Cancel discard the draft. Removing the current-document association does not erase a durable message or

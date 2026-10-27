@@ -1,5 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
+import { listOptions, listOutput, listSpaceDocuments, type ListArguments } from '@univerjs/univer-workspace-agent-runtime/workspace-spaces';
+import { workspaceListParameters, workspaceListOutput } from './workspace-list-contract.js';
 import { referenceText, type Content, type FileReference } from './model.js';
 export type { FileReference } from './model.js';
 import { SpaceError, type WorkspaceConnection } from './workspace.js';
@@ -15,13 +17,13 @@ export class ToolBindings {
   private epoch = 0;
   private current = new Map<
     string,
-    { owner: string; sequence: number; file: FileReference | null }
+    { owner: string; sequence: number; file: FileReference | null; space: string }
   >();
   private requested = new Map<string, number>();
-  private admissions = new Map<string, FileReference | null>();
+  private admissions = new Map<string, { file: FileReference | null; space: string }>();
   private turns = new Map<
     string,
-    { turn: number; file: FileReference | null }
+    { turn: number; file: FileReference | null; space: string }
   >();
   constructor(private workspace: WorkspaceConnection) {}
   clear() {
@@ -112,6 +114,7 @@ export class ToolBindings {
     nodeId: string,
     owner: string,
     sequence: number,
+    space = '',
   ) {
     const key = `${sessionId}/${owner}`,
       epoch = this.epoch;
@@ -121,15 +124,13 @@ export class ToolBindings {
     const file = nodeId ? await this.bind(sessionId, nodeId) : null;
     if (epoch !== this.epoch || this.requested.get(key) !== sequence)
       return { applied: false };
-    this.current.set(sessionId, { owner, sequence, file });
+    this.current.set(sessionId, { owner, sequence, file, space });
     return { applied: true, file };
   }
   /** Snapshot at native inbox admission, including queued human messages. */
   admit(sessionId: string, messageId: string) {
-    this.admissions.set(
-      `${sessionId}/${messageId}`,
-      this.current.get(sessionId)?.file ?? null,
-    );
+    const current = this.current.get(sessionId);
+    this.admissions.set(`${sessionId}/${messageId}`, { file: current?.file ?? null, space: current?.space ?? '' });
   }
   beginStep(
     sessionId: string,
@@ -140,12 +141,13 @@ export class ToolBindings {
     const admitted = messages.find((message) =>
       this.admissions.has(`${sessionId}/${message.id}`),
     );
-    const file = admitted
+    const current = this.current.get(sessionId);
+    const context = admitted
       ? this.admissions.get(`${sessionId}/${admitted.id}`)!
-      : (this.current.get(sessionId)?.file ?? null);
+      : { file: current?.file ?? null, space: current?.space ?? '' };
     for (const message of messages)
       this.admissions.delete(`${sessionId}/${message.id}`);
-    this.turns.set(sessionId, { turn, file });
+    this.turns.set(sessionId, { turn, ...context });
   }
   discard(sessionId: string, messageId: string) {
     this.admissions.delete(`${sessionId}/${messageId}`);
@@ -160,6 +162,9 @@ export class ToolBindings {
         ? null
         : (this.current.get(sessionId)?.file ?? null))
     );
+  }
+  currentSpace(sessionId: string) {
+    return this.turns.has(sessionId) ? this.turns.get(sessionId)?.space ?? '' : this.current.get(sessionId)?.space ?? '';
   }
   activeTurn(sessionId: string) {
     return this.turns.get(sessionId);
@@ -301,6 +306,39 @@ export function registerReadTools(
       { type: 'text' as const, text: JSON.stringify(value) },
     ],
   };
+  const listDocuments = async (args: any, exec: ToolRunContext) => {
+    const id = session(exec);
+    if (!id) throw new SpaceError(403, 'A native Agent Session is required.');
+    if (!args || typeof args !== 'object' || Array.isArray(args) ||
+        ['spaceId', 'parentNodeId', 'query'].some(key => (args as any)[key] !== undefined && typeof (args as any)[key] !== 'string') ||
+        (args.recursive !== undefined && typeof args.recursive !== 'boolean') ||
+        (args.resourceKind !== undefined && !['univer', 'blob', 'folder', 'all'].includes(args.resourceKind)) ||
+        (args.unitType !== undefined && !['sheet', 'doc', 'slide', 'board', 'base'].includes(args.unitType)))
+      throw new SpaceError(400, 'Invalid Workspace list filters.');
+    const status = await workspace.status();
+    if (status.state !== 'connected' || !status.user?.id) throw new SpaceError(401, 'Sign in to Workspace first.');
+    let spaceId = args.spaceId ?? bindings.currentSpace(id);
+    if (args.spaceId !== undefined && !args.spaceId.trim()) throw new SpaceError(400, 'Space id must be non-empty.');
+    if (!spaceId) {
+      const result = await workspace.json('/api/spaces', { signal: exec.signal });
+      spaceId = result.spaces.find((space: any) => space.type === 'personal' && space.accessRole === 'owner')?.id ?? '';
+    }
+    if (!spaceId) throw new SpaceError(404, 'No personal Workspace Space is available.');
+    const client = { request: (path: string, init: RequestInit = {}) => workspace.request(path, {
+      ...init, signal: init.signal ? AbortSignal.any([exec.signal, init.signal]) : exec.signal,
+    }) };
+    return listOutput(await listSpaceDocuments(client, spaceId, listOptions(args as ListArguments)), spaceId);
+  };
+  const listTool = (name: 'univer_documents' | 'univer_list') => ({
+    name,
+    description: name === 'univer_documents'
+      ? 'List Nodes in a Univer Workspace Space. Omit spaceId to use the current Space or personal Space, or provide another accessible Space. Includes nested folders and Univer and Blob resources; filter by parentNodeId, recursive, query, resourceKind, or unitType.'
+      : 'Alias of univer_documents with the same Space and filter options.',
+    parameters: { ...workspaceListParameters },
+    output: { ...output, schema: workspaceListOutput },
+    execute: listDocuments,
+    presentCall: () => ({ card: 'generic' as const, title: 'List Workspace documents', kind: 'read' as const }),
+  });
   const disposers = [
     ctx.tools.register({
       name: 'univer_spaces',
@@ -318,23 +356,8 @@ export function registerReadTools(
         return workspace.json('/api/spaces', { signal: exec.signal });
       },
     }),
-    ctx.tools.register({
-      name: 'univer_documents',
-      description:
-        'List stable file references explicitly associated with this native Conversation. Does not read document bodies.',
-      parameters: {
-        type: 'object',
-        properties: {},
-      },
-      output,
-      async execute(_args: any, exec: ToolRunContext) {
-        const scope = await bindings.scope(session(exec));
-        return {
-          files: [...scope.files.values()],
-          currentFile: bindings.currentFile(session(exec)!),
-        };
-      },
-    }),
+    ctx.tools.register(listTool('univer_documents')),
+    ctx.tools.register(listTool('univer_list')),
     ctx.tools.register({
       name: 'univer_open',
       description:

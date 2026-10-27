@@ -128,6 +128,7 @@ export function apply(ctx: any) {
       const result = await api('current', {
         sessionId,
         nodeId: removed ? '' : file.nodeId,
+        space: file.node?.spaceId ?? file.space?.id ?? view.space,
         owner: contextOwner,
         sequence,
       });
@@ -164,12 +165,13 @@ export function apply(ctx: any) {
         unblock();
     }
   }
-  async function clearCurrent(sessionId = view.sessionId) {
+  async function clearCurrent(sessionId = view.sessionId, space = view.location === 'space' || view.location === 'folder' ? view.space : '') {
     const sequence = ++contextSequence;
     if (sessionId)
       await api('current', {
         sessionId,
         nodeId: '',
+        space,
         owner: contextOwner,
         sequence,
       });
@@ -200,7 +202,7 @@ export function apply(ctx: any) {
       context: null,
       chatMode: 'compact',
     });
-    if (previous && previous !== id) await clearCurrent(previous);
+    if (previous && previous !== id) await clearCurrent(previous, '');
     if (
       request !== sessionRequest ||
       before !== generation ||
@@ -408,7 +410,7 @@ export function apply(ctx: any) {
     )
       return;
     if (view.sessionId && view.sessionId !== id) {
-      await clearCurrent(view.sessionId);
+      await clearCurrent(view.sessionId, '');
       if (
         request !== sessionRequest ||
         before !== generation ||
@@ -664,7 +666,7 @@ export function apply(ctx: any) {
     home: (location: 'home' | 'recent' = 'home', filter = 'all') =>
       run(async () => {
         await flushEditor();
-        void run(clearCurrent);
+        void run(() => clearCurrent(view.sessionId, ''));
         sessionRequest++;
         contentRequest++;
         directoryRequest++;

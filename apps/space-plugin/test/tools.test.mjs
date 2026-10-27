@@ -97,11 +97,12 @@ test('changed resource identity, cancellation and logout clear cannot use an old
 
 test('current Page is frozen at native message admission, including queued turns and removal', async () => {
   const f = setup();
-  await f.bindings.setCurrent('s1', 'n1', 'surface', 1);
+  await f.bindings.setCurrent('s1', 'n1', 'surface', 1, 'space-a');
   f.bindings.admit('s1', 'message-A');
-  await f.bindings.setCurrent('s1', '', 'surface', 2);
+  await f.bindings.setCurrent('s1', '', 'surface', 2, 'space-b');
   f.bindings.beginStep('s1', 10, [{ id: 'message-A' }]);
   assert.equal(f.bindings.currentFile('s1').nodeId, 'n1');
+  assert.equal(f.bindings.currentSpace('s1'), 'space-a');
   assert.match(f.bindings.contextText('s1'), /always call univer_inspect/);
   await f.bindings.setCurrent('s1', 'n1', 'surface', 3);
   f.bindings.admit('s1', 'message-B');
