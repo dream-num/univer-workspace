@@ -77,6 +77,18 @@ execFileSync(
   ],
   { stdio: 'inherit' },
 );
+// The Host treats packages as external, but HTML View is a build dependency.
+// Bundle it with its own dependency graph so installed plugins do not depend on
+// the private Labs registry or on development-only node_modules.
+const htmlViewBundle = (await build({
+  entryPoints: [fileURLToPath(import.meta.resolve('@univerjs-labs/html-view'))],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node24',
+  write: false,
+  logLevel: 'silent',
+})).outputFiles[0].text;
 // DSH public Tools types are erased. The Host owns the single Tools service.
 await build({
   entryPoints: [
@@ -112,6 +124,8 @@ await build({
   packages: 'external',
   splitting: true,
   plugins: [{ name: 'bundle-shared-content-runtime', setup(build) {
+    build.onResolve({ filter: /^@univerjs-labs\/html-view$/ }, () => ({ path: 'html-view', namespace: 'space-html-view' }));
+    build.onLoad({ filter: /.*/, namespace: 'space-html-view' }, () => ({ contents: htmlViewBundle, loader: 'js' }));
     build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime(?:\/(?:api-reference|workspace-spaces|workspace-resources|workspace-exchange|workspace-session-path|workspace-inspection|workspace-blob|workspace-html-view|workspace-svg|workspace-skill-resources|workspace-resource-library|workspace-issues|workspace-issue-operations|workspace-render|workspace-screenshot|workspace-file-state-api|workspace-worktree-api|workspace-state|workspace-status|workspace-unit-operations))?$/ }, (args) => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
   } }],
   target: 'node24',
