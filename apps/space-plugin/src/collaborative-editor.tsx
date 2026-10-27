@@ -22,6 +22,13 @@ import { UniverDocsCorePreset } from '@univerjs/preset-docs-core';
 import { createSheetEditorPresets, sheetEditorLocales } from '@univerjs/univer-workspace-editor-presets/sheets';
 import { createSlideEditorPresets, slideEditorLocales } from '@univerjs/univer-workspace-editor-presets/slides';
 import { createBoardEditorPresets, boardEditorLocales } from '@univerjs/univer-workspace-editor-presets/boards';
+import { createBaseEditorPresets, baseEditorLocales } from '@univerjs/univer-workspace-editor-presets/bases';
+import { UniverBasesThreadCommentUIPlugin } from '@univerjs-pro/bases-thread-comment-ui';
+import { UniverBasesHistoryUIPlugin } from '@univerjs-pro/bases-history-ui';
+import baseHistoryLocale from '@univerjs-pro/bases-history-ui/locale/zh-CN';
+import { UniverBasesExchangeClientPlugin } from '@univerjs-pro/bases-exchange-client';
+import { yellowTheme } from '@univerjs/themes';
+
 import { UniverBoardsThreadCommentUIPlugin, OpenBoardCommentPanelOperation } from '@univerjs-pro/boards-thread-comment-ui';
 import { UniverBoardsHistoryUIPlugin } from '@univerjs-pro/boards-history-ui';
 import boardHistoryLocale from '@univerjs-pro/boards-history-ui/locale/zh-CN';
@@ -101,6 +108,8 @@ export function CollaborativeEditor({
     let startup: Promise<void>;
     let runtime: ReturnType<typeof createUniver> | undefined;
     let transport: ReturnType<typeof editorHTTP> | undefined;
+    let docState: DocStateChangeManagerService | undefined;
+    let editorWorker: Worker | undefined;
     const disposables: { dispose(): void }[] = [];
     const subscriptions: { unsubscribe(): void }[] = [];
     const abort = new AbortController();
@@ -113,10 +122,7 @@ export function CollaborativeEditor({
       onCollaborators(state === CollaborationStatus.OFFLINE ? [] : lastMembers);
       if (state === CollaborationStatus.OFFLINE && !disconnected) {
         disconnected = true;
-        runtime?.univer
-          .__getInjector()
-          .get(DocStateChangeManagerService)
-          .flushPendingChanges(file.unitId);
+        docState?.flushPendingChanges(file.unitId);
       }
       // Resume with authoritative permissions and a fresh input surface, after
       // the SDK acknowledges its existing queue. This never writes a snapshot.
@@ -128,10 +134,7 @@ export function CollaborativeEditor({
       }
       setStatus(
         state === CollaborationStatus.SYNCED
-          ? runtime?.univer
-              .__getInjector()
-              .get(DocStateChangeManagerService)
-              .getStateCache(file.unitId).collaboration.length
+          ? (docState?.getStateCache(file.unitId).collaboration.length ?? 0)
             ? 'saving'
             : 'saved'
           : state === CollaborationStatus.OFFLINE
@@ -189,13 +192,15 @@ export function CollaborativeEditor({
           UnitObject.BaseRecord, UnitObject.BaseView, UnitObject.BaseDashboard,
         ],
       };
+      if (file.type === 'base') editorWorker = new Worker('/api/space/base-worker', { type: 'module' });
       const editorPresets: IPreset[] = file.type === 'doc'
         ? [UniverDocsCorePreset({ container: element, ribbonType: 'grid' }),
             UniverDocsDrawingPreset({ collaboration: true }), UniverDocsThreadCommentPreset()]
         : file.type === 'sheet'
           ? createSheetEditorPresets({ container: element, license: workspaceLicense, universerEndpoint: endpoint })
           : file.type === 'slide' ? createSlideEditorPresets(element)
-            : file.type === 'board' ? createBoardEditorPresets(element) : [];
+            : file.type === 'board' ? createBoardEditorPresets(element)
+              : file.type === 'base' ? createBaseEditorPresets(element, editorWorker!) : [];
       // Preserve Browser's original plugin order, replacing only the Host transport
       // and credential-bound collaboration endpoints at their existing positions.
       const presets: IPreset[] = editorPresets.map((preset) => ({ ...preset, plugins: preset.plugins.map((entry): IPresetPlugin => {
@@ -219,6 +224,15 @@ export function CollaborativeEditor({
               : file.type === 'board' ? [UniverBoardsThreadCommentUIPlugin, UniverThreadCommentDataSourcePlugin,
                   [UniverBoardsHistoryUIPlugin, { historyServerUrl: '/universer-api/history', univerContainerId: element.id }],
                   UniverBoardsPrintPlugin] as IPresetPlugin[]
+                : file.type === 'base' ? [UniverBasesThreadCommentUIPlugin, UniverThreadCommentDataSourcePlugin,
+                    [UniverBasesHistoryUIPlugin, { historyServerUrl: '/universer-api/history', univerContainerId: element.id }],
+                    [UniverExchangeClientPlugin, {
+                      uploadFileServerUrl: '/universer-api/stream/file/upload',
+                      getTaskServerUrl: '/universer-api/exchange/task/{taskID}',
+                      signUrlServerUrl: '/universer-api/file/{fileID}/sign-url',
+                      importServerUrl: '/universer-api/exchange/{type}/import',
+                      exportServerUrl: '/universer-api/exchange/{type}/export', downloadEndpointUrl: '/',
+                    }], UniverBasesExchangeClientPlugin] as IPresetPlugin[]
                 : [UniverSlidesThreadCommentUIPlugin, UniverThreadCommentDataSourcePlugin,
                     [UniverSlidesHistoryUIPlugin, { historyServerUrl: '/universer-api/history', univerContainerId: element.id }],
                     [UniverExchangeClientPlugin, {
@@ -233,13 +247,13 @@ export function CollaborativeEditor({
       runtime = createUniver({
         locale: LocaleType.ZH_CN,
         collaboration: true,
-        ...(file.type === 'slide' ? { theme: purpleTheme } : file.type === 'board' ? { theme: redTheme } : {}),
+        ...(file.type === 'slide' ? { theme: purpleTheme } : file.type === 'board' ? { theme: redTheme } : file.type === 'base' ? { theme: yellowTheme } : {}),
         locales: {
           [LocaleType.ZH_CN]: mergeLocales(
             docsLocale,
             sheetsLocale,
             sheetEditorLocales['zh-CN'],
-            ...(file.type === 'slide' ? [slideEditorLocales['zh-CN'], slideHistoryLocale] : file.type === 'board' ? [boardEditorLocales['zh-CN'], boardHistoryLocale] : []),
+            ...(file.type === 'slide' ? [slideEditorLocales['zh-CN'], slideHistoryLocale] : file.type === 'board' ? [boardEditorLocales['zh-CN'], boardHistoryLocale] : file.type === 'base' ? [baseEditorLocales['zh-CN'], baseHistoryLocale] : []),
             collabLocale,
             collabUILocale,
             docCommentLocale,
@@ -250,7 +264,7 @@ export function CollaborativeEditor({
         },
         presets: [
           ...(file.type !== 'sheet' ? [licensePreset] : []),
-          ...(['slide', 'board'].includes(file.type) ? [{ plugins: [[UniverNetworkPlugin, { override: [[IHTTPImplementation, { useValue: transport }]] }]] } as IPreset] : []),
+          ...(['slide', 'board', 'base'].includes(file.type) ? [{ plugins: [[UniverNetworkPlugin, { override: [[IHTTPImplementation, { useValue: transport }]] }]] } as IPreset] : []),
           ...presets,
         ],
         plugins: collaborationPlugins,
@@ -304,15 +318,15 @@ export function CollaborativeEditor({
           if (event.unitId === file.unitId) syncState(event.status);
         }),
       );
-      const docState = univer.__getInjector().get(DocStateChangeManagerService);
+      docState = file.type === 'base' ? undefined : univer.__getInjector().get(DocStateChangeManagerService);
       const flush = async () => {
         await startup;
         await transport!.drain();
-        docState.flushPendingChanges(file.unitId);
+        docState?.flushPendingChanges(file.unitId);
         await collaboration.flush(file.unitId, { timeout: 20000 });
         // A committed Comment body can schedule its anchor mutation afterwards.
         await transport!.drain();
-        docState.flushPendingChanges(file.unitId);
+        docState?.flushPendingChanges(file.unitId);
         await collaboration.flush(file.unitId, { timeout: 20000 });
       };
       disposables.push(
@@ -332,7 +346,7 @@ export function CollaborativeEditor({
       face.bindEditor(file.nodeId, {
         flush,
         isSaved: () =>
-          !docState.getStateCache(file.unitId).collaboration.length &&
+          !(docState?.getStateCache(file.unitId).collaboration.length ?? 0) &&
           initialized &&
           transport!.isIdle() &&
           collaboration.getCollaborationStatus(file.unitId) ===
@@ -343,7 +357,8 @@ export function CollaborativeEditor({
         : file.type === 'sheet' ? collaboration.loadSheetAsync(file.unitId)
           : file.type === 'slide' ? collaboration.loadSlideAsync(file.unitId)
             : file.type === 'board' ? collaboration.loadBoardAsync(file.unitId)
-              : Promise.reject(new Error('Unsupported collaborative editor.')));
+              : file.type === 'base' ? collaboration.loadBaseAsync(file.unitId)
+                : Promise.reject(new Error('Unsupported collaborative editor.')));
       if (!unit) throw new Error('Server 未能加载此文件。');
       await univer
         .__getInjector()
@@ -438,6 +453,9 @@ export function CollaborativeEditor({
           void api.executeCommand(OpenSlideCommentPanelOperation.id);
         } else if (file.type === 'board' && !commentPanel.panelVisible) {
           void api.executeCommand(OpenBoardCommentPanelOperation.id);
+        } else if (file.type === 'base' && !commentPanel.panelVisible) {
+          // SDK 1.1.0 registers this Base command but does not export its constant.
+          void api.executeCommand('base.operation.open-comment-panel');
         } else if (commentPanel.panelVisible) {
           univer.__getInjector().get(ISidebarService).close();
           commentPanel.setPanelVisible(false);
@@ -484,10 +502,7 @@ export function CollaborativeEditor({
         (runtime.univerAPI
           .getCollaboration()
           .getCollaborationStatus(file.unitId) !== CollaborationStatus.SYNCED ||
-          runtime.univer
-            .__getInjector()
-            .get(DocStateChangeManagerService)
-            .getStateCache(file.unitId).collaboration.length > 0)
+          (docState?.getStateCache(file.unitId).collaboration.length ?? 0) > 0)
       ) {
         event.preventDefault();
         event.returnValue = '';
@@ -508,10 +523,7 @@ export function CollaborativeEditor({
         closingEditor = (async () => {
           try {
             await startup;
-            active.univer
-              .__getInjector()
-              .get(DocStateChangeManagerService)
-              .flushPendingChanges(file.unitId);
+            docState?.flushPendingChanges(file.unitId);
             await active.univerAPI
               .getCollaboration()
               .flush(file.unitId, { timeout: 20000 });
@@ -536,9 +548,11 @@ export function CollaborativeEditor({
             window.removeEventListener('beforeunload', beforeUnload);
             subscriptions.forEach((s) => s.unsubscribe());
             active.univer.dispose();
+            editorWorker?.terminate();
           }
         })();
       else {
+        editorWorker?.terminate();
         abort.abort();
         window.removeEventListener('beforeunload', beforeUnload);
       }

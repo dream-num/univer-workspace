@@ -32,7 +32,7 @@ export const contentTypes = [
     kind: 'base',
     label: 'Relational Table',
     createLabel: 'Relational Table',
-    runtime: 'viewer',
+    runtime: 'editor',
     resource: 'univer',
   },
   {

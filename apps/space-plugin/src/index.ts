@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-client-connection';
 import type {} from '@deepseek-ai/dsh-agent';
@@ -25,6 +26,15 @@ export function apply(ctx: Context) {
     write: async (payload) => { await ctx.credentials.modifyRecord(key, async () => ({ kind: 'grant', payload })); },
   }, () => bindings.clear());
   ctx.effect(() => () => auth.dispose());
+  // Browser's Base formula worker is a packaged asset on the same authenticated Connection.
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: '/api/space/base-worker', methods: ['GET'], requestBody: 'buffered',
+    async fetch() {
+      return new Response(await readFile(new URL('./base-editor-worker.js', import.meta.url), 'utf8'), {
+        headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' },
+      });
+    },
+  }));
   ctx.effect(() => registerApiTool(ctx));
   ctx.effect(() => registerCreationTools(ctx, workspace, bindings));
   ctx.effect(() => registerExchangeTools(ctx, workspace, bindings, editing));

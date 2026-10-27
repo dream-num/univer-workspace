@@ -97,9 +97,9 @@ eight creation kinds and six file lifecycle paths. CRUD, collaboration, sharing
 and human-collaboration Web scripts use `authorizeWorkspace` through the same
 OAuth flow. Run native Desktop checks separately.
 
-The Sheet, Slides and Canvas editors now use shared Browser preset sources,
-including their existing collaboration and feature plugins. Their Workspace
-Host transport is configured in place.
+Sheet, Slides, Canvas and Relational Table now use shared Browser preset
+sources, including their existing collaboration and feature plugins. The Base
+formula Worker is packaged and served through the owner Connection.
 
 For the original Workspace Browser's minimum assembly check, serve it with its
 own Vite config against the same Server, set `SPACE_WORKSPACE_BROWSER_ORIGIN`,

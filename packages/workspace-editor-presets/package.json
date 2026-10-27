@@ -1,13 +1,15 @@
 {
   "name": "@univerjs/univer-workspace-editor-presets",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "type": "module",
   "exports": {
     "./sheets": "./src/sheets.ts",
     "./slides": "./src/slides.ts",
     "./referenced-sheets": "./src/referenced-sheets.ts",
-    "./boards": "./src/boards.ts"
+    "./boards": "./src/boards.ts",
+    "./bases": "./src/bases.ts",
+    "./base-worker": "./src/base-worker.ts"
   },
   "files": [
     "src"
@@ -84,7 +86,15 @@
     "@univerjs-pro/docs-latex": "1.1.0",
     "@univerjs-pro/boards-table-ui": "1.1.0",
     "@univerjs-pro/boards": "1.1.0",
-    "@univerjs-pro/boards-chart": "1.1.0"
+    "@univerjs-pro/boards-chart": "1.1.0",
+    "@univerjs-pro/bases-ui": "1.1.0",
+    "@univerjs-pro/bases-exchange-client": "1.1.0",
+    "@univerjs-pro/collaboration-client": "1.1.0",
+    "@univerjs-pro/bases-history-ui": "1.1.0",
+    "@univerjs-pro/bases-thread-comment-ui": "1.1.0",
+    "@univerjs/rpc": "1.1.0",
+    "@univerjs-pro/bases": "1.1.0",
+    "@univerjs/engine-formula": "1.1.0"
   },
   "devDependencies": {
     "react": "19.2.8",

@@ -44,6 +44,9 @@ const sdkCss = await Promise.all(
     '@univerjs-pro/boards-table-ui',
     '@univerjs-pro/boards-thread-comment-ui',
     '@univerjs-pro/bases-ui',
+    '@univerjs-pro/bases-history-ui',
+    '@univerjs-pro/bases-thread-comment-ui',
+    '@univerjs-pro/bases-exchange-client',
     '@univerjs-pro/collaboration-client-ui',
     '@univerjs/preset-docs-thread-comment',
     '@univerjs/preset-docs-drawing',
@@ -117,3 +120,6 @@ await build({
 await copyFile(fileURLToPath(import.meta.resolve('@univerjs/univer-workspace-agent-runtime/worker')), 'lib/workspace-content-worker.js');
 await copyFile(fileURLToPath(import.meta.resolve('@univerjs/univer-workspace-agent-runtime/worker-child')), 'lib/worker-child.mjs');
 await copyFile(fileURLToPath(import.meta.resolve('@univerjs/univer-workspace-agent-runtime/worker-child-upstream')), 'lib/worker-child-upstream.mjs');
+
+// The original Browser Base formula worker, served through the existing owner-only Connection.
+await build({ entryPoints: ['src/base-worker.ts'], outfile: 'lib/base-editor-worker.js', bundle: true, format: 'esm', platform: 'browser', target: 'es2022', logLevel: 'info' });

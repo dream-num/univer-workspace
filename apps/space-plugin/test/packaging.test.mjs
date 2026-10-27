@@ -71,3 +71,26 @@ test('installed Host packages the original shared content worker without a file 
     assert.equal(hash(await readFile(`lib/${output}`)), hash(await readFile(fileURLToPath(import.meta.resolve(`@univerjs/univer-workspace-agent-runtime/${entry}`)))));
   }
 });
+
+test('Base formula worker is served from the installed plugin over the owner Connection', async () => {
+  const { apply } = await import('../lib/index.js');
+  const routes = [], disposers = [];
+  apply({
+    effect(fn) { const dispose = fn(); if (typeof dispose === 'function') disposers.push(dispose); },
+    on() {}, tools: { register() { return () => {}; } },
+    connection: { fetch: { register(route) { routes.push(route); return async () => {}; } } },
+    systemPrompt: { context() { return () => {}; } },
+    credentials: { readRecord: async () => undefined, modifyRecord: async () => {} },
+  });
+  try {
+    const route = routes.find((entry) => entry.path === '/api/space/base-worker');
+    assert.ok(route);
+    assert.deepEqual(route.methods, ['GET']);
+    const response = await route.fetch(new Request('http://localhost/api/space/base-worker'));
+    assert.equal(response.headers.get('content-type'), 'text/javascript; charset=utf-8');
+    const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
+    assert.equal(hash(await response.text()), hash(await readFile('lib/base-editor-worker.js')));
+  } finally {
+    for (const dispose of disposers.reverse()) await dispose();
+  }
+});
