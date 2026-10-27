@@ -18,7 +18,7 @@ export const contentTypes = [
     kind: 'slide',
     label: 'Slides',
     createLabel: 'Slide',
-    runtime: 'viewer',
+    runtime: 'editor',
     resource: 'univer',
   },
   {

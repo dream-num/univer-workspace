@@ -20,6 +20,15 @@ import { ThreadCommentPanelService } from '@univerjs/thread-comment-ui';
 import { getDocThreadCommentCollaborationPlugins } from './workarounds/doc-thread-comment-delete.js';
 import { UniverDocsCorePreset } from '@univerjs/preset-docs-core';
 import { createSheetEditorPresets, sheetEditorLocales } from '@univerjs/univer-workspace-editor-presets/sheets';
+import { createSlideEditorPresets, slideEditorLocales } from '@univerjs/univer-workspace-editor-presets/slides';
+import { UniverSlidesThreadCommentUIPlugin, OpenSlideCommentPanelOperation } from '@univerjs-pro/slides-thread-comment-ui';
+import { UniverSlidesHistoryUIPlugin } from '@univerjs-pro/slides-history-ui';
+import slideHistoryLocale from '@univerjs-pro/slides-history-ui/locale/zh-CN';
+import { UniverSlidesExchangeClientPlugin } from '@univerjs-pro/slides-exchange-client';
+import { UniverSlidesPrintPlugin } from '@univerjs-pro/slides-print';
+import { UniverExchangeClientPlugin } from '@univerjs-pro/exchange-client';
+import { purpleTheme } from '@univerjs/themes';
+
 import { UniverSheetsHistoryUIPlugin } from '@univerjs-pro/sheets-history-ui';
 import docsLocale from '@univerjs/preset-docs-core/locales/zh-CN';
 import sheetsLocale from '@univerjs/preset-sheets-core/locales/zh-CN';
@@ -168,12 +177,17 @@ export function CollaborativeEditor({
           UnitObject.DocumentSection,
           UnitObject.DocumentParagraph,
           UnitObject.DocumentEntity,
+          UnitObject.SlidePage, UnitObject.SlideElement, UnitObject.SlideMaster,
+          UnitObject.BoardElement, UnitObject.BaseTable, UnitObject.BaseField,
+          UnitObject.BaseRecord, UnitObject.BaseView, UnitObject.BaseDashboard,
         ],
       };
       const editorPresets: IPreset[] = file.type === 'doc'
         ? [UniverDocsCorePreset({ container: element, ribbonType: 'grid' }),
             UniverDocsDrawingPreset({ collaboration: true }), UniverDocsThreadCommentPreset()]
-        : createSheetEditorPresets({ container: element, license: workspaceLicense, universerEndpoint: endpoint });
+        : file.type === 'sheet'
+          ? createSheetEditorPresets({ container: element, license: workspaceLicense, universerEndpoint: endpoint })
+          : file.type === 'slide' ? createSlideEditorPresets(element) : [];
       // Preserve Browser's original plugin order, replacing only the Host transport
       // and credential-bound collaboration endpoints at their existing positions.
       const presets: IPreset[] = editorPresets.map((preset) => ({ ...preset, plugins: preset.plugins.map((entry): IPresetPlugin => {
@@ -193,16 +207,31 @@ export function CollaborativeEditor({
             [UniverCollaborationClientPlugin, collaborationConfig],
             [UniverCollaborationClientUIPlugin, { enableDocumentCollaborationUI: true, enableUrlUnitLoader: false }],
             ...getDocThreadCommentCollaborationPlugins()]
-        : [UniverThreadCommentDataSourcePlugin];
+        : file.type === 'sheet' ? [UniverThreadCommentDataSourcePlugin]
+          : [UniverCollaborationPlugin,
+              [UniverCollaborationClientPlugin, collaborationConfig],
+              [UniverCollaborationClientUIPlugin, { enableDocumentCollaborationUI: true, enableUrlUnitLoader: false }],
+              UniverSlidesThreadCommentUIPlugin, UniverThreadCommentDataSourcePlugin,
+              [UniverSlidesHistoryUIPlugin, { historyServerUrl: '/universer-api/history', univerContainerId: element.id }],
+              [UniverExchangeClientPlugin, {
+                uploadFileServerUrl: '/universer-api/stream/file/upload',
+                getTaskServerUrl: '/universer-api/exchange/task/{taskID}',
+                signUrlServerUrl: '/universer-api/file/{fileID}/sign-url',
+                importServerUrl: '/universer-api/exchange/{type}/import',
+                exportServerUrl: '/universer-api/exchange/{type}/export', downloadEndpointUrl: '/',
+              }],
+              UniverSlidesExchangeClientPlugin, UniverSlidesPrintPlugin];
       const licensePreset: IPreset = { plugins: [[UniverLicensePlugin, { license: workspaceLicense }]] };
       runtime = createUniver({
         locale: LocaleType.ZH_CN,
         collaboration: true,
+        ...(file.type === 'slide' ? { theme: purpleTheme } : {}),
         locales: {
           [LocaleType.ZH_CN]: mergeLocales(
             docsLocale,
             sheetsLocale,
             sheetEditorLocales['zh-CN'],
+            ...(file.type === 'slide' ? [slideEditorLocales['zh-CN'], slideHistoryLocale] : []),
             collabLocale,
             collabUILocale,
             docCommentLocale,
@@ -212,7 +241,8 @@ export function CollaborativeEditor({
           ),
         },
         presets: [
-          ...(file.type === 'doc' ? [licensePreset] : []),
+          ...(file.type !== 'sheet' ? [licensePreset] : []),
+          ...(file.type === 'slide' ? [{ plugins: [[UniverNetworkPlugin, { override: [[IHTTPImplementation, { useValue: transport }]] }]] } as IPreset] : []),
           ...presets,
         ],
         plugins: collaborationPlugins,
@@ -302,7 +332,9 @@ export function CollaborativeEditor({
       });
       const unit = await (file.type === 'doc'
         ? collaboration.loadDocAsync(file.unitId)
-        : collaboration.loadSheetAsync(file.unitId));
+        : file.type === 'sheet' ? collaboration.loadSheetAsync(file.unitId)
+          : file.type === 'slide' ? collaboration.loadSlideAsync(file.unitId)
+            : Promise.reject(new Error('Unsupported collaborative editor.')));
       if (!unit) throw new Error('Server 未能加载此文件。');
       await univer
         .__getInjector()
@@ -393,6 +425,8 @@ export function CollaborativeEditor({
           void retention?.refresh().catch((cause) => setError(cause.message));
         if (file.type === 'sheet') {
           void api.executeCommand(ToggleSheetCommentPanelOperation.id);
+        } else if (file.type === 'slide' && !commentPanel.panelVisible) {
+          void api.executeCommand(OpenSlideCommentPanelOperation.id);
         } else if (commentPanel.panelVisible) {
           univer.__getInjector().get(ISidebarService).close();
           commentPanel.setPanelVisible(false);
