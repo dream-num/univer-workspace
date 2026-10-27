@@ -77,6 +77,14 @@
     "./workspace-html-view": {
       "types": "./src/workspace/html-view.ts",
       "default": "./lib/workspace/html-view.js"
+    },
+    "./workspace-svg": {
+      "types": "./src/workspace/svg-operations.ts",
+      "default": "./lib/workspace/svg-operations.js"
+    },
+    "./workspace-skill-resources": {
+      "types": "./src/workspace/skill-resources.ts",
+      "default": "./lib/workspace/skill-resources.js"
     }
   },
   "scripts": {
@@ -93,7 +101,8 @@
     "@univerjs-pro/exchange-node": "1.1.0",
     "@univerjs/protocol": "1.1.0",
     "@univerjs/core": "1.1.0",
-    "@univerjs-labs/html-view": "1.0.0-dev.6518eb0"
+    "@univerjs-labs/html-view": "1.0.0-dev.6518eb0",
+    "@univer-cli/svg-facade": "1.1.0"
   },
   "devDependencies": {
     "@univer-cli/api-reference": "1.1.0",

@@ -10,6 +10,8 @@ import { registerCreationTools } from './creation-tools.js';
 import { registerExchangeTools } from './exchange-tools.js';
 import { registerBlobTool } from './blob-tool.js';
 import { registerHtmlViewTool } from './html-view-tool.js';
+import { registerSvgTool } from './svg-tool.js';
+import { registerWorkspaceSkills } from './skills.js';
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials';
 import { WorkspaceOAuth } from './oauth.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
@@ -42,6 +44,8 @@ export function apply(ctx: Context) {
   ctx.effect(() => registerExchangeTools(ctx, workspace, bindings, editing));
   ctx.effect(() => registerBlobTool(ctx, workspace, bindings));
   ctx.effect(() => registerHtmlViewTool(ctx, workspace, bindings));
+  ctx.effect(() => registerSvgTool(ctx, editing));
+  ctx.inject(['skills'], (skillContext) => { skillContext.effect(() => registerWorkspaceSkills(skillContext)); });
   ctx.effect(() => registerEditingTools(ctx, editing));
   ctx.effect(() => registerReadTools(ctx, workspace, bindings, (session, args, signal) => editing.inspect(session, args, signal)));
   ctx.effect(() =>

@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { scopeSdkCss } from './scope-sdk-css.mjs';
 import { releaseSdkDefaults } from './release-sdk-defaults.mjs';
-import { readFile, writeFile, mkdir, copyFile, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, copyFile, rm, cp } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 await rm('lib', { recursive: true, force: true });
 await mkdir('lib', { recursive: true });
@@ -91,6 +91,8 @@ await build({
     'src/exchange-tools.ts',
     'src/blob-tool.ts',
     'src/html-view-tool.ts',
+    'src/svg-tool.ts',
+    'src/skills.ts',
     'src/viewer-data.ts',
     'src/host-layout.ts',
     'src/editor-http.ts',
@@ -102,7 +104,7 @@ await build({
   packages: 'external',
   splitting: true,
   plugins: [{ name: 'bundle-shared-content-runtime', setup(build) {
-    build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime(?:\/(?:api-reference|workspace-spaces|workspace-resources|workspace-exchange|workspace-session-path|workspace-inspection|workspace-blob|workspace-html-view))?$/ }, (args) => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
+    build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime(?:\/(?:api-reference|workspace-spaces|workspace-resources|workspace-exchange|workspace-session-path|workspace-inspection|workspace-blob|workspace-html-view|workspace-svg|workspace-skill-resources))?$/ }, (args) => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
   } }],
   target: 'node24',
   logLevel: 'info',
@@ -133,3 +135,6 @@ await copyFile(fileURLToPath(import.meta.resolve('@univerjs/univer-workspace-age
 
 // The original Browser Base formula worker, served through the existing owner-only Connection.
 await build({ entryPoints: ['src/base-worker.ts'], outfile: 'lib/base-editor-worker.js', bundle: true, format: 'esm', platform: 'browser', target: 'es2022', logLevel: 'info' });
+
+// Preserve the original Workspace Skill bodies, references and templates in the installed plugin.
+await cp('../../packages/dsh-univer-workspace-plugin/skills', 'lib/skills', { recursive: true });

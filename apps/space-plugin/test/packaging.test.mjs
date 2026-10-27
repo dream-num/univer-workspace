@@ -78,6 +78,7 @@ test('Base formula worker is served from the installed plugin over the owner Con
   apply({
     effect(fn) { const dispose = fn(); if (typeof dispose === 'function') disposers.push(dispose); },
     on() {}, tools: { register() { return () => {}; } },
+    inject(_deps, callback) { callback(this); }, skills: { registerProvider() { return () => {}; } },
     connection: { fetch: { register(route) { routes.push(route); return async () => {}; } } },
     systemPrompt: { context() { return () => {}; } },
     credentials: { readRecord: async () => undefined, modifyRecord: async () => {} },
