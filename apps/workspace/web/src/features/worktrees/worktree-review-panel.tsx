@@ -51,6 +51,7 @@ import { DEFAULT_WORKTREE_REVIEW_VIEW, type WorktreeReviewView } from "./worktre
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { WorktreeReviewHeader } from "./worktree-review-header";
+import { PartialMergeResults } from "./partial-merge-results";
 
 type WorktreeDetailModel = components["schemas"]["WorktreeDetail"];
 type WorktreeState = components["schemas"]["WorktreeState"];
@@ -235,6 +236,8 @@ export function WorktreeReviewPanel({
           </>
         }
       />
+
+      <PartialMergeResults units={worktree.units} />
 
       {worktree.state === "ready" && worktree.capabilities.merge && (
         <div className="flex items-center gap-2 px-5 py-2 text-sm">

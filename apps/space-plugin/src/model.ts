@@ -13,7 +13,7 @@ export interface Proposal {
   userId: string;
   sessionId: string;
   turn: number;
-  phase: 'editing' | 'applying' | 'ready' | 'canceling' | 'canceled' | 'rejected' | 'applied' | 'conflict' | 'failed';
+  phase: 'editing' | 'applying' | 'uncertain' | 'ready' | 'canceling' | 'canceled' | 'rejected' | 'applied' | 'conflict' | 'failed';
   message: string;
   revision?: number;
 }

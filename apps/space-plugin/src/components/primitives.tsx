@@ -191,6 +191,8 @@ export function CreateMenu({
     key: string;
   } | null>(null);
   const [name, setName] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
+  const submittingRef = React.useRef(false);
   const [inviting, setInviting] = React.useState(false);
   const [invite, setInvite] = React.useState<
     import('../sharing.js').Invite | undefined
@@ -222,7 +224,7 @@ export function CreateMenu({
             key={kind}
             role="menuitem"
             className={button + ' tw-w-full'}
-            disabled={v.busy || (kind !== 'space' && !allowed)}
+            disabled={kind !== 'space' && !allowed}
             title={
               kind !== 'space' && !allowed
                 ? 'You do not have permission to create here'
@@ -254,12 +256,20 @@ export function CreateMenu({
             className="sp-create-dialog"
             onSubmit={async (e) => {
               e.preventDefault();
-              await face.create({
-                ...draft,
-                name,
-                invite: draft.kind === 'space' ? invite : undefined,
-              });
-              if (!face.store.getSnapshot().error) setDraft(null);
+              if (submittingRef.current || !name.trim()) return;
+              submittingRef.current = true;
+              setSubmitting(true);
+              try {
+                const created = await face.create({
+                  ...draft,
+                  name,
+                  invite: draft.kind === 'space' ? invite : undefined,
+                });
+                if (created) setDraft(null);
+              } finally {
+                submittingRef.current = false;
+                setSubmitting(false);
+              }
             }}
           >
             <h2>Create {creationName(draft.kind)}</h2>
@@ -298,7 +308,7 @@ export function CreateMenu({
                       value={invite}
                       onChange={setInvite}
                       roles={['viewer', 'editor', 'admin']}
-                      disabled={v.busy}
+                      disabled={submitting}
                     />
                     <p>
                       Members can access all content in this Space. Existing
@@ -313,13 +323,13 @@ export function CreateMenu({
               <button
                 type="button"
                 className={button}
-                disabled={v.busy}
+                disabled={submitting}
                 onClick={() => setDraft(null)}
               >
                 Cancel
               </button>
-              <button className={button} disabled={v.busy || !name.trim()}>
-                {v.busy ? 'Creating…' : 'Create'}
+              <button className={button} disabled={submitting || !name.trim()}>
+                {submitting ? 'Creating…' : 'Create'}
               </button>
             </div>
           </form>

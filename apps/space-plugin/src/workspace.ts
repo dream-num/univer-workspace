@@ -51,6 +51,8 @@ export class WorkspaceConnection {
   readonly license = process.env.UNIVER_LICENSE ?? '';
   endpoint = '';
   get sessionCookie() { return this.cookie; }
+  /** Aborted whenever the active endpoint or Workspace credential changes. */
+  get identitySignal() { return this.lifetime.signal; }
   /** Activate only a server-verified Workspace credential; never a DSH identity. */
   activateSession(endpoint: string, token: string) {
     if (!/^[A-Za-z0-9._~-]{16,4096}$/.test(token)) throw new SpaceError(400, 'Invalid Workspace session.');

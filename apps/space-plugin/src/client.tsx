@@ -244,6 +244,7 @@ export function apply(ctx: any) {
     update({ busy: true, error: '', notice: '' });
     try {
       await operation();
+      return true;
     } catch (error) {
       if (!(error instanceof Error && error.name === 'AbortError'))
         update({
@@ -251,6 +252,7 @@ export function apply(ctx: any) {
             ? '尚未保存到 Workspace。请检查连接后重试，当前文档将保持打开。'
             : error instanceof Error ? error.message : '请求失败，请重试。',
         });
+      return false;
     } finally {
       pending--;
       const resume = pausedEditor;
@@ -1016,13 +1018,13 @@ export type Face = {
   sharing(input: import('./sharing.js').SharingInput): Promise<any>;
   htmlSource(unit: string): Promise<{ editorMode: 'edit' | 'readOnly' }>;
   readDirectory(space: string, parent?: string, cursor?: string): Promise<Page>;
-  showTrash(): Promise<void>;
+  showTrash(): Promise<boolean>;
   mutate(input: {
     action: string;
     id: string;
     name?: string;
     parent?: string;
-  }): Promise<void>;
+  }): Promise<boolean>;
   editorRequest(
     file: Content,
     userId: string,
@@ -1058,7 +1060,7 @@ export type Face = {
     parent: string;
     key: string;
     invite?: import('./sharing.js').Invite;
-  }): Promise<void>;
+  }): Promise<boolean>;
   close(): void;
   removeContext(): void;
   reconnectContext(): void;

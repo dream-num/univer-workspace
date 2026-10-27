@@ -69,12 +69,11 @@ export function AIChanges({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '无法完成操作');
       if (action === 'apply') {
-        setReview(null);
-        setProposal(
-          await face
-            .editingStatus(sessionId!, file.nodeId)
-            .catch(() => proposal),
-        );
+        const current = await face.editingStatus(sessionId!, file.nodeId).catch(() => null);
+        const uncertain = current?.phase === 'uncertain' ||
+          (!current && String((cause as { code?: unknown })?.code) === '502');
+        if (!uncertain) setReview(null);
+        setProposal(current ?? proposal);
       }
     } finally {
       setBusy(false);
@@ -87,6 +86,7 @@ export function AIChanges({
     {
       editing: 'Editing with AI',
       applying: 'Applying…',
+      uncertain: 'Apply result not confirmed',
       ready: 'Changes ready',
       canceling: 'Canceling…',
       canceled: 'Canceled',
@@ -130,7 +130,7 @@ export function AIChanges({
           </button>
         )}
         {error && <span role="alert">{error}</span>}
-        {proposal?.message && phase === 'failed' && (
+        {proposal?.message && (phase === 'failed' || phase === 'uncertain') && (
           <span role="alert">{proposal.message}</span>
         )}
       </div>
@@ -157,7 +157,7 @@ export function AIChanges({
                 disabled={busy || !loaded.left || !loaded.right}
                 onClick={() => action('apply')}
               >
-                {busy ? 'Applying…' : 'Apply changes'}
+                {busy ? 'Applying…' : phase === 'uncertain' ? 'Retry apply' : 'Apply changes'}
               </button>
               <button
                 className={iconButton}

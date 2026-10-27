@@ -107,19 +107,20 @@ export class AgentEditing {
       await this.authorize(p);
       this.proposals.set(this.key(session, file.nodeId), p);
     }
-    if (p.phase === 'applying')
-      throw new SpaceError(409, 'Changes are being applied.');
+    if (p.phase === 'applying' || p.phase === 'uncertain')
+      throw new SpaceError(409, 'The Apply result must be confirmed before editing again.');
     if (args.worktreeId && args.worktreeId !== p.worktreeId)
       throw new SpaceError(403, 'This draft belongs to a different request.');
     await this.authorize(p);
     p.turn = turn;
     return p;
   }
-  private async post(path: string, data?: unknown, key?: string) {
+  private async post(path: string, data?: unknown, key?: string, signal?: AbortSignal) {
     return this.workspace.json(path, {
       method: 'POST',
       headers: key ? { 'Idempotency-Key': key } : {},
       body: data === undefined ? undefined : JSON.stringify(data),
+      signal,
     });
   }
   private async ensureDraft(p: Pending) {
@@ -269,13 +270,14 @@ export class AgentEditing {
       result,
     };
   }
-  private async discard(p: Pending, phase: 'rejected' | 'canceled') {
+  private async discard(p: Pending, phase: 'rejected' | 'canceled', signal?: AbortSignal) {
     p.review = undefined;
     if (p.worktreeId)
       await this.post(
         `/api/worktrees/${p.worktreeId}/discard`,
         undefined,
         `${p.id}-discard`,
+        signal,
       );
     p.phase = phase;
   }
@@ -286,35 +288,52 @@ export class AgentEditing {
     proposalId?: string,
     reviewToken?: string,
   ) {
-    await this.bindings.scope(session);
+    const identity = this.workspace.identitySignal;
+    const scope = await this.bindings.scope(session);
+    const checkIdentity = () => {
+      if (identity.aborted || identity !== this.workspace.identitySignal)
+        throw new SpaceError(409, 'Workspace identity changed. Review the changes again.');
+    };
+    checkIdentity();
     const p = this.proposals.get(this.key(session, node));
     if (!p || p.id !== proposalId)
       throw new SpaceError(409, 'This proposal is no longer current.');
+    if (scope.userId !== p.userId || scope.endpoint !== p.file.endpoint)
+      throw new SpaceError(403, 'Workspace identity changed.');
     if (action === 'cancel' || action === 'reject') {
-      if (p.phase === 'applying')
-        throw new SpaceError(409, 'Apply is already in progress.');
+      if (p.phase === 'applying' || p.phase === 'uncertain')
+        throw new SpaceError(409, 'The Apply result must be confirmed before discarding changes.');
       if (p.phase === 'applied')
         throw new SpaceError(409, 'These changes were already applied.');
       p.cancelRequested = true;
       p.phase = 'canceling';
       if (p.operation) await p.operation.catch(() => {});
+      checkIdentity();
       if ((p as Proposal).phase !== 'canceled')
-        await this.discard(p, action === 'reject' ? 'rejected' : 'canceled');
+        await this.discard(p, action === 'reject' ? 'rejected' : 'canceled', identity);
       if (action === 'reject') p.phase = 'rejected';
       return this.public(p);
     }
     await this.authorize(p);
+    try { checkIdentity(); }
+    catch (error) { p.review = undefined; throw error; }
     if (
       p.operation ||
       !p.worktreeId ||
-      !['ready', 'conflict'].includes(p.phase)
+      !['ready', 'conflict', 'uncertain'].includes(p.phase)
     )
       throw new SpaceError(409, 'Wait until changes are ready.');
     if (action === 'review') {
-      p.review = await this.post(
+      if (p.phase === 'uncertain')
+        throw new SpaceError(409, 'Confirm the previous Apply result before reviewing again.');
+      const review = await this.post(
         `/universer-api/worktrees/${p.worktreeId}/review`,
         { unitId: p.file.unitId },
+        undefined,
+        identity,
       );
+      checkIdentity();
+      p.review = review;
       return p.review;
     }
     if (action === 'apply') {
@@ -326,6 +345,7 @@ export class AgentEditing {
           `/api/worktrees/${p.worktreeId}/merge`,
           { reviewToken },
           p.applyKey,
+          identity,
         );
         if (result.worktree?.state !== 'merged')
           throw new SpaceError(409, 'The Server could not apply all changes.');
@@ -333,6 +353,13 @@ export class AgentEditing {
         p.review = undefined;
         return this.public(p);
       } catch (error) {
+        if (error instanceof SpaceError && error.status >= 500) {
+          // The Server may have committed before the response was lost. Keep
+          // the exact approved token and operation key for safe recovery.
+          p.phase = 'uncertain';
+          p.message = 'Apply result not confirmed. Retry the same approved changes to check recovery.';
+          throw new SpaceError(502, p.message);
+        }
         p.phase = 'conflict';
         p.message = error instanceof Error ? error.message : 'Apply failed.';
         p.review = undefined;
