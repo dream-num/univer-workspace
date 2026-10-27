@@ -10,15 +10,13 @@
  * @module dsh-univer-workspace-plugin/tools/api
  */
 
-import type { createStandardApiReference, ApiReferenceUnit } from "@univer-cli/api-reference";
+import { ApiReferenceInputError, queryWorkspaceApi } from "@univerjs/univer-workspace-agent-runtime/api-reference";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm";
 import type { JsonValue } from "../json-value.ts";
 import { registerUniverTool } from "./presentation.ts";
 import { UniverError } from "./errors.ts";
-
-let reference: Promise<ReturnType<typeof createStandardApiReference>> | undefined;
 
 const apiUnitEnum = {
   type: "string" as const,
@@ -67,29 +65,14 @@ export function registerApiTool(ctx: Context): () => void {
         render: (_args: unknown, value: unknown) => text(JSON.stringify(value ?? {})),
       },
       async execute(args) {
-        if (args.queries.length === 0 || args.queries.some((query) => query.trim() === "")) {
-          throw new UniverError(
-            "univer_api requires at least one non-empty query.",
-            "INVALID_REQUEST",
-          );
+        try {
+          const response = await queryWorkspaceApi(args);
+          return { ...response, result: response.result as JsonValue };
+        } catch (error) {
+          if (error instanceof ApiReferenceInputError)
+            throw new UniverError(error.message, "INVALID_REQUEST");
+          throw error;
         }
-        if (args.limit !== undefined && (!Number.isInteger(args.limit) || args.limit < 1)) {
-          throw new UniverError("univer_api limit must be a positive integer.", "INVALID_REQUEST");
-        }
-        const api = await (reference ??= import('@univer-cli/api-reference').then(module => module.createStandardApiReference()));
-        const result =
-          args.action === "show"
-            ? api.show(args.queries)
-            : api.find({
-                terms: args.queries,
-                ...(args.unit === undefined ? {} : { unit: args.unit as ApiReferenceUnit }),
-                ...(args.limit === undefined ? {} : { limit: args.limit }),
-              });
-        return {
-          ok: true as const,
-          operation: "api" as const,
-          result: result as unknown as JsonValue,
-        };
       },
       presentCall: (args) => ({
         card: "generic",

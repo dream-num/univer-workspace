@@ -4,6 +4,7 @@ import type {} from '@deepseek-ai/dsh-agent';
 import type {} from '@deepseek-ai/dsh-system-prompt';
 import { ToolBindings, registerReadTools } from './tools.js';
 import { AgentEditing, registerEditingTools } from './editing.js';
+import { registerApiTool } from './api-tool.js';
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials';
 import { WorkspaceOAuth } from './oauth.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
@@ -22,6 +23,7 @@ export function apply(ctx: Context) {
     write: async (payload) => { await ctx.credentials.modifyRecord(key, async () => ({ kind: 'grant', payload })); },
   }, () => bindings.clear());
   ctx.effect(() => () => auth.dispose());
+  ctx.effect(() => registerApiTool(ctx));
   ctx.effect(() => registerEditingTools(ctx, editing));
   ctx.effect(() => registerReadTools(ctx, workspace, bindings, (session, args, signal) => editing.inspect(session, args, signal)));
   ctx.effect(() =>

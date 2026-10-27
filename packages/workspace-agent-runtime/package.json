@@ -33,7 +33,11 @@
       "default": "./lib/snapshot-adapter.js"
     },
     "./worker-child": "./lib/worker-child.mjs",
-    "./worker-child-upstream": "./lib/worker-child-upstream.mjs"
+    "./worker-child-upstream": "./lib/worker-child-upstream.mjs",
+    "./api-reference": {
+      "types": "./src/api-reference.d.ts",
+      "default": "./lib/api-reference.js"
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs"
@@ -50,6 +54,7 @@
     "@univerjs/protocol": "1.1.0"
   },
   "devDependencies": {
+    "@univer-cli/api-reference": "1.1.0",
     "esbuild": "0.27.7"
   }
 }

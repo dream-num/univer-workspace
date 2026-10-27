@@ -44,6 +44,7 @@ await build({
     'src/file-reference.ts',
     'src/tools.ts',
     'src/editing.ts',
+    'src/api-tool.ts',
     'src/viewer-data.ts',
     'src/host-layout.ts',
     'src/editor-http.ts',
@@ -55,7 +56,7 @@ await build({
   packages: 'external',
   splitting: true,
   plugins: [{ name: 'bundle-shared-content-runtime', setup(build) {
-    build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime$/ }, () => ({ path: fileURLToPath(import.meta.resolve('@univerjs/univer-workspace-agent-runtime')) }));
+    build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime(?:\/api-reference)?$/ }, (args) => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
   } }],
   target: 'node24',
   logLevel: 'info',
