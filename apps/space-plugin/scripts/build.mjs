@@ -98,6 +98,7 @@ await build({
     'src/lint-tool.ts',
     'src/screenshot-tool.ts',
     'src/status-tool.ts',
+    'src/unit-tool.ts',
     'src/viewer-data.ts',
     'src/host-layout.ts',
     'src/editor-http.ts',
@@ -109,7 +110,7 @@ await build({
   packages: 'external',
   splitting: true,
   plugins: [{ name: 'bundle-shared-content-runtime', setup(build) {
-    build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime(?:\/(?:api-reference|workspace-spaces|workspace-resources|workspace-exchange|workspace-session-path|workspace-inspection|workspace-blob|workspace-html-view|workspace-svg|workspace-skill-resources|workspace-resource-library|workspace-issues|workspace-issue-operations|workspace-render|workspace-screenshot|workspace-file-state-api|workspace-worktree-api|workspace-state|workspace-status))?$/ }, (args) => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
+    build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime(?:\/(?:api-reference|workspace-spaces|workspace-resources|workspace-exchange|workspace-session-path|workspace-inspection|workspace-blob|workspace-html-view|workspace-svg|workspace-skill-resources|workspace-resource-library|workspace-issues|workspace-issue-operations|workspace-render|workspace-screenshot|workspace-file-state-api|workspace-worktree-api|workspace-state|workspace-status|workspace-unit-operations))?$/ }, (args) => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
   } }],
   target: 'node24',
   logLevel: 'info',

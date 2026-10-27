@@ -121,6 +121,10 @@
     "./workspace-status": {
       "types": "./src/workspace/status-operations.ts",
       "default": "./lib/workspace/status-operations.js"
+    },
+    "./workspace-unit-operations": {
+      "types": "./src/workspace/unit-operations.ts",
+      "default": "./lib/workspace/unit-operations.js"
     }
   },
   "scripts": {

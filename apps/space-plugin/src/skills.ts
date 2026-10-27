@@ -43,7 +43,7 @@ export function registerWorkspaceSkills(ctx: Context) {
       const note = [
         '# Space host product rules',
         'For ordinary Floating Chat requests, create and edit directly on the shared Workspace trunk. Use univer_create/univer_new for new Units, univer_import for local Office files, and univer_edit or univer_execute for Facade changes. Do not require a Worktree or user Apply for ordinary edits.',
-        'A Worktree is only for an explicit review request. This integration currently supports a Worktree only for the admitted Docs or Sheets document; review and Apply belong to the user in the existing UI. Worktree-local creation and import are not yet available.',
+        'A Worktree is only for an explicit review request. The existing in-document Review and draft editing are connected for the admitted Docs or Sheets document. The univer_unit tool can create a Worktree-local Unit or change its removal intent, but editing and reviewing those local Units, multi-Unit Review, and Worktree-local import are not yet connected in this host.',
         'Use the currently registered tool schemas. If an original instruction below conflicts with these Space host rules or names an unavailable tool, follow these rules and report the limitation rather than claiming it was executed.',
         ...(unavailable.length ? [`Unavailable in this host: ${unavailable.join(', ')}.`] : []),
         'The following original Workspace Skill is retained for its domain and Facade guidance:',

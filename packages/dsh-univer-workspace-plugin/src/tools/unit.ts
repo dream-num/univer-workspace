@@ -6,7 +6,8 @@
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm";
-import { resolveTargetSpace, resolveToolScope } from "./tool-scope.ts";
+import { resolveToolScope } from "./tool-scope.ts";
+import { runUnitOperation, UnitOperationError } from "@univerjs/univer-workspace-agent-runtime/workspace-unit-operations";
 import { registerUniverTool } from "./presentation.ts";
 import { UniverError } from "./errors.ts";
 
@@ -68,50 +69,16 @@ export function registerUnitTool(ctx: Context): () => void {
       async execute(args, exec) {
         const resolved = await resolveToolScope(ctx, exec);
         const { userId } = resolved;
-        if (args.worktreeId.trim() === "")
-          throw new UniverError("univer_unit requires worktreeId.", "INVALID_REQUEST");
-        if (args.action === "remove" || args.action === "restore") {
-          if (!args.unitId?.trim())
-            throw new UniverError(
-              "univer_unit requires unitId for removal or restoration.",
-              "INVALID_REQUEST",
-            );
-          return ctx
-            .get("univerWorkspace")!
-            .setWorktreeUnitRemoved(userId, args.worktreeId, args.unitId, args.action === "remove");
+        const service = ctx.get("univerWorkspace")!;
+        try {
+          return await runUnitOperation(args, resolved.spaceId, {
+            setWorktreeUnitRemoved: (worktreeId, unitId, removed) => service.setWorktreeUnitRemoved(userId, worktreeId, unitId, removed),
+            createWorktreeLocalUnit: (input) => service.createWorktreeLocalUnit(userId, input),
+          });
+        } catch (error) {
+          if (error instanceof UnitOperationError) throw new UniverError(error.message, error.code, { cause: error });
+          throw error;
         }
-        const targetSpaceId = resolveTargetSpace(resolved, args.spaceId);
-        if (!args.unitType)
-          throw new UniverError("univer_unit create requires unitType.", "INVALID_REQUEST");
-        if (!args.name?.trim())
-          throw new UniverError("univer_unit requires a non-empty name.", "INVALID_REQUEST");
-        const idempotencyKey = args.idempotencyKey?.trim();
-        if (args.idempotencyKey !== undefined && idempotencyKey === "") {
-          throw new UniverError("univer_unit idempotencyKey must be non-empty.", "INVALID_REQUEST");
-        }
-        if (
-          args.initialData !== undefined &&
-          (args.initialData === null ||
-            typeof args.initialData !== "object" ||
-            Array.isArray(args.initialData))
-        ) {
-          throw new UniverError(
-            "univer_unit initialData must be a JSON object.",
-            "INVALID_REQUEST",
-          );
-        }
-        const unit = await ctx.get("univerWorkspace")!.createWorktreeLocalUnit(userId, {
-          worktreeId: args.worktreeId,
-          name: args.name,
-          unitType: args.unitType,
-          targetSpaceId,
-          targetParentNodeId: args.parentNodeId ?? null,
-          ...(args.initialData === undefined
-            ? {}
-            : { initialData: args.initialData as Record<string, unknown> }),
-          ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
-        });
-        return unit;
       },
       presentCall: (args: unknown) => {
         const input = args as { action?: string; name?: string; unitId?: string } | null;

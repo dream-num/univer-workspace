@@ -17,6 +17,7 @@ import { registerIssueTool } from './issue-tool.js';
 import { registerLintTool } from './lint-tool.js';
 import { registerScreenshotTool } from './screenshot-tool.js';
 import { registerStatusTool } from './status-tool.js';
+import { registerUnitTool } from './unit-tool.js';
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials';
 import { WorkspaceOAuth } from './oauth.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
@@ -54,6 +55,7 @@ export function apply(ctx: Context) {
   ctx.effect(() => registerIssueTool(ctx, workspace, bindings));
   ctx.effect(() => registerLintTool(ctx, workspace, bindings));
   ctx.effect(() => registerStatusTool(ctx, workspace));
+  ctx.effect(() => registerUnitTool(ctx, workspace, bindings));
   ctx.inject(['attachments'], (imageContext) => { imageContext.effect(() => registerScreenshotTool(imageContext, workspace, bindings, editing)); });
   ctx.inject(['skills'], (skillContext) => { skillContext.effect(() => registerWorkspaceSkills(skillContext)); });
   ctx.effect(() => registerEditingTools(ctx, editing));
