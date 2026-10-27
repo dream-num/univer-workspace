@@ -2041,10 +2041,19 @@ importers:
       '@univer-cli/svg-facade':
         specifier: 1.1.0
         version: 1.1.0
+      '@univer-cli/unit-layout-lint':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
+      '@univer-cli/unit-screenshot':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
       '@univer-cli/univer-collaboration-runtime':
         specifier: 1.1.0
         version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
       '@univer-cli/univer-collaboration-runtime-pool':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
+      '@univer-cli/univer-render-runtime':
         specifier: 1.1.0
         version: 1.1.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-labs/html-view':

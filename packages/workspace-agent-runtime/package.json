@@ -97,6 +97,10 @@
     "./workspace-issue-operations": {
       "types": "./src/workspace/issue-operations.ts",
       "default": "./lib/workspace/issue-operations.js"
+    },
+    "./workspace-render": {
+      "types": "./src/workspace/render-operations.ts",
+      "default": "./lib/workspace/render-operations.js"
     }
   },
   "scripts": {
@@ -115,7 +119,10 @@
     "@univerjs/core": "1.1.0",
     "@univerjs-labs/html-view": "1.0.0-dev.6518eb0",
     "@univer-cli/svg-facade": "1.1.0",
-    "@univer-cli/resource-library": "1.1.0"
+    "@univer-cli/resource-library": "1.1.0",
+    "@univer-cli/unit-layout-lint": "1.1.0",
+    "@univer-cli/unit-screenshot": "1.1.0",
+    "@univer-cli/univer-render-runtime": "1.1.0"
   },
   "devDependencies": {
     "@univer-cli/api-reference": "1.1.0",
