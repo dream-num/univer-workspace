@@ -232,6 +232,15 @@ export class WorkspaceConnection {
     }
   }
 
+  /** Original Blob workflows need raw HTTP status and network failures for retry recovery. */
+  async rawRequest(path: string, init: RequestInit = {}) {
+    if (!this.endpoint) throw new SpaceError(409, 'Workspace is not configured.');
+    const target = new URL(path, this.endpoint);
+    if (target.origin !== this.endpoint || !path.startsWith('/api/')) throw new SpaceError(400, 'Invalid Workspace API path.');
+    const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(20000), ...(init.signal ? [init.signal] : [])]);
+    return fetch(target, { ...init, redirect: 'error', signal,
+      headers: { ...Object.fromEntries(new Headers(init.headers)), ...(this.cookie ? { cookie: this.cookie } : {}) } });
+  }
   async json(path: string, init: RequestInit = {}): Promise<any> {
     return (await this.request(path, init)).json();
   }

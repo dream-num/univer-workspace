@@ -69,6 +69,10 @@
     "./workspace-inspection": {
       "types": "./src/workspace/inspection.ts",
       "default": "./lib/workspace/inspection.js"
+    },
+    "./workspace-blob": {
+      "types": "./src/workspace/blob-api.ts",
+      "default": "./lib/workspace/blob-api.js"
     }
   },
   "scripts": {
