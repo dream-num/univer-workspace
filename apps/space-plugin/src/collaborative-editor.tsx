@@ -113,6 +113,8 @@ export function CollaborativeEditor({
     let canceled = false;
     let initialized = false;
     let disconnected = false;
+    let hasBeenSynced = false;
+    let locallyChanged = false;
     let recovering = false;
     let accessDenied = false;
     let lastMembers: readonly IMember[] = [];
@@ -134,7 +136,8 @@ export function CollaborativeEditor({
     const syncState = (state: CollaborationStatus) => {
       if (canceled || !initialized || accessDenied) return;
       onCollaborators(state === CollaborationStatus.OFFLINE ? [] : lastMembers);
-      if (state === CollaborationStatus.OFFLINE && !disconnected) {
+      if (state === CollaborationStatus.SYNCED) { hasBeenSynced = true; locallyChanged = false; }
+      if (state === CollaborationStatus.OFFLINE && hasBeenSynced && !disconnected) {
         disconnected = true;
         docState?.flushPendingChanges(file.unitId);
       }
@@ -165,6 +168,17 @@ export function CollaborativeEditor({
           cause instanceof Error ? cause.message : '无法打开协同编辑器。',
         );
       }
+    };
+    const needsFlush = async () => {
+      if (locallyChanged || (docState?.getStateCache(file.unitId).collaboration.length ?? 0) > 0) return true;
+      if (hasBeenSynced) return false;
+      // An initially offline document may have an older queued edit. Check the
+      // SDK's durable cache before allowing a clean, never-connected view to close.
+      if (!runtime) return true;
+      const cache = runtime.univer.__getInjector().get(ILocalCacheService);
+      await cache.exhaustSavingTask();
+      const saved = await cache.loadOfflineData(file.unitId, user?.id);
+      return !!saved?.awaitingChangeset || !!saved?.mutations.length;
     };
     const mount = async () => {
       await closingEditor;
@@ -390,26 +404,29 @@ export function CollaborativeEditor({
       docState = file.type === 'base' ? undefined : univer.__getInjector().get(DocStateChangeManagerService);
       const flush = async () => {
         await startup;
-        await transport!.drain();
         docState?.flushPendingChanges(file.unitId);
+        await transport!.drainWrites();
+        docState?.flushPendingChanges(file.unitId);
+        // A clean document can be left while the socket is offline; no local edit is discarded.
+        if (!(await needsFlush())) return;
         await collaboration.flush(file.unitId, { timeout: 20000 });
         // A committed Comment body can schedule its anchor mutation afterwards.
-        await transport!.drain();
+        await transport!.drainWrites();
         docState?.flushPendingChanges(file.unitId);
         await collaboration.flush(file.unitId, { timeout: 20000 });
       };
       disposables.push(
         api.addEvent(api.Event.CommandExecuted, (event) => {
           if (
-            initialized &&
-            !canceled &&
             event.type === CommandType.MUTATION &&
             event.params?.unitId === file.unitId &&
             !event.options?.fromCollab &&
             !event.options?.fromChangeset &&
             !event.options?.onlyLocal
-          )
-            setStatus('saving');
+          ) {
+            locallyChanged = true;
+            if (initialized && !canceled) setStatus('saving');
+          }
         }),
       );
       face.bindEditor(file.nodeId, {
@@ -433,7 +450,8 @@ export function CollaborativeEditor({
         .__getInjector()
         .get(CollaborationSessionService)
         .requireSession(file.unitId);
-      await transport.drain();
+      // Asset loads can retry independently; they must not hold editor startup open.
+      await transport.drainWrites();
       if (canceled) return;
       if (api.getCurrentLifecycleStage() < LifecycleStages.Rendered)
         await new Promise<void>((resolve) => {
@@ -583,7 +601,6 @@ export function CollaborativeEditor({
       onCommentsReady(null);
       onCollaborators([]);
       face.bindEditor(file.nodeId, null);
-      disposables.forEach((d) => d.dispose());
       const active = runtime;
       // Host panel changes can unmount us without using a Space navigation action.
       // Drain the SDK queue before destruction; preserve its user-scoped offline
@@ -592,10 +609,12 @@ export function CollaborativeEditor({
         closingEditor = (async () => {
           try {
             await startup;
+            await transport?.drainWrites();
             docState?.flushPendingChanges(file.unitId);
-            await active.univerAPI
-              .getCollaboration()
-              .flush(file.unitId, { timeout: 20000 });
+            if (await needsFlush())
+              await active.univerAPI
+                .getCollaboration()
+                .flush(file.unitId, { timeout: 20000 });
           } catch {
             const cached = await active.univer
               .__getInjector()
@@ -611,9 +630,13 @@ export function CollaborativeEditor({
                 : '修改尚未同步，离线缓存也未能完成。请检查网络后重试。',
             });
           } finally {
+            // Keep lifecycle listeners and local-mutation tracking alive until startup/flush settle.
+            disposables.forEach((d) => d.dispose());
             active.univerAPI.disposeUnit(file.unitId);
-            await transport?.drain();
+            // The collaboration queue has been flushed or durably cached above.
+            // Cancel asset/metadata reads instead of waiting for their remote timeouts.
             abort.abort();
+            await transport?.drain();
             window.removeEventListener('beforeunload', beforeUnload);
             subscriptions.forEach((s) => s.unsubscribe());
             embedProducts?.dispose();
@@ -622,6 +645,7 @@ export function CollaborativeEditor({
           }
         })();
       else {
+        disposables.forEach((d) => d.dispose());
         embedProducts?.dispose();
         editorWorker?.terminate();
         abort.abort();

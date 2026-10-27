@@ -20,24 +20,28 @@ export function AIChanges({
   const [review, setReview] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [statusError, setStatusError] = useState('');
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (!sessionId) return;
     let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
         const p = await face.editingStatus(sessionId, file.nodeId);
-        if (!stopped) setProposal(p);
+        if (!stopped) { setProposal(p); setStatusError(''); }
       } catch (cause) {
         if (!stopped)
-          setError(cause instanceof Error ? cause.message : '无法检查 AI 修改');
+          setStatusError(cause instanceof Error ? cause.message : '无法检查 AI 修改');
+      } finally {
+        // A slow/offline response must not accumulate overlapping status requests.
+        if (!stopped) timer = setTimeout(poll, 1000);
       }
     };
     void poll();
-    const timer = setInterval(poll, 1000);
     return () => {
       stopped = true;
-      clearInterval(timer);
+      clearTimeout(timer);
     };
   }, [face, file.nodeId, sessionId]);
   async function action(action: string) {
@@ -79,7 +83,7 @@ export function AIChanges({
       setBusy(false);
     }
   }
-  if (!proposal && !error) return null;
+  if (!proposal && !error && !statusError) return null;
   const phase = proposal?.phase;
   const label =
     phase &&
@@ -130,6 +134,7 @@ export function AIChanges({
           </button>
         )}
         {error && <span role="alert">{error}</span>}
+        {statusError && <span role="alert">{statusError}</span>}
         {proposal?.message && (phase === 'failed' || phase === 'uncertain') && (
           <span role="alert">{proposal.message}</span>
         )}

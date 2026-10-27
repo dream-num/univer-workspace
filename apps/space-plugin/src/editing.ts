@@ -63,9 +63,10 @@ export class AgentEditing {
     };
   }
   async status(session: string, node: string) {
-    const scope = await this.bindings.scope(session);
     const p = this.proposals.get(this.key(session, node));
-    return p && p.userId === scope.userId && p.file.endpoint === scope.endpoint
+    if (!p) return null;
+    const scope = await this.bindings.scope(session);
+    return p.userId === scope.userId && p.file.endpoint === scope.endpoint
       ? this.public(p)
       : null;
   }

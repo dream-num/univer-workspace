@@ -433,10 +433,14 @@ export class WorkspaceConnection {
     const asset = /^\/universer-api\/file\/([^/]+)\/sign-url$/.exec(target.pathname);
     if (asset && response.ok) {
       const value = JSON.parse(body) as { url?: unknown };
-      if (value.url !== `/universer-api/file/${asset[1]}/content`) throw new SpaceError(502, 'Workspace returned an invalid asset URL.');
-      const query = new URLSearchParams({ endpoint: input.endpoint, userId: input.userId, fileId: decodeURIComponent(asset[1]!) });
-      value.url = `/api/space/editor-asset?${query}`;
-      body = JSON.stringify(value);
+      // The deployed Server may return a signed storage URL instead of the Fork's content route.
+      // Preserve SDK error envelopes and proxy successful URLs through the authenticated owner route.
+      if (value.url !== undefined) {
+        assetContentURL(value.url, this.endpoint);
+        const query = new URLSearchParams({ endpoint: input.endpoint, userId: input.userId, fileId: decodeURIComponent(asset[1]!) });
+        value.url = `/api/space/editor-asset?${query}`;
+        body = JSON.stringify(value);
+      }
     }
     lifetime.signal.throwIfAborted();
     return { status: response.status, statusText: response.statusText, body };
@@ -468,9 +472,14 @@ export class WorkspaceConnection {
     const status = await this.status();
     if (identity !== this.lifetime || status.state !== 'connected' || status.user?.id !== input.userId) throw new SpaceError(401, 'Workspace identity changed.');
     if (!input.fileId || input.fileId.length > 256 || /[\\/]/.test(input.fileId)) throw new SpaceError(400, 'Invalid asset identity.');
-    const path = `/universer-api/file/${encodeURIComponent(input.fileId)}/content`;
+    const signed = await this.json(`/universer-api/file/${encodeURIComponent(input.fileId)}/sign-url`, { signal: AbortSignal.any([request.signal, identity.signal]) });
+    identity.signal.throwIfAborted();
+    const contentURL = assetContentURL(signed.url, this.endpoint);
     const range = request.headers.get('range');
-    const response = await fetch(new URL(path, this.endpoint), { headers: { cookie: this.cookie, ...(range ? { range } : {}) }, redirect: 'error', signal: AbortSignal.any([request.signal, identity.signal, AbortSignal.timeout(120000)]) });
+    const response = await fetch(contentURL, { headers: {
+      ...(contentURL.origin === this.endpoint ? { cookie: this.cookie } : {}),
+      ...(range ? { range } : {}),
+    }, redirect: 'error', signal: AbortSignal.any([request.signal, identity.signal, AbortSignal.timeout(120000)]) });
     identity.signal.throwIfAborted();
     const headers = new Headers();
     for (const name of ['content-type', 'content-length', 'content-disposition', 'content-range', 'accept-ranges', 'etag', 'content-security-policy', 'cross-origin-resource-policy', 'x-content-type-options']) {
@@ -1033,4 +1042,16 @@ function decodeSnapshot(value: any): any {
   for (const sheet of Object.values(snapshot.workbook?.sheets ?? {}) as any[])
     sheet.originalMeta = bytes(sheet.originalMeta);
   return snapshot;
+}
+
+/** Match the original Workspace asset contract: HTTP(S), with no URL credentials. */
+function assetContentURL(value: unknown, origin: string): URL {
+  if (typeof value !== 'string' || !value)
+    throw new SpaceError(502, 'Workspace did not return an asset content URL.');
+  let url: URL;
+  try { url = new URL(value, origin); }
+  catch { throw new SpaceError(502, 'Workspace returned an invalid asset URL.'); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
+    throw new SpaceError(502, 'Workspace returned an unsupported asset URL.');
+  return url;
 }
