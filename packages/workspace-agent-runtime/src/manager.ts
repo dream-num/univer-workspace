@@ -210,11 +210,33 @@ export class RuntimeManager {
     if (target.scope.kind !== "worktree") {
       throw new Error("workspace target is not editable: execute requires a Worktree target");
     }
+    return await this.commitWrite(target, code);
+  }
+
+  /** Explicit product opt-in: commit normal Agent edits to the shared trunk. */
+  public async writeTrunkAndCommit(
+    target: WorkspaceRuntimeTarget,
+    code: string,
+    signal?: AbortSignal,
+  ): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }> {
+    if (target.scope.kind !== "trunk") {
+      throw new Error("workspace target is not trunk");
+    }
+    signal?.throwIfAborted();
+    return await this.commitWrite(target, code, signal);
+  }
+
+  private async commitWrite(
+    target: WorkspaceRuntimeTarget,
+    code: string,
+    signal?: AbortSignal,
+  ): Promise<{ committed: boolean; value: CollaborationRuntimeValue; revision?: number }> {
     return await this.withDiagnosticContext(target, "write", async () => {
       const lease = await this.acquire(target);
       let reusable = false;
       try {
         await this.synchronize(lease, target);
+        signal?.throwIfAborted();
         const { prepareContentExecutionProgram } = await import('@univer-cli/content-execution');
         const executed = await lease.execute({
           code: prepareContentExecutionProgram({
@@ -224,11 +246,12 @@ export class RuntimeManager {
           }),
           mode: "write",
         });
+        signal?.throwIfAborted();
         if (executed.mutations.length === 0) {
           reusable = true;
           return { committed: false, value: executed.value };
         }
-        const committed = await this.commitStableChangeset(lease);
+        const committed = await this.commitStableChangeset(lease, signal);
         reusable = true;
         return { committed: true, revision: committed.state.baseRevision, value: executed.value };
       } finally {
@@ -300,9 +323,11 @@ export class RuntimeManager {
 
   private async commitStableChangeset(
     lease: UniverCollaborationRuntimeLease,
+    signal?: AbortSignal,
   ): Promise<Extract<CollaborationCommitResult, { readonly status: "confirmed" }>> {
     let lastResult: CollaborationCommitResult | undefined;
     for (let attempt = 0; attempt < MAX_COMMIT_ATTEMPTS; attempt += 1) {
+      signal?.throwIfAborted();
       const result = await lease.commit();
       lastResult = result;
       if (result.status === "confirmed") return result;

@@ -7,6 +7,7 @@
  * @module dsh-univer-workspace-plugin/runtime/target
  */
 
+import { createHash } from "node:crypto";
 import { UniverType } from "@univerjs/protocol";
 
 export type WorkspaceUnitType = "sheet" | "doc" | "slide" | "base" | "board";
@@ -41,6 +42,9 @@ export function workspaceRuntimeKey(target: WorkspaceRuntimeTarget): string {
   return [
     "workspace",
     encodeURIComponent(target.origin),
+    // A pooled worker captures its credential on creation. Keep accounts and
+    // renewed sessions separate without placing the bearer value in the key.
+    createHash("sha256").update(target.sessionToken).digest("hex"),
     scope,
     encodeURIComponent(target.unitId),
     target.unitType,

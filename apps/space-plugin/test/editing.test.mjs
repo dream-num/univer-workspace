@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { AgentEditing } from '../lib/editing.js';
 import { ToolBindings } from '../lib/tools.js';
 import { SpaceError } from '../lib/workspace.js';
+import { workspaceRuntimeKey } from '@univerjs/univer-workspace-agent-runtime/target';
 function setup() {
   let currentUser = 'a',
     canEdit = true,
@@ -54,8 +55,15 @@ function setup() {
         worktree: { state: path.endsWith('/merge') ? 'merged' : 'ready' },
       };
     },
+    executeTrunk: async (file, code, signal) => {
+      signal.throwIfAborted();
+      writes.push({ file, code, scope: 'trunk' });
+      if (finish) await finish.promise;
+      signal.throwIfAborted();
+      return { committed: true, revision: 2, value: null };
+    },
     executeDraft: async (file, worktreeId, code) => {
-      writes.push({ file, worktreeId, code });
+      writes.push({ file, worktreeId, code, scope: 'worktree' });
       if (finish) await finish.promise;
       return { committed: true, revision: 2, value: null };
     },
@@ -100,16 +108,15 @@ test('a queued write retains the admitted document after current Page switches',
   const f = setup();
   await f.admit('one', 1);
   await f.bindings.setCurrent('s', 'two', 'surface', 2);
-  await f.editing.edit(
+  const result = await f.editing.edit(
     's',
     { mode: 'write', code: 'doc.appendParagraph("one")' },
     new AbortController().signal,
   );
   assert.equal(f.writes[0].file.nodeId, 'one');
-  assert.equal(
-    JSON.parse(f.calls.find((x) => x.path.endsWith('/units')).body).resourceId,
-    'r-one',
-  );
+  assert.equal(f.writes[0].scope, 'trunk');
+  assert.equal(result.committedToSharedDocument, true);
+  assert.equal(f.calls.some((x) => x.path === '/api/worktrees'), false);
   await assert.rejects(
     f.editing.edit(
       's',
@@ -153,6 +160,7 @@ test('Viewer and revoked members are denied before content execution; identity c
 test('cancel waits for an in-flight draft commit, discards it and blocks further calls from the same turn', async () => {
   const f = setup();
   await f.admit('one', 1);
+  await f.editing.worktree('s', { action: 'create' }, new AbortController().signal);
   const hold = f.defer();
   const controller = new AbortController(),
     work = f.editing.edit('s', { mode: 'write', code: 'x' }, controller.signal);
@@ -202,6 +210,7 @@ test('Agent merge and unreviewed UI Apply fail closed', async () => {
 test('account changes during Apply cannot issue the approved merge with another identity', async () => {
   const f = setup();
   await f.admit('one', 1);
+  await f.editing.worktree('s', { action: 'create' }, new AbortController().signal);
   await f.editing.edit('s', { mode: 'write', code: 'x' }, new AbortController().signal);
   await f.editing.worktree('s', { action: 'ready' }, new AbortController().signal);
   const proposal = await f.editing.status('s', 'one');
@@ -218,6 +227,7 @@ test('account changes during Apply cannot issue the approved merge with another 
 test('an uncertain Apply can retry the same approved operation without a new review', async () => {
   const f = setup();
   await f.admit('one', 1);
+  await f.editing.worktree('s', { action: 'create' }, new AbortController().signal);
   await f.editing.edit('s', { mode: 'write', code: 'x' }, new AbortController().signal);
   await f.editing.worktree('s', { action: 'ready' }, new AbortController().signal);
   const proposal = await f.editing.status('s', 'one');
@@ -243,4 +253,26 @@ test('new Worktree Tool output is lossless JSON before a first content revision 
     new AbortController().signal,
   );
   assert.deepEqual(result, JSON.parse(JSON.stringify(result)));
+});
+
+
+test('account switching before a direct write prevents execution', async () => {
+  const f = setup();
+  await f.admit('one', 1);
+  const gate = f.deferMetadata();
+  const editing = f.editing.edit('s', { mode: 'write', code: 'x' }, new AbortController().signal);
+  await gate.entered;
+  f.user('b');
+  gate.release();
+  await assert.rejects(editing, /identity changed/i);
+  assert.equal(f.writes.length, 0);
+});
+
+
+test('pooled runtimes do not reuse another Workspace credential', () => {
+  const target = { origin: 'https://example.test', unitId: 'unit', unitType: 'doc', scope: { kind: 'trunk' }, sessionToken: 'token-a', revision: -1, license: '' };
+  const first = workspaceRuntimeKey(target);
+  const second = workspaceRuntimeKey({ ...target, sessionToken: 'token-b' });
+  assert.notEqual(first, second);
+  assert.equal(first.includes('token-a'), false);
 });

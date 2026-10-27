@@ -225,6 +225,14 @@ export class AgentEditing {
         400,
         'mode=write and bounded Facade code are required.',
       );
+    const admitted = this.bindings.writingTurn(session);
+    if (!admitted.file) throw new SpaceError(403, 'No document was associated when this request was sent.');
+    const existing = this.proposals.get(this.key(session, admitted.file.nodeId));
+    // A Worktree is explicit: either supplied by the caller or created earlier
+    // in this turn. Ordinary Floating Chat writes target the shared trunk.
+    if (!args.worktreeId && !(existing?.turn === admitted.turn && existing.worktreeId)) {
+      return this.editTrunk(session, admitted.file, args, signal);
+    }
     const p = await this.target(session, args);
     return this.perform(p, signal, async () => {
       const id = await this.ensureDraft(p);
@@ -248,6 +256,28 @@ export class AgentEditing {
         committedToSharedDocument: false,
       };
     });
+  }
+  private async editTrunk(session: string, file: FileReference, args: any, signal: AbortSignal) {
+    const scope = await this.bindings.scope(session);
+    if (!['doc', 'sheet', 'slide', 'board', 'base'].includes(file.type))
+      throw new SpaceError(400, 'This content is not a Univer Unit.');
+    if ((args.nodeId && args.nodeId !== file.nodeId) ||
+        (args.resourceId && args.resourceId !== file.resourceId) ||
+        (args.unitId && args.unitId !== file.unitId) ||
+        (args.unitType && args.unitType !== file.type))
+      throw new SpaceError(409, 'This request is bound to a different document.');
+    const identity = this.workspace.identitySignal;
+    const { node } = await this.workspace.json(`/api/nodes/${encodeURIComponent(file.nodeId)}`, { signal });
+    if (identity.aborted || scope.endpoint !== file.endpoint)
+      throw new SpaceError(403, 'Workspace identity changed.');
+    if (node.resource?.id !== file.resourceId || node.resource?.unitId !== file.unitId || node.resource?.unitType !== file.type)
+      throw new SpaceError(409, 'Document identity changed.');
+    if (!node.resource.capabilities.editContent)
+      throw new SpaceError(403, 'You do not have permission to edit this document.');
+    const result = await this.workspace.executeTrunk(
+      file as FileReference & { type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, args.code, signal,
+    );
+    return { ...result, value: result.value ?? null, file, committedToSharedDocument: result.committed };
   }
   async inspect(session: string, args: any, signal: AbortSignal) {
     signal.throwIfAborted();
@@ -387,7 +417,7 @@ export function registerEditingTools(ctx: Context, editing: AgentEditing) {
     nodeId: { type: 'string' },
     resourceId: { type: 'string' },
     unitId: { type: 'string' },
-    unitType: { type: 'string', enum: ['doc', 'sheet'] },
+    unitType: { type: 'string', enum: ['doc', 'sheet', 'slide', 'board', 'base'] },
     worktreeId: { type: 'string' },
   };
   const disposers = [
@@ -415,7 +445,7 @@ export function registerEditingTools(ctx: Context, editing: AgentEditing) {
     ctx.tools.register({
       name: 'univer_edit',
       description:
-        'Execute real Univer Facade API code on the isolated current-document Worktree using the existing Fork headless runtime. mode=write only. Variables: api/univerAPI, workbook (Sheets), doc (Docs). Commits actual draft changesets; shared content is unchanged until human Review/Apply. Read first with univer_inspect. Examples: doc.appendParagraph("new paragraph"); return doc.save().body.dataStream; or workbook.getActiveSheet().getRange("B2").setValue(37); return true;',
+        'Execute Univer Facade API code for the current Workspace Unit. With no worktreeId, commits changes to the shared trunk through collaboration. When an explicit Worktree is created for this turn, writes go to its draft for Review. Read first with univer_inspect. Variables include api/univerAPI and the type-specific Unit handle.',
       parameters: {
         type: 'object',
         properties: {
@@ -430,7 +460,7 @@ export function registerEditingTools(ctx: Context, editing: AgentEditing) {
         editing.edit(session(exec), args, exec.signal),
       presentCall: () => ({
         card: 'generic',
-        title: 'Edit document draft',
+        title: 'Edit Workspace content',
         kind: 'edit',
       }),
     }),

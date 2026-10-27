@@ -78,6 +78,20 @@ export class WorkspaceConnection {
   async executeDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, code: string) {
     return this.runtime.writeAndCommit(this.draftTarget(file, worktreeId), code);
   }
+  /** Commit through the original collaboration runtime and authenticated trunk endpoints. */
+  async executeTrunk(
+    file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' },
+    code: string,
+    signal: AbortSignal,
+  ) {
+    const token = this.cookie.match(/(?:^|; )workspace_session=([^;]+)/)?.[1];
+    if (!token || this.endpoint !== file.endpoint) throw new SpaceError(401, 'Workspace identity changed.');
+    const identity = this.lifetime.signal;
+    return this.runtime.writeTrunkAndCommit({
+      origin: this.endpoint, sessionToken: token, license: this.license, revision: -1,
+      scope: { kind: 'trunk' }, unitId: file.unitId, unitType: file.type,
+    }, code, AbortSignal.any([signal, identity]));
+  }
   async inspectDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, sheet?: string, range?: string) {
     if (range && (!sheet || file.type !== 'sheet')) throw new SpaceError(400, 'A worksheet name is required for a Sheet range.');
     return this.runtime.inspect(this.draftTarget(file, worktreeId), file.type === 'doc' ? { kind: 'document' } : range ? { kind: 'worksheet-range', ranges: [{ worksheet: { name: sheet! }, range }] } : { kind: 'workbook' });
