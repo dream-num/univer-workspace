@@ -82,31 +82,7 @@ export type DocEditorProps = CollaborationEditorProps;
 
 export { docEditorLocales } from "@univerjs/univer-workspace-editor-presets/docs";
 
-export function createDocComparisonPresets(
-  container: HTMLElement
-): IPreset[] {
-  return [
-    UniverDocsCorePreset({
-      container,
-      ribbonType: "grid",
-      header: false,
-      toolbar: false,
-      footer: false,
-      contextMenu: false,
-      disableAutoFocus: true,
-    }),
-    UniverDocsDrawingPreset({
-      collaboration: false,
-    }),
-    UniverDocsHyperLinkPreset(),
-    {
-      plugins: [
-        ...getDocReplayCompatibilityPlugins(),
-        ...getDocAuthoringUIPlugins(),
-      ],
-    },
-  ];
-}
+export { createDocComparisonPresets } from "@univerjs/univer-workspace-editor-presets/docs";
 
 export const docEditorDefinition: ICollaborationEditorDefinition = {
   liveSheetReferences: true,

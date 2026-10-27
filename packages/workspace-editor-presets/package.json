@@ -1,6 +1,6 @@
 {
   "name": "@univerjs/univer-workspace-editor-presets",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,7 +11,9 @@
     "./bases": "./src/bases.ts",
     "./base-worker": "./src/base-worker.ts",
     "./docs": "./src/docs.ts",
-    "./doc-features": "./src/doc-features.ts"
+    "./doc-features": "./src/doc-features.ts",
+    "./embed-product-runtime": "./src/embed-product-runtime.ts",
+    "./read-only-guard": "./src/read-only-guard.ts"
   },
   "files": [
     "src"

@@ -85,44 +85,7 @@ export type SlideEditorProps = CollaborationEditorProps;
 
 export { slideEditorLocales } from "@univerjs/univer-workspace-editor-presets/slides";
 
-export function createSlideComparisonPresets(
-  container: HTMLElement,
-  collaboration = false,
-): IPreset[] {
-  return [
-    {
-      plugins: [
-        UniverRenderEnginePlugin,
-        [
-          UniverUIPlugin,
-          {
-            container,
-            ribbonType: "grid",
-            header: false,
-            toolbar: false,
-            footer: false,
-            disableAutoFocus: true,
-          },
-        ],
-        UniverDocsPlugin,
-        UniverDocsUIPlugin,
-        [
-          UniverDrawingPlugin,
-          {
-            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
-            ...(collaboration ? { override: [[IImageIoService, null]] } : {}),
-          },
-        ],
-        UniverSlidesPlugin,
-        UniverSlidesUIPlugin,
-        UniverSlidesChartPlugin,
-        UniverSlidesChartUIPlugin,
-        UniverSlidesTablePlugin,
-        UniverSlidesTableUIPlugin,
-      ],
-    },
-  ];
-}
+export { createSlideComparisonPresets } from "@univerjs/univer-workspace-editor-presets/slides";
 
 export const slideEditorDefinition: ICollaborationEditorDefinition = {
   liveSheetReferences: true,

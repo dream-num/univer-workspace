@@ -95,50 +95,7 @@ export type BoardEditorProps = CollaborationEditorProps;
 
 export { boardEditorLocales } from "@univerjs/univer-workspace-editor-presets/boards";
 
-export function createBoardComparisonPresets(
-  container: HTMLElement,
-  collaboration = false,
-): IPreset[] {
-  return [
-    {
-      plugins: [
-        UniverRenderEnginePlugin,
-        [
-          UniverUIPlugin,
-          {
-            container,
-            ribbonType: "grid",
-            header: false,
-            toolbar: false,
-            footer: false,
-            disableAutoFocus: true,
-          },
-        ],
-        UniverDocsPlugin,
-        UniverDocsUIPlugin,
-        [
-          UniverDrawingPlugin,
-          {
-            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
-            ...(collaboration ? { override: [[IImageIoService, null]] } : {}),
-          },
-        ],
-        UniverDocsLatexPlugin,
-        UniverDocsLatexUIPlugin,
-        UniverBoardsPlugin,
-        UniverInkPlugin,
-        UniverInkUIPlugin,
-        UniverBoardsUIPlugin,
-        UniverBoardsChartPlugin,
-        UniverBoardsChartUIPlugin,
-        UniverBoardsMindPlugin,
-        UniverBoardsMindUIPlugin,
-        UniverBoardsTablePlugin,
-        UniverBoardsTableUIPlugin,
-      ],
-    },
-  ];
-}
+export { createBoardComparisonPresets } from "@univerjs/univer-workspace-editor-presets/boards";
 
 export const boardEditorDefinition: ICollaborationEditorDefinition = {
   label: "board",

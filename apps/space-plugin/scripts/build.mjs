@@ -41,6 +41,8 @@ const sdkCss = await Promise.all(
     '@univerjs-pro/slides-table-ui',
     '@univerjs-pro/slides-thread-comment-ui',
     '@univerjs-pro/edit-history-ui',
+    '@univerjs-pro/embed-ui',
+    '@univerjs-pro/exchange-client',
     '@univerjs/thread-comment-ui',
     '@univerjs-pro/boards-ui',
     '@univerjs-pro/ink-ui',

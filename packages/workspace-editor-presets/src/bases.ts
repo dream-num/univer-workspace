@@ -110,3 +110,56 @@ export function createBaseEditorPresets(container: HTMLElement, worker: Worker):
     },
   ];
 }
+
+export function createBaseComparisonPresets(
+  container: HTMLElement,
+  options: { collaboration?: boolean; worker?: boolean; onWorker?: (worker: Worker) => void; createWorker?: () => Worker } = {},
+): IPreset[] {
+  const worker = options.worker === false ? undefined : options.createWorker?.() ?? new Worker(
+    new URL("./base-worker.ts", import.meta.url), { type: "module" },
+  );
+  if (worker) options.onWorker?.(worker);
+  return [
+    {
+      plugins: [
+        UniverRenderEnginePlugin,
+        [
+          UniverProFormulaEnginePlugin,
+          {
+            notExecuteFormula: true,
+          },
+        ],
+        [
+          UniverUIPlugin,
+          {
+            container,
+            ribbonType: "grid",
+            header: false,
+            toolbar: false,
+            footer: false,
+            disableAutoFocus: true,
+          },
+        ],
+        ...(worker ? [[UniverRPCMainThreadPlugin, { workerURL: worker }] satisfies IPresetPlugin] : []),
+        [
+          UniverDrawingPlugin,
+          {
+            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
+            ...(options.collaboration ? { override: [[IImageIoService, null]] } : {}),
+          },
+        ],
+        UniverBasesPlugin,
+        [
+          UniverBasesUIPlugin,
+          {
+            ...(options.collaboration ? { override: [[IAttachmentIoService, null]] } : {}),
+            workbench: {
+              collaborationStatus: false,
+              footer: false,
+            },
+          },
+        ],
+      ],
+    },
+  ];
+}

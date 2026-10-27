@@ -113,3 +113,29 @@ export function createDocEditorPresets(container: HTMLElement, compact = false):
     },
   ];
 }
+
+export function createDocComparisonPresets(
+  container: HTMLElement
+): IPreset[] {
+  return [
+    UniverDocsCorePreset({
+      container,
+      ribbonType: "grid",
+      header: false,
+      toolbar: false,
+      footer: false,
+      contextMenu: false,
+      disableAutoFocus: true,
+    }),
+    UniverDocsDrawingPreset({
+      collaboration: false,
+    }),
+    UniverDocsHyperLinkPreset(),
+    {
+      plugins: [
+        ...getDocReplayCompatibilityPlugins(),
+        ...getDocAuthoringUIPlugins(),
+      ],
+    },
+  ];
+}

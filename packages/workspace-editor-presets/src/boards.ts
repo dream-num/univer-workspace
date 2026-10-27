@@ -149,3 +149,48 @@ export function createBoardEditorPresets(container: HTMLElement): IPreset[] {
     },
   ];
 }
+
+export function createBoardComparisonPresets(
+  container: HTMLElement,
+  collaboration = false,
+): IPreset[] {
+  return [
+    {
+      plugins: [
+        UniverRenderEnginePlugin,
+        [
+          UniverUIPlugin,
+          {
+            container,
+            ribbonType: "grid",
+            header: false,
+            toolbar: false,
+            footer: false,
+            disableAutoFocus: true,
+          },
+        ],
+        UniverDocsPlugin,
+        UniverDocsUIPlugin,
+        [
+          UniverDrawingPlugin,
+          {
+            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
+            ...(collaboration ? { override: [[IImageIoService, null]] } : {}),
+          },
+        ],
+        UniverDocsLatexPlugin,
+        UniverDocsLatexUIPlugin,
+        UniverBoardsPlugin,
+        UniverInkPlugin,
+        UniverInkUIPlugin,
+        UniverBoardsUIPlugin,
+        UniverBoardsChartPlugin,
+        UniverBoardsChartUIPlugin,
+        UniverBoardsMindPlugin,
+        UniverBoardsMindUIPlugin,
+        UniverBoardsTablePlugin,
+        UniverBoardsTableUIPlugin,
+      ],
+    },
+  ];
+}

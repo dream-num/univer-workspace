@@ -6,7 +6,7 @@ import { DocSelectionRenderService } from '@univerjs/docs-ui';
 import { UniverUIPlugin, ISidebarService } from '@univerjs/ui';
 import { ShowCommentPanelOperation } from '@univerjs/preset-docs-thread-comment';
 import { ToggleSheetCommentPanelOperation } from '@univerjs/preset-sheets-thread-comment';
-import { UserManagerService, LifecycleStages } from '@univerjs/core';
+import { UserManagerService, LifecycleStages, type UniverInstanceType } from '@univerjs/core';
 import { DocStateChangeManagerService } from '@univerjs/docs';
 import { CommandType } from '@univerjs/core';
 import docsDrawingLocale from '@univerjs/preset-docs-drawing/locales/zh-CN';
@@ -49,10 +49,19 @@ import { purpleTheme } from '@univerjs/themes';
 import { UniverSheetsHistoryUIPlugin } from '@univerjs-pro/sheets-history-ui';
 import docsLocale from '@univerjs/preset-docs-core/locales/zh-CN';
 import sheetsLocale from '@univerjs/preset-sheets-core/locales/zh-CN';
-import { UniverCollaborationPlugin } from '@univerjs-pro/collaboration';
+import { SnapshotService, UniverCollaborationPlugin } from '@univerjs-pro/collaboration';
+import { UniverEmbedPlugin } from '@univerjs-pro/embed';
+import { UniverEmbedUIPlugin } from '@univerjs-pro/embed-ui';
+import embedLocale from '@univerjs-pro/embed-ui/locale/zh-CN';
+import { UniverChartEmbedPlugin } from '@univerjs-pro/chart-embed';
+import { createWorkspaceReferencedUnitProviderRegistration, withLiveSheetReferences } from '@univerjs/univer-workspace-reference-provider';
+import { createEmbedProductRuntime } from '@univerjs/univer-workspace-editor-presets/embed-product-runtime';
+import { isReferencedSourceBlockedMutation } from '@univerjs/univer-workspace-editor-presets/read-only-guard';
+import '@univerjs-pro/embed/facade';
 import {
   UniverCollaborationClientPlugin,
   CollaborationStatus,
+  CollaborationController,
   CollaborationUIEventService,
   CollaborationUIEventId,
   ILocalCacheService,
@@ -113,6 +122,8 @@ export function CollaborativeEditor({
     let transport: ReturnType<typeof editorHTTP> | undefined;
     let docState: DocStateChangeManagerService | undefined;
     let editorWorker: Worker | undefined;
+    let embedProducts: ReturnType<typeof createEmbedProductRuntime> | undefined;
+    const referencedUnitIds = new Set<string>();
     const disposables: { dispose(): void }[] = [];
     const subscriptions: { unsubscribe(): void }[] = [];
     const abort = new AbortController();
@@ -262,6 +273,40 @@ export function CollaborativeEditor({
                     }], UniverSlidesExchangeClientPlugin, UniverSlidesPrintPlugin] as IPresetPlugin[]),
           ];
       const licensePreset: IPreset = { plugins: [[UniverLicensePlugin, { license: workspaceLicense }]] };
+      const referenceHost = { view: { kind: 'trunk' as const } };
+      const snapshotReferences = createWorkspaceReferencedUnitProviderRegistration({
+        hostContext: referenceHost,
+        prepareUnit: async (unitType: UniverInstanceType) => {
+          if (!embedProducts) throw new Error('The embed runtime is not ready.');
+          await embedProducts.ensure(unitType);
+        },
+        resolveSnapshotService: () => {
+          if (!runtime) throw new Error('Workspace SnapshotService is not ready.');
+          return runtime.univer.__getInjector().get(SnapshotService);
+        },
+      });
+      const preparedReferences = { ...snapshotReferences, provider: {
+        async ensureUnit(input: Parameters<typeof snapshotReferences.provider.ensureUnit>[0]) {
+          const result = await snapshotReferences.provider.ensureUnit(input);
+          if (result.unitId !== file.unitId) referencedUnitIds.add(result.unitId);
+          return result;
+        },
+      } };
+      const referenceProvider = file.type === 'doc' || file.type === 'slide'
+        ? withLiveSheetReferences(preparedReferences, referenceHost, async sourceUnitId => {
+            if (canceled || !runtime) throw new Error('Editor was disposed.');
+            if (sourceUnitId !== file.unitId) await runtime.univer.__getInjector().get(CollaborationController).readyForCollab(sourceUnitId);
+          })
+        : preparedReferences;
+      const embedPlugins: IPresetPlugin[] = [
+        [UniverEmbedPlugin, { resourceRefUnitProviderRegistrations: [referenceProvider] }],
+        UniverEmbedUIPlugin, UniverChartEmbedPlugin,
+      ];
+      const runtimePresets: IPreset[] = [
+        ...(file.type !== 'sheet' ? [licensePreset] : []),
+        ...(['slide', 'board', 'base'].includes(file.type) ? [{ plugins: [[UniverNetworkPlugin, { override: [[IHTTPImplementation, { useValue: transport }]] }]] } as IPreset] : []),
+        ...presets,
+      ];
       runtime = createUniver({
         locale: LocaleType.ZH_CN,
         collaboration: true,
@@ -275,20 +320,25 @@ export function CollaborativeEditor({
             ...(file.type === 'slide' ? [slideEditorLocales['zh-CN'], slideHistoryLocale] : file.type === 'board' ? [boardEditorLocales['zh-CN'], boardHistoryLocale] : file.type === 'base' ? [baseEditorLocales['zh-CN'], baseHistoryLocale] : []),
             collabLocale,
             collabUILocale,
+            embedLocale,
             docCommentLocale,
             docsDrawingLocale,
             sheetsDrawingLocale,
             sheetCommentLocale,
           ),
         },
-        presets: [
-          ...(file.type !== 'sheet' ? [licensePreset] : []),
-          ...(['slide', 'board', 'base'].includes(file.type) ? [{ plugins: [[UniverNetworkPlugin, { override: [[IHTTPImplementation, { useValue: transport }]] }]] } as IPreset] : []),
-          ...presets,
-        ],
-        plugins: collaborationPlugins,
+        presets: runtimePresets,
+        plugins: [...collaborationPlugins, ...embedPlugins],
       });
       const { univer, univerAPI: api } = runtime;
+      embedProducts = createEmbedProductRuntime({
+        univer, container: element, license: workspaceLicense,
+        plugins: [...runtimePresets.flatMap(preset => preset.plugins), ...collaborationPlugins, ...embedPlugins],
+        createBaseWorker: () => new Worker('/api/space/base-worker', { type: 'module' }),
+      });
+      disposables.push(api.addEvent(api.Event.BeforeCommandExecute, event => {
+        if (isReferencedSourceBlockedMutation(event, referencedUnitIds)) event.cancel = true;
+      }));
       // Track the full public HTTP pipeline before the SDK's merge interceptor,
       // including auth requests waiting in its batching queue.
       const httpTracking = univer
@@ -566,11 +616,13 @@ export function CollaborativeEditor({
             abort.abort();
             window.removeEventListener('beforeunload', beforeUnload);
             subscriptions.forEach((s) => s.unsubscribe());
+            embedProducts?.dispose();
             active.univer.dispose();
             editorWorker?.terminate();
           }
         })();
       else {
+        embedProducts?.dispose();
         editorWorker?.terminate();
         abort.abort();
         window.removeEventListener('beforeunload', beforeUnload);
