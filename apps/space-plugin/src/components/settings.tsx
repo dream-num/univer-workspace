@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useSyncExternalStore } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import type { Face } from '../client.js';
 import type { State } from '../model.js';
 import { Icon, button } from './primitives.js';
@@ -26,8 +26,9 @@ export function Welcome({ face, v }: { face: Face; v: State }) {
 /** Mounted inside the official settings.section slot; DSH owns dialog chrome. */
 export function Settings({ face }: { face: Face }) {
   const v = useSyncExternalStore(face.store.subscribe, face.store.getSnapshot);
-  const [endpoint, setEndpoint] = useState(v.status.endpoint || 'https://space.univer.ai');
-  useEffect(() => setEndpoint(v.status.endpoint || 'https://space.univer.ai'), [v.status.endpoint]);
+  // Keep the editable draft independent from background status refreshes.
+  // Current Server above the form continues to show any saved custom origin.
+  const [endpoint, setEndpoint] = useState('https://space.univer.ai');
   return <div className="sp-shell tw-h-full tw-overflow-y-auto tw-p-6">
     <section className="tw-flex tw-max-w-lg tw-flex-col tw-gap-6" aria-label="Workspace settings">
       <h2 className="tw-m-0 tw-text-xl tw-font-semibold">Workspace</h2>
@@ -44,7 +45,7 @@ export function Settings({ face }: { face: Face }) {
       {v.status.user && <button className={button + ' tw-self-start'} disabled={v.busy} onClick={() => face.disconnect()}>Sign Out</button>}
       <form className="tw-flex tw-flex-col tw-gap-3" onSubmit={event => { event.preventDefault(); face.configure(endpoint); }}>
         <label className="tw-flex tw-flex-col tw-gap-2 tw-text-sm">Custom Workspace URL
-          <input aria-label="Custom Workspace URL" className="tw-box-border tw-w-full tw-rounded-lg tw-border tw-border-solid tw-border-line tw-bg-canvas tw-px-3 tw-py-2 tw-text-sm tw-text-ink" type="url" required value={endpoint} onChange={event => setEndpoint(event.target.value)} disabled={v.busy} />
+          <input aria-label="Custom Workspace URL" className="tw-box-border tw-w-full tw-rounded-lg tw-border tw-border-solid tw-border-line tw-bg-canvas tw-px-3 tw-py-2 tw-text-sm tw-text-ink" type="url" required value={endpoint} onChange={event => setEndpoint(event.target.value)} />
         </label>
         <button className={button + ' tw-self-start tw-bg-hover'} disabled={v.busy || ['waiting', 'exchanging'].includes(v.status.oauth?.phase ?? '')}>Change Server</button>
       </form>

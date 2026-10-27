@@ -1025,9 +1025,11 @@ export function apply(ctx: any) {
       polling = true;
       try {
         const status = await api('status');
-        const changed = status.state !== view.status.state || status.endpoint !== view.status.endpoint || status.user?.id !== view.status.user?.id;
+        const changed = status.state !== view.status.state || status.endpoint !== view.status.endpoint ||
+          (status.state !== 'network-error' && status.user?.id !== view.status.user?.id);
         const contentChanged = status.contentVersion !== appliedContentVersion;
-        if (changed || contentChanged || status.oauth?.phase !== view.status.oauth?.phase) {
+        // Retry pending content after reconnect without repeatedly marking the UI busy while offline.
+        if (changed || (contentChanged && status.state !== 'network-error') || status.oauth?.phase !== view.status.oauth?.phase) {
           await run(async () => {
             await refresh();
             if (contentChanged && view.status.state === 'connected') {
