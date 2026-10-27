@@ -105,6 +105,22 @@
     "./workspace-screenshot": {
       "types": "./src/workspace/screenshot-support.ts",
       "default": "./lib/workspace/screenshot-support.js"
+    },
+    "./workspace-state": {
+      "types": "./src/workspace/state.ts",
+      "default": "./lib/workspace/state.js"
+    },
+    "./workspace-worktree-api": {
+      "types": "./src/workspace/worktree-api.ts",
+      "default": "./lib/workspace/worktree-api.js"
+    },
+    "./workspace-file-state-api": {
+      "types": "./src/workspace/file-state-api.ts",
+      "default": "./lib/workspace/file-state-api.js"
+    },
+    "./workspace-status": {
+      "types": "./src/workspace/status-operations.ts",
+      "default": "./lib/workspace/status-operations.js"
     }
   },
   "scripts": {
