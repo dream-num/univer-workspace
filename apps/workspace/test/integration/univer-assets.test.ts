@@ -1,3 +1,4 @@
+import { captureReviewToken } from "./review-token.js";
 import { createServer, type Server } from "node:http";
 import {
   existsSync,
@@ -217,7 +218,8 @@ describe("Univer embedded assets", () => {
     const merged = await application.worktrees.merge(
       owner.userId,
       worktree.body.id,
-      "asset-merge-worktree-0001"
+      "asset-merge-worktree-0001",
+      { reviewToken: await captureReviewToken(origin, owner.cookie, worktree.body.id) }
     );
     expect(merged.operation.state).toBe("completed");
     expect(count(application, "univer_resources")).toBe(1);

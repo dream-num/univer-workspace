@@ -145,13 +145,37 @@ export interface WorktreeBackend {
     userId: string,
   ): Promise<WorktreeData>;
   reopen(worktreeId: string, userId: string): Promise<WorktreeData>;
-  merge(worktreeId: string, userId: string, reviewToken?: string, onReviewValidated?: () => void): Promise<WorktreeData>;
+  merge(worktreeId: string, userId: string, reviewToken?: string, journal?: ReviewedMergeJournal): Promise<WorktreeData>;
+  validateFinalization?(worktreeId: string, userId: string, proof?: ReviewedMergeProof): Promise<void>;
+  committedUnitsForProof?(worktreeId: string, userId: string, proof: ReviewedMergeProof, units: readonly WorktreeUnit[]): Promise<readonly string[]>;
   discard(worktreeId: string, userId: string): Promise<WorktreeData>;
   submitChangeset(
     worktreeId: string,
     changeset: IChangeset,
     userId: string
   ): Promise<WorktreeChangesetSubmitResult>;
+}
+
+/** Opaque hashes only: collaboration revisions/content stay in the SDK database. */
+export interface ReviewedMergeProof {
+  readonly format: 1;
+  readonly units: readonly {
+    readonly unitId: string;
+    readonly frozen: string;
+    readonly identity: string;
+    readonly trunk: string;
+    readonly submission?: string;
+    readonly terminal: boolean;
+  }[];
+}
+
+/** Server closures, never deserialized from HTTP or SDK protocol input. */
+export interface ReviewedMergeJournal {
+  load(): ReviewedMergeProof | undefined;
+  legacy(): boolean;
+  validated(proof: ReviewedMergeProof): void;
+  authorize(): Promise<void>;
+  aborted(): void;
 }
 
 export type WorktreeChangesetSubmitResult =

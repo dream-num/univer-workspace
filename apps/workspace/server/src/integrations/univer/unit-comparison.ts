@@ -124,7 +124,7 @@ export async function createWorkspaceUnitComparison(input: {
     : view === "merged"
       ? loadMergedSide(input.materializer, input.service, unit, type, context)
       : view === "preview"
-        ? loadPreviewSide(input.materializer, input.worktreeService, input.worktreeId, unit, type, context)
+        ? loadPreviewSide(input.materializer, input.worktreeService, input.service, input.worktreeId, unit, type, context)
         : loadWorktreeSide(input.materializer, input.worktreeService, input.worktreeId, unit, type, context);
   const [left, right] = await Promise.all([leftPromise, rightPromise]);
   const history = view === "draft" ? await loadComparisonHistory({
@@ -211,6 +211,7 @@ async function loadMergedSide(
 async function loadPreviewSide(
   materializer: Materializer,
   service: UniverCollabWorktreeService,
+  trunk: UniverCollabService,
   worktreeId: string,
   unit: WorktreeUnitData,
   type: UniverType,
@@ -219,6 +220,11 @@ async function loadPreviewSide(
   const evaluation = await service.evaluateWorktreeUnitMerge(
     { worktreeID: worktreeId, unitID: unit.unitID }, context,
   );
+  if (evaluation.status === "already-merged") {
+    // A partial merge freezes successful Units. A new review must show that
+    // retrying the remaining Units leaves their current trunk content alone.
+    return loadTrunkSide(materializer, trunk, unit.unitID, type, context);
+  }
   if (evaluation.status === "not-behind" ||
       (evaluation.status === "not-applicable" && evaluation.reason === "worktree-created-unit")) {
     return loadWorktreeSide(materializer, service, worktreeId, unit, type, context);

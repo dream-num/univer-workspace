@@ -15,6 +15,8 @@ import type {
   WorktreeBackend,
 } from "../../server/src/modules/worktrees/index.js";
 
+import type { ReviewedMergeJournal } from "../../server/src/modules/worktrees/worktrees.types.js";
+
 const applications: WorkspaceApplication[] = [];
 const temporaryDirectories: string[] = [];
 
@@ -215,8 +217,9 @@ describe("Worktrees", () => {
         })),
       };
     });
-    const partial = await application.worktrees.merge(user.id, id, "partial-removal-merge-0001");
-    expect(partial.worktree.state).toBe("ready");
+    await expect(application.worktrees.merge(user.id, id, "partial-removal-merge-0001"))
+      .rejects.toMatchObject({ code: "CONFLICT" });
+    expect(application.operations.get(user.id, "partial-removal-merge-0001").state).toBe("failed");
     expect(application.trash.list(user.id, space.id, {}).items).toEqual([]);
     expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
     await expect(
@@ -968,8 +971,8 @@ class MemoryWorktreeBackend implements WorktreeBackend {
     return this._transition(worktreeId, "draft");
   }
 
-  async merge(worktreeId: string, _userId?: string, _reviewToken?: string, onReviewValidated?: () => void): Promise<WorktreeData> {
-    onReviewValidated?.();
+  async merge(worktreeId: string, _userId?: string, _reviewToken?: string, journal?: ReviewedMergeJournal): Promise<WorktreeData> {
+    journal?.validated({ format: 1, units: [] });
     const current = this._require(worktreeId);
     return this._set(worktreeId, {
       ...current,

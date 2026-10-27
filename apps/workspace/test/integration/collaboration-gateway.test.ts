@@ -2346,13 +2346,14 @@ describe("content permission integration", () => {
       ).status,
     ).toBe(200);
     await f.application.worktrees.markReady(f.editor.id, worktreeId);
-    const merged = await f.application.worktrees.merge(
+    await expect(f.application.worktrees.merge(
       f.editor.id,
       worktreeId,
       "revoked-draft-merge-0001",
       { reviewToken: await captureReviewToken(f.origin, f.editor.cookie, worktreeId) },
-    );
-    expect(merged.worktree.state).not.toBe("merged");
+    )).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(f.application.operations.get(f.editor.id, "revoked-draft-merge-0001").state).toBe("failed");
+    expect((await f.application.worktrees.get(f.editor.id, worktreeId)).worktree.state).toBe("ready");
     const database = new DatabaseSync(f.collaborationDatabaseFilename, { readOnly: true });
     try {
       expect(
