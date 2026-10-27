@@ -25,7 +25,7 @@ export function SpaceView(
       <div className="tw-relative tw-flex tw-h-full tw-w-full tw-min-w-0 tw-overflow-hidden tw-bg-canvas tw-font-sans tw-text-[13px] tw-text-ink">
         <main
           style={{ containerType: 'inline-size', containerName: 'sp-main' }}
-          className="tw-flex tw-min-h-0 tw-min-w-0 tw-flex-1 tw-flex-col"
+          className="tw-relative tw-flex tw-min-h-0 tw-min-w-0 tw-flex-1 tw-flex-col"
         >
           {(v.error || v.notice) && (
             <div
@@ -61,6 +61,15 @@ export function SpaceView(
               face={props}
               v={v}
             />
+          )}
+          {v.opening && (
+            <section className="sp-file-loading" role="status" aria-live="polite" aria-busy="true" aria-label={`正在打开 ${v.opening.name}`}>
+              <header className="sp-page-toolbar" data-window-drag>
+                <Icon name={v.opening.type} size={16} /><span>{v.opening.name}</span>
+                <button className={iconButton + ' tw-ml-auto'} aria-label="取消打开文件" onClick={() => props.close()}><Icon name="close" size={18} /></button>
+              </header>
+              <div className="sp-file-loading-body"><span className="sp-spinner" /><span>正在加载…</span></div>
+            </section>
           )}
         </main>
         <FloatingChat

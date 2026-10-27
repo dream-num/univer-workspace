@@ -82,7 +82,7 @@ import { subscribeWorkspaceCollaborators } from './workarounds/collaboration-mem
 import { UnitObject, type IMember } from '@univerjs/protocol';
 import '@univerjs-pro/collaboration-client/facade';
 import { UniverLicensePlugin } from '@univerjs-pro/license';
-import type { Content, State } from './model.js';
+import type { OpenFile, State } from './model.js';
 import type { Face } from './client.js';
 import { editorHTTP } from './editor-http.js';
 import { installDocCommentRetention } from './workarounds/doc-comment-retention.js';
@@ -98,7 +98,7 @@ export function CollaborativeEditor({
   onCommentsReady,
   onCollaborators,
 }: {
-  file: Content;
+  file: OpenFile;
   user: State['status']['user'];
   face: Face;
   onCollaborators(members: readonly IMember[]): void;
@@ -112,6 +112,7 @@ export function CollaborativeEditor({
   useEffect(() => {
     let canceled = false;
     let initialized = false;
+    let cancelingLoad = false;
     let disconnected = false;
     let hasBeenSynced = false;
     let locallyChanged = false;
@@ -182,7 +183,7 @@ export function CollaborativeEditor({
     };
     const mount = async () => {
       await closingEditor;
-      if (canceled) return;
+      if (canceled || abort.signal.aborted) return;
       if (!user?.id) throw new Error('请重新登录 Workspace。');
       const element = container.current!;
       element.id = `space-editor-${crypto.randomUUID()}`;
@@ -381,7 +382,7 @@ export function CollaborativeEditor({
           .__getInjector()
           .get(CollaborationUIEventService)
           .event$.subscribe((event) => {
-            if (canceled) return;
+            if (canceled || abort.signal.aborted) return;
             if (event.id === CollaborationUIEventId.PERMISSION_DENIED) {
               accessDenied = true;
               setStatus('denied');
@@ -403,6 +404,11 @@ export function CollaborativeEditor({
       );
       docState = file.type === 'base' ? undefined : univer.__getInjector().get(DocStateChangeManagerService);
       const flush = async () => {
+        if (!initialized && !locallyChanged && !(await needsFlush())) {
+          cancelingLoad = true;
+          abort.abort(new DOMException('Document load superseded by navigation', 'AbortError'));
+          return;
+        }
         await startup;
         docState?.flushPendingChanges(file.unitId);
         await transport!.drainWrites();
@@ -445,6 +451,7 @@ export function CollaborativeEditor({
             : file.type === 'board' ? collaboration.loadBoardAsync(file.unitId)
               : file.type === 'base' ? collaboration.loadBaseAsync(file.unitId)
                 : Promise.reject(new Error('Unsupported collaborative editor.')));
+      if (canceled || abort.signal.aborted) return;
       if (!unit) throw new Error('Server 未能加载此文件。');
       await univer
         .__getInjector()
@@ -452,16 +459,23 @@ export function CollaborativeEditor({
         .requireSession(file.unitId);
       // Asset loads can retry independently; they must not hold editor startup open.
       await transport.drainWrites();
-      if (canceled) return;
+      if (canceled || abort.signal.aborted) return;
       if (api.getCurrentLifecycleStage() < LifecycleStages.Rendered)
-        await new Promise<void>((resolve) => {
+        await new Promise<void>((resolve, reject) => {
+          const onAbort = () => reject(abort.signal.reason);
+          abort.signal.addEventListener('abort', onAbort, { once: true });
+          if (abort.signal.aborted) onAbort();
           disposables.push(
             api.addEvent(api.Event.LifeCycleChanged, ({ stage }) => {
-              if (stage >= LifecycleStages.Rendered) resolve();
+              if (stage >= LifecycleStages.Rendered) {
+                abort.signal.removeEventListener('abort', onAbort);
+                resolve();
+              }
             }),
+            { dispose: () => abort.signal.removeEventListener('abort', onAbort) },
           );
         });
-      if (canceled) return;
+      if (canceled || abort.signal.aborted) return;
       api.setCurrent(file.unitId);
       disposables.push(
         subscribeWorkspaceCollaborators(
@@ -554,7 +568,7 @@ export function CollaborativeEditor({
       let commentsWereVisible = commentPanel.panelVisible;
       subscriptions.push(
         commentPanel.panelVisible$.subscribe((visible) => {
-          if (canceled) return;
+          if (canceled || abort.signal.aborted) return;
           if (!visible && commentsWereVisible && file.type === 'doc') {
             // RichTextEditor uses its own internal Doc and reserves the host
             // range. Restore the existing document input when the panel closes.
@@ -581,7 +595,10 @@ export function CollaborativeEditor({
       setLoaded(true);
       syncState(collaboration.getCollaborationStatus(file.unitId));
     };
-    startup = mount();
+    startup = mount().catch(cause => {
+      if (cancelingLoad && abort.signal.aborted) return;
+      throw cause;
+    });
     void startup.catch(fail);
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (
@@ -608,7 +625,7 @@ export function CollaborativeEditor({
       if (active)
         closingEditor = (async () => {
           try {
-            await startup;
+            if (!cancelingLoad) await startup;
             await transport?.drainWrites();
             docState?.flushPendingChanges(file.unitId);
             if (await needsFlush())

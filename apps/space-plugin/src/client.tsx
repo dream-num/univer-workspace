@@ -14,7 +14,7 @@ import { Icon } from './components/primitives.js';
 import {
   selectedReference,
   type State,
-  type Content,
+  type OpenFile,
   type Page,
   type Node,
 } from './model.js';
@@ -78,6 +78,8 @@ export function apply(ctx: any) {
   let licenseReady = false;
   let generation = 0;
   let contentRequest = 0;
+  let openingAbort: AbortController | undefined;
+  let departure: Promise<void> | undefined;
   let directoryRequest = 0;
   let retained: any;
   const references = new Map<string, any>();
@@ -199,6 +201,11 @@ export function apply(ctx: any) {
       if (active.length === 1) defaultSessionId = active[0].id;
     }
     const id = pageSessions.get(key) ?? view.sessionId ?? defaultSessionId;
+    if (id && id === previous && retained && references.get(id) === retained) {
+      if (key) pageSessions.set(key, id);
+      await associateCurrent();
+      return;
+    }
     retained = undefined;
     update({
       sessionId: null,
@@ -231,13 +238,14 @@ export function apply(ctx: any) {
   async function api<T = any>(
     operation: string,
     payload: object = {},
+    signal?: AbortSignal,
   ): Promise<T> {
     const before = generation;
     const result = await ctx.connection.rpc.call(
       '/api',
       `space/${operation}`,
       payload,
-      lifetime.signal,
+      signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal,
     );
     if (before !== generation)
       throw new DOMException('Request superseded', 'AbortError');
@@ -337,6 +345,7 @@ export function apply(ctx: any) {
   }
   function clearContent() {
     generation++;
+    cancelFileOpen();
     contextSequence++;
     unblock();
     removedContexts.clear();
@@ -491,6 +500,62 @@ export function apply(ctx: any) {
       await editor.flush();
     }
   }
+  function cancelFileOpen() {
+    openingAbort?.abort();
+    openingAbort = undefined;
+    contentRequest++;
+    update({ opening: undefined });
+    unblock();
+  }
+  function leaveEditor() {
+    if (!departure) departure = flushEditor().finally(() => { departure = undefined; });
+    return departure;
+  }
+  function openFile(node: string, expected?: { resource: string; unit: string; session: string }) {
+    if ((view.opening?.nodeId === node && !expected) || (!view.opening && view.content?.nodeId === node && !expected)) return Promise.resolve(true);
+    openingAbort?.abort();
+    const abort = new AbortController();
+    openingAbort = abort;
+    const request = ++contentRequest, before = generation;
+    directoryRequest++; sessionRequest++; contextSequence++;
+    const metadata = view.all.find(item => item.id === node) ?? view.page?.nodes.find(item => item.id === node) ?? view.recent.find(item => item.node.id === node)?.node;
+    unblock();
+    if (view.sessionId && !ctx.conversation.blocks.storeFor(view.sessionId).getSnapshot()) {
+      ownBlock = { session: view.sessionId, block: { reason: '正在打开文档…' } };
+      ctx.conversation.blocks.set(view.sessionId, ownBlock.block);
+    }
+    // Paint the requested destination now; leave the old runtime mounted until its departure succeeds.
+    update({ opening: { nodeId: node, name: metadata?.name ?? '正在打开…', type: metadata?.resource?.unitType ?? (metadata?.resource?.kind === 'blob' ? 'site' : 'file') }, context: null, error: '', notice: '' });
+    return run(async () => {
+      try {
+        await leaveEditor();
+        if (abort.signal.aborted || request !== contentRequest || before !== generation) return;
+        const previous = view.sessionId;
+        update({ content: null });
+        if (previous) void clearCurrent(previous, '').catch(() => {});
+        const content = await api<OpenFile>('open', { node }, abort.signal);
+        if (abort.signal.aborted || request !== contentRequest || before !== generation) return;
+        if (expected && (content.resourceId !== expected.resource || content.unitId !== expected.unit))
+          throw new Error('This file reference no longer matches its Workspace identity.');
+        update({ content, opening: undefined, ...(expected ? { ai: true, chatMode: 'expanded' as const } : {}) });
+        if (expected) await linkSession(expected.session);
+        else await restoreSession();
+        // Recents are auxiliary metadata, never part of the switch's loading barrier.
+        void recents().catch(() => {});
+      } catch (error) {
+        if (abort.signal.aborted || request !== contentRequest || before !== generation)
+          throw new DOMException('File navigation superseded', 'AbortError');
+        if (request === contentRequest && before === generation) {
+          update({ opening: undefined });
+          unblock();
+          if (view.content && view.sessionId) void associateCurrent().catch(() => {});
+        }
+        throw error;
+      } finally {
+        if (openingAbort === abort) openingAbort = undefined;
+      }
+    });
+  }
   const face = {
     editingStatus: (sessionId: string, nodeId: string) => api('editing-status', { sessionId, nodeId }),
     editingAction: async (input: { sessionId: string; nodeId: string; action: string; proposalId: string; reviewToken?: string }) => {
@@ -615,7 +680,7 @@ export function apply(ctx: any) {
         });
       }),
     editorRequest: async (
-      file: Content,
+      file: OpenFile,
       userId: string,
       input: { path: string; method: string; body: string | null },
       signal: AbortSignal,
@@ -629,7 +694,7 @@ export function apply(ctx: any) {
       if (!result.ok) throw new Error(result.error.message);
       return result.value;
     },
-    editorUpload: async (file: Content, userId: string, input: { path: string; method: string; body: FormData }, signal: AbortSignal) => {
+    editorUpload: async (file: OpenFile, userId: string, input: { path: string; method: string; body: FormData }, signal: AbortSignal) => {
       if (input.method !== 'POST') throw new Error('Unsupported editor upload method.');
       const query = new URLSearchParams({ endpoint: file.endpoint, userId, path: input.path });
       const response = await fetch(`/api/space/editor-upload?${query}`, { method: 'POST', body: input.body, signal: AbortSignal.any([signal, lifetime.signal]), credentials: 'same-origin' });
@@ -695,12 +760,14 @@ export function apply(ctx: any) {
     }),
     directory: (space: string, parent = '', cursor = '') =>
       run(async () => {
-        await flushEditor();
+        cancelFileOpen();
+        await leaveEditor();
         await directory(space, parent, cursor);
       }),
     home: (location: 'home' | 'recent' = 'home', filter = 'all') =>
       run(async () => {
-        await flushEditor();
+        cancelFileOpen();
+        await leaveEditor();
         void run(() => clearCurrent(view.sessionId, ''));
         sessionRequest++;
         contentRequest++;
@@ -714,21 +781,7 @@ export function apply(ctx: any) {
         await recents();
       }),
     moreRecent: () => run(() => recents(view.recentCursor ?? '')),
-    open: (node: string) =>
-      run(async () => {
-        if (view.content?.nodeId === node) return;
-        await flushEditor();
-        const request = ++contentRequest;
-        directoryRequest++;
-        sessionRequest++;
-        const before = generation;
-        const content = await api<Content>('content', { node });
-        if (before === generation && request === contentRequest) {
-          update({ content });
-          await restoreSession();
-          await recents();
-        }
-      }),
+    open: (node: string) => openFile(node),
     create: (input: {
       kind: string;
       name: string;
@@ -777,7 +830,7 @@ export function apply(ctx: any) {
           await directory(input.space, input.parent);
           update({ spaceTab: 'Content' });
           if (input.kind !== 'folder') {
-            const content = await api<Content>('content', {
+            const content = await api<OpenFile>('open', {
               node: result.node.id,
             });
             update({ content });
@@ -788,7 +841,8 @@ export function apply(ctx: any) {
       }),
     close: () =>
       run(async () => {
-        await flushEditor();
+        cancelFileOpen();
+        await leaveEditor();
         void run(clearCurrent);
         sessionRequest++;
         contentRequest++;
@@ -811,7 +865,8 @@ export function apply(ctx: any) {
     chat: () => run(() => nativeChat(Boolean(view.content))),
     back: () =>
       run(async () => {
-        await flushEditor();
+        cancelFileOpen();
+        await leaveEditor();
         ctx.layout.selectPanel(null);
         const target = defaultSessionId && references.get(defaultSessionId);
         if (target)
@@ -887,20 +942,8 @@ export function apply(ctx: any) {
     }),
   );
   async function openWorkspaceReference(node: string, resource: string, unit: string, session: string) {
-    await flushEditor();
-    const before = generation, request = ++contentRequest;
-    directoryRequest++;
-    sessionRequest++;
-    const file = await api<Content>('content', { node });
-    if (before !== generation || request !== contentRequest) return;
-    if (file.resourceId !== resource || file.unitId !== unit)
-      throw new Error('This file reference no longer matches its Workspace identity.');
-    // Preserve the reference Session, then visibly associate this Page under current ACLs.
     ctx.layout.selectPanel(PANEL);
-    contentRequest++;
-    directoryRequest++;
-    update({ content: file, ai: true, chatMode: 'expanded' });
-    await linkSession(session);
+    await openFile(node, { resource, unit, session });
   }
 
   ctx.effect(() =>
@@ -1072,12 +1115,12 @@ export type Face = {
     parent?: string;
   }): Promise<boolean>;
   editorRequest(
-    file: Content,
+    file: OpenFile,
     userId: string,
     input: { path: string; method: string; body: string | null },
     signal: AbortSignal,
   ): Promise<{ status: number; statusText: string; body: string }>;
-  editorUpload(file: Content, userId: string, input: { path: string; method: string; body: FormData }, signal: AbortSignal): Promise<{ status: number; statusText: string; body: string }>;
+  editorUpload(file: OpenFile, userId: string, input: { path: string; method: string; body: FormData }, signal: AbortSignal): Promise<{ status: number; statusText: string; body: string }>;
   bindEditor(
     node: string,
     binding: {

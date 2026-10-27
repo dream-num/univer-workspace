@@ -10,7 +10,7 @@ import { UniverCollaborationEmbedPlugin } from '@univerjs-pro/collaboration-embe
 import { UniverChartEmbedPlugin } from '@univerjs-pro/chart-embed';
 import { HoverManagerService, DragManagerService } from '@univerjs/sheets-ui';
 import type { Face } from './client.js';
-import type { Content, State } from './model.js';
+import type { OpenFile, State } from './model.js';
 import { editorHTTP } from './editor-http.js';
 import { workspaceLicense } from './license.js';
 
@@ -22,7 +22,7 @@ export function HtmlViewer({
   face,
   user,
 }: {
-  file: Content;
+  file: OpenFile;
   face: Face;
   user: State['status']['user'];
 }) {
@@ -109,7 +109,7 @@ export function HtmlViewer({
     const flush = async () => {
       await viewer.current?.prepareToLeave();
       await Promise.all(
-        transports.current.map((transport) => transport.drain()),
+        transports.current.map((transport) => transport.drainWrites()),
       );
     };
     const isSaved = () => !viewer.current?.hasPendingChanges();
@@ -130,10 +130,12 @@ export function HtmlViewer({
     return () => {
       face.bindEditor(file.nodeId, null);
       window.removeEventListener('beforeunload', beforeUnload);
-      tracking.current.forEach((registration) => registration.dispose());
       void Promise.allSettled(
-        transports.current.map((transport) => transport.drain()),
-      ).finally(() => lifetime.current.abort());
+        transports.current.map((transport) => transport.drainWrites()),
+      ).finally(() => {
+        lifetime.current.abort();
+        tracking.current.forEach((registration) => registration.dispose());
+      });
     };
   }, [file.nodeId]);
   return (

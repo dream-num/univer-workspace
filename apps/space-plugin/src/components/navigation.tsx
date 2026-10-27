@@ -51,7 +51,7 @@ export function Navigation({ face, v }: { face: Face; v: State }) {
             key={filter}
             className={
               row +
-              (v.location === 'home' && v.filter === filter && !v.content
+              (v.location === 'home' && v.filter === filter && !v.content && !v.opening
                 ? ' sp-selected'
                 : '')
             }
@@ -96,7 +96,7 @@ export function Navigation({ face, v }: { face: Face; v: State }) {
             key={item.node.id}
             title={item.node.name}
             className={
-              row + (v.content?.nodeId === item.node.id ? ' sp-selected' : '')
+              row + ((v.opening?.nodeId ?? v.content?.nodeId) === item.node.id ? ' sp-selected' : '')
             }
             onClick={() => face.open(item.node.id)}
           >

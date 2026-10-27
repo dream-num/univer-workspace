@@ -221,6 +221,9 @@ export function apply(ctx: Context) {
             signal,
           );
           break;
+        case 'open':
+          value = await workspace.open(string('node'), signal);
+          break;
         case 'content':
           value = await workspace.read(string('node'), signal);
           break;
@@ -303,6 +306,7 @@ export function apply(ctx: Context) {
     'recent',
     'nodes',
     'content',
+    'open',
     'create',
     'editor-http',
     'associate',

@@ -1,3 +1,4 @@
+import type { Content, OpenFile } from './model.js';
 import { createHash } from 'node:crypto';
 import { RuntimeManager } from '@univerjs/univer-workspace-agent-runtime';
 import { inspectionQuery } from '@univerjs/univer-workspace-agent-runtime/workspace-inspection';
@@ -52,6 +53,7 @@ export class WorkspaceConnection {
   readonly license = process.env.UNIVER_LICENSE ?? '';
   endpoint = '';
   private contentGeneration = 0;
+  private htmlCache = new Map<string, { html: string; etag: string | null; sha256?: string }>();
   get contentVersion() { return this.contentGeneration; }
   noteContentChanged() { this.contentGeneration++; }
   get sessionCookie() { return this.cookie; }
@@ -64,6 +66,7 @@ export class WorkspaceConnection {
     this.lifetime.abort();
     this.lifetime = new AbortController();
     this.cookie = `workspace_session=${token}`;
+    this.htmlCache.clear();
   }
   clearSession() {
     this.loginAttempt++;
@@ -71,6 +74,7 @@ export class WorkspaceConnection {
     this.lifetime.abort();
     this.lifetime = new AbortController();
     this.cookie = '';
+    this.htmlCache.clear();
   }
   private runtime = new RuntimeManager(new URL('./workspace-content-worker.js', import.meta.url));
   /** Host-only credential boundary. No credential enters Tool results or UI. */
@@ -143,6 +147,7 @@ export class WorkspaceConnection {
     this.lifetime.abort();
     this.lifetime = new AbortController();
     this.cookie = '';
+    this.htmlCache.clear();
     this.endpoint = next;
     return true;
   }
@@ -187,6 +192,7 @@ export class WorkspaceConnection {
     this.loginAbort?.abort();
     this.lifetime.abort();
     this.cookie = '';
+    this.htmlCache.clear();
     await Promise.allSettled([...this.pending]);
     await this.runtime.close();
     await this.materializer.dispose();
@@ -270,6 +276,7 @@ export class WorkspaceConnection {
     this.lifetime.abort();
     this.lifetime = new AbortController();
     this.cookie = cookie;
+    this.htmlCache.clear();
     return this.status();
   }
 
@@ -824,6 +831,46 @@ export class WorkspaceConnection {
     return { items };
   }
 
+  /** Open formal editors with authorized metadata; their SDK loader owns the snapshot read. */
+  open(nodeId: string, signal?: AbortSignal): Promise<OpenFile> {
+    const operation = this.readContent(nodeId, signal, true);
+    this.pending.add(operation);
+    void operation.finally(() => this.pending.delete(operation)).catch(() => {});
+    return operation;
+  }
+
+  private async htmlContent(resourceId: string, sha256: string | undefined, signal?: AbortSignal) {
+    const identity = this.lifetime;
+    const active = AbortSignal.any([identity.signal, ...(signal ? [signal] : [])]);
+    active.throwIfAborted();
+    const cached = this.htmlCache.get(resourceId);
+    // The fresh resource-open response has already rechecked ACL and content identity.
+    if (cached && sha256 && cached.sha256 === sha256) {
+      this.htmlCache.delete(resourceId); this.htmlCache.set(resourceId, cached);
+      return cached.html;
+    }
+    const response = await this.rawRequest(`/api/blob-resources/${encodeURIComponent(resourceId)}/content`, {
+      signal: active, headers: cached?.etag ? { 'if-none-match': cached.etag } : {},
+    });
+    active.throwIfAborted();
+    if (response.status === 304 && cached) {
+      const entry = { ...cached, sha256, etag: response.headers.get('etag') ?? cached.etag };
+      this.htmlCache.delete(resourceId); this.htmlCache.set(resourceId, entry);
+      return cached.html;
+    }
+    if (!response.ok) {
+      this.htmlCache.delete(resourceId);
+      throw new SpaceError(response.status, 'Cannot load this Workspace Page.');
+    }
+    const html = await response.text();
+    active.throwIfAborted();
+    if (Buffer.byteLength(html, 'utf8') > 1024 * 1024) throw new SpaceError(413, 'HTML preview exceeds 1 MiB. Open this file in Workspace.');
+    this.htmlCache.delete(resourceId);
+    this.htmlCache.set(resourceId, { html, sha256, etag: response.headers.get('etag') });
+    while (this.htmlCache.size > 16) this.htmlCache.delete(this.htmlCache.keys().next().value!);
+    return html;
+  }
+
   /** Track materialization so unload waits until all SDK work has settled. */
   read(nodeId: string, signal?: AbortSignal) {
     const operation = this.readContent(nodeId, signal);
@@ -834,7 +881,9 @@ export class WorkspaceConnection {
     return operation;
   }
 
-  private async readContent(nodeId: string, signal?: AbortSignal) {
+  private readContent(nodeId: string, signal?: AbortSignal): Promise<Content>;
+  private readContent(nodeId: string, signal: AbortSignal | undefined, metadataOnly: true): Promise<OpenFile>;
+  private async readContent(nodeId: string, signal?: AbortSignal, metadataOnly = false): Promise<Content | OpenFile> {
     const lifetime = this.lifetime;
     const endpoint = this.endpoint;
     const json = (path: string, init: RequestInit = {}) => {
@@ -867,16 +916,7 @@ export class WorkspaceConnection {
           413,
           'HTML preview exceeds 1 MiB. Open this file in Workspace.',
         );
-      const html = await (
-        await this.request(
-          `/api/blob-resources/${encodeURIComponent(resource.id)}/content`,
-          {
-            signal: signal
-              ? AbortSignal.any([signal, lifetime.signal])
-              : lifetime.signal,
-          },
-        )
-      ).text();
+      const html = await this.htmlContent(resource.id, typeof opened.sha256 === 'string' ? opened.sha256 : undefined, signal);
       lifetime.signal.throwIfAborted();
       return {
         endpoint,
@@ -906,6 +946,11 @@ export class WorkspaceConnection {
     const type = types[resource.unitType];
     if (resource.kind !== 'univer' || !type)
       throw new SpaceError(400, 'This content type has no supported preview.');
+    if (metadataOnly) return {
+      endpoint, nodeId, resourceId: resource.id, unitId: resource.unitId,
+      type: resource.unitType, name: node.name, node,
+      space: nodeResult.space, breadcrumbs: nodeResult.breadcrumbs,
+    };
     const prefix = `/universer-api/snapshot/${type}/unit/${encodeURIComponent(resource.unitId)}`;
     const body = await json(`${prefix}/rev/0`);
     const snapshot = decodeSnapshot(body.snapshot);

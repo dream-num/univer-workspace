@@ -2,10 +2,8 @@ import React, { useState } from 'react';
 import type { Face } from '../client.js';
 import type { State } from '../model.js';
 import { CollaborativeEditor } from '../collaborative-editor.js';
-import { Viewer } from '../viewer.js';
 import { Icon, Menu, button, iconButton } from './primitives.js';
 import { FileActions } from './file-actions.js';
-import { contentType } from '../content-types.js';
 import { Collaborators } from './collaborators.js';
 import type { IMember } from '@univerjs/protocol';
 import { HtmlViewer } from '../html-viewer.js';
@@ -95,7 +93,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
         }
       >
         <div className="sp-editor">
-          {contentType(file.type)?.runtime === 'editor' ? (
+          {file.type !== 'site' ? (
             <CollaborativeEditor
               key={file.nodeId}
               file={file}
@@ -104,15 +102,13 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
               onCommentsReady={setComments}
               onCollaborators={setMembers}
             />
-          ) : file.type === 'site' ? (
+          ) : (
             <HtmlViewer
               key={file.nodeId}
               file={file}
               face={face}
               user={v.status.user}
             />
-          ) : (
-            <Viewer key={file.nodeId + file.sha256} file={file} />
           )}
         </div>
       </div>

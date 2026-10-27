@@ -68,7 +68,7 @@ export interface Recent {
   lastOpenedAt: string;
   location: { space: Space; breadcrumbs: { id: string; name: string }[] };
 }
-export interface Content {
+export interface OpenFile {
   endpoint: string;
   nodeId: string;
   resourceId: string;
@@ -76,12 +76,17 @@ export interface Content {
   name: string;
   type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' | 'site';
   html?: string;
-  revision: number;
-  sha256: string;
-  capturedAt: string;
   node?: Node;
   space?: Space;
   breadcrumbs?: { id: string; name: string }[];
+}
+/** A materialized read for tools/comparison; ordinary editor opens only need identity metadata. */
+export interface Content extends OpenFile {
+  revision: number;
+  sha256: string;
+  sourceSha256?: string;
+  notice?: string;
+  capturedAt: string;
   data: any;
   content: {
     text: string;
@@ -121,7 +126,8 @@ export interface State {
   } | null;
   space: string;
   parent: string;
-  content: Content | null;
+  content: OpenFile | null;
+  opening?: { nodeId: string; name: string; type: string };
   context: {
     file: FileReference;
     state: 'linking' | 'linked' | 'removed' | 'failed';
@@ -163,7 +169,7 @@ export interface TrashBatch {
   restoreBlockedBy?: { name?: string } | null;
   originalLocation: { breadcrumbs: { id: string; name: string }[] };
 }
-export function selectedReference(file: Content): FileReference {
+export function selectedReference(file: FileReference): FileReference {
   return {
     endpoint: file.endpoint,
     nodeId: file.nodeId,

@@ -56,7 +56,7 @@ export function FloatingChat({
   const expanded = v.chatMode === 'expanded',
     minimized = v.chatMode === 'minimized';
   const hidden =
-    (!v.content && v.location !== 'space') || (!v.sessionId && !v.ai);
+    (!v.content && !v.opening && v.location !== 'space') || (!v.sessionId && !v.ai);
   const positioned = useRef(false);
   const clamp = () => {
     const box = seat.current?.getBoundingClientRect();

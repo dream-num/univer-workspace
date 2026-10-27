@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Face } from '../client.js';
-import type { Content } from '../model.js';
+import type { Content, OpenFile } from '../model.js';
 import type { Proposal } from '../model.js';
 import { Viewer } from '../viewer.js';
 import { button, iconButton, Icon } from './primitives.js';
@@ -13,7 +13,7 @@ export function AIChanges({
   sessionId,
 }: {
   face: Face;
-  file: Content;
+  file: OpenFile;
   sessionId: string | null;
 }) {
   const [proposal, setProposal] = useState<Proposal | null>(null);
