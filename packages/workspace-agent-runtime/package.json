@@ -101,6 +101,10 @@
     "./workspace-render": {
       "types": "./src/workspace/render-operations.ts",
       "default": "./lib/workspace/render-operations.js"
+    },
+    "./workspace-screenshot": {
+      "types": "./src/workspace/screenshot-support.ts",
+      "default": "./lib/workspace/screenshot-support.js"
     }
   },
   "scripts": {
