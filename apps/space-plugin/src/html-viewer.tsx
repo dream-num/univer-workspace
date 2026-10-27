@@ -27,6 +27,11 @@ export function HtmlViewer({
   user: State['status']['user'];
 }) {
   const viewer = useRef<WorkspaceHtmlViewerHandle>(null);
+  const loadId = face.store.getSnapshot().contentLoadId;
+  const ownsView = () => {
+    const current = face.store.getSnapshot();
+    return !lifetime.current.signal.aborted && !current.opening && current.content?.nodeId === file.nodeId && current.contentLoadId === loadId;
+  };
   const [error, setError] = useState('');
   const [inspecting, setInspecting] = useState(false);
   const lifetime = useRef(new AbortController());
@@ -152,13 +157,9 @@ export function HtmlViewer({
           const operation = inspecting
             ? viewer.current?.inspect.close()
             : viewer.current?.inspect.open();
-          void operation?.catch((cause) =>
-            setError(
-              cause instanceof Error
-                ? cause.message
-                : 'Cannot inspect this page.',
-            ),
-          );
+          void operation?.catch((cause) => {
+            if (ownsView()) setError(cause instanceof Error ? cause.message : 'Cannot inspect this page.');
+          });
         }}
       >
         Inspect page
@@ -171,8 +172,8 @@ export function HtmlViewer({
         allowedOrigins={allowedOrigins}
         className="sp-html-runtime"
         loadEngine={loadEngine}
-        onError={setError}
-        onInspectChanged={setInspecting}
+        onError={message => { if (ownsView()) setError(message); }}
+        onInspectChanged={value => { if (ownsView()) setInspecting(value); }}
       />
     </div>
   );

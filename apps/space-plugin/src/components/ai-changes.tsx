@@ -25,13 +25,19 @@ export function AIChanges({
   useEffect(() => {
     if (!sessionId) return;
     let stopped = false;
+    const loadId = face.store.getSnapshot().contentLoadId;
+    const current = () => {
+      const view = face.store.getSnapshot();
+      return !stopped && !view.opening && view.content?.nodeId === file.nodeId && view.contentLoadId === loadId;
+    };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
+        if (!current()) return;
         const p = await face.editingStatus(sessionId, file.nodeId);
-        if (!stopped) { setProposal(p); setStatusError(''); }
+        if (current()) { setProposal(p); setStatusError(''); }
       } catch (cause) {
-        if (!stopped)
+        if (current())
           setStatusError(cause instanceof Error ? cause.message : '无法检查 AI 修改');
       } finally {
         // A slow/offline response must not accumulate overlapping status requests.

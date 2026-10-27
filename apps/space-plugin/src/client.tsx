@@ -252,15 +252,16 @@ export function apply(ctx: any) {
     if (!result.ok) throw Object.assign(new Error(result.error.message), { code: result.error.code });
     return result.value;
   }
-  let pending = 0;
-  async function run(operation: () => Promise<void>) {
-    pending++;
-    update({ busy: true, error: '', notice: '' });
+  const activities = new Set<() => boolean>();
+  const isBusy = () => [...activities].some(current => current());
+  async function run(operation: () => Promise<void>, current = () => !disposed) {
+    activities.add(current);
+    if (current()) update({ busy: true, error: '', notice: '' });
     try {
       await operation();
       return true;
     } catch (error) {
-      if (!(error instanceof Error && error.name === 'AbortError'))
+      if (current() && !(error instanceof Error && error.name === 'AbortError'))
         update({
           error: error instanceof Error && error.message.startsWith('[FCollaboration]:')
             ? '尚未保存到 Workspace。请检查连接后重试，当前文档将保持打开。'
@@ -268,27 +269,18 @@ export function apply(ctx: any) {
         });
       return false;
     } finally {
-      pending--;
+      activities.delete(current);
       const resume = pausedEditor;
-      if (
-        !pending &&
-        resume &&
-        resume === editor &&
-        view.content?.nodeId === resume.node
-      ) {
+      if (current() && !isBusy() && resume && resume === editor && view.content?.nodeId === resume.node) {
         pausedEditor = null;
-        try {
-          await resume.resume?.();
-        } catch (error) {
-          update({
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Cannot resume this page.',
-          });
+        try { await resume.resume?.(); }
+        catch (error) {
+          if (current() && resume === editor && view.content?.nodeId === resume.node)
+            update({ error: error instanceof Error ? error.message : 'Cannot resume this page.' });
         }
       }
-      update({ busy: pending > 0 });
+      // A superseded load owns no current UI, including the global progress indicator.
+      if (current()) update({ busy: isBusy() });
     }
   }
   async function recents(cursor = '') {
@@ -504,7 +496,7 @@ export function apply(ctx: any) {
     openingAbort?.abort();
     openingAbort = undefined;
     contentRequest++;
-    update({ opening: undefined });
+    update({ opening: undefined, busy: isBusy() });
     unblock();
   }
   function leaveEditor() {
@@ -517,6 +509,7 @@ export function apply(ctx: any) {
     const abort = new AbortController();
     openingAbort = abort;
     const request = ++contentRequest, before = generation;
+    const current = () => !disposed && !abort.signal.aborted && request === contentRequest && before === generation;
     directoryRequest++; sessionRequest++; contextSequence++;
     const metadata = view.all.find(item => item.id === node) ?? view.page?.nodes.find(item => item.id === node) ?? view.recent.find(item => item.node.id === node)?.node;
     unblock();
@@ -537,7 +530,7 @@ export function apply(ctx: any) {
         if (abort.signal.aborted || request !== contentRequest || before !== generation) return;
         if (expected && (content.resourceId !== expected.resource || content.unitId !== expected.unit))
           throw new Error('This file reference no longer matches its Workspace identity.');
-        update({ content, opening: undefined, ...(expected ? { ai: true, chatMode: 'expanded' as const } : {}) });
+        update({ content, contentLoadId: request, opening: undefined, ...(expected ? { ai: true, chatMode: 'expanded' as const } : {}) });
         if (expected) await linkSession(expected.session);
         else await restoreSession();
         // Recents are auxiliary metadata, never part of the switch's loading barrier.
@@ -554,7 +547,7 @@ export function apply(ctx: any) {
       } finally {
         if (openingAbort === abort) openingAbort = undefined;
       }
-    });
+    }, current);
   }
   const face = {
     editingStatus: (sessionId: string, nodeId: string) => api('editing-status', { sessionId, nodeId }),
@@ -833,7 +826,7 @@ export function apply(ctx: any) {
             const content = await api<OpenFile>('open', {
               node: result.node.id,
             });
-            update({ content });
+            update({ content, contentLoadId: contentRequest });
             await restoreSession();
             await recents();
           }

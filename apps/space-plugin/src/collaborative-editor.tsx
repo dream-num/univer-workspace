@@ -105,6 +105,7 @@ export function CollaborativeEditor({
   onCommentsReady(binding: { toggle(): void; visible: boolean } | null): void;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const loadId = face.store.getSnapshot().contentLoadId;
   const [status, setStatus] = useState('loading'),
     [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0),
@@ -130,14 +131,25 @@ export function CollaborativeEditor({
     const disposables: { dispose(): void }[] = [];
     const subscriptions: { unsubscribe(): void }[] = [];
     const abort = new AbortController();
-    setStatus('loading');
-    setError('');
-    onCollaborators([]);
-    setLoaded(false);
+    const matchesView = () => {
+      const current = face.store.getSnapshot();
+      return !current.opening && current.content?.nodeId === file.nodeId && current.contentLoadId === loadId;
+    };
+    const ownsView = () => !canceled && !abort.signal.aborted && matchesView();
+    const publishStatus = (value: string) => { if (ownsView()) setStatus(value); };
+    const publishError = (value: string) => { if (ownsView()) setError(value); };
+    const publishLoaded = (value: boolean) => { if (ownsView()) setLoaded(value); };
+    const publishMembers = (value: readonly IMember[]) => { if (ownsView()) onCollaborators(value); };
+    const publishComments = (value: { toggle(): void; visible: boolean } | null) => { if (ownsView()) onCommentsReady(value); };
+    publishStatus('loading');
+    publishError('');
+    publishMembers([]);
+    publishLoaded(false);
     const syncState = (state: CollaborationStatus) => {
       if (canceled || !initialized || accessDenied) return;
-      onCollaborators(state === CollaborationStatus.OFFLINE ? [] : lastMembers);
       if (state === CollaborationStatus.SYNCED) { hasBeenSynced = true; locallyChanged = false; }
+      if (!ownsView()) return;
+      publishMembers(state === CollaborationStatus.OFFLINE ? [] : lastMembers);
       if (state === CollaborationStatus.OFFLINE && hasBeenSynced && !disconnected) {
         disconnected = true;
         docState?.flushPendingChanges(file.unitId);
@@ -146,11 +158,11 @@ export function CollaborativeEditor({
       // the SDK acknowledges its existing queue. This never writes a snapshot.
       if (disconnected && state === CollaborationStatus.SYNCED && !recovering) {
         recovering = true;
-        setStatus('loading');
-        setAttempt((value) => value + 1);
+        publishStatus('loading');
+        if (ownsView()) setAttempt((value) => value + 1);
         return;
       }
-      setStatus(
+      publishStatus(
         state === CollaborationStatus.SYNCED
           ? (docState?.getStateCache(file.unitId).collaboration.length ?? 0)
             ? 'saving'
@@ -164,8 +176,8 @@ export function CollaborativeEditor({
     };
     const fail = (cause: unknown) => {
       if (!canceled) {
-        setStatus('error');
-        setError(
+        publishStatus('error');
+        publishError(
           cause instanceof Error ? cause.message : '无法打开协同编辑器。',
         );
       }
@@ -385,14 +397,14 @@ export function CollaborativeEditor({
             if (canceled || abort.signal.aborted) return;
             if (event.id === CollaborationUIEventId.PERMISSION_DENIED) {
               accessDenied = true;
-              setStatus('denied');
-              setError(
+              publishStatus('denied');
+              publishError(
                 'Workspace 拒绝编辑权限。请重新打开文件以检查当前访问权限。',
               );
             }
             if (event.id === CollaborationUIEventId.CONFLICT) {
-              setStatus('conflict');
-              setError('同步冲突。请保留此页并等待恢复。');
+              publishStatus('conflict');
+              publishError('同步冲突。请保留此页并等待恢复。');
             }
           }),
       );
@@ -431,7 +443,7 @@ export function CollaborativeEditor({
             !event.options?.onlyLocal
           ) {
             locallyChanged = true;
-            if (initialized && !canceled) setStatus('saving');
+            if (initialized && !canceled) publishStatus('saving');
           }
         }),
       );
@@ -484,7 +496,7 @@ export function CollaborativeEditor({
           (people) => {
             lastMembers = people;
             if (!canceled)
-              onCollaborators(
+              publishMembers(
                 collaboration.getCollaborationStatus(file.unitId) ===
                   CollaborationStatus.OFFLINE || accessDenied
                   ? []
@@ -506,8 +518,8 @@ export function CollaborativeEditor({
               file.node?.resource?.capabilities.editContent
           ) {
             accessDenied = true;
-            setStatus('denied');
-            setError('文件权限已更改。请重新打开文件以使用当前权限。');
+            publishStatus('denied');
+            publishError('文件权限已更改。请重新打开文件以使用当前权限。');
           }
         } catch (cause) {
           if (
@@ -516,9 +528,9 @@ export function CollaborativeEditor({
             /not found|forbidden|access denied|permission/i.test(cause.message)
           ) {
             accessDenied = true;
-            onCollaborators([]);
-            setStatus('denied');
-            setError('你已无权访问此文件。请联系 Space 所有者。');
+            publishMembers([]);
+            publishStatus('denied');
+            publishError('你已无权访问此文件。请联系 Space 所有者。');
           }
         } finally {
           accessCheckRunning = false;
@@ -547,7 +559,7 @@ export function CollaborativeEditor({
         .get(ThreadCommentPanelService);
       const toggleComments = () => {
         if (!commentPanel.panelVisible)
-          void retention?.refresh().catch((cause) => setError(cause.message));
+          void retention?.refresh().catch((cause) => publishError(cause.message));
         if (file.type === 'sheet') {
           void api.executeCommand(ToggleSheetCommentPanelOperation.id);
         } else if (file.type === 'slide' && !commentPanel.panelVisible) {
@@ -584,15 +596,15 @@ export function CollaborativeEditor({
             });
           }
           commentsWereVisible = visible;
-          onCommentsReady({ visible, toggle: toggleComments });
+          publishComments({ visible, toggle: toggleComments });
         }),
       );
-      onCommentsReady({
+      publishComments({
         visible: commentPanel.panelVisible,
         toggle: toggleComments,
       });
       initialized = true;
-      setLoaded(true);
+      publishLoaded(true);
       syncState(collaboration.getCollaborationStatus(file.unitId));
     };
     startup = mount().catch(cause => {
@@ -615,8 +627,8 @@ export function CollaborativeEditor({
     window.addEventListener('beforeunload', beforeUnload);
     return () => {
       canceled = true;
-      onCommentsReady(null);
-      onCollaborators([]);
+      publishComments(null);
+      publishMembers([]);
       face.bindEditor(file.nodeId, null);
       const active = runtime;
       // Host panel changes can unmount us without using a Space navigation action.
@@ -641,7 +653,7 @@ export function CollaborativeEditor({
                 () => true,
                 () => false,
               );
-            face.update({
+            if (matchesView()) face.update({
               error: cached
                 ? '修改尚未同步。请保持同一 Workspace 账号并重新打开文件，从此浏览器的离线缓存恢复同步。'
                 : '修改尚未同步，离线缓存也未能完成。请检查网络后重试。',
@@ -669,7 +681,7 @@ export function CollaborativeEditor({
         window.removeEventListener('beforeunload', beforeUnload);
       }
     };
-  }, [file.nodeId, user?.id, attempt]);
+  }, [file.nodeId, user?.id, attempt, loadId]);
   useLayoutEffect(() => {
     // Suspend the actual input surface during a disconnect. The native inert
     // boundary prevents text/IME input before the SDK creates a local mutation.

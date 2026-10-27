@@ -95,7 +95,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
         <div className="sp-editor">
           {file.type !== 'site' ? (
             <CollaborativeEditor
-              key={file.nodeId}
+              key={`${file.nodeId}:${v.contentLoadId ?? ''}`}
               file={file}
               user={v.status.user}
               face={face}
@@ -104,7 +104,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
             />
           ) : (
             <HtmlViewer
-              key={file.nodeId}
+              key={`${file.nodeId}:${v.contentLoadId ?? ''}`}
               file={file}
               face={face}
               user={v.status.user}

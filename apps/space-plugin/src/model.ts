@@ -127,6 +127,7 @@ export interface State {
   space: string;
   parent: string;
   content: OpenFile | null;
+  contentLoadId?: number;
   opening?: { nodeId: string; name: string; type: string };
   context: {
     file: FileReference;
