@@ -2,7 +2,11 @@
 export const navigationHost = {
   version: '0.2.1-rc.3',
   commit: 'be72761',
-  css: 'kB3qhq',
+  // Desktop and npm Web publish distinct CSS artifacts for this same release.
+  artifacts: [
+    { sidebar: 'kB3qhq', layout: 'PIRFFq' },
+    { sidebar: 'hHd-Xa', layout: 'pI_x6G' },
+  ],
 } as const;
 export function supportsHostNavigation(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
@@ -30,7 +34,11 @@ export function installHostNavigation(
   },
 ) {
   if (!supportsHostNavigation(options.graph)) return null;
-  const prefix = navigationHost.css;
+  const artifact = navigationHost.artifacts.find(({ sidebar, layout }) =>
+    marker.closest(`.${sidebar}_root`)?.closest(`.${layout}_frame`),
+  );
+  if (!artifact) return null;
+  const prefix = artifact.sidebar;
   const root = marker.closest<HTMLElement>(`.${prefix}_root`);
   const nav = root?.querySelector<HTMLElement>(
     `:scope > nav.${prefix}_panelList`,
@@ -39,7 +47,7 @@ export function installHostNavigation(
     `:scope > .${prefix}_regionArea`,
   );
   const foot = root?.querySelector<HTMLElement>(`:scope > .${prefix}_footArea`);
-  const frame = root?.closest<HTMLElement>('.PIRFFq_frame');
+  const frame = root?.closest<HTMLElement>(`.${artifact.layout}_frame`);
   if (
     !root ||
     !nav ||

@@ -58,6 +58,7 @@ export function FloatingChat({
     [geometry, setGeometry] = useState({ width: 560, right: 16, bottom: 16 });
   const panel = useRef<HTMLElement>(null),
     seat = useRef<HTMLDivElement>(null),
+    keyboardFocus = useRef(false),
     drag = useRef<{
       x: number;
       y: number;
@@ -101,6 +102,20 @@ export function FloatingChat({
   useEffect(() => {
     if (!expanded) setHistory(false);
   }, [expanded]);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      keyboardFocus.current = e.key === 'Tab';
+    };
+    const pointer = () => {
+      keyboardFocus.current = false;
+    };
+    document.addEventListener('keydown', key, true);
+    document.addEventListener('pointerdown', pointer, true);
+    return () => {
+      document.removeEventListener('keydown', key, true);
+      document.removeEventListener('pointerdown', pointer, true);
+    };
+  }, []);
   useEffect(() => {
     if (!expanded) return;
     const collapse = (e: PointerEvent) => {
@@ -336,8 +351,17 @@ export function FloatingChat({
         <div
           hidden={history}
           className="sp-native-conversation"
+          onPointerDownCapture={(e) => {
+            if (
+              (e.target as HTMLElement).closest('[role="textbox"],textarea')
+            ) {
+              face.update({ chatMode: 'expanded' });
+            }
+          }}
+          onInputCapture={() => face.update({ chatMode: 'expanded' })}
           onFocusCapture={(e) => {
             if (
+              keyboardFocus.current &&
               (e.target as HTMLElement).matches('[role="textbox"],textarea')
             ) {
               face.update({ chatMode: 'expanded' });
