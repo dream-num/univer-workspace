@@ -120,10 +120,10 @@ test('a queued write retains the admitted document after current Page switches',
   await assert.rejects(
     f.editing.edit(
       's',
-      { mode: 'write', unitId: 'u-two', code: 'anything' },
+      { mode: 'write', nodeId: 'two', unitId: 'u-one', code: 'anything' },
       new AbortController().signal,
     ),
-    /different document/,
+    /same document/,
   );
   assert.equal(f.writes.length, 1);
 });
@@ -275,4 +275,23 @@ test('pooled runtimes do not reuse another Workspace credential', () => {
   const second = workspaceRuntimeKey({ ...target, sessionToken: 'token-b' });
   assert.notEqual(first, second);
   assert.equal(first.includes('token-a'), false);
+});
+
+
+test('an explicit authorized file can be edited when no current document is associated', async () => {
+  const f = setup();
+  const result = await f.editing.edit('s', { mode: 'write', nodeId: 'two', code: 'x' }, new AbortController().signal);
+  assert.equal(f.writes[0].file.nodeId, 'two');
+  assert.equal(f.writes[0].scope, 'trunk');
+  assert.equal(result.committedToSharedDocument, true);
+});
+
+
+test('an explicit Worktree retains the admitted file even when its Node ID is supplied', async () => {
+  const f = setup();
+  await f.admit('one', 1);
+  await f.editing.worktree('s', { action: 'create' }, new AbortController().signal);
+  const result = await f.editing.edit('s', { mode: 'write', nodeId: 'one', code: 'x' }, new AbortController().signal);
+  assert.equal(f.writes[0].scope, 'worktree');
+  assert.equal(result.committedToSharedDocument, false);
 });

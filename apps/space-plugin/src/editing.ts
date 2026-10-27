@@ -225,13 +225,16 @@ export class AgentEditing {
         400,
         'mode=write and bounded Facade code are required.',
       );
-    const admitted = this.bindings.writingTurn(session);
-    if (!admitted.file) throw new SpaceError(403, 'No document was associated when this request was sent.');
-    const existing = this.proposals.get(this.key(session, admitted.file.nodeId));
+    const explicit = args.nodeId || args.resourceId || args.unitId;
+    const admitted = explicit ? undefined : this.bindings.writingTurn(session);
+    const file = explicit ? await this.bindings.resolve(session, args, signal) : admitted?.file;
+    if (!file) throw new SpaceError(403, 'No document was associated when this request was sent.');
+    const existing = this.proposals.get(this.key(session, file.nodeId));
+    const turn = this.bindings.activeTurn(session);
     // A Worktree is explicit: either supplied by the caller or created earlier
-    // in this turn. Ordinary Floating Chat writes target the shared trunk.
-    if (!args.worktreeId && !(existing?.turn === admitted.turn && existing.worktreeId)) {
-      return this.editTrunk(session, admitted.file, args, signal);
+    // in this turn for this document. Ordinary Floating Chat writes target trunk.
+    if (!args.worktreeId && !(existing && turn?.file?.nodeId === file.nodeId && existing.turn === turn.turn && existing.worktreeId)) {
+      return this.editTrunk(session, file, args, signal);
     }
     const p = await this.target(session, args);
     return this.perform(p, signal, async () => {
@@ -445,7 +448,7 @@ export function registerEditingTools(ctx: Context, editing: AgentEditing) {
     ctx.tools.register({
       name: 'univer_edit',
       description:
-        'Execute Univer Facade API code for the current Workspace Unit. With no worktreeId, commits changes to the shared trunk through collaboration. When an explicit Worktree is created for this turn, writes go to its draft for Review. Read first with univer_inspect. Variables include api/univerAPI and the type-specific Unit handle.',
+        'Execute Univer Facade API code for the admitted current Workspace Unit or an explicit authorized nodeId, resourceId, or unitId. With no worktreeId, commits changes to the shared trunk through collaboration. When an explicit Worktree is created for this turn, writes go to its draft for Review. Read first with univer_inspect. Variables include api/univerAPI and the type-specific Unit handle.',
       parameters: {
         type: 'object',
         properties: {

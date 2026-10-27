@@ -1,7 +1,7 @@
 [
   {
     "name": "univer_spaces",
-    "description": "List Spaces accessible to the current authenticated Workspace user. Requires a file associated with this Conversation. Read only.",
+    "description": "List Spaces accessible to the current authenticated Workspace user. Read only.",
     "parameters": {
       "type": "object",
       "properties": {}
@@ -19,17 +19,20 @@
   },
   {
     "name": "univer_open",
-    "description": "Resolve metadata for a file associated with this native Conversation. Use univer_inspect to read content on demand. Read only.",
+    "description": "Open an authorized Workspace file by resourceId, nodeId, or unitId and return its stable identity and a Workspace reference. Use univer_inspect to read content on demand.",
     "parameters": {
       "type": "object",
       "properties": {
         "nodeId": {
           "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "unitId": {
+          "type": "string"
         }
-      },
-      "required": [
-        "nodeId"
-      ]
+      }
     },
     "output": {}
   },
