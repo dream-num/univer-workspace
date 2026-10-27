@@ -25,7 +25,7 @@ export const contentTypes = [
     kind: 'board',
     label: 'Canvas',
     createLabel: 'Canvas',
-    runtime: 'viewer',
+    runtime: 'editor',
     resource: 'univer',
   },
   {

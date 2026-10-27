@@ -1,12 +1,13 @@
 {
   "name": "@univerjs/univer-workspace-editor-presets",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "type": "module",
   "exports": {
     "./sheets": "./src/sheets.ts",
     "./slides": "./src/slides.ts",
-    "./referenced-sheets": "./src/referenced-sheets.ts"
+    "./referenced-sheets": "./src/referenced-sheets.ts",
+    "./boards": "./src/boards.ts"
   },
   "files": [
     "src"
@@ -68,7 +69,22 @@
     "@univerjs/thread-comment-ui": "1.1.0",
     "@univerjs/sheets-data-validation": "1.1.0",
     "@univerjs/sheets-thread-comment": "1.1.0",
-    "@univerjs-pro/slides-table-ui": "1.1.0"
+    "@univerjs-pro/slides-table-ui": "1.1.0",
+    "@univerjs-pro/boards-print": "1.1.0",
+    "@univerjs-pro/ink": "1.1.0",
+    "@univerjs-pro/boards-ui": "1.1.0",
+    "@univerjs-pro/boards-thread-comment-ui": "1.1.0",
+    "@univerjs-pro/boards-mind": "1.1.0",
+    "@univerjs-pro/boards-mind-ui": "1.1.0",
+    "@univerjs-pro/boards-history-ui": "1.1.0",
+    "@univerjs-pro/ink-ui": "1.1.0",
+    "@univerjs-pro/boards-table": "1.1.0",
+    "@univerjs-pro/boards-chart-ui": "1.1.0",
+    "@univerjs-pro/docs-latex-ui": "1.1.0",
+    "@univerjs-pro/docs-latex": "1.1.0",
+    "@univerjs-pro/boards-table-ui": "1.1.0",
+    "@univerjs-pro/boards": "1.1.0",
+    "@univerjs-pro/boards-chart": "1.1.0"
   },
   "devDependencies": {
     "react": "19.2.8",

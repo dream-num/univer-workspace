@@ -21,6 +21,13 @@ import { getDocThreadCommentCollaborationPlugins } from './workarounds/doc-threa
 import { UniverDocsCorePreset } from '@univerjs/preset-docs-core';
 import { createSheetEditorPresets, sheetEditorLocales } from '@univerjs/univer-workspace-editor-presets/sheets';
 import { createSlideEditorPresets, slideEditorLocales } from '@univerjs/univer-workspace-editor-presets/slides';
+import { createBoardEditorPresets, boardEditorLocales } from '@univerjs/univer-workspace-editor-presets/boards';
+import { UniverBoardsThreadCommentUIPlugin, OpenBoardCommentPanelOperation } from '@univerjs-pro/boards-thread-comment-ui';
+import { UniverBoardsHistoryUIPlugin } from '@univerjs-pro/boards-history-ui';
+import boardHistoryLocale from '@univerjs-pro/boards-history-ui/locale/zh-CN';
+import { UniverBoardsPrintPlugin } from '@univerjs-pro/boards-print';
+import { redTheme } from '@univerjs/themes';
+
 import { UniverSlidesThreadCommentUIPlugin, OpenSlideCommentPanelOperation } from '@univerjs-pro/slides-thread-comment-ui';
 import { UniverSlidesHistoryUIPlugin } from '@univerjs-pro/slides-history-ui';
 import slideHistoryLocale from '@univerjs-pro/slides-history-ui/locale/zh-CN';
@@ -187,7 +194,8 @@ export function CollaborativeEditor({
             UniverDocsDrawingPreset({ collaboration: true }), UniverDocsThreadCommentPreset()]
         : file.type === 'sheet'
           ? createSheetEditorPresets({ container: element, license: workspaceLicense, universerEndpoint: endpoint })
-          : file.type === 'slide' ? createSlideEditorPresets(element) : [];
+          : file.type === 'slide' ? createSlideEditorPresets(element)
+            : file.type === 'board' ? createBoardEditorPresets(element) : [];
       // Preserve Browser's original plugin order, replacing only the Host transport
       // and credential-bound collaboration endpoints at their existing positions.
       const presets: IPreset[] = editorPresets.map((preset) => ({ ...preset, plugins: preset.plugins.map((entry): IPresetPlugin => {
@@ -202,36 +210,36 @@ export function CollaborativeEditor({
         }];
         return entry;
       }) }));
-      const collaborationPlugins: IPresetPlugin[] = file.type === 'doc'
-        ? [UniverCollaborationPlugin,
+      const collaborationPlugins: IPresetPlugin[] = file.type === 'sheet'
+        ? [UniverThreadCommentDataSourcePlugin]
+        : [UniverCollaborationPlugin,
             [UniverCollaborationClientPlugin, collaborationConfig],
             [UniverCollaborationClientUIPlugin, { enableDocumentCollaborationUI: true, enableUrlUnitLoader: false }],
-            ...getDocThreadCommentCollaborationPlugins()]
-        : file.type === 'sheet' ? [UniverThreadCommentDataSourcePlugin]
-          : [UniverCollaborationPlugin,
-              [UniverCollaborationClientPlugin, collaborationConfig],
-              [UniverCollaborationClientUIPlugin, { enableDocumentCollaborationUI: true, enableUrlUnitLoader: false }],
-              UniverSlidesThreadCommentUIPlugin, UniverThreadCommentDataSourcePlugin,
-              [UniverSlidesHistoryUIPlugin, { historyServerUrl: '/universer-api/history', univerContainerId: element.id }],
-              [UniverExchangeClientPlugin, {
-                uploadFileServerUrl: '/universer-api/stream/file/upload',
-                getTaskServerUrl: '/universer-api/exchange/task/{taskID}',
-                signUrlServerUrl: '/universer-api/file/{fileID}/sign-url',
-                importServerUrl: '/universer-api/exchange/{type}/import',
-                exportServerUrl: '/universer-api/exchange/{type}/export', downloadEndpointUrl: '/',
-              }],
-              UniverSlidesExchangeClientPlugin, UniverSlidesPrintPlugin];
+            ...(file.type === 'doc' ? getDocThreadCommentCollaborationPlugins()
+              : file.type === 'board' ? [UniverBoardsThreadCommentUIPlugin, UniverThreadCommentDataSourcePlugin,
+                  [UniverBoardsHistoryUIPlugin, { historyServerUrl: '/universer-api/history', univerContainerId: element.id }],
+                  UniverBoardsPrintPlugin] as IPresetPlugin[]
+                : [UniverSlidesThreadCommentUIPlugin, UniverThreadCommentDataSourcePlugin,
+                    [UniverSlidesHistoryUIPlugin, { historyServerUrl: '/universer-api/history', univerContainerId: element.id }],
+                    [UniverExchangeClientPlugin, {
+                      uploadFileServerUrl: '/universer-api/stream/file/upload',
+                      getTaskServerUrl: '/universer-api/exchange/task/{taskID}',
+                      signUrlServerUrl: '/universer-api/file/{fileID}/sign-url',
+                      importServerUrl: '/universer-api/exchange/{type}/import',
+                      exportServerUrl: '/universer-api/exchange/{type}/export', downloadEndpointUrl: '/',
+                    }], UniverSlidesExchangeClientPlugin, UniverSlidesPrintPlugin] as IPresetPlugin[]),
+          ];
       const licensePreset: IPreset = { plugins: [[UniverLicensePlugin, { license: workspaceLicense }]] };
       runtime = createUniver({
         locale: LocaleType.ZH_CN,
         collaboration: true,
-        ...(file.type === 'slide' ? { theme: purpleTheme } : {}),
+        ...(file.type === 'slide' ? { theme: purpleTheme } : file.type === 'board' ? { theme: redTheme } : {}),
         locales: {
           [LocaleType.ZH_CN]: mergeLocales(
             docsLocale,
             sheetsLocale,
             sheetEditorLocales['zh-CN'],
-            ...(file.type === 'slide' ? [slideEditorLocales['zh-CN'], slideHistoryLocale] : []),
+            ...(file.type === 'slide' ? [slideEditorLocales['zh-CN'], slideHistoryLocale] : file.type === 'board' ? [boardEditorLocales['zh-CN'], boardHistoryLocale] : []),
             collabLocale,
             collabUILocale,
             docCommentLocale,
@@ -242,7 +250,7 @@ export function CollaborativeEditor({
         },
         presets: [
           ...(file.type !== 'sheet' ? [licensePreset] : []),
-          ...(file.type === 'slide' ? [{ plugins: [[UniverNetworkPlugin, { override: [[IHTTPImplementation, { useValue: transport }]] }]] } as IPreset] : []),
+          ...(['slide', 'board'].includes(file.type) ? [{ plugins: [[UniverNetworkPlugin, { override: [[IHTTPImplementation, { useValue: transport }]] }]] } as IPreset] : []),
           ...presets,
         ],
         plugins: collaborationPlugins,
@@ -334,7 +342,8 @@ export function CollaborativeEditor({
         ? collaboration.loadDocAsync(file.unitId)
         : file.type === 'sheet' ? collaboration.loadSheetAsync(file.unitId)
           : file.type === 'slide' ? collaboration.loadSlideAsync(file.unitId)
-            : Promise.reject(new Error('Unsupported collaborative editor.')));
+            : file.type === 'board' ? collaboration.loadBoardAsync(file.unitId)
+              : Promise.reject(new Error('Unsupported collaborative editor.')));
       if (!unit) throw new Error('Server 未能加载此文件。');
       await univer
         .__getInjector()
@@ -427,6 +436,8 @@ export function CollaborativeEditor({
           void api.executeCommand(ToggleSheetCommentPanelOperation.id);
         } else if (file.type === 'slide' && !commentPanel.panelVisible) {
           void api.executeCommand(OpenSlideCommentPanelOperation.id);
+        } else if (file.type === 'board' && !commentPanel.panelVisible) {
+          void api.executeCommand(OpenBoardCommentPanelOperation.id);
         } else if (commentPanel.panelVisible) {
           univer.__getInjector().get(ISidebarService).close();
           commentPanel.setPanelVisible(false);
