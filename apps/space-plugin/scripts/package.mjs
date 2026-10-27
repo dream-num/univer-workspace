@@ -30,11 +30,14 @@ try {
     notices.push(`${name}@${pkg.version} — ${pkg.license ?? 'See upstream package license'} — ${typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url ?? pkg.homepage ?? ''}`);
   }
   await writeFile(join(stage, 'THIRD_PARTY_NOTICES.txt'), notices.join('\n') + '\n');
-  // npm consumers get the complete runtime closure. DSH's pnpm manager owns
-  // its profile lock; its actual installation is verified separately.
-  execFileSync('npm', ['install', '--package-lock-only', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: stage, stdio: 'inherit' });
-  const lock = JSON.parse(await readFile(join(stage, 'package-lock.json'), 'utf8'));
-  await writeFile(join(stage, 'npm-shrinkwrap.json'), JSON.stringify(lock, null, 2) + '\n');
+  // Freeze the audited production closure; packaging must not resolve new
+  // transitive versions. DSH's manager still owns its separate profile lock.
+  const runtimeLock = await readFile('runtime-lock.json', 'utf8');
+  const lock = JSON.parse(runtimeLock);
+  const entries = value => JSON.stringify(Object.entries(value ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+  if (lock.name !== name || lock.version !== version || entries(lock.packages?.['']?.dependencies) !== entries(dependencies))
+    throw new Error('Update and audit runtime-lock.json for the changed release manifest before packaging.');
+  await writeFile(join(stage, 'npm-shrinkwrap.json'), runtimeLock);
   execFileSync('npm', ['pack', '--pack-destination', stage], { cwd: stage, stdio: 'inherit' });
   const stagedPackage = join(stage, `${name}-${version}.tgz`);
   const scan = await scanRelease(stagedPackage);

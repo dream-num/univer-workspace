@@ -23,6 +23,11 @@ try {
     for (let attempt = 0; attempt < 3; attempt++) {
       try { await control.click({ timeout: 1500 }); return; }
       catch (error) {
+        if (await page.getByText('预览版说明', { exact: true }).isVisible()) {
+          await page.getByRole('button', { name: '继续', exact: true }).click();
+          await page.getByText('预览版说明', { exact: true }).waitFor({ state: 'hidden' });
+          continue;
+        }
         if (!await page.getByText('开始使用', { exact: true }).isVisible()) throw error;
         await page.getByRole('button', { name: '关闭', exact: true }).click();
         await page.getByText('开始使用', { exact: true }).waitFor({ state: 'hidden' });
@@ -56,7 +61,7 @@ try {
   await click(spaceEntry());
   await page.locator('.sp-file-open').first().waitFor();
   checks.push('Reload keeps the non-secret endpoint preference; no password, cookie or license in that record');
-  await page.getByRole('button', { name: 'Space settings', exact: true }).click();
+  await click(page.getByRole('button', { name: 'Space settings', exact: true }));
   await dialog.locator('[data-workspace-status="connected"]').waitFor();
   assert.equal(await dialog.getByLabel('Workspace Endpoint').inputValue(), login.origin);
   checks.push('The formal Sidebar settings entry reopens the current connection');
@@ -70,6 +75,6 @@ try {
   }
   throw error;
 } finally {
-  await writeFile(resolve(out, 'first-use.json'), JSON.stringify({ carrier: 'official packaged DSH Web; fresh profile, not Desktop', checks, pageErrors: errors, boundary: 'Reload verified. Native application restart and origin persistence need Desktop acceptance.' }, null, 2));
+  await writeFile(resolve(out, 'first-use.json'), JSON.stringify({ status: checks.length === 4 && errors.length === 0 ? 'PASS' : 'FAIL', carrier: 'official packaged DSH Web; fresh profile, not Desktop', checks, pageErrors: errors, boundary: { reloadVerified: checks.length >= 3, nativeApplicationRestartVerified: false } }, null, 2));
   await browser.close();
 }

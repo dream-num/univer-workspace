@@ -21,6 +21,9 @@ npm run package:release -- /absolute/output/outside/repository
 Install the resulting tarball with the official DSH Plugins manager. Coupled
 Univer dependencies are pinned to 1.1.0; React 18 is resolved by the official
 host module loader. Tailwind utilities are prefixed/scoped with preflight off.
+The packager copies the audited production closure from committed `runtime-lock.json`;
+it never resolves fresh transitive versions. Manifest/version changes require an
+explicit runtime-lock refresh and audit. The source npm graph remains separately locked.
 Build-time PostCSS confines SDK global reset blocks and unprefixed utilities to
 the editor and Univer namespace portal roots; published SDK files stay intact.
 
