@@ -5,6 +5,7 @@ import { createDocument } from '@univerjs/univer-workspace-agent-runtime/workspa
 import { workspaceCreateOutput, workspaceCreateParameters } from './workspace-create-contract.js';
 import { resolveToolSpace, type ToolBindings } from './tools.js';
 import { SpaceError, type WorkspaceConnection } from './workspace.js';
+import { referenceText } from './model.js';
 
 const unitTypes = ['sheet', 'doc', 'slide', 'board', 'base'] as const;
 type UnitType = typeof unitTypes[number];
@@ -35,7 +36,7 @@ export function registerCreationTools(ctx: Context, workspace: WorkspaceConnecti
       spaceId, parentNodeId: parent || null, name: args.name.trim(), unitType: args.unitType as UnitType,
     });
     workspace.noteContentChanged();
-    return created;
+    return { ...created, reference: referenceText({ endpoint: workspace.endpoint, ...created, name: args.name.trim(), type: args.unitType }) };
   };
   const createTool = (name: 'univer_create' | 'univer_new') => ({
     name,
@@ -82,6 +83,11 @@ export function registerCreationTools(ctx: Context, workspace: WorkspaceConnecti
         value = await workspace.mutate({ action, id: args.id, name: args.name, parent: args.parentNodeId ?? '' }, signal);
       }
       workspace.noteContentChanged();
+      if (args.action === 'create_page') {
+        const node = (value as any)?.node;
+        const resourceId = node?.resource?.id;
+        if (node?.id && resourceId) return { ...(value as object), reference: referenceText({ endpoint: workspace.endpoint, nodeId: node.id, resourceId, unitId: '', name: node.name, type: 'site' }) };
+      }
       return value;
     },
     presentCall: () => ({ card: 'generic', title: 'Update Workspace', kind: 'execute' }),

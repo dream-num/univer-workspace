@@ -7,6 +7,8 @@ import { PageContextDock } from './components/page-context.js';
 import { HostNavigation } from './components/navigation.js';
 import { HostNavigationBridge } from './components/host-navigation.js';
 import { WorkspaceReference } from './components/file-reference.js';
+import { ReturnedFiles } from './components/returned-files.js';
+import { spaceReturnedFilesDefinition } from './turn-files.js';
 import { workspaceReferenceRule } from './file-reference.js';
 import { Icon } from './components/primitives.js';
 import {
@@ -878,6 +880,23 @@ export function apply(ctx: any) {
       });
     }),
   );
+  async function openWorkspaceReference(node: string, resource: string, unit: string, session: string) {
+    await flushEditor();
+    const before = generation, request = ++contentRequest;
+    directoryRequest++;
+    sessionRequest++;
+    const file = await api<Content>('content', { node });
+    if (before !== generation || request !== contentRequest) return;
+    if (file.resourceId !== resource || file.unitId !== unit)
+      throw new Error('This file reference no longer matches its Workspace identity.');
+    // Preserve the reference Session, then visibly associate this Page under current ACLs.
+    ctx.layout.selectPanel(PANEL);
+    contentRequest++;
+    directoryRequest++;
+    update({ content: file, ai: true, chatMode: 'expanded' });
+    await linkSession(session);
+  }
+
   ctx.effect(() =>
     ctx.uiConversation.userText.register(workspaceReferenceRule),
   );
@@ -888,40 +907,19 @@ export function apply(ctx: any) {
           name: 'conversation.user.text.node',
           key: 'workspace-file',
           inject: () => ({
-            openFile: async (
-              node: string,
-              resource: string,
-              unit: string,
-              session: string,
-            ) => {
-              await flushEditor();
-              const before = generation,
-                request = ++contentRequest;
-              directoryRequest++;
-              sessionRequest++;
-              const file = await api<Content>('content', { node });
-              if (before !== generation || request !== contentRequest) return;
-              if (file.resourceId !== resource || file.unitId !== unit)
-                throw new Error(
-                  'This file reference no longer matches its Workspace identity.',
-                );
-              // Preserve the reference Session, then visibly associate this Page under current ACLs.
-              ctx.layout.selectPanel(PANEL);
-              contentRequest++;
-              directoryRequest++;
-              update({
-                content: file,
-                ai: true,
-                chatMode: 'expanded',
-              });
-              await linkSession(session);
-            },
+            openFile: openWorkspaceReference,
           }),
         },
         WorkspaceReference,
       ),
     ),
   );
+  ctx.effect(() => ctx.uiConversation.events.register(spaceReturnedFilesDefinition));
+  ctx.effect(() => ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
+    name: 'conversation.chat.turnTail', id: 'space-returned-files',
+    select: (owner: any) => owner.turn.data.get('spaceReturnedFiles'),
+    inject: (sessionId: string) => ({ sessionId, openFile: openWorkspaceReference }),
+  }, ReturnedFiles)));
   ctx.effect(() =>
     ctx.slots.inject('conversation.input.dock', () =>
       ctx.slots.register(

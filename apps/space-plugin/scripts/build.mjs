@@ -42,6 +42,7 @@ await build({
     'src/workspace.ts',
     'src/model.ts',
     'src/file-reference.ts',
+    'src/turn-files.ts',
     'src/tools.ts',
     'src/editing.ts',
     'src/api-tool.ts',

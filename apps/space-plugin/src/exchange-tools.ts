@@ -10,7 +10,7 @@ import { importParameters, exportParameters } from './workspace-exchange-contrac
 import { resolveToolSpace, type ToolBindings } from './tools.js';
 import { SpaceError, type WorkspaceConnection } from './workspace.js';
 import type { AgentEditing } from './editing.js';
-import type { FileReference } from './model.js';
+import { referenceText, type FileReference } from './model.js';
 
 /** Reuse the Workspace Agent's SDK conversion and Session path contract. */
 export function registerExchangeTools(ctx: Context, workspace: WorkspaceConnection, bindings: ToolBindings, editing: AgentEditing) {
@@ -42,7 +42,7 @@ export function registerExchangeTools(ctx: Context, workspace: WorkspaceConnecti
       const key = args.idempotencyKey ?? createHash('sha256').update(`${sessionId}\0${exec.callId}`).digest('hex');
       const unit = await createDocument(client, { spaceId, parentNodeId: parent || null, name: args.name.trim(), unitType: imported.unitType, initialData: imported.data as any, idempotencyKey: key });
       workspace.noteContentChanged();
-      return { ok: true, operation: 'import', status: 'done', sourcePath: args.source, ...unit, unitType: imported.unitType, name: args.name.trim() };
+      return { ok: true, operation: 'import', status: 'done', sourcePath: args.source, ...unit, unitType: imported.unitType, name: args.name.trim(), reference: referenceText({ endpoint: workspace.endpoint, ...unit, name: args.name.trim(), type: imported.unitType }) };
     },
     presentCall: () => ({ card: 'generic', title: 'Import Workspace document', kind: 'execute' }),
   });

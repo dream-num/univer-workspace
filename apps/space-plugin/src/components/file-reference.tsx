@@ -16,9 +16,16 @@ export function WorkspaceReference({
     session: string,
   ): Promise<void>;
 }) {
+  return <WorkspaceReferenceButton file={node.data} interactive={interactive} openFile={openFile} sessionId={sessionId} />;
+}
+export function WorkspaceReferenceButton({ file, interactive, openFile, sessionId }: {
+  file: { label: string; nodeId: string; resourceId: string; unitId: string };
+  interactive: boolean;
+  sessionId: string;
+  openFile(node: string, resource: string, unit: string, session: string): Promise<void>;
+}) {
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
-  const file = node.data;
   return (
     <span
       style={{
@@ -34,7 +41,7 @@ export function WorkspaceReference({
         data-workspace-reference={file.nodeId}
         disabled={!interactive || busy}
         aria-label={`Open Space file: ${file.label}`}
-        title={`Space file · ${file.resourceId} · ${file.unitId}`}
+        title={`Space file · ${file.label}`}
         style={{
           display: 'inline-flex',
           alignItems: 'center',

@@ -34,6 +34,9 @@ export const workspaceCreateOutput: JsonSchemaNode = {
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "reference": {
+      "type": "string"
+    },
     "resourceId": {
       "type": "string"
     },
