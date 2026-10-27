@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { RuntimeManager } from '@univerjs/univer-workspace-agent-runtime';
+import { inspectionQuery } from '@univerjs/univer-workspace-agent-runtime/workspace-inspection';
 import {
   transformSnapshotToDocumentData,
   transformSnapshotToWorkbookData,
@@ -113,6 +114,9 @@ export class WorkspaceConnection {
     return { origin: this.endpoint, sessionToken: token, license: this.license, revision,
       scope: worktreeId ? { kind: 'worktree' as const, worktreeId } : { kind: 'trunk' as const },
       unitId: file.unitId, unitType: file.type };
+  }
+  async inspectUnit(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, range?: string, revision = -1, worktreeId?: string) {
+    return this.runtime.inspect(this.unitTarget(file, worktreeId, revision), inspectionQuery(file.type, range));
   }
   async inspectDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, sheet?: string, range?: string) {
     if (range && (!sheet || file.type !== 'sheet')) throw new SpaceError(400, 'A worksheet name is required for a Sheet range.');

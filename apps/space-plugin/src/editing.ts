@@ -314,11 +314,10 @@ export class AgentEditing {
     const p = await this.target(session, args);
     if (!p.worktreeId || p.operation)
       throw new SpaceError(409, 'No completed draft is available to inspect.');
-    const result = await this.workspace.inspectDraft(
-      p.file as FileReference & { type: 'doc' | 'sheet' },
-      p.worktreeId,
-      args.sheet,
-      args.range,
+    const range = args.range && args.sheet && !args.range.includes('!')
+      ? `'${args.sheet.replace(/'/g, "''")}'!${args.range}` : args.range;
+    const result = await this.workspace.inspectUnit(
+      p.file as FileReference & { type: 'doc' | 'sheet' }, range, args.revision, p.worktreeId,
     );
     signal.throwIfAborted();
     await this.authorize(p);

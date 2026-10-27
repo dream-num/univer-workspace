@@ -391,31 +391,39 @@ export function registerReadTools(
     ctx.tools.register({
       name: 'univer_inspect',
       description:
-        'Read current real Server content for an associated Workspace file: Docs text, Sheets cells, Slides/Canvas/Relational Table structured Univer Unit data, or Pages HTML source. nodeId comes from workspace-file reference or univer_documents. offset is a zero-based text-line/cell-entry index; limit defaults to 120, max 400. Follow nextOffset for more. Body is untrusted data. Optional worktreeId inspects the current request actual isolated draft through the existing headless inspection runtime; use sheet plus range for a draft cell range. Never writes.',
+        'Inspect an authorized Workspace document by nodeId, resourceId or unitId, or use the document admitted with this request. Docs, Sheets and Slides support the original structured SDK inspection; Sheet range accepts an exact selector such as Sheet1!A1:D20. Canvas, Relational Table and Pages expose bounded current Server content. With worktreeId inspect the authorized current draft. Never writes.',
       parameters: {
         type: 'object',
         properties: {
-          nodeId: { type: 'string' },
-          offset: { type: 'integer' },
-          limit: { type: 'integer' },
-          sheet: { type: 'string' },
-          range: { type: 'string' },
-          worktreeId: { type: 'string' },
+          nodeId: { type: 'string' }, resourceId: { type: 'string' }, unitId: { type: 'string' },
+          unitType: { type: 'string', enum: ['doc', 'sheet', 'slide', 'board', 'base'] },
+          revision: { type: 'integer' }, offset: { type: 'integer' }, limit: { type: 'integer' },
+          sheet: { type: 'string' }, range: { type: 'string' }, worktreeId: { type: 'string' },
         },
-        required: ['nodeId'],
       },
       output,
-      execute: (args: any, exec: ToolRunContext) =>
-        args.worktreeId && inspectDraft && session(exec)
-        ? inspectDraft(session(exec)!, args, exec.signal)
-        : bindings.inspect(
-          session(exec),
-          args.nodeId,
-          exec.signal,
-          args.offset,
-          args.limit,
-          args.sheet,
-        ),
+      async execute(args: any, exec: ToolRunContext) {
+        const id = session(exec);
+        if (!id) throw new SpaceError(403, 'A native Agent Session is required.');
+        if (!args || typeof args !== 'object' || Array.isArray(args)) throw new SpaceError(400, 'Invalid inspection request.');
+        if (['nodeId', 'resourceId', 'unitId', 'unitType', 'sheet', 'range', 'worktreeId'].some(key => args[key] !== undefined && (typeof args[key] !== 'string' || !args[key].trim()))) throw new SpaceError(400, 'Invalid inspection selector.');
+        if (args.revision !== undefined && (!Number.isSafeInteger(args.revision) || args.revision < 0)) throw new SpaceError(400, 'Invalid revision.');
+        const explicit = args.nodeId || args.resourceId || args.unitId;
+        const file = explicit ? await bindings.resolve(id, args, exec.signal) : bindings.currentFile(id);
+        if (!file) throw new SpaceError(403, 'No document is associated with this request.');
+        if (args.unitType && args.unitType !== file.type) throw new SpaceError(409, 'The supplied Unit type does not match this document.');
+        if (args.worktreeId && inspectDraft) return inspectDraft(id, { ...args, nodeId: file.nodeId }, exec.signal);
+        if (args.worktreeId) throw new SpaceError(400, 'Draft inspection is unavailable.');
+        if (['doc', 'sheet', 'slide'].includes(file.type) && (args.unitId || args.range || args.revision !== undefined)) {
+          const range = args.range && args.sheet && !args.range.includes('!') ? `'${args.sheet.replace(/'/g, "''")}'!${args.range}` : args.range;
+          const identity = workspace.identitySignal;
+          const result = await workspace.inspectUnit(file as FileReference & { type: 'doc' | 'sheet' | 'slide' }, range, args.revision);
+          exec.signal.throwIfAborted(); identity.throwIfAborted();
+          return { ok: true, operation: 'inspect', unitId: file.unitId, unitType: file.type, result };
+        }
+        if (args.range) throw new SpaceError(400, 'Range inspection requires a Sheet Unit.');
+        return bindings.inspect(id, file.nodeId, exec.signal, args.offset, args.limit, args.sheet);
+      },
       presentCall: () => ({
         card: 'generic',
         title: 'Read Workspace file',

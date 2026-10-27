@@ -65,6 +65,10 @@
     "./workspace-session-path": {
       "types": "./src/workspace/session-path.ts",
       "default": "./lib/workspace/session-path.js"
+    },
+    "./workspace-inspection": {
+      "types": "./src/workspace/inspection.ts",
+      "default": "./lib/workspace/inspection.js"
     }
   },
   "scripts": {
