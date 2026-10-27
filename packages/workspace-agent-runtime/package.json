@@ -89,6 +89,14 @@
     "./workspace-resource-library": {
       "types": "./src/workspace/resource-library.ts",
       "default": "./lib/workspace/resource-library.js"
+    },
+    "./workspace-issues": {
+      "types": "./src/workspace/issues-api.ts",
+      "default": "./lib/workspace/issues-api.js"
+    },
+    "./workspace-issue-operations": {
+      "types": "./src/workspace/issue-operations.ts",
+      "default": "./lib/workspace/issue-operations.js"
     }
   },
   "scripts": {
