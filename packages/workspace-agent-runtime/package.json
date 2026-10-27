@@ -49,6 +49,14 @@
     "./workspace-wire": {
       "types": "./src/workspace/wire.ts",
       "default": "./lib/workspace/wire.js"
+    },
+    "./workspace-resources": {
+      "types": "./src/workspace/resources-api.ts",
+      "default": "./lib/workspace/resources-api.js"
+    },
+    "./workspace-json": {
+      "types": "./src/workspace/json-value.ts",
+      "default": "./lib/workspace/json-value.js"
     }
   },
   "scripts": {

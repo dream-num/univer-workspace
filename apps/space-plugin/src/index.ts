@@ -5,6 +5,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt';
 import { ToolBindings, registerReadTools } from './tools.js';
 import { AgentEditing, registerEditingTools } from './editing.js';
 import { registerApiTool } from './api-tool.js';
+import { registerCreationTools } from './creation-tools.js';
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials';
 import { WorkspaceOAuth } from './oauth.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
@@ -24,6 +25,7 @@ export function apply(ctx: Context) {
   }, () => bindings.clear());
   ctx.effect(() => () => auth.dispose());
   ctx.effect(() => registerApiTool(ctx));
+  ctx.effect(() => registerCreationTools(ctx, workspace, bindings));
   ctx.effect(() => registerEditingTools(ctx, editing));
   ctx.effect(() => registerReadTools(ctx, workspace, bindings, (session, args, signal) => editing.inspect(session, args, signal)));
   ctx.effect(() =>
@@ -78,7 +80,7 @@ export function apply(ctx: Context) {
           value = await editing.action(string('sessionId'), string('nodeId'), string('action'), string('proposalId'), string('reviewToken', true));
           break;
         case 'status':
-          value = await auth.status();
+          value = { ...(await auth.status()), contentVersion: workspace.contentVersion };
           break;
         case 'associate':
           value = await bindings.bind(string('sessionId'), string('nodeId'));
@@ -105,6 +107,7 @@ export function apply(ctx: Context) {
             string('owner'),
             Number(sequence),
             string('space', true),
+            string('parent', true),
           );
           break;
         }

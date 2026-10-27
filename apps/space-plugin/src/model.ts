@@ -97,6 +97,7 @@ export interface State {
   status: {
     state: string;
     endpoint: string;
+    contentVersion?: number;
     oauth?: { phase: string; message: string };
     user?: {
       id?: string;

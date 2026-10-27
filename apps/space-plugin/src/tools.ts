@@ -17,13 +17,13 @@ export class ToolBindings {
   private epoch = 0;
   private current = new Map<
     string,
-    { owner: string; sequence: number; file: FileReference | null; space: string }
+    { owner: string; sequence: number; file: FileReference | null; space: string; parent: string }
   >();
   private requested = new Map<string, number>();
-  private admissions = new Map<string, { file: FileReference | null; space: string }>();
+  private admissions = new Map<string, { file: FileReference | null; space: string; parent: string }>();
   private turns = new Map<
     string,
-    { turn: number; file: FileReference | null; space: string }
+    { turn: number; file: FileReference | null; space: string; parent: string }
   >();
   constructor(private workspace: WorkspaceConnection) {}
   clear() {
@@ -115,6 +115,7 @@ export class ToolBindings {
     owner: string,
     sequence: number,
     space = '',
+    parent = '',
   ) {
     const key = `${sessionId}/${owner}`,
       epoch = this.epoch;
@@ -124,13 +125,13 @@ export class ToolBindings {
     const file = nodeId ? await this.bind(sessionId, nodeId) : null;
     if (epoch !== this.epoch || this.requested.get(key) !== sequence)
       return { applied: false };
-    this.current.set(sessionId, { owner, sequence, file, space });
+    this.current.set(sessionId, { owner, sequence, file, space, parent });
     return { applied: true, file };
   }
   /** Snapshot at native inbox admission, including queued human messages. */
   admit(sessionId: string, messageId: string) {
     const current = this.current.get(sessionId);
-    this.admissions.set(`${sessionId}/${messageId}`, { file: current?.file ?? null, space: current?.space ?? '' });
+    this.admissions.set(`${sessionId}/${messageId}`, { file: current?.file ?? null, space: current?.space ?? '', parent: current?.parent ?? '' });
   }
   beginStep(
     sessionId: string,
@@ -144,7 +145,7 @@ export class ToolBindings {
     const current = this.current.get(sessionId);
     const context = admitted
       ? this.admissions.get(`${sessionId}/${admitted.id}`)!
-      : { file: current?.file ?? null, space: current?.space ?? '' };
+      : { file: current?.file ?? null, space: current?.space ?? '', parent: current?.parent ?? '' };
     for (const message of messages)
       this.admissions.delete(`${sessionId}/${message.id}`);
     this.turns.set(sessionId, { turn, ...context });
@@ -165,6 +166,9 @@ export class ToolBindings {
   }
   currentSpace(sessionId: string) {
     return this.turns.has(sessionId) ? this.turns.get(sessionId)?.space ?? '' : this.current.get(sessionId)?.space ?? '';
+  }
+  currentParent(sessionId: string) {
+    return this.turns.has(sessionId) ? this.turns.get(sessionId)?.parent ?? '' : this.current.get(sessionId)?.parent ?? '';
   }
   activeTurn(sessionId: string) {
     return this.turns.get(sessionId);
@@ -290,6 +294,20 @@ export class ToolBindings {
   }
 }
 
+/** Resolve the admitted Space, falling back to the signed-in user's Personal Space. */
+export async function resolveToolSpace(workspace: WorkspaceConnection, bindings: ToolBindings, sessionId: string, requested: string | undefined, signal: AbortSignal) {
+  const status = await workspace.status();
+  if (status.state !== 'connected' || !status.user?.id) throw new SpaceError(401, 'Sign in to Workspace first.');
+  if (requested !== undefined && (!requested.trim())) throw new SpaceError(400, 'Space id must be non-empty.');
+  let spaceId = requested ?? bindings.currentSpace(sessionId);
+  if (!spaceId) {
+    const result = await workspace.json('/api/spaces', { signal });
+    spaceId = result.spaces.find((space: any) => space.type === 'personal' && space.accessRole === 'owner')?.id ?? '';
+  }
+  if (!spaceId) throw new SpaceError(404, 'No personal Workspace Space is available.');
+  return spaceId;
+}
+
 /** Public JSON Schema registration avoids installing another DSH Tools service.
  * These are the exact schemas produced by the TASK-006 defineTool DSL.
  * Uses the same public native registry as the existing Workspace capability plugin. */
@@ -315,15 +333,7 @@ export function registerReadTools(
         (args.resourceKind !== undefined && !['univer', 'blob', 'folder', 'all'].includes(args.resourceKind)) ||
         (args.unitType !== undefined && !['sheet', 'doc', 'slide', 'board', 'base'].includes(args.unitType)))
       throw new SpaceError(400, 'Invalid Workspace list filters.');
-    const status = await workspace.status();
-    if (status.state !== 'connected' || !status.user?.id) throw new SpaceError(401, 'Sign in to Workspace first.');
-    let spaceId = args.spaceId ?? bindings.currentSpace(id);
-    if (args.spaceId !== undefined && !args.spaceId.trim()) throw new SpaceError(400, 'Space id must be non-empty.');
-    if (!spaceId) {
-      const result = await workspace.json('/api/spaces', { signal: exec.signal });
-      spaceId = result.spaces.find((space: any) => space.type === 'personal' && space.accessRole === 'owner')?.id ?? '';
-    }
-    if (!spaceId) throw new SpaceError(404, 'No personal Workspace Space is available.');
+    const spaceId = await resolveToolSpace(workspace, bindings, id, args.spaceId, exec.signal);
     const client = { request: (path: string, init: RequestInit = {}) => workspace.request(path, {
       ...init, signal: init.signal ? AbortSignal.any([exec.signal, init.signal]) : exec.signal,
     }) };

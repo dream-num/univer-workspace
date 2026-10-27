@@ -129,6 +129,7 @@ export function apply(ctx: any) {
         sessionId,
         nodeId: removed ? '' : file.nodeId,
         space: file.node?.spaceId ?? file.space?.id ?? view.space,
+        parent: file.node ? file.node.parentNodeId ?? '' : view.parent,
         owner: contextOwner,
         sequence,
       });
@@ -172,6 +173,7 @@ export function apply(ctx: any) {
         sessionId,
         nodeId: '',
         space,
+        parent: space && space === view.space ? view.parent : '',
         owner: contextOwner,
         sequence,
       });
@@ -351,6 +353,31 @@ export function apply(ctx: any) {
       sharing: null,
       chatMode: 'compact',
     });
+  }
+  async function refreshOpenMetadata() {
+    const current = view.content, before = generation;
+    if (!current) return;
+    const metadata = await api<any>('metadata', { node: current.nodeId });
+    if (before !== generation || view.content?.nodeId !== current.nodeId) return;
+    if (metadata.node.name === current.name &&
+        metadata.node.parentNodeId === current.node?.parentNodeId &&
+        metadata.node.spaceId === current.node?.spaceId &&
+        JSON.stringify(metadata.breadcrumbs) === JSON.stringify(current.breadcrumbs)) return;
+    update({ content: { ...view.content, name: metadata.node.name, node: metadata.node,
+      space: metadata.space, breadcrumbs: metadata.breadcrumbs } });
+    await associateCurrent();
+  }
+  async function refreshVisibleDirectory() {
+    if (!view.space || !['space', 'folder'].includes(view.location)) return;
+    const space = view.space, parent = view.parent, before = generation, request = ++directoryRequest;
+    const page = await api<Page>('nodes', { space, parent });
+    if (before !== generation || request !== directoryRequest || view.space !== space || view.parent !== parent) return;
+    page.nodes = page.nodes.map((node) => ({
+      ...node,
+      resource: node.resource && view.all.find((item) => item.id === node.id)?.resource?.htmlView
+        ? { ...node.resource, htmlView: true } : node.resource,
+    }));
+    update({ page });
   }
   async function directory(space: string, parent = '', cursor = '') {
     const request = ++directoryRequest;
@@ -988,14 +1015,25 @@ export function apply(ctx: any) {
       label: () => 'Workspace', inject: () => ({ face }) }, Settings)));
   ctx.effect(() => {
     let polling = false;
+    let appliedContentVersion: number | undefined;
     const timer = setInterval(async () => {
       if (polling || lifetime.signal.aborted) return;
       polling = true;
       try {
         const status = await api('status');
         const changed = status.state !== view.status.state || status.endpoint !== view.status.endpoint || status.user?.id !== view.status.user?.id;
-        if (changed || status.oauth?.phase !== view.status.oauth?.phase) {
-          await run(refresh);
+        const contentChanged = status.contentVersion !== appliedContentVersion;
+        if (changed || contentChanged || status.oauth?.phase !== view.status.oauth?.phase) {
+          await run(async () => {
+            await refresh();
+            if (contentChanged && view.status.state === 'connected') {
+              await refreshVisibleDirectory();
+              await refreshOpenMetadata();
+              appliedContentVersion = status.contentVersion;
+            } else if (contentChanged && view.status.state !== 'network-error') {
+              appliedContentVersion = status.contentVersion;
+            }
+          });
         }
       } catch { /* Connection reset owns retry; never surface raw transport details. */ }
       finally { polling = false; }

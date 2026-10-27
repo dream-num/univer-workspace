@@ -50,6 +50,9 @@ export function normalizeEndpoint(value: string): string {
 export class WorkspaceConnection {
   readonly license = process.env.UNIVER_LICENSE ?? '';
   endpoint = '';
+  private contentGeneration = 0;
+  get contentVersion() { return this.contentGeneration; }
+  noteContentChanged() { this.contentGeneration++; }
   get sessionCookie() { return this.cookie; }
   /** Aborted whenever the active endpoint or Workspace credential changes. */
   get identitySignal() { return this.lifetime.signal; }
@@ -87,10 +90,12 @@ export class WorkspaceConnection {
     const token = this.cookie.match(/(?:^|; )workspace_session=([^;]+)/)?.[1];
     if (!token || this.endpoint !== file.endpoint) throw new SpaceError(401, 'Workspace identity changed.');
     const identity = this.lifetime.signal;
-    return this.runtime.writeTrunkAndCommit({
+    const result = await this.runtime.writeTrunkAndCommit({
       origin: this.endpoint, sessionToken: token, license: this.license, revision: -1,
       scope: { kind: 'trunk' }, unitId: file.unitId, unitType: file.type,
     }, code, AbortSignal.any([signal, identity]));
+    if (result.committed) this.noteContentChanged();
+    return result;
   }
   async inspectDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' }, worktreeId: string, sheet?: string, range?: string) {
     if (range && (!sheet || file.type !== 'sheet')) throw new SpaceError(400, 'A worksheet name is required for a Sheet range.');
