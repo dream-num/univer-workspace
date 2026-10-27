@@ -56,6 +56,15 @@ The smart workbench offers Workspace Agent downloads and CLI/Skill installation 
 when the signed-in user has never created a Worktree and has no visible tasks. Users with
 visible team tasks see a compact introduction alongside their task list.
 
+A validated Review/Apply intent can recover after a Server process crash by replaying
+its original Apply with the same actor, review token and Idempotency-Key. The Server
+checks durable SDK results and the accepted version proof before resuming; already
+committed Units are never submitted again. Concurrent changes or revoked permissions
+terminate remaining work for a new review. Multi-Unit Merge is not atomic. Legacy validated intents without version proof terminate remaining work for a new
+review. Unknown history or corrupt proof remains blocked rather than guessed;
+retain both databases and stop other writers before recovery. See the [recovery
+boundary](docs/architecture.md#version-bound-human-worktree-review-task-009d).
+
 Worktree review keeps the agent draft as its default view and also offers a
 structured, read-only side-by-side comparison. The Server materializes and
 decodes the authoritative Trunk and draft states, computes semantic differences

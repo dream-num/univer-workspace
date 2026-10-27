@@ -253,13 +253,14 @@ export function createWorkspaceApplication(
     onChanged: (change) => worktreeChangeFeed.publishIssues(change),
   });
   const worktrees = createWorktreesModule({
+    runMerge: collaboration ? (action) => collaboration!.reviewCommit.run(action) : undefined,
     trash,
     repository: new WorktreesRepository(database),
     access,
     backend:
       dependencies.worktreeBackend ??
       (collaboration
-        ? createWorktreeBackend(collaboration.worktreeService)
+        ? createWorktreeBackend(collaboration.worktreeService, collaboration.reviewedMergeRecovery)
         : unavailableWorktreeBackend()),
     publishMergedAssets: (worktreeId, unitIds) =>
       univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds),
@@ -293,6 +294,7 @@ export function createWorkspaceApplication(
           worktrees,
         }),
         reviewCommit: collaboration.reviewCommit,
+        reviewedMergeRecovery: collaboration.reviewedMergeRecovery,
         service: collaboration.service,
         commentService: collaboration.commentService,
         historyService: collaboration.historyService,

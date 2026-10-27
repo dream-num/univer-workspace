@@ -6,9 +6,12 @@ import {
 import type {
   WorktreeBackend,
 } from "../../modules/worktrees/worktrees.types.js";
+import type { ReviewedMergeRecovery } from "./reviewed-merge-recovery.js";
 
-export function createWorktreeBackend(service: UniverCollabWorktreeService): WorktreeBackend {
+export function createWorktreeBackend(service: UniverCollabWorktreeService, recovery: ReviewedMergeRecovery): WorktreeBackend {
   return {
+    validateFinalization: (id, actor, proof) => recovery.validateFinalization({ userID: actor, customData: { source: "product-api" }, request: { worktreeID: id } }, id, proof),
+    committedUnitsForProof: (id, actor, proof, units) => recovery.committedUnitsForProof({ userID: actor, customData: { source: "product-api" }, request: { worktreeID: id } }, id, proof, units),
     async createWorktree(worktreeId, userId) {
       return (
         await service.createWorktree(
@@ -92,13 +95,13 @@ export function createWorktreeBackend(service: UniverCollabWorktreeService): Wor
         )
       ).worktree;
     },
-    async merge(worktreeId, userId, reviewToken, onReviewValidated) {
+    async merge(worktreeId, userId, reviewToken, reviewJournal) {
       return (
         await service.mergeWorktree(
           { worktreeID: worktreeId },
           {
             ...collaborationCallOptions(userId),
-            customData: { source: "product-api", reviewToken: reviewToken ?? "", onReviewValidated },
+            customData: { source: "product-api", reviewToken: reviewToken ?? "", reviewJournal },
           },
         )
       ).worktree;

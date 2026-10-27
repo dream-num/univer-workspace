@@ -3,6 +3,7 @@ import type { WorkspaceDatabase } from "../../db/database.js";
 import type { UnitType } from "../access/index.js";
 import type { OperationState } from "../resources/resources.types.js";
 import type {
+  ReviewedMergeProof,
   WorktreeKind,
   WorktreeVisibility,
 } from "./worktrees.types.js";
@@ -591,15 +592,33 @@ export class WorktreesRepository {
   /** Called inside the runtime's merge lease, after Review/ACL validation and
    * before the SDK can write. A subsequent validated attempt can supersede an
    * earlier failed attempt only while the SDK Worktree is still ready. */
-  markReviewValidated(operationId: string, worktreeId: string): void {
+  markReviewValidated(operationId: string, worktreeId: string, proof: ReviewedMergeProof): void {
     this._database.transaction((database) => {
-      database.prepare(`UPDATE operations SET step = 'superseded'
+      database
+        .prepare(`UPDATE operations SET step = 'superseded', state = 'failed',
+        last_error_code = 'CONFLICT', last_error_message = 'A newer reviewed intent superseded this merge.',
+        lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
         WHERE kind = 'merge_worktree' AND step = 'review_validated'
           AND json_extract(payload_json, '$.worktreeId') = ? AND id <> ?`)
-        .run(worktreeId, operationId);
-      database.prepare("UPDATE operations SET step = 'review_validated' WHERE id = ?")
-        .run(operationId);
+        .run(Date.now(), worktreeId, operationId);
+      database
+        .prepare(`UPDATE operations SET step = 'review_validated', state = 'pending',
+        last_error_code = NULL, last_error_message = NULL,
+        payload_json = json_set(payload_json, '$.reviewProof', json(?)) WHERE id = ?`)
+        .run(JSON.stringify(proof), operationId);
     });
+  }
+
+  abortReview(operationId: string, failedAt: number): void {
+    this._database.connection
+      .prepare(
+        `UPDATE operations SET step = 'review_aborted', state = 'failed',
+          last_error_code = 'CONFLICT',
+          last_error_message = 'Merge terminated; review current versions and permissions with a new Operation.',
+          lease_owner = NULL, lease_expires_at = NULL, updated_at = ?
+         WHERE id = ? AND step = 'review_validated' AND state <> 'completed'`,
+      )
+      .run(failedAt, operationId);
   }
 
   completeOperation(

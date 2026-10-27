@@ -361,6 +361,11 @@ activate_worktree_resource
 Node/Resource/Unit ID；相同 Idempotency Key 只能重放相同意图。Lease、Attempt、
 `next_attempt_at` 和最后错误字段支持后台恢复。
 
+Review/Apply 在现有 `payload_json.reviewProof` 保存版本证明的摘要，不保存 Snapshot、Changeset 或 revision 值。
+首次请求的 actor、Worktree、Token 和 Key 不变；服务端在校验租约内追加摘要并将 `step` 置为
+`review_validated`。新校验可将此前凭据置为 `superseded`；安全终止后为 `review_aborted`，必须重新
+Review 并使用新 Key。SDK 部分合并或恢复冲突不会被记为 completed。没有 Schema 结构变更，版本仍为 V12。
+
 V3 Operation JSON 只使用明确的 Node/Resource/Unit 或 Blob 上传身份，不读取旧
 `entryId`、`fileId` 或 `fileEntryId`。
 

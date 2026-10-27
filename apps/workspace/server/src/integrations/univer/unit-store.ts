@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ReviewCommitCoordinator } from "./review-commit.js";
+import { ReviewedMergeRecovery } from "./reviewed-merge-recovery.js";
 import { createRequire } from "node:module";
 import type * as BoardsModule from "@univerjs-pro/boards";
 import type * as CommentDatabaseModule from "@univerjs-pro/collaboration-comment-database-sqlite";
@@ -109,6 +110,7 @@ export interface UnitSnapshotStore {
 
 export interface CollaborationRuntime {
   readonly reviewCommit: ReviewCommitCoordinator;
+  readonly reviewedMergeRecovery: ReviewedMergeRecovery;
   readonly unitStore: UnitStore;
   readonly unitSnapshotStore: UnitSnapshotStore;
   /** Shared, lazily started materializer; disposed with the runtime. */
@@ -256,6 +258,7 @@ export function createCollaborationRuntime(
 
   return {
     reviewCommit,
+    reviewedMergeRecovery: new ReviewedMergeRecovery(worktreeDatabase, database),
     unitStore,
     unitSnapshotStore,
     snapshotMaterializer,

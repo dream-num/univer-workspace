@@ -47,7 +47,7 @@ if (process.argv[2] === '--child') {
     const review = await (await fetch(`${origin}/universer-api/worktrees/${worktreeId}/review`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: '{}' })).json();
     const snapshotPath = `/universer-api/snapshot/2/unit/${unit}/rev/0`;
     const trunk = await fetch(origin + snapshotPath, { headers: { cookie } }); assert.equal(trunk.status, 200);
-    await writeFile(join(directory, 'private.json'), JSON.stringify({ cookie, worktreeId, reviewToken: review.reviewToken, key: crypto.randomUUID(), snapshotPath, trunkHash: fingerprint(await trunk.json()) }));
+    await writeFile(join(directory, 'private.json'), JSON.stringify({ cookie, worktreeId, unit, sheet, reviewToken: review.reviewToken, key: crypto.randomUUID(), snapshotPath, trunkHash: fingerprint(await trunk.json()) }));
   }
   process.stdout.write('FAULT:READY ' + origin + '\n');
   process.on('SIGTERM', async () => { server.closeAllConnections(); await new Promise(done => server.close(done)); await app.close(); process.exit(0); });
@@ -70,7 +70,7 @@ if (process.argv[2] === '--child') {
     });
     child.stderr.on('data', bytes => process.stderr.write(bytes));
     const timeout = (promise, label) => Promise.race([promise, new Promise((_, reject) => { const timer = setTimeout(() => reject(new Error(label + ' timed out')), 30000); timer.unref(); })]);
-    return { ready: timeout(readyPromise, 'Server boot'), merging: timeout(mergingPromise, 'SDK merging event') };
+    return { ready: timeout(readyPromise, 'Server boot'), merging: () => timeout(mergingPromise, 'SDK merging event') };
   };
   try {
     const first = boot('crash'), origin = await first.ready;
@@ -78,7 +78,7 @@ if (process.argv[2] === '--child') {
     const headers = { cookie: state.cookie, 'content-type': 'application/json', 'Idempotency-Key': state.key };
     const path = `/api/worktrees/${state.worktreeId}/merge`, body = JSON.stringify({ reviewToken: state.reviewToken });
     const request = fetch(origin + path, { method: 'POST', headers, body }).catch(() => null);
-    await first.merging;
+    await first.merging();
     const stopped = child; stopped.kill('SIGKILL'); await new Promise(done => stopped.once('exit', done)); await request;
     const restarted = await boot('resume').ready;
     const before = await (await fetch(restarted + `/api/worktrees/${state.worktreeId}`, { headers })).json();
@@ -91,8 +91,11 @@ if (process.argv[2] === '--child') {
     const result = { carrier: 'actual SDK / HTTP / disk SQLite, SIGKILL at persisted merging status', before: before.worktree.state, replayStatus: replay.status, error: response.error?.message, after: after.worktree.state, trunkUnchanged, recovered: replay.ok && after.worktree.state === 'merged' };
     const output = resolve(process.env.SPACE_EVIDENCE_DIR); await mkdir(output, { recursive: true });
     await writeFile(join(output, 'review-crash-merging.json'), JSON.stringify(result, null, 2)); console.log(result);
-    assert.equal(trunkUnchanged, true, 'The rejected recovery must not publish unreviewed content');
+    if (!result.recovered) assert.equal(trunkUnchanged, true, 'A rejected recovery must not publish unreviewed content');
     assert.equal(result.recovered, true, 'Release gate: an accepted merge must recover after a process crash');
+    const comparison = await (await fetch(restarted + `/universer-api/worktrees/${state.worktreeId}/units/${state.unit}/comparison`, { headers })).json();
+    assert.equal(comparison.left.unitData.sheets[state.sheet].cellData[0][0].v, 'reviewed-crash-proposal', 'Recovered trunk must match the approved proposal');
+    assert.equal(trunkUnchanged, false, 'The accepted change must actually reach trunk');
   } finally {
     if (child && child.exitCode === null && child.signalCode === null) { const exiting = new Promise(done => child.once('exit', done)); child.kill('SIGKILL'); await exiting; }
     await rm(directory, { recursive: true, force: true });
