@@ -46,6 +46,7 @@ export function apply(ctx: any) {
     status: { state: 'unconfigured', endpoint: '' },
     spaces: [],
     all: [],
+    sharedNodeIds: [],
     recent: [],
     recentCursor: null,
     page: null,
@@ -322,13 +323,14 @@ export function apply(ctx: any) {
       update({ spaces: result.spaces });
       const index = await api('index');
       if (before !== generation) return;
-      update({ all: index.nodes });
+      update({ all: index.nodes, sharedNodeIds: index.sharedNodeIds });
       await recents();
     } else if (status.state !== 'network-error') {
       clearContent();
       update({
         spaces: [],
         all: [],
+        sharedNodeIds: [],
         recent: [],
         page: null,
         space: '',
@@ -349,7 +351,7 @@ export function apply(ctx: any) {
     update({
       content: null,
       context: null,
-      spaces: [], all: [], recent: [], page: null, space: '', parent: '',
+      spaces: [], all: [], sharedNodeIds: [], recent: [], page: null, space: '', parent: '',
       location: 'home', query: '',
       pins: [],
       navigation: { pinned: true, recent: true, spaces: true, recentLimit: 5, expandedPages: [] },
@@ -1001,9 +1003,9 @@ export function apply(ctx: any) {
     ctx.slots.inject('sidebar.workspaces', () => {
       let release: (() => void) | undefined;
       const sync = () => {
-        const active =
-          ctx.layout.panelInfo.getSnapshot().activePanelId === PANEL &&
-          view.hostNavigation === 'active';
+        // Public Space content must remain available even if the optional,
+        // release-gated rail adapter cannot recognize a Desktop artifact.
+        const active = ctx.layout.panelInfo.getSnapshot().activePanelId === PANEL;
         if (active && !release)
           release = ctx.slots.register(
             { name: 'sidebar.workspaces', priority: -100, inject: () => face },

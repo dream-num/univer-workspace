@@ -113,6 +113,8 @@ export interface State {
   };
   spaces: Space[];
   all: Node[];
+  /** Exact roots returned by the existing Shared with me view, not every non-owner node. */
+  sharedNodeIds?: string[];
   recent: Recent[];
   recentCursor: string | null;
   page: Page | null;

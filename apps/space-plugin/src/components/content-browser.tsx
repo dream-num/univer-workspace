@@ -37,7 +37,9 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
   }, [context]);
   const [selected, setSelected] = useState<string[]>([]),
     [grid, setGrid] = useState(false),
-    [kind, setKind] = useState('all');
+    [kind, setKind] = useState('all'),
+    [sort, setSort] = useState<'activity' | 'name'>('activity'),
+    [descending, setDescending] = useState(true);
   const folder = v.location === 'folder',
     space = v.location === 'space';
   const title = folder
@@ -67,14 +69,29 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
     (node) =>
       (v.location !== 'home' ||
         v.discovery !== 'Your items' ||
-        node.accessRole === 'owner') &&
+        v.spaces.some((s) => s.id === node.spaceId && s.accessRole === 'owner')) &&
       (v.discovery !== 'Shared with you' ||
         v.location !== 'home' ||
-        node.accessRole !== 'owner') &&
+        v.sharedNodeIds?.includes(node.id)) &&
+      (v.location !== 'home' || v.discovery !== 'Favorites') &&
       node.name.toLowerCase().includes(v.query.toLowerCase()) &&
       (v.filter === 'all' || nodeKind(node) === v.filter) &&
       (kind === 'all' || nodeKind(node) === kind),
-  );
+  ).sort((a, b) => {
+    const activity = (node: Node) => v.location === 'recent'
+      ? v.recent.find((item) => item.node.id === node.id)?.lastOpenedAt ?? ''
+      : node.updatedAt ?? '';
+    const order = sort === 'name' ? a.name.localeCompare(b.name) : activity(a).localeCompare(activity(b));
+    return (descending ? -order : order) || a.id.localeCompare(b.id);
+  });
+  const suggested = v.location === 'home' && v.filter === 'all' &&
+    v.discovery === 'Suggested' && !v.query.trim();
+  const showSource = v.location === 'home' && v.discovery === 'Suggested';
+  useEffect(() => { setSelected([]); }, [v.discovery, v.filter, v.query]);
+  const sortBy = (value: 'activity' | 'name') => {
+    setSort(value);
+    setDescending(sort === value ? !descending : value === 'activity');
+  };
   const go = (node: Node) =>
     node.resource
       ? face.open(node.id)
@@ -202,23 +219,17 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
           >
             {(space
               ? ['Overview', 'Content']
-              : folder
+              : folder || v.location === 'recent'
                 ? []
-                : v.filter === 'doc'
+                : v.filter !== 'all'
                   ? ['All', 'Your items', 'Shared with you']
                   : ['Suggested', 'Favorites', 'Your items', 'Shared with you']
             ).map((tab) => (
               <button
                 role="tab"
-                disabled={tab === 'Favorites'}
-                title={
-                  tab === 'Favorites'
-                    ? `${tab} is not available in Space yet`
-                    : undefined
-                }
                 aria-selected={
                   (space ? v.spaceTab : v.discovery) === tab ||
-                  (v.filter === 'doc' &&
+                  (v.filter !== 'all' &&
                     tab === 'All' &&
                     v.discovery === 'Suggested')
                 }
@@ -226,7 +237,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                 className={
                   button +
                   ((space ? v.spaceTab : v.discovery) === tab ||
-                  (v.filter === 'doc' &&
+                  (v.filter !== 'all' &&
                     tab === 'All' &&
                     v.discovery === 'Suggested')
                     ? ' sp-selected'
@@ -308,11 +319,30 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
           </section>
         ) : (
           <>
-            {v.location === 'home' &&
-              v.discovery === 'Suggested' &&
-              !v.query &&
+            {suggested && (
+              <section className="sp-home-create" aria-label="Create together in Space">
+                <div className="sp-home-section-heading"><h2>Create together in Space</h2><CreateMenu face={face} v={v} shortcut={{ kind: 'templates', className: button + ' sp-browse-templates', children: <>Browse templates<Icon name="chevron" size={14} /></> }} /></div>
+                <p>Start with a blank file and work with your team.</p>
+                <div className="sp-starter-strip">
+                  {(['doc', 'sheet', 'site', 'slide'] as const).map((type) => (
+                    <CreateMenu key={type} face={face} v={v} shortcut={{
+                      kind: type, className: 'sp-starter-card', children: <>
+                        <span className={'sp-starter-preview sp-starter-' + type} aria-hidden="true">
+                          <span className="sp-starter-paper"><Icon name={type} size={24} /><span /><span /><span /></span>
+                        </span>
+                        <strong>Blank {type === 'site' ? 'page' : type === 'doc' ? 'document' : type === 'sheet' ? 'spreadsheet' : 'presentation'}</strong>
+                        <span>{kindName(type)}</span>
+                      </>,
+                    }} />
+                  ))}
+                </div>
+              </section>
+            )}
+            {suggested &&
               v.pins.length > 0 && (
-                <section aria-label="Pinned pages" className="sp-pins">
+                <section aria-label="Pinned pages" className="sp-pinned-section">
+                  <h2>Pinned</h2>
+                  <div className="sp-pins">
                   {v.all
                     .filter((n) => v.pins.includes(n.id))
                     .map((node) => (
@@ -337,6 +367,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                         </span>
                       </button>
                     ))}
+                  </div>
                 </section>
               )}
             {items.length > 0 && (
@@ -346,7 +377,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                 aria-label="Content"
               >
                 <div className="sp-file-columns" role="row">
-                  <span className="tw-flex tw-items-center tw-gap-3">
+                  <span className="tw-flex tw-items-center tw-gap-3" role="columnheader" aria-sort={sort === 'name' ? descending ? 'descending' : 'ascending' : 'none'}>
                     <input
                       type="checkbox"
                       aria-label="Select all loaded rows"
@@ -363,12 +394,12 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                         )
                       }
                     />
-                    Name
+                    <button className={button + ' sp-sort'} onClick={() => sortBy('name')}>Name{sort === 'name' && <Icon name={descending ? 'down' : 'up'} size={12} />}</button>
                   </span>
-                  {v.discovery === 'Suggested' && !folder && !space && (
-                    <span className="sp-source">Source</span>
+                  {showSource && (
+                    <span className="sp-source" role="columnheader">Source</span>
                   )}
-                  <span className="sp-activity">Last activity</span>
+                  <span className="sp-activity" role="columnheader" aria-sort={sort === 'activity' ? descending ? 'descending' : 'ascending' : 'none'}><button className={button + ' sp-sort'} onClick={() => sortBy('activity')}>Last activity{sort === 'activity' && <Icon name={descending ? 'down' : 'up'} size={12} />}</button></span>
                   <span />
                 </div>
                 {items.map((node) => (
@@ -399,9 +430,9 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                         className={button + ' sp-file-open'}
                         onClick={() => go(node)}
                       >
-                        <Icon name={nodeKind(node)} />
+                        <span className="sp-content-glyph" data-kind={nodeKind(node)}><Icon name={nodeKind(node)} size={18} /></span>
                         <span className="tw-truncate">{node.name}</span>
-                        <span className="sp-file-kind">
+                        <span className="sp-file-kind" title={kindName(nodeKind(node))}>
                           {contentKinds.find(
                             ([key]) => key === nodeKind(node),
                           )?.[1] ??
@@ -411,10 +442,9 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                         </span>
                       </button>
                     </span>
-                    {v.discovery === 'Suggested' && !folder && !space && (
+                    {showSource && (
                       <span className="sp-source">
-                        {v.spaces.find((s) => s.id === node.spaceId)?.name ??
-                          'Space'}
+                        <button className={button + ' sp-source-link'} onClick={() => face.directory(node.spaceId ?? v.space)}>{v.spaces.find((s) => s.id === node.spaceId)?.name ?? 'Shared'}</button>
                       </span>
                     )}
                     <span className="sp-activity">
@@ -440,6 +470,10 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                 title={
                   v.busy
                     ? 'Loading content…'
+                    : v.discovery === 'Favorites' && v.location === 'home'
+                      ? 'Favorites aren’t available yet'
+                      : !v.query && v.location === 'home' && v.discovery === 'Shared with you'
+                        ? 'Nothing shared with you yet'
                     : folder
                       ? 'This folder is empty'
                       : space
@@ -447,7 +481,7 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                         : 'No results found'
                 }
               >
-                <p>{v.query ? 'Try a different search.' : ''}</p>
+                <p>{v.discovery === 'Favorites' && v.location === 'home' ? 'Pinned pages are shown in Suggested.' : v.query ? 'Try a different search.' : v.location === 'home' && v.discovery === 'Shared with you' ? 'Files shared directly with you will appear here.' : !v.busy ? 'Create something new to get started.' : ''}</p>
               </Empty>
             )}
             {(folder || space

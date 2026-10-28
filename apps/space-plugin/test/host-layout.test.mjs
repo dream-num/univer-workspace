@@ -19,6 +19,13 @@ test('Module cache revisions may change without changing the supported release',
   });
   assert.equal(supportsHostNavigation(graph), true);
 });
+test('Desktop full commit and Web short commit identify the same exact supported release', () => {
+  const graph = known();
+  graph.release.commit = navigationHost.fullCommit;
+  assert.equal(supportsHostNavigation(graph), true);
+  graph.release.commit = navigationHost.commit + '-unrelated-build';
+  assert.equal(supportsHostNavigation(graph), false);
+});
 test('Host integration fails closed before DOM access on unknown release or missing module metadata', () => {
   assert.equal(supportsHostNavigation(known()), true);
   const wrongRelease = known();

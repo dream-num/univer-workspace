@@ -1,12 +1,8 @@
-/** Exact official Web release/build tested by this integration. Unknown builds remain native. */
+/** Exact official release identity; the DOM is checked independently of CSS artifact hashes. */
 export const navigationHost = {
   version: '0.2.1-rc.3',
   commit: 'be72761',
-  // Desktop and npm Web publish distinct CSS artifacts for this same release.
-  artifacts: [
-    { sidebar: 'kB3qhq', layout: 'PIRFFq' },
-    { sidebar: 'hHd-Xa', layout: 'pI_x6G' },
-  ],
+  fullCommit: 'be72761ee1a6736ebcdf4f3739363b083ae53c98',
 } as const;
 export function supportsHostNavigation(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
@@ -16,7 +12,7 @@ export function supportsHostNavigation(value: unknown): boolean {
   };
   return (
     graph.release?.version === navigationHost.version &&
-    graph.release.commit === navigationHost.commit &&
+    (graph.release.commit === navigationHost.commit || graph.release.commit === navigationHost.fullCommit) &&
     Array.isArray(graph.entries) &&
     graph.entries.some(
       (e) => e && e.id === '@deepseek-ai/dsh-client-ui-sidebar',
@@ -34,26 +30,35 @@ export function installHostNavigation(
   },
 ) {
   if (!supportsHostNavigation(options.graph)) return null;
-  const artifact = navigationHost.artifacts.find(({ sidebar, layout }) =>
-    marker.closest(`.${sidebar}_root`)?.closest(`.${layout}_frame`),
-  );
-  if (!artifact) return null;
-  const prefix = artifact.sidebar;
-  const root = marker.closest<HTMLElement>(`.${prefix}_root`);
-  const nav = root?.querySelector<HTMLElement>(
-    `:scope > nav.${prefix}_panelList`,
-  );
-  const region = root?.querySelector<HTMLElement>(
-    `:scope > .${prefix}_regionArea`,
-  );
-  const foot = root?.querySelector<HTMLElement>(`:scope > .${prefix}_footArea`);
-  const frame = root?.closest<HTMLElement>(`.${artifact.layout}_frame`);
+  // The public sidebar.footer.action Slot is our anchor. In this release the
+  // sidebar owns a direct nav, followed by the workspace region and footer.
+  // Desktop platform builds can change every CSS-module hash at the same commit.
+  let root: HTMLElement | null = marker.parentElement;
+  while (root && !root.querySelector(':scope > nav')) root = root.parentElement;
+  const nav = root?.querySelector<HTMLElement>(':scope > nav');
+  const region = nav?.nextElementSibling as HTMLElement | null;
+  const foot = region?.nextElementSibling as HTMLElement | null;
+  let sidebarCol: HTMLElement | null = root ?? null;
+  let frame = root?.parentElement;
+  while (frame && !frame.querySelector(':scope > [data-shell-overlay]')) {
+    sidebarCol = frame;
+    frame = frame.parentElement;
+  }
+  const footerActions = foot && [...foot.children].find(child => child.contains(marker)) as HTMLElement | undefined;
+  const newSession = nav?.previousElementSibling as HTMLElement | null;
   if (
     !root ||
     !nav ||
     !region ||
     !foot ||
     !frame ||
+    !foot.contains(marker) ||
+    !footerActions ||
+    region.tagName !== 'DIV' ||
+    !newSession?.matches('button[aria-label]') ||
+    !nav.querySelector('button[aria-label]') ||
+    !foot.querySelector('button[aria-haspopup="menu"]') ||
+    foot.nextElementSibling !== null ||
     !frame.querySelector(':scope > [data-shell-overlay]') ||
     !/^[0-9.]+px\s+minmax\(/.test(frame.style.gridTemplateColumns)
   )
@@ -87,30 +92,25 @@ export function installHostNavigation(
   let closed = false,
     disposed = false;
   function sync() {
-    // Mark the known artifact once at its boundary; no generated classes leak
-    // into navigation CSS. These lookups remain private, version-gated risks.
-    const parts = [
-      'logoRow',
-      'topStrip',
-      'panelList',
-      'panelRow',
-      'panelTitle',
-      'panelGlyph',
-      'moreAnchor',
-      'footArea',
-      'footerActions',
-      'regionArea',
-      'newSession',
-    ];
-    for (const part of parts)
-      for (const element of root!.querySelectorAll<HTMLElement>(
-        `.${prefix}_${part}`,
-      ))
-        attr(element, 'data-space-host-part', part);
-    const sidebarCol = frame!.querySelector<HTMLElement>(
-      `.${artifact!.layout}_sidebarCol`,
-    );
-    if (sidebarCol) attr(sidebarCol, 'data-space-host-part', 'sidebarCol');
+    // Owned markers isolate styles; native handlers and DOM order stay intact.
+    attr(nav!, 'data-space-host-part', 'panelList');
+    attr(region!, 'data-space-host-part', 'regionArea');
+    attr(foot!, 'data-space-host-part', 'footArea');
+    attr(footerActions!, 'data-space-host-part', 'footerActions');
+    attr(newSession!, 'data-space-host-part', 'newSession');
+    attr(sidebarCol!, 'data-space-host-part', 'sidebarCol');
+    for (const row of root!.querySelectorAll<HTMLElement>(':scope > [data-window-drag]'))
+      attr(row, 'data-space-host-part', row.querySelector('[aria-hidden="true"]') ? 'logoRow' : 'topStrip');
+    for (const child of nav!.children) {
+      if (child === activity) continue;
+      if (child.tagName !== 'BUTTON') attr(child as HTMLElement, 'data-space-host-part', 'moreAnchor');
+      for (const row of child.tagName === 'BUTTON' ? [child as HTMLElement] : child.querySelectorAll<HTMLElement>('button[aria-label]')) {
+        attr(row, 'data-space-host-part', 'panelRow');
+        const glyph = row.firstElementChild, title = row.lastElementChild;
+        if (glyph) attr(glyph as HTMLElement, 'data-space-host-part', 'panelGlyph');
+        if (title && title !== glyph) attr(title as HTMLElement, 'data-space-host-part', 'panelTitle');
+      }
+    }
     closed = frame!.dataset.sidebarCollapsed === 'true';
     attr(root!, 'data-space-secondary-collapsed', String(closed));
     attr(
@@ -153,15 +153,13 @@ export function installHostNavigation(
     );
     if (frame!.style.getPropertyValue('--space-open-columns') !== openColumns)
       frame!.style.setProperty('--space-open-columns', openColumns);
-    const trigger = foot!.querySelector<HTMLElement>(
-      `.${prefix}_settingsArea button[aria-haspopup="menu"]`,
-    );
+    const trigger = foot!.querySelector<HTMLElement>('button[aria-haspopup="menu"]');
     if (trigger) {
       attr(trigger, 'data-space-system-settings', '');
       attr(trigger, 'title', 'DSH menu');
     }
     for (const button of nav!.querySelectorAll<HTMLElement>(
-      `button.${prefix}_panelRow[aria-label]`,
+      'button[data-space-host-part="panelRow"][aria-label]',
     ))
       attr(button, 'title', button.getAttribute('aria-label')!);
     options.collapsed(closed);
@@ -176,7 +174,7 @@ export function installHostNavigation(
   const onClick = (event: MouseEvent) => {
     const button =
       event.target instanceof Element
-        ? event.target.closest(`button.${prefix}_panelRow`)
+        ? event.target.closest('button[data-space-host-part="panelRow"]')
         : null;
     if (
       button?.getAttribute('aria-label') === 'Space' &&

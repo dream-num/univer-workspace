@@ -307,6 +307,7 @@ export class WorkspaceConnection {
       this.json(path, { signal: AbortSignal.any([signal, lifetime.signal]) });
     const { spaces } = await read('/api/spaces');
     const nodes: any[] = [];
+    const sharedNodeIds: string[] = [];
     const seen = new Set<string>();
     const queue: { space: string; parent?: string }[] = spaces.map(
       (space: any) => ({
@@ -321,6 +322,7 @@ export class WorkspaceConnection {
         `/api/shared-with-me?${new URLSearchParams({ limit: '100', ...(sharedCursor ? { cursor: sharedCursor } : {}) })}`,
       );
       for (const { node } of page.items) {
+        sharedNodeIds.push(node.id);
         if (seen.has(node.id)) continue;
         seen.add(node.id);
         nodes.push(node);
@@ -377,7 +379,7 @@ export class WorkspaceConnection {
       if (htmlIds.has(node.id) && node.resource?.kind === 'blob')
         node.resource = { ...node.resource, htmlView: true };
     lifetime.signal.throwIfAborted();
-    return { nodes, scope: 'accessible-spaces', complete: true };
+    return { nodes, sharedNodeIds, scope: 'accessible-spaces', complete: true };
   }
 
   /** SDK HTTP only, bound to the same Workspace endpoint and authenticated user.
