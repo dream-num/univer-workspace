@@ -12,6 +12,7 @@ Agent 的职责是实现已经确定的产品契约，而不是通过改变产�
 
 ## Engineering rules
 
+- Desktop plugin packages must include the repository's existing Workspace license through the Host-only packaged runtime configuration. Use `npm run package:release`, require the scanner's exact source/license match, and verify the extracted package with `UNIVER_LICENSE` absent. Do not rely on a licensed development Host as proof of package completeness, log license values, or change the SDK's license validation.
 - Preserve the approved menu and interaction contract even when a capability is incomplete. Technical constraints require a product decision, not unilateral deletion, hiding, renaming, moving, global View Only or disabled-button test passes. Reuse existing Workspace APIs, workflows, Hooks, SDKs and Facades; the old Workspace Agent UI remains excluded as a design reference.
 - UI types are Docs, Sheets, Slides, Canvas, Relational Table and Pages; Pages retain the Workspace HTML View identity.
 - All content UI names, creation labels and runtime classifications come from `src/content-types.ts`. Row More, right-click and file identity menus share `FileActions`. Human lifecycle writes reuse Server Node/Resource/Blob/Trash workflows; retain fresh Server capabilities and stable Resource/Unit identities.

@@ -11,6 +11,7 @@ import {
 } from '@univerjs-pro/collaboration';
 import { UnitSnapshotMaterializer } from '@univerjs-pro/collaboration-service';
 import { contentType } from './content-types.js';
+import { readRuntimeLicense } from './runtime-license.js';
 
 export class SpaceError extends Error {
   constructor(
@@ -50,7 +51,7 @@ export function normalizeEndpoint(value: string): string {
 
 /** Plugin-owned connection only; no credentials, second Agent, or chat history in the client. */
 export class WorkspaceConnection {
-  readonly license = process.env.UNIVER_LICENSE ?? '';
+  readonly license = readRuntimeLicense();
   endpoint = '';
   private contentGeneration = 0;
   private htmlCache = new Map<string, { html: string; etag: string | null; sha256?: string }>();

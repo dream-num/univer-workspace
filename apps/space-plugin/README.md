@@ -21,9 +21,12 @@ npm run package:release -- /absolute/output/outside/repository
 Install the resulting tarball with the official DSH Plugins manager. Coupled
 Univer dependencies are pinned to 1.1.0; React 18 is resolved by the official
 host module loader. Tailwind utilities are prefixed/scoped with preflight off.
-The packager copies the audited production closure from committed `runtime-lock.json`;
-it never resolves fresh transitive versions. Manifest/version changes require an
-explicit runtime-lock refresh and audit. The source npm graph remains separately locked.
+The packager copies the production closure from committed `package-lock.json`;
+it never resolves fresh transitive versions. Manifest/version changes require a
+matching package-lock update. Desktop packages include the repository's existing
+Workspace application license in Host-only `lib/runtime-license.json`. Packaging
+and resource scans fail if it is missing or differs from the current source.
+No license value is written to build logs or committed generated files.
 Build-time PostCSS confines SDK global reset blocks and unprefixed utilities to
 the editor and Univer namespace portal roots; published SDK files stay intact.
 
@@ -175,7 +178,10 @@ The formal HTML Viewer is a build-time `file:` dependency on the Fork's existing
 `packages/workspace-html-viewer`; `.npmrc` materializes its sources with isolated
 consumer peers, rather than linking a second SDK/React graph. Browser JSX uses
 automatic transformation for that shared component. All coupled SDKs stay at
-1.1.0. Runtime licensing is supplied by the Host owner through UNIVER_LICENSE; the build does not read or embed the Fork development credential.
+1.1.0. Desktop packaging carries the Fork's existing development license through
+the Host-only runtime configuration. A nonempty UNIVER_LICENSE overrides it;
+an ordinary Desktop launch needs no environment-variable setup. The license's
+existing scope and expiry still apply; the SDK remains responsible for validation.
 Run build/install from this repository, preserving those source directories.
 
 Run `node scripts/check-human-collaboration-live.mjs` and
@@ -197,7 +203,12 @@ In Plugins, choose Add plugin and paste the generated tarball's path into Packag
 
 On a fresh profile pnpm blocks the transitive protobufjs@7.6.6 postinstall until explicitly approved. In the official installer, verify that this is the listed package and choose Allow these scripts and retry. This is the normal dependency trust step, not a peer-warning failure. The exact published postinstall reads dependency metadata and prints a version-scheme warning; it downloads no executable. Do not globally enable all dependency scripts.
 
-Before starting DSH, its launching environment must supply the operator's valid UNIVER_LICENSE for the existing Univer Pro capabilities. Credentials are never built into the tarball, saved in the client preference store, or included in Agent context. The LicensePlugin receives this value through an authenticated owner-only Host route. A Finder launch does not necessarily inherit a terminal environment; verify licensing with the deployment operator. No development credential is supplied to external testers.
+Desktop test packages include the repository's existing Workspace application
+license in Host-only `lib/runtime-license.json`, so a normal Desktop launch does
+not need terminal environment variables. A nonempty UNIVER_LICENSE can override
+the packaged value. The existing authenticated owner-only runtime config route
+supplies it to the official LicensePlugin; it is not saved in client preferences
+or included in Agent context. Packaging does not extend its scope or expiry.
 
 The Server must run the matching release commit (including the Review/Apply fixes), as one writer process against persistent product SQLite, collaboration SQLite and Blob storage. Back up those stores together. Stop the old writer before upgrading; never reset the database. Remote services require HTTPS/WSS, the registered public OAuth client `univer-workspace-harness` with consent and `identity session` scopes, and reverse-proxy support for /api, /universer-api and collaboration WebSocket upgrade. The plugin expects a service origin, not an API path. Outstanding Review tokens expire after 30 minutes and require fresh Review after a Server restart. Multi-Unit SDK merges are per-Unit, not a cross-Unit transaction; Space's current-document Agent edit targets one Doc or Sheet.
 

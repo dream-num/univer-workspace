@@ -95,6 +95,7 @@ await build({
     'src/index.ts',
     'src/oauth.ts',
     'src/workspace.ts',
+    'src/runtime-license.ts',
     'src/model.ts',
     'src/file-reference.ts',
     'src/turn-files.ts',
