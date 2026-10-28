@@ -7,7 +7,7 @@ import { UniverUIPlugin, ISidebarService } from '@univerjs/ui';
 import { ShowCommentPanelOperation } from '@univerjs/preset-docs-thread-comment';
 import { ToggleSheetCommentPanelOperation } from '@univerjs/preset-sheets-thread-comment';
 import { UserManagerService, LifecycleStages, type UniverInstanceType } from '@univerjs/core';
-import { DocStateChangeManagerService } from '@univerjs/docs';
+import { DocStateChangeManagerService, DocSelectionManagerService } from '@univerjs/docs';
 import { CommandType } from '@univerjs/core';
 import docsDrawingLocale from '@univerjs/preset-docs-drawing/locales/zh-CN';
 import sheetsDrawingLocale from '@univerjs/preset-sheets-drawing/locales/zh-CN';
@@ -87,6 +87,7 @@ import type { Face } from './client.js';
 import { editorHTTP } from './editor-http.js';
 import { installDocCommentRetention } from './workarounds/doc-comment-retention.js';
 import { workspaceLicense } from './license.js';
+import { captureDocTarget } from './doc-focus.js';
 
 let closingEditor: Promise<void> = Promise.resolve();
 
@@ -123,6 +124,7 @@ export function CollaborativeEditor({
     let accessCheckRunning = false;
     let startup: Promise<void>;
     let runtime: ReturnType<typeof createUniver> | undefined;
+    let focusChannel = '';
     let transport: ReturnType<typeof editorHTTP> | undefined;
     let docState: DocStateChangeManagerService | undefined;
     let editorWorker: Worker | undefined;
@@ -358,6 +360,22 @@ export function CollaborativeEditor({
         plugins: [...collaborationPlugins, ...embedPlugins],
       });
       const { univer, univerAPI: api } = runtime;
+      focusChannel = crypto.randomUUID();
+      const selectionService = file.type === 'doc'
+        ? univer.__getInjector().get(DocSelectionManagerService)
+        : undefined;
+      const publishDocFocus = () => {
+        if (!selectionService || canceled || abort.signal.aborted) return;
+        const target = captureDocTarget(
+          api.getDocument(file.unitId) as any,
+          selectionService.getDocRanges({ unitId: file.unitId, subUnitId: file.unitId }),
+        );
+        face.updateDocFocus(target ? { ...target, id: crypto.randomUUID(), channel: focusChannel, nodeId: file.nodeId, resourceId: file.resourceId, unitId: file.unitId } : null);
+      };
+      if (selectionService) {
+        const focusSubscription = selectionService.textSelection$.subscribe(publishDocFocus);
+        subscriptions.push({ unsubscribe: () => focusSubscription.unsubscribe() });
+      }
       embedProducts = createEmbedProductRuntime({
         univer, container: element, license: workspaceLicense,
         plugins: [...runtimePresets.flatMap(preset => preset.plugins), ...collaborationPlugins, ...embedPlugins],
@@ -605,6 +623,7 @@ export function CollaborativeEditor({
       });
       initialized = true;
       publishLoaded(true);
+      publishDocFocus();
       syncState(collaboration.getCollaborationStatus(file.unitId));
     };
     startup = mount().catch(cause => {
@@ -627,6 +646,7 @@ export function CollaborativeEditor({
     window.addEventListener('beforeunload', beforeUnload);
     return () => {
       canceled = true;
+      face.updateDocFocus(null, focusChannel);
       publishComments(null);
       publishMembers([]);
       face.bindEditor(file.nodeId, null);

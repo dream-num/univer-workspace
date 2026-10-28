@@ -21,6 +21,7 @@ import { registerUnitTool } from './unit-tool.js';
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials';
 import { WorkspaceOAuth } from './oauth.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
+import { parseDocFocus } from './doc-focus.js';
 
 export const name = 'space-plugin';
 export const inject = ['connection', 'tools', 'systemPrompt', 'credentials'];
@@ -159,6 +160,14 @@ export function apply(ctx: Context) {
             string('space', true),
             string('parent', true),
           );
+          break;
+        }
+        case 'focus': {
+          const focus = parseDocFocus(input?.focus);
+          const sessionId = string('sessionId');
+          value = focus
+            ? bindings.setFocus(sessionId, focus)
+            : bindings.clearFocus(sessionId, string('channel'));
           break;
         }
         case 'recent': {
@@ -312,6 +321,7 @@ export function apply(ctx: Context) {
     'associate',
     'index',
     'current',
+    'focus',
     'metadata',
     'html-source',
     'mutate',

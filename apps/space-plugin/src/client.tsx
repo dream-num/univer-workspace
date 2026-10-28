@@ -23,6 +23,7 @@ import tailwind from '../lib/tailwind.css';
 import sdkCss from '../lib/univer-scoped.css';
 import { configureLicense } from './license.js';
 import { Settings } from './components/settings.js';
+import type { DocFocus } from './doc-focus.js';
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
@@ -859,6 +860,9 @@ export function apply(ctx: any) {
         void run(associateCurrent);
       }
     },
+    updateDocFocus: (focus: DocFocus | null, channel = focus?.channel ?? '') => {
+      if (view.sessionId) void api('focus', { sessionId: view.sessionId, focus, channel }).catch(() => {});
+    },
     chat: () => run(() => nativeChat(Boolean(view.content))),
     back: () =>
       run(async () => {
@@ -1126,6 +1130,7 @@ export type Face = {
       resume?(): Promise<void>;
     } | null,
   ): void;
+  updateDocFocus(focus: DocFocus | null, channel?: string): void;
   newConversation(): void;
   pin(id: string): void;
   reference(): any;

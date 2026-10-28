@@ -1,5 +1,39 @@
 [
   {
+    "name": "univer_focus",
+    "description": "Read the Docs text selected or the paragraph containing the caret when this user message was admitted. For a direct replacement, first read this target, then call this tool again with action replace, the exact targetId and expectedText, and plain replacement text. It validates paragraph identity and exact text against the current Server document before applying through the official Facade and collaboration write path. Stale targets, unsupported blocks, Pages, Sheets, closed editors and missing focus are rejected; it never falls back to a whole-document edit.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "read",
+            "replace"
+          ]
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "expectedText": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "output": {},
+    "presentation": {
+      "card": "generic",
+      "title": "Replace focused Docs text",
+      "kind": "edit"
+    }
+  },
+  {
     "name": "univer_spaces",
     "description": "List Spaces accessible to the current authenticated Workspace user. Read only.",
     "parameters": {
