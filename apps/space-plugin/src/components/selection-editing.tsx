@@ -5,12 +5,10 @@ import type { SelectionEditing } from '../selection-editing.js';
 export function SelectionEditingControls({ editor }: { editor: SelectionEditing }) {
   const state = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
   const [instruction, setInstruction] = useState('');
-  const anchor = state.anchor;
-  const width = state.phase === 'selected' ? 155 : state.phase === 'reviewing' ? 322 : 384;
-  const left = anchor ? Math.max(8, Math.min(window.innerWidth - width - 8, anchor.left)) : 8;
-  const top = anchor ? Math.max(8, Math.min(window.innerHeight - 170, state.phase === 'selected' || state.phase === 'reviewing' ? anchor.top - 52 : anchor.bottom + 8)) : 8;
-  if (state.phase === 'idle' && !state.error) return null;
-  return <div className="sp-selection-ai tw-font-sans" style={{ position: 'fixed', left, top, width, visibility: anchor || state.error ? 'visible' : 'hidden' }}
+  const reviewing = state.phase === 'reviewing' || state.phase === 'applying';
+  const width = state.phase === 'selected' ? 155 : reviewing ? 322 : 384;
+  if (state.phase === 'idle' || state.phase === 'applied') return null;
+  return <div className="sp-selection-ai tw-font-sans" style={{ width }}
     onPointerDown={event => event.stopPropagation()}>
     {state.phase === 'selected' && <div role="toolbar" aria-label="Selection AI" className="tw-flex tw-h-11 tw-items-center tw-rounded-full tw-border tw-border-solid tw-border-line tw-bg-white tw-p-1 tw-shadow-md">
       <button className="tw-flex tw-h-9 tw-w-full tw-items-center tw-justify-center tw-gap-2 tw-rounded-full hover:tw-bg-hover" onPointerDown={event => event.preventDefault()} onClick={() => { setInstruction(''); editor.begin(); }}><Sparkles size={16} />Ask for change</button>
@@ -29,11 +27,24 @@ export function SelectionEditingControls({ editor }: { editor: SelectionEditing 
       </div>
     </form>}
     {state.phase === 'editing' && <div role="status" className="tw-flex tw-h-14 tw-items-center tw-justify-between tw-rounded-3xl tw-border tw-border-solid tw-border-line tw-bg-white tw-px-3 tw-shadow-md"><span className="tw-text-muted">Editing…</span><button aria-label="Stop generation" className="sp-selection-ai-round sp-selection-ai-submit" onClick={editor.cancel}><Square size={14} fill="currentColor" /></button></div>}
-    {state.phase === 'reviewing' && <div role="toolbar" aria-label="Review edit" className="tw-flex tw-h-11 tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-solid tw-border-line tw-bg-white tw-p-1 tw-shadow-md">
-      <button className="sp-selection-ai-action" onClick={editor.undo}><Undo2 size={15} />Undo</button>
-      <button className="sp-selection-ai-action" onClick={() => { setInstruction(''); editor.begin(); }}><Sparkles size={15} />Ask for change</button>
-      <button className="sp-selection-ai-action sp-selection-ai-accept" onClick={() => void editor.accept()}><Check size={15} />Accept</button>
+    {reviewing && <div role="toolbar" aria-label="Review edit" aria-busy={state.phase === 'applying'} className="tw-flex tw-h-11 tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-solid tw-border-line tw-bg-white tw-p-1 tw-shadow-md">
+      <button disabled={state.phase === 'applying'} className="sp-selection-ai-action" onClick={editor.undo}><Undo2 size={15} />Undo</button>
+      <button disabled={state.phase === 'applying'} className="sp-selection-ai-action" onClick={() => { setInstruction(''); editor.begin(); }}><Sparkles size={15} />Ask for change</button>
+      <button disabled={state.phase === 'applying'} className="sp-selection-ai-action sp-selection-ai-accept" onClick={() => void editor.accept()}><Check size={15} />{state.phase === 'applying' ? 'Applying…' : 'Accept'}</button>
     </div>}
     {state.error && <div role="alert" className="tw-mt-2 tw-rounded-xl tw-border tw-border-solid tw-border-line tw-bg-white tw-p-3 tw-text-sm tw-shadow-md">{state.error}<button aria-label="Dismiss selection edit error" onClick={editor.undo}><X size={14} /></button></div>}
+  </div>;
+}
+
+/** Application/save errors stay outside the SDK surface after its range popup closes. */
+export function SelectionEditingNotice({ editor }: { editor: SelectionEditing }) {
+  const state = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
+  if (state.phase !== 'applied' && !(state.phase === 'idle' && state.error)) return null;
+  const pending = state.syncState === 'pending';
+  return <div className="sp-selection-ai sp-selection-notice tw-rounded-xl tw-border tw-border-solid tw-border-line tw-bg-white tw-p-3 tw-text-sm tw-shadow-md" role={state.error || state.warning ? 'alert' : 'status'}>
+    {state.phase === 'applied' && <div>{pending ? 'Applied locally · Saving…' : state.syncState === 'failed' ? 'Applied locally · Not yet synchronized' : state.warning ? 'Local changes synchronized · Check the document' : 'Edit synchronized'}</div>}
+    {(state.error || state.warning) && <div>{state.warning}{state.warning && state.error ? ' · ' : ''}{state.error}</div>}
+    {state.syncState === 'failed' && <button className="sp-selection-ai-action" onClick={() => void editor.retrySync()}>Retry sync</button>}
+    <button disabled={pending} className="sp-selection-ai-action" aria-label="Dismiss selection edit notice" onClick={editor.undo}><X size={14} />Dismiss</button>
   </div>;
 }

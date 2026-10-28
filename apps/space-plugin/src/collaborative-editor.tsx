@@ -1,5 +1,5 @@
 import { WorkspaceCollaborationSocketService } from './collaboration-socket.js';
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createUniver, LocaleType, mergeLocales, type IPreset, type IPresetPlugin } from '@univerjs/presets';
 import { IRenderManagerService } from '@univerjs/engine-render';
 import { DocSelectionRenderService } from '@univerjs/docs-ui';
@@ -89,7 +89,8 @@ import { installDocCommentRetention } from './workarounds/doc-comment-retention.
 import { workspaceLicense } from './license.js';
 import { captureDocTarget } from './doc-focus.js';
 import { SelectionEditing } from './selection-editing.js';
-import { SelectionEditingControls } from './components/selection-editing.js';
+import { SelectionEditingNotice } from './components/selection-editing.js';
+import { EditorInputGate } from './editor-input-gate.js';
 
 let closingEditor: Promise<void> = Promise.resolve();
 
@@ -115,6 +116,7 @@ export function CollaborativeEditor({
   const [attempt, setAttempt] = useState(0),
     [loaded, setLoaded] = useState(false);
   useEffect(() => {
+    const inputGate = new EditorInputGate(container.current!);
     let canceled = false;
     let initialized = false;
     let cancelingLoad = false;
@@ -142,7 +144,11 @@ export function CollaborativeEditor({
       return !current.opening && current.content?.nodeId === file.nodeId && current.contentLoadId === loadId;
     };
     const ownsView = () => !canceled && !abort.signal.aborted && matchesView();
-    const publishStatus = (value: string) => { if (ownsView()) setStatus(value); };
+    const publishStatus = (value: string) => {
+      if (!ownsView()) return;
+      inputGate.setConnectionBlocked(value === 'offline' || value === 'denied');
+      setStatus(value);
+    };
     const publishError = (value: string) => { if (ownsView()) setError(value); };
     const publishLoaded = (value: boolean) => { if (ownsView()) setLoaded(value); };
     const publishMembers = (value: readonly IMember[]) => { if (ownsView()) onCollaborators(value); };
@@ -629,7 +635,8 @@ export function CollaborativeEditor({
       publishLoaded(true);
       publishDocFocus();
       if (file.type === 'doc') {
-        const selection = new SelectionEditing(univer, api, file, element, face);
+        const selection = new SelectionEditing(univer, api, file, face,
+          blocked => inputGate.setProjectionBlocked(blocked), flush);
         selectionEditingBinding = selection;
         disposables.push(selection);
         setSelectionEditing(selection);
@@ -714,13 +721,6 @@ export function CollaborativeEditor({
       }
     };
   }, [file.nodeId, user?.id, attempt, loadId]);
-  useLayoutEffect(() => {
-    // Suspend the actual input surface during a disconnect. The native inert
-    // boundary prevents text/IME input before the SDK creates a local mutation.
-    // Do not cancel a mutation after the SDK has already changed its input state.
-    if (container.current)
-      container.current.inert = status === 'offline' || status === 'denied';
-  }, [status]);
   return (
     <div
       className="sp-viewer"
@@ -745,7 +745,7 @@ export function CollaborativeEditor({
         </span>
       </div>
       <div className="sp-sdk" ref={container} />
-      {selectionEditing && <SelectionEditingControls editor={selectionEditing} />}
+      {selectionEditing && <SelectionEditingNotice editor={selectionEditing} />}
       {status === 'loading' && (
         <div className="sp-viewer-message" role="status">
           <span className="sp-spinner" />

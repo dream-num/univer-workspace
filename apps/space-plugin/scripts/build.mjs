@@ -99,6 +99,8 @@ await build({
     'src/model.ts',
     'src/doc-focus.ts',
     'src/selection-projection.ts',
+    'src/selection-editing.ts',
+    'src/editor-input-gate.ts',
     'src/file-reference.ts',
     'src/turn-files.ts',
     'src/tools.ts',
