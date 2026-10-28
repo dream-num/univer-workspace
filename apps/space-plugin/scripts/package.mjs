@@ -26,9 +26,9 @@ try {
   // Always refresh from the repository; never inherit a stale packaged value.
   await rm(join(stage, 'lib/runtime-license.json'), { force: true });
   const licenseSource = await readFile('../../apps/workspace/web/src/features/editor/features/license.ts', 'utf8');
-  const match = licenseSource.match(/export const UNIVER_LICENSE\s*=\s*("[^"]+")/);
+  const match = licenseSource.match(/export const UNIVER_LICENSE\s*=\s*(["'])([^"']+)\1/);
   if (!match) throw new Error('Workspace application development license not found.');
-  const value = JSON.parse(match[1]);
+  const value = match[2];
   if (typeof value !== 'string' || !value.trim()) throw new Error('Workspace application development license is empty.');
   await writeFile(join(stage, 'lib/runtime-license.json'), JSON.stringify({ scope: 'internal-desktop-test', license: value }) + '\n');
   const readme = await readFile('README.md', 'utf8');

@@ -810,47 +810,90 @@
   flex: 1;
   flex-direction: column;
 }
-/* Published DSH 0.2.1-rc.3 native Composer structure only. No copied editor,
-   event handlers or Session state: unknown native structures keep native UI.
-   Scope every override to this floating occurrence, never the global Chat. */
-.sp-floating-chat[data-mode='compact']:has(.uV2eYG_card)
+/* Published DSH native Composer structure only. The data-* hooks are part of
+   the public Conversation DOM contract; generated CSS-module names are not.
+   Keep every override below inside this Space-owned floating occurrence so the
+   native global Chat retains its normal DSH chrome. */
+.sp-floating-chat[data-mode='compact']:has([data-composer-card])
   .sp-native-conversation {
   flex: none;
   overflow: visible;
   border-radius: inherit;
 }
-.sp-floating-chat[data-mode='compact'] .wSkVaW_embeddedBody {
+.sp-floating-chat[data-mode='compact'] [data-composer-seat] {
   flex: none;
   width: 100%;
   overflow: visible;
 }
-.sp-floating-chat[data-mode='compact'] .wSkVaW_scrollBody {
+.sp-floating-chat[data-mode='compact'] [data-conversation-scroll] {
   flex: none;
   margin: 0;
   overflow: visible;
   scrollbar-gutter: auto;
 }
-.sp-floating-chat[data-mode='compact'] .wSkVaW_composerSeat {
+.sp-floating-chat[data-mode='compact'] [data-composer-seat] {
   background: transparent;
   position: relative;
   --dsh-composer-text-max-height: 168px;
 }
-.sp-floating-chat[data-mode='compact'] .wSkVaW_composerStack {
+.sp-floating-chat[data-mode='compact'] [data-composer-seat] > * {
   position: relative;
   gap: 0;
 }
-.sp-floating-chat[data-mode='compact'] .uV2eYG_root {
-  padding: 0;
-}
-.sp-floating-chat[data-mode='compact'] .uV2eYG_card {
+.sp-floating-chat[data-mode='compact'] [data-composer-card] {
   min-height: 52px;
   max-width: 100%;
+  box-sizing: border-box;
   border-radius: 28px;
   background: var(--sp-canvas);
   box-shadow: none;
   gap: 0;
   padding: 0;
 }
+.sp-floating-chat[data-mode='compact'] [data-composer-card] > [data-input-scroll] {
+  margin: 0 108px 0 72px;
+  padding: 10px 0;
+  max-height: var(--dsh-composer-text-max-height);
+  overflow-y: auto;
+}
+.sp-floating-chat[data-mode='compact'] [data-composer-input] {
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 4px 0;
+  font-size: 14px;
+  line-height: 24px;
+}
+.sp-floating-chat[data-mode='compact'] [data-composer-placeholder] {
+  inset: 4px 0 auto;
+  font-size: 14px;
+  line-height: 24px;
+}
+/* The native row stays mounted for real attachments, submit and stop actions.
+   Its two stable children are the left utility group and right action group. */
+.sp-floating-chat[data-mode='compact'] [data-composer-card] > [data-input-scroll] + div {
+  display: contents;
+}
+.sp-floating-chat[data-mode='compact'] [data-composer-card] > [data-input-scroll] + div > :first-child {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+}
+.sp-floating-chat[data-mode='compact'] [data-composer-card] > [data-input-scroll] + div > :last-child {
+  position: absolute;
+  right: 8px;
+  bottom: 10px;
+}
+/* Space follows ChatGPT's compact composer: attachment and send/stop remain;
+   permission, model and DSH statistics are deliberately out of the surface. */
+.sp-floating-chat[data-mode='compact'] [data-composer-dock],
+.sp-floating-chat[data-mode='compact'] [data-composer-stat],
+.sp-floating-chat[data-mode='compact'] [data-slot='conversation.input.permission'],
+.sp-floating-chat[data-mode='compact'] [data-slot='conversation.input.model'],
+.sp-floating-chat[data-mode='compact'] [data-composer-card] > [data-input-scroll] + div > :last-child > :first-child {
+  display: none !important;
+}
+/* The generated class rules remain a compatibility fallback for the official
+   0.2.1-rc.3 graph, while the stable hooks above own the behavior. */
 .sp-floating-chat[data-mode='compact'] .uV2eYG_scroll {
   margin: 0 108px 0 72px;
   padding: 10px 0;
@@ -890,6 +933,33 @@
   bottom: 10px;
   width: auto;
   z-index: 11;
+}
+/* The Space composer keeps the native input behavior, but its compact surface
+   follows the ChatGPT Space contract in every native Conversation phase. These
+   selectors intentionally use the published data hooks and do not depend on
+   CSS-module hashes. */
+.sp-floating-chat [data-composer-dock],
+.sp-floating-chat [data-composer-stat],
+.sp-floating-chat [data-slot='conversation.input.permission'],
+.sp-floating-chat [data-slot='conversation.input.model'],
+.sp-floating-chat [data-composer-card] [data-composer-dock] {
+  display: none !important;
+}
+.sp-floating-chat [data-composer-card] .uV2eYG_modes,
+.sp-floating-chat [data-composer-card] .uV2eYG_standardControls {
+  display: none !important;
+}
+.sp-floating-chat[data-mode='compact'] [data-composer-card] {
+  border-radius: 28px;
+  box-shadow: none;
+  padding-top: 0;
+}
+.sp-floating-chat[data-mode='compact'] [data-composer-card] [data-composer-input] {
+  min-height: 32px;
+  padding: 4px 0;
+}
+.sp-floating-chat[data-mode='compact'] [data-composer-card] [data-composer-placeholder] {
+  inset: 4px 0 auto;
 }
 .sp-floating-chat .sp-context-compact > summary {
   list-style: none;
@@ -1245,7 +1315,11 @@
 }
 [data-space-host-navigation='0.2.1-rc.3'][data-space-mode='space']
   > [data-space-host-part="regionArea"] {
-  top: 0;
+  /* Electron Windows reserves the native frame through this Host-owned
+     variable. Keeping the value in the selector prevents the web fallback
+     from painting Space content beneath window controls. macOS/Web resolve it
+     to zero and keep the reference alignment. */
+  top: var(--dsh-frame-top-clearance, 0px);
   bottom: 0;
   padding: 0;
 }

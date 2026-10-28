@@ -9,7 +9,9 @@ import { scanRelease } from '../scripts/scan-release.mjs';
 test('release scan requires the repository license and confines it to Host configuration', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'space-package-license-'));
   const source = await readFile('../../apps/workspace/web/src/features/editor/features/license.ts', 'utf8');
-  const license = JSON.parse(source.match(/export const UNIVER_LICENSE\s*=\s*("[^"]+")/)[1]);
+  const licenseMatch = source.match(/export const UNIVER_LICENSE\s*=\s*(["'])([^"']+)\1/);
+  assert.ok(licenseMatch);
+  const license = licenseMatch[2];
   const tarball = join(directory, 'fixture.tgz');
   const pack = () => execFileSync('tar', ['-czf', tarball, '-C', directory, 'package/lib/runtime-license.json', 'package/lib/client.js', 'package/package.json']);
   try {

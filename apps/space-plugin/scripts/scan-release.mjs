@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 export async function scanRelease(file) {
   const source = await readFile('../../apps/workspace/web/src/features/editor/features/license.ts', 'utf8');
-  const credential = JSON.parse(source.match(/export const UNIVER_LICENSE\s*=\s*("[^"]+")/)[1]);
+  const licenseMatch = source.match(/export const UNIVER_LICENSE\s*=\s*(["'])([^"']+)\1/);
+  if (!licenseMatch) throw new Error('Workspace application development license not found.');
+  const credential = licenseMatch[2];
   const env = { ...process.env, LC_ALL: 'C' };
   const names = execFileSync('tar', ['-tzf', file], { encoding: 'utf8', env }).trim().split('\n');
   const findings = [], files = [], upstreamStrings = [];

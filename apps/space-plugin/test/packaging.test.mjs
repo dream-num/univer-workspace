@@ -51,7 +51,9 @@ test('published plugin cannot install a second DSH Tools runtime or scheduler Sy
 
 test('built code contains no inline development license, local checkout paths or SDK service fallback', async () => {
   const source = await readFile('../../apps/workspace/web/src/features/editor/features/license.ts', 'utf8');
-  const credential = JSON.parse(source.match(/export const UNIVER_LICENSE\s*=\s*("[^"]+")/)[1]);
+  const licenseMatch = source.match(/export const UNIVER_LICENSE\s*=\s*(["'])([^"']+)\1/);
+  assert.ok(licenseMatch);
+  const credential = licenseMatch[2];
   for (const name of (await readdir('lib')).filter(name => /\.(m?js|css)$/.test(name))) {
     const content = await readFile(`lib/${name}`, 'utf8');
     assert.ok(!content.includes(credential), `${name}: development license must not be bundled`);
