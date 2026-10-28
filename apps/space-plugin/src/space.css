@@ -1803,3 +1803,11 @@
 [data-space-host-frame='0.2.1-rc.3'][data-space-mode='space']:not([data-space-secondary-collapsed='true']) {
   grid-template-columns: var(--space-open-columns) !important;
 }
+.sp-selection-ai { z-index: 1200; color: #181818; font-size: 14px; line-height: 18px; }
+.sp-selection-ai button { cursor: pointer; border: 0; font: inherit; }
+.sp-selection-ai-round { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: transparent; }
+.sp-selection-ai-submit { background: #3982f6; color: white; }
+.sp-selection-ai-submit:disabled { opacity: .35; cursor: default; }
+.sp-selection-ai-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; border-radius: 18px; height: 36px; padding: 0 10px; background: transparent; }
+.sp-selection-ai-action:hover { background: #f2f2f2; }
+.sp-selection-ai-accept, .sp-selection-ai-accept:hover { background: #111; color: white; }

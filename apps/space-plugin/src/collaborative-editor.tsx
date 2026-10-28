@@ -88,6 +88,8 @@ import { editorHTTP } from './editor-http.js';
 import { installDocCommentRetention } from './workarounds/doc-comment-retention.js';
 import { workspaceLicense } from './license.js';
 import { captureDocTarget } from './doc-focus.js';
+import { SelectionEditing } from './selection-editing.js';
+import { SelectionEditingControls } from './components/selection-editing.js';
 
 let closingEditor: Promise<void> = Promise.resolve();
 
@@ -106,6 +108,7 @@ export function CollaborativeEditor({
   onCommentsReady(binding: { toggle(): void; visible: boolean } | null): void;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const [selectionEditing, setSelectionEditing] = useState<SelectionEditing | null>(null);
   const loadId = face.store.getSnapshot().contentLoadId;
   const [status, setStatus] = useState('loading'),
     [error, setError] = useState('');
@@ -624,6 +627,11 @@ export function CollaborativeEditor({
       initialized = true;
       publishLoaded(true);
       publishDocFocus();
+      if (file.type === 'doc') {
+        const selection = new SelectionEditing(univer, api, file, element);
+        disposables.push(selection);
+        setSelectionEditing(selection);
+      }
       syncState(collaboration.getCollaborationStatus(file.unitId));
     };
     startup = mount().catch(cause => {
@@ -646,6 +654,7 @@ export function CollaborativeEditor({
     window.addEventListener('beforeunload', beforeUnload);
     return () => {
       canceled = true;
+      setSelectionEditing(null);
       face.updateDocFocus(null, focusChannel);
       publishComments(null);
       publishMembers([]);
@@ -733,6 +742,7 @@ export function CollaborativeEditor({
         </span>
       </div>
       <div className="sp-sdk" ref={container} />
+      {selectionEditing && <SelectionEditingControls editor={selectionEditing} />}
       {status === 'loading' && (
         <div className="sp-viewer-message" role="status">
           <span className="sp-spinner" />
