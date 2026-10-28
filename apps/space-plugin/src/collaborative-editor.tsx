@@ -128,6 +128,7 @@ export function CollaborativeEditor({
     let startup: Promise<void>;
     let runtime: ReturnType<typeof createUniver> | undefined;
     let focusChannel = '';
+    let selectionEditingBinding: SelectionEditing | undefined;
     let transport: ReturnType<typeof editorHTTP> | undefined;
     let docState: DocStateChangeManagerService | undefined;
     let editorWorker: Worker | undefined;
@@ -628,7 +629,8 @@ export function CollaborativeEditor({
       publishLoaded(true);
       publishDocFocus();
       if (file.type === 'doc') {
-        const selection = new SelectionEditing(univer, api, file, element);
+        const selection = new SelectionEditing(univer, api, file, element, face);
+        selectionEditingBinding = selection;
         disposables.push(selection);
         setSelectionEditing(selection);
       }
@@ -654,6 +656,7 @@ export function CollaborativeEditor({
     window.addEventListener('beforeunload', beforeUnload);
     return () => {
       canceled = true;
+      selectionEditingBinding?.dispose();
       setSelectionEditing(null);
       face.updateDocFocus(null, focusChannel);
       publishComments(null);

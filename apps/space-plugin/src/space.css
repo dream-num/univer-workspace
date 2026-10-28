@@ -1804,6 +1804,7 @@
   grid-template-columns: var(--space-open-columns) !important;
 }
 .sp-selection-ai { z-index: 1200; color: #181818; font-size: 14px; line-height: 18px; }
+.sp-selection-ai, .sp-selection-ai * { box-sizing: border-box; }
 .sp-selection-ai button { cursor: pointer; border: 0; font: inherit; }
 .sp-selection-ai-round { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: transparent; }
 .sp-selection-ai-submit { background: #3982f6; color: white; }

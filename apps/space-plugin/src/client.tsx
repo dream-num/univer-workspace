@@ -555,6 +555,7 @@ export function apply(ctx: any) {
     }, current);
   }
   const face = {
+    selectionProposal: (input: import('./selection-editing.js').SelectionProposalInput, signal: AbortSignal) => api<{ text: string }>('selection-proposal', input, signal),
     editingStatus: (sessionId: string, nodeId: string) => api('editing-status', { sessionId, nodeId }),
     editingAction: async (input: { sessionId: string; nodeId: string; action: string; proposalId: string; reviewToken?: string }) => {
       if (input.action === 'review' || input.action === 'apply') {
@@ -1101,6 +1102,7 @@ export function apply(ctx: any) {
   });
 }
 export type Face = {
+  selectionProposal(input: import('./selection-editing.js').SelectionProposalInput, signal: AbortSignal): Promise<{ text: string }>;
   editingStatus(sessionId: string, nodeId: string): Promise<import('./model.js').Proposal | null>;
   editingAction(input: { sessionId: string; nodeId: string; action: string; proposalId: string; reviewToken?: string }): Promise<any>;
 

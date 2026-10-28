@@ -22,9 +22,10 @@ import type { CredentialKey } from '@deepseek-ai/dsh-credentials';
 import { WorkspaceOAuth } from './oauth.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
 import { parseDocFocus } from './doc-focus.js';
+import { selectionProposal } from './selection-proposal.js';
 
 export const name = 'space-plugin';
-export const inject = ['connection', 'tools', 'systemPrompt', 'credentials'];
+export const inject = ['connection', 'tools', 'systemPrompt', 'credentials', 'llm', 'agents', 'agentDefaultModel', 'sessionProjections'];
 
 /** Use the public Connection carrier; no webServer or Desktop-private IPC. */
 export function apply(ctx: Context) {
@@ -121,6 +122,9 @@ export function apply(ctx: Context) {
       };
       let value: unknown;
       switch (operation) {
+        case 'selection-proposal':
+          value = await selectionProposal(ctx, workspace, input ?? {}, signal);
+          break;
         case 'runtime-config':
           value = { license: workspace.license };
           break;
@@ -302,6 +306,7 @@ export function apply(ctx: Context) {
   // Public exact Fetch routes use the shared authenticated carrier and admit
   // owner peers only. They are also supported by Desktop's dsh-app forwarding.
   for (const operation of [
+    'selection-proposal',
     'runtime-config',
     'status',
     'editing-status',
@@ -343,7 +348,7 @@ export function apply(ctx: Context) {
             const raw = await request.text();
             if (
               raw.length >
-              (operation === 'editor-http' ? 8 * 1024 * 1024 : 16384)
+              (operation === 'editor-http' ? 8 * 1024 * 1024 : operation === 'selection-proposal' ? 256 * 1024 : 16384)
             )
               return new Response('Request too large', { status: 413 });
             let message;

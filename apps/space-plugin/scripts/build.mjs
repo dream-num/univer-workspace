@@ -98,6 +98,7 @@ await build({
     'src/runtime-license.ts',
     'src/model.ts',
     'src/doc-focus.ts',
+    'src/selection-projection.ts',
     'src/file-reference.ts',
     'src/turn-files.ts',
     'src/tools.ts',
