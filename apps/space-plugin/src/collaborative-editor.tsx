@@ -66,6 +66,7 @@ import {
   CollaborationUIEventId,
   ILocalCacheService,
   CollaborationSessionService,
+  SessionStatus,
   MemberService,
 } from '@univerjs-pro/collaboration-client';
 import {
@@ -122,6 +123,7 @@ export function CollaborativeEditor({
     let cancelingLoad = false;
     let disconnected = false;
     let hasBeenSynced = false;
+    let sessionStatus = SessionStatus.IDLE;
     let locallyChanged = false;
     let recovering = false;
     let accessDenied = false;
@@ -146,7 +148,7 @@ export function CollaborativeEditor({
     const ownsView = () => !canceled && !abort.signal.aborted && matchesView();
     const publishStatus = (value: string) => {
       if (!ownsView()) return;
-      inputGate.setConnectionBlocked(value === 'offline' || value === 'denied');
+      inputGate.setConnectionBlocked(value === 'loading' || value === 'offline' || value === 'denied');
       setStatus(value);
     };
     const publishError = (value: string) => { if (ownsView()) setError(value); };
@@ -159,32 +161,29 @@ export function CollaborativeEditor({
     publishLoaded(false);
     const syncState = (state: CollaborationStatus) => {
       if (canceled || !initialized || accessDenied) return;
-      if (state === CollaborationStatus.SYNCED) { hasBeenSynced = true; locallyChanged = false; }
+      const synced = state === CollaborationStatus.SYNCED && sessionStatus === SessionStatus.ONLINE;
+      const offline = sessionStatus === SessionStatus.OFFLINE || disconnected && !synced;
+      if (synced) { hasBeenSynced = true; locallyChanged = false; }
       if (!ownsView()) return;
-      publishMembers(state === CollaborationStatus.OFFLINE ? [] : lastMembers);
-      if (state === CollaborationStatus.OFFLINE && hasBeenSynced && !disconnected) {
+      publishMembers(sessionStatus === SessionStatus.ONLINE ? lastMembers : []);
+      if (offline && hasBeenSynced && !disconnected) {
         disconnected = true;
         docState?.flushPendingChanges(file.unitId);
       }
       // Resume with authoritative permissions and a fresh input surface, after
       // the SDK acknowledges its existing queue. This never writes a snapshot.
-      if (disconnected && state === CollaborationStatus.SYNCED && !recovering) {
+      if (disconnected && synced && !recovering) {
         recovering = true;
         publishStatus('loading');
         if (ownsView()) setAttempt((value) => value + 1);
         return;
       }
-      publishStatus(
-        state === CollaborationStatus.SYNCED
-          ? (docState?.getStateCache(file.unitId).collaboration.length ?? 0)
-            ? 'saving'
-            : 'saved'
-          : state === CollaborationStatus.OFFLINE
-            ? 'offline'
-            : state === CollaborationStatus.CONFLICT
-              ? 'conflict'
-              : 'saving',
-      );
+      let next = 'saving';
+      if (offline) next = 'offline';
+      else if (state === CollaborationStatus.CONFLICT) next = 'conflict';
+      else if (synced) next = (docState?.getStateCache(file.unitId).collaboration.length ?? 0) ? 'saving' : 'saved';
+      else if (!hasBeenSynced) next = 'loading';
+      publishStatus(next);
     };
     const fail = (cause: unknown) => {
       if (!canceled) {
@@ -422,7 +421,7 @@ export function CollaborativeEditor({
           .__getInjector()
           .get(CollaborationUIEventService)
           .event$.subscribe((event) => {
-            if (canceled || abort.signal.aborted) return;
+            if (!ownsView() || event.unitID && event.unitID !== file.unitId) return;
             if (event.id === CollaborationUIEventId.PERMISSION_DENIED) {
               accessDenied = true;
               publishStatus('denied');
@@ -439,7 +438,9 @@ export function CollaborativeEditor({
       const collaboration = api.getCollaboration();
       disposables.push(
         api.addEvent(api.Event.CollaborationStatusChanged, (event) => {
-          if (event.unitId === file.unitId) syncState(event.status);
+          // A Facade notification can be queued across load/disposal. Read the
+          // current entity instead of consuming an old event payload again.
+          if (ownsView() && event.unitId === file.unitId) syncState(collaboration.getCollaborationStatus(file.unitId));
         }),
       );
       docState = file.type === 'base' ? undefined : univer.__getInjector().get(DocStateChangeManagerService);
@@ -493,10 +494,18 @@ export function CollaborativeEditor({
                 : Promise.reject(new Error('Unsupported collaborative editor.')));
       if (canceled || abort.signal.aborted) return;
       if (!unit) throw new Error('Server 未能加载此文件。');
-      await univer
+      const session = await univer
         .__getInjector()
         .get(CollaborationSessionService)
         .requireSession(file.unitId);
+      if (canceled || abort.signal.aborted) return;
+      // Entity OFFLINE is also its initial state while the room joins. The
+      // public per-Unit room lifecycle distinguishes startup from actual loss.
+      subscriptions.push(session.sessionStatus$.subscribe(value => {
+        if (canceled || abort.signal.aborted) return;
+        sessionStatus = value;
+        syncState(collaboration.getCollaborationStatus(file.unitId));
+      }));
       // Asset loads can retry independently; they must not hold editor startup open.
       await transport.drainWrites();
       if (canceled || abort.signal.aborted) return;
@@ -636,7 +645,8 @@ export function CollaborativeEditor({
       publishDocFocus();
       if (file.type === 'doc') {
         const selection = new SelectionEditing(univer, api, file, face,
-          blocked => inputGate.setProjectionBlocked(blocked), flush, ownsView);
+          blocked => inputGate.setProjectionBlocked(blocked), flush,
+          () => ownsView() && !accessDenied && sessionStatus === SessionStatus.ONLINE && !disconnected);
         selectionEditingBinding = selection;
         disposables.push(selection);
         setSelectionEditing(selection);
