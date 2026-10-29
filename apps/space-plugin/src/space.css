@@ -613,7 +613,7 @@
 .sp-sheet-body .sp-editor {
   border-top: 1px solid var(--sp-line);
 }
-/* Floating chat is an overlay inside the plugin; it never reserves editor width. */
+/* Space owns geometry; the Host owns the single native Conversation. */
 .sp-chat-seat {
   position: absolute;
   inset: 0;
@@ -623,110 +623,111 @@
 .sp-chat-seat[hidden],
 .sp-floating-chat[hidden],
 .sp-chat-restore[hidden],
-.sp-native-conversation[hidden] {
+.sp-native-conversation[hidden],
+.sp-chat-header[hidden],
+.sp-native-messages[hidden] {
   display: none;
 }
 .sp-floating-chat {
+  --sp-chat-control: 36px;
   box-sizing: border-box;
   position: absolute;
   display: flex;
   flex-direction: column;
-  background: var(--sp-canvas);
-  border: 1px solid var(--sp-line);
-  border-radius: 20px;
-  box-shadow: 0 4px 22px #0002;
+  padding: 0 6px 6px;
   pointer-events: auto;
-  min-height: 52px;
-  max-height: calc(100% - 32px);
+  min-width: 0;
+}
+.sp-chat-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  background: var(--sp-canvas);
+  border-radius: 22px;
+  box-shadow:
+    0 0 0 0.5px #0000001a,
+    0 16px 32px -8px #00000030;
+}
+.sp-floating-chat[data-mode="compact"][data-chrome="false"] .sp-chat-surface {
+  border-radius: 28px;
 }
 .sp-chat-header {
-  height: 44px;
   display: flex;
-  align-items: center;
   flex-shrink: 0;
-  gap: 0;
-  padding: 4px 8px;
+  height: 46px;
+  align-items: center;
+  padding: 4px 6px;
+  gap: 4px;
   box-sizing: border-box;
 }
-.sp-floating-chat[data-mode='compact'] {
-  border: 0;
-  border-radius: 28px;
-  box-shadow:
-    0 2px 12px #0000000d,
-    0 0 1px #00000026;
-}
-.sp-floating-chat[data-mode='compact'] .sp-chat-header {
-  position: absolute;
-  z-index: 10;
-  right: 44px;
-  bottom: 10px;
-  height: 32px;
+.sp-floating-chat .sp-chat-control,
+.sp-chat-header .sp-menu > summary {
+  width: var(--sp-chat-control);
+  height: var(--sp-chat-control);
+  min-width: var(--sp-chat-control);
   padding: 0;
-}
-.sp-floating-chat[data-mode='compact'] .sp-chat-header > .sp-chat-title,
-.sp-floating-chat[data-mode='compact'] .sp-chat-minimize,
-.sp-floating-chat[data-mode='compact'] .sp-chat-grip {
-  display: none;
-}
-.sp-floating-chat .sp-chat-header .sp-chat-expand,
-.sp-floating-chat .sp-chat-header .sp-menu > summary {
-  width: 28px;
-  height: 32px;
   justify-content: center;
-  padding: 0;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
-.sp-chat-header .sp-control:hover {
+.sp-chat-control svg,
+.sp-chat-menu > summary svg {
+  width: 16px;
+  height: 16px;
+}
+.sp-chat-header .sp-control:hover,
+.sp-chat-header .sp-menu > summary:hover {
   background: color-mix(in srgb, var(--sp-ink) 5%, transparent);
 }
-.sp-floating-chat .sp-chat-header .sp-control {
-  height: 32px;
+.sp-chat-header .sp-control:focus-visible,
+.sp-chat-header summary:focus-visible,
+.sp-chat-resize:focus-visible,
+.sp-chat-height:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
 }
-/* E08: minimize, history title, draggable header space, then Dock Chat menu. */
-.sp-floating-chat[data-mode='expanded'] .sp-chat-expand {
-  display: none;
-}
-.sp-floating-chat[data-mode='expanded'] .sp-chat-minimize {
-  order: -1;
-}
-.sp-floating-chat[data-mode='expanded'] .sp-chat-title {
-  flex: 0 1 auto;
-  max-width: calc(100% - 120px);
-}
-.sp-floating-chat[data-mode='expanded'] .sp-chat-header > .sp-menu {
-  order: 2;
-}
-.sp-floating-chat[data-mode='expanded'] .sp-chat-grip {
-  flex: 1;
-  width: auto;
-  min-width: 24px;
-}
-.sp-floating-chat[data-mode='expanded'] .sp-chat-grip:hover {
-  background: transparent;
-}
-.sp-floating-chat[data-mode='expanded'] .sp-chat-grip svg {
-  visibility: hidden;
+.sp-chat-header .sp-control:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .sp-chat-title {
-  flex: 1;
   min-width: 0;
+  max-width: 55%;
   font-size: 14px;
-  color: var(--sp-muted);
-  padding: 4px 8px;
+  padding: 0 8px;
+  height: 36px;
+  border-radius: 18px;
 }
-.sp-chat-grip {
+.sp-floating-chat .sp-chat-grip {
+  flex: 1;
+  width: auto;
+  min-width: 20px;
   cursor: grab;
   touch-action: none;
 }
-.sp-chat-grip:active {
+.sp-chat-grip svg {
+  visibility: hidden;
+}
+.sp-chat-grip:hover svg,
+.sp-chat-grip:focus-visible svg {
+  visibility: visible;
+}
+.sp-floating-chat[data-dragging] .sp-chat-grip {
   cursor: grabbing;
 }
-.sp-chat-header .sp-menu-body {
-  top: auto;
-  bottom: calc(100% + 8px);
+.sp-floating-chat[data-dragging] {
+  user-select: none;
 }
-.sp-floating-chat[data-mode='expanded'] .sp-chat-header .sp-menu-body {
+.sp-chat-header .sp-menu-body {
   top: calc(100% + 4px);
   bottom: auto;
+}
+.sp-floating-chat[data-dock^="bottom"][data-mode="compact"]
+  .sp-chat-header
+  .sp-menu-body {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 .sp-native-conversation {
   display: flex;
@@ -734,14 +735,17 @@
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  border-radius: 0 0 20px 20px;
+  border-radius: 0 0 22px 22px;
 }
 .sp-native-conversation > div {
   flex: 1;
   min-width: 0;
 }
-.sp-native-messages[hidden] {
-  display: none;
+.sp-native-messages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 .sp-chat-history {
   flex: 1;
@@ -753,6 +757,14 @@
   display: flex;
   justify-content: flex-start;
   margin-bottom: 4px;
+}
+.sp-chat-drop-preview {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  border: 1px dashed var(--sp-muted);
+  background: color-mix(in srgb, var(--sp-ink) 4%, transparent);
+  border-radius: 22px;
 }
 .sp-context {
   display: flex;
@@ -771,76 +783,78 @@
 }
 .sp-shell .sp-chat-seat .sp-chat-restore {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--sp-canvas);
-  border: 1px solid var(--sp-line);
-  box-shadow: 0 2px 8px #0001;
+  box-shadow:
+    0 0 0 0.5px #0000001a,
+    0 4px 12px #0002;
   pointer-events: auto;
 }
 .sp-chat-resize {
   position: absolute;
-  width: 16px;
-  top: 40px;
-  bottom: 16px;
+  width: 12px;
+  top: 12px;
+  bottom: 12px;
   cursor: ew-resize;
   touch-action: none;
 }
-.sp-floating-chat[data-mode='compact'] .sp-chat-resize {
-  top: 12px;
-  bottom: 12px;
-}
 .sp-chat-resize-left {
-  left: -8px;
+  left: 0;
 }
 .sp-chat-resize-right {
-  right: -8px;
+  right: 0;
 }
-.sp-chat-resize:focus-visible {
-  outline: 2px solid #60a5fa;
+.sp-chat-height {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  height: 8px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.sp-chat-height-top {
+  top: -4px;
+}
+.sp-chat-height-bottom {
+  bottom: 0;
 }
 .sp-shell > div > main {
   position: relative;
-}
-.sp-native-messages {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
 }
 /* Published DSH native Composer structure only. The data-* hooks are part of
    the public Conversation DOM contract; generated CSS-module names are not.
    Keep every override below inside this Space-owned floating occurrence so the
    native global Chat retains its normal DSH chrome. */
-.sp-floating-chat[data-mode='compact']:has([data-composer-card])
+.sp-floating-chat[data-mode="compact"]:has([data-composer-card])
   .sp-native-conversation {
   flex: none;
   overflow: visible;
   border-radius: inherit;
 }
-.sp-floating-chat[data-mode='compact'] [data-composer-seat] {
+.sp-floating-chat [data-composer-seat] {
   flex: none;
   width: 100%;
   overflow: visible;
 }
-.sp-floating-chat[data-mode='compact'] [data-conversation-scroll] {
+.sp-floating-chat[data-mode="compact"] [data-conversation-scroll] {
   flex: none;
   margin: 0;
   overflow: visible;
   scrollbar-gutter: auto;
 }
-.sp-floating-chat[data-mode='compact'] [data-composer-seat] {
-  background: transparent;
+.sp-floating-chat [data-conversation-content] [data-composer-seat] {
+  background: transparent !important;
+  border-radius: 0 0 22px 22px;
   position: relative;
   --dsh-composer-text-max-height: 168px;
 }
-.sp-floating-chat[data-mode='compact'] [data-composer-seat] > * {
+.sp-floating-chat [data-composer-seat] > * {
   position: relative;
   gap: 0;
 }
-.sp-floating-chat[data-mode='compact'] [data-composer-card] {
+.sp-floating-chat [data-composer-card] {
   min-height: 52px;
   max-width: 100%;
   box-sizing: border-box;
@@ -850,116 +864,60 @@
   gap: 0;
   padding: 0;
 }
-.sp-floating-chat[data-mode='compact'] [data-composer-card] > [data-input-scroll] {
-  margin: 0 108px 0 72px;
+.sp-floating-chat [data-composer-card] > [data-input-scroll] {
+  margin: 0 204px 0 72px;
   padding: 10px 0;
   max-height: var(--dsh-composer-text-max-height);
   overflow-y: auto;
 }
-.sp-floating-chat[data-mode='compact'] [data-composer-input] {
+.sp-floating-chat [data-composer-input] {
   min-height: 32px;
   box-sizing: border-box;
   padding: 4px 0;
   font-size: 14px;
   line-height: 24px;
 }
-.sp-floating-chat[data-mode='compact'] [data-composer-placeholder] {
+.sp-floating-chat [data-composer-placeholder] {
   inset: 4px 0 auto;
   font-size: 14px;
   line-height: 24px;
 }
 /* The native row stays mounted for real attachments, submit and stop actions.
    Its two stable children are the left utility group and right action group. */
-.sp-floating-chat[data-mode='compact'] [data-composer-card] > [data-input-scroll] + div {
+.sp-floating-chat [data-composer-card] > [data-input-scroll] + div {
   display: contents;
 }
-.sp-floating-chat[data-mode='compact'] [data-composer-card] > [data-input-scroll] + div > :first-child {
+.sp-floating-chat
+  [data-composer-card]
+  > [data-input-scroll]
+  + div
+  > :first-child {
   position: absolute;
   left: 10px;
   bottom: 10px;
 }
-.sp-floating-chat[data-mode='compact'] [data-composer-card] > [data-input-scroll] + div > :last-child {
+.sp-floating-chat
+  [data-composer-card]
+  > [data-input-scroll]
+  + div
+  > :last-child {
   position: absolute;
   right: 8px;
   bottom: 10px;
 }
 /* Space follows ChatGPT's compact composer: attachment and send/stop remain;
-   permission, model and DSH statistics are deliberately out of the surface. */
-.sp-floating-chat[data-mode='compact'] [data-composer-dock],
-.sp-floating-chat[data-mode='compact'] [data-composer-stat],
-.sp-floating-chat[data-mode='compact'] [data-slot='conversation.input.permission'],
-.sp-floating-chat[data-mode='compact'] [data-slot='conversation.input.model'],
-.sp-floating-chat[data-mode='compact'] [data-composer-card] > [data-input-scroll] + div > :last-child > :first-child {
+   permission and DSH statistics stay outside this focused surface. */
+.sp-floating-chat [data-composer-dock],
+.sp-floating-chat [data-composer-stat],
+.sp-floating-chat [data-slot="conversation.input.permission"] {
   display: none !important;
 }
-/* The generated class rules remain a compatibility fallback for the official
-   0.2.1-rc.3 graph, while the stable hooks above own the behavior. */
-.sp-floating-chat[data-mode='compact'] .uV2eYG_scroll {
-  margin: 0 108px 0 72px;
-  padding: 10px 0;
-}
-.sp-floating-chat[data-mode='compact'] .uV2eYG_input {
-  min-height: 32px;
-  padding: 4px 0;
-  font-size: 14px;
-  line-height: 24px;
-}
-.sp-floating-chat[data-mode='compact'] .uV2eYG_placeholder {
-  inset: 4px 0 auto;
-  font-size: 14px;
-  line-height: 24px;
-}
-.sp-floating-chat[data-mode='compact'] .uV2eYG_row {
-  display: contents;
-}
-.sp-floating-chat[data-mode='compact'] .uV2eYG_tools {
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-}
-.sp-floating-chat[data-mode='compact'] .uV2eYG_trailing {
-  position: absolute;
-  right: 8px;
-  bottom: 10px;
-}
-.sp-floating-chat[data-mode='compact'] .uV2eYG_modes,
-.sp-floating-chat[data-mode='compact'] .uV2eYG_standardControls,
-.sp-floating-chat[data-mode='compact'] .uV2eYG_dock {
-  display: none;
-}
-.sp-floating-chat[data-mode='compact'] .sp-context-dock {
+.sp-floating-chat .sp-context-dock {
   position: absolute;
   left: 42px;
   bottom: 10px;
   width: auto;
   z-index: 11;
-}
-/* The Space composer keeps the native input behavior, but its compact surface
-   follows the ChatGPT Space contract in every native Conversation phase. These
-   selectors intentionally use the published data hooks and do not depend on
-   CSS-module hashes. */
-.sp-floating-chat [data-composer-dock],
-.sp-floating-chat [data-composer-stat],
-.sp-floating-chat [data-slot='conversation.input.permission'],
-.sp-floating-chat [data-slot='conversation.input.model'],
-.sp-floating-chat [data-composer-card] [data-composer-dock] {
-  display: none !important;
-}
-.sp-floating-chat [data-composer-card] .uV2eYG_modes,
-.sp-floating-chat [data-composer-card] .uV2eYG_standardControls {
-  display: none !important;
-}
-.sp-floating-chat[data-mode='compact'] [data-composer-card] {
-  border-radius: 28px;
-  box-shadow: none;
-  padding-top: 0;
-}
-.sp-floating-chat[data-mode='compact'] [data-composer-card] [data-composer-input] {
-  min-height: 32px;
-  padding: 4px 0;
-}
-.sp-floating-chat[data-mode='compact'] [data-composer-card] [data-composer-placeholder] {
-  inset: 4px 0 auto;
 }
 .sp-floating-chat .sp-context-compact > summary {
   list-style: none;
@@ -969,10 +927,10 @@
 .sp-context-compact > summary::-webkit-details-marker {
   display: none;
 }
-.sp-context-compact[data-context-state='removed'] > summary {
+.sp-context-compact[data-context-state="removed"] > summary {
   opacity: 0.5;
 }
-.sp-context-compact[data-context-state='failed'] > summary {
+.sp-context-compact[data-context-state="failed"] > summary {
   color: var(--sp-danger, #b42318);
 }
 .sp-context-compact .sp-context {
@@ -984,6 +942,88 @@
   background: var(--sp-canvas);
   box-shadow: 0 4px 16px #0002;
 }
+
+.sp-floating-chat :has(> [data-composer-card]) {
+  padding: 0;
+  width: 100%;
+}
+.sp-floating-chat
+  [data-composer-seat]
+  [data-slot="conversation.input.model"]
+  > div {
+  max-width: 148px;
+}
+.sp-floating-chat [data-slot="conversation.input.model"] button {
+  max-width: 148px;
+  height: 36px;
+  font-size: 12px;
+}
+.sp-floating-chat
+  [data-composer-card]
+  > [data-input-scroll]
+  + div
+  > :last-child {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  bottom: 8px;
+}
+.sp-floating-chat
+  [data-composer-card]
+  > [data-input-scroll]
+  + div
+  > :last-child
+  > :first-child {
+  display: flex;
+}
+.sp-floating-chat[data-mode="expanded"] [data-composer-card] {
+  border-top: 1px solid var(--sp-line);
+  border-radius: 0 0 22px 22px;
+}
+.sp-floating-chat [data-input-scroll] {
+  min-width: 0;
+}
+@container sp-main (max-width:520px) {
+  .sp-floating-chat [data-slot="conversation.input.model"] > div,
+  .sp-floating-chat [data-slot="conversation.input.model"] button {
+    max-width: 100px;
+  }
+  .sp-floating-chat [data-composer-card] > [data-input-scroll] {
+    margin-right: 156px;
+  }
+}
+/* Preserve the native scrolling transcript while its composer stays at the foot. */
+.sp-floating-chat[data-mode="expanded"] [data-conversation-scroll] {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+}
+.sp-floating-chat [data-slot="conversation.input.model"] button {
+  width: 148px;
+  gap: 4px;
+  padding: 4px 6px;
+}
+.sp-floating-chat
+  [data-slot="conversation.input.model"]
+  button
+  > svg:first-child {
+  display: none;
+}
+.sp-floating-chat [data-slot="conversation.input.model"] button > span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-floating-chat
+  [data-slot="conversation.input.model"]
+  button
+  > span:first-of-type {
+  flex: 1;
+}
+
 /* Space has a second title tier and more air before its content tabs (E22/E43). */
 .sp-space-library {
   padding: 28px 56px 40px;

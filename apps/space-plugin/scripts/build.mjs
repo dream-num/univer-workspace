@@ -98,6 +98,7 @@ await build({
     'src/runtime-license.ts',
     'src/model.ts',
     'src/doc-focus.ts',
+    'src/chat-docking.ts',
     'src/editor-lifecycle.ts',
     'src/selection-projection.ts',
     'src/selection-editing.ts',

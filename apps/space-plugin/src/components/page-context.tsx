@@ -1,6 +1,5 @@
-import React, { useContext, useSyncExternalStore } from 'react';
+import React, { useSyncExternalStore } from 'react';
 import type { Face } from '../client.js';
-import { ExpandedChat } from './floating-chat.js';
 import { Icon, button, iconButton } from './primitives.js';
 /** Public conversation.input.dock entry: the current Page sits at the native input. */
 export function PageContextDock(
@@ -9,7 +8,6 @@ export function PageContextDock(
     usePanelInfo(select: (info: any) => boolean): boolean;
   },
 ) {
-  const expanded = useContext(ExpandedChat);
   const v = useSyncExternalStore(
     props.store.subscribe,
     props.store.getSnapshot,
@@ -63,16 +61,12 @@ export function PageContextDock(
   const label = `${c.file.name} · ${{ linking: '关联中…', linked: '当前文档', removed: '未关联', failed: '关联失败' }[c.state]}`;
   return (
     <div className="sp-shell sp-context-dock">
-      {expanded ? (
-        context
-      ) : (
-        <details className="sp-context-compact" data-context-state={c.state}>
-          <summary className={iconButton} aria-label={label} title={label}>
-            <Icon name={c.file.type} size={16} />
-          </summary>
-          {context}
-        </details>
-      )}
+      <details className="sp-context-compact" data-context-state={c.state}>
+        <summary className={iconButton} aria-label={label} title={label}>
+          <Icon name={c.file.type} size={16} />
+        </summary>
+        {context}
+      </details>
     </div>
   );
 }
