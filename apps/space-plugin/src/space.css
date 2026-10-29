@@ -865,7 +865,7 @@
   padding: 0;
 }
 .sp-floating-chat [data-composer-card] > [data-input-scroll] {
-  margin: 0 204px 0 72px;
+  margin: 0 204px 0 84px;
   padding: 10px 0;
   max-height: var(--dsh-composer-text-max-height);
   overflow-y: auto;
@@ -893,8 +893,8 @@
   + div
   > :first-child {
   position: absolute;
-  left: 10px;
-  bottom: 10px;
+  left: 8px;
+  bottom: 8px;
 }
 .sp-floating-chat
   [data-composer-card]
@@ -914,15 +914,15 @@
 }
 .sp-floating-chat .sp-context-dock {
   position: absolute;
-  left: 42px;
-  bottom: 10px;
+  left: 44px;
+  bottom: 8px;
   width: auto;
   z-index: 11;
 }
 .sp-floating-chat .sp-context-compact > summary {
   list-style: none;
-  width: 28px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
 }
 .sp-context-compact > summary::-webkit-details-marker {
   display: none;
@@ -982,6 +982,23 @@
 }
 .sp-floating-chat [data-input-scroll] {
   min-width: 0;
+}
+/* Main composer actions share the header's 36px hit area and 16px glyphs.
+   Text pickers remain flexible; their secondary chevron uses 12px. */
+.sp-floating-chat [data-composer-card] > [data-input-scroll] + div > :first-child > button,
+.sp-floating-chat [data-composer-card] > [data-input-scroll] + div > :last-child > button {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+}
+.sp-floating-chat [data-composer-card] > [data-input-scroll] + div > :first-child > button svg,
+.sp-floating-chat [data-composer-card] > [data-input-scroll] + div > :last-child > button svg {
+  width: 16px;
+  height: 16px;
+}
+.sp-floating-chat [data-slot="conversation.input.model"] button svg {
+  width: 12px;
+  height: 12px;
 }
 @container sp-main (max-width:520px) {
   .sp-floating-chat [data-slot="conversation.input.model"] > div,
