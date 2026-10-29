@@ -24,6 +24,7 @@ import sdkCss from '../lib/univer-scoped.css';
 import { configureLicense } from './license.js';
 import { Settings } from './components/settings.js';
 import type { DocFocus } from './doc-focus.js';
+import { EditorResources, type EditorBinding, type EditorResource } from './editor-lifecycle.js';
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
@@ -274,11 +275,11 @@ export function apply(ctx: any) {
     } finally {
       activities.delete(current);
       const resume = pausedEditor;
-      if (current() && !isBusy() && resume && resume === editor && view.content?.nodeId === resume.node) {
+      if (current() && !isBusy() && resume && resume === editors.current && view.content?.nodeId === resume.node) {
         pausedEditor = null;
         try { await resume.resume?.(); }
         catch (error) {
-          if (current() && resume === editor && view.content?.nodeId === resume.node)
+          if (current() && resume === editors.current && view.content?.nodeId === resume.node)
             update({ error: error instanceof Error ? error.message : 'Cannot resume this page.' });
         }
       }
@@ -481,17 +482,12 @@ export function apply(ctx: any) {
     if (!view.sessionId) await newConversation();
     else if (view.content) await associateCurrent();
   }
-  type EditorBinding = {
-    node: string;
-    flush(): Promise<void>;
-    isSaved(): boolean;
-    resume?(): Promise<void>;
-  };
-  let editor: EditorBinding | null = null;
+  const editors = new EditorResources();
   let pausedEditor: EditorBinding | null = null;
   async function flushEditor() {
     // HTML drafts may still be inside the sandbox before the host sees pending
     // state. Its formal departure protocol must run even while Saved is true.
+    const editor = editors.current;
     if (editor) {
       if (editor.resume) pausedEditor = editor;
       await editor.flush();
@@ -535,7 +531,7 @@ export function apply(ctx: any) {
         if (abort.signal.aborted || request !== contentRequest || before !== generation) return;
         if (expected && (content.resourceId !== expected.resource || content.unitId !== expected.unit))
           throw new Error('This file reference no longer matches its Workspace identity.');
-        update({ content, contentLoadId: request, opening: undefined, ...(expected ? { ai: true, chatMode: 'expanded' as const } : {}) });
+        update({ content, contentLoadId: request, opening: undefined, chatMode: expected ? 'expanded' : 'compact', ...(expected ? { ai: true } : {}) });
         if (expected) await linkSession(expected.session);
         else await restoreSession();
         // Recents are auxiliary metadata, never part of the switch's loading barrier.
@@ -699,19 +695,13 @@ export function apply(ctx: any) {
       const response = await fetch(`/api/space/editor-upload?${query}`, { method: 'POST', body: input.body, signal: AbortSignal.any([signal, lifetime.signal]), credentials: 'same-origin' });
       return { status: response.status, statusText: response.statusText, body: await response.text() };
     },
-    bindEditor: (
-      node: string,
-      binding: {
-        flush(): Promise<void>;
-        isSaved(): boolean;
-        resume?(): Promise<void>;
-      } | null,
-    ) => {
-      if (binding) editor = { node, ...binding };
-      else if (editor?.node === node) {
-        editor = null;
-        pausedEditor = null;
-      }
+    bindEditor: (node: string, binding: EditorResource) => {
+      const release = editors.bind(node, binding);
+      const owned = editors.current;
+      return () => {
+        release();
+        if (pausedEditor === owned) pausedEditor = null;
+      };
     },
     pin: (id: string) => {
       const pins = view.pins.includes(id)
@@ -1124,14 +1114,7 @@ export type Face = {
     signal: AbortSignal,
   ): Promise<{ status: number; statusText: string; body: string }>;
   editorUpload(file: OpenFile, userId: string, input: { path: string; method: string; body: FormData }, signal: AbortSignal): Promise<{ status: number; statusText: string; body: string }>;
-  bindEditor(
-    node: string,
-    binding: {
-      flush(): Promise<void>;
-      isSaved(): boolean;
-      resume?(): Promise<void>;
-    } | null,
-  ): void;
+  bindEditor(node: string, binding: EditorResource): () => void;
   updateDocFocus(focus: DocFocus | null, channel?: string): void;
   newConversation(): void;
   pin(id: string): void;

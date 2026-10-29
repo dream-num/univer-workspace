@@ -1,15 +1,27 @@
 import React, { useState } from 'react';
 import type { Face } from '../client.js';
 import type { State } from '../model.js';
-import { CollaborativeEditor } from '../collaborative-editor.js';
+import { viewerAdapters } from './viewer-adapters.js';
 import { Icon, Menu, button, iconButton } from './primitives.js';
 import { FileActions } from './file-actions.js';
 import { Collaborators } from './collaborators.js';
 import type { IMember } from '@univerjs/protocol';
-import { HtmlViewer } from '../html-viewer.js';
 import { AIChanges } from './ai-changes.js';
 export function PageViewer({ face, v }: { face: Face; v: State }) {
+  return (
+    <ResourceViewer
+      key={`${v.content!.nodeId}:${v.contentLoadId ?? ''}`}
+      face={face}
+      v={v}
+    />
+  );
+}
+
+/** Toolbar callbacks and collaborators belong to this exact resource mount. */
+function ResourceViewer({ face, v }: { face: Face; v: State }) {
   const file = v.content!;
+  const adapter = viewerAdapters[file.type];
+  const Editor = adapter.Editor;
   const [members, setMembers] = useState<readonly IMember[]>([]);
   const [comments, setComments] = useState<{
     toggle(): void;
@@ -43,7 +55,7 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
         </Menu>
         <div className="tw-ml-auto tw-flex tw-items-center tw-gap-1">
           <Collaborators members={members} currentUserId={v.status.user?.id} />
-          {(file.type === 'doc' || file.type === 'sheet') && (
+          {adapter.comments && (
             <button
               className={button}
               disabled={!comments}
@@ -85,31 +97,26 @@ export function PageViewer({ face, v }: { face: Face; v: State }) {
           </button>
         </div>
       </header>
-      {(file.type === 'doc' || file.type === 'sheet') && <AIChanges key={file.nodeId + v.sessionId} face={face} file={file} sessionId={v.sessionId} />}
+      {adapter.review && (
+        <AIChanges
+          key={file.nodeId + v.sessionId}
+          face={face}
+          file={file}
+          sessionId={v.sessionId}
+        />
+      )}
       <div
-        className={
-          'sp-page-body ' +
-          (file.type !== 'doc' ? 'sp-sheet-body' : 'sp-doc-body')
-        }
+        className={'sp-page-body ' + adapter.body}
+        data-viewer-kind={file.type}
       >
         <div className="sp-editor">
-          {file.type !== 'site' ? (
-            <CollaborativeEditor
-              key={`${file.nodeId}:${v.contentLoadId ?? ''}`}
-              file={file}
-              user={v.status.user}
-              face={face}
-              onCommentsReady={setComments}
-              onCollaborators={setMembers}
-            />
-          ) : (
-            <HtmlViewer
-              key={`${file.nodeId}:${v.contentLoadId ?? ''}`}
-              file={file}
-              face={face}
-              user={v.status.user}
-            />
-          )}
+          <Editor
+            file={file}
+            user={v.status.user}
+            face={face}
+            onCommentsReady={setComments}
+            onCollaborators={setMembers}
+          />
         </div>
       </div>
     </>

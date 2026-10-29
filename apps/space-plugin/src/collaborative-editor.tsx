@@ -91,6 +91,7 @@ import { workspaceLicense } from './license.js';
 import { captureDocTarget } from './doc-focus.js';
 import { SelectionEditing } from './selection-editing.js';
 import { SelectionEditingNotice } from './components/selection-editing.js';
+import { disposeEditorResources } from './editor-lifecycle.js';
 import { EditorInputGate } from './editor-input-gate.js';
 
 let closingEditor: Promise<void> = Promise.resolve();
@@ -118,6 +119,7 @@ export function CollaborativeEditor({
     [loaded, setLoaded] = useState(false);
   useEffect(() => {
     const inputGate = new EditorInputGate(container.current!);
+    let releaseEditor = () => {};
     let canceled = false;
     let initialized = false;
     let cancelingLoad = false;
@@ -476,7 +478,7 @@ export function CollaborativeEditor({
           }
         }),
       );
-      face.bindEditor(file.nodeId, {
+      releaseEditor = face.bindEditor(file.nodeId, {
         flush,
         isSaved: () =>
           !(docState?.getStateCache(file.unitId).collaboration.length ?? 0) &&
@@ -678,7 +680,7 @@ export function CollaborativeEditor({
       face.updateDocFocus(null, focusChannel);
       publishComments(null);
       publishMembers([]);
-      face.bindEditor(file.nodeId, null);
+      releaseEditor();
       const active = runtime;
       // Host panel changes can unmount us without using a Space navigation action.
       // Drain the SDK queue before destruction; preserve its user-scoped offline
@@ -709,25 +711,27 @@ export function CollaborativeEditor({
             });
           } finally {
             // Keep lifecycle listeners and local-mutation tracking alive until startup/flush settle.
-            disposables.forEach((d) => d.dispose());
-            active.univerAPI.disposeUnit(file.unitId);
+            disposeEditorResources([...disposables.map(d => () => d.dispose()), () => active.univerAPI.disposeUnit(file.unitId)]);
             // The collaboration queue has been flushed or durably cached above.
             // Cancel asset/metadata reads instead of waiting for their remote timeouts.
             abort.abort();
-            await transport?.drain();
-            window.removeEventListener('beforeunload', beforeUnload);
-            subscriptions.forEach((s) => s.unsubscribe());
-            embedProducts?.dispose();
-            active.univer.dispose();
-            editorWorker?.terminate();
+            try { await transport?.drain(); } catch (error) {
+              console.error('Editor transport cleanup failed', error);
+            } finally {
+              disposeEditorResources([
+                () => window.removeEventListener('beforeunload', beforeUnload),
+                ...subscriptions.map(s => () => s.unsubscribe()),
+                () => embedProducts?.dispose(), () => active.univer.dispose(), () => editorWorker?.terminate(),
+              ]);
+            }
           }
         })();
       else {
-        disposables.forEach((d) => d.dispose());
-        embedProducts?.dispose();
-        editorWorker?.terminate();
-        abort.abort();
-        window.removeEventListener('beforeunload', beforeUnload);
+        disposeEditorResources([
+          ...disposables.map(d => () => d.dispose()), () => embedProducts?.dispose(),
+          () => editorWorker?.terminate(), () => abort.abort(),
+          () => window.removeEventListener('beforeunload', beforeUnload),
+        ]);
       }
     };
   }, [file.nodeId, user?.id, attempt, loadId]);

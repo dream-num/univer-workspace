@@ -118,7 +118,7 @@ export function HtmlViewer({
       );
     };
     const isSaved = () => !viewer.current?.hasPendingChanges();
-    face.bindEditor(file.nodeId, {
+    const releaseEditor = face.bindEditor(file.nodeId, {
       flush,
       isSaved,
       resume: async () => {
@@ -133,7 +133,7 @@ export function HtmlViewer({
     };
     window.addEventListener('beforeunload', beforeUnload);
     return () => {
-      face.bindEditor(file.nodeId, null);
+      releaseEditor();
       window.removeEventListener('beforeunload', beforeUnload);
       void Promise.allSettled(
         transports.current.map((transport) => transport.drainWrites()),
