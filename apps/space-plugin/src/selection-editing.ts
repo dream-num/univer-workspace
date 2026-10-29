@@ -1,7 +1,9 @@
-import { CommandType, DocumentDataModel, ICommandService, JSONX, TextX, TextXActionType, getRichTextEditPath, type ICommand, type Univer, type IDisposable } from '@univerjs/core';
+import { CommandType, DocumentDataModel, ICommandService, IUniverInstanceService, JSONX, TextX, TextXActionType, getRichTextEditPath, type ICommand, type Univer, type IDisposable } from '@univerjs/core';
 import type { FUniver } from '@univerjs/core/facade';
 import { DocSelectionManagerService, DocSkeletonManagerService, RichTextEditingMutation, type IRichTextEditingMutationParams } from '@univerjs/docs';
-import { DocCanvasPopManagerService, DocFloatMenuService, DocSelectionRenderService } from '@univerjs/docs-ui';
+import { DocCanvasPopManagerService, DocSelectionRenderService, FLOAT_TOOLBAR_MENU_POSITION } from '@univerjs/docs-ui';
+import { IMenuManagerService, MenuItemType } from '@univerjs/ui';
+import { BehaviorSubject, Subscription } from 'rxjs';
 import { captureDocTarget, resolveDocTarget, type DocTarget } from './doc-focus.js';
 import type { OpenFile } from './model.js';
 import type { Face } from './client.js';
@@ -43,19 +45,21 @@ export class SelectionEditing {
   private state: SelectionEditState = { phase: 'idle' };
   private listeners = new Set<() => void>();
   private disposed = false;
-  private subscription;
+  private subscription = new Subscription();
   private request?: AbortController;
   private projection?: { registration: IDisposable; model: DocumentDataModel; insertedLength: number };
   private revision = -1;
   private applying = false;
   private applyingMutation = false;
   private syncing = false;
-  private menuSuppressed = false;
+  private readonly menuHidden = new BehaviorSubject(true);
+  private beginRegistration: IDisposable;
   private commandSubscription: IDisposable;
   private commandRegistration: IDisposable;
   private componentRegistration: IDisposable;
   private popup?: IDisposable;
   private popupKey = '';
+  private readonly model: DocumentDataModel;
   private readonly componentKey = `space-selection-ai-${crypto.randomUUID()}`;
   readonly getSnapshot = () => this.state;
   readonly subscribe = (listener: () => void) => {
@@ -69,18 +73,42 @@ export class SelectionEditing {
     private readonly face: Face,
     private readonly setProjectionBlocked: (blocked: boolean) => void,
     private readonly flush: () => Promise<void>,
+    private readonly ownsView: () => boolean = () => true,
   ) {
+    this.model = this.document().getDocumentDataModel();
     this.commandRegistration = univer.__getInjector().get(ICommandService).registerCommand(AcceptDocSelectionCommand);
+    const beginId = 'space.operation.ask-doc-selection';
+    this.beginRegistration = univer.__getInjector().get(ICommandService).registerCommand({
+      id: beginId, type: CommandType.OPERATION, handler: () => { this.begin(); return this.state.phase === 'instruction'; },
+    });
+    // Published Docs UI renders extra menus in its own selection toolbar. Its
+    // range anchor and layout lifecycle remain the sole owner of this entry.
+    univer.__getInjector().get(IMenuManagerService).mergeMenu({
+      [FLOAT_TOOLBAR_MENU_POSITION]: {
+        [beginId]: { order: 20, menuItemFactory: () => ({
+          id: beginId, type: MenuItemType.BUTTON, title: 'Ask for change', tooltip: 'Ask for change', hidden$: this.menuHidden,
+        }) },
+      },
+    });
     this.componentRegistration = api.registerComponent(this.componentKey, () => createElement('div', {
       className: 'sp-shell sp-selection-popup',
     }, createElement(SelectionEditingControls, { editor: this })));
     const service = univer.__getInjector().get(DocSelectionManagerService);
-    this.subscription = service.textSelection$.subscribe(() => {
-      if (!['idle', 'selected'].includes(this.state.phase) && !(this.state.phase === 'applied' && this.state.syncState === 'complete')) return;
-      const doc = api.getDocument(file.unitId);
-      const target = doc && captureDocTarget(doc, service.getDocRanges({ unitId: file.unitId, subUnitId: file.unitId }));
-      this.set(target?.kind === 'selection' && !target.segmentId && target.text ? { phase: 'selected', target } : { phase: 'idle' });
-    });
+    this.subscription.add(service.textSelection$.subscribe(event => {
+      if (this.disposed || !this.ownsView()) return;
+      // Events from embedded/comment editors must never reuse the host's cached
+      // ranges. Empty/collapsed host ranges invalidate an unsubmitted operation.
+      const target = event.unitId === file.unitId && event.subUnitId === file.unitId ? this.captureSelection() : null;
+      if (this.projection || this.applying || this.syncing) return;
+      if (sameTarget(target, this.state.target)) return;
+      this.request?.abort();
+      this.set(target ? { phase: 'selected', target } : { phase: 'idle' });
+    }));
+    this.subscription.add(univer.__getInjector().get(IUniverInstanceService).focused$.subscribe(unitId => {
+      // Null focus is expected when the user enters our instruction popup.
+      // A different focused Unit is an explicit change of editor owner.
+      if (unitId && unitId !== file.unitId && this.state.target) this.undo();
+    }));
     this.commandSubscription = api.addEvent(api.Event.BeforeCommandExecute, event => {
       if (this.applyingMutation || !this.state.target || event.type !== CommandType.MUTATION) return;
       const params = event.params as { unitId?: string } | undefined;
@@ -94,12 +122,8 @@ export class SelectionEditing {
   }
   protected set(state: SelectionEditState) {
     if (this.disposed) return;
-    const suppress = ['instruction', 'editing', 'reviewing', 'applying'].includes(state.phase);
-    if (suppress !== this.menuSuppressed) {
-      this.renderer().render.with(DocFloatMenuService).setSuppressed(suppress);
-      this.menuSuppressed = suppress;
-    }
     this.state = state;
+    this.menuHidden.next(state.phase !== 'selected');
     this.updatePopup();
     this.listeners.forEach(listener => listener());
   }
@@ -109,22 +133,25 @@ export class SelectionEditing {
     return doc;
   }
   protected validate() {
+    if (this.disposed || !this.ownsView()) throw new Error('This document is no longer active.');
+    if (!this.isCurrentDocument()) throw new Error('This document was closed or replaced. Select the text again.');
+    const focused = this.univer.__getInjector().get(IUniverInstanceService).getFocusedUnit();
+    if (focused && focused.getUnitId() !== this.file.unitId) throw new Error('Select text in the active document first.');
     if (!this.state.target) throw new Error('Select text in this document first.');
     return resolveDocTarget(this.document(), this.state.target);
   }
   private updatePopup() {
     const target = this.state.target;
-    if (!target) {
+    if (!target || this.state.phase === 'selected') {
       this.popup?.dispose();
       this.popup = undefined;
       this.popupKey = '';
       return;
     }
     const { start, end } = this.validate();
-    const direction = ['instruction', 'editing'].includes(this.state.phase) ? 'bottom-left' : 'top-left';
+    const direction = 'bottom-left';
     const projectedEnd = end + (this.projection?.insertedLength ?? 0);
-    const passive = this.state.phase === 'selected';
-    const key = `${start}/${projectedEnd}/${direction}/${passive}`;
+    const key = `${start}/${projectedEnd}/${direction}`;
     if (key === this.popupKey) return;
     this.popup?.dispose();
     // The native popup owns viewport/zoom/layout subscriptions and placement.
@@ -132,14 +159,20 @@ export class SelectionEditing {
     this.popup = this.univer.__getInjector().get(DocCanvasPopManagerService).attachPopupToRange({
       startOffset: start, endOffset: projectedEnd, collapsed: false, segmentId: target.segmentId,
     }, {
-      componentKey: this.componentKey, direction, offset: [0, 8], zIndex: 1200,
-      requiresStableLayout: false, hideOnInvisible: passive, hiddenType: 'hide',
+      componentKey: this.componentKey, direction, offset: [0, 8],
+      requiresStableLayout: false, hideOnInvisible: true, hiddenType: 'hide',
     }, this.file.unitId);
     this.popupKey = key;
   }
   begin = () => {
-    if (this.applying) return;
+    if (this.disposed || this.applying || !['selected', 'reviewing'].includes(this.state.phase)) return;
     try {
+      if (this.state.phase === 'selected') {
+        const target = this.captureSelection();
+        if (!target) throw new Error('Select text in this document first.');
+        // Capture at activation, after the native toolbar has restored focus.
+        this.state = { phase: 'selected', target };
+      }
       this.validate();
       this.set({ ...this.state, phase: 'instruction', error: undefined });
     }
@@ -148,7 +181,11 @@ export class SelectionEditing {
   cancel = () => {
     if (this.applying) return;
     this.request?.abort();
-    this.set({ ...this.state, phase: this.state.candidate === undefined ? 'selected' : 'reviewing', error: undefined });
+    if (this.state.candidate !== undefined) this.set({ ...this.state, phase: 'reviewing', error: undefined });
+    else {
+      const target = this.captureSelection();
+      this.set(target ? { phase: 'selected', target } : { phase: 'idle' });
+    }
   };
   submit = (instruction: string) => this.propose(instruction);
   undo = () => {
@@ -156,7 +193,7 @@ export class SelectionEditing {
     this.request?.abort(); this.clearProjection(); this.set({ phase: 'idle' });
   };
   accept = async () => {
-    if (this.applying || this.state.phase !== 'reviewing' || this.state.candidate === undefined) return;
+    if (this.disposed || !this.ownsView() || this.applying || this.state.phase !== 'reviewing' || this.state.candidate === undefined) return;
     const pending = this.state;
     const revision = this.revision;
     let mutationAttempted = false;
@@ -164,7 +201,7 @@ export class SelectionEditing {
     try {
       this.set({ ...pending, phase: 'applying', error: undefined });
       const { node } = await this.face.metadata(this.file.nodeId);
-      if (this.disposed || this.getSnapshot().phase !== 'applying' || this.state.target !== pending.target) return;
+      if (this.disposed || !this.ownsView() || this.getSnapshot().phase !== 'applying' || this.state.target !== pending.target) return;
       if (!node.resource?.capabilities.editContent || node.resource.id !== this.file.resourceId)
         throw new Error('This document can no longer be edited.');
       this.validateRevision();
@@ -190,7 +227,12 @@ export class SelectionEditing {
       }
       this.set({ phase: 'applied', syncState: 'pending' });
     } catch (error) {
-      if (this.disposed) return;
+      if (this.disposed || !this.ownsView()) return;
+      if (!this.isCurrentDocument()) {
+        this.clearProjection();
+        this.set({ phase: 'idle', error: 'This document was closed or replaced. Select the text again.' });
+        return;
+      }
       const changed = this.document().getDocumentDataModel().getMutationRevision() !== revision;
       if (mutationAttempted && changed) {
         // Never offer Apply again after a local mutation, even if a downstream
@@ -230,7 +272,6 @@ export class SelectionEditing {
     this.request?.abort();
     try {
       this.clearProjection();
-      if (this.menuSuppressed) this.renderer().render.with(DocFloatMenuService).setSuppressed(false);
     } finally {
       this.disposed = true;
       this.projection?.registration.dispose();
@@ -239,10 +280,28 @@ export class SelectionEditing {
       this.subscription.unsubscribe();
       this.commandSubscription.dispose();
       this.commandRegistration.dispose();
+      this.beginRegistration.dispose();
+      this.menuHidden.next(true);
+      this.menuHidden.complete();
       this.popup?.dispose();
       this.componentRegistration.dispose();
       this.listeners.clear();
     }
+  }
+
+  private captureSelection(): DocTarget | null {
+    if (this.disposed || !this.ownsView() || !this.isCurrentDocument()) return null;
+    const service = this.univer.__getInjector().get(DocSelectionManagerService);
+    const current = service.__getCurrentSelection();
+    if (current?.unitId !== this.file.unitId || current.subUnitId !== this.file.unitId) return null;
+    const doc = this.api.getDocument(this.file.unitId);
+    const info = service.getSelectionInfo(current);
+    const target = doc && info && captureDocTarget(doc, info.textRanges, !!info.rectRanges?.length);
+    return target?.kind === 'selection' && !target.segmentId && target.text ? target : null;
+  }
+
+  private isCurrentDocument() {
+    return this.api.getDocument(this.file.unitId)?.getDocumentDataModel() === this.model;
   }
 
   private renderer() {
@@ -254,11 +313,13 @@ export class SelectionEditing {
     if (!this.projection) return;
     const current = this.projection;
     current.registration.dispose();
-    const { render, skeleton } = this.renderer();
-    skeleton.getViewModel().reset(this.document().getDocumentDataModel());
-    skeleton.getSkeleton().makeDirty(true);
-    skeleton.recalculate();
-    render.mainComponent?.makeDirty();
+    if (this.isCurrentDocument()) {
+      const { render, skeleton } = this.renderer();
+      skeleton.getViewModel().reset(this.model);
+      skeleton.getSkeleton().makeDirty(true);
+      skeleton.recalculate();
+      render.mainComponent?.makeDirty();
+    }
     // On restoration failure retain the lease and input protection for retry.
     this.projection = undefined;
     current.model.dispose();
@@ -311,12 +372,13 @@ export class SelectionEditing {
         instruction, candidate,
         focus: { ...target, id: crypto.randomUUID(), channel: crypto.randomUUID(), nodeId: this.file.nodeId, resourceId: this.file.resourceId, unitId: this.file.unitId },
       }, controller.signal);
-      if (controller.signal.aborted || this.disposed) return;
+      if (controller.signal.aborted || this.disposed || !this.ownsView() || this.request !== controller || this.getSnapshot().phase !== 'editing' || this.state.target !== target) return;
       this.validateRevision();
       this.showProjection(result.text);
       this.set({ ...this.state, phase: 'reviewing', candidate: result.text });
     } catch (error) {
-      if (controller.signal.aborted || this.disposed) return;
+      if (controller.signal.aborted || this.disposed || !this.ownsView() || this.request !== controller || this.state.target !== target) return;
+      if (!this.isCurrentDocument()) { this.set({ phase: 'idle', error: (error as Error).message }); return; }
       this.set({ ...this.state, phase: candidate === undefined ? 'instruction' : 'reviewing', error: (error as Error).message });
     }
   }
@@ -325,4 +387,8 @@ export class SelectionEditing {
     if (this.document().getDocumentDataModel().getMutationRevision() !== this.revision)
       throw new Error('Document changed. Select the text again before applying an edit.');
   }
+}
+
+function sameTarget(a: DocTarget | null, b?: DocTarget) {
+  return !a && !b || !!a && !!b && a.startOffset === b.startOffset && a.endOffset === b.endOffset && a.segmentId === b.segmentId && a.text === b.text && JSON.stringify(a.paragraphs) === JSON.stringify(b.paragraphs);
 }

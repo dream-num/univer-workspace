@@ -376,10 +376,10 @@ export function CollaborativeEditor({
         : undefined;
       const publishDocFocus = () => {
         if (!selectionService || canceled || abort.signal.aborted) return;
-        const target = captureDocTarget(
-          api.getDocument(file.unitId) as any,
-          selectionService.getDocRanges({ unitId: file.unitId, subUnitId: file.unitId }),
-        );
+        const current = selectionService.__getCurrentSelection();
+        const info = current?.unitId === file.unitId && current.subUnitId === file.unitId
+          ? selectionService.getSelectionInfo(current) : undefined;
+        const target = info ? captureDocTarget(api.getDocument(file.unitId)!, info.textRanges, !!info.rectRanges.length) : null;
         face.updateDocFocus(target ? { ...target, id: crypto.randomUUID(), channel: focusChannel, nodeId: file.nodeId, resourceId: file.resourceId, unitId: file.unitId } : null);
       };
       if (selectionService) {
@@ -636,7 +636,7 @@ export function CollaborativeEditor({
       publishDocFocus();
       if (file.type === 'doc') {
         const selection = new SelectionEditing(univer, api, file, face,
-          blocked => inputGate.setProjectionBlocked(blocked), flush);
+          blocked => inputGate.setProjectionBlocked(blocked), flush, ownsView);
         selectionEditingBinding = selection;
         disposables.push(selection);
         setSelectionEditing(selection);

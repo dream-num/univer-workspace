@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Univer, UniverInstanceType, CustomRangeType, TextXActionType } from '@univerjs/core';
+import { Univer, UniverInstanceType, CustomRangeType, TextXActionType, IUniverInstanceService } from '@univerjs/core';
 import { FUniver } from '@univerjs/core/facade';
-import { UniverDocsPlugin } from '@univerjs/docs';
+import { UniverDocsPlugin, DocSelectionManagerService } from '@univerjs/docs';
 import { UniverRenderEnginePlugin } from '@univerjs/engine-render';
 import '@univerjs/docs/facade';
 import { SelectionEditing } from '../lib/selection-editing.js';
 import { EditorInputGate } from '../lib/editor-input-gate.js';
 import { captureDocTarget } from '../lib/doc-focus.js';
+import { IMenuManagerService } from '@univerjs/ui';
 import { selectionEditActions, selectionProjection } from '../lib/selection-projection.js';
 
 // These checks exercise Accept with a real SDK document/commands/history. UI
@@ -18,8 +19,9 @@ class AcceptCheck extends SelectionEditing {
   showProjection() { this.preview = true; }
 }
 
-function fixture({ text = 'Alpha red kite. Link', candidate = 'Alpha blue kite. Link', metadata, flush = async () => {} } = {}) {
+function fixture({ text = 'Alpha red kite. Link', candidate = 'Alpha blue kite. Link', metadata, flush = async () => {}, selectionProposal = async () => ({ text: candidate }), ownsView = () => true } = {}) {
   const univer = new Univer();
+  univer.__getInjector().add([IMenuManagerService, { useValue: { mergeMenu() {} } }]);
   univer.registerPlugin(UniverRenderEnginePlugin);
   univer.registerPlugin(UniverDocsPlugin);
   const data = { id: 'selection-correctness', documentStyle: {}, body: {
@@ -38,12 +40,20 @@ function fixture({ text = 'Alpha red kite. Link', candidate = 'Alpha blue kite. 
   const target = captureDocTarget(doc, [{ startOffset: 0, endOffset: text.length }]);
   assert.ok(target);
   const editor = new AcceptCheck(univer, uiFreeAPI, { unitId: data.id, nodeId: 'node', resourceId: 'resource' }, {
-    metadata: metadata ?? (async () => ({ node: { resource: { id: 'resource', capabilities: { editContent: true } } } })),
-  }, () => {}, flush);
+    metadata: metadata ?? (async () => ({ node: { resource: { id: 'resource', unitId: data.id, capabilities: { editContent: true } } } })),
+    selectionProposal, store: { getSnapshot: () => ({ sessionId: null }) },
+  }, () => {}, flush, ownsView);
   editor.set({ phase: 'reviewing', target, candidate });
   editor.revision = doc.getDocumentDataModel().getMutationRevision();
   editor.preview = true;
-  return { editor, doc, text, candidate, dispose() { editor.dispose(); univer.dispose(); } };
+  const selection = univer.__getInjector().get(DocSelectionManagerService);
+  const select = (startOffset, endOffset, unitId = data.id) => {
+    selection.__TEST_ONLY_setCurrentSelection({ unitId, subUnitId: unitId });
+    selection.__replaceTextRangesWithNoRefresh({
+      textRanges: [{ startOffset, endOffset, collapsed: startOffset === endOffset }], rectRanges: [], segmentId: '', segmentPage: -1, isEditing: false,
+    }, { unitId, subUnitId: unitId });
+  };
+  return { editor, doc, univer, selection, select, text, candidate, dispose() { editor.dispose(); univer.dispose(); } };
 }
 
 test('Accept uses SDK changed spans, preserving unchanged Bold/Link and native Undo/Redo', async () => {
@@ -190,4 +200,92 @@ test('single input owner retains either reason through save/status and projectio
   assert.equal(element.inert, true);
   gate.setConnectionBlocked(false);
   assert.equal(element.inert, false);
+});
+
+test('activation captures the latest SDK selection, and a collapsed selection cannot reuse it', () => {
+  const f = fixture();
+  try {
+    f.editor.undo();
+    f.select(0, 5);
+    assert.equal(f.editor.getSnapshot().target.text, 'Alpha');
+    // Updating the SDK cache without an event models a toolbar activation racing
+    // the last selection notification. Activation must still read current data.
+    f.selection.replaceSelectionInfoWithoutRefresh({
+      ...f.selection.getSelectionInfo(), textRanges: [{ startOffset: 6, endOffset: 9, collapsed: false }],
+    });
+    f.editor.begin();
+    assert.equal(f.editor.getSnapshot().phase, 'instruction');
+    assert.equal(f.editor.getSnapshot().target.text, 'red');
+    f.univer.__getInjector().get(IUniverInstanceService).focusUnit(null);
+    assert.equal(f.editor.getSnapshot().phase, 'instruction'); // Popup focus is not a new editor.
+    f.select(9, 9);
+    f.editor.begin();
+    assert.equal(f.editor.getSnapshot().phase, 'idle');
+    assert.equal(f.editor.getSnapshot().target, undefined);
+  } finally { f.dispose(); }
+});
+
+test('a changed selection aborts generation and ignores even an uncooperative late response', async () => {
+  let release, signal;
+  const f = fixture({ selectionProposal: (_, s) => { signal = s; return new Promise(r => { release = r; }); } });
+  try {
+    f.editor.undo(); f.select(0, 5); f.editor.begin();
+    const generating = f.editor.submit('Change Alpha');
+    f.select(6, 9);
+    assert.equal(signal.aborted, true);
+    release({ text: 'Wrong' }); await generating;
+    assert.equal(f.editor.getSnapshot().phase, 'selected');
+    assert.equal(f.editor.getSnapshot().target.text, 'red');
+    assert.equal(f.editor.preview, false);
+    assert.equal(f.doc.getDocumentDataModel().getBody().dataStream, `${f.text}\r\n`);
+  } finally { f.dispose(); }
+});
+
+test('another focused Unit invalidates the host target instead of reading its cached ranges', () => {
+  const f = fixture();
+  try {
+    f.editor.undo(); f.select(0, 5); f.editor.begin();
+    f.univer.createUnit(UniverInstanceType.UNIVER_DOC, { id: 'other-doc', body: { dataStream: 'Other\r\n', paragraphs: [{ startIndex: 5, paragraphId: 'other' }], sectionBreaks: [{ startIndex: 6 }] } });
+    f.univer.__getInjector().get(IUniverInstanceService).focusUnit('other-doc');
+    f.select(0, 5, 'other-doc');
+    f.editor.begin();
+    assert.equal(f.editor.getSnapshot().phase, 'idle');
+    assert.equal(f.editor.getSnapshot().target, undefined);
+  } finally { f.dispose(); }
+});
+
+test('leaving the owning view during AI or metadata awaits cannot project or apply', async () => {
+  let active = true, release;
+  const f = fixture({ ownsView: () => active, selectionProposal: () => new Promise(r => { release = r; }) });
+  try {
+    f.editor.undo(); f.select(0, 5); f.editor.begin();
+    const generating = f.editor.submit('Replace'); active = false;
+    release({ text: 'Wrong' }); await generating;
+    assert.equal(f.editor.preview, false);
+    assert.equal(f.doc.getDocumentDataModel().getBody().dataStream, `${f.text}\r\n`);
+  } finally { f.dispose(); }
+  active = true;
+  const g = fixture({ ownsView: () => active, metadata: () => new Promise(r => { release = r; }) });
+  try {
+    const applying = g.editor.accept(); active = false;
+    release({ node: { resource: { id: 'resource', capabilities: { editContent: true } } } });
+    await applying;
+    assert.equal(g.doc.getDocumentDataModel().getBody().dataStream, `${g.text}\r\n`);
+  } finally { g.dispose(); }
+});
+
+test('reopening a different Document model with the same Unit id rejects a pending Accept', async () => {
+  let release;
+  const f = fixture({ metadata: () => new Promise(r => { release = r; }) });
+  try {
+    const applying = f.editor.accept();
+    f.editor.api.disposeUnit('selection-correctness');
+    f.univer.createUnit(UniverInstanceType.UNIVER_DOC, { id: 'selection-correctness', body: {
+      dataStream: `${f.text}\r\n`, paragraphs: [{ startIndex: f.text.length, paragraphId: 'p1' }], sectionBreaks: [{ startIndex: f.text.length + 1 }],
+    } });
+    release({ node: { resource: { id: 'resource', capabilities: { editContent: true } } } });
+    await applying;
+    assert.equal(f.editor.getSnapshot().phase, 'idle');
+    assert.equal(f.editor.api.getDocument('selection-correctness').getDocumentDataModel().getBody().dataStream, `${f.text}\r\n`);
+  } finally { f.dispose(); }
 });

@@ -6,13 +6,10 @@ export function SelectionEditingControls({ editor }: { editor: SelectionEditing 
   const state = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
   const [instruction, setInstruction] = useState('');
   const reviewing = state.phase === 'reviewing' || state.phase === 'applying';
-  const width = state.phase === 'selected' ? 155 : reviewing ? 322 : 384;
-  if (state.phase === 'idle' || state.phase === 'applied') return null;
+  const width = reviewing ? 322 : 384;
+  if (state.phase === 'idle' || state.phase === 'selected' || state.phase === 'applied') return null;
   return <div className="sp-selection-ai tw-font-sans" style={{ width }}
     onPointerDown={event => event.stopPropagation()}>
-    {state.phase === 'selected' && <div role="toolbar" aria-label="Selection AI" className="tw-flex tw-h-11 tw-items-center tw-rounded-full tw-border tw-border-solid tw-border-line tw-bg-white tw-p-1 tw-shadow-md">
-      <button className="tw-flex tw-h-9 tw-w-full tw-items-center tw-justify-center tw-gap-2 tw-rounded-full hover:tw-bg-hover" onPointerDown={event => event.preventDefault()} onClick={() => { setInstruction(''); editor.begin(); }}><Sparkles size={16} />Ask for change</button>
-    </div>}
     {state.phase === 'instruction' && <form aria-label="Edit instruction" className="tw-rounded-3xl tw-border tw-border-solid tw-border-line tw-bg-white tw-p-3 tw-shadow-md" onSubmit={event => { event.preventDefault(); if (instruction.trim()) void editor.submit(instruction); }}>
       <textarea autoFocus aria-label="Edit instruction" placeholder="Describe the edit…" value={instruction} rows={2}
         className="tw-w-full tw-resize-none tw-border-0 tw-bg-transparent tw-text-sm tw-outline-none"

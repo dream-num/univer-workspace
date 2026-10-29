@@ -1803,7 +1803,7 @@
 [data-space-host-frame='0.2.1-rc.3'][data-space-mode='space']:not([data-space-secondary-collapsed='true']) {
   grid-template-columns: var(--space-open-columns) !important;
 }
-.sp-selection-ai { z-index: 1200; color: #181818; font-size: 14px; line-height: 18px; }
+.sp-selection-ai { color: #181818; font-size: 14px; line-height: 18px; }
 .sp-selection-popup { width: auto; height: auto; overflow: visible; }
 .sp-selection-notice { position: absolute; top: 36px; right: 12px; width: 384px; max-width: calc(100% - 24px); }
 .sp-selection-ai, .sp-selection-ai * { box-sizing: border-box; }
