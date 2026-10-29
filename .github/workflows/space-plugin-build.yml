@@ -1,0 +1,158 @@
+name: Build Space Plugin
+
+on:
+  push:
+    branches:
+      - feat/space-full-univer-integration
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache workspace pnpm downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm11.24.0-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Cache isolated plugin npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node24-space-npm-${{ hashFiles('apps/space-plugin/package-lock.json') }}
+
+      - name: Install locked workspace build dependencies
+        run: >-
+          pnpm --filter '@univerjs/univer-workspace-agent-runtime...'
+          --filter '@univerjs/univer-workspace-client-core...'
+          --filter '@univerjs/univer-workspace-reference-provider...'
+          install --frozen-lockfile
+
+      - name: Build shared plugin dependencies
+        run: |
+          pnpm --filter @univerjs/univer-workspace-agent-runtime build
+          pnpm --filter @univerjs/univer-workspace-reference-provider build
+
+      - name: Install locked Space Plugin dependencies
+        working-directory: apps/space-plugin
+        run: npm ci --no-audit --no-fund
+
+      - name: Build Space Plugin
+        working-directory: apps/space-plugin
+        run: npm run build
+
+      - name: Package and verify the release artifact
+        id: package
+        working-directory: apps/space-plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -e 'const v = require("./package.json").version; if (!/^[0-9A-Za-z.-]+$/.test(v)) process.exit(1); process.stdout.write(v)')
+          DSH_VERSION=$(node -e 'process.stdout.write(require("./package.json").devDependencies["@deepseek-ai/dsh"])')
+          SHORT_SHA=${GITHUB_SHA:0:12}
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          RELEASE_DIR="$RUNNER_TEMP/space-plugin-release"
+          npm run package:release -- "$RELEASE_DIR"
+          PACKAGE="$RELEASE_DIR/dsh-space-plugin-$VERSION.tgz"
+          env -u UNIVER_LICENSE node scripts/verify-release.mjs "$PACKAGE" "$RELEASE_DIR/package-inventory.json"
+
+          OUTPUT_DIR="$GITHUB_WORKSPACE/artifacts/space-plugin"
+          mkdir -p "$OUTPUT_DIR"
+          FILENAME="space-plugin-$VERSION-$SHORT_SHA.tgz"
+          mv "$PACKAGE" "$OUTPUT_DIR/$FILENAME"
+          cd "$OUTPUT_DIR"
+          sha256sum "$FILENAME" > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          export VERSION DSH_VERSION FILENAME SHORT_SHA
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          const info = {
+            version: process.env.VERSION,
+            commit: process.env.GITHUB_SHA,
+            shortCommit: process.env.SHORT_SHA,
+            buildTime: new Date().toISOString(),
+            dshVersion: process.env.DSH_VERSION,
+            target: 'Official DSH Desktop macOS arm64; compatible DSH Web',
+            artifact: process.env.FILENAME,
+          };
+          writeFileSync('build-info.json', JSON.stringify(info, null, 2) + '\n');
+          NODE
+          ARTIFACT_NAME="Space-Plugin-$VERSION-$SHORT_SHA"
+          SHA256=$(cut -d ' ' -f 1 SHA256SUMS)
+          {
+            echo "artifact_name=$ARTIFACT_NAME"
+            echo "filename=$FILENAME"
+            echo "version=$VERSION"
+            echo "sha256=$SHA256"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "## Space Plugin $VERSION"
+            echo
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Artifact: \`$ARTIFACT_NAME\` (retained for 30 days)"
+            echo "- Package: \`$FILENAME\`"
+            echo "- SHA256: \`$SHA256\`"
+            echo "- Target: official DSH Desktop $DSH_VERSION on macOS arm64; compatible DSH Web $DSH_VERSION"
+            echo
+            echo 'Download and extract the workflow artifact, verify SHA256SUMS, then in DSH open Plugins → Add plugin and install the tarball by its local path. Cold-restart DSH. For updates remove the existing dsh-space-plugin first.'
+            echo 'On a fresh profile, if prompted, approve the listed protobufjs@7.6.6 dependency build and retry.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install into an isolated DSH profile
+        working-directory: apps/space-plugin
+        shell: bash
+        env:
+          DSH_HOME: ${{ runner.temp }}/space-dsh-smoke
+          PACKAGE_NAME: ${{ steps.package.outputs.filename }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$DSH_HOME/profiles/space-ci"
+          printf 'allowBuilds:\n  protobufjs@7.6.6: true\n' > "$DSH_HOME/profiles/space-ci/pnpm-workspace.yaml"
+          ./node_modules/.bin/dsh plugin --profile space-ci add "$GITHUB_WORKSPACE/artifacts/space-plugin/$PACKAGE_NAME"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const profile = join(process.env.DSH_HOME, 'profiles/space-ci');
+          const installed = JSON.parse(readFileSync(join(profile, 'node_modules/dsh-space-plugin/package.json'), 'utf8'));
+          const settings = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'));
+          assert.equal(installed.version, process.env.PACKAGE_VERSION);
+          assert.ok(settings.dsh?.profile?.bundles?.includes('dsh-space-plugin'));
+          console.log('Installed and selected Space Plugin in an isolated DSH profile.');
+          NODE
+
+      - name: Upload Space Plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: |
+            artifacts/space-plugin/*.tgz
+            artifacts/space-plugin/SHA256SUMS
+            artifacts/space-plugin/build-info.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

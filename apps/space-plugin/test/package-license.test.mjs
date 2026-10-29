@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { scanRelease } from '../scripts/scan-release.mjs';
 
 test('release scan requires the repository license and confines it to Host configuration', async () => {
@@ -28,6 +28,12 @@ test('release scan requires the repository license and confines it to Host confi
     await writeFile(join(directory, 'package/lib/client.js'), JSON.stringify(license));
     pack();
     await assert.rejects(scanRelease(tarball), /development-license/);
+    await writeFile(join(directory, 'package/lib/client.js'), JSON.stringify(resolve('../..') + '/checkout-file'));
+    pack();
+    await assert.rejects(scanRelease(tarball), /checkout-path/);
+    await writeFile(join(directory, 'package/lib/client.js'), JSON.stringify('/home/runner/work/project/checkout-file'));
+    pack();
+    await assert.rejects(scanRelease(tarball), /github-runner-path/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

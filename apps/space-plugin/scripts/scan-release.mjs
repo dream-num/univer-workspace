@@ -27,6 +27,8 @@ export async function scanRelease(file) {
     }
     for (const [kind, value] of [
       ['development-license', credential], ['absolute-local-path', '/Users/'],
+      ['checkout-path', resolve('../..')], ['github-runner-path', '/home/runner/work/'],
+      ['github-container-path', '/github/workspace/'],
       ['private-test-path', '/private/tmp/task'], ['test-path', '/tmp/task'],
       ['debug-service', 'ws://127.0.0.1:8000/'], ['temporary-instrumentation', 'TASK010_PREVIEW_'],
     ]) if (data.includes(value)) {

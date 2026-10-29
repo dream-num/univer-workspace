@@ -7,11 +7,16 @@ Agent and tool logs. Official host source is unchanged.
 
 ## Build / install
 
-Use Node >=24.9.0 and this application's isolated npm graph:
+Use Node >=24.9.0, pnpm 11 and this application's isolated npm graph. From the
+repository root, build the shared runtime and reference provider before installing
+the plugin's local build dependencies:
 
 ```sh
+pnpm --filter '@univerjs/univer-workspace-agent-runtime...' --filter '@univerjs/univer-workspace-client-core...' --filter '@univerjs/univer-workspace-reference-provider...' install --frozen-lockfile
 pnpm --filter @univerjs/univer-workspace-agent-runtime build
-npm ci
+pnpm --filter @univerjs/univer-workspace-reference-provider build
+cd apps/space-plugin
+npm ci --no-audit --no-fund
 npm run build
 npm test
 npm run typecheck
@@ -29,6 +34,15 @@ and resource scans fail if it is missing or differs from the current source.
 No license value is written to build logs or committed generated files.
 Build-time PostCSS confines SDK global reset blocks and unprefixed utilities to
 the editor and Univer namespace portal roots; published SDK files stay intact.
+
+Each push to `feat/space-full-univer-integration` also builds a **Space Plugin**
+workflow artifact. Download and extract it from the successful GitHub Actions run.
+It contains `space-plugin-<version>-<short-sha>.tgz`, `SHA256SUMS` and
+`build-info.json`; Actions retains it for 30 days. Verify the download from the
+extracted directory with `shasum -a 256 -c SHA256SUMS` on macOS or
+`sha256sum -c SHA256SUMS` on Linux. Then install the tarball in the official DSH
+Plugins manager as described under [Release candidate](#release-candidate).
+These workflow artifacts are builds for review, not GitHub Releases or npm publications.
 
 ## Use
 
