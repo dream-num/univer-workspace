@@ -21,6 +21,7 @@ import {
 import css from './space.css';
 import tailwind from '../lib/tailwind.css';
 import sdkCss from '../lib/univer-scoped.css';
+import hiddenEditorInputCss from './workarounds/hidden-editor-input.css';
 import { configureLicense } from './license.js';
 import { Settings } from './components/settings.js';
 import type { DocFocus } from './doc-focus.js';
@@ -874,7 +875,7 @@ export function apply(ctx: any) {
   ctx.effect(() => {
     const style = document.createElement('style');
     style.dataset.plugin = PANEL;
-    style.textContent = `${sdkCss}\n${css}\n${tailwind}`;
+    style.textContent = `${sdkCss}\n${css}\n${tailwind}\n${hiddenEditorInputCss}`;
     document.head.appendChild(style);
     return () => style.remove();
   });
