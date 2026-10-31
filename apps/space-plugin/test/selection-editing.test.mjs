@@ -289,3 +289,23 @@ test('reopening a different Document model with the same Unit id rejects a pendi
     assert.equal(f.editor.api.getDocument('selection-correctness').getDocumentDataModel().getBody().dataStream, `${f.text}\r\n`);
   } finally { f.dispose(); }
 });
+
+test('dispose aborts a pending proposal and ignores its late result', async () => {
+  let resolve, signal;
+  const f = fixture({ selectionProposal: (_input, abort) => {
+    signal = abort;
+    return new Promise(done => { resolve = done; });
+  } });
+  try {
+    f.editor.state = { phase: 'instruction', target: f.editor.state.target };
+    const pending = f.editor.submit('change it');
+    f.editor.dispose();
+    assert.equal(signal.aborted, true);
+    const snapshot = f.editor.getSnapshot();
+    f.editor.showProjection = () => { throw new Error('late projection'); };
+    resolve({ text: 'late result' });
+    await pending;
+    assert.equal(f.editor.getSnapshot(), snapshot);
+    assert.equal(f.doc.getDocumentDataModel().getBody().dataStream, `${f.text}\r\n`);
+  } finally { f.dispose(); }
+});

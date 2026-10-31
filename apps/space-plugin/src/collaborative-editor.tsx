@@ -674,13 +674,16 @@ export function CollaborativeEditor({
     };
     window.addEventListener('beforeunload', beforeUnload);
     return () => {
+      if (canceled) return;
       canceled = true;
-      selectionEditingBinding?.dispose();
-      setSelectionEditing(null);
-      face.updateDocFocus(null, focusChannel);
-      publishComments(null);
-      publishMembers([]);
-      releaseEditor();
+      disposeEditorResources([
+        () => selectionEditingBinding?.dispose(),
+        () => setSelectionEditing(null),
+        () => face.updateDocFocus(null, focusChannel),
+        () => publishComments(null),
+        () => publishMembers([]),
+        () => releaseEditor(),
+      ]);
       const active = runtime;
       // Host panel changes can unmount us without using a Space navigation action.
       // Drain the SDK queue before destruction; preserve its user-scoped offline
@@ -714,7 +717,7 @@ export function CollaborativeEditor({
             disposeEditorResources([...disposables.map(d => () => d.dispose()), () => active.univerAPI.disposeUnit(file.unitId)]);
             // The collaboration queue has been flushed or durably cached above.
             // Cancel asset/metadata reads instead of waiting for their remote timeouts.
-            abort.abort();
+            disposeEditorResources([() => abort.abort()]);
             try { await transport?.drain(); } catch (error) {
               console.error('Editor transport cleanup failed', error);
             } finally {
@@ -728,7 +731,8 @@ export function CollaborativeEditor({
         })();
       else {
         disposeEditorResources([
-          ...disposables.map(d => () => d.dispose()), () => embedProducts?.dispose(),
+          ...disposables.map(d => () => d.dispose()),
+          ...subscriptions.map(s => () => s.unsubscribe()), () => embedProducts?.dispose(),
           () => editorWorker?.terminate(), () => abort.abort(),
           () => window.removeEventListener('beforeunload', beforeUnload),
         ]);

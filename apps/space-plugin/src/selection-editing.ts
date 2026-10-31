@@ -12,6 +12,7 @@ import { selectionProjection, selectionEditActions } from './selection-projectio
 import type { DocFocus } from './doc-focus.js';
 import { createElement } from 'react';
 import { SelectionEditingControls } from './components/selection-editing.js';
+import { disposeEditorResources } from './editor-lifecycle.js';
 
 // A normal Command provides the SDK history trigger for this one atomic edit.
 // The SDK still validates/applies/inverts/transforms the rich-text mutation.
@@ -63,6 +64,7 @@ export class SelectionEditing {
   private readonly componentKey = `space-selection-ai-${crypto.randomUUID()}`;
   readonly getSnapshot = () => this.state;
   readonly subscribe = (listener: () => void) => {
+    if (this.disposed) return () => {};
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
   };
@@ -105,12 +107,13 @@ export class SelectionEditing {
       this.set(target ? { phase: 'selected', target } : { phase: 'idle' });
     }));
     this.subscription.add(univer.__getInjector().get(IUniverInstanceService).focused$.subscribe(unitId => {
+      if (this.disposed) return;
       // Null focus is expected when the user enters our instruction popup.
       // A different focused Unit is an explicit change of editor owner.
       if (unitId && unitId !== file.unitId && this.state.target) this.undo();
     }));
     this.commandSubscription = api.addEvent(api.Event.BeforeCommandExecute, event => {
-      if (this.applyingMutation || !this.state.target || event.type !== CommandType.MUTATION) return;
+      if (this.disposed || this.applyingMutation || !this.state.target || event.type !== CommandType.MUTATION) return;
       const params = event.params as { unitId?: string } | undefined;
       if (params?.unitId !== file.unitId) return;
       // Restore the authoritative renderer before any local/remote mutation.
@@ -179,7 +182,7 @@ export class SelectionEditing {
     catch (error) { this.set({ phase: 'idle', error: (error as Error).message }); }
   };
   cancel = () => {
-    if (this.applying) return;
+    if (this.disposed || this.applying) return;
     this.request?.abort();
     if (this.state.candidate !== undefined) this.set({ ...this.state, phase: 'reviewing', error: undefined });
     else {
@@ -189,7 +192,7 @@ export class SelectionEditing {
   };
   submit = (instruction: string) => this.propose(instruction);
   undo = () => {
-    if (this.applying || this.syncing) return;
+    if (this.disposed || this.applying || this.syncing) return;
     this.request?.abort(); this.clearProjection(); this.set({ phase: 'idle' });
   };
   accept = async () => {
@@ -269,24 +272,38 @@ export class SelectionEditing {
   };
   dispose() {
     if (this.disposed) return;
-    this.request?.abort();
-    try {
-      this.clearProjection();
-    } finally {
-      this.disposed = true;
-      this.projection?.registration.dispose();
-      this.projection?.model.dispose();
-      this.projection = undefined;
-      this.subscription.unsubscribe();
-      this.commandSubscription.dispose();
-      this.commandRegistration.dispose();
-      this.beginRegistration.dispose();
-      this.menuHidden.next(true);
-      this.menuHidden.complete();
-      this.popup?.dispose();
-      this.componentRegistration.dispose();
-      this.listeners.clear();
-    }
+    // Invalidate callbacks before abort/unsubscribe can synchronously notify them.
+    this.disposed = true;
+    const projection = this.projection;
+    const popup = this.popup;
+    this.projection = undefined;
+    this.popup = undefined;
+    this.popupKey = '';
+    disposeEditorResources([
+      () => this.request?.abort(),
+      // Release the presentation before restoring the authoritative renderer.
+      () => projection?.registration.dispose(),
+      () => {
+        if (projection && this.isCurrentDocument()) {
+          const { render, skeleton } = this.renderer();
+          skeleton.getViewModel().reset(this.model);
+          skeleton.getSkeleton().makeDirty(true);
+          skeleton.recalculate();
+          render.mainComponent?.makeDirty();
+        }
+      },
+      () => projection?.model.dispose(),
+      () => { if (projection) this.setProjectionBlocked(false); },
+      () => this.subscription.unsubscribe(),
+      () => this.commandSubscription.dispose(),
+      () => this.commandRegistration.dispose(),
+      () => this.beginRegistration.dispose(),
+      () => this.menuHidden.next(true),
+      () => this.menuHidden.complete(),
+      () => popup?.dispose(),
+      () => this.componentRegistration.dispose(),
+      () => this.listeners.clear(),
+    ], error => console.error('Selection editing cleanup failed', error));
   }
 
   private captureSelection(): DocTarget | null {
@@ -357,7 +374,7 @@ export class SelectionEditing {
     // controls until Accept/Undo; never let a projected caret write to trunk.
   }
   private async propose(instruction: string) {
-    if (!instruction.trim() || this.state.phase !== 'instruction') return;
+    if (this.disposed || !instruction.trim() || this.state.phase !== 'instruction') return;
     const target = this.state.target!;
     const candidate = this.state.candidate;
     const controller = new AbortController();

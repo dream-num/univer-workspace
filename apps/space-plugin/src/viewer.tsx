@@ -26,6 +26,7 @@ import { viewerData } from './viewer-data.js';
 import { UniverLicensePlugin } from '@univerjs-pro/license';
 import { workspaceLicense } from './license.js';
 import { contentType } from './content-types.js';
+import { disposeEditorResources } from './editor-lifecycle.js';
 
 /** One disposable, disconnected SDK viewer. No collaboration/write transport. */
 export function Viewer({ file }: { file: Content }) {
@@ -217,13 +218,16 @@ function OfficeViewer({ file }: { file: Content }) {
       }
     }
     return () => {
+      if (canceled) return;
       canceled = true;
-      clearTimeout(timer);
-      lifecycle?.dispose();
-      steadyLifecycle?.dispose();
-      fitObserver?.disconnect();
-      cancelAnimationFrame(fitFrame);
-      queueMicrotask(() => runtime?.univer.dispose());
+      disposeEditorResources([
+        () => clearTimeout(timer),
+        () => lifecycle?.dispose(),
+        () => steadyLifecycle?.dispose(),
+        () => fitObserver?.disconnect(),
+        () => cancelAnimationFrame(fitFrame),
+        () => queueMicrotask(() => disposeEditorResources([() => runtime?.univer.dispose()])),
+      ]);
     };
   }, [file.nodeId, file.sha256]);
   return (
