@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import type { Face } from '../client.js';
-import type { Content, OpenFile } from '../model.js';
+import type { OpenFile } from '../model.js';
 import type { Proposal } from '../model.js';
 import { Viewer } from '../viewer.js';
+import type { ComparisonInput } from '../viewer-data.js';
 import { button, iconButton, Icon } from './primitives.js';
 
 /** Review remains in the current document. The Server returns the saved shared
@@ -245,7 +246,7 @@ function SheetChangeDetails({ result }: { result: any }) {
     </details>
   );
 }
-function ReviewSide({ file, onReady }: { file: Content; onReady(): void }) {
+function ReviewSide({ file, onReady }: { file: ComparisonInput; onReady(): void }) {
   useEffect(() => {
     const element = document.querySelector(
       `[data-review-side="${file.sha256}"]`,

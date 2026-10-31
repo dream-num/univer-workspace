@@ -16,23 +16,22 @@ import { Univer } from '@univerjs/core';
 import { FUniver } from '@univerjs/core/facade';
 import { CollaborationController } from '@univerjs-pro/collaboration-client';
 import { EMPTY } from 'rxjs';
-import type { Content } from './model.js';
 import {
   officePreset,
   officeLocales,
   SetSlideZoomRatioOperation,
 } from './office-presets.js';
-import { viewerData } from './viewer-data.js';
+import { viewerData, type ComparisonInput } from './viewer-data.js';
 import { UniverLicensePlugin } from '@univerjs-pro/license';
 import { workspaceLicense } from './license.js';
 import { contentType } from './content-types.js';
 import { disposeEditorResources } from './editor-lifecycle.js';
 
 /** One disposable, disconnected SDK viewer. No collaboration/write transport. */
-export function Viewer({ file }: { file: Content }) {
+export function Viewer({ file }: { file: ComparisonInput }) {
   return <OfficeViewer file={file} />;
 }
-function OfficeViewer({ file }: { file: Content }) {
+function OfficeViewer({ file }: { file: ComparisonInput }) {
   const container = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');

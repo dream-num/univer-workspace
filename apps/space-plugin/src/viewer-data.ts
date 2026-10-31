@@ -1,7 +1,9 @@
 import { DocumentFlavor } from '@univerjs/core';
 import type { Content } from './model.js';
+export type ComparisonInput = Pick<Content, 'nodeId' | 'unitId' | 'type' | 'name' | 'sha256' | 'data'>;
+
 /** Detached view projection only. The Server snapshot and rich body stay intact. */
-export function viewerData(file: Content) {
+export function viewerData(file: ComparisonInput) {
   const data = structuredClone(file.data);
   if (file.type === 'doc') {
     data.title = file.name;
