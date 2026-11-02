@@ -693,6 +693,12 @@ importers:
       '@univerjs-pro/docs-code-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/docs-column':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/docs-column-ui':
+        specifier: 1.1.0
+        version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/docs-exchange-client':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
@@ -708,7 +714,19 @@ importers:
       '@univerjs-pro/docs-latex-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/docs-list':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/docs-list-ui':
+        specifier: 1.1.0
+        version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/docs-print':
+        specifier: 1.1.0
+        version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/docs-quote':
+        specifier: 1.1.0
+        version: 1.1.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/docs-quote-ui':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/docs-shape':
@@ -859,6 +877,9 @@ importers:
         specifier: 1.1.0
         version: 1.1.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/docs-drawing-ui':
+        specifier: 1.1.0
+        version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/docs-find-replace':
         specifier: 1.1.0
         version: 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/docs-hyper-link':
@@ -5502,6 +5523,12 @@ packages:
 
   '@univerjs/docs-drawing@1.1.0':
     resolution: {integrity: sha512-vzaPTOTt5SsIsvNMI4plHL9Dq5eg/rcP/fTwnf5sIMnUm1LMKJzrC61huAfrDAm5sguNjpKnjRXvRUjFr383cg==, tarball: https://registry.npmjs.org/@univerjs/docs-drawing/-/docs-drawing-1.1.0.tgz}
+
+  '@univerjs/docs-find-replace@1.1.0':
+    resolution: {integrity: sha512-dsWZriBc+CdLEph8SebXPBNZUTiCQwVIDkSmXi8Fgb7uodzc0zNqHnUT6WFt9PT46wKJheWpy3m2aMt3CyBmAQ==, tarball: https://registry.npmjs.org/@univerjs/docs-find-replace/-/docs-find-replace-1.1.0.tgz}
+    peerDependencies:
+      react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+      rxjs: '>=7.0.0'
 
   '@univerjs/docs-hyper-link-ui@1.1.0':
     resolution: {integrity: sha512-h01Hf7zfXnAQwVw5DfM6bTvCcX6Z7Hc4p/FaBi41DLR2szHEMs8UYgExfdV7dLCQUSo81cfS86EadyWp5LpUdg==, tarball: https://registry.npmjs.org/@univerjs/docs-hyper-link-ui/-/docs-hyper-link-ui-1.1.0.tgz}
@@ -18367,6 +18394,21 @@ snapshots:
     transitivePeerDependencies:
       - react
       - rxjs
+
+  '@univerjs/docs-find-replace@1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs/core': 1.1.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/docs': 1.1.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/docs-ui': 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/engine-render': 1.1.0(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/find-replace': 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/ui': 1.1.0(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      react: 19.2.8
+      rxjs: 7.8.2
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - react-dom
 
   '@univerjs/docs-hyper-link-ui@1.1.0(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)':
     dependencies:

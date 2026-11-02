@@ -27,9 +27,14 @@ describe("Workspace mobile unit presets", () => {
       calloutUI,
       chartUI,
       codeUI,
+      columnUI,
       latexUI,
+      listUI,
+      quoteUI,
       shapeUI,
       tableUI,
+      findReplace,
+      docsFindReplace,
       { getDocReplayCompatibilityPlugins },
       { createDocMobilePresets },
     ] = await Promise.all([
@@ -43,9 +48,14 @@ describe("Workspace mobile unit presets", () => {
       import("@univerjs-pro/docs-callout-ui"),
       import("@univerjs-pro/docs-chart-ui"),
       import("@univerjs-pro/docs-code-ui"),
+      import("@univerjs-pro/docs-column-ui"),
       import("@univerjs-pro/docs-latex-ui"),
+      import("@univerjs-pro/docs-list-ui"),
+      import("@univerjs-pro/docs-quote-ui"),
       import("@univerjs-pro/docs-shape-ui"),
       import("@univerjs-pro/docs-table-ui"),
+      import("@univerjs/find-replace"),
+      import("@univerjs/docs-find-replace"),
       import("../../web/src/features/editor/units/doc/doc-features.js"),
       import("../../web/src/features/editor/units/doc/doc-mobile-presets.js"),
     ]);
@@ -65,9 +75,14 @@ describe("Workspace mobile unit presets", () => {
         calloutUI.UniverDocsCalloutMobileUIPlugin,
         chartUI.UniverDocsChartMobileUIPlugin,
         codeUI.UniverDocsCodeMobileUIPlugin,
+        columnUI.UniverDocsColumnMobileUIPlugin,
         latexUI.UniverDocsLatexMobileUIPlugin,
+        listUI.UniverDocsListMobileUIPlugin,
+        quoteUI.UniverDocsQuoteMobileUIPlugin,
         shapeUI.UniverDocsShapeMobileUIPlugin,
         tableUI.UniverDocsTableMobileUIPlugin,
+        findReplace.UniverFindReplaceMobileUIPlugin,
+        docsFindReplace.UniverDocsFindReplacePlugin,
         ...getDocReplayCompatibilityPlugins(),
       ])
     );
@@ -82,9 +97,13 @@ describe("Workspace mobile unit presets", () => {
       calloutUI.UniverDocsCalloutUIPlugin,
       chartUI.UniverDocsChartUIPlugin,
       codeUI.UniverDocsCodeUIPlugin,
+      columnUI.UniverDocsColumnUIPlugin,
       latexUI.UniverDocsLatexUIPlugin,
+      listUI.UniverDocsListUIPlugin,
+      quoteUI.UniverDocsQuoteUIPlugin,
       shapeUI.UniverDocsShapeUIPlugin,
       tableUI.UniverDocsTableUIPlugin,
+      findReplace.UniverFindReplacePlugin,
     ]);
     expectExchangeLeftToFactory(presets);
     expect(pluginOptions(presets, "UNIVER_DRAWING_PLUGIN")).toMatchObject({
