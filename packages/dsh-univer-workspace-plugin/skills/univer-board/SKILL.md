@@ -90,6 +90,27 @@ For a generated diagram, follow intent → spec when useful → layout decisions
 4. Hand off an overview and any needed readable details. Distinguish clean results, visually reviewed diagnostic
    exceptions, and blockers; command success alone is not visual verification.
 
+For automatic crossings, excessive detours or distant automatic captions, inspect the installed `univer_lint`
+schema for `includePortPlan`. When supported,
+request `includePortPlan: true` with `unitType: "board"` and `mode: "both"` on the intended Worktree.
+Read `analyses[].portPlan` and the unchanged original findings. Apply only one ready non-empty plan through
+`FBoard.applyLayoutPlan` on the same current page; then lint a fresh snapshot before requesting label repairs.
+For a distance finding, also request `maximumAutomaticLabelDistance: 12` when supported. An empty plan does not
+resolve the finding; report ineligible ownership or missing support rather than forcing ports to automatic.
+Missing/incomplete planning remains incomplete. Preserve authored ports/routes, node frames and native ownership.
+See [port and label repair](references/connector-labels.md#verification-and-repair) and review arrowheads in screenshots.
+
+For new ordinary generated shapes, inspect the installed `univer_lint` tool schema first. Only when it
+exposes `textPlanElementIds`, request that explicit generated selection in rendered/both mode, retain
+`analyses[].textPlan`, and apply a ready current plan through the Facade. Report missing support instead of
+sending unsupported arguments or guessing ordinary shape heights. Replan, fit and remeasure; preserve
+all text, fonts and authored/native ownership. See the [native text sizing procedure](references/board-spec.md).
+
+If the installed schema also exposes `textPlanMaximumWidthGrowth`, use it with `textPlanElementIds` to bound
+horizontal growth from 1 to 2; 1 keeps the original width. For long or bilingual generated text, start with 1.25
+and adjust using complete coverage and screenshots. Preserve complete text, fonts and incomplete findings;
+never send the option to an unsupported version or fall back to guessed dimensions.
+
 For a localized edit, inspect the changed region and affected relationships; do not regenerate the Board or run
 an unrelated profile matrix. Full drag/menu/Undo/Redo testing belongs to explicit interaction or coverage requests,
 not every authoring task. A static screenshot does not prove UI behavior.
@@ -99,6 +120,12 @@ API. Run planning through `univer_edit` with `mode: "read"`: review its diagnost
 applying a ready plan through `univer_execute` to the same Board/page. Preserve fixed elements, manual connectors
 and native structured-layout owners. A stale or incomplete plan must be recomputed or reported; never
 force-apply it or replace the Board snapshot.
+
+For an explicit automatic-label proximity check, call `univer_lint` with `unitType: "board"`,
+`mode: "rendered"` or `"both"`, and `maximumAutomaticLabelDistance: 12`. The opt-in value must be finite and
+non-negative; zero is valid. Missing native support or unresolved distance makes coverage incomplete, and
+exceeded limits are errors. Preserve fixed/authored and endpoint-role labels. Read native receipt/status and
+screenshots; this sampled, marker-trimmed stroke-centerline metric is not raster ink and never repairs labels.
 
 For measured label repair, call `univer_lint` with `unitType: "board"`, `mode: "both"` and
 `includeLabelPlan: true`. The check remains read-only. An empty `patches` array needs no write.

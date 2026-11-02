@@ -39,6 +39,10 @@ interface LintArguments {
   readonly pages?: readonly PageSelector[];
   readonly mode?: "model" | "rendered" | "both";
   readonly includeLabelPlan?: boolean;
+  readonly includePortPlan?: boolean;
+  readonly textPlanElementIds?: readonly string[];
+  readonly textPlanMaximumWidthGrowth?: number;
+  readonly maximumAutomaticLabelDistance?: number;
 }
 
 interface ScreenshotArguments extends LintArguments {
@@ -158,10 +162,31 @@ export function registerRenderTools(
           description:
             "Board only: model runs headless; rendered needs a render page and browser; both is the default.",
         },
+        maximumAutomaticLabelDistance: {
+          type: "number",
+          description:
+            "Board rendered/both only: inspect automatic labels against this finite non-negative distance in Board units. Missing or unresolved native evidence is incomplete; this does not move labels.",
+        },
+        textPlanElementIds: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Board rendered/both only: explicitly selected generated shape IDs for a read-only native text-size plan. Missing or incomplete plans remain incomplete coverage.",
+        },
+        textPlanMaximumWidthGrowth: {
+          type: "number",
+          description:
+            "Optional finite text-plan width-growth limit from 1 to 2; requires textPlanElementIds. Native plans preserve full text and fonts and are never applied by lint.",
+        },
         includeLabelPlan: {
           type: "boolean",
           description:
             "Board rendered/both only: include read-only label placement plans in analyses. Apply only a ready, current plan through the Facade, then lint again.",
+        },
+        includePortPlan: {
+          type: "boolean",
+          description:
+            "Board rendered/both only: return a read-only native automatic port-order plan. Missing or incomplete plans remain incomplete coverage. Apply one ready plan through the Facade, then lint a fresh snapshot.",
         },
       },
       output: {
@@ -180,9 +205,21 @@ export function registerRenderTools(
           },
           {
             ...(args.mode === undefined ? {} : { mode: args.mode }),
+            ...(args.maximumAutomaticLabelDistance === undefined
+              ? {}
+              : { maximumAutomaticLabelDistance: args.maximumAutomaticLabelDistance }),
+            ...(args.textPlanElementIds === undefined
+              ? {}
+              : { textPlanElementIds: args.textPlanElementIds }),
+            ...(args.textPlanMaximumWidthGrowth === undefined
+              ? {}
+              : { textPlanMaximumWidthGrowth: args.textPlanMaximumWidthGrowth }),
             ...(args.includeLabelPlan === undefined
               ? {}
               : { includeLabelPlan: args.includeLabelPlan }),
+            ...(args.includePortPlan === undefined
+              ? {}
+              : { includePortPlan: args.includePortPlan }),
           },
         );
         return {

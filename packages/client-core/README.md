@@ -65,10 +65,24 @@ findings/incomplete 如实保留，修复后仍须读取完整诊断；该脚本
 运行同样 15 类的全部 45 个变体，并自动开启真实 render 和 label plan；仍须提供 `--out`
 与 `--render-page-root`。普通节点可移动，反馈关系使用自动正交路由，保留全部关系和标签，
 以及真实的 container/lane、sequence、mind map/tree/timeline 所有权。嵌套 frame 有合法容纳空间，
-class 使用 `layerGap: 160`；节点尺寸不为消除诊断而预先放大。每个质量场景要求 model/rendered
+新建活动图的责任泳道与流程方向一致，已声明的重试关系通过 `feedbackConnectorIds` 参与布局，
+不推进主流程层级；已有文档的泳道方向和手工路径保持原有约束。
+层间距使用 SDK 默认标签预算；节点尺寸不为消除诊断而预先放大。每个质量场景要求 model/rendered
 诊断均 clean。flowchart、dataflow、architecture、deployment 的 fan-out 变体还保留原有边，
 增加明确标注的汇聚边，同时验证普通 source/sink 的 fan-out+fan-in；专属语义图不强加 Join 关系。
 原始报告、关系/标签数量、截图与残余规则完整输出，不能用合同断言替代该预期。
+质量场景与业务视觉场景由 factory 显式列出普通 preset Shape 的生成 ID，通过公开 rendered lint 的
+`textPlanElementIds` 获取原生只读尺寸计划，并经 `applyLayoutPlan` 应用。普通 Shape 不再按高度比例猜测尺寸；
+
+两个生成 factory 对新建普通图形显式提供 `textPlanMaximumWidthGrowth: 1.25`，将横向增长限制传给原生文字规划器；字号和完整文字保持不变。调用方可显式选择 1 到 2，其中 1 保留原宽。预算内无法容纳时保留 incomplete，不回退到猜测尺寸。
+缺少计划或计划 incomplete 时保留原模型和诊断，不回退猜测。自定义符号、原生结构与固定/受保护成员不进入
+这个选择。表格和明确授权的 Sequence 标题框继续使用各自的原生测量。
+每条尺寸写入验证精确 Undo/Redo，尺寸变化后重新布局、收紧生成容器并复测；原生计划也验证 stale 拒绝。
+质量场景与业务视觉场景复用实测文本扩容和重新布局流程，保留各自的方向、图预算和固定元素约束；
+已声明的反馈关系不推进主流程层级。只有 factory 新建并明确授权的泳池和泳道参与容量扩展。
+输入尺寸、原始测量、每次调整和精确 Undo/Redo 均保留；原生受管元素及缺少可靠测量的文字仍报告未收敛。
+新生成 Sequence 参与者可由 factory 明确授权按真实测量扩大标题框；lifeline 配置、消息次序和内容保持原值。
+该授权不覆盖 fixed、locked、不可选或 managed 元素，也不用于加载的原生结构或 activation bar。
 脚本先完成所有场景，再在质量未达预期时退出 2；合同断言失败退出 1。两类证据应写到独立新目录，
 不覆盖已有压力场景或把 native/manual findings 从原始报告中过滤掉。
 
@@ -79,9 +93,18 @@ class 使用 `layerGap: 160`；节点尺寸不为消除诊断而预先放大。�
 显式指定成员的新 scope 关闭自动捕获，逐层校验 group 和 node 的父级，并为子框的外置标题保留 padding，
 避免重叠 seed 框颠倒真实所有权或让父边框压住子标题；普通生成框的上方和侧边至少保留 24 Board units，
 为圆角边框及原生图形描边保留空间。
-Architecture、Deployment、Package 和 Use Case 模板为关系文字预留更大的层间距；多区域和用例边界另留
-标题通道。原生 Timeline 使用公开 `setLayout` 的纵向单侧结构，生成标题跟随真实结构范围，保留全部时间顺序、
-文字、字号与原生所有权。上述是新生成模板的展示选择，不自动改动已导入的固定边界或端点。
+Class、Architecture、Deployment、Package 和 Use Case 模板不覆盖 SDK 默认层间距，让 SDK 根据关系标签
+预留空间；布局方向、后四类的 `itemGap: 64`、多区域和用例边界的标题通道仍保留。原生 Timeline 使用公开
+`setLayout` 保留各变体请求的方向：普通与长双语使用横向结构，密集嵌套使用纵向单侧结构。
+组织树的密集变体使用公开的 `mindmap-vertical` 向下布局，普通与长双语使用 `tree-right`，
+节点及父子关系保持相同的原生所有权。
+新生成的简单 Sequence 按标题框底边建立共同时间原点，首条消息留出 48 单位，消息间距 72 单位，
+lifeline 在末条消息后保留 72 单位。它只收紧 factory 创建的初始图；既有消息时间、activation、fragment
+和已保存的 lifeline 配置不因此改写。较高的实测标签或自调用需要增加相应间距并重新检查。
+生成标题跟随真实结构范围，保留全部时间顺序、文字、字号与原生所有权。
+上述是新生成模板的展示选择，不自动改动已导入的固定边界或端点。
+Actor 的新生成标题区与符号绘制区分别计算；通过 Shape Facade 的 `getConnectionSites()` 读取实际手臂
+连接点，保留 SDK 比例公式和绘制顺序。旧 SDK 的固定数字路径继续兼容，不改写已有自定义 Actor。
 生成标题在布局、fit 和文本扩容后对齐实际内容范围，单独验证只改标题及精确 Undo/Redo，避免标题留在旧 seed
 位置而浪费总览宽度。已有至少两层 frame 祖先的 UML Package scope 增加顶部标题通道，普通单层包不受影响。
 若已安装 renderer 返回 `element-text-overflow` 的公开 `textLayout` 测量，最多三轮按真实内容/可用
@@ -90,10 +113,35 @@ textRect 比例扩大可编辑普通 Shape；Table 使用 inclusive 零基 `tabl
 保留资源行列和内容；不完整的 range 仍拒绝。每条公开 resize 写入独立验证 Undo/Redo，再通过相同
 selection/direction/fixed 约束重新 plan、apply、fit
 和测量；不缩字号。固定、locked、不可选和 native/managed 元素保持不变。新的图计划 incomplete
-时回滚该轮尺寸变更并保存诊断。仅对明确允许扩容的新生成 lane，先调用 `setSwimlaneLaneSize` 为实测
-子节点和留白增加容量，再扩大子节点并重新规划；pool 仍受 generic graph plan 保护。用户容量、固定 pool
-和 locked/collapsed lane 不变。容量写入单独验证 Undo/Redo，规划不完整时一并回滚。
+时回滚该轮尺寸变更并保存诊断。新生成泳池在首次布局及实测子节点扩容后，读取同一公开 graph plan 的
+候选位置，为实际全局 rank、字体和关系标签跨度预留泳池主轴与泳道容量；不复制 SDK 的间距估算。新生成泳道的初始截面按最大子节点预留，不累计沿流程排列的节点高度；并行节点所需容量仍由公开 graph plan 扩展，显式 lane 尺寸保持原值。仅
+factory 明确标记可扩容的 pool/lane 允许写入，额外保留 24 Board units 的生成留白；pool 的主轴使用
+`setElementTransform`，泳道按末尾优先调用 `setSwimlaneLaneSize`，不借用后续显式或受保护泳道的容量。
+固定/locked/managed 成员、手工 guides、嵌套或变换 owner、显式 lane 尺寸及无生成授权的已导入 Board
+保持不变。每条容量写入验证精确 Undo/Redo；仍 incomplete 时反向回滚并保留原诊断，不应用候选位置。
 停止边界不代表必然收敛，未报告 overflow 也不代表人工视觉验收通过。
+Component、Architecture、State 和 Dataflow 的三种变体还须逐标签审查与所属路径的距离。验收应保留
+完整标签清单、自动/固定 placement、实际旋转文本框、所属路径、Board units 下的距离及对应的 100% 截图；
+作者固定标签保持原位。Renderer 提供 `connectorLabelLayouts` 时，每张截图的 `connectorLabelEvidence`
+保留原生 rect、旋转、bounds、当前换行宽度下含 padding 的 outer/required 尺寸、独立的 empty/overflow/
+endpointConstrained 标志与原始 routes；empty 标签的原生框仍可能有可见绘制，不跳过其度量。
+`distanceToResolvedPolyline` 通过逆旋转计算所属 `routes.points` 有限折线与原生矩形的最小距离，单位为
+Board units。它不包含描边/marker，也不代表最终圆角或 cubic 路径的距离；issue/focus bounds 和作者
+`placement.distance` 都不能代替实际标签框或实测距离。零距离只表示矩形与折线相交，不自动判定视觉好坏。
+字段缺失、标签未解析、无充分且唯一的已解析路径，或 map 与可见 route ID 不一致均保留 incomplete。
+原生 map 按 SDK 合同枚举可见连接线的全部标签；当前公开 screenshot 结果不携带加载后的同态 native
+snapshot，因此独立标签 ID 清单与自动/固定 placement 无法核对，明确记录 unavailable，不使用生成前输入
+冒充。`labelProximity.status` 的 measured/incomplete 仅描述几何度量，`coverage.geometry` 记录其覆盖；
+独立的 `coverage.independentSameStateLabelIds` 明确保持 incomplete，不使已经测得的几何或原诊断永久失败。
+上述 12 个 visual 场景的 quality 同时暴露真实几何缺测，原 rendered 诊断状态与 findings 完整保留。
+`--suite visual` 对全部 15 类的 45 个变体在 label-plan 应用前后的原生 lint 中显式请求
+`maximumAutomaticLabelDistance: 12`。该 opt-in policy 由 SDK 计算；缺少 receipt、度量未解析或超限
+均不能判为 clean。`labelRepair.automaticLabelDistance` 独立保留原生 lint 的 receipt、逐标签状态和
+距离；它不是截图 analysis 的测量，未证明与 PNG 为同一 renderer 状态，明确记录
+`sameStateWithScreenshots: "not-established"`。截图中原有 `distanceToResolvedPolyline` 保留其 legacy
+有限折线限定，不替代 native sampled-stroke metric，`finalPaintDistance` 仍为 unmeasured，人工审阅 pending。
+contract、quality 和 elements suite 不默认请求这个 visual policy。
+Collision 数量非增、度量完成或诊断 clean 都不代表这项视觉验收通过，不把未测或跳过记为通过。
 `--suite elements` 另建元素目录，覆盖已安装 SDK 的全部注册内建/custom/sequence 形状、图表、
 8 类图示表格、文字、图片、Ink、连接线标记与容器。目录使用固定展示坐标，只验证可用性与视觉表现；
 另外以真实本地 Sheet 验证 native BoardFloating Embed 和 constant/cross-Unit 公式 Shape，通过公开
@@ -113,3 +161,5 @@ patch 数量推断应用次数。中途失败保留已生成图片、进度和�
 `visualReview.status` 默认为 `pending`：诊断 clean 不能替代逐图审查文字溢出与字号、内容层次、
 阅读方向、容器留白、标题/角标/边框、箭头和路径间距。公共 content bounds 也不等于完整字形 ink
 测量；需要单独记录实际浏览器字形检查和人工/代理视觉审阅。视觉审阅结果与自动质量结论分开保存。
+
+业务截图的完整内容 overview 显式请求 32 Board units 留白，避免边缘描边贴住裁剪边界。分块仍覆盖 renderer 回读的完整范围，并验证实际缩放比例。

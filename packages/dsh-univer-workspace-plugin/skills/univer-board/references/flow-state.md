@@ -3,6 +3,11 @@
 Use native `ShapeTypeEnum.Flowchart*` shapes for flowcharts, `createSwimlane()` for responsibilities, and
 containers for composite states. Match control-flow meaning before choosing a visual layout.
 
+For a new activity, align responsibility lanes with the flow: use vertical lanes for a top-down flow and
+horizontal lanes for a left-to-right flow. Keep an existing Board's authored lane orientation. When calling
+`board.planGraphLayout()`, pass known retry connector IDs in `feedbackConnectorIds` so a return does not push
+the entry after the decision. Keep every relation and label, then inspect the rendered arrows and reading order.
+
 For activity control flow, distinguish `fork` / `join` from `decision` / `merge` in `semanticRole`.
 A fork starts concurrent branches; the ordinary join waits for all incoming branches. A merge accepts alternative
 paths without synchronization. Use a merge for initial entry plus a retry path, not a join that waits for both.

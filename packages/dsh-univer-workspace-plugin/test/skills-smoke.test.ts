@@ -100,6 +100,8 @@ describe("bundled Workspace Skills", () => {
     expect(board).toContain('mode: "both"');
     expect(board).toContain("FBoard.planGraphLayout");
     expect(board).toContain("FBoard.applyLayoutPlan");
+    expect(board).toContain("includePortPlan: true");
+    expect(board).toContain("analyses[].portPlan");
     expect(board).toContain("incomplete");
     expect(embed).toContain("createEmbed");
     expect(crossUnitFormula).toContain("buildReference()");

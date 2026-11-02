@@ -13,7 +13,7 @@ import { createUnitLayoutLint } from "@univer-cli/unit-layout-lint";
 import { realizeVisualFixture, visualVariants } from "./board-visual-fixtures.mjs";
 import { captureVisualEvidence } from "./board-visual-evidence.mjs";
 import { elementProfiles, realizeElementFixture } from "./board-element-fixtures.mjs";
-import { repairMeasuredVisualText } from "./board-visual-repair.mjs";
+import { repairMeasuredVisualText, verifyRenderedLabelPlan } from "./board-visual-repair.mjs";
 
 // Keep SDK runtime notices intact on stderr so stdout remains one machine-readable summary.
 console.log = console.info = console.debug = (...args) => console.error(...args);
@@ -90,6 +90,7 @@ const detailProfiles = new Set([
   "erd",
   "uml-component",
 ]);
+const nearLineProfiles = new Set(["uml-component", "architecture", "uml-state", "dataflow"]);
 try {
   for (const profile of selected) {
     for (const variant of values.variant ? [values.variant] : variants) {
@@ -146,7 +147,6 @@ try {
             direction: variant === "fan-out" ? "vertical" : "horizontal",
             fixedElementIds: fixture.fixed,
             maxNodes: 100,
-            ...(qualitySuite && profile === "uml-class" ? { layerGap: 160 } : {}),
             ...fixture.layoutOptions,
           };
           plan = board.planGraphLayout(options);
@@ -323,7 +323,7 @@ try {
             ...(changed ? { undoExact: true, redoExact: true } : {}),
           });
         }
-        const textRepair = visualSuite
+        const textRepair = requireClean
           ? await repairMeasuredVisualText(
               board,
               createUnitLayoutLint({ runtime: renderRuntime }),
@@ -395,9 +395,10 @@ try {
           planLabels && shouldRender
             ? await verifyRenderedLabelPlan(
                 board,
-                renderRuntime,
+                createUnitLayoutLint({ runtime: renderRuntime }),
                 !requireClean,
                 fixture.renderUnits,
+                visualSuite ? 12 : undefined,
               )
             : undefined;
         const rendered = shouldRender
@@ -410,7 +411,13 @@ try {
               )
             : await renderEvidence(screenshot, board.save(), id, variant === "long-labels")
           : undefined;
-        const quality = requireClean ? qualityResult(plan, analysisAfter, labelRepair) : undefined;
+        const labelProximity =
+          visualSuite && nearLineProfiles.has(profile)
+            ? (rendered?.labelProximity ?? { status: "incomplete" })
+            : undefined;
+        const quality = requireClean
+          ? qualityResult(plan, analysisAfter, labelRepair, labelProximity)
+          : undefined;
         const result = {
           suite: values.suite,
           profile,
@@ -420,6 +427,7 @@ try {
           plan,
           graphApplication,
           compactApplications,
+          capacityPreparation: fixture.capacityPreparation,
           textRepair,
           headingApplication,
           initialSnapshot: visualEvidence ? initial : undefined,
@@ -455,6 +463,7 @@ try {
           planStatus: plan?.status ?? "not-run",
           patchCount: plan?.patches.length ?? 0,
           application: graphApplication.status,
+          capacityPreparation: fixture.capacityPreparation?.status ?? "not-applicable",
           graphApplication,
           renderedStatus: rendered?.status ?? "not-run",
           labelPlanStatus: labelRepair?.before.analyses[0]?.labelPlan?.status ?? "not-run",
@@ -539,15 +548,19 @@ else if (requireClean && results.some((result) => result.quality.status !== "cle
   process.exitCode = 2;
 }
 
-function qualityResult(plan, model, labels) {
+function qualityResult(plan, model, labels, labelProximity) {
   const report = labels?.after;
   const status = !report
     ? "not-run"
-    : plan?.status === "incomplete" ||
+    : labels.automaticLabelDistance?.status === "incomplete" ||
+        labelProximity?.status === "incomplete" ||
+        plan?.status === "incomplete" ||
         labels.before.analyses[0].labelPlan.status === "incomplete" ||
         report.status === "incomplete"
       ? "incomplete"
-      : model.issues.length > 0 || report.findings.length > 0
+      : labels.automaticLabelDistance?.status === "findings" ||
+          model.issues.length > 0 ||
+          report.findings.length > 0
         ? "findings"
         : "clean";
   return {
@@ -555,6 +568,10 @@ function qualityResult(plan, model, labels) {
     status,
     modelFindings: model.issues.length,
     renderedFindings: report?.findings.length ?? 0,
+    ...(labelProximity ? { labelProximityStatus: labelProximity.status } : {}),
+    ...(labels?.automaticLabelDistance
+      ? { automaticLabelDistanceStatus: labels.automaticLabelDistance.status }
+      : {}),
     rules: [
       ...model.issues.map((issue) => ({ source: "model", rule: issue.rule })),
       ...(report?.findings.map((finding) => ({ source: "rendered", rule: finding.rule })) ?? []),
@@ -626,97 +643,6 @@ async function renderEvidence(screenshot, unitData, id, detail) {
   };
 }
 
-async function verifyRenderedLabelPlan(
-  board,
-  runtime,
-  assertCollisionImprovement = true,
-  renderUnits = {},
-) {
-  const lint = createUnitLayoutLint({ runtime });
-  const input = {
-    unitType: "board",
-    unitData: board.save(),
-    ...renderUnits,
-    mode: "rendered",
-    includeLabelPlan: true,
-  };
-  const snapshot = persistedSnapshot(board);
-  const before = await lint.lint(input);
-  assert.deepEqual(
-    persistedSnapshot(board),
-    snapshot,
-    "Rendered label planning changed the source",
-  );
-  assert.equal(before.analyses.length, 1, "Fixture unexpectedly changed page count");
-  const plan = before.analyses[0].labelPlan;
-  assert.ok(plan, "Requested rendered label plan unavailable");
-  let applied = false;
-  let application;
-  if (plan.status === "ready" && plan.patches.length > 0) {
-    const semantics = labelSemantics(board);
-    if (!board.applyLayoutPlan(plan)) {
-      const error = new Error("Rendered plan rejected by the headless Facade");
-      error.diagnostics = {
-        report: before,
-        sourcePreconditions: board.planGraphLayout().preconditions,
-      };
-      throw error;
-    }
-    assert.deepEqual(
-      labelSemantics(board),
-      semantics,
-      "Label plan changed text, bindings, styles or node geometry",
-    );
-    applied = true;
-    const afterApply = persistedSnapshot(board);
-    assert.equal(board.undo(), true, "Rendered label plan Undo failed");
-    assert.deepEqual(persistedSnapshot(board), snapshot, "Label plan Undo lost data");
-    assert.equal(board.redo(), true, "Rendered label plan Redo failed");
-    assert.deepEqual(persistedSnapshot(board), afterApply, "Label plan Redo lost data");
-    assert.equal(board.applyLayoutPlan(plan), false, "Stale rendered label plan accepted");
-    application = {
-      status: "applied-undo-redo",
-      applied: true,
-      changed: !isDeepStrictEqual(snapshot, afterApply),
-      undoExact: true,
-      redoExact: true,
-      staleRejected: true,
-    };
-  } else if (plan.status === "incomplete") {
-    assert.equal(board.applyLayoutPlan(plan), false, "Incomplete rendered label plan accepted");
-    assert.deepEqual(persistedSnapshot(board), snapshot, "Rejected label plan changed content");
-    application = { status: "rejected-incomplete", applied: false, rejectedWithoutMutation: true };
-  } else {
-    assert.equal(plan.status, "ready");
-    assert.deepEqual(persistedSnapshot(board), snapshot, "No-op rendered plan changed content");
-    application = { status: "unchanged", applied: false };
-  }
-  const after = await lint.lint({ ...input, unitData: board.save(), includeLabelPlan: false });
-  const collisions = (report) =>
-    report.findings.filter(
-      (finding) =>
-        finding.rule.startsWith("connector-label-") && finding.rule.includes("collision"),
-    ).length;
-  const collisionNonIncreasing = collisions(after) <= collisions(before);
-  if (assertCollisionImprovement) {
-    assert.ok(collisionNonIncreasing, "Label planning increased measured collisions");
-  }
-  return { before, after, applied, application, collisionNonIncreasing };
-}
-
-function labelSemantics(board) {
-  const snapshot = persistedSnapshot(board);
-  for (const pages of [snapshot.pages, snapshot.slides]) {
-    for (const page of Object.values(pages ?? {})) {
-      for (const element of Object.values(page.elements)) {
-        if (!element.connectorData) continue;
-        for (const label of element.connectorData.labels ?? []) delete label.placement;
-      }
-    }
-  }
-  return snapshot;
-}
-
 function realize(board, E, profile, variant, quality = false) {
   let next = 0;
   const labels =
@@ -730,6 +656,9 @@ function realize(board, E, profile, variant, quality = false) {
   const count = variant === "fan-out" ? 7 : 3;
   const ids = [];
   const protectedIds = [];
+  const feedbackConnectorIds = [];
+  const generatedSequenceParticipants = [];
+  const textPlanElementIds = [];
   const ownership = [];
   const label = (index) => labels[index % labels.length];
   // Different seeded geometry, dimensions and branching; no saved golden coordinates.
@@ -767,6 +696,7 @@ function realize(board, E, profile, variant, quality = false) {
     }
     assert.equal(ref.getText().getPlainText(), text, "Shape caption changed during styling");
     ids.push(ref.getId());
+    if (Object.values(E.ShapeTypeEnum).includes(type)) textPlanElementIds.push(ref.getId());
     if (parentId) {
       if (!laneId) assert.equal(board.moveElementsToContainer([ref.getId()], parentId), true);
       ownership.push([ref.getId(), parentId]);
@@ -866,6 +796,7 @@ function realize(board, E, profile, variant, quality = false) {
       });
       assert.ok(ref);
       ref.getText().setText(label(index));
+      if (quality) generatedSequenceParticipants.push(ref.getId());
       return ref.getId();
     });
     assert.ok(
@@ -1011,6 +942,7 @@ function realize(board, E, profile, variant, quality = false) {
         routingMode: "auto",
       });
       const feedback = board.getElement(feedbackId).connectorData;
+      feedbackConnectorIds.push(feedbackId);
       assert.equal(feedback.routingMode, "auto");
       assert.equal(feedback.waypoints?.length ?? 0, 0);
     } else
@@ -1056,6 +988,22 @@ function realize(board, E, profile, variant, quality = false) {
     nodes: ids,
     fixed: !quality && ids.length > 0 ? [ids[0]] : [],
     protected: protectedIds,
+    ...(textPlanElementIds.length ? { textPlanElementIds, textPlanMaximumWidthGrowth: 1.25 } : {}),
+    ...(quality
+      ? {
+          layoutOptions: {
+            direction: variant === "fan-out" ? "vertical" : "horizontal",
+            maxNodes: 100,
+            feedbackConnectorIds,
+          },
+          expandablePools: profile === "uml-activity" ? ["pool"] : [],
+          expandableSequenceParticipants: generatedSequenceParticipants,
+          expandableLanes:
+            profile === "uml-activity"
+              ? ["request", "fulfill"].map((laneId) => ({ containerId: "pool", laneId }))
+              : [],
+        }
+      : {}),
     semanticCoverage: {
       nodes: elements.length - connectors.length,
       relations: connectors.length,

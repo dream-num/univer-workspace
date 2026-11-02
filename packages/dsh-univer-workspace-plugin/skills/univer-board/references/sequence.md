@@ -74,3 +74,21 @@ visible form, preserve its full condition in the spec and keep the abbreviation 
 Message `messageType` values are `synchronous`, `asynchronous`, `reply`, `create`, `destroy`, or `self`.
 Keep semantic IDs for messages referenced by activations/fragments; generated connector IDs are separate.
 For independent endpoint annotations, read [connector-labels.md](connector-labels.md).
+
+## Generated spacing
+
+For a new simple sequence, use the participant header bottoms as the common time origin. Start with
+`firstOffsetY: 48` and `step: 72`, then increase spacing for measured multiline labels, self calls,
+activations or fragment guards. End each lifeline about 64–96 Board units after the last message;
+derive that height from the same world times. Do not use a large fixed tail to hide uncertain bounds.
+Inspect the rendered labels and arrow tips before accepting the compact layout. Preserve the timing
+and lifeline configuration of existing authored diagrams.
+
+## Generated stroke weight
+
+For new diagrams using the compact shared style, call the returned participant shape's
+`setStrokeWidth(1.25)` after insertion. This preserves its native stroke fields and lifeline/participant
+geometry. Pass `style: { strokeWidth: 1.25 }` on each newly generated `insertSequenceMessages()` item;
+the helper retains the message type's marker, dash, activation binding and lifecycle semantics.
+Do not replace the entire `shapeData.stroke` with a width-only object or restyle existing authored participants.
+Keep activation dimensions and message timing unchanged, and review actual marker/lifeline details at 100%.

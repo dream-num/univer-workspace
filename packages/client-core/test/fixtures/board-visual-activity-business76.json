@@ -1,0 +1,2683 @@
+{
+  "sourceCapture": {
+    "path": "D:/develop/board_test/board-quality-evidence/native-routing-dev76/fresh-generation45-r2/visual-uml-activity-business/case.json",
+    "sha256": "556dc3cfccd708a07385a70a45455a9b46254163d0b072b0d7acf58e65f3e96e",
+    "note": "Exact saved initial native76 model and actual rendered overflow measurements. No old coordinates are edited for the regression."
+  },
+  "snapshot": {
+    "id": "fresh76-uml-activity-business-25c22a16-f251-473c-9925-db4db1a5acb9",
+    "name": "fresh76-uml-activity-business-25c22a16-f251-473c-9925-db4db1a5acb9",
+    "appVersion": "0.0.1",
+    "defaultPageSize": {
+      "width": 1920,
+      "height": 1080
+    },
+    "pageOrder": ["hydYZ_"],
+    "pages": {
+      "hydYZ_": {
+        "id": "hydYZ_",
+        "pageType": "page",
+        "name": "Board",
+        "elementOrder": [
+          "visual-pool",
+          "visual-request",
+          "visual-budget",
+          "visual-approve",
+          "visual-receive",
+          "visual-record",
+          "visual-close",
+          "WjD8_M",
+          "PUrRDS",
+          "H_zZfk",
+          "6kts0E",
+          "cQABWJ",
+          "visual-case-heading"
+        ],
+        "elements": {
+          "visual-pool": {
+            "id": "visual-pool",
+            "type": "container",
+            "transform": {
+              "left": 70,
+              "top": 90,
+              "width": 2100,
+              "height": 998,
+              "rotation": 0
+            },
+            "containerData": {
+              "kind": "swimlane",
+              "title": "Procurement · request to receipt",
+              "titleVisible": true,
+              "titlePosition": "top",
+              "headerSize": 32,
+              "padding": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "shapeData": {
+                "shapeType": "rect",
+                "fill": {
+                  "color": "rgba(255, 255, 255, 0.72)"
+                },
+                "stroke": {
+                  "color": "#94a3b8",
+                  "width": 1
+                }
+              },
+              "behavior": {
+                "acceptsChildren": true,
+                "acceptsContainer": true,
+                "allowNested": true,
+                "autoCapture": true,
+                "autoResize": true,
+                "membershipLocked": false,
+                "membershipAwareness": "interactive",
+                "clipChildren": false
+              },
+              "capturePolicy": {
+                "enabled": true,
+                "captureMode": "strict",
+                "expelMode": "hysteresis",
+                "expelHysteresis": 12,
+                "allowCaptureFromSiblingContainer": false,
+                "allowCaptureFromAncestorContainer": true,
+                "allowCaptureContainer": true,
+                "allowCaptureLockedObjects": false,
+                "modifierToDisable": "Alt",
+                "modifierToForce": "Shift"
+              },
+              "swimlane": {
+                "orientation": "horizontal",
+                "headerSize": 190,
+                "laneGap": 0,
+                "collapsedLaneSize": 32,
+                "lanes": [
+                  {
+                    "id": "requester",
+                    "title": "Requesting team",
+                    "order": 0,
+                    "size": 288
+                  },
+                  {
+                    "id": "finance",
+                    "title": "Finance and procurement",
+                    "order": 1,
+                    "size": 342
+                  },
+                  {
+                    "id": "warehouse",
+                    "title": "Receiving team",
+                    "order": 2,
+                    "size": 288
+                  }
+                ]
+              }
+            },
+            "name": "container 1"
+          },
+          "visual-request": {
+            "id": "visual-request",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "requester",
+            "transform": {
+              "left": 240,
+              "top": 120,
+              "width": 218,
+              "height": 84,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartProcess",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Submit purchase request\nBusiness justification and cost centre",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Submit purchase request\rBusiness justification and cost centre\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 23,
+                          "paragraphId": "para_EcXBN_fQ4GLT",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 62,
+                          "paragraphId": "para_l1SEFbva-dhW",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 23
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 24,
+                          "ed": 62
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "request",
+              "semanticKind": "process"
+            },
+            "name": "flowChartProcess 1"
+          },
+          "visual-budget": {
+            "id": "visual-budget",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "finance",
+            "transform": {
+              "left": 310,
+              "top": 408,
+              "width": 256,
+              "height": 138,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartDecision",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Check available budget\nReserve approved spending limit",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Check available budget\rReserve approved spending limit\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 22,
+                          "paragraphId": "para_-qLwwGVM-FYm",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 54,
+                          "paragraphId": "para_wQhjigWRoSDQ",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 22
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 23,
+                          "ed": 54
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "budget",
+              "semanticKind": "decision"
+            },
+            "name": "flowChartDecision 1"
+          },
+          "visual-approve": {
+            "id": "visual-approve",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "finance",
+            "transform": {
+              "left": 380,
+              "top": 408,
+              "width": 218,
+              "height": 84,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartProcess",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Approve supplier order\nDual control for high-value purchases",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Approve supplier order\rDual control for high-value purchases\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 22,
+                          "paragraphId": "para_jBdgbKCgewbK",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 60,
+                          "paragraphId": "para_J2tMudBmosb5",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 22
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 23,
+                          "ed": 60
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "approve",
+              "semanticKind": "process"
+            },
+            "name": "flowChartProcess 2"
+          },
+          "visual-receive": {
+            "id": "visual-receive",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "warehouse",
+            "transform": {
+              "left": 450,
+              "top": 750,
+              "width": 218,
+              "height": 84,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartProcess",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Inspect delivery\nQuantity, damage and serial numbers",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Inspect delivery\rQuantity, damage and serial numbers\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 16,
+                          "paragraphId": "para_-Aw-mJ8SINPL",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 52,
+                          "paragraphId": "para_mWdfyZkFJtHu",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 16
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 17,
+                          "ed": 52
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "receive",
+              "semanticKind": "process"
+            },
+            "name": "flowChartProcess 3"
+          },
+          "visual-record": {
+            "id": "visual-record",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "warehouse",
+            "transform": {
+              "left": 520,
+              "top": 750,
+              "width": 218,
+              "height": 84,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartProcess",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Record goods receipt\nMatch purchase order and invoice",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Record goods receipt\rMatch purchase order and invoice\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 20,
+                          "paragraphId": "para_dsVqcSMvzJea",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 53,
+                          "paragraphId": "para_jXn1GaFm1HxZ",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 20
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 21,
+                          "ed": 53
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "record",
+              "semanticKind": "process"
+            },
+            "name": "flowChartProcess 4"
+          },
+          "visual-close": {
+            "id": "visual-close",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "requester",
+            "transform": {
+              "left": 590,
+              "top": 120,
+              "width": 218,
+              "height": 84,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartProcess",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Confirm fulfilment\nRequester accepts delivered goods",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Confirm fulfilment\rRequester accepts delivered goods\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 18,
+                          "paragraphId": "para_l0UG59wnIzhA",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 52,
+                          "paragraphId": "para_Tj_X6hGMB1aT",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 18
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 19,
+                          "ed": 52
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "close",
+              "semanticKind": "process"
+            },
+            "name": "flowChartProcess 5"
+          },
+          "WjD8_M": {
+            "id": "WjD8_M",
+            "type": "connector",
+            "transform": {
+              "left": -70,
+              "top": -90,
+              "width": 1,
+              "height": 1,
+              "rotation": 0
+            },
+            "connectorData": {
+              "start": {
+                "kind": "shapeSite",
+                "shapeId": "visual-request",
+                "connectionSiteId": 2
+              },
+              "end": {
+                "kind": "shapeSite",
+                "shapeId": "visual-budget",
+                "connectionSiteId": 0
+              },
+              "routing": "orthogonal",
+              "routingMode": "auto",
+              "style": {
+                "stroke": "#0369a1",
+                "strokeWidth": 2,
+                "endMarker": {
+                  "type": "filledArrow"
+                },
+                "cornerStyle": "rounded"
+              },
+              "labels": [
+                {
+                  "id": "_0YQV1",
+                  "content": "Purchase requisition"
+                }
+              ]
+            },
+            "custom": {
+              "visualSource": {
+                "from": "request",
+                "to": "budget",
+                "label": "Purchase requisition"
+              },
+              "mainPath": true
+            },
+            "parentId": "visual-pool",
+            "name": "connector 1"
+          },
+          "PUrRDS": {
+            "id": "PUrRDS",
+            "type": "connector",
+            "transform": {
+              "left": -70,
+              "top": -90,
+              "width": 1,
+              "height": 1,
+              "rotation": 0
+            },
+            "connectorData": {
+              "start": {
+                "kind": "shapeSite",
+                "shapeId": "visual-budget",
+                "connectionSiteId": 1
+              },
+              "end": {
+                "kind": "shapeSite",
+                "shapeId": "visual-approve",
+                "connectionSiteId": 3
+              },
+              "routing": "orthogonal",
+              "routingMode": "auto",
+              "style": {
+                "stroke": "#0369a1",
+                "strokeWidth": 2,
+                "endMarker": {
+                  "type": "filledArrow"
+                },
+                "cornerStyle": "rounded"
+              },
+              "labels": [
+                {
+                  "id": "yq93Uv",
+                  "content": "Budget available"
+                }
+              ]
+            },
+            "custom": {
+              "visualSource": {
+                "from": "budget",
+                "to": "approve",
+                "label": "Budget available"
+              },
+              "mainPath": true
+            },
+            "parentId": "visual-pool",
+            "laneId": "finance",
+            "name": "connector 2"
+          },
+          "H_zZfk": {
+            "id": "H_zZfk",
+            "type": "connector",
+            "transform": {
+              "left": -70,
+              "top": -90,
+              "width": 1,
+              "height": 1,
+              "rotation": 0
+            },
+            "connectorData": {
+              "start": {
+                "kind": "shapeSite",
+                "shapeId": "visual-approve",
+                "connectionSiteId": 2
+              },
+              "end": {
+                "kind": "shapeSite",
+                "shapeId": "visual-receive",
+                "connectionSiteId": 0
+              },
+              "routing": "orthogonal",
+              "routingMode": "auto",
+              "style": {
+                "stroke": "#0369a1",
+                "strokeWidth": 2,
+                "endMarker": {
+                  "type": "filledArrow"
+                },
+                "cornerStyle": "rounded"
+              },
+              "labels": [
+                {
+                  "id": "_TwbhO",
+                  "content": "Supplier delivery"
+                }
+              ]
+            },
+            "custom": {
+              "visualSource": {
+                "from": "approve",
+                "to": "receive",
+                "label": "Supplier delivery"
+              },
+              "mainPath": true
+            },
+            "parentId": "visual-pool",
+            "name": "connector 3"
+          },
+          "6kts0E": {
+            "id": "6kts0E",
+            "type": "connector",
+            "transform": {
+              "left": -70,
+              "top": -90,
+              "width": 1,
+              "height": 1,
+              "rotation": 0
+            },
+            "connectorData": {
+              "start": {
+                "kind": "shapeSite",
+                "shapeId": "visual-receive",
+                "connectionSiteId": 1
+              },
+              "end": {
+                "kind": "shapeSite",
+                "shapeId": "visual-record",
+                "connectionSiteId": 3
+              },
+              "routing": "orthogonal",
+              "routingMode": "auto",
+              "style": {
+                "stroke": "#0369a1",
+                "strokeWidth": 2,
+                "endMarker": {
+                  "type": "filledArrow"
+                },
+                "cornerStyle": "rounded"
+              },
+              "labels": [
+                {
+                  "id": "rtDd6I",
+                  "content": "Inspection passed"
+                }
+              ]
+            },
+            "custom": {
+              "visualSource": {
+                "from": "receive",
+                "to": "record",
+                "label": "Inspection passed"
+              },
+              "mainPath": true
+            },
+            "parentId": "visual-pool",
+            "laneId": "warehouse",
+            "name": "connector 4"
+          },
+          "cQABWJ": {
+            "id": "cQABWJ",
+            "type": "connector",
+            "transform": {
+              "left": -70,
+              "top": -90,
+              "width": 1,
+              "height": 1,
+              "rotation": 0
+            },
+            "connectorData": {
+              "start": {
+                "kind": "shapeSite",
+                "shapeId": "visual-record",
+                "connectionSiteId": 0
+              },
+              "end": {
+                "kind": "shapeSite",
+                "shapeId": "visual-close",
+                "connectionSiteId": 2
+              },
+              "routing": "orthogonal",
+              "routingMode": "auto",
+              "style": {
+                "stroke": "#0369a1",
+                "strokeWidth": 2,
+                "endMarker": {
+                  "type": "filledArrow"
+                },
+                "cornerStyle": "rounded"
+              },
+              "labels": [
+                {
+                  "id": "JHVR6x",
+                  "content": "Receipt posted"
+                }
+              ]
+            },
+            "custom": {
+              "visualSource": {
+                "from": "record",
+                "to": "close",
+                "label": "Receipt posted"
+              },
+              "mainPath": true
+            },
+            "parentId": "visual-pool",
+            "name": "connector 5"
+          },
+          "visual-case-heading": {
+            "id": "visual-case-heading",
+            "type": "text",
+            "text": "Procurement · request to receipt\numl-activity · business",
+            "textData": {
+              "id": "d",
+              "documentStyle": {
+                "marginBottom": 0,
+                "marginLeft": 0,
+                "marginRight": 0,
+                "marginTop": 0,
+                "pageSize": {
+                  "height": null,
+                  "width": null
+                },
+                "renderConfig": {
+                  "horizontalAlign": 1,
+                  "verticalAlign": 1,
+                  "wrapStrategy": 2,
+                  "zeroWidthParagraphBreak": 1
+                },
+                "textStyle": {
+                  "fs": 14
+                }
+              },
+              "drawings": {},
+              "drawingsOrder": [],
+              "body": {
+                "dataStream": "Procurement · request to receipt\ruml-activity · business\r\n",
+                "customBlocks": [],
+                "customRanges": [],
+                "paragraphs": [
+                  {
+                    "startIndex": 32,
+                    "paragraphId": "para_KGd9BmM5Wq3R",
+                    "paragraphStyle": {
+                      "lineSpacing": 1.2,
+                      "spaceBelow": {
+                        "v": 5
+                      }
+                    }
+                  },
+                  {
+                    "startIndex": 56,
+                    "paragraphId": "para_OkNc8uU4oVo9",
+                    "paragraphStyle": {
+                      "lineSpacing": 1.25,
+                      "spaceBelow": {
+                        "v": 0
+                      }
+                    }
+                  }
+                ],
+                "textRuns": [
+                  {
+                    "ts": {
+                      "bl": 1,
+                      "ff": "Arial",
+                      "fs": 18,
+                      "cl": {
+                        "rgb": "#0f172a"
+                      }
+                    },
+                    "st": 0,
+                    "ed": 32
+                  },
+                  {
+                    "ts": {
+                      "bl": 0,
+                      "ff": "Consolas",
+                      "fs": 9,
+                      "cl": {
+                        "rgb": "#64748b"
+                      }
+                    },
+                    "st": 33,
+                    "ed": 56
+                  }
+                ],
+                "tables": [],
+                "sectionBreaks": [],
+                "customDecorations": []
+              }
+            },
+            "transform": {
+              "left": 70,
+              "top": -60,
+              "width": 1100,
+              "height": 110,
+              "rotation": 0
+            },
+            "name": "text 1"
+          }
+        },
+        "background": {
+          "type": "none"
+        }
+      }
+    },
+    "activePageId": "hydYZ_",
+    "slideOrder": ["hydYZ_"],
+    "slides": {
+      "hydYZ_": {
+        "id": "hydYZ_",
+        "pageType": "page",
+        "name": "Board",
+        "elementOrder": [
+          "visual-pool",
+          "visual-request",
+          "visual-budget",
+          "visual-approve",
+          "visual-receive",
+          "visual-record",
+          "visual-close",
+          "WjD8_M",
+          "PUrRDS",
+          "H_zZfk",
+          "6kts0E",
+          "cQABWJ",
+          "visual-case-heading"
+        ],
+        "elements": {
+          "visual-pool": {
+            "id": "visual-pool",
+            "type": "container",
+            "transform": {
+              "left": 70,
+              "top": 90,
+              "width": 2100,
+              "height": 998,
+              "rotation": 0
+            },
+            "containerData": {
+              "kind": "swimlane",
+              "title": "Procurement · request to receipt",
+              "titleVisible": true,
+              "titlePosition": "top",
+              "headerSize": 32,
+              "padding": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "shapeData": {
+                "shapeType": "rect",
+                "fill": {
+                  "color": "rgba(255, 255, 255, 0.72)"
+                },
+                "stroke": {
+                  "color": "#94a3b8",
+                  "width": 1
+                }
+              },
+              "behavior": {
+                "acceptsChildren": true,
+                "acceptsContainer": true,
+                "allowNested": true,
+                "autoCapture": true,
+                "autoResize": true,
+                "membershipLocked": false,
+                "membershipAwareness": "interactive",
+                "clipChildren": false
+              },
+              "capturePolicy": {
+                "enabled": true,
+                "captureMode": "strict",
+                "expelMode": "hysteresis",
+                "expelHysteresis": 12,
+                "allowCaptureFromSiblingContainer": false,
+                "allowCaptureFromAncestorContainer": true,
+                "allowCaptureContainer": true,
+                "allowCaptureLockedObjects": false,
+                "modifierToDisable": "Alt",
+                "modifierToForce": "Shift"
+              },
+              "swimlane": {
+                "orientation": "horizontal",
+                "headerSize": 190,
+                "laneGap": 0,
+                "collapsedLaneSize": 32,
+                "lanes": [
+                  {
+                    "id": "requester",
+                    "title": "Requesting team",
+                    "order": 0,
+                    "size": 288
+                  },
+                  {
+                    "id": "finance",
+                    "title": "Finance and procurement",
+                    "order": 1,
+                    "size": 342
+                  },
+                  {
+                    "id": "warehouse",
+                    "title": "Receiving team",
+                    "order": 2,
+                    "size": 288
+                  }
+                ]
+              }
+            },
+            "name": "container 1"
+          },
+          "visual-request": {
+            "id": "visual-request",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "requester",
+            "transform": {
+              "left": 240,
+              "top": 120,
+              "width": 218,
+              "height": 84,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartProcess",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Submit purchase request\nBusiness justification and cost centre",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Submit purchase request\rBusiness justification and cost centre\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 23,
+                          "paragraphId": "para_EcXBN_fQ4GLT",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 62,
+                          "paragraphId": "para_l1SEFbva-dhW",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 23
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 24,
+                          "ed": 62
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "request",
+              "semanticKind": "process"
+            },
+            "name": "flowChartProcess 1"
+          },
+          "visual-budget": {
+            "id": "visual-budget",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "finance",
+            "transform": {
+              "left": 310,
+              "top": 408,
+              "width": 256,
+              "height": 138,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartDecision",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Check available budget\nReserve approved spending limit",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Check available budget\rReserve approved spending limit\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 22,
+                          "paragraphId": "para_-qLwwGVM-FYm",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 54,
+                          "paragraphId": "para_wQhjigWRoSDQ",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 22
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 23,
+                          "ed": 54
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "budget",
+              "semanticKind": "decision"
+            },
+            "name": "flowChartDecision 1"
+          },
+          "visual-approve": {
+            "id": "visual-approve",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "finance",
+            "transform": {
+              "left": 380,
+              "top": 408,
+              "width": 218,
+              "height": 84,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartProcess",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Approve supplier order\nDual control for high-value purchases",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Approve supplier order\rDual control for high-value purchases\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 22,
+                          "paragraphId": "para_jBdgbKCgewbK",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 60,
+                          "paragraphId": "para_J2tMudBmosb5",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 22
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 23,
+                          "ed": 60
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "approve",
+              "semanticKind": "process"
+            },
+            "name": "flowChartProcess 2"
+          },
+          "visual-receive": {
+            "id": "visual-receive",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "warehouse",
+            "transform": {
+              "left": 450,
+              "top": 750,
+              "width": 218,
+              "height": 84,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartProcess",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Inspect delivery\nQuantity, damage and serial numbers",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Inspect delivery\rQuantity, damage and serial numbers\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 16,
+                          "paragraphId": "para_-Aw-mJ8SINPL",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 52,
+                          "paragraphId": "para_mWdfyZkFJtHu",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 16
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 17,
+                          "ed": 52
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "receive",
+              "semanticKind": "process"
+            },
+            "name": "flowChartProcess 3"
+          },
+          "visual-record": {
+            "id": "visual-record",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "warehouse",
+            "transform": {
+              "left": 520,
+              "top": 750,
+              "width": 218,
+              "height": 84,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartProcess",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Record goods receipt\nMatch purchase order and invoice",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Record goods receipt\rMatch purchase order and invoice\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 20,
+                          "paragraphId": "para_dsVqcSMvzJea",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 53,
+                          "paragraphId": "para_jXn1GaFm1HxZ",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 20
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 21,
+                          "ed": 53
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "record",
+              "semanticKind": "process"
+            },
+            "name": "flowChartProcess 4"
+          },
+          "visual-close": {
+            "id": "visual-close",
+            "type": "shape",
+            "parentId": "visual-pool",
+            "laneId": "requester",
+            "transform": {
+              "left": 590,
+              "top": 120,
+              "width": 218,
+              "height": 84,
+              "rotation": 0
+            },
+            "shapeData": {
+              "shapeType": "flowChartProcess",
+              "fill": {
+                "color": "#f0fdfa"
+              },
+              "stroke": {
+                "color": "#0f766e",
+                "width": 1.25
+              },
+              "shapeText": {
+                "autoFitType": "noAutoFit",
+                "textWrap": "square",
+                "horizontalAlign": 2,
+                "isHorizontal": true,
+                "text": "Confirm fulfilment\nRequester accepts delivered goods",
+                "textDirection": "horz",
+                "verticalAlign": 2,
+                "dataModel": {
+                  "ha": 2,
+                  "va": 2,
+                  "doc": {
+                    "id": "d",
+                    "documentStyle": {
+                      "marginBottom": 0,
+                      "marginLeft": 0,
+                      "marginRight": 0,
+                      "marginTop": 0,
+                      "pageSize": {
+                        "height": null,
+                        "width": null
+                      },
+                      "renderConfig": {
+                        "horizontalAlign": 2,
+                        "verticalAlign": 2,
+                        "wrapStrategy": 2,
+                        "zeroWidthParagraphBreak": 1
+                      }
+                    },
+                    "drawings": {},
+                    "drawingsOrder": [],
+                    "body": {
+                      "dataStream": "Confirm fulfilment\rRequester accepts delivered goods\r\n",
+                      "customBlocks": [],
+                      "customRanges": [],
+                      "paragraphs": [
+                        {
+                          "startIndex": 18,
+                          "paragraphId": "para_l0UG59wnIzhA",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.2,
+                            "spaceBelow": {
+                              "v": 3
+                            }
+                          }
+                        },
+                        {
+                          "startIndex": 52,
+                          "paragraphId": "para_Tj_X6hGMB1aT",
+                          "paragraphStyle": {
+                            "lineSpacing": 1.25,
+                            "spaceBelow": {
+                              "v": 0
+                            }
+                          }
+                        }
+                      ],
+                      "textRuns": [
+                        {
+                          "ts": {
+                            "bl": 1,
+                            "ff": "Arial",
+                            "fs": 11.25,
+                            "cl": {
+                              "rgb": "#243247"
+                            }
+                          },
+                          "st": 0,
+                          "ed": 18
+                        },
+                        {
+                          "ts": {
+                            "bl": 0,
+                            "ff": "Arial",
+                            "fs": 9,
+                            "cl": {
+                              "rgb": "#475569"
+                            }
+                          },
+                          "st": 19,
+                          "ed": 52
+                        }
+                      ],
+                      "tables": [],
+                      "sectionBreaks": [],
+                      "customDecorations": []
+                    }
+                  }
+                },
+                "isRichText": true
+              },
+              "textRectPadding": {
+                "left": 12,
+                "top": 10,
+                "right": 12,
+                "bottom": 10
+              }
+            },
+            "custom": {
+              "visualSourceId": "close",
+              "semanticKind": "process"
+            },
+            "name": "flowChartProcess 5"
+          },
+          "WjD8_M": {
+            "id": "WjD8_M",
+            "type": "connector",
+            "transform": {
+              "left": -70,
+              "top": -90,
+              "width": 1,
+              "height": 1,
+              "rotation": 0
+            },
+            "connectorData": {
+              "start": {
+                "kind": "shapeSite",
+                "shapeId": "visual-request",
+                "connectionSiteId": 2
+              },
+              "end": {
+                "kind": "shapeSite",
+                "shapeId": "visual-budget",
+                "connectionSiteId": 0
+              },
+              "routing": "orthogonal",
+              "routingMode": "auto",
+              "style": {
+                "stroke": "#0369a1",
+                "strokeWidth": 2,
+                "endMarker": {
+                  "type": "filledArrow"
+                },
+                "cornerStyle": "rounded"
+              },
+              "labels": [
+                {
+                  "id": "_0YQV1",
+                  "content": "Purchase requisition"
+                }
+              ]
+            },
+            "custom": {
+              "visualSource": {
+                "from": "request",
+                "to": "budget",
+                "label": "Purchase requisition"
+              },
+              "mainPath": true
+            },
+            "parentId": "visual-pool",
+            "name": "connector 1"
+          },
+          "PUrRDS": {
+            "id": "PUrRDS",
+            "type": "connector",
+            "transform": {
+              "left": -70,
+              "top": -90,
+              "width": 1,
+              "height": 1,
+              "rotation": 0
+            },
+            "connectorData": {
+              "start": {
+                "kind": "shapeSite",
+                "shapeId": "visual-budget",
+                "connectionSiteId": 1
+              },
+              "end": {
+                "kind": "shapeSite",
+                "shapeId": "visual-approve",
+                "connectionSiteId": 3
+              },
+              "routing": "orthogonal",
+              "routingMode": "auto",
+              "style": {
+                "stroke": "#0369a1",
+                "strokeWidth": 2,
+                "endMarker": {
+                  "type": "filledArrow"
+                },
+                "cornerStyle": "rounded"
+              },
+              "labels": [
+                {
+                  "id": "yq93Uv",
+                  "content": "Budget available"
+                }
+              ]
+            },
+            "custom": {
+              "visualSource": {
+                "from": "budget",
+                "to": "approve",
+                "label": "Budget available"
+              },
+              "mainPath": true
+            },
+            "parentId": "visual-pool",
+            "laneId": "finance",
+            "name": "connector 2"
+          },
+          "H_zZfk": {
+            "id": "H_zZfk",
+            "type": "connector",
+            "transform": {
+              "left": -70,
+              "top": -90,
+              "width": 1,
+              "height": 1,
+              "rotation": 0
+            },
+            "connectorData": {
+              "start": {
+                "kind": "shapeSite",
+                "shapeId": "visual-approve",
+                "connectionSiteId": 2
+              },
+              "end": {
+                "kind": "shapeSite",
+                "shapeId": "visual-receive",
+                "connectionSiteId": 0
+              },
+              "routing": "orthogonal",
+              "routingMode": "auto",
+              "style": {
+                "stroke": "#0369a1",
+                "strokeWidth": 2,
+                "endMarker": {
+                  "type": "filledArrow"
+                },
+                "cornerStyle": "rounded"
+              },
+              "labels": [
+                {
+                  "id": "_TwbhO",
+                  "content": "Supplier delivery"
+                }
+              ]
+            },
+            "custom": {
+              "visualSource": {
+                "from": "approve",
+                "to": "receive",
+                "label": "Supplier delivery"
+              },
+              "mainPath": true
+            },
+            "parentId": "visual-pool",
+            "name": "connector 3"
+          },
+          "6kts0E": {
+            "id": "6kts0E",
+            "type": "connector",
+            "transform": {
+              "left": -70,
+              "top": -90,
+              "width": 1,
+              "height": 1,
+              "rotation": 0
+            },
+            "connectorData": {
+              "start": {
+                "kind": "shapeSite",
+                "shapeId": "visual-receive",
+                "connectionSiteId": 1
+              },
+              "end": {
+                "kind": "shapeSite",
+                "shapeId": "visual-record",
+                "connectionSiteId": 3
+              },
+              "routing": "orthogonal",
+              "routingMode": "auto",
+              "style": {
+                "stroke": "#0369a1",
+                "strokeWidth": 2,
+                "endMarker": {
+                  "type": "filledArrow"
+                },
+                "cornerStyle": "rounded"
+              },
+              "labels": [
+                {
+                  "id": "rtDd6I",
+                  "content": "Inspection passed"
+                }
+              ]
+            },
+            "custom": {
+              "visualSource": {
+                "from": "receive",
+                "to": "record",
+                "label": "Inspection passed"
+              },
+              "mainPath": true
+            },
+            "parentId": "visual-pool",
+            "laneId": "warehouse",
+            "name": "connector 4"
+          },
+          "cQABWJ": {
+            "id": "cQABWJ",
+            "type": "connector",
+            "transform": {
+              "left": -70,
+              "top": -90,
+              "width": 1,
+              "height": 1,
+              "rotation": 0
+            },
+            "connectorData": {
+              "start": {
+                "kind": "shapeSite",
+                "shapeId": "visual-record",
+                "connectionSiteId": 0
+              },
+              "end": {
+                "kind": "shapeSite",
+                "shapeId": "visual-close",
+                "connectionSiteId": 2
+              },
+              "routing": "orthogonal",
+              "routingMode": "auto",
+              "style": {
+                "stroke": "#0369a1",
+                "strokeWidth": 2,
+                "endMarker": {
+                  "type": "filledArrow"
+                },
+                "cornerStyle": "rounded"
+              },
+              "labels": [
+                {
+                  "id": "JHVR6x",
+                  "content": "Receipt posted"
+                }
+              ]
+            },
+            "custom": {
+              "visualSource": {
+                "from": "record",
+                "to": "close",
+                "label": "Receipt posted"
+              },
+              "mainPath": true
+            },
+            "parentId": "visual-pool",
+            "name": "connector 5"
+          },
+          "visual-case-heading": {
+            "id": "visual-case-heading",
+            "type": "text",
+            "text": "Procurement · request to receipt\numl-activity · business",
+            "textData": {
+              "id": "d",
+              "documentStyle": {
+                "marginBottom": 0,
+                "marginLeft": 0,
+                "marginRight": 0,
+                "marginTop": 0,
+                "pageSize": {
+                  "height": null,
+                  "width": null
+                },
+                "renderConfig": {
+                  "horizontalAlign": 1,
+                  "verticalAlign": 1,
+                  "wrapStrategy": 2,
+                  "zeroWidthParagraphBreak": 1
+                },
+                "textStyle": {
+                  "fs": 14
+                }
+              },
+              "drawings": {},
+              "drawingsOrder": [],
+              "body": {
+                "dataStream": "Procurement · request to receipt\ruml-activity · business\r\n",
+                "customBlocks": [],
+                "customRanges": [],
+                "paragraphs": [
+                  {
+                    "startIndex": 32,
+                    "paragraphId": "para_KGd9BmM5Wq3R",
+                    "paragraphStyle": {
+                      "lineSpacing": 1.2,
+                      "spaceBelow": {
+                        "v": 5
+                      }
+                    }
+                  },
+                  {
+                    "startIndex": 56,
+                    "paragraphId": "para_OkNc8uU4oVo9",
+                    "paragraphStyle": {
+                      "lineSpacing": 1.25,
+                      "spaceBelow": {
+                        "v": 0
+                      }
+                    }
+                  }
+                ],
+                "textRuns": [
+                  {
+                    "ts": {
+                      "bl": 1,
+                      "ff": "Arial",
+                      "fs": 18,
+                      "cl": {
+                        "rgb": "#0f172a"
+                      }
+                    },
+                    "st": 0,
+                    "ed": 32
+                  },
+                  {
+                    "ts": {
+                      "bl": 0,
+                      "ff": "Consolas",
+                      "fs": 9,
+                      "cl": {
+                        "rgb": "#64748b"
+                      }
+                    },
+                    "st": 33,
+                    "ed": 56
+                  }
+                ],
+                "tables": [],
+                "sectionBreaks": [],
+                "customDecorations": []
+              }
+            },
+            "transform": {
+              "left": 70,
+              "top": -60,
+              "width": 1100,
+              "height": 110,
+              "rotation": 0
+            },
+            "name": "text 1"
+          }
+        },
+        "background": {
+          "type": "none"
+        }
+      }
+    },
+    "activeSlideId": "hydYZ_",
+    "theme": {
+      "id": "default",
+      "name": "Default",
+      "colorScheme": {
+        "dk1": "#1f2329",
+        "lt1": "#ffffff",
+        "dk2": "#c6ccd6",
+        "lt2": "#f3f5f9",
+        "acc1": "#2c53f1",
+        "acc2": "#ff5a1f",
+        "acc3": "#7e3af2",
+        "acc4": "#f1b312",
+        "acc5": "#1c64f2",
+        "acc6": "#057a55",
+        "hlink": "#2c53f1",
+        "folHlink": "#7e3af2",
+        "boardStroke": "#1f2329",
+        "boardText": "#1f2329",
+        "boardFillPrimary": "#e6eafd",
+        "boardFillDecision": "#fcedc6",
+        "boardFillData": "#d7eae4",
+        "boardFillAccent": "#dfe9fd",
+        "boardFillWarning": "#ffe1d7",
+        "boardFillDanger": "#fde3e3",
+        "boardFillNeutral": "#eef0f3",
+        "boardFillPurple": "#f0e7fd",
+        "boardStrokePrimary": "#1f2329",
+        "boardStrokeDecision": "#1f2329",
+        "boardStrokeData": "#1f2329",
+        "boardStrokeAccent": "#1f2329",
+        "boardStrokeWarning": "#1f2329",
+        "boardStrokeDanger": "#1f2329",
+        "boardStrokeNeutral": "#1f2329",
+        "boardStrokePurple": "#1f2329",
+        "boardTextPrimary": "#1f2329",
+        "boardTextDecision": "#1f2329",
+        "boardTextData": "#1f2329",
+        "boardTextAccent": "#1f2329",
+        "boardTextWarning": "#1f2329",
+        "boardTextDanger": "#1f2329",
+        "boardTextNeutral": "#1f2329",
+        "boardTextPurple": "#1f2329",
+        "boardFillHeader": "#2c53f1",
+        "boardTextOnHeader": "#ffffff",
+        "boardStrokeHeader": "#2846b9",
+        "boardFillStrong": "#1f2329",
+        "boardTextOnStrong": "#ffffff",
+        "boardStrokeStrong": "#1f2329",
+        "primary": "#2c53f1"
+      },
+      "fontScheme": {
+        "heading": "Calibri Light",
+        "body": "Calibri"
+      },
+      "fmtScheme": {
+        "name": "Default",
+        "fillStyleLst": [
+          {
+            "fillType": 2,
+            "color": "#eef0f3",
+            "opacity": 1
+          },
+          {
+            "fillType": 2,
+            "color": "#e6eafd",
+            "opacity": 1
+          },
+          {
+            "fillType": 3,
+            "gradientAngle": 90,
+            "gradientStops": [
+              {
+                "position": 0,
+                "color": "#dfe9fd"
+              },
+              {
+                "position": 1,
+                "color": "#e6eafd"
+              }
+            ]
+          }
+        ],
+        "lnStyleLst": [
+          {
+            "lineStrokeType": 2,
+            "color": "#1f2329",
+            "width": 1,
+            "opacity": 1
+          },
+          {
+            "lineStrokeType": 2,
+            "color": "#1f2329",
+            "width": 1.5,
+            "opacity": 1
+          },
+          {
+            "lineStrokeType": 2,
+            "color": "#1f2329",
+            "width": 2.25,
+            "opacity": 1
+          }
+        ],
+        "effectStyleLst": [
+          {},
+          {
+            "outerShadow": {
+              "color": "rgba(0, 0, 0, 0.18)",
+              "blurRadius": 4,
+              "direction": 45,
+              "distance": 2,
+              "rotateWithShape": false
+            }
+          },
+          {
+            "outerShadow": {
+              "color": "rgba(0, 0, 0, 0.28)",
+              "blurRadius": 8,
+              "direction": 45,
+              "distance": 4,
+              "rotateWithShape": false
+            }
+          }
+        ],
+        "bgFillStyleLst": [
+          {
+            "fillType": 2,
+            "color": "#ffffff",
+            "opacity": 1
+          },
+          {
+            "fillType": 2,
+            "color": "#f3f5f9",
+            "opacity": 1
+          },
+          {
+            "fillType": 3,
+            "gradientAngle": 90,
+            "gradientStops": [
+              {
+                "position": 0,
+                "color": "#ffffff"
+              },
+              {
+                "position": 1,
+                "color": "#f3f5f9"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "resources": [
+      {
+        "name": "UNIVER_EMBED_RESOURCE_PLUGIN",
+        "data": "{\"version\":1,\"embeds\":{}}"
+      },
+      {
+        "name": "BOARD_OBJECT_PERMISSION_PLUGIN",
+        "data": "[]"
+      },
+      {
+        "name": "BOARD_UNIVER_THREAD_COMMENT_PLUGIN",
+        "data": "{}"
+      },
+      {
+        "name": "BOARD_CHART_PLUGIN",
+        "data": "{\"dataSources\":{},\"charts\":{}}"
+      },
+      {
+        "name": "BOARD_TABLE_PLUGIN",
+        "data": "{\"version\":1,\"tables\":{},\"themes\":{}}"
+      },
+      {
+        "name": "UNIVER_EXTERNAL_REFERENCE_PLUGIN",
+        "data": "{\"schemaVersion\":1,\"references\":{}}"
+      }
+    ]
+  },
+  "fixture": {
+    "nodes": [
+      "visual-request",
+      "visual-budget",
+      "visual-approve",
+      "visual-receive",
+      "visual-record",
+      "visual-close"
+    ],
+    "fixed": ["visual-case-heading"],
+    "protected": ["visual-pool"],
+    "expandablePools": ["visual-pool"],
+    "expandableLanes": [
+      {
+        "containerId": "visual-pool",
+        "laneId": "requester"
+      },
+      {
+        "containerId": "visual-pool",
+        "laneId": "finance"
+      },
+      {
+        "containerId": "visual-pool",
+        "laneId": "warehouse"
+      }
+    ],
+    "layoutOptions": {
+      "elementIds": [
+        "visual-pool",
+        "visual-request",
+        "visual-budget",
+        "visual-approve",
+        "visual-receive",
+        "visual-record",
+        "visual-close",
+        "WjD8_M",
+        "PUrRDS",
+        "H_zZfk",
+        "6kts0E",
+        "cQABWJ"
+      ],
+      "direction": "horizontal",
+      "maxNodes": 180
+    }
+  },
+  "measuredReport": {
+    "analyses": [
+      {
+        "pageId": "hydYZ_",
+        "rendered": {
+          "source": "rendered",
+          "issues": [
+            {
+              "id": "element-text-overflow:[\"visual-budget\"]:380:498",
+              "rule": "element-text-overflow",
+              "severity": "error",
+              "elementIds": ["visual-budget"],
+              "connectorIds": [],
+              "bounds": {
+                "left": 380,
+                "top": 498,
+                "width": 256,
+                "height": 138
+              },
+              "focusBounds": {
+                "left": 356,
+                "top": 474,
+                "width": 304,
+                "height": 186
+              },
+              "textLayout": {
+                "availableSize": {
+                  "width": 104,
+                  "height": 49
+                },
+                "contentSize": {
+                  "width": 101,
+                  "height": 102.3
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,89 +1,242 @@
 import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
+import { recordConnectorLabelEvidence } from "./board-visual-label-evidence.mjs";
 
 const snapshot = (board) => JSON.parse(JSON.stringify(board.save()));
 
-function proposeLaneCapacity(board, patches, fixture) {
-  const lanePatches = [];
-  const containers = new Map();
+// Generation permission comes from the private fixture manifest, never from a loaded Board snapshot.
+// Use the public planner's candidate positions: duplicating its font/label/rank budgets goes stale.
+export function proposeGeneratedGraphCapacity(board, fixture, plan) {
+  const poolPatches = [],
+    lanePatches = [],
+    blocked = [];
+  const diagnostics = plan.diagnostics ?? [];
+  if (
+    plan.status !== "incomplete" ||
+    diagnostics.some(
+      (item) => item.severity !== "warning" && item.code !== "swimlane-capacity-exceeded",
+    )
+  )
+    return { poolPatches, lanePatches, blocked };
+  const allowedPools = new Set(fixture.expandablePools ?? []);
+  const allowedLanes = new Map();
   for (const { containerId, laneId } of fixture.expandableLanes ?? []) {
-    if (!containers.has(containerId)) containers.set(containerId, new Set());
-    containers.get(containerId).add(laneId);
+    if (!allowedLanes.has(containerId)) allowedLanes.set(containerId, new Set());
+    allowedLanes.get(containerId).add(laneId);
   }
+  const requested = new Set(
+    diagnostics
+      .filter((item) => item.code === "swimlane-capacity-exceeded")
+      .map((item) => item.elementIds?.[0]),
+  );
   const protectedIds = new Set([...fixture.fixed, ...fixture.protected]);
-  for (const [containerId, allowed] of containers) {
+  const nodes = new Set(fixture.nodes);
+  const elements = Object.values(board.getElements());
+  const transforms = new Map(
+    plan.patches
+      .filter((patch) => patch.transform)
+      .map((patch) => [patch.elementId, patch.transform]),
+  );
+  const generatedPadding = 24;
+  const isPlainFrame = (item) =>
+    item?.transform &&
+    !item.transform.rotation &&
+    !item.transform.skewX &&
+    !item.transform.skewY &&
+    !item.transform.flipX &&
+    !item.transform.flipY &&
+    (item.transform.scaleX ?? 1) === 1 &&
+    (item.transform.scaleY ?? 1) === 1;
+  const isPinned = (item) =>
+    protectedIds.has(item.id) ||
+    item.locked ||
+    item.selectable === false ||
+    !!item.managedBy ||
+    item.connectorData?.routingMode === "manual" ||
+    !!item.connectorData?.waypoints?.length;
+  for (const containerId of requested) {
     const pool = board.getElement(containerId),
       swimlane = pool?.containerData?.swimlane;
+    if (!swimlane || (!allowedPools.has(containerId) && !allowedLanes.has(containerId))) continue;
     if (
-      !swimlane ||
+      pool.parentId ||
       pool.locked ||
       pool.selectable === false ||
       pool.managedBy ||
       fixture.fixed.includes(containerId) ||
       pool.containerData.behavior.membershipLocked ||
-      pool.transform.rotation ||
-      pool.transform.skewX ||
-      pool.transform.skewY ||
-      pool.transform.flipX ||
-      pool.transform.flipY ||
-      (pool.transform.scaleX ?? 1) !== 1 ||
-      (pool.transform.scaleY ?? 1) !== 1
-    )
+      !isPlainFrame(pool)
+    ) {
+      blocked.push({ containerId, reason: "owner-not-an-editable-generated-plain-pool" });
       continue;
+    }
+    const descendants = elements.filter((element) => {
+      const seen = new Set();
+      let current = element;
+      while (current?.parentId && !seen.has(current.id)) {
+        if (current.parentId === containerId) return true;
+        seen.add(current.id);
+        current = board.getElement(current.parentId);
+      }
+      return false;
+    });
+    if (
+      descendants.some(
+        (item) =>
+          isPinned(item) ||
+          (item.type !== "connector" &&
+            (!nodes.has(item.id) || item.parentId !== containerId || !isPlainFrame(item))),
+      )
+    ) {
+      blocked.push({ containerId, reason: "pinned-native-or-nested-member" });
+      continue;
+    }
+    const members = descendants.filter((item) => item.type !== "connector");
+    const candidates = members.map((item) => ({
+      id: item.id,
+      laneId: item.laneId,
+      transform: { ...item.transform, ...transforms.get(item.id) },
+    }));
+    if (
+      candidates.some(
+        ({ transform }) =>
+          ![transform.left, transform.top, transform.width, transform.height].every(
+            Number.isFinite,
+          ) ||
+          transform.width <= 0 ||
+          transform.height <= 0,
+      )
+    ) {
+      blocked.push({ containerId, reason: "invalid-native-candidate-geometry" });
+      continue;
+    }
     const lanes = [...swimlane.lanes].sort((a, b) => a.order - b.order);
-    const elements = Object.values(board.getElements());
+    const horizontal = swimlane.orientation === "horizontal";
+    const mainSize = horizontal ? "width" : "height",
+      mainStart = horizontal ? "left" : "top";
+    const crossSize = horizontal ? "height" : "width",
+      crossStart = horizontal ? "top" : "left";
     const eligible = (lane) =>
-      allowed.has(lane.id) &&
-      !lane.locked &&
-      !lane.collapsed &&
-      !elements.some((element) => {
-        const seen = new Set();
-        let current = element,
-          laneId = current.laneId,
-          pinned = false;
-        while (current && current.id !== containerId && !seen.has(current.id)) {
-          seen.add(current.id);
-          pinned ||=
-            protectedIds.has(current.id) ||
-            current.locked ||
-            current.selectable === false ||
-            !!current.managedBy;
-          if (current.parentId === containerId) return laneId === lane.id && pinned;
-          current = current.parentId ? board.getElement(current.parentId) : undefined;
-          laneId ??= current?.laneId;
-        }
-        return false;
-      });
-    const desired = lanes.map((lane) => {
-      if (!eligible(lane)) return lane.size;
-      const members = fixture.nodes
-        .map((id) => board.getElement(id))
-        .filter((item) => item?.parentId === containerId && item.laneId === lane.id);
-      const axis = swimlane.orientation === "horizontal" ? "height" : "width",
-        sizes = members.map((item) => patches[item.id]?.[axis] ?? item.transform[axis]),
-        stacked = (fixture.layoutOptions.direction ?? "horizontal") !== swimlane.orientation;
-      if (!sizes.length || !sizes.every((size) => Number.isFinite(size) && size > 0))
-        return lane.size;
-      // Conservative generated-lane preflight; the public graph plan remains authoritative.
+      allowedLanes.get(containerId)?.has(lane.id) && !lane.locked && !lane.collapsed;
+    if (allowedPools.has(containerId) && lanes.every((lane) => !lane.locked && !lane.collapsed)) {
       const required = Math.ceil(
-        (stacked ? sizes.reduce((sum, size) => sum + size, 0) : Math.max(...sizes)) +
-          72 +
-          (stacked ? Math.max(0, sizes.length - 1) * (fixture.layoutOptions.layerGap ?? 100) : 0),
+        Math.max(
+          pool.transform[mainSize],
+          ...candidates.map(
+            ({ transform }) => transform[mainStart] + transform[mainSize] + generatedPadding,
+          ),
+        ),
       );
-      return Math.max(lane.size, required);
+      if (required > pool.transform[mainSize])
+        poolPatches.push({
+          containerId,
+          transform: { [mainSize]: required },
+          kind: "swimlane-pool-capacity",
+        });
+    }
+    let cursor =
+      horizontal && pool.containerData.titleVisible !== false
+        ? (pool.containerData.headerSize ?? 0)
+        : 0;
+    const desired = lanes.map((lane) => {
+      const start = cursor;
+      cursor += lane.size;
+      const ends = candidates
+        .filter((item) => item.laneId === lane.id)
+        .map(
+          ({ transform }) =>
+            transform[crossStart] + transform[crossSize] - start + generatedPadding,
+        );
+      return eligible(lane) && ends.length
+        ? Math.max(lane.size, Math.ceil(Math.max(...ends)))
+        : lane.size;
     });
     const firstGrowth = desired.findIndex((size, index) => size > lanes[index].size);
-    if (firstGrowth < 0 || !lanes.slice(firstGrowth).every(eligible)) continue;
+    if (firstGrowth < 0) continue;
+    if (!lanes.slice(firstGrowth).every(eligible)) {
+      blocked.push({ containerId, reason: "later-lane-capacity-is-authored-locked-or-collapsed" });
+      continue;
+    }
     const targets = [];
     let carry = 0;
     for (const [index, lane] of lanes.entries()) {
       const size = desired[index] + carry;
-      if (size > lane.size) targets.push({ containerId, laneId: lane.id, size });
+      if (size > lane.size)
+        targets.push({ containerId, laneId: lane.id, size, kind: "swimlane-capacity" });
       carry += desired[index] - lane.size;
     }
-    // Native resizing transfers capacity to the next lane. Reserve it at the pool's end first.
+    // Native resizing transfers capacity to the next lane. Reserve the suffix at the end first.
     lanePatches.push(...targets.reverse());
   }
-  return lanePatches;
+  return { poolPatches, lanePatches, blocked };
+}
+
+export function reserveGeneratedVisualCapacity(board, fixture) {
+  const applications = [],
+    steps = [];
+  if (!(fixture.expandablePools?.length || fixture.expandableLanes?.length))
+    return { status: "not-applicable", applications, steps, rolledBack: false };
+  const before = snapshot(board);
+  const apply = (action, details) => {
+    const previous = snapshot(board);
+    const accepted = action(),
+      after = snapshot(board);
+    const changed = JSON.stringify(previous) !== JSON.stringify(after);
+    const application = { ...details, changed, applied: accepted === true };
+    applications.push(application);
+    assert.equal(accepted, true, "Generated capacity resize rejected");
+    fixture.verify();
+    if (changed) {
+      assert.equal(board.undo(), true, "Generated capacity Undo failed");
+      assert.deepEqual(snapshot(board), previous, "Generated capacity Undo lost content");
+      assert.equal(board.redo(), true, "Generated capacity Redo failed");
+      assert.deepEqual(snapshot(board), after, "Generated capacity Redo lost content");
+    }
+    if (changed) Object.assign(application, { undoExact: true, redoExact: true });
+  };
+  let rollbackStarted = false;
+  const rollback = () => {
+    rollbackStarted = true;
+    for (const item of [...applications].reverse())
+      if (item.changed)
+        assert.equal(board.undo(), true, "Blocked generated capacity rollback failed");
+    assert.deepEqual(snapshot(board), before, "Blocked generated capacity rollback lost content");
+  };
+  let plan;
+  try {
+    for (let iteration = 0; iteration < 3; iteration++) {
+      const planning = snapshot(board);
+      plan = board.planGraphLayout({ ...fixture.layoutOptions, fixedElementIds: fixture.fixed });
+      assert.deepEqual(snapshot(board), planning, "Capacity demand planning mutated content");
+      if (plan.status === "ready")
+        return { status: "ready", applications, steps, rolledBack: false };
+      const proposal = proposeGeneratedGraphCapacity(board, fixture, plan);
+      steps.push({ iteration, status: plan.status, diagnostics: plan.diagnostics, proposal });
+      if (!proposal.poolPatches.length && !proposal.lanePatches.length) break;
+      for (const patch of proposal.poolPatches)
+        apply(() => board.setElementTransform(patch.containerId, patch.transform), patch);
+      for (const patch of proposal.lanePatches)
+        apply(() => board.setSwimlaneLaneSize(patch.containerId, patch.laneId, patch.size), patch);
+    }
+    // Never apply incomplete candidates or report a capacity warning as a clean layout.
+    const planning = snapshot(board);
+    plan = board.planGraphLayout({ ...fixture.layoutOptions, fixedElementIds: fixture.fixed });
+    assert.deepEqual(snapshot(board), planning);
+    if (plan.status === "ready") return { status: "ready", applications, steps, rolledBack: false };
+    assert.equal(board.applyLayoutPlan(plan), false, "Incomplete capacity plan accepted");
+    assert.deepEqual(snapshot(board), planning);
+    rollback();
+    return {
+      status: "blocked",
+      applications,
+      steps,
+      diagnostics: plan.diagnostics,
+      rolledBack: true,
+    };
+  } catch (error) {
+    if (!rollbackStarted) rollback();
+    throw error;
+  }
 }
 
 export function proposeMeasuredTextGrowth(board, report, fixture) {
@@ -91,17 +244,24 @@ export function proposeMeasuredTextGrowth(board, report, fixture) {
     tablePatches = {},
     skipped = [];
   const protectedIds = new Set([...fixture.fixed, ...fixture.protected]);
-  const candidates = new Set(fixture.nodes);
+  const generatedParticipants = new Set(fixture.expandableSequenceParticipants ?? []);
+  const nativeTextIds = new Set(fixture.textPlanElementIds ?? []);
+  const candidates = new Set([...fixture.nodes, ...generatedParticipants]);
   const issues = report.analyses
     .flatMap((page) => page.rendered?.issues ?? [])
     .filter((issue) => issue.rule === "element-text-overflow");
   for (const issue of issues)
     for (const id of issue.elementIds) {
       const element = board.getElement(id);
+      const generatedParticipant =
+        generatedParticipants.has(id) &&
+        element?.type === "shape" &&
+        !!element.shapeData.sequenceLifeline;
       let reason;
       if (!element || !["shape", "table"].includes(element.type) || !candidates.has(id))
         reason = "not-an-ordinary-generated-shape-or-table";
-      else if (protectedIds.has(id)) reason = "fixed-or-native-owner";
+      else if (fixture.fixed.includes(id) || (protectedIds.has(id) && !generatedParticipant))
+        reason = "fixed-or-native-owner";
       else {
         const seen = new Set();
         let current = element;
@@ -114,6 +274,7 @@ export function proposeMeasuredTextGrowth(board, report, fixture) {
           current = current.parentId ? board.getElement(current.parentId) : undefined;
         }
       }
+      if (!reason && nativeTextIds.has(id)) reason = "native-text-plan-required";
       const available = issue.textLayout?.availableSize,
         content = issue.textLayout?.contentSize;
       if (
@@ -204,7 +365,8 @@ export function proposeMeasuredTextGrowth(board, report, fixture) {
   return {
     patches,
     tablePatches,
-    lanePatches: proposeLaneCapacity(board, patches, fixture),
+    // Capacity is resolved after measured writes by the native planner, not estimated glyph gaps.
+    lanePatches: [],
     skipped,
     issues,
   };
@@ -220,18 +382,48 @@ async function assertHistory(board, before, after, label) {
 export async function repairMeasuredVisualText(board, lint, fixture) {
   const reports = [],
     attempts = [];
-  const measure = () =>
-    lint.lint({
+  const protectedIds = new Set([...fixture.fixed, ...fixture.protected]);
+  const textPlanElementIds = fixture.textPlanElementIds?.filter((id) => !protectedIds.has(id));
+  const measure = async () => {
+    const before = snapshot(board);
+    const report = await lint.lint({
       unitType: "board",
-      unitData: board.save(),
+      unitData: snapshot(board),
       ...fixture.renderUnits,
       mode: "rendered",
+      ...(textPlanElementIds?.length
+        ? {
+            textPlanElementIds,
+            ...(fixture.textPlanMaximumWidthGrowth === undefined
+              ? {}
+              : { textPlanMaximumWidthGrowth: fixture.textPlanMaximumWidthGrowth }),
+          }
+        : {}),
     });
+    assert.deepEqual(snapshot(board), before, "Rendered text planning changed source content");
+    return report;
+  };
   for (let index = 0; index < 3; index++) {
     const report = await measure();
     reports.push(report);
+    const textPlans = textPlanElementIds?.length
+      ? report.analyses.map((page) => page.textPlan)
+      : [];
+    const unavailable =
+      textPlanElementIds?.length && (!textPlans.length || textPlans.some((plan) => !plan));
+    if (unavailable || textPlans.some((plan) => plan.status !== "ready"))
+      return {
+        status: unavailable ? "text-plan-unavailable" : "text-plan-incomplete",
+        reports,
+        attempts,
+        visualApproval: "pending",
+      };
     const proposal = proposeMeasuredTextGrowth(board, report, fixture);
-    if (!Object.keys(proposal.patches).length && !Object.keys(proposal.tablePatches).length)
+    if (
+      !textPlans.some((plan) => plan.patches.length) &&
+      !Object.keys(proposal.patches).length &&
+      !Object.keys(proposal.tablePatches).length
+    )
       return {
         status: proposal.issues.length ? "blocked" : "no-overflow-reported",
         reports,
@@ -255,14 +447,16 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
         ...(changed ? { undoExact: true, redoExact: true } : {}),
       });
     };
-    for (const patch of proposal.lanePatches)
-      await applyGrowth(
-        () => board.setSwimlaneLaneSize(patch.containerId, patch.laneId, patch.size),
-        {
-          kind: "swimlane-capacity",
-          ...patch,
-        },
-      );
+    for (const textPlan of textPlans) {
+      if (!textPlan.patches.length) continue;
+      await applyGrowth(() => board.applyLayoutPlan(textPlan), {
+        kind: "native-rendered-text-plan",
+        textPlan,
+      });
+      const applied = snapshot(board);
+      assert.equal(board.applyLayoutPlan(textPlan), false, "Stale native text plan accepted");
+      assert.deepEqual(snapshot(board), applied, "Rejected text plan changed content");
+    }
     if (Object.keys(proposal.patches).length)
       await applyGrowth(() => board.setElementsTransform(proposal.patches), {
         kind: "element-frame-size",
@@ -285,6 +479,9 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
           );
         }
     }
+    const capacityPreparation = reserveGeneratedVisualCapacity(board, fixture);
+    if (!capacityPreparation.rolledBack)
+      growthApplications.push(...capacityPreparation.applications);
     const grown = snapshot(board);
     const plan = board.planGraphLayout({
       ...fixture.layoutOptions,
@@ -299,9 +496,11 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
       assert.deepEqual(snapshot(board), before, "Blocked growth rollback lost content");
       attempts.push({
         index,
+        textPlans,
         patches: proposal.patches,
         tablePatches: proposal.tablePatches,
-        lanePatches: proposal.lanePatches,
+        lanePatches: capacityPreparation.steps.flatMap((step) => step.proposal.lanePatches),
+        capacityPreparation,
         growthApplications,
         skipped: proposal.skipped,
         growthApplied: true,
@@ -332,9 +531,11 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
     }
     attempts.push({
       index,
+      textPlans,
       patches: proposal.patches,
       tablePatches: proposal.tablePatches,
-      lanePatches: proposal.lanePatches,
+      lanePatches: capacityPreparation.steps.flatMap((step) => step.proposal.lanePatches),
+      capacityPreparation,
       growthApplications,
       skipped: proposal.skipped,
       growthApplied: true,
@@ -357,4 +558,125 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
     attempts,
     visualApproval: "pending",
   };
+}
+
+export async function verifyRenderedLabelPlan(
+  board,
+  lint,
+  assertCollisionImprovement = true,
+  renderUnits = {},
+  maximumAutomaticLabelDistance,
+) {
+  const input = {
+    unitType: "board",
+    unitData: board.save(),
+    ...renderUnits,
+    mode: "rendered",
+    includeLabelPlan: true,
+    ...(maximumAutomaticLabelDistance === undefined ? {} : { maximumAutomaticLabelDistance }),
+  };
+  const beforeSnapshot = snapshot(board);
+  const before = await lint.lint(input);
+  assert.deepEqual(snapshot(board), beforeSnapshot, "Rendered label planning changed the source");
+  assert.equal(before.analyses.length, 1, "Fixture unexpectedly changed page count");
+  const plan = before.analyses[0].labelPlan;
+  assert.ok(plan, "Requested rendered label plan unavailable");
+  let applied = false;
+  let application;
+  if (plan.status === "ready" && plan.patches.length > 0) {
+    const semantics = labelSemantics(board);
+    if (!board.applyLayoutPlan(plan)) {
+      const error = new Error("Rendered plan rejected by the headless Facade");
+      error.diagnostics = {
+        report: before,
+        sourcePreconditions: board.planGraphLayout().preconditions,
+      };
+      throw error;
+    }
+    assert.deepEqual(
+      labelSemantics(board),
+      semantics,
+      "Label plan changed text, bindings, styles or node geometry",
+    );
+    applied = true;
+    const afterApply = snapshot(board);
+    assert.equal(board.undo(), true, "Rendered label plan Undo failed");
+    assert.deepEqual(snapshot(board), beforeSnapshot, "Label plan Undo lost data");
+    assert.equal(board.redo(), true, "Rendered label plan Redo failed");
+    assert.deepEqual(snapshot(board), afterApply, "Label plan Redo lost data");
+    assert.equal(board.applyLayoutPlan(plan), false, "Stale rendered label plan accepted");
+    application = {
+      status: "applied-undo-redo",
+      applied: true,
+      changed: !isDeepStrictEqual(beforeSnapshot, afterApply),
+      undoExact: true,
+      redoExact: true,
+      staleRejected: true,
+    };
+  } else if (plan.status === "incomplete") {
+    assert.equal(board.applyLayoutPlan(plan), false, "Incomplete rendered label plan accepted");
+    assert.deepEqual(snapshot(board), beforeSnapshot, "Rejected label plan changed content");
+    application = { status: "rejected-incomplete", applied: false, rejectedWithoutMutation: true };
+  } else {
+    assert.equal(plan.status, "ready");
+    assert.deepEqual(snapshot(board), beforeSnapshot, "No-op rendered plan changed content");
+    application = { status: "unchanged", applied: false };
+  }
+  const after = await lint.lint({ ...input, unitData: board.save(), includeLabelPlan: false });
+  const collisions = (report) =>
+    report.findings.filter(
+      (finding) =>
+        finding.rule.startsWith("connector-label-") && finding.rule.includes("collision"),
+    ).length;
+  const collisionNonIncreasing = collisions(after) <= collisions(before);
+  if (assertCollisionImprovement) {
+    assert.ok(collisionNonIncreasing, "Label planning increased measured collisions");
+  }
+  const record = (report) =>
+    report.analyses.map(({ pageId, rendered }) => ({
+      pageId,
+      ...recordConnectorLabelEvidence(rendered, pageId, { maximumAutomaticLabelDistance })
+        .nativeAutomaticLabelDistance,
+    }));
+  const automaticLabelDistance =
+    maximumAutomaticLabelDistance === undefined
+      ? undefined
+      : {
+          source: "native-lint-analysis",
+          maximumAutomaticLabelDistance,
+          before: record(before),
+          after: record(after),
+          sameStateWithScreenshots: "not-established",
+          finalPaintDistance: "unmeasured",
+          visualApproval: "pending",
+        };
+  if (automaticLabelDistance)
+    automaticLabelDistance.status =
+      automaticLabelDistance.after.length === 0 ||
+      automaticLabelDistance.after.some((page) => page.status === "incomplete")
+        ? "incomplete"
+        : automaticLabelDistance.after.some((page) => page.status === "findings")
+          ? "findings"
+          : "measured";
+  return {
+    before,
+    after,
+    applied,
+    application,
+    collisionNonIncreasing,
+    ...(automaticLabelDistance === undefined ? {} : { automaticLabelDistance }),
+  };
+}
+
+function labelSemantics(board) {
+  const copy = snapshot(board);
+  for (const pages of [copy.pages, copy.slides]) {
+    for (const page of Object.values(pages ?? {})) {
+      for (const element of Object.values(page.elements)) {
+        if (!element.connectorData) continue;
+        for (const label of element.connectorData.labels ?? []) delete label.placement;
+      }
+    }
+  }
+  return copy;
 }

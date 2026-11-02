@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { reserveGeneratedVisualCapacity } from "./board-visual-repair.mjs";
+import { insertCompactGeneratedMindMap } from "./board-generated-styles.mjs";
 
 export const visualVariants = ["business", "long-bilingual", "nested-dense"];
 const node = (id, title, detail, kind = "service", extra = {}) => ({
@@ -617,7 +619,7 @@ function json(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function actorCaption(element, item, E) {
+function actorCaption(element, item, E, connectionSites) {
   const copy = json(element),
     glyphHeight = copy.transform.height,
     width = copy.transform.width;
@@ -643,28 +645,54 @@ function actorCaption(element, item, E) {
   const top = glyphHeight + 4,
     height = top + captionHeight,
     geometry = copy.shapeData.customGeometry;
-  // Read the factory's horizontal arm from this instance instead of copying its drawing implementation.
+  const nativeArm = connectionSites.find((site) => site.index === E.BoardConnectorSite.Right);
   const arms = [];
-  for (const path of geometry.pathLst) {
-    let previous;
-    for (const command of path.dataArray) {
-      if (command.command === "L" && previous?.[1] === command.points[1])
-        arms.push({
-          length: Math.abs(command.points[0] - previous[0]),
-          y: (command.points[1] * glyphHeight) / path.h,
-        });
-      previous = ["M", "L"].includes(command.command) ? command.points : undefined;
+  if (!nativeArm) {
+    // Older SDK stock Actors use literal paths and do not expose native connection sites.
+    for (const path of geometry.pathLst) {
+      let previous;
+      for (const command of path.dataArray) {
+        if (
+          command.command === "L" &&
+          previous?.[1] === command.points[1] &&
+          command.points.every(Number.isFinite) &&
+          previous.every(Number.isFinite)
+        )
+          arms.push({
+            length: Math.abs(command.points[0] - previous[0]),
+            y: (command.points[1] * glyphHeight) / path.h,
+          });
+        previous = ["M", "L"].includes(command.command) ? command.points : undefined;
+      }
     }
-    path.h *= height / glyphHeight;
   }
-  const arm = arms.sort((a, b) => b.length - a.length)[0];
+  const arm = nativeArm ?? arms.sort((a, b) => b.length - a.length)[0];
   assert.ok(arm, "Native Actor has no horizontal arm anchor");
+  const glyphHeightGuide = "visualActorGlyphHeight";
+  for (const path of geometry.pathLst) {
+    if (Number.isFinite(path.h)) path.h *= height / glyphHeight;
+    for (const command of path.dataArray)
+      command.points = command.points.map((value) => (value === "h" ? glyphHeightGuide : value));
+  }
   if (geometry.strokeReferenceSize) geometry.strokeReferenceSize.height *= height / glyphHeight;
+  const originalGuides = geometry.gd ?? {};
   geometry.gd = {
-    ...geometry.gd,
+    [glyphHeightGuide]: [E.ShapeOperatorEnum.MulDiv, "h", glyphHeight, height],
+    ...Object.fromEntries(
+      Object.entries(originalGuides).map(([key, formula]) => [
+        key,
+        Array.isArray(formula)
+          ? formula.map((value, index) => (index > 0 && value === "h" ? glyphHeightGuide : value))
+          : formula,
+      ]),
+    ),
     visualActorCaptionTop: [E.ShapeOperatorEnum.MulDiv, "h", top, height],
   };
-  geometry.gdKeyList = [...(geometry.gdKeyList ?? []), "visualActorCaptionTop"];
+  geometry.gdKeyList = [
+    glyphHeightGuide,
+    ...(geometry.gdKeyList ?? Object.keys(originalGuides)),
+    "visualActorCaptionTop",
+  ];
   geometry.rect = { l: "l", t: "visualActorCaptionTop", r: "r", b: "b" };
   copy.transform.height = height;
   copy.shapeData.textRectPadding = { left: 12, right: 12, top: 0, bottom: 8 };
@@ -676,7 +704,9 @@ export function realizeVisualFixture(board, api, profile, variant) {
   const E = api.Enum;
   const ids = {};
   const protectedIds = [];
+  const textPlanElementIds = [];
   const fixed = [];
+  const feedbackConnectorIds = [];
   const groups = {};
   const expectations = [];
   const structuredTableText = new Map();
@@ -724,15 +754,16 @@ export function realizeVisualFixture(board, api, profile, variant) {
           children: children(item.id),
         }));
     const root = spec.nodes.find((item) => !item.parent);
+    const structureKind = {
+      mindmap: variant === "nested-dense" ? "mindmap-vertical" : "mindmap-horizontal",
+      tree: variant === "nested-dense" ? "mindmap-vertical" : "tree-right",
+      timeline: variant === "nested-dense" ? "timeline-vertical" : "timeline-horizontal",
+    }[profile];
     const native = ensure(
-      board.insertMindMap({
+      insertCompactGeneratedMindMap(board, {
         left: 520,
         top: 400,
-        structureKind: {
-          mindmap: variant === "nested-dense" ? "mindmap-vertical" : "mindmap-horizontal",
-          tree: variant === "nested-dense" ? "tree-down" : "tree-right",
-          timeline: variant === "nested-dense" ? "timeline-vertical" : "timeline-horizontal",
-        }[profile],
+        structureKind,
         root: {
           text: [root.title, root.detail].filter(Boolean).join("\n"),
           children: children(root.id),
@@ -743,16 +774,32 @@ export function realizeVisualFixture(board, api, profile, variant) {
     if (profile === "timeline")
       ensure(
         native.setLayout({
-          structureKind: "timeline-vertical",
-          direction: "right",
+          direction: variant === "nested-dense" ? "right" : "both",
           horizontalGap: 80,
           siblingGap: 16,
           branchGap: 24,
         }),
-        "Readable native timeline layout failed",
+        "Generated native timeline spacing failed",
       );
+    expectations.push(() => {
+      assert.equal(
+        native.getLayout()?.structureKind,
+        structureKind,
+        "Generated native structure changed orientation",
+      );
+      if (profile === "timeline")
+        assert.ok(
+          native.getBounds().width < (variant === "long-bilingual" ? 2700 : 2100),
+          "Generated native timeline exceeds its readable width budget",
+        );
+    });
     protectedIds.push(...Object.keys(board.getElements()));
   } else if (profile === "uml-sequence") {
+    const participantHeight = variant === "long-bilingual" ? 150 : 85;
+    const messageStep = 72;
+    const firstMessageOffset = 48;
+    const lifelineHeight =
+      firstMessageOffset + Math.max(0, spec.edges.length - 1) * messageStep + 72;
     spec.nodes.forEach((item, index) => {
       const ref = ensure(
         board.insertShape({
@@ -761,13 +808,13 @@ export function realizeVisualFixture(board, api, profile, variant) {
             left: 100 + index * 390,
             top: 80,
             width: 290,
-            height: variant === "long-bilingual" ? 150 : 85,
+            height: participantHeight,
           },
           shapeData: {
             sequenceLifeline: {
               participantShapeType: "object",
               participantEngineShapeType: E.ShapeTypeEnum.RoundRect,
-              lifelineHeight: spec.edges.length * 140 + 220,
+              lifelineHeight,
               minLifelineHeight: 80,
             },
           },
@@ -775,6 +822,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
         "Sequence participant insertion failed",
       );
       ref.getText().setRichText(rich(item.title, item.detail));
+      ref.setStrokeWidth(1.25);
       ids[item.id] = ref.getId();
     });
     ensure(
@@ -783,10 +831,15 @@ export function realizeVisualFixture(board, api, profile, variant) {
           fromParticipantId: ids[item.from],
           toParticipantId: ids[item.to],
           type: item.reply ? "reply" : "synchronous",
+          style: { strokeWidth: 1.25 },
           text: item.label,
           order: index + 1,
         })),
-        { timeOriginY: variant === "long-bilingual" ? 270 : 210, step: 140 },
+        {
+          timeOriginY: 80 + participantHeight,
+          firstOffsetY: firstMessageOffset,
+          step: messageStep,
+        },
       ),
       "Sequence message insertion failed",
     );
@@ -865,17 +918,14 @@ export function realizeVisualFixture(board, api, profile, variant) {
     }
     if (spec.lanes) {
       const dimensions = spec.nodes.map(size);
-      const poolWidth =
-        190 +
+      const horizontal = spec.direction === "horizontal";
+      const headerSize = horizontal ? 190 : 64;
+      const mainSize = horizontal ? "width" : "height";
+      const poolMainSize =
+        headerSize +
         64 +
-        (spec.direction === "horizontal"
-          ? dimensions.reduce((sum, value) => sum + value.width, 0) + (spec.nodes.length - 1) * 100
-          : Math.max(
-              ...spec.lanes.map((lane) => {
-                const members = spec.nodes.filter((item) => item.lane === lane.id).map(size);
-                return Math.max(0, ...members.map((member) => member.width));
-              }),
-            ));
+        dimensions.reduce((sum, value) => sum + value[mainSize], 0) +
+        (spec.nodes.length - 1) * 100;
       const lanes = spec.lanes.map((lane) => {
         const members = spec.nodes.filter((item) => item.lane === lane.id).map(size);
         return {
@@ -883,23 +933,22 @@ export function realizeVisualFixture(board, api, profile, variant) {
           size:
             lane.size ??
             Math.max(
-              230,
-              members.reduce((sum, value) => sum + value.height, 0) +
-                Math.max(0, members.length - 1) * (spec.direction === "vertical" ? 100 : 48) +
-                72,
+              160,
+              Math.max(0, ...members.map((value) => value[horizontal ? "height" : "width"])) + 72,
             ),
         };
       });
+      const poolCrossSize = lanes.reduce((sum, lane) => sum + lane.size, 0);
       ensure(
         board.createSwimlane({
           id: "visual-pool",
           left: 70,
           top: 90,
-          width: poolWidth,
-          height: lanes.reduce((sum, lane) => sum + lane.size, 0) + 80,
-          headerSize: 190,
+          width: horizontal ? poolMainSize : poolCrossSize,
+          height: horizontal ? poolCrossSize + 80 : poolMainSize,
+          headerSize,
           title: spec.title,
-          orientation: "horizontal",
+          orientation: spec.direction,
           lanes,
         }),
         "Swimlane insertion failed",
@@ -1012,19 +1061,21 @@ export function realizeVisualFixture(board, api, profile, variant) {
         frontend: ["#eff6ff", "#2563eb"],
       }[item.kind] ?? ["#f0fdfa", "#0f766e"];
       const transform = seed(index, item);
+      const pool = item.lane ? board.getElement("visual-pool") : undefined;
+      const laneIndex = spec.lanes?.findIndex((lane) => lane.id === item.lane);
+      const laneOffset = pool?.containerData.swimlane.lanes
+        .slice(0, laneIndex)
+        .reduce((sum, lane) => sum + lane.size, 0);
       const point = item.lane
-        ? {
-            x: 310 + (spec.direction === "horizontal" ? index * 70 : 0),
-            y:
-              210 +
-              board
-                .getElement("visual-pool")
-                .containerData.swimlane.lanes.slice(
-                  0,
-                  spec.lanes.findIndex((lane) => lane.id === item.lane),
-                )
-                .reduce((sum, lane) => sum + lane.size, 0),
-          }
+        ? spec.direction === "horizontal"
+          ? { x: 310 + index * 70, y: 210 + laneOffset }
+          : {
+              x:
+                pool.transform.left +
+                laneOffset +
+                pool.containerData.swimlane.lanes[laneIndex].size / 2,
+              y: 210 + index * 70,
+            }
         : { x: transform.left, y: transform.top };
       const ref = ensure(
         board.insertShapeAtPoint({
@@ -1041,7 +1092,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
           },
           fillColor: palette[0],
           strokeColor: palette[1],
-          strokeWidth: 1.25,
+          ...(item.kind === "component" ? {} : { strokeWidth: 1.25 }),
           attachToDropTarget: false,
           ...(item.parent ? { parentId: groups[item.parent] } : {}),
           ...(item.lane ? { parentId: "visual-pool", laneId: item.lane } : {}),
@@ -1050,8 +1101,16 @@ export function realizeVisualFixture(board, api, profile, variant) {
         `Cannot create ${item.id}`,
       );
       ids[item.id] = ref.id;
+      // Only ordinary presets created here participate; custom glyphs retain their native geometry.
+      if (!["actor", "component", "initial", "final"].includes(item.kind))
+        textPlanElementIds.push(ref.id);
       if (item.kind === "actor") {
-        const caption = actorCaption(board.getElement(ref.id), item, E);
+        const caption = actorCaption(
+          board.getElement(ref.id),
+          item,
+          E,
+          board.getShape(ref.id).getConnectionSites(),
+        );
         ensure(
           board.updateElement(ref.id, { element: caption.element }),
           "Cannot reserve Actor caption rail",
@@ -1082,6 +1141,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
             multiplicity: item.endMultiplicity,
           },
           name: item.label,
+          style: { strokeWidth: 1.25 },
         });
       else if (profile === "erd")
         ref = board.insertEntityRelation({
@@ -1089,6 +1149,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
           start: { elementId: ids[item.from], cardinality: "one" },
           end: { elementId: ids[item.to], cardinality: item.cardinality },
           label: item.label,
+          style: { strokeWidth: 1.25 },
         });
       else {
         const primary = spec.mainPath?.some(
@@ -1171,6 +1232,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
         });
       }
       ensure(ref, `Cannot create ${item.from} → ${item.to}`);
+      if (outerFeedback) feedbackConnectorIds.push(ref.id);
       if (item.waypoints?.length || item.routingMode === "manual") {
         for (const id of [ids[item.from], ids[item.to]]) if (!fixed.includes(id)) fixed.push(id);
         protectedIds.push(ref.id);
@@ -1223,11 +1285,14 @@ export function realizeVisualFixture(board, api, profile, variant) {
   const contentBefore = json(board.getElements());
   const expectedRelations = spec.native ? spec.nodes.length - 1 : spec.edges.length;
   const nodes = Object.values(ids);
-  return {
+  const fixture = {
     spec,
     nodes,
     fixed,
     protected: protectedIds,
+    ...(textPlanElementIds.length ? { textPlanElementIds, textPlanMaximumWidthGrowth: 1.25 } : {}),
+    // Only this factory owns the pool main dimension; this permission is never persisted.
+    expandablePools: spec.lanes ? ["visual-pool"] : [],
     expandableLanes: (spec.lanes ?? [])
       .filter((lane) => lane.size === undefined && !lane.locked && !lane.collapsed)
       .map((lane) => ({ containerId: "visual-pool", laneId: lane.id })),
@@ -1235,9 +1300,9 @@ export function realizeVisualFixture(board, api, profile, variant) {
       elementIds: layoutElementIds,
       direction: spec.direction,
       maxNodes: 180,
-      ...(profile === "uml-class" ? { layerGap: 160 } : {}),
+      ...(feedbackConnectorIds.length ? { feedbackConnectorIds } : {}),
       ...(["architecture", "deployment", "uml-package", "uml-use-case"].includes(profile)
-        ? { layerGap: 192, itemGap: 64 }
+        ? { itemGap: 64 }
         : {}),
     },
     compactContainers: Object.values(groups).reverse(),
@@ -1343,4 +1408,7 @@ export function realizeVisualFixture(board, api, profile, variant) {
     },
     verifyLayout() {},
   };
+  fixture.capacityPreparation = reserveGeneratedVisualCapacity(board, fixture);
+  fixture.verify();
+  return fixture;
 }

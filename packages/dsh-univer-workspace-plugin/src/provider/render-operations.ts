@@ -85,7 +85,12 @@ export async function lintUnitLayout(
   config: RenderRuntimeConfig,
   options: Pick<
     Extract<UnitLayoutLintInput, { unitType: "board" }>,
-    "mode" | "includeLabelPlan"
+    | "mode"
+    | "includeLabelPlan"
+    | "includePortPlan"
+    | "textPlanElementIds"
+    | "textPlanMaximumWidthGrowth"
+    | "maximumAutomaticLabelDistance"
   > = {},
 ): Promise<UnitLayoutLintReport> {
   if (source.unitType !== "slide" && source.unitType !== "board") {
@@ -93,12 +98,51 @@ export async function lintUnitLayout(
   }
   if (
     source.unitType === "slide" &&
-    (options.mode !== undefined || options.includeLabelPlan === true)
+    (options.mode !== undefined ||
+      options.includeLabelPlan === true ||
+      options.includePortPlan === true ||
+      options.textPlanElementIds !== undefined ||
+      options.textPlanMaximumWidthGrowth !== undefined ||
+      options.maximumAutomaticLabelDistance !== undefined)
   ) {
-    throw new Error("Layout lint mode and label planning are only supported for Board Units.");
+    throw new Error(
+      "Layout lint mode, repair planning and label distance are only supported for Board Units.",
+    );
   }
   if (options.mode === "model" && options.includeLabelPlan === true) {
     throw new Error("Label planning requires rendered or both Board layout lint mode.");
+  }
+  if (options.mode === "model" && options.includePortPlan === true) {
+    throw new Error("Port planning requires rendered or both Board layout lint mode.");
+  }
+  const maximum = options.maximumAutomaticLabelDistance;
+  if (maximum !== undefined && (!Number.isFinite(maximum) || maximum < 0)) {
+    throw new Error("maximumAutomaticLabelDistance must be a finite non-negative number.");
+  }
+  if (maximum !== undefined && options.mode === "model") {
+    throw new Error("Label distance requires rendered or both Board layout lint mode.");
+  }
+  if (options.textPlanElementIds !== undefined && options.mode === "model") {
+    throw new Error("Text planning requires rendered or both Board layout lint mode.");
+  }
+  const textIds = options.textPlanElementIds;
+  if (
+    textIds !== undefined &&
+    (!Array.isArray(textIds) ||
+      !textIds.length ||
+      textIds.some((id) => typeof id !== "string" || !id.trim()) ||
+      new Set(textIds).size !== textIds.length)
+  ) {
+    throw new Error("textPlanElementIds must select unique non-empty shape IDs.");
+  }
+  const textWidth = options.textPlanMaximumWidthGrowth;
+  if (
+    textWidth !== undefined &&
+    (!Number.isFinite(textWidth) || textWidth < 1 || textWidth > 2 || !textIds?.length)
+  ) {
+    throw new Error(
+      "textPlanMaximumWidthGrowth requires selected shape IDs and a finite number from 1 to 2.",
+    );
   }
   const modelRuntime =
     source.unitType === "board"

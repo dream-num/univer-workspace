@@ -38,6 +38,23 @@ describe("render tool surface", () => {
         unitType: { type: "string", enum: ["slide", "board"] },
         mode: { enum: ["model", "rendered", "both"] },
         includeLabelPlan: { type: "boolean" },
+        includePortPlan: {
+          type: "boolean",
+          description: expect.stringContaining("read-only native automatic port-order plan"),
+        },
+        textPlanElementIds: {
+          type: "array",
+          items: { type: "string" },
+          description: expect.stringContaining("explicitly selected"),
+        },
+        textPlanMaximumWidthGrowth: {
+          type: "number",
+          description: expect.stringContaining("from 1 to 2"),
+        },
+        maximumAutomaticLabelDistance: {
+          type: "number",
+          description: expect.stringContaining("finite non-negative distance"),
+        },
       },
     });
     dispose();

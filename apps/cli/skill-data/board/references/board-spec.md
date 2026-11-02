@@ -186,8 +186,21 @@ For a semantic visual scope, explicitly set native `containerData.behavior.layou
 interior remains available while borders and captions are checked; ordinary panels, tables and Embed keep body
 occupancy. Do not replace this native contract with custom metadata or use it to exempt diagnostics.
 
-When the installed rendered report includes `element-text-overflow`, use its `textLayout` content/available ratio
-to grow eligible generated shapes without shrinking type. For a table, use the inclusive zero-based `tableRange`
+For newly generated ordinary preset shapes, first check the installed lint help or tool schema for native text
+planning. When available, explicitly select their generated IDs with CLI `--plan-text <element-id...>` or the
+
+若安装版本的 `lint --help` 还列出 `--text-width-growth`，可与 `--plan-text` 一起显式限制横向增长（1 到 2；1 保留原宽）；双语或横向较长的新图先用 1.25，再依据完整覆盖和截图调整。保留完整文字和字号，应用 ready 原生计划后重新布局并检查；未支持此参数的版本不得假设具备该能力。
+rendered lint input `textPlanElementIds`. Use rendered/both mode and retain every `analyses[].textPlan` and
+coverage diagnostic. Apply only a ready plan for the unchanged current Board page with `board.applyLayoutPlan`,
+verify Undo/Redo and stale rejection, then replan the graph, fit generated containers and remeasure. The native
+planner preserves text and fonts while balancing width and height; do not replace it with a height-only ratio.
+`FBoard.planRenderedTextLayout` belongs to the browser Boards UI; headless `execute` consumes a lint-produced
+plan rather than calling this browser-only method. Missing or incomplete plan support stays unresolved, with
+no guessed ordinary-shape fallback. Keep custom geometry, native structures, fixed/locked/unselectable/managed
+owners and manual edits outside this generated selection.
+
+For explicitly authorized generated sequence participant headers, use their native `textLayout`
+content/available ratio without altering lifelines, messages, activation bars or fonts. For a table, use the inclusive zero-based `tableRange`
 to resize only the measured rows/columns, including every row/column in a merged range; preserve values, merges
 and styles. A whole-table native paint measurement without a cell range, whose available size matches the current
 outer frame, can instead grow the Table element frame
@@ -228,3 +241,18 @@ retain each chosen label's original placement and source metadata before using `
 that still match their imported baseline; preserve absolute `labelAt` and user-edited pins. Obtain a fresh ready
 measured label plan, apply it, and check again. Lint and planning never relax pins implicitly. Keep import-only
 findings separate from the explicitly optimized result.
+
+## Styles for newly generated diagrams
+
+For a new plain-text mind map, tree or timeline, use a compact 16 px root and 14 px children
+(native document `fontSize` values 12 pt and 10.5 pt). After native insertion, call the owning node's
+`setStyle()` so intrinsic dimensions and the managed layout use the effective font; a smaller rich-text
+span alone can leave the native creation dimensions at the larger default. Use 1.25 Board-unit node and
+branch strokes, keeping the branch's native marker and routing semantics. See [mind-map.md](mind-map.md).
+Read the current Board theme's font/color scheme when available and retain native colors otherwise.
+
+This is a generation policy. Preserve existing/manual node styles, authored rich text and imported source
+styles unless a user explicitly asks to restyle them. Verify complete text and native bounds after styling;
+do not fit by dropping text or rewriting native min/max width metadata. Native reference-scaled symbols
+are an exception to the nominal 1.25 width: retain their designed width instead of forcing an ordinary
+rectangle's model width onto their geometry. See [uml-structure.md](uml-structure.md).

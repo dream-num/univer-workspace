@@ -14,6 +14,7 @@ import {
   repairMeasuredVisualText,
 } from "../scripts/board-visual-repair.mjs";
 import { elementProfiles, realizeElementFixture } from "../scripts/board-element-fixtures.mjs";
+import { insertCompactGeneratedMindMap } from "../scripts/board-generated-styles.mjs";
 
 describe("Board business visual manifests", () => {
   it("has 45 independent cases with complete native or explicitly connected business content", () => {
@@ -299,6 +300,9 @@ describe("Board public Facade business fixture preservation", () => {
         const api = createStandardHeadlessUniverFacade(univer),
           board = api.createBoard({ id: profile, name: profile }),
           fixture = realizeVisualFixture(board, api, profile, "business");
+        expect(fixture.textPlanMaximumWidthGrowth).toBeGreaterThanOrEqual(1);
+        expect(fixture.textPlanMaximumWidthGrowth).toBeLessThanOrEqual(1.25);
+        expect(fixture.textPlanElementIds.length).toBeGreaterThan(0);
         const check = () => {
           for (const group of fixture.spec.groups) {
             const actual = board.getElement(`visual-${group.id}`);
@@ -351,6 +355,23 @@ describe("Board public Facade business fixture preservation", () => {
             lint: async () => ({
               analyses: [
                 {
+                  // The adapter boundary returns a native plan; graph preconditions use the live model.
+                  textPlan: {
+                    ...board.planGraphLayout(fixture.layoutOptions),
+                    patches: measurements
+                      ? []
+                      : [
+                          {
+                            elementId: "visual-budget",
+                            transform: {
+                              width: board.getElement("visual-budget").transform.width,
+                              height: Math.ceil(
+                                board.getElement("visual-budget").transform.height * 3.12 + 4,
+                              ),
+                            },
+                          },
+                        ],
+                  },
                   rendered: {
                     issues: measurements++
                       ? []
@@ -377,11 +398,14 @@ describe("Board public Facade business fixture preservation", () => {
         );
         expect(result.status).toBe(allowed === true ? "no-overflow-reported" : "replan-incomplete");
         if (allowed === true) {
+          expect(result.attempts[0].growthApplications[0].kind).toBe("native-rendered-text-plan");
           const lane = board
             .getElement("visual-pool")
             .containerData.swimlane.lanes.find((item) => item.id === "finance");
           expect(lane.size).toBeGreaterThan(board.getElement("visual-budget").transform.height);
-          expect(result.attempts[0].growthApplications[0]).toMatchObject({
+          expect(
+            result.attempts[0].growthApplications.find((item) => item.kind === "swimlane-capacity"),
+          ).toMatchObject({
             kind: "swimlane-capacity",
             undoExact: true,
             redoExact: true,
@@ -500,7 +524,7 @@ describe("Board public Facade business fixture preservation", () => {
     async (profile, variant) => {
       const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
         await import("@univer-cli/headless-univer");
-      const { UniverInstanceType } = await import("@univerjs/core");
+      const { ColorKit, UniverInstanceType } = await import("@univerjs/core");
       const univer = await createStandardHeadlessUniverFactory({ license: "" })({
         unitId: profile,
         unitType: UniverInstanceType.UNIVER_BOARD,
@@ -510,6 +534,10 @@ describe("Board public Facade business fixture preservation", () => {
         const api = createStandardHeadlessUniverFacade(univer);
         const board = api.createBoard({ id: profile, name: profile });
         const fixture = realizeVisualFixture(board, api, profile, variant);
+        if (fixture.textPlanElementIds?.length) {
+          expect(fixture.textPlanMaximumWidthGrowth).toBeGreaterThanOrEqual(1);
+          expect(fixture.textPlanMaximumWidthGrowth).toBeLessThanOrEqual(1.25);
+        } else expect(fixture.textPlanMaximumWidthGrowth).toBeUndefined();
         fixture.verify();
         for (const item of fixture.spec.nodes.filter((item) => item.kind === "database")) {
           const element = Object.values(board.getElements()).find(
@@ -559,8 +587,16 @@ describe("Board public Facade business fixture preservation", () => {
             expect(table.getValues().flat()).not.toContain("Field");
             expect(table.getValues().flat()).not.toContain("Type");
             const headerStyle = table.getCellRichText(0, 0).getData().body.textRuns[0].ts;
+            const data = table.getData();
+            const headerFill = data.rows[0].cells[0].style.fill.color;
             expect(headerStyle.bl).toBe(1);
-            expect(headerStyle.cl.rgb.toLowerCase()).toBe("#ffffff");
+            expect(
+              ColorKit.getContrastRatio(headerStyle.cl.rgb, headerFill),
+            ).toBeGreaterThanOrEqual(4.5);
+            expect(data.custom.headerAccentColor).not.toBe(data.custom.outerBorderColor);
+            expect(
+              ColorKit.getContrastRatio(data.custom.headerAccentColor, headerFill),
+            ).toBeGreaterThan(ColorKit.getContrastRatio(data.custom.outerBorderColor, headerFill));
           }
           if (variant === "long-bilingual") {
             expect(customer.getValues()[4][0]).toContain("外键、唯一性");
@@ -640,6 +676,232 @@ describe("Board public Facade business fixture preservation", () => {
   );
 });
 
+describe("Board generated compact native styles", () => {
+  const json = (value) => JSON.parse(JSON.stringify(value));
+  const snapshot = (board) => {
+    const value = json(board.save());
+    value.resources = (value.resources ?? [])
+      .map((resource) => ({ ...resource, data: JSON.parse(resource.data) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return value;
+  };
+  it.each(["mindmap-horizontal", "tree-right", "timeline-vertical"])(
+    "uses compact effective text and native dimensions for new %s without restyling authored maps",
+    async (structureKind) => {
+      const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+        await import("@univer-cli/headless-univer");
+      const { UniverInstanceType } = await import("@univerjs/core");
+      const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+        unitId: `compact-${structureKind}`,
+        unitType: UniverInstanceType.UNIVER_BOARD,
+      });
+      try {
+        const api = createStandardHeadlessUniverFacade(univer);
+        const board = api.createBoard({
+          id: `compact-${structureKind}`,
+          name: "Compact generation",
+        });
+        const defaults = api.createBoard({
+          id: `defaults-${structureKind}`,
+          name: "Manual defaults",
+        });
+        const plain = {
+          id: "generated-native",
+          left: 200,
+          top: 180,
+          structureKind,
+          root: {
+            id: "generated-root",
+            text: "Capability evolution · 能力演进\nAll source details remain editable and complete",
+            children: [
+              {
+                id: "generated-child",
+                connectorId: "generated-branch",
+                text: "Validate every tool result · 验证每个工具结果\nKeep the original bilingual explanation without truncation",
+                side: "right",
+                children: [
+                  {
+                    id: "generated-detail",
+                    text: "One complete stage-local detail · 完整的阶段细节",
+                  },
+                ],
+              },
+              {
+                id: "generated-closed",
+                text: "Collapsed stage · 折叠阶段",
+                collapsed: true,
+                children: [
+                  { id: "generated-hidden", text: "Hidden detail survives · 隐藏内容仍然保留" },
+                ],
+              },
+            ],
+          },
+        };
+        const baseline = defaults.insertMindMap(plain);
+        expect(baseline).toBeTruthy();
+        const authored = board.insertMindMap({
+          left: -800,
+          top: -200,
+          root: {
+            text: api.newRichText().span("Authored rich source · 原有样式", {
+              fontFamily: "Arial",
+              fontSize: 17,
+              bold: true,
+              color: "#7e22ce",
+            }),
+          },
+        });
+        expect(authored).toBeTruthy();
+        const authoredBefore = json(board.getElements());
+        const generated = insertCompactGeneratedMindMap(board, plain);
+        expect(generated).toBeTruthy();
+        expect(generated.getLayout()).toEqual(baseline.getLayout());
+        for (const [id, element] of Object.entries(authoredBefore))
+          expect(json(board.getElement(id))).toEqual(element);
+        let smaller = false;
+        const capacityChecks = [];
+        for (const node of generated.getNodes()) {
+          const original = baseline.getNode(node.getId());
+          expect(node.getText()).toBe(original.getText());
+          expect(node.getStyle()).toMatchObject({
+            strokeWidth: 1.25,
+            textStyle: { fontSize: node.getId() === "generated-root" ? 12 : 10.5 },
+          });
+          const element = board.getElement(node.getId());
+          const defaultElement = defaults.getElement(node.getId());
+          expect(element.custom).toEqual(defaultElement.custom);
+          expect(element.transform.width).toBeGreaterThanOrEqual(
+            element.custom.mindmap.size.minWidth,
+          );
+          expect(element.transform.height).toBeGreaterThanOrEqual(
+            element.custom.mindmap.size.minHeight,
+          );
+          capacityChecks.push(() =>
+            expect(element.transform.width).toBeLessThanOrEqual(
+              element.custom.mindmap.size.maxWidth,
+            ),
+          );
+          smaller ||=
+            element.transform.width < defaultElement.transform.width ||
+            element.transform.height < defaultElement.transform.height;
+          if (node.getId() !== "generated-root") {
+            const actual = node.getIncomingConnectorStyle();
+            const expected = original.getIncomingConnectorStyle();
+            expect(actual.strokeWidth).toBe(1.25);
+            for (const field of ["startMarker", "endMarker", "dash", "lineType", "cornerStyle"])
+              expect(actual[field]).toEqual(expected[field]);
+          }
+        }
+        expect(smaller, "Effective compact fonts must recompute native host dimensions").toBe(true);
+        expect(baseline.getRootNode().getStyle().textStyle.fontSize).toBe(24);
+        const after = snapshot(board);
+        expect(await board.undo()).toBe(true);
+        expect(snapshot(board)).not.toEqual(after);
+        expect(await board.redo()).toBe(true);
+        expect(snapshot(board)).toEqual(after);
+        const saved = json(board.save());
+        api.disposeUnit(board.getId());
+        const reopened = api.createBoard(saved);
+        expect(snapshot(reopened)).toEqual(after);
+        expect(reopened.getMindMap("generated-native").getNode("generated-hidden").getText()).toBe(
+          "Hidden detail survives · 隐藏内容仍然保留",
+        );
+        for (const check of capacityChecks) check();
+      } finally {
+        univer.dispose();
+      }
+    },
+    20_000,
+  );
+  it("rejects authored rich blueprints before inserting or rewriting any native element", async () => {
+    const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+      await import("@univer-cli/headless-univer");
+    const { UniverInstanceType } = await import("@univerjs/core");
+    const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+      unitId: "compact-rich-boundary",
+      unitType: UniverInstanceType.UNIVER_BOARD,
+    });
+    try {
+      const api = createStandardHeadlessUniverFacade(univer);
+      const board = api.createBoard({ id: "compact-rich-boundary", name: "Authored boundary" });
+      const before = snapshot(board);
+      expect(() =>
+        insertCompactGeneratedMindMap(board, {
+          left: 0,
+          top: 0,
+          root: {
+            text: "Generated root",
+            children: [{ text: api.newRichText().span("Authored", { fontSize: 19 }) }],
+          },
+        }),
+      ).toThrow(/preserve authored rich text/);
+      expect(snapshot(board)).toEqual(before);
+    } finally {
+      univer.dispose();
+    }
+  });
+  it.each(["business", "long-bilingual", "nested-dense"])(
+    "keeps native component reference strokes and sequence semantics for generated %s",
+    async (variant) => {
+      const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
+        await import("@univer-cli/headless-univer");
+      const { UniverInstanceType } = await import("@univerjs/core");
+      const univer = await createStandardHeadlessUniverFactory({ license: "" })({
+        unitId: `compact-symbols-${variant}`,
+        unitType: UniverInstanceType.UNIVER_BOARD,
+      });
+      try {
+        const api = createStandardHeadlessUniverFacade(univer);
+        const component = api.createBoard({ id: `component-${variant}`, name: "Components" });
+        const reference = api.createBoard({ id: `reference-${variant}`, name: "Native reference" });
+        const native = reference.insertShape({
+          shapeType: api.Enum.BoardCustomShapeType.ComponentBox,
+          transform: { left: 0, top: 0, width: 218, height: 84 },
+        });
+        const nativeElement = reference.getElement(native.getId());
+        const fixture = realizeVisualFixture(component, api, "uml-component", variant);
+        fixture.verify();
+        for (const element of Object.values(component.getElements()).filter(
+          (item) => item.shapeData?.shapeType === api.Enum.BoardCustomShapeType.ComponentBox,
+        )) {
+          expect(element.shapeData.stroke.width).toBe(nativeElement.shapeData.stroke.width);
+          expect(element.shapeData.stroke.width).not.toBe(1.25);
+          expect(element.shapeData.customGeometry.strokeReferenceSize).toEqual(
+            nativeElement.shapeData.customGeometry.strokeReferenceSize,
+          );
+        }
+        const sequence = api.createBoard({ id: `sequence-${variant}`, name: "Sequence" });
+        const sequenceFixture = realizeVisualFixture(sequence, api, "uml-sequence", variant);
+        sequenceFixture.verify();
+        const participants = Object.values(sequence.getElements()).filter(
+          (item) => item.shapeData?.sequenceLifeline,
+        );
+        expect(participants).toHaveLength(sequenceFixture.spec.nodes.length);
+        for (const item of participants) expect(item.shapeData.stroke.width).toBe(1.25);
+        const messages = Object.values(sequence.getElements()).filter(
+          (item) => item.type === "connector",
+        );
+        expect(messages).toHaveLength(sequenceFixture.spec.edges.length);
+        for (const message of messages) {
+          const data = message.connectorData;
+          expect(data.style.strokeWidth).toBe(1.25);
+          expect(data.start.kind).toBe("lifeline");
+          expect(data.end.kind).toBe("lifeline");
+          const source = sequenceFixture.spec.edges.find((item) =>
+            data.labels.some((label) => label.content === item.label),
+          );
+          expect(source).toBeTruthy();
+          expect(data.style.endMarker.type).toBe(source.reply ? "openArrow" : "filledTriangle");
+          if (source.reply) expect(data.style.dash).toEqual([6, 4]);
+        }
+      } finally {
+        univer.dispose();
+      }
+    },
+    20_000,
+  );
+});
+
 describe("Board full-extent visual capture tiling", () => {
   it.each([
     { name: "narrow portrait", bounds: { left: 1234, top: -167, width: 383, height: 2091 } },
@@ -680,6 +942,7 @@ describe("Board full-extent visual capture tiling", () => {
           },
         };
         const result = await captureVisualEvidence(screenshot, { id: "aspect-fixture" }, directory);
+        expect(calls[0].target).toEqual({ kind: "board-content", padding: 32 });
         expect(result.coverage.fullNativeScaleTiling).toBe(true);
         expect(result.contentBounds).toEqual(bounds);
         for (const scale of [0.5, 1, 2]) {
@@ -884,6 +1147,7 @@ describe("Board full-extent visual capture tiling", () => {
             images: [
               {
                 name: "board-content.png",
+                pageId: "page",
                 width: 800,
                 height: 600,
                 scale: input.target.scale ?? 1,
@@ -891,8 +1155,33 @@ describe("Board full-extent visual capture tiling", () => {
                 contentBounds: { left: -20, top: -10, width: 400, height: 250 },
                 layoutAnalysis: {
                   source: "rendered",
-                  routes: [],
+                  routes: [
+                    {
+                      connectorId: "edge",
+                      resolved: true,
+                      points: [
+                        { x: -10, y: 20 },
+                        { x: 30, y: 20 },
+                      ],
+                    },
+                  ],
                   issues: [],
+                  connectorLabelLayouts: {
+                    edge: {
+                      label: {
+                        status: "ready",
+                        rect: { left: 0, top: 2, width: 20, height: 10 },
+                        bounds: { left: 0, top: 2, width: 20, height: 10 },
+                        angleRadians: 0,
+                        outerSize: { width: 20, height: 10 },
+                        requiredSize: { width: 16, height: 6 },
+                        empty: false,
+                        overflow: false,
+                        endpointConstrained: false,
+                      },
+                      pending: { status: "unresolved" },
+                    },
+                  },
                   contentBounds: { left: -20, top: -10, width: 400, height: 250 },
                 },
               },
@@ -914,6 +1203,48 @@ describe("Board full-extent visual capture tiling", () => {
       expect(result.status).toBe("clean");
       expect(result.coverage.visualApproval).toBe("pending");
       expect(result.coverage.typographyInkMeasured).toBe(false);
+      expect(result.labelProximity).toMatchObject({
+        status: "incomplete",
+        metric: "distanceToResolvedPolyline",
+        coverage: {
+          geometry: {
+            complete: false,
+            incomplete: [{ pageId: "page", source: "rendered", reason: "unresolved-label" }],
+          },
+          independentSameStateLabelIds: { status: "incomplete" },
+        },
+        finalPaintDistance: "unmeasured",
+        visualApproval: "pending",
+      });
+      const saved = JSON.parse(await readFile(join(directory, "capture.json"), "utf8"));
+      expect(saved.labelProximity).toEqual(result.labelProximity);
+      expect(
+        saved.outputs.every(
+          (output) => output.connectorLabelEvidence.coverage.geometry.complete === false,
+        ),
+      ).toBe(true);
+      expect(
+        saved.outputs.every(
+          (output) =>
+            output.connectorLabelEvidence.coverage.independentSameStateLabelIds.status ===
+            "incomplete",
+        ),
+      ).toBe(true);
+      for (const output of saved.outputs) {
+        expect(output.connectorLabelEvidence.entries).toEqual([
+          {
+            connectorId: "edge",
+            labelId: "label",
+            status: "measured",
+            distanceToResolvedPolyline: 8,
+          },
+          { connectorId: "edge", labelId: "pending", status: "incomplete" },
+        ]);
+        expect(output.connectorLabelEvidence.native).toEqual({
+          connectorLabelLayouts: output.layoutAnalysis.connectorLabelLayouts,
+          routes: output.layoutAnalysis.routes,
+        });
+      }
       expect(
         JSON.parse(await readFile(join(directory, "capture-progress.json"), "utf8")).complete,
       ).toBe(true);

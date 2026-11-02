@@ -22,6 +22,99 @@ async function withBoard(callback) {
 }
 
 describe("Generated business presentation", () => {
+  it.each(visualVariants)(
+    "keeps the generated %s sequence readable without oversized rows or lifeline tails",
+    async (variant) => {
+      await withBoard((board, api) => {
+        const fixture = realizeVisualFixture(board, api, "uml-sequence", variant);
+        const elements = board.getElements();
+        const messages = Object.values(elements).filter(
+          (element) => element.connectorData?.start.kind === "lifeline",
+        );
+        const messageTimes = messages.map(({ connectorData }) => {
+          const times = [connectorData.start, connectorData.end].map((endpoint) => {
+            expect(endpoint.kind).toBe("lifeline");
+            const participant = board.getElementBounds(endpoint.shapeId);
+            return participant.top + participant.height + endpoint.offsetY;
+          });
+          expect(times[0]).toBe(times[1]);
+          return times[0];
+        });
+        expect(messageTimes).toHaveLength(fixture.spec.edges.length);
+        for (let index = 1; index < messageTimes.length; index++) {
+          const gap = messageTimes[index] - messageTimes[index - 1];
+          expect(gap).toBeGreaterThanOrEqual(48);
+          expect(gap).toBeLessThanOrEqual(96);
+        }
+        for (const participant of Object.values(elements).filter(
+          (element) => element.shapeData?.sequenceLifeline,
+        )) {
+          const bounds = board.getElementBounds(participant.id);
+          const headerBottom = bounds.top + bounds.height;
+          const firstGap = messageTimes[0] - headerBottom;
+          const tail =
+            headerBottom +
+            participant.shapeData.sequenceLifeline.lifelineHeight -
+            messageTimes[messageTimes.length - 1];
+          expect(firstGap).toBeGreaterThanOrEqual(32);
+          expect(firstGap).toBeLessThanOrEqual(80);
+          expect(tail).toBeGreaterThanOrEqual(48);
+          expect(tail).toBeLessThanOrEqual(96);
+        }
+        fixture.verify();
+      });
+    },
+    20_000,
+  );
+
+  it.each(visualVariants)(
+    "reads the generated %s activity in flow order across responsibility lanes with exact history",
+    async (variant) => {
+      await withBoard((board, api) => {
+        const fixture = realizeVisualFixture(board, api, "uml-activity", variant);
+        const pool = board.getElement("visual-pool");
+        expect(pool.containerData.swimlane.orientation).toBe(fixture.spec.direction);
+        const before = JSON.parse(JSON.stringify(board.save()));
+        const plan = board.planGraphLayout({
+          ...fixture.layoutOptions,
+          fixedElementIds: fixture.fixed,
+        });
+        expect(plan.status).toBe("ready");
+        expect(board.applyLayoutPlan(plan)).toBe(true);
+        const axis = fixture.spec.direction === "vertical" ? "top" : "left";
+        const size = axis === "top" ? "height" : "width";
+        const steps = fixture.spec.mainPath.map((id) => board.getElementBounds(`visual-${id}`));
+        const crossSize = size === "width" ? "height" : "width";
+        for (const lane of pool.containerData.swimlane.lanes) {
+          const members = Object.values(board.getElements()).filter(
+            (element) =>
+              element.parentId === pool.id &&
+              element.laneId === lane.id &&
+              element.type !== "connector",
+          );
+          const largest = Math.max(
+            ...members.map((element) => board.getElementBounds(element.id)[crossSize]),
+          );
+          expect(
+            lane.size,
+            "Serial activity lanes reserve space for their tallest node, not every process step",
+          ).toBeLessThanOrEqual(largest + 96);
+        }
+        for (let index = 1; index < steps.length; index++)
+          expect(steps[index][axis]).toBeGreaterThan(
+            steps[index - 1][axis] + steps[index - 1][size],
+          );
+        fixture.verify();
+        const after = JSON.parse(JSON.stringify(board.save()));
+        expect(board.undo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
+        expect(board.redo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
+      });
+    },
+    20_000,
+  );
+
   it.each(["architecture", "deployment", "uml-state", "uml-sequence", "mindmap", "timeline"])(
     "fits only the generated %s heading to ready native measurements with exact history",
     async (profile) => {
@@ -169,12 +262,14 @@ describe("Generated business presentation", () => {
     },
     20_000,
   );
-  it.each(["architecture", "deployment", "uml-package", "uml-use-case"])(
-    "reserves explicit generated label and caption space for %s without changing facts",
+  it.each(["uml-class", "architecture", "deployment", "uml-package", "uml-use-case"])(
+    "uses SDK layer spacing and preserves generated %s frame constraints",
     async (profile) => {
       await withBoard((board, api) => {
         const fixture = realizeVisualFixture(board, api, profile, "business");
-        expect(fixture.layoutOptions).toMatchObject({ layerGap: 192, itemGap: 64 });
+        expect(fixture.layoutOptions).not.toHaveProperty("layerGap");
+        expect(fixture.layoutOptions.direction).toBe("horizontal");
+        if (profile !== "uml-class") expect(fixture.layoutOptions).toMatchObject({ itemGap: 64 });
         for (const elementId of fixture.compactContainers) {
           const scope = board.getElement(elementId);
           expect(scope.containerData.behavior.layoutOccupancy).toBe("frame");
@@ -237,8 +332,8 @@ describe("Generated business presentation", () => {
         fixture.verify();
         const native = board.getMindMaps()[0];
         expect(native.getLayout()).toMatchObject({
-          structureKind: "timeline-vertical",
-          direction: "right",
+          structureKind: variant === "nested-dense" ? "timeline-vertical" : "timeline-horizontal",
+          direction: variant === "nested-dense" ? "right" : "both",
           horizontalGap: 80,
           siblingGap: 16,
           branchGap: 24,
@@ -255,6 +350,10 @@ describe("Generated business presentation", () => {
         expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
         expect(board.redo()).toBe(true);
         expect(JSON.parse(JSON.stringify(board.save()))).toEqual(after);
+        expect(native.getLayout()?.direction).toBe("both");
+        // Restore generation settings before checking their original width budget.
+        expect(board.undo()).toBe(true);
+        expect(JSON.parse(JSON.stringify(board.save()))).toEqual(before);
         fixture.verify();
       });
     },

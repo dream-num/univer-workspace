@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { recordConnectorLabelEvidence } from "./board-visual-label-evidence.mjs";
 
 function renderedCaptureBounds(image) {
   const measured = image.layoutAnalysis?.contentBounds;
@@ -57,11 +58,12 @@ export async function captureVisualEvidence(
   { overviewOnly = false, renderUnits = {} } = {},
 ) {
   await mkdir(directory, { recursive: true });
+  const initialTarget = { kind: "board-content", padding: 32 };
   const first = await screenshot.capture({
     unitType: "board",
     unitData,
     ...renderUnits,
-    target: { kind: "board-content" },
+    target: initialTarget,
   });
   assert.equal(first.images.length, 1, "Visual case must have one active Board page");
   const captures = [];
@@ -72,7 +74,12 @@ export async function captureVisualEvidence(
       const { bytes, ...metadata } = image;
       const file = resolve(directory, `${name}${index ? `-${index}` : ""}.png`);
       await writeFile(file, bytes, { flag: "wx" });
-      captures.push({ file, target, ...metadata });
+      captures.push({
+        file,
+        target,
+        ...metadata,
+        connectorLabelEvidence: recordConnectorLabelEvidence(image.layoutAnalysis, image.pageId),
+      });
       await writeFile(
         resolve(directory, "capture-progress.json"),
         `${JSON.stringify({ complete: false, outputs: captures }, null, 2)}\n`,
@@ -99,7 +106,7 @@ export async function captureVisualEvidence(
   try {
     bounds = renderedCaptureBounds(image);
   } catch (error) {
-    await save("initial-model-fit", first, { kind: "board-content" });
+    await save("initial-model-fit", first, initialTarget);
     throw error;
   }
   let fitScale = image.scale;
@@ -156,6 +163,32 @@ export async function captureVisualEvidence(
         ? "findings"
         : "clean",
     outputs: captures,
+    labelProximity: {
+      status: captures.some((capture) => capture.connectorLabelEvidence.status === "incomplete")
+        ? "incomplete"
+        : "measured",
+      metric: "distanceToResolvedPolyline",
+      coverage: {
+        geometry: {
+          complete: captures.every(
+            (capture) => capture.connectorLabelEvidence.coverage.geometry.complete,
+          ),
+          incomplete: [
+            ...new Map(
+              captures
+                .flatMap((capture) => capture.connectorLabelEvidence.coverage.geometry.incomplete)
+                .map((item) => [JSON.stringify(item), item]),
+            ).values(),
+          ],
+        },
+        independentSameStateLabelIds: {
+          status: "incomplete",
+          detail: "same-state-label-id-inventory-unavailable",
+        },
+      },
+      finalPaintDistance: "unmeasured",
+      visualApproval: "pending",
+    },
     contentBounds: bounds,
     fitScale,
     coverage: {

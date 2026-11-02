@@ -138,6 +138,13 @@ Rendered checks require the version-matched render page and a supported browser.
 For a Board, `--plan-labels` with `--mode rendered` or `--mode both` adds read-only measured label plans in
 `analyses[].labelPlan`. Review a ready plan for `FBoard.getActivePageId()`, apply it with `FBoard.applyLayoutPlan`, then lint
 again. Stale plans are rejected and must be recaptured; model-only checks cannot produce measured label plans.
+Board rendered/both `--plan-ports` returns a read-only native automatic port-order plan in
+`analyses[].portPlan`. Missing or incomplete planning leaves coverage incomplete. Apply one ready plan to
+the same Board/page, then lint a fresh snapshot before using another plan; original findings remain visible.
+Board rendered/both lint can opt into `--maximum-automatic-label-distance 12` (finite non-negative Board
+units, including zero). Missing native evidence is incomplete; exceeded limits are errors, so either exits 2.
+The sampled, marker-trimmed stroke-centerline metric excludes fixed/authored and endpoint-role labels;
+it is not raster ink and never moves labels.
 For a new diagram or an explicit repair, use rendered measurements before growing shapes or table frames.
 Rendered `analyses[].rendered.elementTextLayouts` also reports native local available/content sizes for shape text
 without overflow. Use ready metrics to fit generated heading frames explicitly, then remeasure and verify history;

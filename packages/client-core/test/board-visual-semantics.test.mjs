@@ -33,7 +33,12 @@ function captionTop(element) {
   return (element.transform.height * guide[2]) / guide[3];
 }
 
-function feetBottom(element) {
+function feetBottom(board, element) {
+  const nativeFoot = board
+    .getShape(element.id)
+    .getConnectionSites()
+    .find((site) => site.index === 2);
+  if (nativeFoot) return nativeFoot.y;
   return Math.max(
     ...element.shapeData.customGeometry.pathLst.flatMap((path) =>
       path.dataArray
@@ -108,8 +113,9 @@ describe("Business diagram source semantics", () => {
         const fixture = realizeVisualFixture(board, api, "uml-use-case", variant);
         for (const source of fixture.spec.nodes.filter((node) => node.kind === "actor")) {
           const element = json(board.getElement(`visual-${source.id}`));
-          expect(captionTop(element)).toBeGreaterThan(feetBottom(element) + 8);
-          expect(feetBottom(element)).toBeCloseTo((214 * 128) / 244, 8);
+          const originalFeetBottom = feetBottom(board, element);
+          expect(captionTop(element)).toBeGreaterThan(originalFeetBottom + 8);
+          expect(originalFeetBottom).toBeCloseTo((214 * 128) / 244, 8);
           expect(element.shapeData.customGeometry.pathLst.map((path) => path.dataArray)).toEqual(
             originalGeometry.pathLst.map((path) => path.dataArray),
           );
@@ -134,6 +140,15 @@ describe("Business diagram source semantics", () => {
             expect(endpoint.connectionPosition * element.transform.height).toBeLessThan(
               captionTop(element),
             );
+            const nativeArm = board
+              .getShape(element.id)
+              .getConnectionSites()
+              .find((site) => site.index === endpoint.connectionSiteId);
+            if (nativeArm)
+              expect(endpoint.connectionPosition * element.transform.height).toBeCloseTo(
+                nativeArm.y,
+                8,
+              );
           }
           const before = json(board.save());
           expect(
@@ -145,8 +160,8 @@ describe("Business diagram source semantics", () => {
             }),
           ).toBe(true);
           const resized = board.getElement(element.id);
-          expect(captionTop(resized)).toBeGreaterThan(feetBottom(resized) + 16);
-          expect(feetBottom(resized)).toBeCloseTo(feetBottom(element) * 2, 8);
+          expect(captionTop(resized)).toBeGreaterThan(feetBottom(board, resized) + 16);
+          expect(feetBottom(board, resized)).toBeCloseTo(originalFeetBottom * 2, 8);
           const after = json(board.save());
           expect(board.undo()).toBe(true);
           expect(json(board.save())).toEqual(before);

@@ -63,7 +63,12 @@ assertDirectory("dist/render-runtime/assets");
 assertWorkerChildClosure();
 assertBundledCommonjsNodeGlobals();
 for (const launcher of ["bin/univer-workspace-cli.js", "bin/uvw.js"]) {
-  if ((statSync(join(packageRoot, launcher)).mode & 0o111) === 0) {
+  const path = join(packageRoot, launcher);
+  if (!readFileSync(path, "utf8").startsWith("#!/usr/bin/env node\n")) {
+    throw new Error(`Package launcher ${launcher} must declare its Node interpreter`);
+  }
+  // Windows has no POSIX execute bits; npm installs the declared bins as command shims.
+  if (process.platform !== "win32" && (statSync(path).mode & 0o111) === 0) {
     throw new Error(`Package launcher ${launcher} must be executable`);
   }
 }
@@ -84,6 +89,8 @@ const packed = spawnSync("npm", ["pack", "--dry-run", "--json"], {
   cwd: packageRoot,
   encoding: "utf8",
   env: { ...process.env, npm_config_update_notifier: "false" },
+  shell: process.platform === "win32",
+  windowsHide: true,
 });
 if (packed.status !== 0) throw new Error(packed.stderr || packed.stdout);
 const artifacts = JSON.parse(packed.stdout);
@@ -97,10 +104,7 @@ console.log(
 
 function findUnresolvedBareImports() {
   const allowed = new Set(Object.keys(packageJson.dependencies ?? {}));
-  const builtins = new Set([
-    ...builtinModules,
-    ...builtinModules.map((name) => `node:${name}`),
-  ]);
+  const builtins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)]);
   const matches = [];
   for (const relativePath of findFiles(packageRoot).filter((path) => path.endsWith(".js"))) {
     const [imports] = parseEsmImports(
@@ -148,8 +152,7 @@ function assertBundledCommonjsNodeGlobals() {
     return (
       (code.includes("environment that doesn't expose the `require` function") &&
         !code.includes("createRequire")) ||
-      (code.includes("__filename") &&
-        !/\b(?:const|let|var)\s+__filename\b/u.test(code)) ||
+      (code.includes("__filename") && !/\b(?:const|let|var)\s+__filename\b/u.test(code)) ||
       (code.includes("__dirname") && !/\b(?:const|let|var)\s+__dirname\b/u.test(code))
     );
   });

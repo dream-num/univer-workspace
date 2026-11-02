@@ -6,7 +6,7 @@ import {
 } from "../scripts/board-visual-fixtures.mjs";
 
 describe("generated nested business ownership", () => {
-  it("reserves one node column rather than a sum of row widths for vertical swimlane flow", async () => {
+  it("keeps one content column per responsibility lane during vertical flow and explicit lane growth", async () => {
     const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
       await import("@univer-cli/headless-univer");
     const { UniverInstanceType } = await import("@univerjs/core");
@@ -20,8 +20,14 @@ describe("generated nested business ownership", () => {
       const fixture = realizeVisualFixture(board, api, "uml-activity", "nested-dense");
       const pool = board.getElement("visual-pool");
       const width = Math.max(...fixture.nodes.map((id) => board.getElement(id).transform.width));
-      expect(pool.transform.width).toBe(pool.containerData.swimlane.headerSize + 64 + width);
       const lanes = structuredClone(pool.containerData.swimlane.lanes);
+      expect(pool.containerData.swimlane.orientation).toBe("vertical");
+      for (const lane of lanes) {
+        const members = fixture.nodes
+          .map((id) => board.getElement(id))
+          .filter((node) => node.laneId === lane.id);
+        expect(lane.size).toBe(Math.max(...members.map((node) => node.transform.width)) + 72);
+      }
       const plan = board.planGraphLayout({
         ...fixture.layoutOptions,
         fixedElementIds: fixture.fixed,
@@ -32,15 +38,43 @@ describe("generated nested business ownership", () => {
       const bounds = board.getElementBounds(pool.id);
       for (const id of fixture.nodes) {
         const child = board.getElementBounds(id);
-        expect(child.left).toBeGreaterThanOrEqual(
-          bounds.left + pool.containerData.swimlane.headerSize,
+        expect(child.left).toBeGreaterThanOrEqual(bounds.left);
+        expect(child.top).toBeGreaterThanOrEqual(
+          bounds.top + pool.containerData.swimlane.headerSize,
         );
         expect(child.left + child.width).toBeLessThanOrEqual(bounds.left + bounds.width);
+        const laneId = board.getElement(id).laneId;
+        for (const x of [child.left + 1, child.left + child.width - 1]) {
+          for (const y of [child.top + 1, child.top + child.height - 1]) {
+            expect(board.resolveDropTargetAtPoint({ x, y }, { area: "content" })).toMatchObject({
+              containerId: pool.id,
+              laneId,
+            });
+          }
+        }
       }
+      const budget = board.getElement("visual-budget");
+      const lane = lanes.find((item) => item.id === budget.laneId);
+      // Native lane boundaries borrow from the next column; add capacity at the suffix before redistributing it.
+      const lastLane = lanes.at(-1);
+      const beforeSuffixGrowth = JSON.parse(JSON.stringify(board.save()));
+      expect(board.setSwimlaneLaneSize(pool.id, lastLane.id, lastLane.size + width)).toBe(true);
+      const afterSuffixGrowth = JSON.parse(JSON.stringify(board.save()));
+      expect(await board.undo()).toBe(true);
+      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(beforeSuffixGrowth);
+      expect(await board.redo()).toBe(true);
+      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(afterSuffixGrowth);
+      const beforeLaneGrowth = JSON.parse(JSON.stringify(board.save()));
+      expect(board.setSwimlaneLaneSize(pool.id, lane.id, lane.size + width)).toBe(true);
+      const afterLaneGrowth = JSON.parse(JSON.stringify(board.save()));
+      expect(board.getElement(pool.id).transform.width).toBe(pool.transform.width + width);
+      expect(await board.undo()).toBe(true);
+      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(beforeLaneGrowth);
+      expect(await board.redo()).toBe(true);
+      expect(JSON.parse(JSON.stringify(board.save()))).toEqual(afterLaneGrowth);
       const beforeGrowth = JSON.parse(JSON.stringify(board.save()));
       expect(
         board.setElementsTransform({
-          "visual-pool": { width: pool.transform.width + width },
           "visual-budget": { width: width * 2 },
         }),
       ).toBe(true);
