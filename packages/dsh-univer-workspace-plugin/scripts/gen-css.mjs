@@ -49,7 +49,6 @@ const SHEETS = [
   "@univerjs-pro/slides-table-ui/lib/index.css",
   // Bases.
   "@univerjs-pro/bases-ui/lib/index.css",
-  "@univerjs-pro/bases-exchange-client/lib/index.css",
   // Boards and ink.
   "@univerjs-pro/ink-ui/lib/index.css",
   "@univerjs-pro/boards-ui/lib/index.css",

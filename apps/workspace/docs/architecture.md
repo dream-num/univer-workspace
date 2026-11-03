@@ -299,7 +299,10 @@ changeset 重建的分段索引。SDK 1.0.0 的 Core/Worktree SQLite Adapter 在
 `changeset.createTime`，并返回实际保存的 changeset；重复提交保留原时间。两者不把协作内容写入产品数据库。
 
 Office Exchange Module 使用已发布的 `@univerjs-pro/exchange-node` 将 Office 字节与 Univer
-数据互转。`/universer-api/exchange/**`、Exchange File Upload 和签名下载遵循 Universer
+数据互转。SDK 1.3 起 Collaboration Service 与 Exchange 都校验 license 与 license key，缺失时
+降级为免费额度；Server 从配置读取同一对凭据，构造 Collaboration Service 时传入，并在首个
+Exchange 任务前对当前进程调用一次 `configureExchange`。SDK 1.3 的 exchange client 只提供
+headless service 与 Facade，不再内置导入/导出菜单、进度提示、导出格式对话框或 Mobile UI 插件。`/universer-api/exchange/**`、Exchange File Upload 和签名下载遵循 Universer
 协议形状，不进入产品 OpenAPI。导入为 Unit 时通过 Resource Module 创建 Personal Space
 根目录下的正式 Node/Resource/Unit；导出时通过 Collaboration Service 固定当前 Trunk head，
 读取包含 Sheet blocks 的恢复材料，再由 `UnitSnapshotMaterializer` 补全 snapshot 后交给 Exchange

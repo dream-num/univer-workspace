@@ -1,5 +1,9 @@
 import { resolve } from "node:path";
 import type { OAuthClientConfig } from "./modules/identity/oauth-clients.js";
+import {
+  resolveUniverLicense,
+  type UniverLicenseCredentials,
+} from "./integrations/univer/univer-license.js";
 
 export interface WorkspaceConfig {
   readonly host: string;
@@ -26,6 +30,8 @@ export interface WorkspaceConfig {
     readonly callbackUrl: string;
   } | null;
   readonly oauthClients: OAuthClientConfig | null;
+  /** Defaults to the bundled development license. */
+  readonly univerLicense?: UniverLicenseCredentials;
 }
 
 export function loadConfig(
@@ -91,6 +97,7 @@ export function loadConfig(
     githubOAuth,
     discordOAuth,
     oauthClients: oauthClientsConfig,
+    univerLicense: resolveUniverLicense(environment),
   };
 }
 

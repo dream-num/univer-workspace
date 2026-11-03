@@ -1,4 +1,4 @@
-import { UniverSheetsExchangeClientMobileUIPlugin } from "@univerjs-pro/sheets-exchange-client";
+import { UniverSheetsExchangeClientPlugin } from "@univerjs-pro/sheets-exchange-client";
 import { UniverSheetsHistoryMobileUIPlugin } from "@univerjs-pro/sheets-history-ui";
 import SheetsHistoryUIEnUS from "@univerjs-pro/sheets-history-ui/locale/en-US";
 import SheetsHistoryUIZhCN from "@univerjs-pro/sheets-history-ui/locale/zh-CN";
@@ -65,7 +65,7 @@ export default createCollaborationEditor({
   exchangeFeaturePlugins: () =>
     createMobileExchangeFeaturePlugins([
       [
-        UniverSheetsExchangeClientMobileUIPlugin,
+        UniverSheetsExchangeClientPlugin,
         { minSheetRowCount: 100, minSheetColumnCount: 20 },
       ],
     ]),

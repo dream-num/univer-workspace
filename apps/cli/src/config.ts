@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { configCodecs, createFileConfig, defineConfig, type Config } from "@univer-cli/config";
-import { UNIVER_LICENSE } from "./license.js";
+import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "./license.js";
 
 export const DEFAULT_ORIGIN = "https://space.univer.ai/";
 export const UNIVER_LICENSE_ENV = "UNIVER_LICENSE";
+export const UNIVER_LICENSE_KEY_ENV = "UNIVER_LICENSE_KEY";
 export const UNIVER_HOME_ENV = "UNIVER_HOME";
 export const WORKSPACE_ORIGIN_CONFIG_KEY = "workspace.origin";
 
@@ -31,6 +32,14 @@ export function resolveUniverLicense(env: NodeJS.ProcessEnv): string {
   const configured = env[UNIVER_LICENSE_ENV];
   return configured === undefined || configured.trim().length === 0
     ? UNIVER_LICENSE
+    : configured;
+}
+
+/** Office exchange verifies the license with this key; override both together. */
+export function resolveUniverLicenseKey(env: NodeJS.ProcessEnv): string {
+  const configured = env[UNIVER_LICENSE_KEY_ENV];
+  return configured === undefined || configured.trim().length === 0
+    ? UNIVER_LICENSE_KEY
     : configured;
 }
 

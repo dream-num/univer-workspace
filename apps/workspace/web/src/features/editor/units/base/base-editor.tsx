@@ -2,8 +2,6 @@ import { UniverBasesPlugin } from "@univerjs-pro/bases";
 import UniverBasesEnUS from "@univerjs-pro/bases/locale/en-US";
 import UniverBasesZhCN from "@univerjs-pro/bases/locale/zh-CN";
 import { UniverBasesExchangeClientPlugin } from "@univerjs-pro/bases-exchange-client";
-import UniverBasesExchangeClientEnUS from "@univerjs-pro/bases-exchange-client/locale/en-US";
-import UniverBasesExchangeClientZhCN from "@univerjs-pro/bases-exchange-client/locale/zh-CN";
 import { UniverBasesHistoryUIPlugin } from "@univerjs-pro/bases-history-ui";
 import BasesHistoryUIEnUS from "@univerjs-pro/bases-history-ui/locale/en-US";
 import BasesHistoryUIZhCN from "@univerjs-pro/bases-history-ui/locale/zh-CN";
@@ -39,7 +37,6 @@ import "@univerjs-pro/bases-thread-comment-ui/lib/index.css";
 import "@univerjs/design/lib/index.css";
 import "@univerjs/ui/lib/index.css";
 import "@univerjs-pro/bases-ui/lib/index.css";
-import "@univerjs-pro/bases-exchange-client/lib/index.css";
 import "@univerjs/thread-comment-ui/lib/index.css";
 
 import {
@@ -60,7 +57,6 @@ export const baseEditorLocales: Readonly<
     UniverUIZhCN,
     UniverEngineFormulaZhCN,
     UniverBasesZhCN,
-    UniverBasesExchangeClientZhCN,
     UniverBasesUIZhCN,
     ThreadCommentUIZhCN,
     BasesThreadCommentUIZhCN
@@ -70,7 +66,6 @@ export const baseEditorLocales: Readonly<
     UniverUIEnUS,
     UniverEngineFormulaEnUS,
     UniverBasesEnUS,
-    UniverBasesExchangeClientEnUS,
     UniverBasesUIEnUS,
     ThreadCommentUIEnUS,
     BasesThreadCommentUIEnUS
