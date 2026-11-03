@@ -124,6 +124,10 @@ pnpm workspace:dev:web
 配置、认证、存储、Docker 与数据库迁移的详细说明见
 [Workspace 应用指南](apps/workspace/README.md)。
 
+## 一键部署
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Univer%20Workspace/)
+
 ## 使用 Workspace Agent
 
 Workspace Agent 是基于 DSH、专为 Univer Workspace 构建的桌面应用。通过 `@` 引用 Workspace 文件，在对话中创建和编辑文档，审核改动并决定合入或丢弃。

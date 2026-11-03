@@ -131,6 +131,10 @@ The Server can also serve the latest built Browser from port 3020 when
 Configuration, authentication, storage, Docker, and database migration details live
 in the [Workspace application guide](apps/workspace/README.md).
 
+## One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Univer%20Workspace/)
+
 ## Use Workspace Agent
 
 Workspace Agent is a desktop app built on DSH for Univer Workspace. Reference Workspace files with `@`, create and edit documents through conversation, then review changes and choose whether to merge or discard them.
