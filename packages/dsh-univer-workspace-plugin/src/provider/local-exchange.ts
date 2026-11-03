@@ -16,9 +16,11 @@ import { extname } from "node:path";
 import {
   ExchangeFormat,
   FormulaCalculationMode,
+  configureExchange,
   exportToBuffer,
   importBuffer,
   type ExportOptions,
+  type IExchangeConfig,
   type ImportOptions,
 } from "@univerjs-pro/exchange-node";
 import { UniverInstanceType } from "@univerjs/core";
@@ -107,6 +109,21 @@ export function assertCompatibleExport(
       "EXPORT_TYPE_MISMATCH",
     );
   }
+}
+
+let configured: Promise<void> | undefined;
+
+/**
+ * Exchange verifies the license with its key and otherwise runs on the free
+ * tier. Credentials belong to the JS context, so they are set once before the
+ * first conversion; a rejected configuration is retried by the next call.
+ */
+export async function configureLocalExchange(credentials: Required<IExchangeConfig>): Promise<void> {
+  configured ??= configureExchange(credentials).catch((error: unknown) => {
+    configured = undefined;
+    throw error;
+  });
+  await configured;
 }
 
 /** Convert an Office byte buffer to JSON-safe UnitData for a Worktree create. */

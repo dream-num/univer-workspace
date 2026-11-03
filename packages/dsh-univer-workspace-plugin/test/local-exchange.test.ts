@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { DEVELOPMENT_LICENSE, DEVELOPMENT_LICENSE_KEY } from "../src/license.js";
 import {
   MAX_INITIAL_DATA_BYTES,
   LocalExchangeError,
   assertCompatibleExport,
+  configureLocalExchange,
   exportUnitData,
   importUnitData,
   inferExportFormat,
@@ -10,6 +12,15 @@ import {
 } from "../src/provider/local-exchange.js";
 
 describe("local Office exchange", () => {
+  // Configure the licensed pair as the tools do; without it the exports would
+  // consume the free-tier quota.
+  beforeAll(async () => {
+    await configureLocalExchange({
+      license: DEVELOPMENT_LICENSE,
+      licenseKey: DEVELOPMENT_LICENSE_KEY,
+    });
+  });
+
   it("infers supported import types and rejects mismatches", () => {
     expect(inferImportUnitType("report.xlsx")).toBe("sheet");
     expect(inferImportUnitType("report.csv", "base")).toBe("base");

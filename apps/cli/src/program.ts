@@ -31,7 +31,7 @@ import {
   WorkspaceUnitLayoutLintFeature,
 } from "@univerjs/univer-workspace-client-core";
 import type { Command } from "commander";
-import { resolveUniverLicense } from "./config.js";
+import { resolveUniverLicense, resolveUniverLicenseKey } from "./config.js";
 import { createAssetCommand } from "./features/asset/command.js";
 import { createBlobCommand } from "./features/blob/command.js";
 import { createContentExecuteCommand } from "./features/content/command.js";
@@ -117,7 +117,10 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     materializer: new HeadlessWorkspaceTypstMaterializer(),
     units,
   });
+  const license = resolveUniverLicense(options.env);
   const exchange = new WorkspaceUnitExchangeFeature({
+    license,
+    licenseKey: resolveUniverLicenseKey(options.env),
     runtime: runtimeOperations,
     resolveImageAsset: async (input) =>
       await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveImageAsset(input),
@@ -131,7 +134,6 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     runtime: runtimeOperations,
     openSource: async () => new WorkspaceContentSource(await auth.authenticatedHttp("client")),
   });
-  const license = resolveUniverLicense(options.env);
   const screenshot = new WorkspaceScreenshotFeature({
     renderPageRoot: options.renderPageRoot,
     license,

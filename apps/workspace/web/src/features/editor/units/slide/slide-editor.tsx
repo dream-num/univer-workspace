@@ -10,8 +10,7 @@ import { UniverSlidesChartUIPlugin } from "@univerjs-pro/slides-chart-ui";
 import UniverSlidesChartUIEnUS from "@univerjs-pro/slides-chart-ui/locale/en-US";
 import UniverSlidesChartUIZhCN from "@univerjs-pro/slides-chart-ui/locale/zh-CN";
 import { UniverSlidesExchangeClientPlugin } from "@univerjs-pro/slides-exchange-client";
-import UniverSlidesExchangeClientEnUS from "@univerjs-pro/slides-exchange-client/locale/en-US";
-import UniverSlidesExchangeClientZhCN from "@univerjs-pro/slides-exchange-client/locale/zh-CN";
+import { createWorkspaceImportExportFeature } from "../../features/import-export";
 import { UniverSlidesHistoryUIPlugin } from "@univerjs-pro/slides-history-ui";
 import SlidesHistoryUIEnUS from "@univerjs-pro/slides-history-ui/locale/en-US";
 import SlidesHistoryUIZhCN from "@univerjs-pro/slides-history-ui/locale/zh-CN";
@@ -95,7 +94,6 @@ export const slideEditorLocales: Readonly<
     UniverSlidesZhCN,
     UniverShapeEditorUIZhCN,
     UniverSlidesUIZhCN,
-    UniverSlidesExchangeClientZhCN,
     UniverSlidesPrintZhCN,
     UniverSlidesChartUIZhCN,
     UniverSlidesTableUIZhCN,
@@ -112,7 +110,6 @@ export const slideEditorLocales: Readonly<
     UniverSlidesEnUS,
     UniverShapeEditorUIEnUS,
     UniverSlidesUIEnUS,
-    UniverSlidesExchangeClientEnUS,
     UniverSlidesPrintEnUS,
     UniverSlidesChartUIEnUS,
     UniverSlidesTableUIEnUS,
@@ -200,7 +197,10 @@ export const slideEditorDefinition: ICollaborationEditorDefinition = {
   locales: slideEditorLocales,
   collaborationFeaturePlugins: () =>
     getThreadCommentCollaborationPlugins(UniverSlidesThreadCommentUIPlugin),
-  exchangeFeaturePlugins: () => [UniverSlidesExchangeClientPlugin],
+  exchangeFeaturePlugins: () => [
+    UniverSlidesExchangeClientPlugin,
+    createWorkspaceImportExportFeature("slide", { mobile: false }),
+  ],
   printFeaturePlugins: () => [UniverSlidesPrintPlugin],
   createPresets: (container, _license, _scope, compact) => [
     { plugins: getReferencedSheetPlugins() },

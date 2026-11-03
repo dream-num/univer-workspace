@@ -267,10 +267,17 @@ issuance itself stays silent exactly like identity-only grants.
 
 The browser uses the same built-in runtime development license as Workspace
 CLI. Both copies are rotated every 90 days and are application credentials, not
-the repository software license. The built-in credential is for `localhost`;
-set `VITE_UNIVER_LICENSE` at build time for any non-local deployment or to
-override it locally. Server, database, GitHub, and Discord settings are runtime
-values.
+the repository software license. The built-in credential authorizes the domains
+listed in its generated `license.ts` comment; set `VITE_UNIVER_LICENSE` at build
+time for any other deployment host or to override it locally. The Collaboration
+endpoint rejects browser pages served from an unlisted host with 403 (code 9018).
+
+The server passes a license and its key to the Collaboration service and to
+Office exchange; without them both SDKs run on their free tier (one
+collaboration node, three editing connections and ten exports per month). It
+uses the bundled development pair unless `UNIVER_LICENSE` and
+`UNIVER_LICENSE_KEY` are set, which must be configured together. Server,
+database, GitHub, and Discord settings are runtime values.
 
 An authenticated Browser keeps one `/api/worktree-events` WebSocket open. AI or
 CLI Worktree writes publish a cache-invalidation signal only after the combined

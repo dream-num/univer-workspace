@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config.js";
+import { BUNDLED_UNIVER_LICENSE } from "./integrations/univer/univer-license.js";
 
 describe("GitHub organization allowlist configuration", () => {
   it("normalizes and de-duplicates organization names", () => {
@@ -72,6 +73,29 @@ describe("password authentication configuration", () => {
   it("rejects an invalid password authentication flag", () => {
     expect(() => loadConfig({ PASSWORD_AUTH_ENABLED: "no" })).toThrow(
       "PASSWORD_AUTH_ENABLED must be true or false",
+    );
+  });
+});
+
+describe("Univer license configuration", () => {
+  it("uses the bundled development license by default", () => {
+    expect(loadConfig({}).univerLicense).toBe(BUNDLED_UNIVER_LICENSE);
+    expect(BUNDLED_UNIVER_LICENSE.license).toMatch(/^\d+-\d+-/);
+    expect(BUNDLED_UNIVER_LICENSE.licenseKey).not.toBe("");
+  });
+
+  it("accepts a deployment license and key together", () => {
+    expect(
+      loadConfig({ UNIVER_LICENSE: " license ", UNIVER_LICENSE_KEY: " key " }).univerLicense
+    ).toEqual({ license: "license", licenseKey: "key" });
+  });
+
+  it("rejects a license without its key", () => {
+    expect(() => loadConfig({ UNIVER_LICENSE: "license" })).toThrow(
+      "UNIVER_LICENSE and UNIVER_LICENSE_KEY must be configured together"
+    );
+    expect(() => loadConfig({ UNIVER_LICENSE_KEY: "key" })).toThrow(
+      "UNIVER_LICENSE and UNIVER_LICENSE_KEY must be configured together"
     );
   });
 });

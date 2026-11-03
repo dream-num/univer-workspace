@@ -187,6 +187,7 @@ export function createWorkspaceApplication(
     (collaboration = createCollaborationRuntime(
       config.collaborationDatabaseFilename,
       {
+        ...(config.univerLicense ? { license: config.univerLicense } : {}),
         commentUserProvider: {
           async getUsers(userIds) {
             return identity.findUsers(userIds).map(protocolUser);
@@ -282,6 +283,7 @@ export function createWorkspaceApplication(
     spaces,
     snapshots: unitSnapshotStore,
     store: blobStore,
+    ...(config.univerLicense ? { license: config.univerLicense } : {}),
   });
   const collaborationGateway: CollaborationGateway | null = collaboration
     ? createCollaborationGateway({

@@ -50,7 +50,6 @@ describe("editor integration assets", () => {
       "@univerjs/design/lib/index.css",
       "@univerjs/ui/lib/index.css",
       "@univerjs-pro/bases-ui/lib/index.css",
-      "@univerjs-pro/bases-exchange-client/lib/index.css",
     ]);
     expectImportsInOrder(editorSources.slide, [
       "@univerjs/design/lib/index.css",
@@ -128,11 +127,15 @@ describe("editor integration assets", () => {
     for (const product of ["sheet", "doc", "slide", "board", "base"]) {
       expect(readEditorSource(product, ".mobile")).toContain("mobile: true");
     }
-    // Exchange-enabled mobile editors pair the Mobile exchange client.
-    for (const product of ["doc", "slide", "base"]) {
+    // Exchange-enabled mobile editors pair the shared exchange client and
+    // the mobile Workspace import/export UI.
+    for (const product of ["sheet", "doc", "slide", "base"]) {
       const source = readEditorSource(product, ".mobile");
       expect(source).toContain("exchangeProvidedByPreset: true");
       expect(source).toContain("createMobileExchangeFeaturePlugins");
+      expect(source).toContain(
+        `createWorkspaceImportExportFeature("${product}", { mobile: true })`
+      );
     }
   });
 
@@ -202,20 +205,24 @@ describe("editor integration assets", () => {
 
   it("registers the supported output plugins for each editor", () => {
     expect(editorSources.sheet).toContain("exchangeProvidedByPreset: true");
-    expect(editorSources.doc).toContain(
-      "exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin]"
+    // SDK 1.3 exchange clients are headless; Workspace adds the import/export UI.
+    expect(editorSources.sheet).toContain(
+      'createWorkspaceImportExportFeature("sheet", { mobile: false })'
     );
+    for (const [product, plugin] of [
+      ["doc", "UniverDocsExchangeClientPlugin"],
+      ["slide", "UniverSlidesExchangeClientPlugin"],
+      ["base", "UniverBasesExchangeClientPlugin"],
+    ] as const) {
+      expect(editorSources[product]).toContain(
+        `exchangeFeaturePlugins: () => [\n    ${plugin},\n    createWorkspaceImportExportFeature("${product}", { mobile: false }),\n  ]`
+      );
+    }
     expect(editorSources.doc).toContain(
       "printFeaturePlugins: () => [UniverDocsPrintPlugin]"
     );
     expect(editorSources.slide).toContain(
-      "exchangeFeaturePlugins: () => [UniverSlidesExchangeClientPlugin]"
-    );
-    expect(editorSources.slide).toContain(
       "printFeaturePlugins: () => [UniverSlidesPrintPlugin]"
-    );
-    expect(editorSources.base).toContain(
-      "exchangeFeaturePlugins: () => [UniverBasesExchangeClientPlugin]"
     );
     expect(editorSources.board).toContain("exchangeEnabled: false");
     expect(editorSources.board).toContain(

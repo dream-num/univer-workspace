@@ -5,6 +5,7 @@ import {
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
 import { createMobileExchangeFeaturePlugins } from "../../features/exchange-plugins";
+import { createWorkspaceImportExportFeature } from "../../features/import-export";
 import { baseEditorDefinition } from "./base-editor";
 import { createBaseMobilePresets } from "./base-mobile-presets";
 
@@ -17,6 +18,9 @@ export default createCollaborationEditor({
   // See createMobileExchangeFeaturePlugins.
   exchangeProvidedByPreset: true,
   exchangeFeaturePlugins: () =>
-    createMobileExchangeFeaturePlugins([UniverBasesExchangeClientPlugin]),
+    createMobileExchangeFeaturePlugins([
+      UniverBasesExchangeClientPlugin,
+      createWorkspaceImportExportFeature("base", { mobile: true }),
+    ]),
   createPresets: (container) => createBaseMobilePresets(container),
 });

@@ -2,9 +2,11 @@ import { extname } from "node:path";
 import {
   ExchangeFormat,
   FormulaCalculationMode,
+  configureExchange,
   exportToFile,
   importFile,
   type ExportOptions,
+  type IExchangeConfig,
   type ImportOptions,
 } from "@univerjs-pro/exchange-node";
 import { UniverInstanceType } from "@univerjs/core";
@@ -35,6 +37,10 @@ const importOfficeFile = importFile as unknown as ImportOfficeFile;
 const exportOfficeFile = exportToFile as unknown as ExportOfficeFile;
 
 export interface WorkspaceUnitExchangeDependencies {
+  /** Exchange verifies the license with its key; without both it runs on the free tier. */
+  readonly license: string;
+  readonly licenseKey: string;
+  readonly configureExchange?: (config: IExchangeConfig) => Promise<void>;
   readonly resolveImageAsset: WorkspaceContentSource["resolveImageAsset"];
   readonly runtime: Pick<WorkspaceContentRuntimeOperations, "exportUnitData">;
   readonly exportToFile?: ExportOfficeFile;
@@ -89,11 +95,14 @@ export interface WorkspaceExportFileResult {
 }
 
 export class WorkspaceUnitExchangeFeature {
+  private configured: Promise<void> | undefined;
+
   public constructor(private readonly dependencies: WorkspaceUnitExchangeDependencies) {}
 
   public async importFile(input: WorkspaceImportFileInput): Promise<WorkspaceImportFileResult> {
     const type = inferImportType(input.sourcePath, input.type);
     const unitType = toInstanceType(type);
+    await this.configureExchange();
     const imported = await (this.dependencies.importFile ?? importOfficeFile)(
       input.sourcePath,
       importOptions(input.sourcePath, unitType),
@@ -144,6 +153,7 @@ export class WorkspaceUnitExchangeFeature {
     }
     const format = inferExportFormat(input.outputPath);
     requireCompatibleExport(target.unitType, format);
+    await this.configureExchange();
     const result: unknown = await this.dependencies.runtime.exportUnitData({ target });
     if (!isRecord(result) || result["id"] !== target.unitId) {
       throw workspaceError(
@@ -164,6 +174,19 @@ export class WorkspaceUnitExchangeFeature {
       unitId: target.unitId,
       worktreeId: input.worktreeId,
     };
+  }
+
+  // Exchange credentials belong to the JS context, so set them once before the
+  // first conversion; a rejected configuration is retried by the next call.
+  private async configureExchange(): Promise<void> {
+    this.configured ??= (this.dependencies.configureExchange ?? configureExchange)({
+      license: this.dependencies.license,
+      licenseKey: this.dependencies.licenseKey,
+    }).catch((error: unknown) => {
+      this.configured = undefined;
+      throw error;
+    });
+    await this.configured;
   }
 }
 
