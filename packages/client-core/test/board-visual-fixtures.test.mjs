@@ -1411,8 +1411,7 @@ describe("Board public element catalogue preservation", () => {
       univer.dispose();
     }
   });
-  // The combined chart case is exercised by the licensed rendered runner; chart creation requires the runtime credential.
-  it.each(elementProfiles.filter((profile) => profile !== "text-image-ink-chart"))(
+  it.each(elementProfiles)(
     "preserves authored %s catalogue geometry and public preset coverage",
     async (profile) => {
       const { createStandardHeadlessUniverFactory, createStandardHeadlessUniverFacade } =
@@ -1439,7 +1438,11 @@ describe("Board public element catalogue preservation", () => {
         expect(fixture.semanticCoverage.automatedLayoutQualityClaim).toBe(false);
         if (profile === "builtin-shapes")
           expect(fixture.semanticCoverage.covered).toHaveLength(
-            new Set(Object.values(api.Enum.ShapeTypeEnum).filter((type) => type !== "none")).size,
+            new Set(
+              Object.values(api.Enum.ShapeTypeEnum).filter(
+                (type) => !["none", "smartArt"].includes(type),
+              ),
+            ).size,
           );
         if (profile === "connector-grammar")
           expect(

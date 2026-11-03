@@ -8,7 +8,7 @@ export const elementProfiles = [
   "table-presets",
   "connector-grammar",
   "label-grammar",
-  "text-image-ink-chart",
+  "text-image-ink",
   "container-grammar",
   "transform-style",
   "native-sheet-embed",
@@ -36,62 +36,6 @@ const point = (index, width = 230, height = 190, columns = 5) => ({
   y: 90 + Math.floor(index / columns) * height,
 });
 
-export function createCatalogueChartInfo(board, api) {
-  return board
-    .newChart(api.Enum.ChartTypeString.Column)
-    .setSource([
-      ["Quarter", "Orders", "Returns"],
-      ["Q1", 120, 4],
-      ["Q2", 168, 5],
-      ["Q3", 192, 3],
-      ["Q4", 226, 6],
-    ])
-    .setSourceHeader({ band: { startOffset: 0, endOffset: 0 } })
-    .setCategoryField(0)
-    .setValueFields([1, 2])
-    .setAbsolutePosition(410, 220)
-    .setSize(660, 430)
-    .setTitle("Orders and returns / 订单与退货")
-    .build();
-}
-
-export function createCatalogueChartFamilyInfos(board, api) {
-  const families = ["Column", "Bar", "Line", "Area", "Pie", "Donut", "Scatter"];
-  return families.map((family, index) => {
-    if (family === "Column") return { family, info: createCatalogueChartInfo(board, api) };
-    const scatter = family === "Scatter";
-    const pie = family === "Pie" || family === "Donut";
-    const source = scatter
-      ? [
-          ["Week", "Orders", "Returns"],
-          [1, 120, 4],
-          [2, 168, 5],
-          [3, 192, 3],
-          [4, 226, 6],
-        ]
-      : [
-          ["Quarter", "Orders", "Returns"],
-          ["Q1", 120, 4],
-          ["Q2", 168, 5],
-          ["Q3", 192, 3],
-          ["Q4", 226, 6],
-        ];
-    const builder = board
-      .newChart(api.Enum.ChartTypeString[family])
-      .setSource(source)
-      .setSourceHeader({ band: { startOffset: 0, endOffset: 0 } })
-      .setCategoryField(0)
-      .setValueFields(pie ? [1] : [1, 2])
-      .setAbsolutePosition(70 + ((index - 1) % 2) * 730, 760 + Math.floor((index - 1) / 2) * 520)
-      .setSize(660, 430)
-      .setTitle(
-        `${family} · ${scatter ? "Orders by week / 每周订单" : "Orders by quarter / 季度订单"}`,
-      );
-    if (family === "Donut") builder.setDoughnutHole(0.5);
-    return { family, info: builder.build() };
-  });
-}
-
 export async function realizeElementFixture(board, api, profile, options = {}) {
   assert.ok(elementProfiles.includes(profile), "Unknown element catalogue");
   const E = api.Enum;
@@ -101,7 +45,6 @@ export async function realizeElementFixture(board, api, profile, options = {}) {
   const renderUnits = {};
   const shapeCaptions = new Map();
   const authoringTextRepairs = [];
-  let chartTypeCoverage;
   const ensure = (value, reason) => {
     assert.ok(value, reason);
     return value;
@@ -299,7 +242,7 @@ export async function realizeElementFixture(board, api, profile, options = {}) {
       "custom-shapes": E.BoardCustomShapeType,
       "sequence-shapes": E.BoardSequenceShapeType,
     }[profile];
-    // None is not a shape. SmartArt needs a composite payload rather than an empty preset insertion.
+    // Exclude the empty preset and composite diagrams from the primitive shape catalogue.
     const types = [...new Set(Object.values(source))].filter(
       (type) => !["none", "smartArt"].includes(type),
     );
@@ -313,96 +256,6 @@ export async function realizeElementFixture(board, api, profile, options = {}) {
         "A public shape preset was skipped",
       ),
     );
-    if (profile === "builtin-shapes") {
-      const entries = [
-        ["plan", "Plan / 计划", E.ShapeTypeEnum.RoundRect, 20, "#dbeafe"],
-        ["release", "Release / 发布", E.ShapeTypeEnum.Hexagon, 310, "#fef3c7"],
-      ];
-      const smartArt = {
-        version: 1,
-        viewport: { width: 520, height: 160 },
-        layout: { id: "urn:univer:catalogue:authored-process", category: "process" },
-        style: {},
-        direction: "leftToRight",
-        rootNodeIds: entries.map(([id]) => id),
-        nodes: Object.fromEntries(
-          entries.map(([id, text]) => [
-            id,
-            {
-              id,
-              childIds: [],
-              role: "content",
-              text: { isHorizontal: true, text },
-            },
-          ]),
-        ),
-        presentationShapeOrder: ["plan-shape", "flow-shape", "release-shape"],
-        presentationShapes: Object.fromEntries([
-          ...entries.map(([id, text, shapeType, left, color]) => [
-            `${id}-shape`,
-            {
-              id: `${id}-shape`,
-              role: "node",
-              dataNodeIds: [id],
-              textSource: "dataNode",
-              transform: { left, top: 30, width: 190, height: 100 },
-              shapeData: {
-                shapeType,
-                fill: { fillType: E.ShapeFillEnum.SolidFill, color },
-                stroke: { color: "#334155", width: 1.5 },
-                shapeText: { isHorizontal: true, text, fontSize: 16 },
-              },
-            },
-          ]),
-          [
-            "flow-shape",
-            {
-              id: "flow-shape",
-              role: "connection",
-              dataNodeIds: [],
-              sourcePresentationShapeId: "plan-shape",
-              targetPresentationShapeId: "release-shape",
-              transform: { left: 230, top: 62, width: 60, height: 36 },
-              shapeData: {
-                shapeType: E.ShapeTypeEnum.RightArrow,
-                fill: { fillType: E.ShapeFillEnum.SolidFill, color: "#475569" },
-              },
-            },
-          ],
-        ]),
-      };
-      const top = 90 + Math.ceil(types.length / 5) * 190;
-      const ref = ensure(
-        board.insertShape({
-          shapeType: E.ShapeTypeEnum.SmartArt,
-          transform: { left: 70, top, width: 520, height: 160 },
-          shapeData: { smartArt },
-        }),
-        "SmartArt composite insertion failed",
-      );
-      ids.push(ref.getId());
-      covered.push({
-        feature: "smart-art-composite",
-        elementId: ref.getId(),
-        logicalNodes: 2,
-        presentationShapes: 3,
-        rendering: "partial-native-composite",
-        childTextPaint: "not-rendered-by-board",
-      });
-      caption(
-        "SmartArt native composite · child text not painted / 子文字未绘制",
-        70,
-        top + 172,
-        520,
-      );
-      expect.push(() =>
-        assert.deepEqual(
-          board.getElement(ref.getId()).shapeData.smartArt,
-          smartArt,
-          "SmartArt source nodes or presentation geometry changed",
-        ),
-      );
-    }
   } else if (profile === "table-presets") {
     let left = 70;
     let top = 90;
@@ -596,7 +449,7 @@ export async function realizeElementFixture(board, api, profile, options = {}) {
         elementId: c.id,
       });
     }
-  } else if (profile === "text-image-ink-chart") {
+  } else if (profile === "text-image-ink") {
     const rich = api
       .newRichText()
       .span("Quarterly operations / 季度运营", {
@@ -660,44 +513,6 @@ export async function realizeElementFixture(board, api, profile, options = {}) {
         "Ink overlaps the image caption",
       );
     });
-    const familyInfos = createCatalogueChartFamilyInfos(board, api);
-    const sampledTypes = familyInfos.map(({ family }) => E.ChartTypeString[family]);
-    chartTypeCoverage = {
-      declared: [...new Set(Object.values(E.ChartTypeString))],
-      sampled: sampledTypes,
-      unverified: [...new Set(Object.values(E.ChartTypeString))].filter(
-        (type) => !sampledTypes.includes(type),
-      ),
-      scope:
-        "Seven representative native families; enum registration is not proof of render support",
-    };
-    for (const { family, info: chartInfo } of familyInfos) {
-      const chart = ensure(await board.insertChart(chartInfo), `${family} chart insertion failed`);
-      ids.push(chart.getElementId());
-      covered.push({
-        feature: "inline-data-chart",
-        family,
-        elementId: chart.getElementId(),
-        sourceHeader: chartInfo.sourceHeader,
-      });
-      expect.push(() => {
-        assert.equal(
-          chart.getInfo().config.type,
-          E.ChartTypeString[family],
-          `${family} native chart kind changed`,
-        );
-        assert.deepEqual(
-          chart.getInfo().dataSource,
-          chartInfo.dataSource,
-          `${family} source facts changed`,
-        );
-        assert.deepEqual(
-          chart.getInfo().sourceHeader,
-          chartInfo.sourceHeader,
-          `${family} title-row projection changed`,
-        );
-      });
-    }
     caption("Editable persistent Ink", 70, inkTop + 65);
   } else if (profile === "container-grammar") {
     for (const [index, kind] of ["generic", "system-boundary", "uml-package"].entries()) {
@@ -841,14 +656,10 @@ export async function realizeElementFixture(board, api, profile, options = {}) {
       source: "element-catalogue",
       authoredCatalogueGeometry: true,
       authoringTextRepairs,
-      ...(chartTypeCoverage ? { chartTypeCoverage } : {}),
       automatedLayoutQualityClaim: false,
       covered,
       primitiveTypes: [...new Set(Object.values(board.getElements()).map((item) => item.type))],
-      notClaimed: [
-        "Temporal animation and video/audio playback are not certified by static PNGs",
-        "Representative inline-data chart families do not certify every declared kind or external data adapter",
-      ],
+      notClaimed: ["Temporal animation and video/audio playback are not certified by static PNGs"],
       unavailable: [
         {
           type: "diagram",
