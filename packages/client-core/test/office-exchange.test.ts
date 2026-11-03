@@ -485,12 +485,49 @@ describe("Workspace Office export workflow", () => {
   });
 });
 
+describe("WorkspaceUnitExchangeFeature licensing", () => {
+  it("configures Exchange credentials once before the first conversion", async () => {
+    const order: string[] = [];
+    const configureExchange = vi.fn(async () => { order.push("configure"); });
+    const feature = createFeature({
+      configureExchange,
+      importFile: async () => { order.push("import"); return { id: "converted" }; },
+      exportToFile: async () => { order.push("export"); },
+    });
+
+    await feature.importFile({ sourcePath: "/tmp/book.xlsx", spaceId: "space-1", worktreeId: "wt-1" });
+    await feature.exportFile({ outputPath: "/tmp/book.xlsx", unitId: "unit-1", worktreeId: "wt-1" });
+
+    expect(configureExchange).toHaveBeenCalledExactlyOnceWith({
+      license: "test-license",
+      licenseKey: "test-license-key",
+    });
+    expect(order).toEqual(["configure", "import", "export"]);
+  });
+
+  it("retries a rejected configuration on the next conversion", async () => {
+    const failure = new Error("license rejected");
+    const configureExchange = vi.fn()
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce(undefined);
+    const feature = createFeature({ configureExchange });
+    const input = { sourcePath: "/tmp/book.xlsx", spaceId: "space-1", worktreeId: "wt-1" };
+
+    await expect(feature.importFile(input)).rejects.toBe(failure);
+    await expect(feature.importFile(input)).resolves.toMatchObject({ committed: true });
+    expect(configureExchange).toHaveBeenCalledTimes(2);
+  });
+});
+
 type CreateInput = Parameters<WorkspaceUnitExchangeDependencies["createUnit"]>[0];
 
 function createFeature(
   overrides: Partial<WorkspaceUnitExchangeDependencies> = {},
 ): WorkspaceUnitExchangeFeature {
   return new WorkspaceUnitExchangeFeature({
+    license: "test-license",
+    licenseKey: "test-license-key",
+    configureExchange: async () => undefined,
     resolveImageAsset: async () => { throw new Error("Unexpected Asset request"); },
     createUnit: async (input) => createdUnit(input),
     exportToFile: async () => undefined,

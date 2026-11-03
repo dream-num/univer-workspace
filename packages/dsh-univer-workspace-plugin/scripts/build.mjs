@@ -20,6 +20,41 @@ const external = [
   "@univerjs-pro/exchange-node-binding",
 ];
 
+// @univerjs-pro/exchange-node's ESM entry only re-exports its CJS build, so the
+// host bundle would otherwise hold both the ESM and the CJS build of every
+// Univer package it reaches. Resolve the host's Univer packages as CJS; that
+// code calls require() for Node built-ins and resolves its native binding from
+// __filename, neither of which ESM output has, so every host output file
+// defines them from its own module URL. The worker never reaches exchange-node
+// and stays ESM-only, which is smaller.
+function univerCjsOnlyPlugin() {
+  return {
+    name: "univer-cjs-only",
+    setup(pluginBuild) {
+      pluginBuild.onResolve({ filter: /^@univerjs(?:-pro)?\// }, async (args) => {
+        if (args.kind === "require-call" || args.pluginData?.univerCjsOnly) return undefined;
+        const result = await pluginBuild.resolve(args.path, {
+          kind: "require-call",
+          importer: args.importer,
+          resolveDir: args.resolveDir,
+          pluginData: { univerCjsOnly: true },
+        });
+        if (result.errors.length > 0) return { errors: result.errors };
+        return { path: result.path, external: result.external, sideEffects: result.sideEffects };
+      });
+    },
+  };
+}
+
+const nodeCommonjsGlobals = {
+  js: [
+    'import { createRequire as __univerCreateRequire } from "node:module";',
+    'import { fileURLToPath as __univerFileURLToPath } from "node:url";',
+    "const require = __univerCreateRequire(import.meta.url);",
+    "const __filename = __univerFileURLToPath(import.meta.url);",
+  ].join("\n"),
+};
+
 await rm("lib", { recursive: true, force: true });
 await mkdir("lib", { recursive: true });
 
@@ -44,6 +79,8 @@ await build({
   format: "esm",
   target: "node22",
   external,
+  banner: nodeCommonjsGlobals,
+  plugins: [univerCjsOnlyPlugin()],
   sourcemap: false,
   minifyWhitespace: process.env.UWA_DESKTOP_BUILD === "1",
   logLevel: "info",

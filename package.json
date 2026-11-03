@@ -6,8 +6,9 @@
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm test:sdk-dependencies && pnpm test:release && pnpm -r test",
+    "test": "pnpm test:sdk-dependencies && pnpm test:univer-license && pnpm test:release && pnpm -r test",
     "test:sdk-dependencies": "node --test scripts/update-sdk-dependencies.test.mjs",
+    "test:univer-license": "node --test scripts/update-univer-license.test.mjs",
     "test:release": "node --test scripts/release/*.test.mjs",
     "check": "pnpm typecheck && pnpm test",
     "format": "oxfmt",
@@ -17,6 +18,7 @@
     "release:cli:dev": "node scripts/release/release-cli.mjs --channel=dev --publish",
     "release:cli:publish": "node scripts/release/publish-cli.mjs",
     "update:univer-sdk": "node scripts/update-sdk-dependencies.mjs",
+    "update:univer-license": "node scripts/update-univer-license.mjs",
     "link:workspace-cli": "pnpm --filter univer-workspace-cli build && pnpm link --global ./apps/cli",
     "unlink:workspace-cli": "node scripts/unlink-workspace-cli.mjs",
     "workspace:dev:web": "pnpm --filter @univerjs/univer-workspace dev:web",

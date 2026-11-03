@@ -66,7 +66,10 @@ interface ExportArguments {
 }
 
 /** Register local Office conversion tools. */
-export function registerExchangeTools(ctx: Context): () => void {
+export function registerExchangeTools(
+  ctx: Context,
+  credentials: { readonly license: string; readonly licenseKey: string },
+): () => void {
   const disposeImport = registerUniverTool(
     ctx,
     defineTool({
@@ -132,7 +135,8 @@ export function registerExchangeTools(ctx: Context): () => void {
         const targetSpaceId = resolveTargetSpace(resolved, args.spaceId);
         const source = await existingSessionPath(exec, args.source);
         const explicitType = explicitImportType(args.unitType, args.type);
-        const { importUnitData } = await import('../provider/local-exchange.ts');
+        const { configureLocalExchange, importUnitData } = await import('../provider/local-exchange.ts');
+        await configureLocalExchange(credentials);
         const imported = await importUnitData(
           new Uint8Array(await readFile(source.path)),
           basename(source.path),
@@ -230,7 +234,8 @@ export function registerExchangeTools(ctx: Context): () => void {
           );
         }
         const output = await newSessionPath(exec, outputArg);
-        const { inferExportFormat, exportUnitData } = await import('../provider/local-exchange.ts');
+        const { configureLocalExchange, inferExportFormat, exportUnitData } = await import('../provider/local-exchange.ts');
+        await configureLocalExchange(credentials);
         const inferredFormat = inferExportFormat(output.path);
         if (args.format !== undefined && args.format !== inferredFormat) {
           throw new UniverError(

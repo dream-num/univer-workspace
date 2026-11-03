@@ -13,6 +13,7 @@ import {
   type IWorkbookData,
 } from "@univerjs/core";
 import { describe, expect, it } from "vitest";
+import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "./license.js";
 
 describe("Exchange Node runtime", () => {
   it("round-trips a real XLSX through the native binding", async () => {
@@ -23,6 +24,9 @@ describe("Exchange Node runtime", () => {
         format: ExchangeFormat.XLSX,
         formulaCalculation: FormulaCalculationMode.FORCED,
         type: UniverInstanceType.UNIVER_SHEET,
+        // Without credentials the export would consume the free-tier quota.
+        license: UNIVER_LICENSE,
+        licenseKey: UNIVER_LICENSE_KEY,
       });
       expect((await stat(outputPath)).size).toBeGreaterThan(0);
       const imported = await importFile(outputPath, {

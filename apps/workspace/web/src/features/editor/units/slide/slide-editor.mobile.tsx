@@ -7,6 +7,7 @@ import {
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
 import { createMobileExchangeFeaturePlugins } from "../../features/exchange-plugins";
+import { createWorkspaceImportExportFeature } from "../../features/import-export";
 import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
 import { slideEditorDefinition } from "./slide-editor";
 import { createSlideMobilePresets } from "./slide-mobile-presets";
@@ -24,7 +25,10 @@ export default createCollaborationEditor({
   // See createMobileExchangeFeaturePlugins.
   exchangeProvidedByPreset: true,
   exchangeFeaturePlugins: () =>
-    createMobileExchangeFeaturePlugins([UniverSlidesExchangeClientPlugin]),
+    createMobileExchangeFeaturePlugins([
+      UniverSlidesExchangeClientPlugin,
+      createWorkspaceImportExportFeature("slide", { mobile: true }),
+    ]),
   printFeaturePlugins: () => [UniverSlidesPrintMobileUIPlugin],
   createPresets: (container, _license, _scope, compact) =>
     createSlideMobilePresets({ container, compact }),

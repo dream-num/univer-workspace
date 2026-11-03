@@ -24,6 +24,7 @@ export const inject = ["tools", "univerWorkspace"];
 
 export interface Config {
   readonly license: string;
+  readonly licenseKey: string;
 }
 
 /** Register every univer_ tool. */
@@ -35,7 +36,7 @@ export function apply(ctx: Context, config: Config): void {
     const disposeIssue = registerIssueTool(ctx);
     const disposeWorktree = registerWorktreeTools(ctx);
     const disposeEdit = registerEditTool(ctx);
-    const disposeExchange = registerExchangeTools(ctx);
+    const disposeExchange = registerExchangeTools(ctx, config);
     const disposeUnit = registerUnitTool(ctx);
     const disposeApi = registerApiTool(ctx);
     const disposeResources = registerResourcesTool(ctx);

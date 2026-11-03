@@ -157,7 +157,8 @@ Board errors or incomplete coverage exit with code 2; with `--json`, stderr cont
 
 ## License policy
 
-Set `UNIVER_LICENSE` to a non-empty value to override the bundled runtime license.
+Set `UNIVER_LICENSE` to a non-empty value to override the bundled runtime license. Office
+import and export also verify the license with `UNIVER_LICENSE_KEY`; override both together.
 
 ## Project links
 

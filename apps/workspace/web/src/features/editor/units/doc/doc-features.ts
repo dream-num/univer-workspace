@@ -1,3 +1,8 @@
+import { UniverDocsFindReplacePlugin } from "@univerjs/docs-find-replace";
+import {
+  UniverFindReplaceMobileUIPlugin,
+  UniverFindReplacePlugin,
+} from "@univerjs/find-replace";
 import type { IPresetPlugin } from "@univerjs/presets";
 import { UniverDocsCalloutPlugin } from "@univerjs-pro/docs-callout";
 import {
@@ -14,11 +19,26 @@ import {
   UniverDocsCodeMobileUIPlugin,
   UniverDocsCodeUIPlugin,
 } from "@univerjs-pro/docs-code-ui";
+import { UniverDocsColumnPlugin } from "@univerjs-pro/docs-column";
+import {
+  UniverDocsColumnMobileUIPlugin,
+  UniverDocsColumnUIPlugin,
+} from "@univerjs-pro/docs-column-ui";
 import { UniverDocsLatexPlugin } from "@univerjs-pro/docs-latex";
 import {
   UniverDocsLatexMobileUIPlugin,
   UniverDocsLatexUIPlugin,
 } from "@univerjs-pro/docs-latex-ui";
+import { UniverDocsListPlugin } from "@univerjs-pro/docs-list";
+import {
+  UniverDocsListMobileUIPlugin,
+  UniverDocsListUIPlugin,
+} from "@univerjs-pro/docs-list-ui";
+import { UniverDocsQuotePlugin } from "@univerjs-pro/docs-quote";
+import {
+  UniverDocsQuoteMobileUIPlugin,
+  UniverDocsQuoteUIPlugin,
+} from "@univerjs-pro/docs-quote-ui";
 import { UniverDocsShapePlugin } from "@univerjs-pro/docs-shape";
 import {
   UniverDocsShapeMobileUIPlugin,
@@ -41,7 +61,10 @@ export function getDocReplayCompatibilityPlugins(): IPresetPlugin[] {
     UniverDocsCalloutPlugin,
     UniverDocsChartPlugin,
     UniverDocsCodePlugin,
+    UniverDocsColumnPlugin,
     UniverDocsLatexPlugin,
+    UniverDocsListPlugin,
+    UniverDocsQuotePlugin,
     UniverDocsShapePlugin,
     UniverDocsTablePlugin,
   ];
@@ -58,7 +81,10 @@ export function getDocAuthoringUIPlugins(): IPresetPlugin[] {
     UniverDocsCalloutUIPlugin,
     UniverDocsChartUIPlugin,
     UniverDocsCodeUIPlugin,
+    UniverDocsColumnUIPlugin,
     UniverDocsLatexUIPlugin,
+    UniverDocsListUIPlugin,
+    UniverDocsQuoteUIPlugin,
     UniverDocsShapeUIPlugin,
     UniverDocsTableUIPlugin,
   ];
@@ -71,8 +97,25 @@ export function getDocMobileAuthoringUIPlugins(): IPresetPlugin[] {
     UniverDocsCalloutMobileUIPlugin,
     UniverDocsChartMobileUIPlugin,
     UniverDocsCodeMobileUIPlugin,
+    UniverDocsColumnMobileUIPlugin,
     UniverDocsLatexMobileUIPlugin,
+    UniverDocsListMobileUIPlugin,
+    UniverDocsQuoteMobileUIPlugin,
     UniverDocsShapeMobileUIPlugin,
     UniverDocsTableMobileUIPlugin,
   ];
+}
+
+/**
+ * Find and replace for the Doc editors only; the comparison viewer stays
+ * read-only. Both find-replace UI plugins share one pluginName, which
+ * UniverDocsFindReplacePlugin declares as its dependency.
+ */
+export function getDocFindReplacePlugins(): IPresetPlugin[] {
+  return [UniverFindReplacePlugin, UniverDocsFindReplacePlugin];
+}
+
+/** Touch counterpart of getDocFindReplacePlugins for the mobile Doc editor. */
+export function getDocMobileFindReplacePlugins(): IPresetPlugin[] {
+  return [UniverFindReplaceMobileUIPlugin, UniverDocsFindReplacePlugin];
 }

@@ -92,7 +92,6 @@ import "@univerjs-pro/collaboration-client/facade";
 import "@univerjs-pro/embed/facade";
 import "@univerjs-pro/embed-ui/lib/index.css";
 import "@univerjs-pro/exchange-client/facade";
-import "@univerjs-pro/exchange-client/lib/index.css";
 
 installHistoryShapeFormulaSdkWorkaround();
 

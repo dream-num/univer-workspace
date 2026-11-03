@@ -2,13 +2,15 @@ import { describe, expect, it } from "vitest";
 import { basename, dirname, join, resolve } from "node:path";
 import {
   resolveUniverLicense,
+  resolveUniverLicenseKey,
   UNIVER_LICENSE_ENV,
+  UNIVER_LICENSE_KEY_ENV,
   workspaceCliHome,
   workspaceDaemonSocketPath,
   workspaceResourceCacheRoot,
   workspaceSessionPath,
 } from "../src/config.js";
-import { UNIVER_LICENSE } from "../src/license.js";
+import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "../src/license.js";
 
 describe("Workspace CLI application paths", () => {
   it("uses the production Workspace CLI home by default", () => {
@@ -57,10 +59,16 @@ describe("Workspace CLI Univer license", () => {
   it("uses the bundled license when the environment does not provide one", () => {
     expect(resolveUniverLicense({})).toBe(UNIVER_LICENSE);
     expect(resolveUniverLicense({ [UNIVER_LICENSE_ENV]: "  " })).toBe(UNIVER_LICENSE);
-    expect(UNIVER_LICENSE).toMatch(/^2101948364242481153-/u);
+    expect(UNIVER_LICENSE).toMatch(/^\d+-\d+-/u);
   });
 
   it("allows a non-empty environment value to override the bundled license", () => {
     expect(resolveUniverLicense({ [UNIVER_LICENSE_ENV]: "custom-license" })).toBe("custom-license");
+  });
+
+  it("resolves the license key the same way", () => {
+    expect(resolveUniverLicenseKey({})).toBe(UNIVER_LICENSE_KEY);
+    expect(resolveUniverLicenseKey({ [UNIVER_LICENSE_KEY_ENV]: " " })).toBe(UNIVER_LICENSE_KEY);
+    expect(resolveUniverLicenseKey({ [UNIVER_LICENSE_KEY_ENV]: "custom-key" })).toBe("custom-key");
   });
 });

@@ -19,3 +19,7 @@
         # development license; the deployment supplies the production value.
         license: !!js >-
           process.env.UWH_UNIVER_LICENSE ?? ''
+        # The key Office exchange verifies the license with; set it together
+        # with the license. Empty/absent falls back to the built-in development key.
+        licenseKey: !!js >-
+          process.env.UWH_UNIVER_LICENSE_KEY ?? ''

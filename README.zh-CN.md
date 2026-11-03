@@ -253,9 +253,15 @@ CLI 与 Workspace 部署基于同一份源码，但各自独立交付：
 
 ## Runtime 开发 License
 
-Browser 与 CLI 包含内容同步、经过批准的 runtime 开发凭据，用于本地开发。该凭据每 90 天轮换
-一次，并不是本仓库的软件许可证。Browser 构建可以通过 `VITE_UNIVER_LICENSE` 覆盖，CLI 可以
-通过 `UNIVER_LICENSE` 覆盖。
+Browser、Workspace Server、CLI 与 DSH 插件包含内容同步、经过批准的 runtime 开发凭据，用于本地
+开发。该凭据每 90 天轮换一次，并不是本仓库的软件许可证。服务端 Collaboration 与 Exchange SDK
+还需要 license key 校验，缺少任一值时降级为免费额度。Browser 构建可以通过 `VITE_UNIVER_LICENSE`
+覆盖，Server 与 CLI 可以通过同时设置 `UNIVER_LICENSE` 和 `UNIVER_LICENSE_KEY` 覆盖。轮换时用生成
+脚本一次更新全部副本：
+
+```bash
+pnpm update:univer-license --license <license.txt> --license-key <licenseKey.txt>
+```
 
 ## License
 
