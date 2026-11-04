@@ -7,7 +7,10 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { promisify } from "node:util";
-import { ApplicationError } from "../../middleware/errors.js";
+import {
+  ApplicationError,
+  type ApplicationErrorCode,
+} from "../../middleware/errors.js";
 import { IdentityRepository } from "./identity.repository.js";
 import type {
   AuthenticatedSession,
@@ -26,11 +29,13 @@ import type {
   ExternalIdentityProvider,
   ExternalOAuthProvider,
   GitHubOAuthProvider,
+  GoogleOAuthProvider,
 } from "./identity.types.js";
 
 const scrypt = promisify(scryptCallback);
 const COOKIE_NAME = "workspace_session";
 const GITHUB_OAUTH_COOKIE_NAME = "workspace_github_oauth";
+const GOOGLE_OAUTH_COOKIE_NAME = "workspace_google_oauth";
 const DISCORD_OAUTH_COOKIE_NAME = "workspace_discord_oauth";
 const CLI_AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
 const CLI_AUTHORIZATION_POLL_INTERVAL_SECONDS = 2;
@@ -48,6 +53,7 @@ export interface IdentityModule {
   readonly cookieName: string;
   readonly sessionTtlMs: number;
   readonly githubOAuthCookieName: string;
+  readonly googleOAuthCookieName: string;
   readonly discordOAuthCookieName: string;
   registerWithPassword(input: PasswordRegistration): Promise<IssuedSession>;
   loginWithPassword(input: PasswordLogin): Promise<IssuedSession>;
@@ -89,6 +95,25 @@ export interface IdentityModule {
     readonly issuedSession: IssuedSession | null;
   }>;
   unlinkGitHub(cookieHeader: string | undefined): AuthenticatedSession;
+  startGoogleOAuth(input: {
+    readonly intent: "login" | "link";
+    readonly returnTo: unknown;
+    readonly cookieHeader: string | undefined;
+  }): {
+    readonly authorizationUrl: string;
+    readonly cookieValue: string;
+  };
+  finishGoogleOAuth(input: {
+    readonly code: unknown;
+    readonly state: unknown;
+    readonly providerError: unknown;
+    readonly oauthCookieHeader: string | undefined;
+    readonly sessionCookieHeader: string | undefined;
+  }): Promise<{
+    readonly returnTo: string;
+    readonly issuedSession: IssuedSession | null;
+  }>;
+  unlinkGoogle(cookieHeader: string | undefined): AuthenticatedSession;
   startDiscordOAuth(input: {
     readonly intent: "login" | "link";
     readonly returnTo: unknown;
@@ -116,6 +141,7 @@ export function createIdentityModule(options: {
   readonly sessionTtlMs: number;
   readonly now?: () => number;
   readonly githubOAuthProvider?: GitHubOAuthProvider | null;
+  readonly googleOAuthProvider?: GoogleOAuthProvider | null;
   readonly discordOAuthProvider?: DiscordOAuthProvider | null;
   readonly oauthStateSecret?: string;
   readonly passwordAuthEnabled?: boolean;
@@ -124,10 +150,14 @@ export function createIdentityModule(options: {
   const now = options.now ?? Date.now;
   const repository = options.repository;
   const githubOAuthProvider = options.githubOAuthProvider ?? null;
+  const googleOAuthProvider = options.googleOAuthProvider ?? null;
   const discordOAuthProvider = options.discordOAuthProvider ?? null;
   const oauthStateSecret = options.oauthStateSecret ?? "";
   const githubOAuthEnabled = Boolean(
     githubOAuthProvider && oauthStateSecret
+  );
+  const googleOAuthEnabled = Boolean(
+    googleOAuthProvider && oauthStateSecret
   );
   const discordOAuthEnabled = Boolean(
     discordOAuthProvider && oauthStateSecret
@@ -142,6 +172,7 @@ export function createIdentityModule(options: {
     return {
       authenticated: false,
       githubOAuthEnabled,
+      googleOAuthEnabled,
       discordOAuthEnabled,
       passwordAuthEnabled,
     };
@@ -160,6 +191,7 @@ export function createIdentityModule(options: {
     return {
       authenticated: true,
       githubOAuthEnabled,
+      googleOAuthEnabled,
       discordOAuthEnabled,
       passwordAuthEnabled,
       trialDeployment,
@@ -218,6 +250,7 @@ export function createIdentityModule(options: {
   return {
     cookieName: COOKIE_NAME,
     githubOAuthCookieName: GITHUB_OAUTH_COOKIE_NAME,
+    googleOAuthCookieName: GOOGLE_OAUTH_COOKIE_NAME,
     discordOAuthCookieName: DISCORD_OAUTH_COOKIE_NAME,
     sessionTtlMs: options.sessionTtlMs,
 
@@ -544,6 +577,10 @@ export function createIdentityModule(options: {
       return startExternalOAuth("github", githubOAuthProvider, input);
     },
 
+    startGoogleOAuth(input) {
+      return startExternalOAuth("google", googleOAuthProvider, input);
+    },
+
     startDiscordOAuth(input) {
       return startExternalOAuth("discord", discordOAuthProvider, input);
     },
@@ -552,12 +589,20 @@ export function createIdentityModule(options: {
       return finishExternalOAuth("github", githubOAuthProvider, input);
     },
 
+    async finishGoogleOAuth(input) {
+      return finishExternalOAuth("google", googleOAuthProvider, input);
+    },
+
     async finishDiscordOAuth(input) {
       return finishExternalOAuth("discord", discordOAuthProvider, input);
     },
 
     unlinkGitHub(cookieHeader) {
       return unlinkExternalIdentity("github", cookieHeader);
+    },
+
+    unlinkGoogle(cookieHeader) {
+      return unlinkExternalIdentity("google", cookieHeader);
     },
 
     unlinkDiscord(cookieHeader) {
@@ -925,7 +970,9 @@ function verifyOAuthState(
     if (
       typeof parsed.state !== "string" ||
       typeof parsed.verifier !== "string" ||
-      (parsed.provider !== "github" && parsed.provider !== "discord") ||
+      (parsed.provider !== "github" &&
+        parsed.provider !== "google" &&
+        parsed.provider !== "discord") ||
       (parsed.intent !== "login" && parsed.intent !== "link") ||
       (parsed.linkedUserId !== null &&
         typeof parsed.linkedUserId !== "string") ||
@@ -982,30 +1029,55 @@ function availableExternalUsername(
   return `${base.slice(0, 64 - randomSuffix.length)}${randomSuffix}`;
 }
 
+const OAUTH_PROVIDERS: Record<
+  ExternalIdentityProvider,
+  {
+    readonly displayName: string;
+    readonly cookieName: string;
+    readonly unavailableCode: ApplicationErrorCode;
+    readonly failedCode: ApplicationErrorCode;
+  }
+> = {
+  github: {
+    displayName: "GitHub",
+    cookieName: GITHUB_OAUTH_COOKIE_NAME,
+    unavailableCode: "GITHUB_OAUTH_UNAVAILABLE",
+    failedCode: "GITHUB_OAUTH_FAILED",
+  },
+  google: {
+    displayName: "Google",
+    cookieName: GOOGLE_OAUTH_COOKIE_NAME,
+    unavailableCode: "GOOGLE_OAUTH_UNAVAILABLE",
+    failedCode: "GOOGLE_OAUTH_FAILED",
+  },
+  discord: {
+    displayName: "Discord",
+    cookieName: DISCORD_OAUTH_COOKIE_NAME,
+    unavailableCode: "DISCORD_OAUTH_UNAVAILABLE",
+    failedCode: "DISCORD_OAUTH_FAILED",
+  },
+};
+
 function oauthUnavailable(provider: ExternalIdentityProvider): ApplicationError {
   return new ApplicationError(
-    provider === "github"
-      ? "GITHUB_OAUTH_UNAVAILABLE"
-      : "DISCORD_OAUTH_UNAVAILABLE",
+    OAUTH_PROVIDERS[provider].unavailableCode,
     503,
     `${providerDisplayName(provider)} OAuth is not configured.`
   );
 }
 
-function oauthFailedCode(provider: ExternalIdentityProvider) {
-  return provider === "github"
-    ? ("GITHUB_OAUTH_FAILED" as const)
-    : ("DISCORD_OAUTH_FAILED" as const);
+function oauthFailedCode(
+  provider: ExternalIdentityProvider
+): ApplicationErrorCode {
+  return OAUTH_PROVIDERS[provider].failedCode;
 }
 
 function providerDisplayName(provider: ExternalIdentityProvider): string {
-  return provider === "github" ? "GitHub" : "Discord";
+  return OAUTH_PROVIDERS[provider].displayName;
 }
 
 function oauthCookieName(provider: ExternalIdentityProvider): string {
-  return provider === "github"
-    ? GITHUB_OAUTH_COOKIE_NAME
-    : DISCORD_OAUTH_COOKIE_NAME;
+  return OAUTH_PROVIDERS[provider].cookieName;
 }
 
 function createSessionToken(

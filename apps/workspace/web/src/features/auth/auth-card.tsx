@@ -16,6 +16,7 @@ import {
   DiscordIcon,
   Field,
   GitHubIcon,
+  GoogleIcon,
   Input,
   PasswordInput,
   Segmented,
@@ -88,8 +89,9 @@ export function AuthCard(props: {
   const sessionView = session.data;
   const passwordAuthEnabled = sessionView?.passwordAuthEnabled === true;
   const showGitHub = sessionView?.githubOAuthEnabled === true;
+  const showGoogle = sessionView?.googleOAuthEnabled === true;
   const showDiscord = sessionView?.discordOAuthEnabled === true;
-  const oauthEnabled = showGitHub || showDiscord;
+  const oauthEnabled = showGitHub || showGoogle || showDiscord;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -251,6 +253,22 @@ export function AuthCard(props: {
               >
                 <GitHubIcon />
                 {t("continueWithGitHub")}
+              </Button>
+            ) : null}
+            {showGoogle ? (
+              <Button
+                variant="secondary"
+                size="lg"
+                className="w-full"
+                onClick={() => {
+                  window.location.href = oauthLoginUrl(
+                    "/api/auth/google/login",
+                    props.returnTo
+                  );
+                }}
+              >
+                <GoogleIcon />
+                {t("continueWithGoogle")}
               </Button>
             ) : null}
             {showDiscord ? (

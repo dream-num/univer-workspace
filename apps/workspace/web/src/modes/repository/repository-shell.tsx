@@ -240,6 +240,7 @@ export function RepositoryShell({
       queryClient.setQueryData(sessionQueryKey, {
         authenticated: false,
         githubOAuthEnabled: currentSession.githubOAuthEnabled,
+        googleOAuthEnabled: currentSession.googleOAuthEnabled,
         discordOAuthEnabled: currentSession.discordOAuthEnabled,
         passwordAuthEnabled: currentSession.passwordAuthEnabled,
       });

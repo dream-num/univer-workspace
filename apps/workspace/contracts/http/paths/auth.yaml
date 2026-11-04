@@ -403,6 +403,105 @@
             schema:
               $ref: ../schemas/common.yaml#/ErrorResponse
 
+/api/auth/google/login:
+  get:
+    tags: [Authentication]
+    operationId: startGoogleLogin
+    summary: Start the Google OAuth login flow.
+    security: []
+    parameters:
+      - name: returnTo
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^/
+    responses:
+      "302":
+        description: Redirect to Google.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+              format: uri
+
+/api/auth/google/link:
+  get:
+    tags: [Authentication]
+    operationId: startGoogleLink
+    summary: Start Google OAuth to link the current User.
+    parameters:
+      - name: returnTo
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^/
+    responses:
+      "302":
+        description: Redirect to Google.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+              format: uri
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/auth/google/callback:
+  get:
+    tags: [Authentication]
+    operationId: finishGoogleOAuth
+    summary: Validate the OAuth callback and finish login or linking.
+    security: []
+    parameters:
+      - name: code
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: state
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: error
+        in: query
+        required: false
+        schema:
+          type: string
+    responses:
+      "302":
+        description: Redirect to a validated local application path.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+
+/api/auth/google:
+  delete:
+    tags: [Authentication]
+    operationId: unlinkGoogle
+    summary: Unlink the current User's Google identity.
+    responses:
+      "200":
+        description: Updated authenticated session.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthenticatedSession
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "409":
+        description: Google is the last authentication method.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
 /api/auth/discord/login:
   get:
     tags: [Authentication]

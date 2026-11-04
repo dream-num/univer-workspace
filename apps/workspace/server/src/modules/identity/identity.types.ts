@@ -16,6 +16,7 @@ export interface AuthenticationMethods {
 export interface AuthenticatedSession {
   readonly authenticated: true;
   readonly githubOAuthEnabled: boolean;
+  readonly googleOAuthEnabled: boolean;
   readonly discordOAuthEnabled: boolean;
   readonly passwordAuthEnabled: boolean;
   readonly trialDeployment: boolean;
@@ -27,6 +28,7 @@ export type SessionView =
   | {
       readonly authenticated: false;
       readonly githubOAuthEnabled: boolean;
+      readonly googleOAuthEnabled: boolean;
       readonly discordOAuthEnabled: boolean;
       readonly passwordAuthEnabled: boolean;
     }
@@ -79,7 +81,7 @@ export interface UserProfilePatch {
   readonly avatarUrl?: unknown;
 }
 
-export type ExternalIdentityProvider = "github" | "discord";
+export type ExternalIdentityProvider = "github" | "google" | "discord";
 
 export interface ExternalIdentity {
   readonly subject: string;
@@ -100,4 +102,5 @@ export interface ExternalOAuthProvider {
 }
 
 export type GitHubOAuthProvider = ExternalOAuthProvider;
+export type GoogleOAuthProvider = ExternalOAuthProvider;
 export type DiscordOAuthProvider = ExternalOAuthProvider;

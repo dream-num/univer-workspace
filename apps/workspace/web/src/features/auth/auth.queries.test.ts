@@ -26,6 +26,7 @@ describe("requireAuthenticatedSession", () => {
     queryClient.setQueryData(sessionQueryKey, {
       authenticated: false,
       githubOAuthEnabled: false,
+      googleOAuthEnabled: false,
       discordOAuthEnabled: false,
       passwordAuthEnabled: true,
     });

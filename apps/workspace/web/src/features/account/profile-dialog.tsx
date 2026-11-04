@@ -11,6 +11,7 @@ import {
   DiscordIcon,
   Field,
   GitHubIcon,
+  GoogleIcon,
   Input,
   Separator,
   toast,
@@ -47,6 +48,18 @@ export function ProfileDialog({
     onSuccess: (updatedSession) => {
       queryClient.setQueryData(sessionQueryKey, updatedSession);
       toast.success(t("githubUnlinked"));
+    },
+    onError: (mutationError) => toast.error(mutationError.message),
+  });
+  const unlinkGoogle = useMutation({
+    mutationFn: async () => {
+      const { data, error: apiErr } = await api.DELETE("/api/auth/google");
+      if (apiErr) throw apiError(apiErr);
+      return data;
+    },
+    onSuccess: (updatedSession) => {
+      queryClient.setQueryData(sessionQueryKey, updatedSession);
+      toast.success(t("googleUnlinked"));
     },
     onError: (mutationError) => toast.error(mutationError.message),
   });
@@ -92,6 +105,9 @@ export function ProfileDialog({
   if (!current) return null;
   const githubLinked = current.authenticationMethods.externalIdentities.some(
     (identity) => identity.provider === "github",
+  );
+  const googleLinked = current.authenticationMethods.externalIdentities.some(
+    (identity) => identity.provider === "google",
   );
   const discordLinked = current.authenticationMethods.externalIdentities.some(
     (identity) => identity.provider === "discord",
@@ -181,6 +197,39 @@ export function ProfileDialog({
           )}
           {!canUnlinkExternalIdentity && githubLinked ? (
             <p className="mt-2 text-[13px] text-muted-foreground">{t("githubOnlyMethod")}</p>
+          ) : null}
+        </>
+      ) : null}
+      {current.googleOAuthEnabled ? (
+        <>
+          <Separator className="my-5" />
+          <h3 className="m-0 mb-3 flex items-center gap-2 text-sm font-semibold">
+            <GoogleIcon className="size-4" />
+            Google
+          </h3>
+          {googleLinked ? (
+            <Button
+              variant="destructive-ghost"
+              className="border border-destructive/30"
+              disabled={!canUnlinkExternalIdentity || unlinkGoogle.isPending}
+              onClick={() => unlinkGoogle.mutate()}
+            >
+              <GoogleIcon />
+              {t("unlinkGoogle")}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                window.location.href = "/api/auth/google/link?returnTo=/";
+              }}
+            >
+              <GoogleIcon />
+              {t("linkGoogle")}
+            </Button>
+          )}
+          {!canUnlinkExternalIdentity && googleLinked ? (
+            <p className="mt-2 text-[13px] text-muted-foreground">{t("googleOnlyMethod")}</p>
           ) : null}
         </>
       ) : null}

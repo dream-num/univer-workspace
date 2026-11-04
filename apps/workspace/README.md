@@ -179,17 +179,18 @@ organization for GitHub login, first-time registration, and account linking.
 This enables the GitHub `read:org` OAuth scope and checks membership during every
 GitHub OAuth callback. Existing Workspace sessions remain valid until they expire
 or are logged out. This setting restricts only GitHub OAuth; password registration,
-Discord login, and trusted Discord Bot login remain separate authentication paths.
+Google login, Discord login, and trusted Discord Bot login remain separate
+authentication paths.
 
 Password registration, password login, and password changes stay available unless
 `PASSWORD_AUTH_ENABLED` is `false`. A restricted deployment sets that value
-together with `GITHUB_ALLOWED_ORGANIZATIONS` and leaves Discord unset, so the
-only browser sign-in path is GitHub membership in a listed organization. The
-process refuses to start when password authentication is off and neither GitHub
-nor Discord OAuth is configured. Existing sessions remain valid until they
+together with `GITHUB_ALLOWED_ORGANIZATIONS` and leaves Google and Discord
+unset, so the only browser sign-in path is GitHub membership in a listed
+organization. The process refuses to start when password authentication is off
+and none of GitHub, Google, or Discord OAuth is configured. Existing sessions remain valid until they
 expire or are logged out. A user who only has a password cannot sign in again
 after that, and a stored password no longer counts as a remaining sign-in
-method when unlinking GitHub or Discord.
+method when unlinking GitHub, Google, or Discord.
 
 Set `TRIAL_DEPLOYMENT=true` on a public trial deployment. After signing in, each
 User sees a dialog stating that the environment does not guarantee data
@@ -203,12 +204,29 @@ creates a ten-minute, one-time authorization request and prints a `/cli-login`
 URL plus verification code, persists the pending request locally, and exits.
 After the user approves the matching code in their own browser, the Agent runs
 `uvw auth login --complete` to exchange it once; neither command
-waits or polls. If necessary, the user can first sign in with GitHub, Discord,
-or a password and return to the approval page. The CLI receives a separate
+waits or polls. If necessary, the user can first sign in with GitHub, Google,
+Discord, or a password and return to the approval page. The CLI receives a separate
 normal `workspace_session`; it never
 receives the browser cookie, Workspace password, or provider access token.
 Pending authorization requests are process-local and intentionally disappear
 on server restart; completed CLI sessions remain normal persisted login sessions.
+
+Google OAuth login and account linking are enabled when
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_CALLBACK_URL` are all
+configured. Create an OAuth 2.0 Client ID of type **Web application** in Google
+Cloud Console and register both redirect URIs you use:
+
+```text
+http://127.0.0.1:5173/api/auth/google/callback
+https://workspace.example.com/api/auth/google/callback
+```
+
+The redirect must exactly match `GOOGLE_CALLBACK_URL`. Workspace requests the
+`openid email profile` scopes, sends PKCE plus the client secret on the token
+exchange, and stores the stable OpenID Connect `sub` claim as the Provider
+Subject. The access token is used only to load the Google profile during
+sign-in and is not persisted. Workspace does not identify or automatically
+link a User by email address.
 
 Discord OAuth login and account linking are enabled when
 `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `DISCORD_CALLBACK_URL` are
@@ -307,6 +325,9 @@ docker run --name univer-workspace \
   -e GITHUB_CLIENT_SECRET \
   -e GITHUB_CALLBACK_URL=https://workspace.example.com/api/auth/github/callback \
   -e GITHUB_ALLOWED_ORGANIZATIONS \
+  -e GOOGLE_CLIENT_ID \
+  -e GOOGLE_CLIENT_SECRET \
+  -e GOOGLE_CALLBACK_URL=https://workspace.example.com/api/auth/google/callback \
   -e DISCORD_CLIENT_ID \
   -e DISCORD_CLIENT_SECRET \
   -e DISCORD_CALLBACK_URL=https://workspace.example.com/api/auth/discord/callback \
@@ -329,19 +350,19 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V11 product databases to V12 automatically.
+backs up and migrates supported V0 through V12 product databases to V13 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` is unchanged. Product V12 adds Space slugs and Worktree numbers; V11 added the Space description; V10 added Space stars; V9 added
+`history=2`; `comment=1` is unchanged. Product V13 extends External Identities with the Google Provider; V12 added Space slugs and Worktree numbers; V11 added the Space description; V10 added Space stars; V9 added
 Issue tables and V8 added content-permission tables. Before creating
 application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V12,
+2. Start a single new instance. Startup first prepares the product database to V13,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -392,6 +413,15 @@ Startup creates and validates a `.v11-backup-…sqlite` backup before the V11 �
 transaction. A failed step rolls back; subsequent successful startups do not
 repeat migration or backup. Rollback requires stopping V12 and restoring the
 pre-upgrade product backup, not just running the old application image.
+V13 extends the External Identity Provider CHECK to allow `google`. The migration
+rebuilds only `external_identities` and preserves every existing row, column and
+constraint. For a V13 rollout, stop every old Workspace instance, start one V13
+instance and wait for migration and health checks to succeed, then restore normal
+service; do not let V12 and V13 processes write the same SQLite file concurrently.
+Startup creates and validates a `.v12-backup-…sqlite` backup before the V12 → V13
+transaction. Rollback requires stopping V13 and restoring the pre-upgrade product
+backup.
+
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
 addresses repositories by `owner/slug`.
 

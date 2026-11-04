@@ -32,6 +32,37 @@ describe("GitHub organization allowlist configuration", () => {
   });
 });
 
+describe("Google OAuth configuration", () => {
+  it("enables Google OAuth when every credential is configured", () => {
+    const config = loadConfig({
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret",
+      GOOGLE_CALLBACK_URL: "https://workspace.example.test/api/auth/google/callback",
+    });
+
+    expect(config.googleOAuth).toEqual({
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      callbackUrl: "https://workspace.example.test/api/auth/google/callback",
+    });
+  });
+
+  it("rejects a partial Google OAuth configuration", () => {
+    expect(() =>
+      loadConfig({
+        GOOGLE_CLIENT_ID: "client-id",
+        GOOGLE_CLIENT_SECRET: "client-secret",
+      }),
+    ).toThrow(
+      "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL",
+    );
+  });
+
+  it("keeps Google OAuth disabled when no credential is configured", () => {
+    expect(loadConfig({}).googleOAuth).toBeNull();
+  });
+});
+
 describe("trial deployment configuration", () => {
   it("is disabled by default", () => {
     expect(loadConfig({}).trialDeployment).toBe(false);
@@ -51,6 +82,17 @@ describe("trial deployment configuration", () => {
 describe("password authentication configuration", () => {
   it("enables password authentication by default", () => {
     expect(loadConfig({}).passwordAuthEnabled).toBe(true);
+  });
+
+  it("disables password authentication when Google OAuth remains available", () => {
+    const config = loadConfig({
+      PASSWORD_AUTH_ENABLED: "false",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret",
+      GOOGLE_CALLBACK_URL: "https://workspace.example.test/api/auth/google/callback",
+    });
+
+    expect(config.passwordAuthEnabled).toBe(false);
   });
 
   it("disables password authentication when GitHub OAuth remains available", () => {

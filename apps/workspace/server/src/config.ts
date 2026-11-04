@@ -24,6 +24,11 @@ export interface WorkspaceConfig {
     readonly callbackUrl: string;
     readonly allowedOrganizations: readonly string[];
   } | null;
+  readonly googleOAuth?: {
+    readonly clientId: string;
+    readonly clientSecret: string;
+    readonly callbackUrl: string;
+  } | null;
   readonly discordOAuth?: {
     readonly clientId: string;
     readonly clientSecret: string;
@@ -38,15 +43,16 @@ export function loadConfig(
   environment: NodeJS.ProcessEnv = process.env
 ): WorkspaceConfig {
   const githubOAuth = githubConfig(environment);
+  const googleOAuth = googleConfig(environment);
   const discordOAuth = discordConfig(environment);
   const passwordAuthEnabled = boolean(
     environment.PASSWORD_AUTH_ENABLED,
     true,
     "PASSWORD_AUTH_ENABLED"
   );
-  if (!passwordAuthEnabled && !githubOAuth && !discordOAuth) {
+  if (!passwordAuthEnabled && !githubOAuth && !googleOAuth && !discordOAuth) {
     throw new Error(
-      "PASSWORD_AUTH_ENABLED=false requires GitHub or Discord OAuth so the deployment still has a browser sign-in method"
+      "PASSWORD_AUTH_ENABLED=false requires GitHub, Google, or Discord OAuth so the deployment still has a browser sign-in method"
     );
   }
   const oauthClientsConfig = oauthClientConfig(environment);
@@ -95,6 +101,7 @@ export function loadConfig(
     ...(discordBotApiKey ? { discordBotApiKey } : {}),
     ...(metricsToken ? { metricsToken } : {}),
     githubOAuth,
+    googleOAuth,
     discordOAuth,
     oauthClients: oauthClientsConfig,
     univerLicense: resolveUniverLicense(environment),
@@ -170,6 +177,31 @@ function convertStringArray(value: unknown, name: string): string[] {
   if (!Array.isArray(value)) return [];
   for (const item of value) requireString(item, name);
   return value.map((item) => item as string);
+}
+
+function googleConfig(
+  environment: NodeJS.ProcessEnv
+): {
+  readonly clientId: string;
+  readonly clientSecret: string;
+  readonly callbackUrl: string;
+} | null {
+  const values = [
+    environment.GOOGLE_CLIENT_ID,
+    environment.GOOGLE_CLIENT_SECRET,
+    environment.GOOGLE_CALLBACK_URL,
+  ];
+  if (values.every((value) => value === undefined)) return null;
+  if (values.some((value) => !value)) {
+    throw new Error(
+      "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL must be configured together"
+    );
+  }
+  return {
+    clientId: values[0]!,
+    clientSecret: values[1]!,
+    callbackUrl: new URL(values[2]!).toString(),
+  };
 }
 
 function discordConfig(

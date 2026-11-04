@@ -1,15 +1,15 @@
 # Univer Workspace 数据模型
 
-状态：V12，已实现
+状态：V13，已实现
 
 权威定义：`server/src/db/schema.sql`
 
 产品数据库使用 SQLite，开启 Foreign Key，Schema 版本为
-`PRAGMA user_version = 12`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+`PRAGMA user_version = 13`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿另存于
-`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V12
+`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V13
 Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
 `__record_id`，并把每条 Record ID 投影到该字段；Row/Column/Cell Map 是可从 Field 与 Record
 重建的派生数据。现有持久化 Base Snapshot 均使用该表示。
@@ -28,7 +28,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-启动入口先将产品数据库准备到 V12，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+启动入口先将产品数据库准备到 V13，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份，在副本上按 Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件
@@ -36,7 +36,7 @@ Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V12，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V13，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -89,8 +89,9 @@ Object Deletion Job ── idempotent delete ── BlobStore Object
 
 ### `external_identities`
 
-外部身份映射。当前 Provider 只允许 GitHub；同一 Provider Subject 唯一，同一 User
-在一个 Provider 下最多一个身份。
+外部身份映射。Provider 允许 `github`、`google` 和 `discord`；同一 Provider Subject 唯一，
+同一 User 在一个 Provider 下最多一个身份。Google 登录以 OpenID Connect `sub` 作为 Subject，
+不按邮箱自动关联已有 User。
 
 ### `login_sessions`
 
@@ -419,11 +420,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V12，不备份；
-2. 完整 V12：校验指纹后正常启动，不重复备份；
-3. 完整 V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V12；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V12；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V12；
+1. 不存在或空文件：创建 V13，不备份；
+2. 完整 V13：校验指纹后正常启动，不重复备份；
+3. 完整 V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V13；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V13；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V13；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -445,12 +446,13 @@ Operation JSON。V0 迁移前要求没有 Pending/Failed Operation；后续版�
 - V2 删除任务完整映射到通用 Outbox；
 - V3 Asset Upload 的内容检测字段被无损移除；声明 MIME 缺失时用旧检测值回填；
 - V4 External Identity 被无损扩展为支持 Discord Provider；
-- 旧表全部删除且 `user_version = 12`。
+- V12 External Identity 被无损扩展为支持 Google Provider；
+- 旧表全部删除且 `user_version = 13`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
 一致性备份始终保留，下一次启动可继续升级或由运维恢复。错误中会给出备份路径。
 迁移实现是唯一兼容边界；线上数据库全部完成升级后，可以删除 `migrations/`、
-`legacy-v0/` 及初始化函数中的一次调用，不影响 V12 Schema 或业务代码。
+`legacy-v0/` 及初始化函数中的一次调用，不影响 V13 Schema 或业务代码。
 
 V6 → V7 只重建 Operation 和删除任务表以扩展 CHECK 枚举，完整保留所有行和恢复字段；
 Blob 及上传会话表不变。升级前自动创建一致性备份；停旧实例后由单个新实例完成迁移。
@@ -494,6 +496,14 @@ V10 → V11 在单个事务内仅为 `spaces` 增加 `description TEXT NOT NULL 
 V11 → V12 在单个事务内仅新增 `spaces.slug`（`TEXT COLLATE NOCASE`）、`worktrees.number`、三个部分唯一索引
 （`spaces_owner_slug`、`worktrees_team_number`、`worktrees_user_number`）和两个 slug Trigger，不改写任何已有行：
 旧 Team Space 的 `slug` 与旧 Worktree 的 `number` 均为 `NULL`。准备阶段在业务 Repository 初始化前校验 V11 指纹、
-生成并验证一致性备份；事务提交前检查外键与完整性，然后校验 V12 指纹。V1–V10 的升级链与 V0 迁移都落到 V12。
-失败事务回滚至 V11，备份保留且启动失败。重复启动不重复迁移或备份。部署须先停全部旧实例，由单个 V12 实例完成迁移
-和健康检查后恢复服务；回退须停新实例并恢复 V11 备份。
+生成并验证一致性备份；事务提交前检查外键与完整性，然后校验 V12 指纹。失败事务回滚至 V11，备份保留且启动失败。
+重复启动不重复迁移或备份。部署须先停全部旧实例，由单个 V12 实例完成迁移和健康检查后恢复服务；
+回退须停新实例并恢复 V11 备份。
+
+V12 → V13 只重建 `external_identities`，把 Provider CHECK 从 `('github', 'discord')` 扩展为
+`('github', 'google', 'discord')`；SQLite 不能原地修改 CHECK，因此迁移在同一事务内外键关闭后重命名旧表、
+创建新表并按原值复制，再逐行比对新旧 External Identity，确认列、约束和行完全保留。准备阶段在业务 Repository
+初始化前校验 V12 指纹、生成并验证一致性备份；事务提交前重新开启外键，检查 `foreign_key_check` 与
+`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都落到 V13。失败事务回滚至 V12，备份保留且
+启动失败。重复启动不重复迁移或备份。部署须先停全部旧实例，由单个 V13 实例完成迁移和健康检查后恢复服务；
+回退须停新实例并恢复 V12 备份。
