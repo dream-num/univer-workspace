@@ -644,6 +644,7 @@ export async function realizeElementFixture(board, api, profile, options = {}) {
       covered.push({ feature: "transform-and-boundary", options: transform, elementId: c.id });
     }
   }
+  if (profile === "formula-bound-shapes") await api.getFormula().onCalculationResultApplied(30_000);
   const before = JSON.parse(JSON.stringify(board.save()));
   const elementIds = Object.keys(board.getElements());
   return {

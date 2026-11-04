@@ -145,7 +145,8 @@ Collision 数量非增、度量完成或诊断 clean 都不代表这项视觉验
 `--suite elements` 另建元素目录，覆盖已安装 SDK 的全部注册内建/custom/sequence 基础形状、
 8 类图示表格、文字、图片、Ink、连接线标记与容器。目录使用固定展示坐标，只验证可用性与视觉表现；
 另外以真实本地 Sheet 验证 native BoardFloating Embed 和 constant/cross-Unit 公式 Shape，通过公开
-`embeddedUnits` / `formulaReferenceUnits` 传递源数据。保存、descriptor 或绑定创建成功不代表子文档
+`embeddedUnits` / `formulaReferenceUnits` 传递源数据。公式目录通过公开计算完成 API 等待结果应用后，
+再保存用于几何与历史检查的基线，避免把异步计算缓存更新误判为布局修改。保存、descriptor 或绑定创建成功不代表子文档
 像素、公式结果或交互已经通过；预期源值与实际截图/交互审阅分别记录。缺少原生 cell 测量的
 表格仍须检查其原生本体 bounds 和完整分块截图；cell 测量也不能替代字形 ink 的逐图审阅。
 未注册的 Media、模板 Placeholder、legacy Group 和 Diagram adapter slot 分别列出，不冒称已渲染。
