@@ -55,8 +55,10 @@ import {
   createIdentityRouter,
   createGitHubOAuthProvider,
   createDiscordOAuthProvider,
+  createGoogleOAuthProvider,
   createOAuthAuthorizationRouter,
   type DiscordOAuthProvider,
+  type GoogleOAuthProvider,
   type GitHubOAuthProvider,
   type IssuedAuthorization,
   IdentityRepository,
@@ -154,6 +156,7 @@ export function createWorkspaceApplication(
     readonly worktreeBackend?: WorktreeBackend;
     readonly blobStore?: BlobStore;
     readonly githubOAuthProvider?: GitHubOAuthProvider;
+    readonly googleOAuthProvider?: GoogleOAuthProvider;
     readonly discordOAuthProvider?: DiscordOAuthProvider;
     readonly oauthStateSecret?: string;
   } = {},
@@ -162,6 +165,7 @@ export function createWorkspaceApplication(
   const oauthStateSecret =
     dependencies.oauthStateSecret ??
     config.githubOAuth?.clientSecret ??
+    config.googleOAuth?.clientSecret ??
     config.discordOAuth?.clientSecret;
   const identity = createIdentityModule({
     repository: new IdentityRepository(database),
@@ -170,6 +174,11 @@ export function createWorkspaceApplication(
       dependencies.githubOAuthProvider ??
       (config.githubOAuth
         ? createGitHubOAuthProvider(config.githubOAuth)
+        : null),
+    googleOAuthProvider:
+      dependencies.googleOAuthProvider ??
+      (config.googleOAuth
+        ? createGoogleOAuthProvider(config.googleOAuth)
         : null),
     discordOAuthProvider:
       dependencies.discordOAuthProvider ??

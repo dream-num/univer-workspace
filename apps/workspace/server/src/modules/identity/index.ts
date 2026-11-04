@@ -10,6 +10,7 @@ export { IdentityRepository } from "./identity.repository.js";
 export { createIdentityRouter } from "./identity.router.js";
 export { createGitHubOAuthProvider } from "./github-oauth.js";
 export { createDiscordOAuthProvider } from "./discord-oauth.js";
+export { createGoogleOAuthProvider } from "./google-oauth.js";
 export { createOAuthAuthorizationRouter } from "./oauth-authorization-router.js";
 export type {
   IssuedAuthorization,
@@ -18,4 +19,5 @@ export type {
 export type {
   DiscordOAuthProvider,
   GitHubOAuthProvider,
+  GoogleOAuthProvider,
 } from "./identity.types.js";

@@ -19,7 +19,7 @@ explains behavior that spans multiple operations.
 ## Authentication
 
 Password Credentials and External Identities are optional authentication
-methods for the same User. GitHub and Discord login map the provider's stable user ID to an
+methods for the same User. GitHub, Google, and Discord login map the provider's stable user ID to an
 internal User. It never identifies or automatically links a User by email.
 
 External login and explicit linking use different OAuth intents. Both validate

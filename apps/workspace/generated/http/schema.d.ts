@@ -275,6 +275,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/google/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start the Google OAuth login flow. */
+        get: operations["startGoogleLogin"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/google/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start Google OAuth to link the current User. */
+        get: operations["startGoogleLink"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/google/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Validate the OAuth callback and finish login or linking. */
+        get: operations["finishGoogleOAuth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink the current User's Google identity. */
+        delete: operations["unlinkGoogle"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/discord/login": {
         parameters: {
             query?: never;
@@ -1680,12 +1748,13 @@ export interface components {
             /** @constant */
             authenticated: false;
             githubOAuthEnabled: boolean;
+            googleOAuthEnabled: boolean;
             discordOAuthEnabled: boolean;
             passwordAuthEnabled: boolean;
         };
         ExternalIdentitySummary: {
             /** @enum {string} */
-            provider: "github" | "discord";
+            provider: "github" | "google" | "discord";
             providerUsername: string;
         };
         AuthenticationMethods: {
@@ -1696,6 +1765,7 @@ export interface components {
             /** @constant */
             authenticated: true;
             githubOAuthEnabled: boolean;
+            googleOAuthEnabled: boolean;
             discordOAuthEnabled: boolean;
             passwordAuthEnabled: boolean;
             /** @description Whether this deployment is a trial environment without a data durability guarantee. */
@@ -2923,6 +2993,102 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             /** @description GitHub is the last authentication method. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    startGoogleLogin: {
+        parameters: {
+            query?: {
+                returnTo?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to Google. */
+            302: {
+                headers: {
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    startGoogleLink: {
+        parameters: {
+            query?: {
+                returnTo?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to Google. */
+            302: {
+                headers: {
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    finishGoogleOAuth: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+                error?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to a validated local application path. */
+            302: {
+                headers: {
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unlinkGoogle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated authenticated session. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedSession"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Google is the last authentication method. */
             409: {
                 headers: {
                     [name: string]: unknown;

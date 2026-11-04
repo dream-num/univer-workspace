@@ -9,6 +9,7 @@ import {
   type DiscordOAuthProvider,
   IdentityRepository,
   type GitHubOAuthProvider,
+  type GoogleOAuthProvider,
 } from "../../server/src/modules/identity/index.js";
 
 const temporaryDirectories: string[] = [];
@@ -116,6 +117,7 @@ describe("identity", () => {
       ).toEqual({
         authenticated: false,
         githubOAuthEnabled: false,
+        googleOAuthEnabled: false,
         discordOAuthEnabled: false,
         passwordAuthEnabled: true,
       });
@@ -124,6 +126,7 @@ describe("identity", () => {
       expect(secondIdentity.getSession(cookie)).toEqual({
         authenticated: false,
         githubOAuthEnabled: false,
+        googleOAuthEnabled: false,
         discordOAuthEnabled: false,
         passwordAuthEnabled: true,
       });
@@ -437,6 +440,115 @@ describe("identity", () => {
     }
   });
 
+  it("logs in, links, and safely unlinks Google identities", async () => {
+    const database = openWorkspaceDatabase(":memory:");
+    let googleUser = {
+      subject: "google-subject-1",
+      username: "alice.gmail",
+      displayName: "Alice Gmail",
+      avatarUrl: "https://lh3.googleusercontent.com/alice.png",
+    };
+    const googleProvider: GoogleOAuthProvider = {
+      authorizationUrl: ({ state, codeChallenge }) =>
+        `https://google.example/authorize?state=${state}&code_challenge=${codeChallenge}`,
+      async exchangeCode() {
+        return googleUser;
+      },
+    };
+    const identity = createIdentityModule({
+      repository: new IdentityRepository(database),
+      sessionTtlMs: 60_000,
+      googleOAuthProvider: googleProvider,
+      oauthStateSecret: "test-oauth-state-secret",
+      now: () => 1_000,
+    });
+
+    try {
+      expect(identity.getSession(undefined)).toMatchObject({
+        authenticated: false,
+        googleOAuthEnabled: true,
+      });
+
+      const login = identity.startGoogleOAuth({
+        intent: "login",
+        returnTo: "/worktrees",
+        cookieHeader: undefined,
+      });
+      const loginState = new URL(login.authorizationUrl).searchParams.get(
+        "state"
+      );
+      const loggedIn = await identity.finishGoogleOAuth({
+        code: "google-login-code",
+        state: loginState,
+        providerError: undefined,
+        oauthCookieHeader: `${identity.googleOAuthCookieName}=${login.cookieValue}`,
+        sessionCookieHeader: undefined,
+      });
+      expect(loggedIn.returnTo).toBe("/worktrees");
+      expect(loggedIn.issuedSession?.view).toMatchObject({
+        googleOAuthEnabled: true,
+        user: { username: "alice.gmail", displayName: "Alice Gmail" },
+        authenticationMethods: {
+          password: false,
+          externalIdentities: [
+            { provider: "google", providerUsername: "alice.gmail" },
+          ],
+        },
+      });
+      const googleCookie = `${identity.cookieName}=${loggedIn.issuedSession!.cookieValue}`;
+      expect(() => identity.unlinkGoogle(googleCookie)).toThrowError(
+        expect.objectContaining({ code: "CONFLICT" })
+      );
+
+      const passwordUser = await identity.registerWithPassword({
+        username: "alice",
+        displayName: "Alice",
+        password: "correct horse battery staple",
+      });
+      const passwordCookie = `${identity.cookieName}=${passwordUser.cookieValue}`;
+      googleUser = {
+        subject: "google-subject-2",
+        username: "alice.work",
+        displayName: "Alice Work",
+        avatarUrl: null,
+      };
+      const link = identity.startGoogleOAuth({
+        intent: "link",
+        returnTo: "/",
+        cookieHeader: passwordCookie,
+      });
+      const linkState = new URL(link.authorizationUrl).searchParams.get(
+        "state"
+      );
+      await identity.finishGoogleOAuth({
+        code: "google-link-code",
+        state: linkState,
+        providerError: undefined,
+        oauthCookieHeader: `${identity.googleOAuthCookieName}=${link.cookieValue}`,
+        sessionCookieHeader: passwordCookie,
+      });
+      expect(identity.getSession(passwordCookie)).toMatchObject({
+        authenticationMethods: {
+          password: true,
+          externalIdentities: [
+            { provider: "google", providerUsername: "alice.work" },
+          ],
+        },
+      });
+      expect(identity.unlinkGoogle(passwordCookie)).toMatchObject({
+        authenticationMethods: {
+          password: true,
+          externalIdentities: [],
+        },
+      });
+      expect(() => identity.unlinkGoogle(undefined)).toThrowError(
+        expect.objectContaining({ code: "UNAUTHENTICATED" })
+      );
+    } finally {
+      database.close();
+    }
+  });
+
   it("completes a Discord ID-only User profile on later Discord OAuth login", async () => {
     const database = openWorkspaceDatabase(":memory:");
     const discordUserId = "123456789012345678";
@@ -556,6 +668,7 @@ describe("identity", () => {
       expect(disabled.getSession(undefined)).toEqual({
         authenticated: false,
         githubOAuthEnabled: false,
+        googleOAuthEnabled: false,
         discordOAuthEnabled: false,
         passwordAuthEnabled: false,
       });

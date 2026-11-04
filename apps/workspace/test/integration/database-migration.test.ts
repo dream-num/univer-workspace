@@ -23,7 +23,7 @@ afterEach(() => {
   }
 });
 
-describe("automatic product database migration to V12", () => {
+describe("automatic product database migration to V13", () => {
   it("backs up a WAL database, migrates all mappings, and is idempotent on restart", () => {
     const { directory, filename, legacy } = legacyDatabase();
     legacy.exec("PRAGMA journal_mode = WAL");
@@ -51,7 +51,7 @@ describe("automatic product database migration to V12", () => {
     backupDatabase.close();
 
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 13,
     });
     expect(
       migrated.connection.prepare("SELECT id, name FROM nodes ORDER BY id").all()
@@ -234,7 +234,7 @@ describe("automatic product database migration to V12", () => {
     const filename = join(directory, "workspace.sqlite");
     const database = openWorkspaceDatabase(filename);
     expect(database.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 13,
     });
     database.close();
     expect(backups(directory)).toEqual([]);
@@ -270,7 +270,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 13,
     });
     expect(
       migrated.connection
@@ -389,7 +389,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 13,
     });
     expect(
       migrated.connection
@@ -485,7 +485,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 13,
     });
     expect(
       migrated.connection.prepare("SELECT * FROM external_identities").get()
@@ -534,7 +534,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 13,
     });
     expect(
       migrated.connection.prepare("PRAGMA table_info(univer_asset_uploads)").all()
@@ -561,7 +561,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 13,
     });
     expect(
       migrated.connection.prepare("PRAGMA table_info(univer_asset_uploads)").all()
@@ -642,7 +642,7 @@ describe("automatic product database migration to V12", () => {
     damaged.close();
 
     expect(() => openWorkspaceDatabase(filename)).toThrow(
-      /V3 to V12 migration failed.*consistent backup is at/
+      /V3 to V13 migration failed.*consistent backup is at/
     );
     expect(onlyBackup(directory)).toContain(".v3-backup-");
     const original = new DatabaseSync(filename, { readOnly: true });
@@ -679,7 +679,7 @@ describe("automatic product database migration to V12", () => {
     );
     try {
       expect(application.database.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-        user_version: 12,
+        user_version: 13,
       });
       expect(count(application.database.connection, "univer_asset_uploads")).toBe(0);
       expect(count(application.database.connection, "univer_assets")).toBe(2);
@@ -708,7 +708,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 13,
     });
     expect(count(migrated.connection, "blob_resources")).toBe(1);
     expect(count(migrated.connection, "blob_upload_sessions")).toBe(1);
@@ -779,7 +779,7 @@ describe("automatic product database migration to V12", () => {
     damaged.close();
 
     expect(() => openWorkspaceDatabase(filename)).toThrow(
-      /V2 to V12 migration failed.*consistent backup is at/
+      /V2 to V13 migration failed.*consistent backup is at/
     );
     expect(onlyBackup(directory)).toContain(".v2-backup-");
     const original = new DatabaseSync(filename, { readOnly: true });
@@ -857,10 +857,10 @@ describe("automatic product database migration to V12", () => {
     const directory = temporaryDirectory();
     const filename = join(directory, "workspace.sqlite");
     const database = new DatabaseSync(filename);
-    database.exec("PRAGMA user_version = 13");
+    database.exec("PRAGMA user_version = 14");
     database.close();
     expect(() => openWorkspaceDatabase(filename)).toThrow(
-      /Unsupported product database version 13/
+      /Unsupported product database version 14/
     );
     expect(backups(directory)).toEqual([]);
   });

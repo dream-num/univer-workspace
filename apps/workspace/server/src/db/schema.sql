@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS password_credentials (
 );
 
 CREATE TABLE IF NOT EXISTS external_identities (
-  provider TEXT NOT NULL CHECK (provider IN ('github', 'discord')),
+  provider TEXT NOT NULL CHECK (provider IN ('github', 'google', 'discord')),
   provider_subject TEXT NOT NULL,
   user_id TEXT NOT NULL,
   provider_username TEXT NOT NULL,
@@ -670,4 +670,4 @@ BEGIN
   SELECT RAISE(ABORT, 'only a team space can have a slug, and personal is reserved');
 END;
 
-PRAGMA user_version = 12;
+PRAGMA user_version = 13;

@@ -23,7 +23,7 @@ ExternalIdentitySummary:
   properties:
     provider:
       type: string
-      enum: [github, discord]
+      enum: [github, google, discord]
     providerUsername:
       type: string
 
@@ -42,11 +42,13 @@ AuthenticationMethods:
 AnonymousSession:
   type: object
   additionalProperties: false
-  required: [authenticated, githubOAuthEnabled, discordOAuthEnabled, passwordAuthEnabled]
+  required: [authenticated, githubOAuthEnabled, googleOAuthEnabled, discordOAuthEnabled, passwordAuthEnabled]
   properties:
     authenticated:
       const: false
     githubOAuthEnabled:
+      type: boolean
+    googleOAuthEnabled:
       type: boolean
     discordOAuthEnabled:
       type: boolean
@@ -59,6 +61,7 @@ AuthenticatedSession:
   required:
     - authenticated
     - githubOAuthEnabled
+    - googleOAuthEnabled
     - discordOAuthEnabled
     - passwordAuthEnabled
     - trialDeployment
@@ -68,6 +71,8 @@ AuthenticatedSession:
     authenticated:
       const: true
     githubOAuthEnabled:
+      type: boolean
+    googleOAuthEnabled:
       type: boolean
     discordOAuthEnabled:
       type: boolean

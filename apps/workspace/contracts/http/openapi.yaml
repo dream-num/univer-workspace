@@ -14,7 +14,7 @@ tags:
   - name: Session
     description: Browser login session bootstrap and logout.
   - name: Authentication
-    description: Password, GitHub, Discord, and CLI browser authorization methods.
+    description: Password, GitHub, Google, Discord, and CLI browser authorization methods.
   - name: Users
     description: Current User profile and User discovery.
   - name: Spaces
@@ -72,6 +72,14 @@ paths:
     $ref: ./paths/auth.yaml#/~1api~1auth~1github~1callback
   /api/auth/github:
     $ref: ./paths/auth.yaml#/~1api~1auth~1github
+  /api/auth/google/login:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1google~1login
+  /api/auth/google/link:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1google~1link
+  /api/auth/google/callback:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1google~1callback
+  /api/auth/google:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1google
   /api/auth/discord/login:
     $ref: ./paths/auth.yaml#/~1api~1auth~1discord~1login
   /api/auth/discord/bot-login:
