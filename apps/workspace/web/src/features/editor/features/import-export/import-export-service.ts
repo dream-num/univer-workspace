@@ -39,6 +39,7 @@ export interface ImportExportServiceDependencies {
   translate(key: string, ...args: string[]): string;
   pickFile(accept: string): Promise<File | undefined>;
   resolveUnitLink(unitId: string): Promise<string | undefined>;
+  resolveUnitName(unitId: string): Promise<string | undefined>;
 }
 
 /**
@@ -142,18 +143,23 @@ export class WorkspaceImportExportService extends Disposable {
     this.visibleSubject.next(false);
   }
 
-  /** Export the current Unit through the server; `targetId` picks a sheet or table. */
+  /**
+   * Export the current Unit through the server; `targetId` picks a sheet or
+   * table. The download takes the Workspace Node name, as the server's own
+   * filename does. `file.name` is not used: the SDK reads it from
+   * Content-Disposition with `/filename=(.+)/`, which returns the quoted ASCII
+   * fallback and the `filename*` parameter after it.
+   */
   async exportUnit(format: ExchangeFormat, targetId?: string): Promise<boolean> {
     const unit = this.dependencies.exchange.currentUnit();
     if (!unit) return false;
     this.showMessage(MessageType.Info, "downloading");
-    const file = await this.dependencies.exchange.exportByUnitId(unit.unitId, format, targetId);
+    const [file, nodeName] = await Promise.all([
+      this.dependencies.exchange.exportByUnitId(unit.unitId, format, targetId),
+      this.dependencies.resolveUnitName(unit.unitId).catch(() => undefined),
+    ]);
     if (!file) return false;
-    this.dependencies.downloadFile(
-      file,
-      unit.name || file.name.split(".").shift() || unit.unitId,
-      format
-    );
+    this.dependencies.downloadFile(file, nodeName || unit.name || unit.unitId, format);
     this.showMessage(MessageType.Success, "downloadSuccess");
     return true;
   }

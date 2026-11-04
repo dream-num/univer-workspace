@@ -14,12 +14,21 @@ const plugins = new Map<
   ReturnType<typeof createWorkspaceImportExportPlugin>
 >();
 
-/** The server imports into the Personal Space root; open the new Node there. */
-async function resolveImportedUnitLink(unitId: string): Promise<string | undefined> {
+async function resolveUnitNode(unitId: string) {
   const { data } = await api.GET("/api/unit-resources/{unitId}", {
     params: { path: { unitId } },
   });
-  return data ? new URL(`/nodes/${data.node.id}`, window.location.origin).href : undefined;
+  return data?.node;
+}
+
+/** The server imports into the Personal Space root; open the new Node there. */
+async function resolveImportedUnitLink(unitId: string): Promise<string | undefined> {
+  const node = await resolveUnitNode(unitId);
+  return node ? new URL(`/nodes/${node.id}`, window.location.origin).href : undefined;
+}
+
+async function resolveUnitName(unitId: string): Promise<string | undefined> {
+  return (await resolveUnitNode(unitId))?.name;
 }
 
 /** Workspace import/export UI for one editor; add it with the headless exchange plugins. */
@@ -32,5 +41,8 @@ export function createWorkspaceImportExportFeature(
     plugin = createWorkspaceImportExportPlugin(WORKSPACE_EXCHANGE_DEFINITIONS[unitType]);
     plugins.set(unitType, plugin);
   }
-  return [plugin, { mobile: options.mobile, resolveUnitLink: resolveImportedUnitLink }];
+  return [
+    plugin,
+    { mobile: options.mobile, resolveUnitLink: resolveImportedUnitLink, resolveUnitName },
+  ];
 }

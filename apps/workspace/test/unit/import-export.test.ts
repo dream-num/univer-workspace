@@ -38,6 +38,7 @@ function setup(overrides: Partial<ImportExportServiceDependencies> = {}, exchang
     translate: (key, ...args) => [key, ...args].join(":"),
     pickFile: vi.fn(async () => new File(["data"], "Report.XLSX")),
     resolveUnitLink: vi.fn(async (unitId: string) => `https://workspace.test/nodes/node-of-${unitId}`),
+    resolveUnitName: vi.fn(async () => "季度预算"),
     ...overrides,
   };
   const service = new WorkspaceImportExportService(dependencies);
@@ -141,17 +142,43 @@ describe("Workspace import/export service", () => {
     expect(latest(service.progress$)).toEqual({ done: 0, count: 0 });
   });
 
-  it("exports the current Unit and downloads it under the Unit name", async () => {
+  it("exports the current Unit and downloads it under the Workspace Node name", async () => {
     const { service, dependencies, messages } = setup();
 
     await expect(service.exportUnit(ExchangeFormat.CSV, "sheet-2")).resolves.toBe(true);
 
     expect(dependencies.exchange.exportByUnitId).toHaveBeenCalledWith("unit-1", ExchangeFormat.CSV, "sheet-2");
-    expect(dependencies.downloadFile).toHaveBeenCalledWith(expect.any(File), "Budget", ExchangeFormat.CSV);
+    expect(dependencies.resolveUnitName).toHaveBeenCalledWith("unit-1");
+    expect(dependencies.downloadFile).toHaveBeenCalledWith(expect.any(File), "季度预算", ExchangeFormat.CSV);
     expect(messages.map((message) => message.content)).toEqual([
       "workspace-import-export.downloading",
       "workspace-import-export.downloadSuccess",
     ]);
+  });
+
+  it("ignores the SDK's misparsed Content-Disposition filename", async () => {
+    // A slide snapshot has no title, and SDK 1.3.1 names the File from the
+    // whole header tail after `filename=`.
+    const sdkName = `"____.pptx"; filename*=UTF-8''%E5%AD%A3%E5%BA%A6.pptx`;
+    const { service, dependencies } = setup(
+      { resolveUnitName: async () => { throw new Error("offline"); } },
+      {
+        currentUnit: () => ({ unitId: "slide-1", name: "" }),
+        exportByUnitId: async () => new File(["x"], sdkName),
+      }
+    );
+
+    await expect(service.exportUnit(ExchangeFormat.PPTX)).resolves.toBe(true);
+
+    expect(dependencies.downloadFile).toHaveBeenCalledWith(expect.any(File), "slide-1", ExchangeFormat.PPTX);
+  });
+
+  it("falls back to the Unit name when the Node cannot be resolved", async () => {
+    const { service, dependencies } = setup({ resolveUnitName: async () => undefined });
+
+    await service.exportUnit(ExchangeFormat.XLSX);
+
+    expect(dependencies.downloadFile).toHaveBeenCalledWith(expect.any(File), "Budget", ExchangeFormat.XLSX);
   });
 
   it("does not download when the server returns no file", async () => {

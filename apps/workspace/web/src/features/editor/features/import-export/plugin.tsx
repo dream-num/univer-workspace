@@ -36,6 +36,8 @@ export interface WorkspaceImportExportConfig {
   readonly mobile: boolean;
   /** Workspace page of an imported Unit, opened from the upload notification. */
   readonly resolveUnitLink: (unitId: string) => Promise<string | undefined>;
+  /** Workspace Node name of a Unit, which names its exported file. */
+  readonly resolveUnitName: (unitId: string) => Promise<string | undefined>;
 }
 
 /** 1.1 sheet and base export operations took their sheet or table under these names. */
@@ -98,6 +100,7 @@ export function createWorkspaceImportExportPlugin(definition: WorkspaceExchangeD
         translate: (key, ...args) => localeService.t(key, ...args),
         pickFile,
         resolveUnitLink: this.config.resolveUnitLink,
+        resolveUnitName: this.config.resolveUnitName,
       });
       this.disposeWithMe(service);
       for (const command of this.commands(service)) {
