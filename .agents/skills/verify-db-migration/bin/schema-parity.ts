@@ -37,19 +37,23 @@ const { openWorkspaceDatabase } = await load<{
 
 const versionOf = (sql: string) => Number(/PRAGMA\s+user_version\s*=\s*(\d+)/i.exec(sql)?.[1]);
 
+// Quoted spans and comments in one alternation, so whichever starts first wins.
+const LEXEMES = /('(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\/)/;
+const QUOTED = /('(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]*\])/;
+
 /** Case, whitespace and comments are insignificant outside quotes; quoted text is kept verbatim. */
 function normalize(sql: string | null): string {
-  return (sql ?? "")
-    .split(/('(?:[^']|'')*'|"(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\])/)
-    .map((part, index) =>
-      index % 2 === 1
-        ? part
-        : part
-            .replace(/--[^\n]*|\/\*[\s\S]*?\*\//g, " ")
-            .toLowerCase()
-            .replace(/\s+/g, " ")
-            .replace(/\s*([(),=<>!+*/-])\s*/g, "$1"),
-    )
+  const uncommented = (sql ?? "")
+    .split(LEXEMES)
+    .map((part, index) => (index % 2 === 1 && (part.startsWith("--") || part.startsWith("/*")) ? " " : part))
+    .join("");
+  return uncommented
+    .split(QUOTED)
+    .map((part, index) => {
+      if (index % 2 === 1) return part;
+      if (/['"`[]/.test(part)) throw new Error(`Unterminated quote in: ${sql}`);
+      return part.toLowerCase().replace(/\s+/g, " ").replace(/\s*([(),=<>!+*/-])\s*/g, "$1");
+    })
     .join("")
     .trim()
     .replace(/^create (unique |temp |temporary )?(table|index|trigger|view) if not exists /, "create $1$2 ");
@@ -57,30 +61,35 @@ function normalize(sql: string | null): string {
 
 /** Top-level comma-separated items of a CREATE TABLE body plus its trailing options. */
 function tableItems(sql: string): { items: string[]; options: string } {
-  const text = normalize(sql);
-  const open = text.indexOf("(");
   const items: string[] = [];
   let depth = 0;
-  let start = open + 1;
-  for (let index = open; index < text.length; index++) {
-    const char = text[index]!;
-    if (char === "'" || char === '"' || char === "`" || char === "[") {
-      const close = char === "[" ? "]" : char;
-      index = text.indexOf(close, index + 1);
-      while (close !== "]" && text[index + 1] === close) index = text.indexOf(close, index + 2);
-      continue;
+  let item = "";
+  let tail: string | undefined;
+  normalize(sql).split(QUOTED).forEach((part, index) => {
+    if (tail !== undefined) return void (tail += part);
+    if (index % 2 === 1) return void (item += part);
+    for (const char of part) {
+      if (tail !== undefined) {
+        tail += char;
+        continue;
+      }
+      if (char === "(") depth++;
+      if (char === ")") depth--;
+      if (char === "(" && depth === 1) {
+        item = "";
+      } else if (char === ")" && depth === 0) {
+        items.push(item);
+        tail = "";
+      } else if (char === "," && depth === 1) {
+        items.push(item);
+        item = "";
+      } else {
+        item += char;
+      }
     }
-    if (char === "(") depth++;
-    if (char === ")" && --depth === 0) {
-      items.push(text.slice(start, index));
-      return { items, options: text.slice(index + 1).trim() };
-    }
-    if (char === "," && depth === 1) {
-      items.push(text.slice(start, index));
-      start = index + 1;
-    }
-  }
-  throw new Error(`Unbalanced CREATE TABLE: ${sql}`);
+  });
+  if (tail === undefined) throw new Error(`Unbalanced CREATE TABLE: ${sql}`);
+  return { items, options: tail.trim() };
 }
 
 /**
@@ -99,7 +108,7 @@ function shape(database: DatabaseSync): Map<string, string> {
     }
   }
   for (const object of all(
-    "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name",
+    "SELECT type, name, sql FROM sqlite_master WHERE name NOT GLOB 'sqlite_*' ORDER BY type, name",
   )) {
     const key = `${object.type} ${object.name}`;
     if (object.type !== "table") {
@@ -141,8 +150,15 @@ try {
   const revisions = [
     ...git("log", "--first-parent", "--format=%H", options.base, "--", SCHEMA).split("\n"),
     ...git("tag", "--list", "v*").split("\n"),
-    ...options.ref,
   ].filter(Boolean);
+  for (const ref of options.ref) {
+    try {
+      git("rev-parse", "--verify", "--quiet", `${ref}^{commit}:${SCHEMA}`);
+    } catch {
+      throw new Error(`--ref ${ref} is not a local commit with ${SCHEMA}; fetch it or fix the ref.`);
+    }
+    revisions.push(ref);
+  }
   const blobs = new Map<string, string[]>();
   for (const revision of revisions) {
     let blob: string;
@@ -152,7 +168,8 @@ try {
       console.log(`skip ${revision}: no ${SCHEMA}`);
       continue;
     }
-    blobs.set(blob, [...(blobs.get(blob) ?? []), /^[0-9a-f]{40}$/.test(revision) ? revision.slice(0, 9) : revision]);
+    const name = /^[0-9a-f]{40}$/.test(revision) ? revision.slice(0, 9) : revision;
+    blobs.set(blob, [...new Set([...(blobs.get(blob) ?? []), name])]);
   }
   if (blobs.size === 0) throw new Error(`No historical ${SCHEMA} found from ${options.base} or v* tags.`);
 
@@ -171,12 +188,19 @@ try {
       const migrated = new DatabaseSync(filename, { readOnly: true });
       problems.push(...differences(expected, shape(migrated)));
       migrated.close();
-      openWorkspaceDatabase(filename).close();
-      openWorkspaceDatabase(filename).close();
-      const backups = readdirSync(directory).filter((name) => name.startsWith(`${blob}.sqlite.v`));
-      if (backups.length > (versionOf(sql) === versionOf(currentSql) ? 0 : 1)) {
-        problems.push(`  restart created another backup: ${backups.join(", ")}`);
+      const backups = () => readdirSync(directory).filter((name) => name.startsWith(`${blob}.sqlite.v`)).join(", ");
+      const migrationBackups = backups();
+      const expectedBackups = versionOf(sql) === versionOf(currentSql) ? 0 : 1;
+      if ((migrationBackups ? migrationBackups.split(", ").length : 0) !== expectedBackups) {
+        problems.push(`  expected ${expectedBackups} backup after migration, found: ${migrationBackups || "<none>"}`);
       }
+      for (const start of ["first", "second"]) {
+        const opened = openWorkspaceDatabase(filename);
+        const changed = differences(expected, shape(opened.connection));
+        opened.close();
+        if (changed.length > 0) problems.push(`  after ${start} startup:`, ...changed);
+      }
+      if (backups() !== migrationBackups) problems.push(`  startup created backups: ${backups()}`);
     } catch (error) {
       problems.push(`  startup threw ${(error as Error).message}`);
     }

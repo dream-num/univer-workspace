@@ -32,9 +32,10 @@ git diff --stat origin/main -- apps/workspace/server/src/db \
 
 For every distinct `schema.sql` on the first-parent history of `origin/main` and in every
 `v*` tag, the script builds a database, runs `prepareCurrentDatabase`, and compares the result
-with a fresh install of the working-tree `schema.sql` before startup re-runs `schema.sql`.
-Then it opens the database twice with `openWorkspaceDatabase` and fails if startup throws or a
-restart creates a second backup. Every line must be `ok`.
+with a fresh install of the working-tree `schema.sql` before startup re-runs `schema.sql`, and
+requires exactly one backup for an older version and none for the current one. Then it opens
+the database twice with `openWorkspaceDatabase`, compares again after each start, and fails if
+startup throws, changes the structure, or creates a backup. Every line must be `ok`.
 
 It compares `user_version`, column order, each column definition and table constraint as
 written (type, collation, default, CHECK, generated expression, foreign key), table options
@@ -43,7 +44,8 @@ triggers and views. Case, whitespace and comments outside quotes are ignored. Qu
 not.
 
 Options. `--base <ref>` replaces `origin/main`. Pass `--ref <commit>` once per commit deployed
-from outside `main` (a `sha-<commit>` image), so its schema is replayed too.
+from outside `main` (a `sha-<commit>` image), so its schema is replayed too. A `--ref` that is
+not a local commit with `schema.sql` is an error; fetch it first.
 
 Read a `FAIL` as:
 
@@ -87,8 +89,10 @@ Wire it twice: a Vitest case under `test/integration/` with the source `openWork
 and `test/production-v<N-1>-migration.ts` with `../dist/server/db/initialize.js`, appended to
 `test:production-import` in `apps/workspace/package.json`. Also update `TARGET_VERSION`, every
 `createBackup`/fingerprint version union, the "expected 0 … N" message, and the version
-`database.ts` expects. Each source version's chain in `prepareCurrentDatabase` must end with
-`migrateV<N-1>ToV<N>` followed by `assertV<N>Fingerprint`.
+`database.ts` expects. Each V1+ chain in `prepareCurrentDatabase` must end with
+`migrateV<N-1>ToV<N>` followed by `assertV<N>Fingerprint`. V0 is different: `legacy-v0/migrate.ts`
+applies the current `schema.sql` directly, so update the `user_version` it expects instead of
+appending a migration to it.
 
 ## 4. Production build
 
@@ -98,8 +102,8 @@ pnpm --filter @univerjs/univer-workspace build:server
 pnpm --filter @univerjs/univer-workspace test:production-import
 ```
 
-`--dist` loads `dist/server/db`, including its copied `schema.sql`. Rebuild first, because a
-stale `dist` fails parity.
+`--dist` loads `dist/server/db`, including its copied `schema.sql`. Rebuild first: a stale
+`dist` fails parity, before or after startup.
 
 ## 5. Repository gates and docs
 
