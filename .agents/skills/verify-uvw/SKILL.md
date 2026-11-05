@@ -8,7 +8,7 @@ description: Verify Univer Workspace (apps/workspace web + server) and the uvw C
 Everything goes through one helper. Run it from the repository root:
 
 ```bash
-V=.claude/skills/verify-uvw/bin/verify-uvw
+V=.agents/skills/verify-uvw/bin/verify-uvw
 $V up        # start server :3920 + web :5973 on a fresh temp data dir
 $V doctor    # read-only: is this instance ours and worth driving?
 $V user      # register a throwaway password user and sign uvw in as it

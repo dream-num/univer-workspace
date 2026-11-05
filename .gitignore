@@ -8,6 +8,5 @@ coverage/
 .DS_Store
 .vscode/
 *.tsbuildinfo
-.agents/
 skills-lock.json
 .gstack/

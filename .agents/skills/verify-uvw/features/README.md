@@ -6,7 +6,7 @@ as the recipe.
 
 ## Baseline preconditions
 
-- `V=.claude/skills/verify-uvw/bin/verify-uvw` from the repository root.
+- `V=.agents/skills/verify-uvw/bin/verify-uvw` from the repository root.
 - `$V up`, `$V user`, and a `$V doctor` with no `FAIL` lines. The run serves web at
   `http://127.0.0.1:5973` and the server at `:3920`, from a fresh `data/` directory.
 - The baseline user is `verify-<run-id>`, display name `Verify <run-id>`. Its password is
