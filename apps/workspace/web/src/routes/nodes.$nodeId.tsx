@@ -13,7 +13,7 @@ import {
 } from "../features/nodes";
 import { anonymousUser, sessionQueryOptions } from "../features/auth";
 import { resourceOpenQueryOptions } from "../features/resources";
-import { spacesQueryOptions } from "../features/spaces";
+import { mySpacesQueryOptions } from "../features/spaces";
 import { WorkspaceLayout } from "./-workspace-layout";
 import { ResourceEditor } from "../features/editor";
 import { BlobPreview } from "../features/blobs";
@@ -45,7 +45,7 @@ export const Route = createFileRoute("/nodes/$nodeId")({
     }
     try {
       const [, result] = await Promise.all([
-        session.authenticated ? context.queryClient.ensureQueryData(spacesQueryOptions) : undefined,
+        session.authenticated ? context.queryClient.ensureQueryData(mySpacesQueryOptions) : undefined,
         context.queryClient.ensureQueryData(nodeQueryOptions(params.nodeId)),
       ]);
       if (result.node.resource) {

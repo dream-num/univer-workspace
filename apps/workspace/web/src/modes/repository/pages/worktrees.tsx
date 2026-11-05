@@ -12,7 +12,7 @@ import {
   worktreeQueryOptions,
   worktreeBelongsToSpace,
 } from "../../../features/worktrees";
-import { spacesQueryOptions } from "../../../features/spaces";
+import { spaceQueryOptions } from "../../../features/spaces";
 import { RepositoryTabs } from "../repository-tabs";
 import { WorktreeReviewPanel } from "../../../features/worktrees/worktree-review-panel";
 import { Button, Empty, Skeleton } from "../../../shared/ui";
@@ -137,7 +137,7 @@ function RepositoryPullRequestPage({
 }) {
   const { t } = useI18n();
   const query = useQuery(worktreeQueryOptions(worktreeId));
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(spaceQueryOptions(spaceId));
   const openPullRequest = usePullRequestNavigate();
   if (query.isPending || spaces.isPending)
     return (
@@ -160,7 +160,7 @@ function RepositoryPullRequestPage({
         </Button>
       </Empty>
     );
-  const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const space = spaces.data;
   if (!space || !worktreeBelongsToSpace(query.data.worktree, space))
     return (
       <Empty

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../../features/auth";
-import { spacesQueryOptions } from "../../features/spaces";
+import { spaceQueryOptions, mySpacesQueryOptions } from "../../features/spaces";
 import { spaceDisplayName } from "./space-name";
 import { useWorktreeChangeFeed, worktreeListQueryOptions } from "../../features/worktrees";
 import { api } from "../../shared/api/client";
@@ -178,7 +178,8 @@ export function RepositoryShell({
   headerActions,
 }: WorkspaceShellProps) {
   const session = useQuery(sessionQueryOptions);
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(mySpacesQueryOptions);
+  const selected = useQuery(spaceQueryOptions(selectedSpaceId));
   // 保留现有后台查询与变更订阅，避免外壳拆分改变请求行为。
   useQuery({
     ...worktreeListQueryOptions("active"),
@@ -210,7 +211,7 @@ export function RepositoryShell({
   // every render rather than after a conditional return.
   const username = session.data?.authenticated ? session.data.user.username : undefined;
   const allSpaces = spaces.data?.spaces ?? [];
-  const selectedSpace = allSpaces.find((space) => space.id === selectedSpaceId);
+  const selectedSpace = selected.data;
   const spaceTitle = selectedSpace?.type === "personal" ? t("personalSpace") : selectedSpace?.name;
   const repositorySpaceName = spaceDisplayName(selectedSpace, t, username) ?? spaceTitle;
   // 保留 R7 半外壳：apps、无空间的 worktrees 和文件编辑器沿用现有外壳。
@@ -253,7 +254,7 @@ export function RepositoryShell({
     },
   });
 
-  if (session.isPending || spaces.isPending) {
+  if (session.isPending || (selectedSpaceId !== undefined && selected.isPending)) {
     return <LoadingScreen />;
   }
   if (!session.data?.authenticated) {
@@ -264,7 +265,7 @@ export function RepositoryShell({
 
   const currentSession = session.data;
   const personalSpaces = allSpaces.filter(
-    (space) => space.type === "personal" && space.accessRole === "owner",
+    (space) => space.type === "personal" && space.affiliation === "owner",
   );
   const teamSpaces = allSpaces.filter((space) => space.type === "team");
   const pageTitle = repositoryShell

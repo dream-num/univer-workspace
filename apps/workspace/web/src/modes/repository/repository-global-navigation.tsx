@@ -10,16 +10,18 @@ import {
   GitPullRequest,
   Globe,
   House,
+  Pin,
 } from "lucide-react";
 import { useState } from "react";
 import { sessionQueryOptions } from "../../features/auth";
-import { spacesQueryOptions } from "../../features/spaces";
+import { mySpacesQueryOptions, spacePinsQueryOptions } from "../../features/spaces";
 import { AGENT_DOWNLOAD_URL } from "../../features/worktrees/worktree-onboarding";
 import { useI18n, type MessageKey } from "../../shared/i18n";
-import { Avatar, Button } from "../../shared/ui";
+import { Avatar, Button, Tooltip } from "../../shared/ui";
 import type { RepositoryGlobalView } from "../shell.types";
-import { RepositorySearchField } from "./repository-controls";
+import { RepositoryQueryState, RepositorySearchField } from "./repository-controls";
 import { filterRepositories } from "./repository-directory";
+import { CustomizePinsDialog } from "./customize-pins-dialog";
 import { spaceDisplayName } from "./space-name";
 
 const entries = [
@@ -38,14 +40,17 @@ const entries = [
 export function RepositoryGlobalNavigation({ view }: { readonly view: RepositoryGlobalView }) {
   const { t, language } = useI18n();
   const session = useQuery(sessionQueryOptions);
-  const spaces = useQuery(spacesQueryOptions);
+  const pins = useQuery(spacePinsQueryOptions);
+  const [customize, setCustomize] = useState(false);
   const [q, setQ] = useState("");
-  const items = filterRepositories(
+  const spaces = useQuery({ ...mySpacesQueryOptions, enabled: Boolean(q.trim()) });
+  const items = q.trim() ? filterRepositories(
     spaces.data?.spaces ?? [],
     { q },
     (space) => spaceDisplayName(space, t) ?? space.name,
     language,
-  );
+  ).slice(0, 8) : pins.data?.spaces ?? [];
+  const list = q.trim() ? spaces : pins;
   const user = session.data?.authenticated ? session.data.user : undefined;
   return (
     <div className="repository-global-navigation">
@@ -67,23 +72,39 @@ export function RepositoryGlobalNavigation({ view }: { readonly view: Repository
         ))}
       </nav>
       <section className="repository-sidebar-repos" aria-label={t("dashboardMyRepositories")}>
-        <h2 className="mb-3 text-sm font-semibold">{t("dashboardMyRepositories")}</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">{t("dashboardMyRepositories")}</h2>
+          <Tooltip content={t("repositoryCustomizePins")}>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("repositoryCustomizePins")}
+              disabled={!pins.data}
+              onClick={() => setCustomize(true)}
+            >
+              <Pin />
+            </Button>
+          </Tooltip>
+        </div>
+        {customize && pins.data ? <CustomizePinsDialog pins={pins.data} onClose={() => setCustomize(false)} /> : null}
         <RepositorySearchField value={q} onChange={setQ} label={t("searchRepositories")} />
-        <ul>
-          {items.slice(0, 8).map((space) => (
-            <li key={space.id}>
-              <Link to="/spaces/$spaceId" params={{ spaceId: space.id }} search={{}}>
-                <BookMarked aria-hidden="true" />
-                <span className="truncate">{spaceDisplayName(space, t)}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-        {!items.length ? (
-          <p className="py-3 text-xs text-muted-foreground">
-            {t(q ? "repositoriesNoMatch" : "repositoriesEmpty")}
-          </p>
-        ) : null}
+        <RepositoryQueryState pending={list.isPending} failed={list.isError && !list.data} retry={list.refetch}>
+          <ul>
+            {items.map((space) => (
+              <li key={space.id}>
+                <Link to="/spaces/$spaceId" params={{ spaceId: space.id }} search={{}}>
+                  <BookMarked aria-hidden="true" />
+                  <span className="truncate">{spaceDisplayName(space, t)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {!items.length ? (
+            <p className="py-3 text-xs text-muted-foreground">
+              {t(q ? "repositoriesNoMatch" : "repositoriesEmpty")}
+            </p>
+          ) : null}
+        </RepositoryQueryState>
         <Link
           className="repository-all-link"
           to="/repositories"

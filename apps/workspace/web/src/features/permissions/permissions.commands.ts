@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { spacesQueryKey } from "../spaces/spaces.queries";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { nodeGrantsQueryOptions, nodeLinkSharingQueryOptions, teamMembersQueryOptions } from "./permissions.queries";
@@ -67,7 +68,10 @@ export function useSetMemberRole() {
       });
       if (error) throw apiError(error);
     },
-    onSuccess: (_, { spaceId }) => client.invalidateQueries({ queryKey: teamMembersQueryOptions(spaceId).queryKey }),
+    onSuccess: (_, { spaceId }) => Promise.all([
+      client.invalidateQueries({ queryKey: teamMembersQueryOptions(spaceId).queryKey }),
+      client.invalidateQueries({ queryKey: spacesQueryKey }),
+    ]),
   });
 }
 
@@ -80,6 +84,9 @@ export function useRemoveMember() {
       });
       if (error) throw apiError(error);
     },
-    onSuccess: (_, { spaceId }) => client.invalidateQueries({ queryKey: teamMembersQueryOptions(spaceId).queryKey }),
+    onSuccess: (_, { spaceId }) => Promise.all([
+      client.invalidateQueries({ queryKey: teamMembersQueryOptions(spaceId).queryKey }),
+      client.invalidateQueries({ queryKey: spacesQueryKey }),
+    ]),
   });
 }

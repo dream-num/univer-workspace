@@ -58,9 +58,16 @@ describe("repository directory", () => {
     expect(spaces.map((s) => s.id)).toEqual(["personal", "finance", "crm"]);
   });
 
+  it("retains the selected directory tab alongside filters", () => {
+    expect(parseRepositorySearch({ view: "starred", type: "team", q: "budget" })).toEqual({
+      view: "starred", type: "team", q: "budget",
+    });
+    expect(parseRepositorySearch({ view: "explore" })).toEqual({ view: "explore" });
+  });
+
   it("drops invalid URL filters and bounds free text", () => {
     expect(
-      parseRepositorySearch({ type: "admin", visibility: true, sort: "random", q: {} }),
+      parseRepositorySearch({ view: "mine", type: "admin", visibility: true, sort: "random", q: {} }),
     ).toEqual({});
     expect(
       parseRepositorySearch({

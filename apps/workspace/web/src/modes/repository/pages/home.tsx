@@ -4,7 +4,7 @@ import { BookMarked, ChevronRight, ExternalLink, Terminal } from "lucide-react";
 import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import type { HomePageProps } from "../../page.types";
 import { sessionQueryOptions } from "../../../features/auth";
-import { spacesQueryOptions } from "../../../features/spaces";
+import { mySpacesQueryOptions } from "../../../features/spaces";
 import { recentResourceSummaryQueryOptions } from "../../../features/views/recent.queries";
 import { worktreeSummaryQueryOptions } from "../../../features/worktrees/worktrees.queries";
 import { issueSummaryQueryOptions } from "../../../features/issues/issues.queries";
@@ -24,7 +24,7 @@ import { spaceDisplayName } from "../space-name";
 export function RepositoryHomePage(_props: HomePageProps) {
   const { t, language } = useI18n();
   const session = useQuery(sessionQueryOptions);
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(mySpacesQueryOptions);
   const recent = useQuery(recentResourceSummaryQueryOptions);
   const prs = useQuery(worktreeSummaryQueryOptions);
   const issues = useQuery(issueSummaryQueryOptions);

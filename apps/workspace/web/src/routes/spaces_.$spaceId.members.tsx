@@ -4,13 +4,13 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { teamMembersQueryOptions } from "../features/permissions";
 import { requireAuthenticatedSession } from "../features/auth";
-import { spacesQueryOptions } from "../features/spaces";
+import { ensureSpace } from "../features/spaces";
 
 export const Route = createFileRoute("/spaces_/$spaceId/members")({
   loader: async ({ context, params, location }) => {
     await requireAuthenticatedSession(context.queryClient, location.href);
     await Promise.all([
-      context.queryClient.ensureQueryData(spacesQueryOptions),
+      ensureSpace(context.queryClient, params.spaceId),
       context.queryClient.ensureQueryData(teamMembersQueryOptions(params.spaceId)),
     ]);
   },

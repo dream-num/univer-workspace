@@ -3,7 +3,7 @@ import { useModeDefinition } from "../modes/registry";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { ResourceUnavailablePage, isResourceUnavailableError, spaceNodesQueryOptions } from "../features/nodes";
 import { sessionQueryOptions } from "../features/auth";
-import { spacesQueryOptions } from "../features/spaces";
+import { ensureSpace } from "../features/spaces";
 
 export const Route = createFileRoute("/spaces/$spaceId")({
   validateSearch: (search: Readonly<Record<string, unknown>>) => ({
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/spaces/$spaceId")({
     const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
     try {
       await Promise.all([
-        session.authenticated ? context.queryClient.ensureQueryData(spacesQueryOptions) : undefined,
+        session.authenticated ? ensureSpace(context.queryClient, params.spaceId) : undefined,
         context.queryClient.ensureQueryData(spaceNodesQueryOptions(params.spaceId)),
       ]);
     } catch (error) {

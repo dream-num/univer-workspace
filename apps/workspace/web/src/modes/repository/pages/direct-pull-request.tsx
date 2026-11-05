@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate } from "@tanstack/react-router";
 import type { WorktreesPageProps } from "../../page.types";
 import { worktreeQueryOptions } from "../../../features/worktrees/worktrees.queries";
-import { spacesQueryOptions } from "../../../features/spaces";
+import { mySpacesQueryOptions } from "../../../features/spaces";
 import { useI18n } from "../../../shared/i18n";
 import { WorkspaceLayout } from "../../workspace-layout";
 import { RepositoryQueryState } from "../repository-controls";
@@ -14,7 +14,7 @@ export function RepositoryDirectPullRequest(
 ) {
   const { t } = useI18n();
   const task = useQuery(worktreeQueryOptions(props.worktree));
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(mySpacesQueryOptions);
   const personalId = spaces.data?.spaces.find(
     (space) => space.type === "personal" && space.accessRole === "owner",
   )?.id;

@@ -12,7 +12,7 @@ vi.mock("@tanstack/react-query", () => ({
   queryOptions: (options: unknown) => options,
   useQuery: ({ queryKey }: { queryKey: string[] }) =>
     queryKey[0] === "spaces"
-      ? { data: { spaces: [] } }
+      ? { data: undefined }
       : queryKey[2] === "active" ? state.active : state.processed,
   useQueries: () => [],
 }));
