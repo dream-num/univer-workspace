@@ -1,13 +1,14 @@
 ---
 name: verify-db-migration
-description: Prove a Univer Workspace database change cannot break a deployed database. Replays every committed and released product schema.sql through current startup and requires a structure identical to a fresh install, then runs the per-version data, backup, rollback and restart matrix against source and the production build. Use whenever a change touches apps/workspace/server/src/db (schema.sql, migrations, database.ts, initialize.ts), the Collaboration migrations, or the Univer SDK baseline, and before calling such a change done.
+description: Verify that a Univer Workspace database change migrates deployed databases correctly. Replays every product schema.sql on origin/main and in release tags (plus explicit deployment refs) through current startup and requires a structure identical to a fresh install, then runs the per-version data, backup, rollback and restart matrix against source and the production build. Use whenever a change touches apps/workspace/server/src/db (schema.sql, migrations, database.ts, initialize.ts), the Collaboration migrations, or the Univer SDK baseline, and before calling such a change done.
 ---
 
 # verify-db-migration
 
 `apps/workspace/AGENTS.md` owns the migration rules. This skill proves a change meets them.
-Work from a full clone (not shallow, tags fetched) after `pnpm install --frozen-lockfile`, and
-rebase onto `origin/main` first: a branch behind a newer schema version fails step 2.
+Work from a full clone (not shallow, tags fetched) after `pnpm install --frozen-lockfile`, with
+`origin/main` freshly fetched. If `origin/main` already has a newer schema version than your
+branch, step 2 fails until you bring that version in.
 
 ## 1. Scope
 
@@ -35,7 +36,8 @@ For every distinct `schema.sql` on the first-parent history of `origin/main` and
 with a fresh install of the working-tree `schema.sql` before startup re-runs `schema.sql`, and
 requires exactly one backup for an older version and none for the current one. Then it opens
 the database twice with `openWorkspaceDatabase`, compares again after each start, and fails if
-startup throws, changes the structure, or creates a backup. Every line must be `ok`.
+startup throws, changes the structure, or creates a backup. Every replayed schema must print
+`ok`.
 
 It compares `user_version`, column order, each column definition and table constraint as
 written (type, collation, default, CHECK, generated expression, foreign key), table options
@@ -91,8 +93,10 @@ and `test/production-v<N-1>-migration.ts` with `../dist/server/db/initialize.js`
 `createBackup`/fingerprint version union, the "expected 0 … N" message, and the version
 `database.ts` expects. Each V1+ chain in `prepareCurrentDatabase` must end with
 `migrateV<N-1>ToV<N>` followed by `assertV<N>Fingerprint`. V0 is different: `legacy-v0/migrate.ts`
-applies the current `schema.sql` directly, so update the `user_version` it expects instead of
-appending a migration to it.
+runs the current `schema.sql` directly, so update the `user_version` it expects instead of
+appending a migration. It keeps the legacy `users`, `spaces` and `worktrees` tables, which that
+`CREATE TABLE IF NOT EXISTS` never changes, so a change to those tables also needs an explicit
+rebuild there.
 
 ## 4. Production build
 
@@ -102,8 +106,8 @@ pnpm --filter @univerjs/univer-workspace build:server
 pnpm --filter @univerjs/univer-workspace test:production-import
 ```
 
-`--dist` loads `dist/server/db`, including its copied `schema.sql`. Rebuild first: a stale
-`dist` fails parity, before or after startup.
+`--dist` loads `dist/server/db`, including its copied `schema.sql`. Rebuild first. Parity catches
+a stale migration and an extra object in the copied schema, but not a definition missing from it.
 
 ## 5. Repository gates and docs
 
@@ -113,8 +117,9 @@ pnpm --filter @univerjs/univer-workspace test:production-import
 ## Report
 
 List the parity output for source and `--dist`, the matrix cases you added, the
-`test:production-import` result, and any FAIL you accepted with its reason. Name as untested
+`test:production-import` result. A `FAIL` blocks the change until fixed. Name as untested
 the rolling upgrade order and concurrent old and new writers; review the release notes'
 stop-old, start-one, resume order instead. V0 to V5 and V10 never had a committed
 `schema.sql`, so parity skips them. They rely on `test/integration/database-migration.test.ts`,
-`test/production-v1-migration.ts` to `v5`, and `test/support/v10-migration-checks.ts`.
+`test/production-v1-migration.ts` to `v5`, and `test/support/v10-migration-checks.ts`, which
+check data but not structural parity.

@@ -35,8 +35,6 @@ const { openWorkspaceDatabase } = await load<{
   openWorkspaceDatabase(filename: string): { connection: DatabaseSync; close(): void };
 }>(`initialize.${extension}`);
 
-const versionOf = (sql: string) => Number(/PRAGMA\s+user_version\s*=\s*(\d+)/i.exec(sql)?.[1]);
-
 // Quoted spans and comments in one alternation, so whichever starts first wins.
 const LEXEMES = /('(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\/)/;
 const QUOTED = /('(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]*\])/;
@@ -144,8 +142,9 @@ try {
   const currentSql = readFileSync(join(root, SCHEMA), "utf8");
   fresh.exec(currentSql);
   const expected = shape(fresh);
+  const targetVersion = expected.get("pragma user_version");
   fresh.close();
-  console.log(`target: working-tree schema.sql V${versionOf(currentSql)} via ${options.dist ? "dist" : "source"}`);
+  console.log(`target: working-tree schema.sql V${targetVersion} via ${options.dist ? "dist" : "source"}`);
 
   const revisions = [
     ...git("log", "--first-parent", "--format=%H", options.base, "--", SCHEMA).split("\n"),
@@ -175,11 +174,12 @@ try {
 
   for (const [blob, names] of blobs) {
     const sql = git("cat-file", "blob", blob);
-    const label = `V${versionOf(sql)} ${blob.slice(0, 9)} (${names.join(", ")})`;
     const filename = join(directory, `${blob}.sqlite`);
     const seed = new DatabaseSync(filename);
     seed.exec(sql);
+    const version = String(seed.prepare("PRAGMA user_version").get()?.user_version);
     seed.close();
+    const label = `V${version} ${blob.slice(0, 9)} (${names.join(", ")})`;
     const problems: string[] = [];
     try {
       // Compare before startup re-runs schema.sql: its IF NOT EXISTS statements would
@@ -188,11 +188,11 @@ try {
       const migrated = new DatabaseSync(filename, { readOnly: true });
       problems.push(...differences(expected, shape(migrated)));
       migrated.close();
-      const backups = () => readdirSync(directory).filter((name) => name.startsWith(`${blob}.sqlite.v`)).join(", ");
+      const backups = () => readdirSync(directory).filter((name) => name.startsWith(`${blob}.sqlite.v`));
       const migrationBackups = backups();
-      const expectedBackups = versionOf(sql) === versionOf(currentSql) ? 0 : 1;
-      if ((migrationBackups ? migrationBackups.split(", ").length : 0) !== expectedBackups) {
-        problems.push(`  expected ${expectedBackups} backup after migration, found: ${migrationBackups || "<none>"}`);
+      const expectedBackups = version === targetVersion ? 0 : 1;
+      if (migrationBackups.length !== expectedBackups) {
+        problems.push(`  expected ${expectedBackups} backup after migration, found: ${migrationBackups.join(", ") || "<none>"}`);
       }
       for (const start of ["first", "second"]) {
         const opened = openWorkspaceDatabase(filename);
@@ -200,7 +200,7 @@ try {
         opened.close();
         if (changed.length > 0) problems.push(`  after ${start} startup:`, ...changed);
       }
-      if (backups() !== migrationBackups) problems.push(`  startup created backups: ${backups()}`);
+      if (backups().length !== migrationBackups.length) problems.push(`  startup created backups: ${backups().join(", ")}`);
     } catch (error) {
       problems.push(`  startup threw ${(error as Error).message}`);
     }
