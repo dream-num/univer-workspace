@@ -39,8 +39,8 @@ window.fetch = async (input, init) => {
   if (!url.pathname.startsWith("/api/")) return nativeFetch(input, init);
   let result: unknown;
   if (url.pathname === "/api/session") result = {
-    authenticated: true, githubOAuthEnabled: false, googleOAuthEnabled: false, discordOAuthEnabled: false, passwordAuthEnabled: true, trialDeployment: false, user,
-    authenticationMethods: { password: true, externalIdentities: [] },
+    authenticated: true, githubOAuthEnabled: false, googleOAuthEnabled: false, discordOAuthEnabled: false, passwordAuthEnabled: true, emailAuthEnabled: false, trialDeployment: false, user,
+    authenticationMethods: { password: true, email: null, externalIdentities: [] },
   };
   else if (url.pathname === "/api/spaces") result = { spaces: [space] };
   else if (url.pathname === "/api/worktrees") result = { items: [] };

@@ -194,6 +194,86 @@
             schema:
               $ref: ../schemas/common.yaml#/ErrorResponse
 
+/api/auth/email/code:
+  post:
+    tags: [Authentication]
+    operationId: requestEmailLoginCode
+    summary: Email a one-time sign-in code for passwordless Email login.
+    description: |
+      The code is valid for ten minutes and can be used once. A User and
+      Personal Space are created only after the code is verified, and the
+      response never reveals whether the address already has an account.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/EmailLoginCodeRequest
+    responses:
+      "202":
+        description: Code accepted for delivery.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/EmailLoginCodeIssued
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "403":
+        description: Email authentication is disabled for this deployment.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "429":
+        description: A code was requested too recently or too often for this address.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "503":
+        description: The configured Email provider could not deliver the code.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/auth/email/login:
+  post:
+    tags: [Authentication]
+    operationId: loginWithEmailCode
+    summary: Verify an emailed sign-in code and create the User on first sign-in.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/EmailLogin
+    responses:
+      "200":
+        description: Authenticated; a User and Personal Space are created when necessary.
+        headers:
+          Set-Cookie:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthenticatedSession
+      "400":
+        description: The code is invalid, expired, already used, or exceeded its attempt limit.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "403":
+        description: Email authentication is disabled for this deployment.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
 /api/auth/password:
   put:
     tags: [Authentication]

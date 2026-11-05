@@ -100,6 +100,7 @@ export function WikiShell({
         googleOAuthEnabled: currentSession.googleOAuthEnabled,
         discordOAuthEnabled: currentSession.discordOAuthEnabled,
         passwordAuthEnabled: currentSession.passwordAuthEnabled,
+        emailAuthEnabled: currentSession.emailAuthEnabled,
       });
       await navigate({
         to: "/login",

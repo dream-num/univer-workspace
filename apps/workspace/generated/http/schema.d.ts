@@ -139,6 +139,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/email/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a one-time sign-in code for passwordless Email login.
+         * @description The code is valid for ten minutes and can be used once. A User and
+         *     Personal Space are created only after the code is verified, and the
+         *     response never reveals whether the address already has an account.
+         */
+        post: operations["requestEmailLoginCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/email/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify an emailed sign-in code and create the User on first sign-in. */
+        post: operations["loginWithEmailCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/password": {
         parameters: {
             query?: never;
@@ -1751,6 +1790,7 @@ export interface components {
             googleOAuthEnabled: boolean;
             discordOAuthEnabled: boolean;
             passwordAuthEnabled: boolean;
+            emailAuthEnabled: boolean;
         };
         ExternalIdentitySummary: {
             /** @enum {string} */
@@ -1759,6 +1799,11 @@ export interface components {
         };
         AuthenticationMethods: {
             password: boolean;
+            /**
+             * Format: email
+             * @description Verified Email address used for passwordless sign-in, when the User has one.
+             */
+            email: string | null;
             externalIdentities: components["schemas"]["ExternalIdentitySummary"][];
         };
         AuthenticatedSession: {
@@ -1768,6 +1813,7 @@ export interface components {
             googleOAuthEnabled: boolean;
             discordOAuthEnabled: boolean;
             passwordAuthEnabled: boolean;
+            emailAuthEnabled: boolean;
             /** @description Whether this deployment is a trial environment without a data durability guarantee. */
             trialDeployment: boolean;
             user: components["schemas"]["User"];
@@ -1781,6 +1827,21 @@ export interface components {
         PasswordLogin: {
             username: string;
             password: string;
+        };
+        EmailLoginCodeRequest: {
+            /** Format: email */
+            email: string;
+        };
+        EmailLoginCodeIssued: {
+            /** @description Lifetime of the emailed code in seconds. */
+            expiresIn: number;
+            /** @description Seconds before another code may be requested for the same address. */
+            resendAfter: number;
+        };
+        EmailLogin: {
+            /** Format: email */
+            email: string;
+            code: string;
         };
         PasswordChange: {
             currentPassword: string;
@@ -2764,6 +2825,101 @@ export interface operations {
             };
             /** @description Username or password is invalid. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    requestEmailLoginCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailLoginCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Code accepted for delivery. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailLoginCodeIssued"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Email authentication is disabled for this deployment. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A code was requested too recently or too often for this address. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The configured Email provider could not deliver the code. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    loginWithEmailCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailLogin"];
+            };
+        };
+        responses: {
+            /** @description Authenticated; a User and Personal Space are created when necessary. */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedSession"];
+                };
+            };
+            /** @description The code is invalid, expired, already used, or exceeded its attempt limit. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Email authentication is disabled for this deployment. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

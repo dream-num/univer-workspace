@@ -18,9 +18,18 @@ explains behavior that spans multiple operations.
 
 ## Authentication
 
-Password Credentials and External Identities are optional authentication
-methods for the same User. GitHub, Google, and Discord login map the provider's stable user ID to an
-internal User. It never identifies or automatically links a User by email.
+Password Credentials, a verified Email address, and External Identities are
+optional authentication methods for the same User. GitHub, Google, and Discord
+login map the provider's stable user ID to an internal User. They never identify
+or automatically link a User by email.
+
+Email sign-in is passwordless: `POST /api/auth/email/code` emails a six-digit,
+single-use code and `POST /api/auth/email/login` exchanges it for a login
+session. A first successful verification creates the User and Personal Space;
+later verifications reuse that User. Codes expire after ten minutes, allow five
+incorrect attempts, and requests are rate limited per address. Responses never
+reveal whether an address already has an account. Email sign-in does not merge
+a User into an existing account created with another provider.
 
 External login and explicit linking use different OAuth intents. Both validate
 `state` and PKCE from a short-lived protected cookie. An access token used
@@ -31,7 +40,8 @@ CLI creates a ten-minute request containing a high-entropy device code and a
 human-verifiable code. A signed-in browser explicitly approves the matching
 code; the CLI then exchanges the device code exactly once for its own normal
 login session. Pending requests are bounded, process-local, and non-durable.
-They contain no browser cookie, password, or external OAuth access token.
+They contain no browser cookie, password, Email verification code, or external
+OAuth access token.
 
 `GET /api/session` returns `200` for both authenticated and anonymous clients so
 React can use it as its application bootstrap request.

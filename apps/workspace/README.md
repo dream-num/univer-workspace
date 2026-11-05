@@ -187,10 +187,61 @@ Password registration, password login, and password changes stay available unles
 together with `GITHUB_ALLOWED_ORGANIZATIONS` and leaves Google and Discord
 unset, so the only browser sign-in path is GitHub membership in a listed
 organization. The process refuses to start when password authentication is off
-and none of GitHub, Google, or Discord OAuth is configured. Existing sessions remain valid until they
+and no Email, GitHub, Google, or Discord sign-in method is configured. Existing sessions remain valid until they
 expire or are logged out. A user who only has a password cannot sign in again
 after that, and a stored password no longer counts as a remaining sign-in
 method when unlinking GitHub, Google, or Discord.
+
+Passwordless Email sign-in is enabled when `EMAIL_AUTH_ENABLED=true` or when any
+`EMAIL_SMTP_*` or `EMAIL_FROM` value is configured. The browser requests a
+six-digit code, and the first successful verification creates the User and
+Personal Space. Codes expire after ten minutes, allow five incorrect attempts,
+and can be requested at most once per minute and five times per hour per address.
+Requests never reveal whether an address already has an account.
+`EMAIL_PROVIDER=console` writes codes to the server log and is intended for local
+development only. For production, point SMTP at your provider; any SMTP provider
+works, including the AWS SES SMTP endpoint:
+
+```text
+EMAIL_PROVIDER=smtp
+EMAIL_FROM=no-reply@example.com
+EMAIL_FROM_NAME=Univer Workspace
+EMAIL_SMTP_HOST=email-smtp.us-east-1.amazonaws.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=<SES SMTP username>
+EMAIL_SMTP_PASSWORD=<SES SMTP password>
+```
+
+The verification email itself is English-only and does not follow the browser
+interface language. `EMAIL_SMTP_USER` and `EMAIL_SMTP_PASSWORD` are written
+exactly as the provider shows them; the SMTP client performs the AUTH encoding, so do not Base64-encode
+or URL-escape them yourself. SES SMTP credentials are separate from IAM access
+keys; create them in the SES console after verifying the sending domain or address. A sandbox SES account can
+only send to verified recipients. `EMAIL_SMTP_PORT=465` enables implicit TLS and
+is used when `EMAIL_SMTP_SECURE` is unset.
+
+An `Invalid login: 535 5.7.8 Authentication Credentials Invalid` response from
+SES means the credentials, not the message, were rejected. Check in this order:
+the SMTP username is the access key ID shown when generating SES SMTP
+credentials (not an IAM user name or IAM secret key), the SMTP password is the
+generated value for that username, and both were created in the same region as
+`EMAIL_SMTP_HOST` (SES SMTP credentials are region-scoped). Regenerating the
+IAM access key invalidates the derived SMTP password. To isolate the deployment
+from the mail settings, verify the same values directly:
+
+```bash
+node --env-file=.env --input-type=module -e '
+import nodemailer from "nodemailer";
+const transport = nodemailer.createTransport({
+  host: process.env.EMAIL_SMTP_HOST,
+  port: Number(process.env.EMAIL_SMTP_PORT ?? 587),
+  secure: process.env.EMAIL_SMTP_SECURE === "true",
+  auth: { user: process.env.EMAIL_SMTP_USER, pass: process.env.EMAIL_SMTP_PASSWORD },
+});
+await transport.verify();
+console.log("SMTP authentication succeeded");
+'
+```
 
 Set `TRIAL_DEPLOYMENT=true` on a public trial deployment. After signing in, each
 User sees a dialog stating that the environment does not guarantee data
@@ -204,8 +255,8 @@ creates a ten-minute, one-time authorization request and prints a `/cli-login`
 URL plus verification code, persists the pending request locally, and exits.
 After the user approves the matching code in their own browser, the Agent runs
 `uvw auth login --complete` to exchange it once; neither command
-waits or polls. If necessary, the user can first sign in with GitHub, Google,
-Discord, or a password and return to the approval page. The CLI receives a separate
+waits or polls. If necessary, the user can first sign in with an Email code, GitHub,
+Google, Discord, or a password and return to the approval page. The CLI receives a separate
 normal `workspace_session`; it never
 receives the browser cookie, Workspace password, or provider access token.
 Pending authorization requests are process-local and intentionally disappear
@@ -225,8 +276,9 @@ The redirect must exactly match `GOOGLE_CALLBACK_URL`. Workspace requests the
 `openid email profile` scopes, sends PKCE plus the client secret on the token
 exchange, and stores the stable OpenID Connect `sub` claim as the Provider
 Subject. The access token is used only to load the Google profile during
-sign-in and is not persisted. Workspace does not identify or automatically
-link a User by email address.
+sign-in and is not persisted. Google login does not identify or automatically
+link a User by email address; the same person who signs in both with Google and
+with an Email code gets two separate Workspace accounts.
 
 Discord OAuth login and account linking are enabled when
 `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `DISCORD_CALLBACK_URL` are
@@ -350,19 +402,19 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V12 product databases to V13 automatically.
+backs up and migrates supported V0 through V13 product databases to V14 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` is unchanged. Product V13 extends External Identities with the Google Provider; V12 added Space slugs and Worktree numbers; V11 added the Space description; V10 added Space stars; V9 added
+`history=2`; `comment=1` is unchanged. Product V14 adds Email identities and Email login codes; V13 added the Google Provider; V12 added Space slugs and Worktree numbers; V11 added the Space description; V10 added Space stars; V9 added
 Issue tables and V8 added content-permission tables. Before creating
 application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V13,
+2. Start a single new instance. Startup first prepares the product database to V14,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -415,12 +467,14 @@ repeat migration or backup. Rollback requires stopping V12 and restoring the
 pre-upgrade product backup, not just running the old application image.
 V13 extends the External Identity Provider CHECK to allow `google`. The migration
 rebuilds only `external_identities` and preserves every existing row, column and
-constraint. For a V13 rollout, stop every old Workspace instance, start one V13
-instance and wait for migration and health checks to succeed, then restore normal
-service; do not let V12 and V13 processes write the same SQLite file concurrently.
-Startup creates and validates a `.v12-backup-…sqlite` backup before the V12 → V13
-transaction. Rollback requires stopping V13 and restoring the pre-upgrade product
-backup.
+constraint.
+V14 adds `user_emails` and `email_login_codes` for passwordless Email sign-in.
+The migration is additive: no existing table or row is rewritten. For a V14
+rollout, stop every old Workspace instance, start one V14 instance and wait for
+migration and health checks to succeed, then restore normal service; do not let
+V13 and V14 processes write the same SQLite file concurrently. Startup creates and
+validates a `.v13-backup-…sqlite` backup before the V13 → V14 transaction.
+Rollback requires stopping V14 and restoring the pre-upgrade product backup.
 
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
 addresses repositories by `owner/slug`.

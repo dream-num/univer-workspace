@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V13 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V14 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -41,14 +41,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V13；
-- V13：校验 Schema 指纹；
-- V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V13；
-- V0：一致性备份后直接迁移到 V13；
+- Fresh：创建 V14；
+- V14：校验 Schema 指纹；
+- V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V14；
+- V0：一致性备份后直接迁移到 V14；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V13 Query。
+Worktree 等业务模块只编译和运行 V14 Query。
 
 V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
@@ -62,6 +62,11 @@ Session 与 Access Resolver，公开读取者和已有成员均可 Star；收藏
 V11 为 `spaces` 增加纯文本 `description`（至多 350 字符）。`SpaceView.description` 随 `GET /api/spaces`、
 `GET /api/spaces/{spaceId}` 返回，`PATCH /api/spaces/{spaceId}` 可修改，权限与重命名 Space 相同；空字符串清除。
 Browser 的 Code tab 在 About 区展示该简介，Settings 提供编辑入口。简介不替代 HTML 页面，也不进入协同库。
+V13 扩展 External Identity Provider，允许 Google 登录。
+V14 为邮箱验证码登录新增 `user_emails` 与 `email_login_codes`：验证码只保存 scrypt Hash，
+十分钟过期、单次使用并限制尝试与请求频率；验证成功后才在同一事务中创建 User、Personal Space、
+邮箱身份和 Session。邮件发送由 `EmailSender` 接口承担，配置层提供 SMTP（含 SES SMTP）与
+仅写入 Server 日志的 console Provider，产品模块不依赖具体邮件厂商。
 V12 为 Team Space 增加 `slug`、为 Worktree 增加仓库级 `number`，供 Browser 与 CLI 以 `owner/slug` 和 `#N` 寻址。
 Spaces Module 在创建时校验或生成 slug（`POST /api/team-spaces` 的 `slug` 可选，供 DSH 插件等未更新的调用方继续使用），
 `PATCH /api/spaces/{spaceId}` 可修改，`GET /api/spaces/lookup?owner=&slug=` 解析 `owner/slug` 与 `owner/personal`，
@@ -78,7 +83,7 @@ SDK 1.0.0 启动时先准备产品数据库，再运行隔离的 `prepareCollabo
 应用 Service。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 2、Worktree 3、History 2；
-Comment 1 不变。产品数据库先准备到 V13，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Comment 1 不变。产品数据库先准备到 V14，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
@@ -115,8 +120,8 @@ Unit 加入继续使用现有资源权限检查；Link Sharing 变更保留既�
 Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session。Server 在进程内
 保存有容量上限、十分钟过期的待授权请求；已登录 Browser 确认人类可核对的验证码后，高熵
 Device Code 只能兑换一次，并为 CLI 创建独立、持久化的 `login_sessions` 行。Server 重启可以
-取消尚未确认或兑换的请求，但不影响已经签发的 CLI Session。Browser Cookie、密码、GitHub、Google
-和 Discord Token 都不会经过 Agent。
+取消尚未确认或兑换的请求，但不影响已经签发的 CLI Session。Browser Cookie、密码、邮箱验证码、
+GitHub、Google 和 Discord Token 都不会经过 Agent。
 
 ## Access Resolver
 
