@@ -36,6 +36,8 @@ as the recipe.
 - Record the feature ID and entry point with every artifact name.
 - An unreachable entry point is reported with the command tried and the unmet
   precondition. Do not report it as verified through a different path.
+- Page theme is a per-browser `localStorage` value. Each journey states the mode it expects.
+  Assume Wiki on a fresh session.
 - OAuth sign-in (GitHub, Google, Discord) and browser-approved `uvw auth login` need a real
   provider or a human. They are out of scope; report them as skipped.
 
@@ -53,5 +55,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   editing, persistence after reload, trunk readback via uvw.
 - [Pull requests (Worktrees)](./pull-requests.md): uvw PR create, unit create, execute,
   ready, and merge, then the merged file seen from uvw and the browser.
+- [Page theme: Wiki and Repository modes](./page-theme-wiki-repository.md): Application settings
+  entry in each mode, theme persistence, and the Repository directory, pull request, issue,
+  recent and pages views.
 - [Issues](./issues.md): Team Space repo creation, Issue open via uvw, comment and close
   in the browser, timeline readback via uvw.
