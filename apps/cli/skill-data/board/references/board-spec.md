@@ -167,6 +167,13 @@ not solve routes or make an incomplete graph plan applicable. Preserve authored 
 and native layout owners. Re-read leaf world bounds, text, membership and bindings after fitting, then obtain fresh
 rendered label measurements and screenshots. Earlier layout plans can be stale after frame changes.
 
+For a newly generated diagram, request a fresh rendered port plan before label planning and final screenshots,
+including when diagnostics are already clean. With native support, an automatic backtracking route can move one
+endpoint onto an empty opposite face only when scene length, bends and backtracking all decrease without new
+findings. Apply a ready nonempty plan explicitly, verify full Undo/Redo and unchanged text, styles, nodes and
+other endpoint bindings, then remeasure and obtain a fresh label plan. Inspection alone never applies the repair;
+keep incomplete plans and authored/manual constraints visible.
+
 New ordinary groups with external captions can set `containerData.headerSize` to `0` through `updateElement`
 before child insertion, then fit and remeasure. Patch the complete element and preserve source constraints; leave
 existing authored groups, swimlanes and native layout owners unchanged.

@@ -13,7 +13,11 @@ import { createUnitLayoutLint } from "@univer-cli/unit-layout-lint";
 import { realizeVisualFixture, visualVariants } from "./board-visual-fixtures.mjs";
 import { captureVisualEvidence } from "./board-visual-evidence.mjs";
 import { elementProfiles, realizeElementFixture } from "./board-element-fixtures.mjs";
-import { repairMeasuredVisualText, verifyRenderedLabelPlan } from "./board-visual-repair.mjs";
+import {
+  repairMeasuredVisualText,
+  verifyRenderedLabelPlan,
+  verifyRenderedPortPlan,
+} from "./board-visual-repair.mjs";
 
 // Keep SDK runtime notices intact on stderr so stdout remains one machine-readable summary.
 console.log = console.info = console.debug = (...args) => console.error(...args);
@@ -370,6 +374,14 @@ try {
             redoExact: true,
           };
         }
+        const portRepair = visualSuite
+          ? await verifyRenderedPortPlan(
+              board,
+              createUnitLayoutLint({ runtime: renderRuntime }),
+              fixture.renderUnits,
+            )
+          : undefined;
+        if (portRepair) fixture.verify();
         const analysisAfter = board.analyzeModelLayout(48);
         const hardRules = new Set([
           "element-overlap",
@@ -416,7 +428,7 @@ try {
             ? (rendered?.labelProximity ?? { status: "incomplete" })
             : undefined;
         const quality = requireClean
-          ? qualityResult(plan, analysisAfter, labelRepair, labelProximity)
+          ? qualityResult(plan, analysisAfter, labelRepair, labelProximity, portRepair)
           : undefined;
         const result = {
           suite: values.suite,
@@ -437,6 +449,7 @@ try {
           snapshot: board.save(),
           rendered,
           labelRepair,
+          portRepair,
           semanticCoverage: fixture.semanticCoverage,
           quality,
           ...(visualEvidence
@@ -467,6 +480,9 @@ try {
           graphApplication,
           renderedStatus: rendered?.status ?? "not-run",
           labelPlanStatus: labelRepair?.before.analyses[0]?.labelPlan?.status ?? "not-run",
+          portPlanStatus: portRepair?.before.analyses[0]?.portPlan?.status ?? "not-run",
+          portPatchCount: portRepair?.before.analyses[0]?.portPlan?.patches.length ?? 0,
+          portApplication: portRepair?.application ?? { status: "not-run", applied: false },
           labelPatchCount: labelRepair?.before.analyses[0]?.labelPlan?.patches.length ?? 0,
           labelApplication: labelRepair?.application ?? { status: "not-run", applied: false },
           ...(visualEvidence ? { visualReviewStatus: "pending" } : {}),
@@ -548,7 +564,7 @@ else if (requireClean && results.some((result) => result.quality.status !== "cle
   process.exitCode = 2;
 }
 
-function qualityResult(plan, model, labels, labelProximity) {
+function qualityResult(plan, model, labels, labelProximity, ports) {
   const report = labels?.after;
   const status = !report
     ? "not-run"
@@ -556,6 +572,7 @@ function qualityResult(plan, model, labels, labelProximity) {
         labelProximity?.status === "incomplete" ||
         plan?.status === "incomplete" ||
         labels.before.analyses[0].labelPlan.status === "incomplete" ||
+        ports?.before.analyses[0].portPlan.status === "incomplete" ||
         report.status === "incomplete"
       ? "incomplete"
       : labels.automaticLabelDistance?.status === "findings" ||

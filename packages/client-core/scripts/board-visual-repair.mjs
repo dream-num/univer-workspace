@@ -560,6 +560,89 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
   };
 }
 
+export async function verifyRenderedPortPlan(board, lint, renderUnits = {}) {
+  const beforeSnapshot = snapshot(board);
+  const input = {
+    unitType: "board",
+    unitData: beforeSnapshot,
+    ...renderUnits,
+    mode: "rendered",
+    includePortPlan: true,
+    maximumAutomaticLabelDistance: 12,
+  };
+  const before = await lint.lint(input);
+  assert.deepEqual(snapshot(board), beforeSnapshot, "Rendered port planning changed the source");
+  assert.equal(before.analyses.length, 1, "Fixture unexpectedly changed page count");
+  const plan = before.analyses[0].portPlan;
+  assert.ok(plan, "Requested rendered port plan unavailable");
+  let application = { status: "unchanged", applied: false };
+  if (plan.status === "ready" && plan.patches.length > 0) {
+    assert.equal(board.applyLayoutPlan(plan), true, "Rendered port plan rejected");
+    const afterApply = snapshot(board);
+    const normalized = JSON.parse(JSON.stringify(afterApply));
+    for (const collection of ["pages", "slides"]) {
+      for (const [pageId, page] of Object.entries(beforeSnapshot[collection] ?? {})) {
+        for (const patch of plan.patches) {
+          const original = page.elements[patch.elementId];
+          const changed = normalized[collection][pageId].elements[patch.elementId];
+          assert.equal(original?.type, "connector", "Port plan changed a node");
+          assert.equal(patch.transform, undefined);
+          assert.equal(patch.labels, undefined);
+          // Native endpoint writes refresh the connector frame and fallback points.
+          changed.transform = original.transform;
+          for (const side of ["start", "end"]) {
+            const from = original.connectorData[side];
+            const to = changed.connectorData[side];
+            assert.equal(to.kind, from.kind);
+            assert.equal(to.shapeId, from.shapeId, "Port plan changed relation ownership");
+            assert.equal(
+              to.connectionSiteId,
+              patch[side]?.connectionSiteId ?? from.connectionSiteId,
+            );
+            assert.equal(
+              to.connectionPosition,
+              patch[side]?.connectionPosition ?? from.connectionPosition,
+            );
+            to.connectionSiteId = from.connectionSiteId;
+            to.connectionPosition = from.connectionPosition;
+            if (from.fallbackPoint === undefined) delete to.fallbackPoint;
+            else to.fallbackPoint = from.fallbackPoint;
+          }
+        }
+      }
+    }
+    assert.deepEqual(
+      normalized,
+      beforeSnapshot,
+      "Port plan changed content, styles, peers or resources",
+    );
+    assert.equal(board.undo(), true);
+    assert.deepEqual(snapshot(board), beforeSnapshot, "Port plan Undo lost data");
+    assert.equal(board.redo(), true);
+    assert.deepEqual(snapshot(board), afterApply, "Port plan Redo lost data");
+    assert.equal(board.applyLayoutPlan(plan), false, "Stale rendered port plan accepted");
+    application = {
+      status: "applied-undo-redo",
+      applied: true,
+      changed: !isDeepStrictEqual(beforeSnapshot, afterApply),
+      undoExact: true,
+      redoExact: true,
+      staleRejected: true,
+    };
+  } else if (plan.status === "incomplete") {
+    assert.equal(board.applyLayoutPlan(plan), false, "Incomplete port plan accepted");
+    assert.deepEqual(snapshot(board), beforeSnapshot);
+    application = { status: "rejected-incomplete", applied: false, rejectedWithoutMutation: true };
+  } else {
+    assert.equal(plan.status, "ready");
+    assert.deepEqual(snapshot(board), beforeSnapshot);
+  }
+  const beforeRecheck = snapshot(board);
+  const after = await lint.lint({ ...input, unitData: beforeRecheck, includePortPlan: false });
+  assert.deepEqual(snapshot(board), beforeRecheck, "Port reinspection changed the source");
+  return { before, after, application };
+}
+
 export async function verifyRenderedLabelPlan(
   board,
   lint,

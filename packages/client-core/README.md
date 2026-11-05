@@ -103,6 +103,10 @@ lifeline 在末条消息后保留 72 单位。它只收紧 factory 创建的初�
 和已保存的 lifeline 配置不因此改写。较高的实测标签或自调用需要增加相应间距并重新检查。
 生成标题跟随真实结构范围，保留全部时间顺序、文字、字号与原生所有权。
 上述是新生成模板的展示选择，不自动改动已导入的固定边界或端点。
+业务视觉场景在标签规划前显式请求公开 rendered port plan，包括诊断已 clean 的新图。只应用 ready 的非空计划；
+记录实际 apply、完整 Undo/Redo、stale 拒绝，以及文字、样式、节点、其他端点绑定和资源保持。
+原生自动端口可在没有新增诊断且路径、折点和回折均减少时选择空置的反向面；fixed/manual/native 约束保持不变。
+每次端口应用后重新获取 model/rendered 诊断和标签计划，incomplete 端口计划使视觉质量状态保持 incomplete。
 Actor 的新生成标题区与符号绘制区分别计算；通过 Shape Facade 的 `getConnectionSites()` 读取实际手臂
 连接点，保留 SDK 比例公式和绘制顺序。旧 SDK 的固定数字路径继续兼容，不改写已有自定义 Actor。
 生成标题在布局、fit 和文本扩容后对齐实际内容范围，单独验证只改标题及精确 Undo/Redo，避免标题留在旧 seed
