@@ -118,6 +118,13 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   through a backed-up V11 → V12 startup migration that backfills nothing. V14 adds an optional verified Email address on Users
   (`users.email`) and single-use Email login codes through a backed-up V13 → V14 startup migration. Old and new writers must not
   share the product file.
+- `GET /api/spaces` lists only Spaces the caller owns or has joined, and every `SpaceView` carries
+  `affiliation` (`owner`, `member`, or `none`). Public Spaces the caller has not joined are listed only by
+  `GET /api/spaces/explore`; starred Spaces by `GET /api/spaces/starred`, filtered by current access. Listing
+  never grants or reveals more than `GET /api/spaces/{spaceId}`. Sidebar pins are protected product User-Space
+  preferences, not memberships or access grants: `GET/PUT/DELETE /api/spaces/pins` read, replace, and reset the
+  caller's ordered list. Product V15 adds them, with a `space_stars(user_id)` index, through a backed-up
+  V14 → V15 startup migration that backfills nothing.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), sharing state, and user-authored
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal
