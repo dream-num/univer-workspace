@@ -4,6 +4,7 @@ import {
   type NodeAuthorizationRow,
   type ResolvedNodeRow,
   type ResourceMappingRow,
+  type SpaceAccessRow,
 } from "./access.repository.js";
 import type {
   AccessRole,
@@ -156,23 +157,7 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     resolveSpace(userId, spaceId) {
       const row = repository.resolveSpace(userId, spaceId);
       if (!row) return null;
-      const assignedRole = row.owner_user_id === userId ? "owner" : row.member_role;
-      const member = userId !== ANONYMOUS_USER_ID && assignedRole !== null;
-      const role = highestRole(
-        userId === ANONYMOUS_USER_ID ? null : assignedRole,
-        row.public_read ? "viewer" : null,
-      );
-      if (!role) return null;
-      return {
-        id: row.id,
-        type: row.type,
-        name: row.name,
-        ownerUserId: row.owner_user_id,
-        publicRead: Boolean(row.public_read),
-        role,
-        member,
-        capabilities: spaceCapabilities(role, { type: row.type, member }),
-      };
+      return spaceAccessFromRow(userId, row);
     },
     resolveNode,
     resolveResource(userId, resourceId) {
@@ -181,6 +166,26 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     resolveUnit(userId, unitId) {
       return resourceAccess(userId, repository.findResourceByUnitId(unitId));
     },
+  };
+}
+
+export function spaceAccessFromRow(userId: string, row: SpaceAccessRow): SpaceAccess | null {
+  const assignedRole = row.owner_user_id === userId ? "owner" : row.member_role;
+  const member = userId !== ANONYMOUS_USER_ID && assignedRole !== null;
+  const role = highestRole(
+    userId === ANONYMOUS_USER_ID ? null : assignedRole,
+    row.public_read ? "viewer" : null,
+  );
+  if (!role) return null;
+  return {
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    ownerUserId: row.owner_user_id,
+    publicRead: Boolean(row.public_read),
+    role,
+    member,
+    capabilities: spaceCapabilities(role, { type: row.type, member }),
   };
 }
 

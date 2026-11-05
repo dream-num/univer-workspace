@@ -515,11 +515,82 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Spaces discoverable by the current User. */
+        /**
+         * List Spaces the current User owns or has joined.
+         * @description Public Spaces belonging to others are available through Explore. Starred Spaces have a separate list.
+         */
         get: operations["listSpaces"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/starred": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List starred Spaces the current User can still read.
+         * @description Ordered by newest star first, then Space ID. Stars retained after access loss are omitted until access returns.
+         */
+        get: operations["listStarredSpaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/explore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List public Spaces the current User neither owns nor has joined.
+         * @description Ordered by total stars descending, then name and ID. Includes starred public Spaces. This list is unpaginated.
+         */
+        get: operations["exploreSpaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the current User's ordered sidebar pins.
+         * @description Owned or joined Spaces and starred public Spaces are eligible. Ineligible stored pins are omitted. If none survive, returns the first eight owned or joined Spaces with customized false. Stored pins remain available if eligibility returns.
+         */
+        get: operations["getSpacePins"];
+        /**
+         * Replace the ordered sidebar pins.
+         * @description Accepts 1 to 12 unique IDs for owned or joined Spaces or starred public Spaces. Invalid, duplicate, over-limit, missing and ineligible IDs return the same 400 INVALID_INPUT with field spaceIds. Replacement is atomic and idempotent.
+         */
+        put: operations["setSpacePins"];
+        post?: never;
+        /**
+         * Reset the sidebar pins to their defaults.
+         * @description Deletes stored pins and returns the first eight owned or joined Spaces with customized false. Idempotent.
+         */
+        delete: operations["resetSpacePins"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1636,6 +1707,7 @@ export interface components {
                 id: string;
                 username: string;
             };
+            affiliation: components["schemas"]["SpaceAffiliation"];
             accessRole: components["schemas"]["SpaceRole"];
             capabilities: components["schemas"]["SpaceCapabilities"];
         };
@@ -1893,6 +1965,11 @@ export interface components {
             /** @description Whether anyone with a link can browse and open this Space read-only. */
             publicRead: boolean;
         };
+        /**
+         * @description Ownership or Team membership, independent of the effective access role. Public readers have none.
+         * @enum {string}
+         */
+        SpaceAffiliation: "owner" | "member" | "none";
         /** @enum {string} */
         SpaceRole: "owner" | "admin" | "editor" | "viewer";
         SpaceCapabilities: {
@@ -1908,8 +1985,30 @@ export interface components {
             /** @description The caller may create, change and delete this Space's Issue labels. */
             manageIssueLabels: boolean;
         };
+        MySpaceView: components["schemas"]["SpaceView"] & {
+            /** @enum {string} */
+            affiliation: "owner" | "member";
+        };
+        MySpaceList: {
+            spaces: components["schemas"]["MySpaceView"][];
+        };
         SpaceList: {
             spaces: components["schemas"]["SpaceView"][];
+        };
+        SpacePins: {
+            /** @description True when at least one stored pin is still eligible. Otherwise spaces contains the first eight owned or joined Spaces. */
+            customized: boolean;
+            /**
+             * @description Maximum number of pins accepted by the server.
+             * @constant
+             */
+            limit: 12;
+            /** @description Eligible Spaces in pin order, or the default order when customized is false. */
+            spaces: components["schemas"]["SpaceView"][];
+        };
+        SetSpacePins: {
+            /** @description Ordered owned or joined Spaces, or public Spaces starred by the current User. */
+            spaceIds: string[];
         };
         /** @description Letters, digits, `.`, `_` and `-`, starting with a letter or digit. Compared case-insensitively. `personal` is reserved. */
         SpaceSlug: string;
@@ -3461,7 +3560,117 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["MySpaceList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listStarredSpaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching Spaces in display order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["SpaceList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    exploreSpaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching Spaces in display order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getSpacePins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current pins or defaults. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpacePins"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setSpacePins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSpacePins"];
+            };
+        };
+        responses: {
+            /** @description Current pins or defaults. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpacePins"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    resetSpacePins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current pins or defaults. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpacePins"];
                 };
             };
             401: components["responses"]["Unauthorized"];

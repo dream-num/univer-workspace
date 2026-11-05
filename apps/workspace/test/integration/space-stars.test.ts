@@ -49,7 +49,7 @@ it("persists per-user Space stars across restart and enforces access at the HTTP
       .spaces.find((space) => space.type === "personal")!;
     expect(team).toMatchObject({ owner: { id: owner.view.user.id, username: "owner" } });
     expect(
-      application.spaces.list(reader.view.user.id).spaces.find((space) => space.id === team.id),
+      application.spaces.get(reader.view.user.id, team.id),
     ).toMatchObject({ owner: { username: "owner" } });
     server = createServer(application.app);
     let origin = await listen(server);

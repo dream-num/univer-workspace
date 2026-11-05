@@ -4,7 +4,7 @@ export {};
 const accessRole = new URLSearchParams(location.search).get("role") === "viewer" ? "viewer" : "owner";
 const nativeFetch = window.fetch.bind(window);
 const space = {
-  id: "preview", name: "Design preview", type: "personal", accessRole, publicRead: false,
+  id: "preview", name: "Design preview", type: "personal", accessRole, affiliation: accessRole === "owner" ? "owner" : "none", publicRead: false,
   capabilities: { browseRoot: true, createAtRoot: false, renameSpace: false, manageMembers: false, viewTrash: false },
 };
 const user = { id: "preview-user", username: "preview", displayName: "Preview", avatarUrl: null };
@@ -42,7 +42,10 @@ window.fetch = async (input, init) => {
     authenticated: true, githubOAuthEnabled: false, googleOAuthEnabled: false, discordOAuthEnabled: false, passwordAuthEnabled: true, emailAuthEnabled: false, trialDeployment: false, user,
     authenticationMethods: { password: true, email: null, externalIdentities: [] },
   };
-  else if (url.pathname === "/api/spaces") result = { spaces: [space] };
+  else if (url.pathname === "/api/spaces") result = { spaces: accessRole === "owner" ? [space] : [] };
+  else if (url.pathname === "/api/spaces/preview") result = space;
+  else if (url.pathname === "/api/spaces/pins") result = { spaces: accessRole === "owner" ? [space] : [], customized: false, limit: 12 };
+  else if (url.pathname === "/api/spaces/starred" || url.pathname === "/api/spaces/explore") result = { spaces: [] };
   else if (url.pathname === "/api/worktrees") result = { items: [] };
   else if (url.pathname.endsWith("/link-sharing")) result = { enabled: true, role: "viewer" };
   else if (url.pathname.endsWith("/grants")) result = { grants: [] };

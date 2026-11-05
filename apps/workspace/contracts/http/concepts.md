@@ -74,6 +74,30 @@ Both policies use existing settings: already-enabled sharing/public read becomes
 anonymous-readable on upgrade. No additional switch or database migration is needed.
 HTML and referenced Units retain independent source permission checks.
 
+## Space lists and pins
+
+`GET /api/spaces` returns only owned or joined Spaces, ordered with the caller's
+Personal Space first, then owned Spaces, then joined Spaces, with name and ID as ties.
+Every `SpaceView` has an `affiliation` derived from ownership and membership.
+It is `owner`, `member`, or `none`; Team viewer members remain `member`.
+Public readers are `none` even though both have the effective `viewer` role.
+
+`GET /api/spaces/starred` returns readable starred Spaces by star time descending,
+then ID. Stars survive access loss, but hidden Spaces are omitted until access returns.
+`GET /api/spaces/explore` returns public Spaces the caller neither owns nor has joined,
+including starred ones, ordered by star count descending, then name and ID. It is unpaginated.
+These lists do not change detail, full-name lookup, anonymous access, or Node Grants.
+
+`GET /api/spaces/pins` returns `{ customized, limit, spaces }`. Pins can contain owned
+or joined Spaces and starred public Spaces. Stored rows retain their order and survive
+loss of eligibility, but ineligible rows are omitted. If no eligible row survives,
+`customized` is false and the first eight owned or joined Spaces are returned.
+`PUT /api/spaces/pins` accepts 1 to 12 unique eligible `spaceIds` in order and replaces
+the rows atomically. All invalid IDs and invalid arrays return the same
+`400 INVALID_INPUT` with `field: spaceIds`; missing and hidden IDs are indistinguishable.
+`DELETE /api/spaces/pins` resets to defaults. Both writes are idempotent.
+All Space list and pin endpoints require a login session and operate only for that User.
+
 ## Node discovery
 
 Node breadcrumbs contain only the path the current User may discover.

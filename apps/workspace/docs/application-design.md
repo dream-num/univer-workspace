@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V14 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V15 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -41,14 +41,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V14；
-- V14：校验 Schema 指纹；
-- V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V14；
-- V0：一致性备份后直接迁移到 V14；
+- Fresh：创建 V15；
+- V15：校验 Schema 指纹；
+- V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V15；
+- V0：一致性备份后直接迁移到 V15；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V14 Query。
+Worktree 等业务模块只编译和运行 V15 Query。
 
 V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
@@ -77,13 +77,28 @@ Issue 分配逻辑与 Worktree 创建都在 `BEGIN IMMEDIATE` 事务内取最大
 Browser 的公共 Repository Header 与 Tabs 供 Code、Issues、PR、Pages 和 Settings 页面复用；
 不改 tab 内部内容，Watch/Fork 和没有对应能力的 GitHub tab 不渲染。
 
+V15 增加 `space_pins` 与 `space_stars_user` 索引，使用已有备份、事务回滚、指纹、外键和完整性检查流程。
+所有列表入口均要求 Session。`GET /api/spaces` 只返回本人拥有或加入的 Space；
+`/api/spaces/starred` 返回当前仍可见的收藏；`/api/spaces/explore` 返回本人未拥有或加入的公开 Space。
+Explore 当前不分页，按收藏总数倒序、名称与 ID 排序。公开链接、匿名访问、Node Grant 和详情权限不变。
+`SpaceView.affiliation` 由 `SpaceAccess` 推导为 `owner | member | none`，本人列表只允许前两种。
+
+Access Module 维护共享的 Space 可见性 SQL、列和 Membership Join，以及纯函数 `spaceAccessFromRow`。
+Spaces Repository 的 `listViews` 只接受 `mine | starred | explore | pins`，每种范围只执行一次 SQL，
+复用访问投影和角色推导。所有 SpaceView 由一个 `toSpaceView` 构造。
+
+`GET/PUT/DELETE /api/spaces/pins` 管理当前用户有序侧栏选择。可固定本人拥有或加入的 Space，以及已收藏的公开 Space。
+GET 过滤不符合条件的存储行，没有剩余行则返回本人列表前 8 个，`customized = false`。
+PUT 校验 1 至 12 个唯一 ID，在同一事务中检查资格并完整替换；无效输入统一返回字段 `spaceIds` 的 400。
+DELETE 删除选择并返回默认列表；两个写方法均幂等。返回 `limit = 12` 供客户端使用。
+
 ## Collaboration SDK 升级边界
 
 SDK 1.0.0 启动时先准备产品数据库，再运行隔离的 `prepareCollaborationDatabase`，最后构造
 应用 Service。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 2、Worktree 3、History 2；
-Comment 1 不变。产品数据库先准备到 V14，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Comment 1 不变。产品数据库先准备到 V15，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
@@ -146,7 +161,7 @@ interface AccessResolver {
 - Resource Node 是否有子 Node（与内容访问彼此独立）。
 
 `SpaceAccess.member` 区分 Space Owner/成员与只靠 `public_read` 得到 `viewer` 的读者。Issue 写入按它判断，
-其余模块继续只看 Role。
+SpaceView 的 affiliation 也由该事实推导，权限判断仍使用 Role 和 Capability。
 
 调用者不直接查询授权表或从客户端字段推断权限。Move 同时验证 Source、Target、同
 Space 与后代链。

@@ -881,14 +881,101 @@ paths:
       tags:
         - Spaces
       operationId: listSpaces
-      summary: List Spaces discoverable by the current User.
+      summary: List Spaces the current User owns or has joined.
+      description: Public Spaces belonging to others are available through Explore. Starred Spaces have a separate list.
       responses:
         '200':
           description: Personal Space followed by owned and joined Team Spaces.
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/MySpaceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/spaces/starred:
+    get:
+      tags:
+        - Spaces
+      operationId: listStarredSpaces
+      summary: List starred Spaces the current User can still read.
+      description: Ordered by newest star first, then Space ID. Stars retained after access loss are omitted until access returns.
+      responses:
+        '200':
+          description: Matching Spaces in display order.
+          content:
+            application/json:
+              schema:
                 $ref: '#/components/schemas/SpaceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/spaces/explore:
+    get:
+      tags:
+        - Spaces
+      operationId: exploreSpaces
+      summary: List public Spaces the current User neither owns nor has joined.
+      description: Ordered by total stars descending, then name and ID. Includes starred public Spaces. This list is unpaginated.
+      responses:
+        '200':
+          description: Matching Spaces in display order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/spaces/pins:
+    get:
+      tags:
+        - Spaces
+      operationId: getSpacePins
+      summary: Get the current User's ordered sidebar pins.
+      description: Owned or joined Spaces and starred public Spaces are eligible. Ineligible stored pins are omitted. If none survive, returns the first eight owned or joined Spaces with customized false. Stored pins remain available if eligibility returns.
+      responses:
+        '200':
+          description: Current pins or defaults.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacePins'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags:
+        - Spaces
+      operationId: setSpacePins
+      summary: Replace the ordered sidebar pins.
+      description: Accepts 1 to 12 unique IDs for owned or joined Spaces or starred public Spaces. Invalid, duplicate, over-limit, missing and ineligible IDs return the same 400 INVALID_INPUT with field spaceIds. Replacement is atomic and idempotent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetSpacePins'
+      responses:
+        '200':
+          description: Current pins or defaults.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacePins'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags:
+        - Spaces
+      operationId: resetSpacePins
+      summary: Reset the sidebar pins to their defaults.
+      description: Deletes stored pins and returns the first eight owned or joined Spaces with customized false. Idempotent.
+      responses:
+        '200':
+          description: Current pins or defaults.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacePins'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /api/team-spaces:
@@ -2974,6 +3061,7 @@ components:
         - type: object
           required:
             - accessRole
+            - affiliation
             - capabilities
             - owner
             - description
@@ -3008,6 +3096,8 @@ components:
                 username:
                   type: string
               description: The authoritative Space owner, including when viewed by another User.
+            affiliation:
+              $ref: '#/components/schemas/SpaceAffiliation'
             accessRole:
               $ref: '#/components/schemas/SpaceRole'
             capabilities:
@@ -3762,6 +3852,13 @@ components:
         publicRead:
           type: boolean
           description: Whether anyone with a link can browse and open this Space read-only.
+    SpaceAffiliation:
+      type: string
+      enum:
+        - owner
+        - member
+        - none
+      description: Ownership or Team membership, independent of the effective access role. Public readers have none.
     SpaceRole:
       type: string
       enum:
@@ -3801,6 +3898,28 @@ components:
         manageIssueLabels:
           type: boolean
           description: The caller may create, change and delete this Space's Issue labels.
+    MySpaceView:
+      allOf:
+        - $ref: '#/components/schemas/SpaceView'
+        - type: object
+          required:
+            - affiliation
+          properties:
+            affiliation:
+              type: string
+              enum:
+                - owner
+                - member
+    MySpaceList:
+      type: object
+      additionalProperties: false
+      required:
+        - spaces
+      properties:
+        spaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/MySpaceView'
     SpaceList:
       type: object
       additionalProperties: false
@@ -3811,6 +3930,42 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SpaceView'
+    SpacePins:
+      type: object
+      additionalProperties: false
+      required:
+        - customized
+        - limit
+        - spaces
+      properties:
+        customized:
+          type: boolean
+          description: True when at least one stored pin is still eligible. Otherwise spaces contains the first eight owned or joined Spaces.
+        limit:
+          type: integer
+          const: 12
+          description: Maximum number of pins accepted by the server.
+        spaces:
+          type: array
+          maxItems: 12
+          description: Eligible Spaces in pin order, or the default order when customized is false.
+          items:
+            $ref: '#/components/schemas/SpaceView'
+    SetSpacePins:
+      type: object
+      additionalProperties: false
+      required:
+        - spaceIds
+      properties:
+        spaceIds:
+          type: array
+          minItems: 1
+          maxItems: 12
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+          description: Ordered owned or joined Spaces, or public Spaces starred by the current User.
     SpaceSlug:
       type: string
       minLength: 1
