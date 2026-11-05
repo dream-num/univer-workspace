@@ -6,8 +6,12 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL,
   avatar_url TEXT,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  email TEXT COLLATE NOCASE
 );
+CREATE UNIQUE INDEX IF NOT EXISTS users_email
+  ON users(email)
+  WHERE email IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS password_credentials (
   user_id TEXT PRIMARY KEY,
@@ -41,6 +45,20 @@ CREATE INDEX IF NOT EXISTS login_sessions_user
   ON login_sessions(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS login_sessions_expiry
   ON login_sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS email_login_codes (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL COLLATE NOCASE,
+  code_hash TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  consumed_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS email_login_codes_email
+  ON email_login_codes(email, created_at DESC);
+CREATE INDEX IF NOT EXISTS email_login_codes_expiry
+  ON email_login_codes(expires_at);
 
 CREATE TABLE IF NOT EXISTS spaces (
   id TEXT PRIMARY KEY,
@@ -670,4 +688,4 @@ BEGIN
   SELECT RAISE(ABORT, 'only a team space can have a slug, and personal is reserved');
 END;
 
-PRAGMA user_version = 13;
+PRAGMA user_version = 14;

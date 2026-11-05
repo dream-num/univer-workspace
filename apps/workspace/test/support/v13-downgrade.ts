@@ -1,9 +1,21 @@
+import { DROP_V14_SQL } from "./v14-downgrade.js";
+
 /**
- * Rebuilds External Identities with the V12 Provider CHECK so a schema.sql-built
- * fixture reads as V12: the Google Provider is absent, every other structure and
- * row is untouched.
+ * Removes the V14 Email identity tables so a schema.sql-built fixture reads as V13.
+ * Every other structure and row is untouched.
+ */
+export const DOWNGRADE_TO_V13_SQL = `
+  ${DROP_V14_SQL}
+  PRAGMA user_version = 13;
+`;
+
+/**
+ * Rebuilds External Identities with the V12 Provider CHECK, then removes the V14
+ * Email tables, so a schema.sql-built fixture reads as V12: the Google Provider is
+ * absent and every other structure and row is untouched.
  */
 export const DOWNGRADE_TO_V12_SQL = `
+  ${DOWNGRADE_TO_V13_SQL}
   PRAGMA foreign_keys = OFF;
   ALTER TABLE external_identities RENAME TO external_identities_v13;
   CREATE TABLE external_identities (

@@ -29,6 +29,7 @@ describe("requireAuthenticatedSession", () => {
       googleOAuthEnabled: false,
       discordOAuthEnabled: false,
       passwordAuthEnabled: true,
+      emailAuthEnabled: false,
     });
 
     try {

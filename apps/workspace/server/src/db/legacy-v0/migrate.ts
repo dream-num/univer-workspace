@@ -108,6 +108,7 @@ export function migrateLegacyV0(database: DatabaseSync): void {
       ALTER TABLE spaces ADD COLUMN description TEXT NOT NULL DEFAULT '';
       ALTER TABLE spaces ADD COLUMN slug TEXT COLLATE NOCASE;
       ALTER TABLE worktrees ADD COLUMN number INTEGER;
+      ALTER TABLE users ADD COLUMN email TEXT COLLATE NOCASE;
     `);
     database.exec(readTargetSchema());
     copyCoreData(database, files, resourceByNode);
@@ -534,9 +535,9 @@ function validateMigrated(
   const version = database.prepare("PRAGMA user_version").get() as
     | { readonly user_version?: unknown }
     | undefined;
-  if (version?.user_version !== 13) {
+  if (version?.user_version !== 14) {
     throw new Error(
-      `Migrated database has user_version ${String(version?.user_version)} instead of 13.`
+      `Migrated database has user_version ${String(version?.user_version)} instead of 14.`
     );
   }
 }

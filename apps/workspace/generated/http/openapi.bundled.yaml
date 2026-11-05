@@ -16,7 +16,7 @@ tags:
   - name: Session
     description: Browser login session bootstrap and logout.
   - name: Authentication
-    description: Password, GitHub, Google, Discord, and CLI browser authorization methods.
+    description: Password, Email code, GitHub, Google, Discord, and CLI browser authorization methods.
   - name: Users
     description: Current User profile and User discovery.
   - name: Spaces
@@ -292,6 +292,86 @@ paths:
                 $ref: '#/components/schemas/AuthenticatedSession'
         '401':
           description: Username or password is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/email/code:
+    post:
+      tags:
+        - Authentication
+      operationId: requestEmailLoginCode
+      summary: Email a one-time sign-in code for passwordless Email login.
+      description: |
+        The code is valid for ten minutes and can be used once. A User and
+        Personal Space are created only after the code is verified, and the
+        response never reveals whether the address already has an account.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailLoginCodeRequest'
+      responses:
+        '202':
+          description: Code accepted for delivery.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailLoginCodeIssued'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Email authentication is disabled for this deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: A code was requested too recently or too often for this address.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: The configured Email provider could not deliver the code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/email/login:
+    post:
+      tags:
+        - Authentication
+      operationId: loginWithEmailCode
+      summary: Verify an emailed sign-in code and create the User on first sign-in.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailLogin'
+      responses:
+        '200':
+          description: Authenticated; a User and Personal Space are created when necessary.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          description: The code is invalid, expired, already used, or exceeded its attempt limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Email authentication is disabled for this deployment.
           content:
             application/json:
               schema:
@@ -3379,6 +3459,7 @@ components:
         - googleOAuthEnabled
         - discordOAuthEnabled
         - passwordAuthEnabled
+        - emailAuthEnabled
       properties:
         authenticated:
           const: false
@@ -3389,6 +3470,8 @@ components:
         discordOAuthEnabled:
           type: boolean
         passwordAuthEnabled:
+          type: boolean
+        emailAuthEnabled:
           type: boolean
     ExternalIdentitySummary:
       type: object
@@ -3410,10 +3493,17 @@ components:
       additionalProperties: false
       required:
         - password
+        - email
         - externalIdentities
       properties:
         password:
           type: boolean
+        email:
+          type:
+            - string
+            - 'null'
+          format: email
+          description: Verified Email address used for passwordless sign-in, when the User has one.
         externalIdentities:
           type: array
           items:
@@ -3427,6 +3517,7 @@ components:
         - googleOAuthEnabled
         - discordOAuthEnabled
         - passwordAuthEnabled
+        - emailAuthEnabled
         - trialDeployment
         - user
         - authenticationMethods
@@ -3440,6 +3531,8 @@ components:
         discordOAuthEnabled:
           type: boolean
         passwordAuthEnabled:
+          type: boolean
+        emailAuthEnabled:
           type: boolean
         trialDeployment:
           type: boolean
@@ -3483,6 +3576,45 @@ components:
           pattern: ^[\p{L}\p{N}._-]+$
         password:
           type: string
+    EmailLoginCodeRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+    EmailLoginCodeIssued:
+      type: object
+      additionalProperties: false
+      required:
+        - expiresIn
+        - resendAfter
+      properties:
+        expiresIn:
+          type: integer
+          minimum: 1
+          description: Lifetime of the emailed code in seconds.
+        resendAfter:
+          type: integer
+          minimum: 1
+          description: Seconds before another code may be requested for the same address.
+    EmailLogin:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - code
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        code:
+          type: string
+          pattern: ^[0-9]{6}$
     PasswordChange:
       type: object
       additionalProperties: false

@@ -35,6 +35,23 @@ export function createIdentityRouter(options: {
     response.json(issued.view);
   });
 
+  router.post("/auth/email/code", async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    const issued = await identity.requestEmailLoginCode({
+      email: request.body?.email,
+    });
+    response.status(202).json(issued);
+  });
+
+  router.post("/auth/email/login", async (request, response) => {
+    const issued = await identity.loginWithEmailCode({
+      email: request.body?.email,
+      code: request.body?.code,
+    });
+    setSessionCookie(response, identity, issued.cookieValue, options);
+    response.json(issued.view);
+  });
+
   router.post("/auth/cli/authorizations", (_request, response) => {
     response.set("Cache-Control", "no-store");
     response.status(201).json(identity.startCliAuthorization());

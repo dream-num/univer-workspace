@@ -114,6 +114,7 @@ export function ProfileDialog({
   );
   const canUnlinkExternalIdentity =
     (current.passwordAuthEnabled && current.authenticationMethods.password) ||
+    current.authenticationMethods.email !== null ||
     current.authenticationMethods.externalIdentities.length > 1;
 
   const submit = (event: FormEvent) => {
@@ -166,6 +167,14 @@ export function ProfileDialog({
             onChange={(event) => setAvatarUrl(event.target.value)}
           />
         </Field>
+        {current.authenticationMethods.email === null ? null : (
+          <p className="m-0 text-[13px] text-muted-foreground">
+            {t("profileEmail")}：
+            <span className="text-foreground">
+              {current.authenticationMethods.email}
+            </span>
+          </p>
+        )}
       </form>
       {current.githubOAuthEnabled ? (
         <>

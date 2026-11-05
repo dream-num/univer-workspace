@@ -21,7 +21,7 @@
     "db:reset": "node --env-file-if-exists=.env --import tsx server/src/db/reset.ts",
     "db:reset:production": "node --env-file-if-exists=.env dist/server/db/reset.js",
     "test": "vitest run --config vitest.config.ts",
-    "test:production-import": "node test/production-import.mjs && node --import tsx test/production-migration.ts && node --import tsx test/production-v1-migration.ts && node --import tsx test/production-v2-migration.ts && node --import tsx test/production-v3-migration.ts && node --import tsx test/production-v4-migration.ts && node --import tsx test/production-v5-migration.ts && node --import tsx test/production-v6-migration.ts && node --import tsx test/production-v7-migration.ts && node --import tsx test/production-v8-migration.ts && node --import tsx test/production-v9-migration.ts && node --import tsx test/production-v10-migration.ts && node --import tsx test/production-v11-migration.ts && node --import tsx test/production-v12-migration.ts && node --import tsx test/production-collaboration-migration.ts",
+    "test:production-import": "node test/production-import.mjs && node --import tsx test/production-migration.ts && node --import tsx test/production-v1-migration.ts && node --import tsx test/production-v2-migration.ts && node --import tsx test/production-v3-migration.ts && node --import tsx test/production-v4-migration.ts && node --import tsx test/production-v5-migration.ts && node --import tsx test/production-v6-migration.ts && node --import tsx test/production-v7-migration.ts && node --import tsx test/production-v8-migration.ts && node --import tsx test/production-v9-migration.ts && node --import tsx test/production-v10-migration.ts && node --import tsx test/production-v11-migration.ts && node --import tsx test/production-v12-migration.ts && node --import tsx test/production-v13-migration.ts && node --import tsx test/production-collaboration-migration.ts",
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
@@ -211,6 +211,7 @@
     "clsx": "^2.1.1",
     "express": "^5.1.0",
     "lucide-react": "^1.28.0",
+    "nodemailer": "^10.3.1",
     "openapi-fetch": "^0.17.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
@@ -228,6 +229,7 @@
     "@tanstack/router-plugin": "^1.168.23",
     "@types/busboy": "^1.5.4",
     "@types/express": "^5.0.6",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",

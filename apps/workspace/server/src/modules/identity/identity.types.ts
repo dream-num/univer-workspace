@@ -7,6 +7,7 @@ export interface User {
 
 export interface AuthenticationMethods {
   readonly password: boolean;
+  readonly email: string | null;
   readonly externalIdentities: readonly {
     readonly provider: ExternalIdentityProvider;
     readonly providerUsername: string;
@@ -19,6 +20,7 @@ export interface AuthenticatedSession {
   readonly googleOAuthEnabled: boolean;
   readonly discordOAuthEnabled: boolean;
   readonly passwordAuthEnabled: boolean;
+  readonly emailAuthEnabled: boolean;
   readonly trialDeployment: boolean;
   readonly user: User;
   readonly authenticationMethods: AuthenticationMethods;
@@ -31,6 +33,7 @@ export type SessionView =
       readonly googleOAuthEnabled: boolean;
       readonly discordOAuthEnabled: boolean;
       readonly passwordAuthEnabled: boolean;
+      readonly emailAuthEnabled: boolean;
     }
   | AuthenticatedSession;
 
@@ -61,6 +64,22 @@ export interface PasswordRegistration {
 export interface PasswordLogin {
   readonly username: unknown;
   readonly password: unknown;
+}
+
+export interface EmailLoginCodeRequest {
+  readonly email: unknown;
+}
+
+export interface EmailLogin {
+  readonly email: unknown;
+  readonly code: unknown;
+}
+
+export interface IssuedEmailLoginCode {
+  /** Lifetime of the emailed code in seconds. */
+  readonly expiresIn: number;
+  /** Seconds before another code may be requested for the same address. */
+  readonly resendAfter: number;
 }
 
 export interface DiscordBotLogin {

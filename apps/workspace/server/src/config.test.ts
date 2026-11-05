@@ -141,3 +141,104 @@ describe("Univer license configuration", () => {
     );
   });
 });
+
+describe("Email sign-in configuration", () => {
+  it("keeps Email sign-in disabled by default", () => {
+    expect(loadConfig({}).emailAuth).toBeNull();
+  });
+
+  it("builds an SMTP provider from discrete settings", () => {
+    const config = loadConfig({
+      EMAIL_SMTP_HOST: "email-smtp.us-east-1.amazonaws.com",
+      EMAIL_SMTP_PORT: "465",
+      EMAIL_SMTP_USER: "smtp-user",
+      EMAIL_SMTP_PASSWORD: "smtp-password",
+      EMAIL_FROM: "no-reply@example.com",
+      EMAIL_FROM_NAME: "Univer Workspace",
+    });
+
+    expect(config.emailAuth).toEqual({
+      provider: "smtp",
+      from: { address: "no-reply@example.com", name: "Univer Workspace" },
+      smtp: {
+        host: "email-smtp.us-east-1.amazonaws.com",
+        port: 465,
+        secure: true,
+        username: "smtp-user",
+        password: "smtp-password",
+      },
+    });
+  });
+
+  it("defaults SMTP to port 587 with STARTTLS", () => {
+    const config = loadConfig({ EMAIL_SMTP_HOST: "smtp.example.com" });
+
+    expect(config.emailAuth).toMatchObject({
+      provider: "smtp",
+      from: { address: "no-reply@localhost" },
+      smtp: { host: "smtp.example.com", port: 587, secure: false },
+    });
+  });
+
+  it("uses the console provider when Email sign-in is enabled without SMTP", () => {
+    expect(loadConfig({ EMAIL_AUTH_ENABLED: "true" }).emailAuth).toEqual({
+      provider: "console",
+      from: { address: "no-reply@localhost" },
+    });
+  });
+
+  it("disables Email sign-in even when SMTP is configured", () => {
+    expect(
+      loadConfig({
+        EMAIL_AUTH_ENABLED: "false",
+        EMAIL_SMTP_HOST: "smtp.example.com",
+      }).emailAuth
+    ).toBeNull();
+  });
+
+  it("rejects an unknown provider", () => {
+    expect(() => loadConfig({ EMAIL_PROVIDER: "sendgrid" })).toThrow(
+      'EMAIL_PROVIDER must be "smtp" or "console"'
+    );
+  });
+
+  it("rejects an incomplete SMTP configuration", () => {
+    expect(() => loadConfig({ EMAIL_SMTP_USER: "smtp-user" })).toThrow(
+      "EMAIL_PROVIDER=smtp requires EMAIL_SMTP_HOST"
+    );
+    expect(() =>
+      loadConfig({
+        EMAIL_SMTP_HOST: "smtp.example.com",
+        EMAIL_SMTP_USER: "smtp-user",
+      })
+    ).toThrow("EMAIL_SMTP_USER and EMAIL_SMTP_PASSWORD");
+  });
+
+  it("rejects an invalid sender address", () => {
+    expect(() =>
+      loadConfig({
+        EMAIL_AUTH_ENABLED: "true",
+        EMAIL_FROM: "not-an-address",
+      })
+    ).toThrow("EMAIL_FROM must be an email address");
+  });
+
+  it("counts Email sign-in as a browser sign-in method", () => {
+    const config = loadConfig({
+      PASSWORD_AUTH_ENABLED: "false",
+      EMAIL_AUTH_ENABLED: "true",
+    });
+
+    expect(config.passwordAuthEnabled).toBe(false);
+    expect(config.emailAuth?.provider).toBe("console");
+  });
+
+  it("rejects a deployment with no browser sign-in method", () => {
+    expect(() =>
+      loadConfig({
+        PASSWORD_AUTH_ENABLED: "false",
+        EMAIL_AUTH_ENABLED: "false",
+      })
+    ).toThrow("PASSWORD_AUTH_ENABLED=false");
+  });
+});

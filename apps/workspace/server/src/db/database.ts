@@ -19,9 +19,9 @@ export class WorkspaceDatabase {
       const version = this.connection
         .prepare("PRAGMA user_version")
         .get() as { readonly user_version: number };
-      if (version.user_version !== 13) {
+      if (version.user_version !== 14) {
         throw new Error(
-          `Unsupported product database version ${version.user_version}; expected 13.`
+          `Unsupported product database version ${version.user_version}; expected 14.`
         );
       }
     } catch (error) {

@@ -227,7 +227,10 @@ Express Request/Response 和 Univer SDK class 不进入业务 Module 的公开 I
 
 Univer 集中在 `integrations/univer`，向业务 Module 提供产品语义的 Interface，不对 SDK
 方法做一一对应的空壳封装。外部 OAuth Provider 位于 Identity Module，并通过
-`GitHubOAuthProvider` / `GoogleOAuthProvider` / `DiscordOAuthProvider` Interface 在测试中替换。Identity Router
+`GitHubOAuthProvider` / `GoogleOAuthProvider` / `DiscordOAuthProvider` Interface 在测试中替换。
+邮箱验证码登录同样属于 Identity Module：一次性验证码保存在产品库（只存 scrypt Hash），
+邮件通过 `EmailSender` Interface 发送，SMTP 与 console 实现由配置选择，业务代码不依赖
+具体邮件厂商。Identity Router
 为部署注册的 OAuth client 提供通用 authorize/token 交接：authorize 复用
 `workspace_session`，未登录时回到现有登录流程；token 只兑换一次性、短期、绑定 PKCE
 和已注册 redirect URI 的 code。Workspace Session 仍是唯一的身份权威来源，现有登录、
