@@ -14,7 +14,8 @@ there after a reload and from the CLI.
 ## How to get to it (user POV)
 
 - Home → `New` (`Create a document to start collaborating`) → choose a type → name → `Create`.
-- Sidebar → `Personal Space` region → `New` → choose a type.
+- Sidebar → `Personal Space` region → `New` → choose a type. Its menu names differ from
+  Home: `Document`, `Sheet`, `Slides`, `Board`, `Base`, `Upload file`, `Folder`.
 - Find it later in the sidebar under `Personal Space`, or with `uvw space find <name> --space <owner>/personal`.
 
 ## Driving it with agent-browser and uvw
@@ -30,6 +31,13 @@ Preconditions:
   then `agent-browser find label "Document name" fill "Verify Budget"`, then
   `agent-browser find role button click --name "Create" --exact`. The URL becomes
   `$ORIGIN/nodes/<nodeId>`, the heading reads `Verify Budget`, and the sidebar lists it.
+- **Sidebar entry.** Run `agent-browser find role button click --name "New" --exact --nth 0`,
+  then `agent-browser find role menuitem click --name "Slides"`. A dialog `Create Slides` has
+  a `File name` textbox (default `Untitled Slides`). Run
+  `agent-browser find label "File name" fill "Sidebar Slides"` and
+  `agent-browser find role button click --name "Create" --exact`. The URL becomes `$ORIGIN/nodes/<nodeId>`, a
+  `File created` toast shows, and `$V cli doc-new-sidebar-find space find "Sidebar Slides" --space "verify-$VERIFY_UVW_RUN/personal" --json`
+  returns a node with `unitType: "slide"` and `path: "/Sidebar Slides"`.
 - **Wait for the editor.** Run `agent-browser wait canvas`, then `agent-browser wait 3000`.
   The `Start`/`Insert`/`Formulas` ribbon is visible and A1 is selected.
 - **Edit cells.** Run `agent-browser keyboard type "Rent"`, `agent-browser press Tab`,
@@ -50,6 +58,11 @@ Preconditions:
 - Without the `wait` after typing, a fast reload can drop the last edit before it syncs.
 - On `127.0.0.1` the bundled license is valid. On any other host the editor shows license
   limitations, and that run proves nothing about editor features.
+- The sidebar has two `New` buttons: `--nth 0` is the Personal Space row (the file lands at
+  `path: "/<name>"`); `--nth 1` is on the first file's row and opens the same menu. Only
+  `--nth 0` has been driven to a created file.
+- The sidebar dialog labels the textbox `File name`, not `Document name`, so
+  `fill "Document name"` fails and the file silently gets `Untitled <Type>`.
 - `space find` takes `--space <owner>/<slug>`, not `-R`.
 - Readback with uvw requires the browser user and the uvw user to be the same account.
   A user registered only in the browser is not signed in to uvw.
