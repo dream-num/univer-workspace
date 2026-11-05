@@ -318,7 +318,9 @@ function createProductDatabase(filename: string): string {
   try {
     db.exec(readFileSync(new URL("../../server/src/db/schema.sql", import.meta.url), "utf8"));
     db.exec(`
-      INSERT INTO users VALUES
+      INSERT INTO users
+        (id, username, display_name, avatar_url, created_at, updated_at)
+      VALUES
         ('product-owner', 'product-owner', 'Product Owner', NULL, 1, 1),
         ('product-legacy-owner', 'product-legacy-owner', 'Product Legacy Owner', NULL, 1, 1),
         ('draft-owner', 'draft-owner', 'Draft Owner', NULL, 1, 1);

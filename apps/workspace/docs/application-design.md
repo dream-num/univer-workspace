@@ -63,9 +63,9 @@ V11 为 `spaces` 增加纯文本 `description`（至多 350 字符）。`SpaceVi
 `GET /api/spaces/{spaceId}` 返回，`PATCH /api/spaces/{spaceId}` 可修改，权限与重命名 Space 相同；空字符串清除。
 Browser 的 Code tab 在 About 区展示该简介，Settings 提供编辑入口。简介不替代 HTML 页面，也不进入协同库。
 V13 扩展 External Identity Provider，允许 Google 登录。
-V14 为邮箱验证码登录新增 `user_emails` 与 `email_login_codes`：验证码只保存 scrypt Hash，
-十分钟过期、单次使用并限制尝试与请求频率；验证成功后才在同一事务中创建 User、Personal Space、
-邮箱身份和 Session。邮件发送由 `EmailSender` 接口承担，配置层提供 SMTP（含 SES SMTP）与
+V14 为邮箱验证码登录在 `users` 上新增可空的 `email` 列（部分唯一索引 `users_email`）与
+`email_login_codes`：验证码只保存 scrypt Hash，十分钟过期、单次使用并限制尝试与请求频率；
+验证成功后才在同一事务中创建 User、Personal Space、`users.email` 和 Session。邮件发送由 `EmailSender` 接口承担，配置层提供 SMTP（含 SES SMTP）与
 仅写入 Server 日志的 console Provider，产品模块不依赖具体邮件厂商。
 V12 为 Team Space 增加 `slug`、为 Worktree 增加仓库级 `number`，供 Browser 与 CLI 以 `owner/slug` 和 `#N` 寻址。
 Spaces Module 在创建时校验或生成 slug（`POST /api/team-spaces` 的 `slug` 可选，供 DSH 插件等未更新的调用方继续使用），

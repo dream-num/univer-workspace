@@ -861,17 +861,36 @@ function assertV13Fingerprint(database: DatabaseSync): void {
 
 function assertV14Fingerprint(database: DatabaseSync): void {
   assertV13Fingerprint(database);
-  const missing = ["user_emails", "email_login_codes"].filter(
-    (name) => !hasTable(database, name)
-  );
-  if (missing.length > 0) {
+  assertColumns(database, "users", [
+    "id", "username", "display_name", "avatar_url", "created_at",
+    "updated_at", "email",
+  ], 14);
+  const emailColumn = (
+    database.prepare("PRAGMA table_info(users)").all() as unknown as Array<{
+      readonly name: string;
+      readonly notnull: number;
+    }>
+  ).find((column) => column.name === "email");
+  if (emailColumn?.notnull !== 0) {
     throw new Error(
-      `Product database V14 fingerprint mismatch (missing: ${missing.join(", ")}).`
+      "Product database V14 fingerprint mismatch (users.email must be nullable)."
     );
   }
-  assertColumns(database, "user_emails", [
-    "user_id", "email", "created_at", "updated_at",
-  ], 14);
+  const emailIndexSql = objectSql(database, "index", "users_email");
+  if (
+    !emailIndexSql.includes("UNIQUE") ||
+    !emailIndexSql.includes("email") ||
+    !emailIndexSql.includes("WHERE email IS NOT NULL")
+  ) {
+    throw new Error(
+      "Product database V14 fingerprint mismatch (users_email partial unique index differs)."
+    );
+  }
+  if (!hasTable(database, "email_login_codes")) {
+    throw new Error(
+      "Product database V14 fingerprint mismatch (email_login_codes missing)."
+    );
+  }
   assertColumns(database, "email_login_codes", [
     "id", "email", "code_hash", "attempts", "created_at", "expires_at",
     "consumed_at",
@@ -882,18 +901,6 @@ function assertV14Fingerprint(database: DatabaseSync): void {
   ) {
     throw new Error(
       "Product database V14 fingerprint mismatch (Email login code indexes missing)."
-    );
-  }
-  if (
-    !objectSql(database, "table", "user_emails").includes(
-      "email TEXT NOT NULL COLLATE NOCASE UNIQUE"
-    ) ||
-    !objectSql(database, "table", "user_emails").includes(
-      "REFERENCES users(id) ON DELETE CASCADE"
-    )
-  ) {
-    throw new Error(
-      "Product database V14 fingerprint mismatch (Email identity constraints differ)."
     );
   }
 }

@@ -162,8 +162,8 @@ export class IdentityRepository {
       database
         .prepare(
           `INSERT INTO users
-            (id, username, display_name, avatar_url, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`
+            (id, username, display_name, avatar_url, created_at, updated_at, email)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           input.user.id,
@@ -171,14 +171,9 @@ export class IdentityRepository {
           input.user.displayName,
           input.user.avatarUrl,
           input.createdAt,
-          input.createdAt
+          input.createdAt,
+          input.email
         );
-      database
-        .prepare(
-          `INSERT INTO user_emails (user_id, email, created_at, updated_at)
-           VALUES (?, ?, ?, ?)`
-        )
-        .run(input.user.id, input.email, input.createdAt, input.createdAt);
       database
         .prepare(
           `INSERT INTO spaces
@@ -428,8 +423,8 @@ export class IdentityRepository {
         .get(userId)
     );
     const emailRow = this._database.connection
-      .prepare("SELECT email FROM user_emails WHERE user_id = ?")
-      .get(userId) as { readonly email: string } | undefined;
+      .prepare("SELECT email FROM users WHERE id = ?")
+      .get(userId) as { readonly email: string | null } | undefined;
     const rows = this._database.connection
       .prepare(
         `SELECT provider, provider_username
@@ -451,10 +446,9 @@ export class IdentityRepository {
   findUserByEmail(email: string): User | null {
     const row = this._database.connection
       .prepare(
-        `SELECT users.id, users.username, users.display_name, users.avatar_url
+        `SELECT id, username, display_name, avatar_url
          FROM users
-         JOIN user_emails ON user_emails.user_id = users.id
-         WHERE user_emails.email = ? COLLATE NOCASE`
+         WHERE email = ? COLLATE NOCASE`
       )
       .get(email) as UserRow | undefined;
     return row ? toUser(row) : null;

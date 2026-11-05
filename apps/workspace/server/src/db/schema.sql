@@ -6,20 +6,16 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL,
   avatar_url TEXT,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  email TEXT COLLATE NOCASE
 );
+CREATE UNIQUE INDEX IF NOT EXISTS users_email
+  ON users(email)
+  WHERE email IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS password_credentials (
   user_id TEXT PRIMARY KEY,
   password_hash TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS user_emails (
-  user_id TEXT PRIMARY KEY,
-  email TEXT NOT NULL COLLATE NOCASE UNIQUE,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

@@ -61,8 +61,25 @@ export function verifyV12Migration(
         )
         .all()
         .map((row) => String(row.name));
+      // Compare only the columns each V12 table already had; V14 adds users.email.
+      const columnsByTable = new Map(
+        tables.map((table) => [
+          table,
+          (
+            original.prepare(`PRAGMA table_info(${table})`).all() as unknown as Array<{
+              readonly name: string;
+            }>
+          )
+            .map((column) => `"${column.name}"`)
+            .join(", "),
+        ]),
+      );
       const rows = (database: DatabaseSync) =>
-        tables.map((table) => database.prepare(`SELECT * FROM ${table}`).all());
+        tables.map((table) =>
+          database
+            .prepare(`SELECT ${columnsByTable.get(table)} FROM ${table}`)
+            .all(),
+        );
       const before = rows(original);
       original.close();
 

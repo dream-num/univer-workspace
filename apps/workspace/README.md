@@ -468,7 +468,7 @@ pre-upgrade product backup, not just running the old application image.
 V13 extends the External Identity Provider CHECK to allow `google`. The migration
 rebuilds only `external_identities` and preserves every existing row, column and
 constraint.
-V14 adds `user_emails` and `email_login_codes` for passwordless Email sign-in.
+V14 adds an optional `users.email` column and `email_login_codes` for passwordless Email sign-in.
 The migration is additive: no existing table or row is rewritten. For a V14
 rollout, stop every old Workspace instance, start one V14 instance and wait for
 migration and health checks to succeed, then restore normal service; do not let

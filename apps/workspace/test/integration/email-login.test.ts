@@ -59,7 +59,11 @@ describe("passwordless Email sign-in", () => {
       },
     });
     expect(tableCount(harness.database, "users")).toBe(1);
-    expect(tableCount(harness.database, "user_emails")).toBe(1);
+    expect(
+      harness.database
+        .prepare("SELECT email FROM users WHERE id = ?")
+        .get(issued.view.user.id)
+    ).toEqual({ email: "alice@example.com" });
     expect(tableCount(harness.database, "spaces")).toBe(1);
     expect(tableCount(harness.database, "login_sessions")).toBe(1);
     expect(
@@ -85,6 +89,11 @@ describe("passwordless Email sign-in", () => {
 
     expect(second.view.user.id).toBe(first.view.user.id);
     expect(tableCount(harness.database, "users")).toBe(1);
+    expect(
+      harness.database
+        .prepare("SELECT email FROM users WHERE id = ?")
+        .get(second.view.user.id)
+    ).toEqual({ email: "alice@example.com" });
     expect(tableCount(harness.database, "spaces")).toBe(1);
     expect(tableCount(harness.database, "login_sessions")).toBe(2);
   });

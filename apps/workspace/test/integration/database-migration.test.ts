@@ -531,7 +531,6 @@ describe("automatic product database migration to V14", () => {
       DROP TABLE IF EXISTS issues;
       DROP TABLE IF EXISTS content_permission_collaborators;
       DROP TABLE IF EXISTS content_permission_objects;
-      ${DROP_V14_SQL}
       PRAGMA user_version = 4;
     `);
     forkedV4.close();
@@ -997,8 +996,7 @@ function richV1Database(): {
     DROP TABLE IF EXISTS issues;
     DROP TABLE IF EXISTS content_permission_collaborators;
     DROP TABLE IF EXISTS content_permission_objects;
-    DROP TABLE IF EXISTS email_login_codes;
-    DROP TABLE IF EXISTS user_emails;
+    ${DROP_V14_SQL}
     PRAGMA user_version = 1;
     COMMIT;
     PRAGMA foreign_keys = ON;
@@ -1150,8 +1148,7 @@ function richV3Database(): {
     DROP TABLE IF EXISTS issues;
     DROP TABLE IF EXISTS content_permission_collaborators;
     DROP TABLE IF EXISTS content_permission_objects;
-    DROP TABLE IF EXISTS email_login_codes;
-    DROP TABLE IF EXISTS user_emails;
+    ${DROP_V14_SQL}
     PRAGMA user_version = 3;
     COMMIT;
     PRAGMA foreign_keys = ON;
@@ -1267,8 +1264,7 @@ function richV2Database(): {
     DROP TABLE IF EXISTS issues;
     DROP TABLE IF EXISTS content_permission_collaborators;
     DROP TABLE IF EXISTS content_permission_objects;
-    DROP TABLE IF EXISTS email_login_codes;
-    DROP TABLE IF EXISTS user_emails;
+    ${DROP_V14_SQL}
     PRAGMA user_version = 2;
     COMMIT;
     PRAGMA foreign_keys = ON;

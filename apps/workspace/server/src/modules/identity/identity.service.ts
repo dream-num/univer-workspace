@@ -474,7 +474,7 @@ export function createIdentityModule(options: {
           });
         } catch (error) {
           if (isUniqueConstraint(error, "users.username")) continue;
-          if (isUniqueConstraint(error, "user_emails.email")) {
+          if (isUniqueConstraint(error, "users.email")) {
             const concurrent = repository.findUserByEmail(email);
             if (concurrent) return issueSession(concurrent);
           }

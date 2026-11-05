@@ -1,9 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
 
 /**
- * Add Email identities and short-lived Email login codes for passwordless sign-in.
- * The change is purely additive: no existing row is rewritten, so every User,
- * credential, Personal Space, Session, and recovery state is preserved.
+ * Add a verified Email address to Users and short-lived Email login codes for
+ * passwordless sign-in. Existing Users keep a NULL Email; no existing row is
+ * rewritten and every credential, Space, Session, and recovery state is preserved.
  */
 export function migrateV13ToV14(database: DatabaseSync): void {
   const previousUsers = count(database, "users");
@@ -12,13 +12,10 @@ export function migrateV13ToV14(database: DatabaseSync): void {
   database.exec("BEGIN IMMEDIATE");
   try {
     database.exec(`
-      CREATE TABLE user_emails (
-        user_id TEXT PRIMARY KEY,
-        email TEXT NOT NULL COLLATE NOCASE UNIQUE,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      );
+      ALTER TABLE users ADD COLUMN email TEXT COLLATE NOCASE;
+      CREATE UNIQUE INDEX users_email
+        ON users(email)
+        WHERE email IS NOT NULL;
       CREATE TABLE email_login_codes (
         id TEXT PRIMARY KEY,
         email TEXT NOT NULL COLLATE NOCASE,
@@ -39,6 +36,12 @@ export function migrateV13ToV14(database: DatabaseSync): void {
     }
     if (count(database, "login_sessions") !== previousSessions) {
       throw new Error("V14 migration changed the login Session count.");
+    }
+    const emails = database
+      .prepare("SELECT COUNT(*) AS count FROM users WHERE email IS NOT NULL")
+      .get() as { readonly count: number };
+    if (emails.count !== 0) {
+      throw new Error("V14 migration introduced Email identities.");
     }
     if (database.prepare("PRAGMA foreign_key_check").all().length > 0) {
       throw new Error("V14 migration failed foreign_key_check.");

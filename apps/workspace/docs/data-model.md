@@ -83,17 +83,15 @@ Object Deletion Job ── idempotent delete ── BlobStore Object
 
 用户的稳定身份和公开资料。`username` 使用 `NOCASE UNIQUE`。
 
+`email`（V14，`TEXT COLLATE NOCASE`，可空）是邮箱验证码登录使用的已验证地址，通过部分唯一索引
+`users_email`（`WHERE email IS NOT NULL`）保证非空值全局唯一；未使用邮箱登录的 User 保持 `NULL`，
+可以存在多个。只有在向该地址发送的六位验证码验证成功后才会写入该列。邮箱首次验证成功时，
+User、`users.email`、Personal Space 与 Session 在同一事务中创建。Google 登录以 OpenID Connect
+`sub` 作为 Subject；Email 登录与 Google 登录之间不按邮箱自动关联已有 User。
+
 ### `password_credentials`
 
 本地密码凭据，与 User 一对一并随 User 删除。
-
-### `user_emails`
-
-邮箱验证码登录使用的已验证邮箱，与 User 一对一并随 User 删除；`email` 使用
-`COLLATE NOCASE UNIQUE`，全部署唯一。只有在向该地址发送的六位验证码验证成功后才会写入。
-邮箱首次验证成功时，User、Personal Space、`user_emails` 与 Session 在同一事务中创建。
-Google 登录以 OpenID Connect `sub` 作为 Subject；Email 登录与 Google 登录之间不按邮箱
-自动关联已有 User。
 
 ### `email_login_codes`
 
@@ -462,7 +460,7 @@ Operation JSON。V0 迁移前要求没有 Pending/Failed Operation；后续版�
 - V3 Asset Upload 的内容检测字段被无损移除；声明 MIME 缺失时用旧检测值回填；
 - V4 External Identity 被无损扩展为支持 Discord Provider；
 - V12 External Identity 被无损扩展为支持 Google Provider；
-- V13 → V14 只新增 `user_emails` 与 `email_login_codes`，不改写任何既有行；
+- V13 → V14 只新增 `users.email`、`users_email` 部分唯一索引与 `email_login_codes`；既有 User 的 `email` 为 `NULL`，其它行不变；
 - 旧表全部删除且 `user_version = 14`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
