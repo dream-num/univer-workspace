@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { useI18n } from "../../shared/i18n";
 import { isOpenWorktree, worktreeBelongsToSpace, worktreeListQueryOptions } from "../../features/worktrees";
 import { issueCountsQueryOptions } from "../../features/issues/issues.queries";
-import { spacesQueryOptions } from "../../features/spaces/spaces.queries";
+import { spaceQueryOptions } from "../../features/spaces/spaces.queries";
 import { RepositoryHeader } from "./repository-header";
 import { spaceSupportsIssues } from "../../features/spaces/space.rules";
 
@@ -34,10 +34,10 @@ export function RepositoryTabs({
   readonly active: RepositoryTab;
 }) {
   const { t } = useI18n();
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(spaceQueryOptions(spaceId));
   const activeWorktrees = useQuery(worktreeListQueryOptions("active"));
   const processedWorktrees = useQuery(worktreeListQueryOptions("processed"));
-  const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const space = spaces.data;
   const navigation = useRef<HTMLElement>(null);
   const hasIssues = space !== undefined && spaceSupportsIssues(space);
   const issueCounts = useQuery({ ...issueCountsQueryOptions(spaceId), enabled: hasIssues });

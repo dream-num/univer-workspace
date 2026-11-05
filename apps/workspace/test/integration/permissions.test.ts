@@ -175,7 +175,7 @@ describe("permissions", () => {
     expect(
       application.spaces.update(owner, space.id, { publicRead: true })
     ).toMatchObject({ publicRead: true });
-    expect(application.spaces.list(visitor).spaces).toContainEqual(
+    expect(application.spaces.list(visitor).spaces).not.toContainEqual(
       expect.objectContaining({
         id: space.id,
         publicRead: true,

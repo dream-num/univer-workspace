@@ -402,19 +402,19 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V13 product databases to V14 automatically.
+backs up and migrates supported V0 through V14 product databases to V15 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` is unchanged. Product V14 adds Email identities and Email login codes; V13 added the Google Provider; V12 added Space slugs and Worktree numbers; V11 added the Space description; V10 added Space stars; V9 added
+`history=2`; `comment=1` is unchanged. Product V15 adds ordered Space pins and a per-user stars index. V14 added Email identities and Email login codes; V13 added the Google Provider; V12 added Space slugs and Worktree numbers; V11 added the Space description; V10 added Space stars; V9 added
 Issue tables and V8 added content-permission tables. Before creating
 application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V14,
+2. Start a single new instance. Startup first prepares the product database to V15,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -476,8 +476,31 @@ V13 and V14 processes write the same SQLite file concurrently. Startup creates a
 validates a `.v13-backup-…sqlite` backup before the V13 → V14 transaction.
 Rollback requires stopping V14 and restoring the pre-upgrade product backup.
 
+V15 adds `space_pins` and `space_stars_user` without changing existing rows, content,
+Blob identities, or recovery state. Stop every old instance, start one V15 instance,
+and wait for migration and health checks before restoring service. Startup validates
+V14, creates a readable `.v14-backup-…sqlite` backup, then creates the table and index
+in one transaction with foreign-key and integrity checks. A failed transaction rolls
+back; successful restarts do not repeat migration or backup. To roll back, stop V15
+and restore the V14 backup. Never run V14 and V15 writers on the same SQLite file.
+
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
 addresses repositories by `owner/slug`.
+
+### Space lists and sidebar pins
+
+`GET /api/spaces` returns only owned and joined Spaces. Every Space response includes
+`affiliation` as `owner`, `member`, or `none`; the owned/joined list uses only the first two.
+`GET /api/spaces/starred` returns currently readable starred Spaces, newest star first.
+`GET /api/spaces/explore` lists other public Spaces by star count, then name and ID.
+Explore is currently unpaginated. Public URLs, detail and lookup access remain unchanged.
+
+`GET /api/spaces/pins` returns `{ customized, limit, spaces }` in saved order. Eligible
+pins are owned or joined Spaces and starred public Spaces. If no stored pin remains
+eligible, the response contains the first eight owned or joined Spaces with
+`customized: false`. `PUT /api/spaces/pins` accepts `{ spaceIds }` with 1 to 12 unique
+eligible IDs and replaces the list atomically. `DELETE` restores the defaults.
+Both writes are idempotent. All list and pin endpoints require a login session.
 
 ### Repository stars
 
@@ -487,7 +510,7 @@ persist across refresh and restart, and never grant access. The product API expo
 `GET`, `PUT` and `DELETE /api/spaces/{spaceId}/star`; writes are idempotent and all
 three return `{ starred, starCount }`. All require login and current Space access.
 `SpaceView.owner` supplies the existing owner's ID and username for the breadcrumb.
-Watch, Fork, star lists and GitHub-only tabs are not provided. See the
+Watch, Fork and GitHub-only tabs are not provided. See the
 [comparison and verification record](docs/proposals/repository-framework-star.md).
 
 Repository Pull requests use the existing Worktree workflow. The list keeps Open/Closed

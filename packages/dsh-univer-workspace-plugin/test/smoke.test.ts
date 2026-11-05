@@ -66,6 +66,20 @@ describe("dsh-univer-workspace-plugin", () => {
     expect(() => narrowSpaces({})).toThrow(/no spaces array/);
   });
 
+  it.each(["owner", "member", "none", "unknown", undefined, null, 1])(
+    "preserves supported affiliation %s without rejecting older or future servers",
+    (affiliation) => {
+      const [space] = narrowSpaces({ spaces: [
+        { id: "sp-1", name: "Team", type: "team", accessRole: "viewer", affiliation },
+      ] });
+      if (affiliation === "owner" || affiliation === "member" || affiliation === "none") {
+        expect(space).toHaveProperty("affiliation", affiliation);
+      } else {
+        expect(space).not.toHaveProperty("affiliation");
+      }
+    },
+  );
+
   it("renders the session-linked Space so the agent does not guess across Spaces", () => {
     const rendered = renderSpaces([
       {

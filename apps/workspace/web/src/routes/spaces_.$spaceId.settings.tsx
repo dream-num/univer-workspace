@@ -4,7 +4,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 
 import { requireAuthenticatedSession } from "../features/auth";
 
-import { spacesQueryOptions } from "../features/spaces";
+import { ensureSpace } from "../features/spaces";
 import {
   ResourceUnavailablePage,
   isResourceUnavailableError,
@@ -15,11 +15,10 @@ export const Route = createFileRoute("/spaces_/$spaceId/settings")({
   loader: async ({ context, params, location }) => {
     await requireAuthenticatedSession(context.queryClient, location.href);
     try {
-      const [spaces] = await Promise.all([
-        context.queryClient.ensureQueryData(spacesQueryOptions),
+      await Promise.all([
+        ensureSpace(context.queryClient, params.spaceId),
         context.queryClient.ensureQueryData(spaceNodesQueryOptions(params.spaceId)),
       ]);
-      if (spaces.spaces.every((space) => space.id !== params.spaceId)) throw notFound();
     } catch (error) {
       if (isResourceUnavailableError(error)) throw notFound();
       throw error;

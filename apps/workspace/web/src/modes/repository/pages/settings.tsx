@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Copy, Globe, LockKeyhole } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { RepositorySettingsLayout } from "../repository-settings-layout";
-import { isValidSlug, useUpdateSpace, spacesQueryOptions } from "../../../features/spaces";
+import { isValidSlug, useUpdateSpace, spaceQueryOptions } from "../../../features/spaces";
 import { ApiError } from "../../../shared/api/errors";
 import { WorkspaceLayout } from "../../workspace-layout";
 import { useI18n } from "../../../shared/i18n";
@@ -31,9 +31,9 @@ export function RepositorySpaceSettingsPage({ spaceId }: SpaceSettingsPageProps)
 }
 
 function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(spaceQueryOptions(spaceId));
   const { t } = useI18n();
-  const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const space = spaces.data;
   const [name, setName] = useState(space?.name ?? "");
   const [description, setDescription] = useState(space?.description ?? "");
   const [error, setError] = useState<string>();

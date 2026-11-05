@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { spaceNodesQueryOptions } from "../nodes/nodes.queries";
-import { spacesQueryKey, spaceStarQueryOptions } from "./spaces.queries";
+import { spacesQueryKey, spaceStarQueryOptions, starredSpacesQueryOptions, spacePinsQueryOptions } from "./spaces.queries";
 
 export function useUpdateSpace(spaceId: string) {
   const client = useQueryClient();
@@ -73,6 +73,35 @@ export function useToggleSpaceStar(spaceId: string) {
       if (previous) client.setQueryData(options.queryKey, previous);
     },
     // Reconcile ambiguous network failures as well as successful writes.
-    onSettled: () => client.invalidateQueries({ queryKey: options.queryKey }),
+    onSettled: () => Promise.all([
+      client.invalidateQueries({ queryKey: options.queryKey }),
+      client.invalidateQueries({ queryKey: starredSpacesQueryOptions.queryKey }),
+      client.invalidateQueries({ queryKey: spacePinsQueryOptions.queryKey }),
+    ]),
+  });
+}
+
+export function useSetSpacePins() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (spaceIds: string[]) => {
+      const { data, error } = await api.PUT("/api/spaces/pins", { body: { spaceIds } });
+      if (error) throw apiError(error);
+      return data;
+    },
+    onSuccess: (pins) => client.setQueryData(spacePinsQueryOptions.queryKey, pins),
+    onError: () => client.invalidateQueries({ queryKey: spacesQueryKey }),
+  });
+}
+
+export function useResetSpacePins() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.DELETE("/api/spaces/pins");
+      if (error) throw apiError(error);
+      return data;
+    },
+    onSuccess: (pins) => client.setQueryData(spacePinsQueryOptions.queryKey, pins),
   });
 }

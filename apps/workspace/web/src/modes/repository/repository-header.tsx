@@ -34,20 +34,24 @@ export function RepositoryHeader({ space }: { readonly space: Space }) {
               {t(space.publicRead ? "repositoryVisibilityPublic" : "repositoryVisibilityPrivate")}
             </span>
           </div>
-          <RepositoryStar spaceId={space.id} name={name} />
+          <RepositoryStar spaceId={space.id} name={name} showCount />
         </div>
       </div>
     </div>
   );
 }
 
-function RepositoryStar({ spaceId, name }: { readonly spaceId: string; readonly name: string }) {
+export function RepositoryStar({ spaceId, name, showCount = false }: {
+  readonly spaceId: string;
+  readonly name: string;
+  readonly showCount?: boolean;
+}) {
   const { t, language } = useI18n();
   const options = spaceStarQueryOptions(spaceId);
   const star = useQuery(options);
   const toggle = useToggleSpaceStar(spaceId);
   const starred = star.data?.starred === true;
-  const label = star.isError && !star.data ? t("repositoryStarRetry") : starred ? "Unstar" : "Star";
+  const label = star.isError && !star.data ? t("repositoryStarRetry") : starred ? t("repositoryUnstar") : t("repositoryStar");
   return (
     <button
       type="button"
@@ -67,13 +71,13 @@ function RepositoryStar({ spaceId, name }: { readonly spaceId: string; readonly 
         className={`size-4 ${starred ? "fill-[var(--color-repository-star)] text-[color:var(--color-repository-star)]" : "text-muted-foreground"}`}
       />
       {label}
-      <span
+      {showCount ? <span
         aria-live="polite"
         aria-atomic="true"
         className="ml-0.5 min-w-5 rounded-full bg-[var(--color-repository-counter)] px-1.5 text-center text-xs leading-[18px] tabular-nums"
       >
         {star.data ? star.data.starCount.toLocaleString(language) : "…"}
-      </span>
+      </span> : null}
     </button>
   );
 }

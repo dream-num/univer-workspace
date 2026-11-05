@@ -100,6 +100,12 @@ paths:
     $ref: ./paths/permissions.yaml#/~1api~1users~1search
   /api/spaces:
     $ref: ./paths/spaces.yaml#/~1api~1spaces
+  /api/spaces/starred:
+    $ref: ./paths/spaces.yaml#/~1api~1spaces~1starred
+  /api/spaces/explore:
+    $ref: ./paths/spaces.yaml#/~1api~1spaces~1explore
+  /api/spaces/pins:
+    $ref: ./paths/spaces.yaml#/~1api~1spaces~1pins
   /api/team-spaces:
     $ref: ./paths/spaces.yaml#/~1api~1team-spaces
   /api/spaces/lookup:

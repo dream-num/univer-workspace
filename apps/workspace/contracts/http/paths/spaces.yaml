@@ -2,14 +2,99 @@
   get:
     tags: [Spaces]
     operationId: listSpaces
-    summary: List Spaces discoverable by the current User.
+    summary: List Spaces the current User owns or has joined.
+    description: Public Spaces belonging to others are available through Explore. Starred Spaces have a separate list.
     responses:
       "200":
         description: Personal Space followed by owned and joined Team Spaces.
         content:
           application/json:
             schema:
+              $ref: ../schemas/spaces.yaml#/MySpaceList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/spaces/starred:
+  get:
+    tags: [Spaces]
+    operationId: listStarredSpaces
+    summary: List starred Spaces the current User can still read.
+    description: Ordered by newest star first, then Space ID. Stars retained after access loss are omitted until access returns.
+    responses:
+      "200":
+        description: Matching Spaces in display order.
+        content:
+          application/json:
+            schema:
               $ref: ../schemas/spaces.yaml#/SpaceList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/spaces/explore:
+  get:
+    tags: [Spaces]
+    operationId: exploreSpaces
+    summary: List public Spaces the current User neither owns nor has joined.
+    description: Ordered by total stars descending, then name and ID. Includes starred public Spaces. This list is unpaginated.
+    responses:
+      "200":
+        description: Matching Spaces in display order.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpaceList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+
+/api/spaces/pins:
+  get:
+    tags: [Spaces]
+    operationId: getSpacePins
+    summary: Get the current User's ordered sidebar pins.
+    description: Owned or joined Spaces and starred public Spaces are eligible. Ineligible stored pins are omitted. If none survive, returns the first eight owned or joined Spaces with customized false. Stored pins remain available if eligibility returns.
+    responses:
+      "200":
+        description: Current pins or defaults.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpacePins
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+  put:
+    tags: [Spaces]
+    operationId: setSpacePins
+    summary: Replace the ordered sidebar pins.
+    description: Accepts 1 to 12 unique IDs for owned or joined Spaces or starred public Spaces. Invalid, duplicate, over-limit, missing and ineligible IDs return the same 400 INVALID_INPUT with field spaceIds. Replacement is atomic and idempotent.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/spaces.yaml#/SetSpacePins
+    responses:
+      "200":
+        description: Current pins or defaults.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpacePins
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+  delete:
+    tags: [Spaces]
+    operationId: resetSpacePins
+    summary: Reset the sidebar pins to their defaults.
+    description: Deletes stored pins and returns the first eight owned or joined Spaces with customized false. Idempotent.
+    responses:
+      "200":
+        description: Current pins or defaults.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/spaces.yaml#/SpacePins
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
 

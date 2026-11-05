@@ -688,4 +688,14 @@ BEGIN
   SELECT RAISE(ABORT, 'only a team space can have a slug, and personal is reserved');
 END;
 
-PRAGMA user_version = 14;
+CREATE INDEX IF NOT EXISTS space_stars_user ON space_stars(user_id, created_at);
+CREATE TABLE IF NOT EXISTS space_pins (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, space_id),
+  UNIQUE (user_id, position)
+);
+
+PRAGMA user_version = 15;

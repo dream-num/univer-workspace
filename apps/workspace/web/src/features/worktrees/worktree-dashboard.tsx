@@ -26,7 +26,7 @@ import {
   Tooltip,
 } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
-import { spacesQueryOptions } from "../spaces/spaces.queries";
+import { spaceQueryOptions } from "../spaces/spaces.queries";
 import { WorktreeOnboarding } from "./worktree-onboarding";
 import {
   UnitChangeIcon,
@@ -85,8 +85,8 @@ export function WorktreeDashboard({
   const { language, t } = useI18n();
   const active = useQuery(worktreeListQueryOptions("active"));
   const processed = useQuery(worktreeListQueryOptions("processed"));
-  const spaces = useQuery(spacesQueryOptions);
-  const scopedSpace = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const spaces = useQuery(spaceQueryOptions(spaceId));
+  const scopedSpace = spaces.data;
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
   const [expandedTasks, setExpandedTasks] = useState<

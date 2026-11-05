@@ -1,15 +1,15 @@
 # Univer Workspace 数据模型
 
-状态：V14，已实现
+状态：V15，已实现
 
 权威定义：`server/src/db/schema.sql`
 
 产品数据库使用 SQLite，开启 Foreign Key，Schema 版本为
-`PRAGMA user_version = 14`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+`PRAGMA user_version = 15`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿另存于
-`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V14
+`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V15
 Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
 `__record_id`，并把每条 Record ID 投影到该字段；Row/Column/Cell Map 是可从 Field 与 Record
 重建的派生数据。现有持久化 Base Snapshot 均使用该表示。
@@ -28,7 +28,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-启动入口先将产品数据库准备到 V14，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+启动入口先将产品数据库准备到 V15，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份，在副本上按 Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件
@@ -36,7 +36,7 @@ Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V14，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V15，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -55,6 +55,7 @@ Space
 
 User ── Recent Resource ── Resource
 User ── Space Star ── Space
+User ── Space Pin ── Space
 Team Space ── Issue ─┬── Issue Comment / Issue Event
                      ├── Issue Label Link ── Issue Label
                      ├── Issue Assignee ── User
@@ -129,6 +130,11 @@ Trigger `spaces_slug_insert/update` 守护这两条不变量；格式与冲突�
 全名由服务端计算：`<owner.username>/<slug>`；Personal Space 一律为 `<owner.username>/personal`
 （经 `spaces_personal_owner` 解析，旧数据同样适用）。username 可修改，改名后旧全名失效，不保留重定向。
 
+`GET /api/spaces` 仅列出本人拥有或作为 Team 成员加入的 Space，不包含其他人的公开 Space。
+`SpaceView.affiliation` 为 `owner | member | none`，从 Access Resolver 的所有者与成员事实推导，
+不从有效角色推导；Team viewer 成员与公开 reader 的 `accessRole` 都可能为 `viewer`。
+公开 Space 仍可通过详情、全名与已有公开链接读取。
+
 ### `space_members`
 
 仅用于 Team Space，角色为 `admin | editor | viewer`。Space Owner 不重复写入成员表；
@@ -142,7 +148,23 @@ Star 不创建 Repository、成员、ACL、Unit 或 Operation，不改变 Space 
 总数从关系表实时计算，不在 Space 中维护冗余计数。Personal 和 Team Space 均支持。
 用户取消 Star 时删除自己的关系；失去访问权时保留关系但不能再读取或操作，重新获得访问权后恢复可见。
 三个 Star HTTP 方法均要求登录及服务端 Access Resolver 确认的当前 Space 访问权。
-数据仅用于此收藏功能，记录属于受保护的产品用户行为数据；HTTP 只返回当前用户状态与汇总计数，不提供收藏者列表。
+`GET /api/spaces/starred` 按收藏时间倒序返回当前仍可访问的收藏，使用
+`space_stars_user(user_id, created_at)` 索引。`GET /api/spaces/explore` 返回本人既非所有者也非成员的
+公开 Space，按收藏总数倒序、名称与 ID 排序，当前不分页。
+记录属于受保护的产品用户行为数据；HTTP 返回本人的收藏列表、状态与汇总计数，不提供收藏者列表。
+
+### `space_pins`
+
+保存用户的有序侧栏选择，字段为 `user_id`、`space_id`、`position` 和 `created_at`。
+主键 `(user_id, space_id)` 防止重复，唯一约束 `(user_id, position)` 保证位置唯一；
+两条外键都 `ON DELETE CASCADE`。位置由服务端按请求顺序写为 0 起的连续整数。
+
+允许固定本人拥有或加入的 Space，以及本人已收藏的公开 Space。读取按位置排序并过滤当前不符合条件的行；
+失去资格时保留关系，资格恢复后重新显示。没有存储行或没有行仍符合条件时，返回本人列表前 8 个，
+`customized = false`。PUT 接受 1 至 12 个唯一 ID，在同一事务内校验资格并完整替换。
+不存在、不可见或不符合条件的 ID 与重复、超限输入统一返回 `400 INVALID_INPUT`，字段为 `spaceIds`。
+DELETE 清空本人的行并恢复默认列表。Pins 不授予访问权，不写 Operation 或协同库。
+记录属于当前用户的产品偏好，只能通过本人 Session 读取和修改。
 
 ## Node 树
 
@@ -433,11 +455,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V14，不备份；
-2. 完整 V14：校验指纹后正常启动，不重复备份；
-3. 完整 V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V14；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V14；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V14；
+1. 不存在或空文件：创建 V15，不备份；
+2. 完整 V15：校验指纹后正常启动，不重复备份；
+3. 完整 V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V15；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V15；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V15；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -461,12 +483,13 @@ Operation JSON。V0 迁移前要求没有 Pending/Failed Operation；后续版�
 - V4 External Identity 被无损扩展为支持 Discord Provider；
 - V12 External Identity 被无损扩展为支持 Google Provider；
 - V13 → V14 只新增 `users.email`、`users_email` 部分唯一索引与 `email_login_codes`；既有 User 的 `email` 为 `NULL`，其它行不变；
-- 旧表全部删除且 `user_version = 14`。
+- V14 → V15 新增 `space_pins` 和 `space_stars_user` 索引；既有行、Blob 身份与恢复状态不变；
+- 旧表全部删除且 `user_version = 15`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
 一致性备份始终保留，下一次启动可继续升级或由运维恢复。错误中会给出备份路径。
 迁移实现是唯一兼容边界；线上数据库全部完成升级后，可以删除 `migrations/`、
-`legacy-v0/` 及初始化函数中的一次调用，不影响 V14 Schema 或业务代码。
+`legacy-v0/` 及初始化函数中的一次调用，不影响 V15 Schema 或业务代码。
 
 V6 → V7 只重建 Operation 和删除任务表以扩展 CHECK 枚举，完整保留所有行和恢复字段；
 Blob 及上传会话表不变。升级前自动创建一致性备份；停旧实例后由单个新实例完成迁移。
@@ -518,6 +541,12 @@ V12 → V13 只重建 `external_identities`，把 Provider CHECK 从 `('github',
 `('github', 'google', 'discord')`；SQLite 不能原地修改 CHECK，因此迁移在同一事务内外键关闭后重命名旧表、
 创建新表并按原值复制，再逐行比对新旧 External Identity，确认列、约束和行完全保留。准备阶段在业务 Repository
 初始化前校验 V12 指纹、生成并验证一致性备份；事务提交前重新开启外键，检查 `foreign_key_check` 与
-`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都继续前进到 V14。失败事务回滚至 V12，备份保留且
+`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都继续前进到 V15。失败事务回滚至 V12，备份保留且
 启动失败。重复启动不重复迁移或备份。部署须先停全部旧实例，由单个 V13 实例完成迁移和健康检查后恢复服务；
 回退须停新实例并恢复 V12 备份。
+
+V14 → V15 在单个事务内新增 `space_pins` 和 `space_stars_user` 索引，不改写已有表、业务行、Blob 身份或恢复状态。
+准备阶段在业务 Repository 初始化前校验 V14 指纹，生成并验证一致性备份；事务提交前检查外键与完整性，
+随后校验 V15 指纹。V0 与所有旧版本升级链都落到 V15。失败事务回滚至 V14，备份保留，启动失败。
+重复启动不重复迁移或备份。部署先停止全部旧实例，由单个 V15 实例完成迁移和健康检查后恢复服务；
+回退先停止新实例，再恢复 V14 备份，不允许新旧版本同时写同一 SQLite 文件。

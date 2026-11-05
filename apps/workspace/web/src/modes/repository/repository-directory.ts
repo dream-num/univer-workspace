@@ -1,6 +1,7 @@
 import type { components } from "../../../../generated/http/schema.js";
 
 export interface RepositorySearch {
+  readonly view?: "starred" | "explore";
   readonly q?: string;
   readonly type?: "personal" | "team";
   readonly visibility?: "public" | "private";
@@ -9,6 +10,7 @@ export interface RepositorySearch {
 
 export function parseRepositorySearch(search: Readonly<Record<string, unknown>>): RepositorySearch {
   return {
+    ...(search.view === "starred" || search.view === "explore" ? { view: search.view } : {}),
     ...(typeof search.q === "string" && search.q ? { q: search.q.slice(0, 200) } : {}),
     ...(search.type === "personal" || search.type === "team" ? { type: search.type } : {}),
     ...(search.visibility === "public" || search.visibility === "private"

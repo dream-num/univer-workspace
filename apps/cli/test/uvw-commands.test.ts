@@ -176,6 +176,30 @@ describe("uvw repository and Issue commands", () => {
     });
   });
 
+  it("uses affiliation for @me, falls back on older servers, and exposes it in JSON", async () => {
+    const { repoContext } = context();
+    const spaces = {
+      list: async () => [
+        { ...teamSpace, id: "owner", accessRole: "viewer", affiliation: "owner" },
+        { ...teamSpace, id: "member", affiliation: "member" },
+        { ...teamSpace, id: "none", affiliation: "none" },
+        { ...teamSpace, id: "legacy" },
+      ],
+    } as unknown as WorkspaceSpaceFeature;
+    const command = createRepoCommand(spaces, repoContext);
+    expect(command.commands.find(command => command.name() === "list")?.description())
+      .toBe("List repositories you own or have joined");
+    expect(JSON.parse(await run(command, ["list", "--owner", "@me", "--json", "id,affiliation"])))
+      .toEqual([{ id: "owner", affiliation: "owner" }, { id: "legacy" }]);
+    expect(JSON.parse(await run(command, ["list", "--json", "id,affiliation"])))
+      .toEqual([
+        { id: "owner", affiliation: "owner" },
+        { id: "member", affiliation: "member" },
+        { id: "none", affiliation: "none" },
+        { id: "legacy" },
+      ]);
+  });
+
   it.each([
     ["Éva", ["upper"]],
     ["éva", ["lower"]],

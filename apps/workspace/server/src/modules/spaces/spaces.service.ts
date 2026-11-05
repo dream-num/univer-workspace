@@ -1,17 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
 import {
-  spaceCapabilities,
+  spaceAccessFromRow,
   type AccessResolver,
-  type AccessRole,
+  type SpaceAccess,
   type SpaceType,
 } from "../access/index.js";
-import { SpacesRepository } from "./spaces.repository.js";
+import { SpacesRepository, type SpaceListScope } from "./spaces.repository.js";
 import { RESERVED_SLUG, slugBaseFromName, validSlug } from "./space-slug.js";
-import type { SpaceStar, SpaceView } from "./spaces.types.js";
+import type { MySpaceView, SpacePins, SpaceStar, SpaceView } from "./spaces.types.js";
 
 export interface SpacesModule {
-  list(userId: string): { readonly spaces: readonly SpaceView[] };
+  list(userId: string): { readonly spaces: readonly MySpaceView[] };
+  listStarred(userId: string): { readonly spaces: readonly SpaceView[] };
+  explore(userId: string): { readonly spaces: readonly SpaceView[] };
+  getPins(userId: string): SpacePins;
+  setPins(userId: string, spaceIds: unknown): SpacePins;
+  resetPins(userId: string): SpacePins;
   createTeamSpace(
     userId: string,
     input: { readonly name: unknown; readonly slug?: unknown; readonly publicRead?: unknown }
@@ -32,6 +37,9 @@ export interface SpacesModule {
   ): SpaceView;
 }
 
+const DEFAULT_PIN_COUNT = 8;
+const PIN_LIMIT = 12;
+
 export function createSpacesModule(options: {
   readonly repository: SpacesRepository;
   readonly access: AccessResolver;
@@ -39,30 +47,45 @@ export function createSpacesModule(options: {
 }): SpacesModule {
   const now = options.now ?? Date.now;
 
+  function list(userId: string, scope: SpaceListScope): SpaceView[] {
+    return options.repository.listViews(userId, scope).map((row) => {
+      const access = spaceAccessFromRow(userId, row);
+      if (!access) throw new Error("Space listing returned an inaccessible row");
+      return toSpaceView(userId, access, { ...row, ownerUsername: row.owner_username });
+    });
+  }
+
+  function getPins(userId: string): SpacePins {
+    const spaces = list(userId, "pins");
+    return {
+      customized: spaces.length > 0,
+      limit: PIN_LIMIT,
+      spaces: spaces.length > 0 ? spaces : list(userId, "mine").slice(0, DEFAULT_PIN_COUNT),
+    };
+  }
+
   return {
     list(userId) {
-      return {
-        spaces: options.repository.listDiscoverable(userId).map((row) => {
-          const role: AccessRole =
-            row.owner_user_id === userId
-              ? "owner"
-              : (row.member_role ?? "viewer");
-          return {
-            id: row.id,
-            type: row.type,
-            name: row.name,
-            publicRead: Boolean(row.public_read),
-            description: row.description,
-            ...fullNameOf(row.type, row.slug, row.owner_username),
-            owner: { id: row.owner_user_id, username: row.owner_username },
-            accessRole: role,
-            capabilities: spaceCapabilities(role, {
-              type: row.type,
-              member: row.owner_user_id === userId || row.member_role !== null,
-            }),
-          };
-        }),
-      };
+      return { spaces: list(userId, "mine").map((space): MySpaceView => {
+        if (space.affiliation === "none") throw new Error("My Spaces returned an unaffiliated Space");
+        return { ...space, affiliation: space.affiliation };
+      }) };
+    },
+    listStarred(userId) {
+      return { spaces: list(userId, "starred") };
+    },
+    explore(userId) {
+      return { spaces: list(userId, "explore") };
+    },
+    getPins,
+    setPins(userId, input) {
+      const ids = validPinIds(input);
+      if (!options.repository.replacePins(userId, ids, now())) throw invalidPins();
+      return getPins(userId);
+    },
+    resetPins(userId) {
+      options.repository.deletePins(userId);
+      return getPins(userId);
     },
 
     createTeamSpace(userId, input) {
@@ -83,18 +106,7 @@ export function createSpacesModule(options: {
         ownerUserId: userId,
         createdAt: now(),
       });
-      const owner = options.repository.getOwner(userId);
-      return {
-        id,
-        type: "team",
-        name,
-        publicRead,
-        description: "",
-        ...fullNameOf("team", slug, owner.username),
-        owner,
-        accessRole: "owner",
-        capabilities: spaceCapabilities("owner", { type: "team", member: true }),
-      };
+      return resolveSpace(options.access, options.repository, userId, id);
     },
 
     get(userId, spaceId) {
@@ -170,18 +182,9 @@ export function createSpacesModule(options: {
       if (input.description !== undefined) {
         options.repository.updateDescription(spaceId, description, updatedAt);
       }
-      const owner = options.repository.getOwner(access.ownerUserId);
-      return {
-        id: access.id,
-        type: access.type,
-        name,
-        publicRead,
-        description,
-        ...fullNameOf(access.type, slug, owner.username),
-        owner,
-        accessRole: access.role,
-        capabilities: access.capabilities,
-      };
+      return toSpaceView(userId, { ...access, name, publicRead }, {
+        description, slug, ownerUsername: options.repository.getOwner(access.ownerUserId).username,
+      });
     },
   };
 }
@@ -196,17 +199,40 @@ function resolveSpace(
   if (!access) throw notFound();
   const details = repository.getDetails(access.id);
   const owner = repository.getOwner(access.ownerUserId);
+  return toSpaceView(userId, access, { ...details, ownerUsername: owner.username });
+}
+
+function toSpaceView(
+  userId: string,
+  access: SpaceAccess,
+  details: { readonly description: string; readonly slug: string | null; readonly ownerUsername: string },
+): SpaceView {
   return {
     id: access.id,
     type: access.type,
     name: access.name,
     publicRead: access.publicRead,
     description: details.description,
-    ...fullNameOf(access.type, details.slug, owner.username),
-    owner,
+    ...fullNameOf(access.type, details.slug, details.ownerUsername),
+    owner: { id: access.ownerUserId, username: details.ownerUsername },
     accessRole: access.role,
+    affiliation: access.ownerUserId === userId ? "owner" : access.member ? "member" : "none",
     capabilities: access.capabilities,
   };
+}
+
+function validPinIds(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > PIN_LIMIT) throw invalidPins();
+  const ids: string[] = [];
+  for (const id of value) {
+    if (typeof id !== "string" || !id || ids.includes(id)) throw invalidPins();
+    ids.push(id);
+  }
+  return ids;
+}
+
+function invalidPins(): ApplicationError {
+  return new ApplicationError("INVALID_INPUT", 400, "spaceIds must contain 1 to 12 unique pinnable Space IDs.", "spaceIds");
 }
 
 /** The full name is computed here once: `<owner>/personal`, `<owner>/<slug>`, or null for a Team Space without a slug. */

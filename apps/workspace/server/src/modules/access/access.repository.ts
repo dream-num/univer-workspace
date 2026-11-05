@@ -33,7 +33,7 @@ export interface ResolvedNodeRow {
   readonly navigation_root_id: string | null;
 }
 
-interface SpaceAccessRow {
+export interface SpaceAccessRow {
   readonly id: string;
   readonly type: SpaceType;
   readonly name: string;
@@ -41,6 +41,20 @@ interface SpaceAccessRow {
   readonly public_read: 0 | 1;
   readonly member_role: Exclude<AccessRole, "owner"> | null;
 }
+
+export const spaceAccessColumns = `
+  spaces.id, spaces.type, spaces.name, spaces.owner_user_id, spaces.public_read,
+  space_members.role AS member_role`;
+
+export const spaceMemberJoin = `
+  LEFT JOIN space_members
+    ON space_members.space_id = spaces.id AND space_members.user_id = $userId`;
+
+export const visibleSpaceSql = `(
+  spaces.owner_user_id = $userId
+  OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL)
+  OR spaces.public_read = 1
+)`;
 
 export interface ResourceMappingRow {
   readonly resource_id: string;
@@ -134,25 +148,11 @@ export class AccessRepository {
     return (
       (this._database.connection
         .prepare(
-          `SELECT
-             spaces.id,
-             spaces.type,
-             spaces.name,
-             spaces.owner_user_id,
-             spaces.public_read,
-             space_members.role AS member_role
-           FROM spaces
-           LEFT JOIN space_members
-             ON space_members.space_id = spaces.id
-            AND space_members.user_id = ?
-           WHERE spaces.id = ?
-             AND (
-               spaces.owner_user_id = ?
-               OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL)
-               OR spaces.public_read = 1
-             )`,
+          `SELECT ${spaceAccessColumns}
+           FROM spaces ${spaceMemberJoin}
+           WHERE spaces.id = $spaceId AND ${visibleSpaceSql}`,
         )
-        .get(userId, spaceId, userId) as SpaceAccessRow | undefined) ?? null
+        .get({ userId, spaceId }) as SpaceAccessRow | undefined) ?? null
     );
   }
 

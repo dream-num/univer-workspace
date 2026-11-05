@@ -1,55 +1,82 @@
 import type { WorkspaceDatabase } from "../../db/database.js";
-import type { AccessRole, SpaceType } from "../access/index.js";
+import { spaceAccessColumns, spaceMemberJoin, visibleSpaceSql, type SpaceAccessRow } from "../access/index.js";
 import type { SpaceStar, SpaceView } from "./spaces.types.js";
 
-export interface DiscoverableSpaceRow {
-  readonly id: string;
-  readonly type: SpaceType;
-  readonly name: string;
-  readonly owner_user_id: string;
+export interface SpaceViewRow extends SpaceAccessRow {
   readonly owner_username: string;
-  readonly public_read: 0 | 1;
   readonly description: string;
   readonly slug: string | null;
-  readonly member_role: Exclude<AccessRole, "owner"> | null;
 }
+
+export type SpaceListScope = "mine" | "starred" | "explore" | "pins";
+
+const mineSql = `(spaces.owner_user_id = $userId
+  OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL))`;
+const pinnableSql = `(${mineSql} OR (spaces.public_read = 1 AND EXISTS (
+  SELECT 1 FROM space_stars WHERE space_stars.space_id = spaces.id AND space_stars.user_id = $userId
+)))`;
+const scopes: Record<SpaceListScope, { join: string; where: string; order: string }> = {
+  mine: {
+    join: "",
+    where: mineSql,
+    order: `CASE WHEN spaces.type = 'personal' AND spaces.owner_user_id = $userId THEN 0
+      WHEN spaces.owner_user_id = $userId THEN 1 ELSE 2 END, spaces.name COLLATE NOCASE, spaces.id`,
+  },
+  starred: {
+    join: "JOIN space_stars ON space_stars.space_id = spaces.id AND space_stars.user_id = $userId",
+    where: "1",
+    order: "space_stars.created_at DESC, spaces.id",
+  },
+  explore: {
+    join: "",
+    where: "spaces.public_read = 1 AND spaces.owner_user_id <> $userId AND space_members.user_id IS NULL",
+    // ponytail: Explore is unpaginated; add pagination when instance size requires it.
+    order: `(SELECT COUNT(*) FROM space_stars WHERE space_stars.space_id = spaces.id) DESC,
+      spaces.name COLLATE NOCASE, spaces.id`,
+  },
+  pins: {
+    join: "JOIN space_pins ON space_pins.space_id = spaces.id AND space_pins.user_id = $userId",
+    where: pinnableSql,
+    order: "space_pins.position",
+  },
+};
 
 const PERSONAL_SLUG = "personal";
 
 export class SpacesRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
 
-  listDiscoverable(userId: string): DiscoverableSpaceRow[] {
-    return this._database.connection
-      .prepare(
-        `SELECT
-           spaces.id,
-           spaces.type,
-           spaces.name,
-           spaces.owner_user_id,
-           users.username AS owner_username,
-           spaces.public_read,
-           spaces.description,
-           spaces.slug,
-           space_members.role AS member_role
-         FROM spaces
-         JOIN users ON users.id = spaces.owner_user_id
-         LEFT JOIN space_members
-           ON space_members.space_id = spaces.id
-          AND space_members.user_id = ?
-         WHERE spaces.owner_user_id = ?
-            OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL)
-            OR spaces.public_read = 1
-         ORDER BY
-           CASE
-             WHEN spaces.type = 'personal' AND spaces.owner_user_id = ? THEN 0
-             WHEN spaces.owner_user_id = ? THEN 1
-             ELSE 2
-           END,
-           spaces.name COLLATE NOCASE,
-           spaces.id`
-      )
-      .all(userId, userId, userId, userId) as unknown as DiscoverableSpaceRow[];
+  listViews(userId: string, scope: SpaceListScope): SpaceViewRow[] {
+    const { join, where, order } = scopes[scope];
+    return this._database.connection.prepare(`
+      SELECT ${spaceAccessColumns}, users.username AS owner_username, spaces.description, spaces.slug
+      FROM spaces
+      JOIN users ON users.id = spaces.owner_user_id
+      ${spaceMemberJoin}
+      ${join}
+      WHERE ${visibleSpaceSql} AND ${where}
+      ORDER BY ${order}
+    `).all({ userId }) as unknown as SpaceViewRow[];
+  }
+
+  replacePins(userId: string, spaceIds: readonly string[], createdAt: number): boolean {
+    return this._database.transaction((database) => {
+      const pinnable = database.prepare(`
+        SELECT spaces.id FROM spaces ${spaceMemberJoin}
+        WHERE spaces.id IN (SELECT value FROM json_each($ids)) AND ${pinnableSql}
+      `).all({ userId, ids: JSON.stringify(spaceIds) });
+      if (pinnable.length !== spaceIds.length) return false;
+      database.prepare("DELETE FROM space_pins WHERE user_id = ?").run(userId);
+      const insert = database.prepare(`
+        INSERT INTO space_pins (user_id, space_id, position, created_at) VALUES (?, ?, ?, ?)
+      `);
+      spaceIds.forEach((spaceId, position) => insert.run(userId, spaceId, position, createdAt));
+      return true;
+    });
+  }
+
+  deletePins(userId: string): void {
+    this._database.connection.prepare("DELETE FROM space_pins WHERE user_id = ?").run(userId);
   }
 
   getOwner(userId: string): SpaceView["owner"] {

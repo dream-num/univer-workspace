@@ -5,7 +5,7 @@ import type { AppsPageProps } from "../../page.types";
 import { HtmlAppPage } from "../../html-app-page";
 import { appTitle } from "../../../features/html-views/app-tree";
 import { htmlViewPagesQueryOptions } from "../../../features/views/html-views.queries";
-import { spacesQueryOptions } from "../../../features/spaces";
+import { mySpacesQueryOptions } from "../../../features/spaces";
 import { formatRelativeDate } from "../../../shared/format-relative-date";
 import { useI18n } from "../../../shared/i18n";
 import { Select } from "../../../shared/ui";
@@ -25,7 +25,7 @@ function RepositoryPagesDirectory({ spaceId, q = "" }: AppsPageProps) {
   const { t, language } = useI18n();
   const navigate = useNavigate();
   const query = useInfiniteQuery(htmlViewPagesQueryOptions(spaceId));
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(mySpacesQueryOptions);
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const term = q.trim().toLocaleLowerCase(language);
   const visible = items.filter((item) =>

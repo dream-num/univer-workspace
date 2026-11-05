@@ -16,10 +16,15 @@ async function setup() {
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   const ctx = new Context();
   const remote = [
-    { id: "personal", type: "personal", name: "Alice 的个人空间", accessRole: "owner" },
-    { id: "team", type: "team", name: "Team", accessRole: "editor" },
+    { id: "personal", type: "personal", name: "Alice 的个人空间", accessRole: "owner", affiliation: "owner" },
+    { id: "team", type: "team", name: "Team", accessRole: "editor", affiliation: "member" },
   ];
-  const request = vi.fn(async () => Response.json({ spaces: remote }));
+  const details = new Map(remote.map(space => [space.id, space]));
+  const request = vi.fn(async (path: string) => {
+    if (path === "/api/spaces") return Response.json({ spaces: remote });
+    const space = details.get(decodeURIComponent(path.slice("/api/spaces/".length)));
+    return space === undefined ? Response.json({}, { status: 404 }) : Response.json(space);
+  });
   let authorized = true;
   let switching = false;
   ctx.provide("workspaceAuth", {
@@ -65,11 +70,70 @@ async function setup() {
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   cleanups.unshift(() => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
   const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  return { service: ctx.get("univerWorkspace")!, origin, registered, records, create, request, resolveByPath,
+  return { service: ctx.get("univerWorkspace")!, origin, registered, records, create, request, resolveByPath, remote, details,
     beginSwitch: () => { switching = true; }, logout: () => { authorized = false; } };
 }
 
 describe("Explicit Space registration", () => {
+  it("links an unlisted public Space and retains it until detail access returns 404", async () => {
+    const { service, request, details, records } = await setup();
+    details.set("public/id", {
+      id: "public/id", type: "team", name: "Public", accessRole: "viewer", affiliation: "none",
+    });
+    const added = await service.addSpace("alice", "public/id");
+    expect(request).toHaveBeenCalledWith("/api/spaces/public%2Fid");
+    expect(request).not.toHaveBeenCalledWith("/api/spaces");
+    expect((await service.listSpaces("alice")).spaces).toEqual([
+      expect.objectContaining({ spaceId: "personal", affiliation: "owner" }),
+      expect.objectContaining({ spaceId: "team", affiliation: "member" }),
+      expect.objectContaining({ spaceId: "public/id", affiliation: "none", dshWorkspaceId: added.dshWorkspaceId }),
+    ]);
+    details.delete("public/id");
+    expect((await service.listSpaces("alice")).spaces.map(space => space.spaceId)).toEqual(["personal", "team"]);
+    expect(records.has(added.dshWorkspaceId)).toBe(true);
+    await expect(service.addSpace("alice", "public/id")).rejects.toThrow("workspace_space_unavailable");
+  });
+
+  it("retains a linked Space after membership ends without fetching listed Spaces twice", async () => {
+    const { service, request, remote } = await setup();
+    const added = await service.addSpace("alice", "team");
+    request.mockClear();
+    await service.listSpaces("alice");
+    expect(request.mock.calls).toEqual([["/api/spaces"]]);
+    remote.splice(1, 1);
+    expect((await service.listSpaces("alice")).spaces).toContainEqual(
+      expect.objectContaining({ spaceId: "team", dshWorkspaceId: added.dshWorkspaceId }),
+    );
+    expect(request).toHaveBeenCalledWith("/api/spaces/team");
+  });
+
+  it.each(["other user", "other origin", "missing registration"])(
+    "does not fetch unlisted links for %s",
+    async (scope) => {
+      const { service, records, registered, remote, request } = await setup();
+      const added = await service.addSpace("alice", "team");
+      const record = records.get(added.dshWorkspaceId)!;
+      if (scope === "other user") records.set(added.dshWorkspaceId, { ...record, userId: "bob" });
+      if (scope === "other origin") records.set(added.dshWorkspaceId, { ...record, origin: "https://other.test" });
+      if (scope === "missing registration") registered.clear();
+      remote.splice(1, 1);
+      request.mockClear();
+      expect((await service.listSpaces("alice")).spaces.map(space => space.spaceId)).toEqual(["personal"]);
+      expect(request.mock.calls).toEqual([["/api/spaces"]]);
+    },
+  );
+
+  it("propagates detail failures other than 404 when linking or listing", async () => {
+    const { service, request, remote } = await setup();
+    await service.addSpace("alice", "team");
+    remote.splice(1, 1);
+    request.mockImplementation(async (path: string) => path === "/api/spaces"
+      ? Response.json({ spaces: remote })
+      : Response.json({ error: { code: "UNAVAILABLE", message: "try later" } }, { status: 503 }));
+    await expect(service.listSpaces("alice")).rejects.toMatchObject({ status: 503, code: "UNAVAILABLE" });
+    await expect(service.addSpace("alice", "team")).rejects.toMatchObject({ status: 503, code: "UNAVAILABLE" });
+  });
+
   it("keeps a newly signed-in user's session list empty when reading identity and Spaces", async () => {
     const { origin, create, registered } = await setup();
     const identity = await fetch(`${origin}/api/uwh/me`);

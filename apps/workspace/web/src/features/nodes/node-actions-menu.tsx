@@ -5,7 +5,7 @@ import { useState, type ReactElement, type ReactNode } from "react";
 import { useUpdateNode, useTrashNode } from "./nodes.commands";
 import type { components } from "../../../../generated/http/schema.js";
 import { ShareDialog } from "../permissions";
-import { spacesQueryOptions } from "../spaces/spaces.queries";
+import { spaceQueryOptions } from "../spaces/spaces.queries";
 import { spaceSupportsIssues } from "../spaces/space.rules";
 import { useI18n } from "../../shared/i18n";
 import {
@@ -45,8 +45,8 @@ export function NodeActionsMenu(props: {
   const [renameOpen, setRenameOpen] = useState(false);
   const [editName, setEditName] = useState(props.node.name);
   const [trashOpen, setTrashOpen] = useState(false);
-  const spaces = useQuery(spacesQueryOptions);
-  const space = spaces.data?.spaces.find((item) => item.id === props.node.spaceId);
+  const spaces = useQuery(spaceQueryOptions(props.node.spaceId));
+  const space = spaces.data;
   // Referencing a file on an Issue is a triage action, so only Team Space editors and above see it.
   const canReferenceInIssue =
     space !== undefined && spaceSupportsIssues(space) && space.capabilities.triageIssues;

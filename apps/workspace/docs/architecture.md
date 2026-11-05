@@ -351,6 +351,14 @@ contracts/http/openapi.yaml + paths + schemas
 - 不生成服务端业务代码。
 - 目录随真实代码创建，不预先建立空层。
 
+## Space 列表与访问
+
+Access Module 共享 Space 可见性 SQL、Membership Join、投影与 `spaceAccessFromRow`；
+Spaces Module 的 `mine`、`starred`、`explore`、`pins` 范围各自只做一次列表查询。
+`toSpaceView` 统一产生详情与列表，`affiliation` 从所有者和成员事实派生。
+Pins 保存在产品库 V15 的 `space_pins`，不进入协同库。其资格校验和完整替换使用同一个产品事务。
+列表成员关系不充当访问授权；详情、全名、公开链接和匿名读取继续通过现有 Access Resolver。
+
 ## 匿名查看
 
 Node 与 Space 页面复用现有查询、目录与只读编辑器，未登录时使用轻量访客布局，不加载工作台
