@@ -733,7 +733,8 @@ export function realizeVisualFixture(board, api, profile, variant) {
   };
   const size = (item) => {
     if (["initial", "final"].includes(item.kind)) return { width: 28, height: 28 };
-    if (item.kind === "actor") return { width: 130, height: 128 };
+    if (item.kind === "actor")
+      return { width: variant === "long-bilingual" ? 260 : 130, height: 128 };
     const width = variant === "long-bilingual" ? 310 : item.kind === "decision" ? 256 : 218;
     const lines = item.detail
       .split("\n")

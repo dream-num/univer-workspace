@@ -114,6 +114,10 @@ instance's geometry and update the complete element through the public API; pres
 verify resizing. Do not copy SDK factory implementation or detach the caption into an unrelated text object.
 Keep authored endpoint sides, fractions and manual guides; bind new unconstrained relations to the glyph rather
 than its caption region.
+For a long generated actor caption, allocate a wider caption frame before growing its height; preserve the
+native glyph envelope, proportions and readable font sizes. Recheck the arm-site bindings after graph planning
+and inspect the complete caption at 100%. A fully fitting but excessively narrow paragraph still needs visual
+refinement.
 
 Start built-in presets at their native default insertion proportions rather than imposing one aspect ratio on every glyph.
 Preserve the native sequence factory's participant kind, geometry and default proportions. Actors, controls,
