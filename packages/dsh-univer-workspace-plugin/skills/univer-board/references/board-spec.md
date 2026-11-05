@@ -182,18 +182,24 @@ For a semantic visual scope, explicitly set native `containerData.behavior.layou
 interior remains available while borders and captions are checked; ordinary panels, tables and Embed keep body
 occupancy. Do not replace this native contract with custom metadata or use it to exempt diagnostics.
 
-For newly generated ordinary preset shapes, first check the installed lint help or tool schema for native text
-planning. When available, explicitly select their generated IDs with CLI `--plan-text <element-id...>` or the
-rendered lint input `textPlanElementIds`. Use rendered/both mode and retain every `analyses[].textPlan` and
+For explicitly selected generated ordinary presets and native stock Board glyphs, check the installed lint
+help or tool schema for native text planning. When available, select their IDs with CLI `--plan-text
+<element-id...>` or rendered lint input `textPlanElementIds`. Use rendered/both mode and retain every
+`analyses[].textPlan` and coverage diagnostic. Unchanged shipped glyph geometry can use this measured plan;
+user-authored custom paths remain unresolved. Never expand the selection to manual objects merely because
+their text overflows.
 
-若当前工具 schema 同时提供 `textPlanMaximumWidthGrowth`，可与 `textPlanElementIds` 一起传入 1 到 2 的有限增长上限；双语或横向较长的新图先用 1.25，再依据完整覆盖和截图调整。先确认安装版本确实支持；仅显式生成的普通图形参与。预算内原生计划 incomplete 时保留诊断，不能缩字、删字或回退猜测。
-coverage diagnostic. Apply only a ready plan for the unchanged current Board page with `board.applyLayoutPlan`,
-verify Undo/Redo and stale rejection, then replan the graph, fit generated containers and remeasure. The native
-planner preserves text and fonts while balancing width and height; do not replace it with a height-only ratio.
+When the installed tool schema exposes `textPlanMaximumWidthGrowth`, pass a finite limit from 1 to 2
+with `textPlanElementIds`; use 1 to retain the original width, or start at 1.25 for bilingual/wide diagrams.
+Confirm support in the installed version first. Preserve complete text and font sizes; an incomplete plan
+within the growth budget retains its diagnostics rather than shrinking or deleting text or guessing sizes.
+Apply only a ready plan for the unchanged current Board page with `board.applyLayoutPlan`, verify Undo/Redo
+and stale rejection, then replan the graph, fit generated containers and remeasure. The native planner
+balances width and height; do not replace it with a height-only ratio.
 `FBoard.planRenderedTextLayout` belongs to the browser Boards UI; headless `execute` consumes a lint-produced
-plan rather than calling this browser-only method. Missing or incomplete plan support stays unresolved, with
-no guessed ordinary-shape fallback. Keep custom geometry, native structures, fixed/locked/unselectable/managed
-owners and manual edits outside this generated selection.
+plan rather than calling this browser-only method. Missing/incomplete support stays unresolved. Keep authored
+custom geometry, native structures, fixed/locked/unselectable/managed owners and manual edits outside this
+generated selection.
 
 For explicitly authorized generated sequence participant headers, use their native `textLayout`
 content/available ratio without altering lifelines, messages, activation bars or fonts. For a table, use the inclusive zero-based `tableRange`
@@ -201,6 +207,8 @@ to resize only the measured rows/columns, including every row/column in a merged
 and styles. A whole-table native paint measurement without a cell range, whose available size matches the current
 outer frame, can instead grow the Table element frame
 through `setElementsTransform`, preserving every resource row, cell and style; an invalid partial range is refused.
+Native minimum row heights and wrapping can make table paint taller than the requested element frame; use
+measured `elementCaptureBounds` for routing and container fit instead of assuming the requested height was painted.
 Keep fixed, locked, unselectable and native/managed owners unchanged, verify each write with Undo/Redo,
 then replan, fit and remeasure. Stop after a bounded number of attempts (at most three); roll back the growth if
 the fresh graph plan is incomplete and retain unresolved/missing measurements instead of guessing sizes.
