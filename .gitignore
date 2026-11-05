@@ -9,6 +9,5 @@ coverage/
 .vscode/
 *.tsbuildinfo
 .agents/
-.claude/
 skills-lock.json
 .gstack/
