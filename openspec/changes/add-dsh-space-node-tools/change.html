@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dsh-univer-work Space/Node tools</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --paper: #f5f5f5;
+      --surface: #ffffff;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --rule: rgba(45, 49, 66, 0.14);
+      --accent: #eb6c36;
+      --accent-text: #a8421a;
+      --accent-tint: #fff0e9;
+      --link: #2e5aa8;
+      --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; }
+    body { min-width: 320px; min-height: 100vh; padding: 40px 24px; background: var(--paper); color: var(--ink); font-family: var(--sans); }
+    .page { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow, .label, footer { font-family: var(--mono); }
+    .eyebrow { margin-bottom: 8px; color: var(--accent-text); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+    h1 { max-width: 920px; overflow-wrap: anywhere; font-size: clamp(32px, 5vw, 52px); line-height: 1.08; }
+    .thesis { max-width: 840px; margin: 16px 0 32px; color: var(--muted); font-size: 18px; line-height: 1.6; }
+    .diagram { overflow-x: auto; padding: 8px 0 24px; }
+    .diagram:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+    svg { display: block; width: 100%; min-width: 900px; height: auto; }
+    .brief { display: grid; grid-template-columns: 1.05fr 1.05fr 0.9fr; gap: 16px; margin-top: 24px; }
+    .card { min-width: 0; padding: 20px; overflow-wrap: anywhere; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+    .label { margin-bottom: 12px; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card p, .card li { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .card ul { padding-left: 20px; }
+    .card li + li { margin-top: 6px; }
+    code { color: var(--ink); font-family: var(--mono); font-size: 0.92em; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+    footer a { color: var(--link); }
+    @media (max-width: 760px) { body { padding: 24px 16px; } .brief { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Tina Change View · add-dsh-space-node-tools</p>
+      <h1>七个稳定 tools 复用一条 Space/Node Core 路径</h1>
+      <p class="thesis">四个 Node mutation 先用同一纯 validator 拒绝非法参数，再请求一次性 approval，body 随后复验；DSH 已记录的 caller arguments 不在插件可抹除范围内。</p>
+    </header>
+
+    <section class="diagram" aria-label="Space/Node tools 架构与授权边界，可横向滚动" tabindex="0">
+      <svg viewBox="0 0 1080 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="space-tools-title space-tools-desc">
+        <title id="space-tools-title">dsh-univer-work Space/Node tools 架构与授权边界</title>
+        <desc id="space-tools-desc">DSH Agent 分别调用三个 Space 只读工具或四个 Node mutation 工具。mutation policy 先用与 body 相同的纯 validator 检查参数，合法才请求 DSH approval。两条路径汇入 Host adapter，再调用 WorkspaceSpaceFeature 和 Workspace Server。</desc>
+        <defs>
+          <marker id="space-tools-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+          </marker>
+          <marker id="space-tools-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+          </marker>
+        </defs>
+        <rect width="1080" height="620" fill="#f5f5f5"/>
+
+        <path d="M 224 310 H 272 V 158 H 332" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#space-tools-arrow)"/>
+        <path d="M 224 310 H 272 V 462 H 332" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#space-tools-arrow-accent)"/>
+        <path d="M 532 462 H 572" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#space-tools-arrow-accent)"/>
+        <path d="M 532 158 H 620 V 244" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#space-tools-arrow)"/>
+        <path d="M 672 410 V 376" fill="none" stroke="#eb6c36" stroke-width="2" marker-end="url(#space-tools-arrow-accent)"/>
+        <path d="M 772 310 H 824" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#space-tools-arrow)"/>
+        <path d="M 934 258 V 214" fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#space-tools-arrow)"/>
+
+        <rect x="236" y="136" width="76" height="28" rx="4" fill="#f5f5f5"/>
+        <text x="274" y="155" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">read-only</text>
+        <rect x="230" y="444" width="88" height="28" rx="4" fill="#f5f5f5"/>
+        <text x="274" y="463" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">consequential</text>
+        <rect x="540" y="444" width="44" height="28" rx="4" fill="#f5f5f5"/>
+        <text x="562" y="463" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">ask</text>
+        <rect x="780" y="292" width="36" height="28" rx="4" fill="#f5f5f5"/>
+        <text x="798" y="311" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">Core</text>
+        <rect x="898" y="224" width="72" height="28" rx="4" fill="#f5f5f5"/>
+        <text x="934" y="243" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="11" text-anchor="middle">HTTP-only</text>
+
+        <rect x="44" y="254" width="180" height="112" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="134" y="300" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="19" font-weight="600" text-anchor="middle">DSH Agent</text>
+        <text x="134" y="330" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">Native / Code Mode</text>
+
+        <rect x="332" y="102" width="200" height="112" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="432" y="144" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">3 个 Space tools</text>
+        <text x="432" y="172" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle">list · browse · find</text>
+        <text x="432" y="194" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">closed root + exact keys</text>
+
+        <rect x="332" y="406" width="200" height="112" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="432" y="448" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">4 个 Node tools</text>
+        <text x="432" y="476" fill="#a8421a" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle">create · rename · move · trash</text>
+        <text x="432" y="498" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">pure validate before ask</text>
+
+        <rect x="572" y="410" width="200" height="104" rx="8" fill="#fff0e9" stroke="#eb6c36" stroke-width="2"/>
+        <text x="672" y="452" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">DSH approval</text>
+        <text x="672" y="480" fill="#a8421a" font-family="PingFang SC, sans-serif" font-size="13" text-anchor="middle">valid 才 ask · allowed-once 才执行</text>
+
+        <rect x="572" y="244" width="200" height="132" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="672" y="284" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Host tool adapter</text>
+        <text x="672" y="312" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">authenticated resolver</text>
+        <text x="672" y="334" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">code allowlist · safe detail</text>
+        <text x="672" y="356" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">ABORTED / disposing / unknown</text>
+
+        <rect x="824" y="258" width="220" height="104" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="934" y="300" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">WorkspaceSpaceFeature</text>
+        <text x="934" y="328" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">parser · traversal · read-back</text>
+
+        <rect x="824" y="86" width="220" height="128" rx="8" fill="#ffffff" stroke="#4f5d75"/>
+        <text x="934" y="134" fill="#2d3142" font-family="PingFang SC, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Workspace Server</text>
+        <text x="934" y="162" fill="#4f5d75" font-family="ui-monospace, monospace" font-size="13" text-anchor="middle">Product HTTP /api</text>
+        <text x="934" y="186" fill="#4f5d75" font-family="PingFang SC, sans-serif" font-size="12" text-anchor="middle">contract 不变</text>
+      </svg>
+    </section>
+
+    <section class="brief" aria-label="决策摘要">
+      <article class="card">
+        <p class="label">Scope / Non-goals</p>
+        <ul>
+          <li>只交付 Space list/browse/find 与 Node create/rename/move/trash。</li>
+          <li>Host-only、HTTP-only；复用 Change 2 的认证与 owner。</li>
+          <li>不加入 Worktree/Unit/open、文件、runtime、Skills、Web 或 Jobs。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Decisions</p>
+        <ul>
+          <li>七个 operation-specific names，closed root 与 exact-key runtime gate 同时生效。</li>
+          <li>四个 mutation 在 <code>tools/pre-execute</code> 中先纯校验，合法才 ask；body 再验。</li>
+          <li>自指 move 在 resolver 前拒绝；后代与跨 Space 仍由 Server 判断。</li>
+        </ul>
+      </article>
+      <article class="card">
+        <p class="label">Risks / Impact</p>
+        <ul>
+          <li>caller-aborted late success 由 DSH 记为 <code>ABORTED</code>；随后 browse/find 核对且不自动重放。</li>
+          <li>tool-owned <code>workspace-result-unknown</code> 保留；owner-only dispose 可返回 Core 已确认结果。</li>
+          <li>错误只透传冻结 code allowlist 与 exact safe detail。</li>
+          <li>Native call 与 Code Mode start/settled arguments 可保留原参数；approval、failure/result、plugin context/log 不复制。</li>
+          <li>影响 DSH app 与 Client Core；Server、CLI contract 和 SDK baseline 不变。</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer>
+      此页面由 <a href="proposal.md">proposal.md</a> 与 <a href="design.md">design.md</a> 派生，仅供审阅；Markdown sources 是权威来源。
+    </footer>
+  </main>
+</body>
+</html>
