@@ -42,10 +42,18 @@ export function connectHtmlView(
   });
   let disposed = false;
   let pending = false;
+  let localChanges = false;
+  // Confirmation alone is indistinguishable from an untouched offline page, so latch
+  // that an edit was seen until the SDK reports nothing pending.
+  let edited = false;
   let inspecting = false;
   options.onInspectChanged?.(false);
   const unsubscribe = view.subscribe((state) => {
-    pending = state.pending.drafts || state.pending.writes || state.pending.confirmation;
+    const { drafts, writes, confirmation } = state.pending;
+    if (drafts || writes) edited = true;
+    else if (!confirmation) edited = false;
+    localChanges = drafts || writes || (edited && confirmation);
+    pending = localChanges || confirmation;
     options.onStatus?.(
       state.sources.flatMap((source) => (source.status === undefined ? [] : [source.status])),
     );
@@ -57,6 +65,7 @@ export function connectHtmlView(
   return {
     prepareToLeave: view.prepareToLeave,
     hasPendingChanges: () => pending,
+    hasLocalChanges: () => localChanges,
     inspect: {
       open: () =>
         view.inspect.open({

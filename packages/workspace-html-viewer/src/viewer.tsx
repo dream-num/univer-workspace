@@ -3,7 +3,7 @@ import { connectHtmlView, type HtmlViewHostOptions } from "./connection.js";
 
 export type WorkspaceHtmlViewerHandle = Pick<
   ReturnType<typeof connectHtmlView>,
-  "prepareToLeave" | "inspect" | "hasPendingChanges"
+  "prepareToLeave" | "inspect" | "hasPendingChanges" | "hasLocalChanges"
 >;
 
 export interface WorkspaceHtmlViewerProps extends HtmlViewHostOptions {
@@ -38,6 +38,7 @@ export const WorkspaceHtmlViewer = forwardRef<WorkspaceHtmlViewerHandle, Workspa
           },
         },
         hasPendingChanges: () => connection.current?.hasPendingChanges() ?? false,
+        hasLocalChanges: () => connection.current?.hasLocalChanges() ?? false,
       }),
       [],
     );

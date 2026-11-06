@@ -64,6 +64,7 @@ export function HtmlView({
   useBlocker({
     shouldBlockFn: async ({ current, next }) => {
       if (isResourceViewChange(current, next)) return false;
+      if (!viewer.current?.hasLocalChanges()) return false;
       try {
         await viewer.current?.prepareToLeave();
         return false;
