@@ -176,6 +176,10 @@ blocks remain outside the replacement. Native block IDs and boundaries are check
 Set `UNIVER_LICENSE` to a non-empty value to override the bundled runtime license. Office
 import and export also verify the license with `UNIVER_LICENSE_KEY`; override both together.
 
+## Debugging
+
+Set `UNIVER_DEBUG=1` to print the stack trace of an unexpected failure instead of its message.
+
 ## Project links
 
 - [Univer Workspace repository](https://github.com/dream-num/univer-workspace)
