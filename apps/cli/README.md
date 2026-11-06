@@ -44,16 +44,16 @@ templates at once.
 
 ## SDK capabilities in one CLI
 
-| Agent outcome           | Univer capabilities composed                                                  |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| Author rich content     | Facade APIs across Sheet, Doc, Slide, Base, and Board                         |
-| Work in isolation       | Personal and Team Spaces, task Worktrees, stable Resource and Unit identities |
-| Verify results          | Structured inspection, layout capture, PNG rendering, and PDF printing         |
-| Exchange business files | Office import and export with original-file preservation                      |
-| Generate content        | Typst-to-Doc and SVG-to-editable-Slide compilation                            |
-| Compose across Units    | Embedded Units and cross-Unit formulas backed by Workspace identities         |
-| Take requests from teams | Team Space Issues (`uvw issue`): read the brief and its discussion, comment, label, and close |
-| Deliver for review      | Pull requests (`uvw pr`, Worktrees): revisions, ready state, direct review links, and controlled merging  |
+| Agent outcome            | Univer capabilities composed                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Author rich content      | Facade APIs across Sheet, Doc, Slide, Base, and Board                                                    |
+| Work in isolation        | Personal and Team Spaces, task Worktrees, stable Resource and Unit identities                            |
+| Verify results           | Structured inspection, layout capture, PNG rendering, and PDF printing                                   |
+| Exchange business files  | Office import and export with original-file preservation                                                 |
+| Generate content         | Markdown/Typst-to-Doc and SVG-to-editable-Slide compilation                                              |
+| Compose across Units     | Embedded Units and cross-Unit formulas backed by Workspace identities                                    |
+| Take requests from teams | Team Space Issues (`uvw issue`): read the brief and its discussion, comment, label, and close            |
+| Deliver for review       | Pull requests (`uvw pr`, Worktrees): revisions, ready state, direct review links, and controlled merging |
 
 Together, these capabilities show the range of products and workflows that can be built with the
 Univer SDK.
@@ -115,16 +115,61 @@ Commands follow the GitHub CLI's naming. A repository is a Space, named `<owner>
 (`<username>/personal` is your Personal Space); pass it with `-R` or set `UVW_REPO`. A pull request is a
 Worktree; `uvw worktree ...` is the same command group under its product name.
 
-| Group | Commands |
-| --- | --- |
-| Core | `auth login/logout/status`, `repo list/view/create/edit/rename`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse` |
-| Content | `space browse/find/node`, `unit`, `execute`, `inspect`, `screenshot`, `lint`, `print-pdf`, `import`, `export`, `compile-typst`, `compile-svg`, `blob`, `asset`, `html-view` |
-| Setup | `config`, `daemon`, `skills`, `resources`, `api` |
+| Group   | Commands                                                                                                                                                                                                                                                |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core    | `auth login/logout/status`, `repo list/view/create/edit/rename`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse` |
+| Content | `space browse/find/node`, `unit`, `execute`, `inspect`, `screenshot`, `lint`, `print-pdf`, `import`, `export`, `compile-markdown`, `export-markdown`, `compile-typst`, `compile-svg`, `blob`, `asset`, `html-view`                                      |
+| Setup   | `config`, `daemon`, `skills`, `resources`, `api`                                                                                                                                                                                                        |
 
 `--json [fields]` prints the bare object or array, optionally narrowed to the listed fields. Exit code 4
 means sign-in is required. `pr discard` is irreversible; there is no `pr close` or `pr reopen`
 (use `pr ready --undo` to return to draft). Content commands take `--worktree <id>`, the `id` from
 `uvw pr view <n> -R <repo> --json id`.
+
+## Modern Docs from Markdown
+
+`compile-markdown` uses the shared Univer AI SDK compiler to create editable Modern Docs.
+Standard Markdown/GFM covers headings, rich text, lists, quotes, code, images, and tables.
+Univer directives add callouts, columns, native charts/shapes, inline styles, and supported ranges.
+Body spacing and heading styles inherit the Univer SDK defaults; agents do not need to specify typography.
+Callouts also inherit native theme colors. Omit `tone` and color overrides for normal generation;
+use an explicit `tone` only when the user requests a custom semantic color:
+
+```markdown
+:::callout{#notice}
+Review the launch checklist before publishing.
+:::
+```
+
+Local resource paths resolve relative to the Markdown file and must remain inside its source directory.
+
+```bash
+uvw compile-markdown report.md --out review/doc.js --json
+uvw compile-markdown report.md --apply --worktree <id> --space <space-id> \
+  --source-map-out review/source-map.json --json
+uvw export-markdown --worktree <id> --unit <doc-id> \
+  --source-map review/source-map.json --blocks intro --out review/update.md \
+  --source-map-out review/current-map.json --json
+uvw compile-markdown review/update.md --apply --worktree <id> --unit <doc-id> \
+  --source-map review/current-map.json --blocks intro \
+  --source-map-out review/current-map.json --json
+```
+
+For updates, assign explicit IDs in the source and retain the materialized source map. The replacement
+source must retain the selected top-level IDs; a full source file is also accepted, and only selected
+blocks are applied. Invalid native mappings or block boundaries fail before content is changed.
+The exported revision is read metadata, not a required update argument.
+Save each successful execution map for the next edit. Direct native edits remain authoritative;
+Markdown is not automatically synchronized back from the document. Worktree review and merge stay explicit.
+
+To edit a generated block after native document changes, first use `export-markdown`. It runs a
+read-only shared SDK program against the current native Doc, writes the selected blocks and local
+resource sidecars, and returns the authoritative revision from that same runtime read. Edit the
+exported Markdown and pass its refreshed source map and selected block IDs to `compile-markdown`.
+Current Workspace image assets resolve through the authenticated Worktree Asset API.
+The source-map JSON includes `{ unitId, revision, sourceMap }`; it is accepted by `--source-map`.
+Exports that cannot represent selected native content without loss fail with diagnostics. Unselected
+blocks remain outside the replacement. Native block IDs and boundaries are checked before update.
 
 ## License policy
 

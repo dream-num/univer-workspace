@@ -15,11 +15,13 @@
 - 提供 Blob/Asset 协议、bounded recovery，以及同进程 local Node filesystem 的原子文件传输。
 - 提供 runtime target、Worktree/Trunk source resolution、Snapshot read adapter 与 referenced-Unit policy。
 - 提供 Shell-neutral worker composition、content runtime pool、同步读取、UnitData export、Facade execution、
-  embedded-image externalization 与 changeset commit workflow。SDK 1.1.0 的 headless factory 为五类 Unit
+  embedded-image externalization 与 changeset commit workflow。当前 headless factory 为五类 Unit
   注册评论 model，已有评论 anchor 在 replay 与 export 中保留；`test/comment-anchors.test.ts` 守住这一上游合同。
 - 提供 Node-hosted Office import/export、格式与 Unit 类型校验、Worktree Unit/runtime 集成和默认 exchange adapter。
   导出通过当前 Worktree 的已认证 Asset 读取解析图片 ID，仅在导出副本中恢复内嵌图片；
   缺失、无权限或无效图片使导出失败，不静默丢图，也不写回 Unit 或产生新 revision。
+- 提供 Markdown 到原生 Modern Doc 的共享编译适配、资源边界校验、创建和按稳定 ID 的局部更新；沿用 SDK 默认排版。
+- 通过共享 SDK 只读程序把当前原生选中块反转换为 Markdown 和资源文件，返回同次 runtime 读取的 revision 与刷新后的 source map，支持编辑后安全局部更新。
 - 提供 Typst bundle 编译、确定性 Doc materialization，以及可选的 Worktree Unit apply workflow。
 - 提供 render Unit 装配、browser screenshot capture、PNG 输出、PDF 打印、Slide layout lint，以及配套 render page 构建源。
 - 提供本机 SVG/relative asset 编译、真实或估算字体测量、Slide page 包装与 Worktree apply workflow。
@@ -40,3 +42,7 @@
 Node-hosted Client Shell 必须注入 Workspace origin、协议调用所需凭据或已认证 HTTP capability。
 `apps/cli` 当前是第一个 consumer。CLI 注入 authenticated HTTP 与 configured origin，并继续负责
 Commander、Session/config、输出与打开或打印 review URL 的交互。
+
+`./markdown` 与 `./document-materialize` 是供 Node-hosted clients 使用的窄入口。它们只向 consumer
+暴露 source、diagnostic、source map 与 UnitData 等 JSON 合同；headless runtime 的 Facade/DI 类型
+留在 materialization implementation 内，以保持 Workspace Browser 与 DSH 的 React/Redi 图隔离。

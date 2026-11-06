@@ -34,6 +34,7 @@
   "dependencies": {
     "@univer-cli/content-execution": "1.3.1",
     "@univer-cli/content-inspection": "1.3.1",
+    "@univer-cli/doc-markdown-facade": "1.3.1",
     "@univerjs-pro/bases-thread-comment": "1.3.1",
     "@univerjs-pro/boards-print": "1.3.1",
     "@univerjs-pro/boards-thread-comment": "1.3.1",
@@ -46,6 +47,7 @@
     "@univerjs-pro/slides-print": "1.3.1",
     "@univerjs-pro/slides-thread-comment": "1.3.1",
     "@univerjs/docs-thread-comment": "1.3.1",
+    "@univerjs/univer-workspace-client-core": "workspace:*",
     "ws": "8.21.3"
   },
   "devDependencies": {

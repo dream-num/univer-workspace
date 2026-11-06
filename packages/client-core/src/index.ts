@@ -110,14 +110,15 @@ export {
   type WorkspaceTypstMaterializeResult,
   type WorkspaceTypstMaterializer,
 } from "./typst.js";
-export { HeadlessWorkspaceTypstMaterializer } from "./typst-materialize.js";
+export {
+  HeadlessWorkspaceTypstMaterializer,
+  HeadlessWorkspaceDocumentMaterializer,
+} from "./typst-materialize.js";
 export {
   WorkspaceUnitLayoutLintFeature,
   type WorkspaceUnitLayoutLintFeatureOptions,
 } from "./layout-lint.js";
-export {
-  WorkspaceContentSource,
-} from "./runtime-source.js";
+export { WorkspaceContentSource } from "./runtime-source.js";
 export {
   WorkspaceRenderUnitLoader,
   type WorkspaceRenderUnitLoadInput,
@@ -203,3 +204,25 @@ export {
   type WorkspaceWorktree,
   type WorkspaceWorktreeState,
 } from "./worktree-model.js";
+
+export {
+  compileWorkspaceMarkdownFile,
+  WorkspaceCompileMarkdownFeature,
+  type WorkspaceMarkdownCompilation,
+  type WorkspaceMarkdownOptions,
+  type WorkspaceCompileMarkdownInput,
+  type WorkspaceCompileMarkdownResult,
+  type WorkspaceCompileMarkdownDependencies,
+} from "./markdown.js";
+
+export { parseDocMarkdownSourceMap } from "@univer-cli/doc-markdown-facade";
+
+export {
+  WorkspaceExportMarkdownFeature,
+  type WorkspaceExportMarkdownInput,
+} from "./markdown-export-feature.js";
+export {
+  writeWorkspaceMarkdownExport,
+  type WorkspaceMarkdownExportResult,
+} from "./markdown-export.js";
+export { readWorkspaceMarkdownImage } from "./markdown-assets.js";

@@ -22,7 +22,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   See the [CLI README](apps/cli/README.md).
 - The private Node-hosted Workspace Client Core under `packages/client-core`, including shared Workspace HTTP,
   error, storage-neutral authentication protocol, Space/Node model, remote workflow behavior, and worker-backed
-  content runtime lifecycle, including Office, Typst, rendering, and SVG workflows. It is bundled into repository
+  content runtime lifecycle, including Office, Markdown, Typst, rendering, and SVG workflows. It is bundled into repository
   applications and is not a separately published SDK.
 - The private Browser reference-provider policy under `packages/reference-provider`. It is an internal module,
   not a separately provided application or a cross-repository SDK contract.

@@ -60,13 +60,13 @@ separate profile matters here for four reasons:
 
 ### Profile isolation is not account isolation
 
-| Boundary | What owns it |
-| --- | --- |
-| Installed plugins and composition patches | The dedicated DSH profile, assembled by `build-profile.sh` |
-| Workspace connection, login, and account switching | Agent core; one active connection per running instance |
+| Boundary                                                                     | What owns it                                                                           |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Installed plugins and composition patches                                    | The dedicated DSH profile, assembled by `build-profile.sh`                             |
+| Workspace connection, login, and account switching                           | Agent core; one active connection per running instance                                 |
 | Account-specific Sessions, indexes, attachments, and local Space directories | Runtime directories selected by Workspace origin and user ID under `UWH_DSH_DATA_HOME` |
-| Shared local model settings and browser-session signing state | Agent's shared settings and credentials paths |
-| Remote document access and mutation permissions | Workspace server |
+| Shared local model settings and browser-session signing state                | Agent's shared settings and credentials paths                                          |
+| Remote document access and mutation permissions                              | Workspace server                                                                       |
 
 Use the same profile when switching Workspace accounts; the application switches
 account-owned services and data directories without reinstalling plugins or
@@ -82,7 +82,7 @@ as a substitute for those explicit storage boundaries.
 
 ## Persisted comment anchors
 
-The headless worker (through the SDK 1.1.0 headless factory) and the browser
+The headless worker (through the pinned SDK headless factory) and the browser
 Viewer (in its own pipeline, `src/client/viewer/rendering.ts`) register the
 Thread Comment models for Sheet, Doc, Slide, Base and Board so existing comment
 anchors survive replay, export and Viewer saves. Neither installs comment UI or
@@ -238,18 +238,20 @@ remote Workspace Resources. The shared operations are deliberately mapped to
 the remote contract rather than accepting a local file path that the server
 cannot authorize:
 
-| dsh-univer-office                                          | Workspace plugin                                                       | Boundary                                                                                                                                   |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `univer_new`                                               | `univer_new` / `univer_create`                                         | Resource creation is a Workspace API operation; the result is opened to resolve `unitId`.                                                  |
-| `univer_unit`                                              | `univer_unit` (`create`, `remove`, `restore`)                                        | Create draft Units or update their deletion intent through the Workspace product API; merge approval remains a separate Worktree action. |
-| `univer_status`                                            | `univer_status` + `univer_spaces`, `univer_documents`, `univer_open`   | Status returns the selected trunk Resource or Worktree Unit/file-state; Space, Node and Unit identity remain separate remote resources.    |
-| `univer_execute`                                           | `univer_execute` (or `univer_edit` `mode=write`)                       | Writes are Worktree-scoped and commit a collaboration changeset; exactly one inline `code`/safe session `codeFile` is accepted.            |
-| `univer_inspect`                                           | `univer_inspect`                                                       | Uses the public content-inspection SDK over the same headless collaboration runtime; range selectors are validated before execution.       |
-| `univer_worktree`                                          | `univer_worktree`                                                      | Lifecycle and approval semantics are aligned.                                                                                              |
-| `univer_import` / `univer_export`                          | same names                                                             | Local exchange SDK conversion; import creates a Worktree-local Unit and export reads trunk/draft UnitData into a session-relative output.  |
-| `univer_api`                                               | `univer_api` (`find`/`show`)                                           | Pinned local CLI SDK reference; read-only and independent of Workspace ACL.                                                                |
-| `univer_resources`                                         | `univer_resources` (`registries`/`find`/`read`/`export`/`clear-cache`) | Pinned local visual-resource library; cache/export are session-relative. This is not a product Resource listing.                           |
-| `univer_screenshot` / `univer_lint` / `univer_compile_svg` | —                                                                      | No deployable remote render contract is available yet; these remain explicit follow-up work, not silently faked tools.                     |
+| dsh-univer-office                                          | Workspace plugin                                                       | Boundary                                                                                                                                  |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `univer_new`                                               | `univer_new` / `univer_create`                                         | Resource creation is a Workspace API operation; the result is opened to resolve `unitId`.                                                 |
+| `univer_unit`                                              | `univer_unit` (`create`, `remove`, `restore`)                          | Create draft Units or update their deletion intent through the Workspace product API; merge approval remains a separate Worktree action.  |
+| `univer_status`                                            | `univer_status` + `univer_spaces`, `univer_documents`, `univer_open`   | Status returns the selected trunk Resource or Worktree Unit/file-state; Space, Node and Unit identity remain separate remote resources.   |
+| `univer_execute`                                           | `univer_execute` (or `univer_edit` `mode=write`)                       | Writes are Worktree-scoped and commit a collaboration changeset; exactly one inline `code`/safe session `codeFile` is accepted.           |
+| `univer_inspect`                                           | `univer_inspect`                                                       | Uses the public content-inspection SDK over the same headless collaboration runtime; range selectors are validated before execution.      |
+| `univer_worktree`                                          | `univer_worktree`                                                      | Lifecycle and approval semantics are aligned.                                                                                             |
+| `univer_import` / `univer_export`                          | same names                                                             | Local exchange SDK conversion; import creates a Worktree-local Unit and export reads trunk/draft UnitData into a session-relative output. |
+| `univer_api`                                               | `univer_api` (`find`/`show`)                                           | Pinned local CLI SDK reference; read-only and independent of Workspace ACL.                                                               |
+| `univer_resources`                                         | `univer_resources` (`registries`/`find`/`read`/`export`/`clear-cache`) | Pinned local visual-resource library; cache/export are session-relative. This is not a product Resource listing.                          |
+| `univer_compile_markdown`                                  | `univer_compile_markdown`                                              | Shared Markdown compiler, SDK default styling, and stable-ID block updates in a draft Worktree.                                           |
+| `univer_export_markdown`                                   | `univer_export_markdown`                                               | Read selected current native Doc blocks to session Markdown/resources with their authoritative revision and refreshed mapping.            |
+| `univer_screenshot` / `univer_lint` / `univer_compile_svg` | —                                                                      | No deployable remote render contract is available yet; these remain explicit follow-up work, not silently faked tools.                    |
 
 ## Architecture boundary
 
@@ -347,3 +349,18 @@ sign-in button. A successful status request with `connected: false` remains a
 sign-in state, while permission and network failures retain their own errors.
 Desktop delegates sign-in to its default-browser bridge; browser deployments
 keep the local OAuth navigation. Settings also offers **Switch account**.
+
+Modern Doc generation uses `univer_compile_markdown`: session Markdown and bounded local resources are compiled
+through the same Univer AI SDK capability as both CLIs. It creates a staged native Doc with SDK default styling;
+explicit source IDs and execution source maps support stable-ID block replacement. Native edits remain authoritative.
+Callouts inherit native SDK theme colors by default. Author `:::callout{#notice}` without `tone`
+or color overrides; supply an explicit `tone` only when the user requests a custom semantic color.
+
+Use `univer_export_markdown` before changing a block that may have been edited natively. Provide its
+Worktree, Unit, previous `sourceMapFile`, selected `blockIds`, and session `out` Markdown path. The
+tool reads current native content, writes resource sidecars beside the Markdown, and saves a refreshed
+map with the same-read revision to `sourceMapOut` (default `<out>.map.json`). Current Workspace image
+resources are resolved through the authenticated Worktree Asset API. Edit the exported file,
+then call `univer_compile_markdown` with that map and the same selected IDs. The exported revision
+remains read metadata. Export performs no document write. Unsupported selected content
+fails rather than silently losing native structure.

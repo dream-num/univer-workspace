@@ -236,6 +236,12 @@ export abstract class UniverWorkspaceService extends Service {
   /** Read one Unit's data with the Facade API. */
   abstract readUnit(userId: string, input: EditUnitInput): Promise<CollaborationRuntimeValue>;
 
+  /** Read current native content with its authoritative same-lease revision metadata. */
+  abstract readUnitWithRevision(
+    userId: string,
+    input: EditUnitInput,
+  ): Promise<{ readonly value: CollaborationRuntimeValue; readonly revision: number }>;
+
   /** Inspect stable structured Unit content with the SDK inspection contract. */
   abstract inspectUnit(userId: string, input: InspectUnitInput): Promise<ContentInspectionResult>;
 

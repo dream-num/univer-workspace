@@ -349,6 +349,25 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await this.runtimeManager.read(target, input.code);
   }
 
+  async readUnitWithRevision(
+    userId: string,
+    input: EditUnitInput,
+  ): Promise<{ readonly value: CollaborationRuntimeValue; readonly revision: number }> {
+    const client = this.requireClient(userId);
+    return await this.runtimeManager.readWithRevision(
+      {
+        origin: client.origin,
+        revision: input.revision ?? -1,
+        scope: input.scope,
+        unitId: input.unitId,
+        unitType: input.unitType,
+        sessionToken: client.sessionToken,
+        license: this.config.license,
+      },
+      input.code,
+    );
+  }
+
   async inspectUnit(userId: string, input: InspectUnitInput): Promise<ContentInspectionResult> {
     const client = this.requireClient(userId);
     const target: WorkspaceRuntimeTarget = {

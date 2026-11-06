@@ -2,6 +2,7 @@ import { build } from "esbuild";
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { build as viteBuild } from "vite";
+import { nodeEsmOptions } from "./node-esm-options.mjs";
 
 // DSH bundles are consumed from a dsh profile, not from this workspace, so
 // every package builds self-contained artifacts: a node ESM host bundle and
@@ -68,6 +69,7 @@ await copyFile(
 );
 
 await build({
+  ...nodeEsmOptions,
   entryPoints: ["src/index.ts"],
   outdir: "lib",
   splitting: true,
@@ -95,6 +97,7 @@ await viteBuild({ configFile: "vite.client.config.mjs" });
 // the whole Univer headless dependency graph. Node builtins stay external; the
 // Univer packages are bundled so the worker is self-contained.
 await build({
+  ...nodeEsmOptions,
   entryPoints: ["src/runtime/worker.ts"],
   outfile: "lib/worker.js",
   bundle: true,
