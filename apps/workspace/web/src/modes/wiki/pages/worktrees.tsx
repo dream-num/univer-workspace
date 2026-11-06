@@ -33,7 +33,9 @@ export function WikiWorktreesPage(props: WorktreesPageProps) {
                 ? {
                     ...(spaceId ? { spaceId } : {}),
                     worktree: selection.worktreeId,
-                    unit: selection.unitId,
+                    ...(selection.unitId === undefined
+                      ? {}
+                      : { unit: selection.unitId }),
                     view: selection.view,
                   }
                 : spaceId

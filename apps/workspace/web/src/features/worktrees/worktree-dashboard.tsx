@@ -53,15 +53,20 @@ type StateFilter = "all" | "draft" | "ready" | "processed";
 type ScopeFilter = "all" | "user" | "team";
 type TaskGroupKey = "running" | "ready" | "processed";
 
+/**
+ * A reviewable entry in the task list: one Agent document, or the Worktree
+ * itself when the Agent has not produced any document yet. The latter keeps
+ * an empty Worktree selectable so it can still be discarded or submitted.
+ */
 interface ReviewDocument {
   readonly key: string;
   readonly worktree: WorktreeDetail;
-  readonly unit: WorktreeUnit;
+  readonly unit: WorktreeUnit | undefined;
 }
 
 export interface WorktreeDashboardSelection {
   readonly worktreeId: string;
-  readonly unitId: string;
+  readonly unitId?: string;
   readonly view: WorktreeReviewView;
 }
 
@@ -148,15 +153,16 @@ export function WorktreeDashboard({
       value?.toLocaleLowerCase().includes(normalizedSearch)
     );
   });
-  const documents = visibleTasks.flatMap((task) => {
+  const documents = visibleTasks.flatMap((task): ReviewDocument[] => {
     const worktree = detailByWorktreeId.get(task.id);
-    return worktree
+    if (!worktree) return [];
+    return worktree.units.length
       ? worktree.units.map((unit) => ({
           key: documentKey(worktree.id, unit.unitId),
           worktree,
           unit,
         }))
-      : [];
+      : [{ key: documentKey(worktree.id), worktree, unit: undefined }];
   });
   const selectionRequested =
     selectedWorktreeId !== undefined || selectedUnitId !== undefined;
@@ -166,7 +172,7 @@ export function WorktreeDashboard({
           (selectedWorktreeId === undefined ||
             document.worktree.id === selectedWorktreeId) &&
           (selectedUnitId === undefined ||
-            document.unit.unitId === selectedUnitId)
+            document.unit?.unitId === selectedUnitId)
       ) ?? null)
     : null;
   const requestedGroup =
@@ -214,7 +220,9 @@ export function WorktreeDashboard({
     setTaskDrawerOpen(false);
     onSelectionChange?.({
       worktreeId: document.worktree.id,
-      unitId: document.unit.unitId,
+      ...(document.unit === undefined
+        ? {}
+        : { unitId: document.unit.unitId }),
       view,
     });
   };
@@ -306,12 +314,12 @@ export function WorktreeDashboard({
                             ...current,
                             [task.id]: nextExpanded,
                           }));
-                          const firstUnit = worktree?.units[0];
-                          if (nextExpanded && firstUnit) {
+                          if (nextExpanded && worktree) {
+                            const firstUnit = worktree.units[0];
                             selectDocument({
                               key: documentKey(
                                 worktree.id,
-                                firstUnit.unitId
+                                firstUnit?.unitId
                               ),
                               worktree,
                               unit: firstUnit,
@@ -396,10 +404,29 @@ export function WorktreeDashboard({
                             );
                           })}
                         </div>
-                      ) : taskExpanded ? (
-                        <span className="block py-1.5 pr-2 pl-8 text-xs text-muted-foreground">
+                      ) : taskExpanded && worktree ? (
+                        <button
+                          type="button"
+                          aria-pressed={
+                            selectedDocument?.worktree.id === worktree.id
+                          }
+                          className={cn(
+                            "block w-full cursor-pointer rounded-md py-1.5 pr-2 pl-8 text-left text-xs transition-colors outline-none",
+                            selectedDocument?.worktree.id === worktree.id
+                              ? "bg-brand-50 font-medium text-brand-700"
+                              : "text-muted-foreground hover:bg-accent",
+                            "focus-visible:ring-2 focus-visible:ring-ring/40"
+                          )}
+                          onClick={() =>
+                            selectDocument({
+                              key: documentKey(worktree.id),
+                              worktree,
+                              unit: undefined,
+                            })
+                          }
+                        >
                           {t("noAgentDocuments")}
-                        </span>
+                        </button>
                       ) : null}
                     </div>
                   );
@@ -652,7 +679,7 @@ export function WorktreeDashboard({
           ) : (
             <WorktreeReviewPanel
               worktree={selectedDocument.worktree}
-              selectedUnitId={selectedDocument.unit.unitId}
+              selectedUnitId={selectedDocument.unit?.unitId ?? null}
               selectedView={selectedView}
               onSelectedViewChange={(view) =>
                 selectDocument(selectedDocument, view)
@@ -677,8 +704,8 @@ export function WorktreeDashboard({
   );
 }
 
-function documentKey(worktreeId: string, unitId: string): string {
-  return `${worktreeId}:${unitId}`;
+function documentKey(worktreeId: string, unitId?: string): string {
+  return unitId === undefined ? worktreeId : `${worktreeId}:${unitId}`;
 }
 
 function isProcessed(task: {
