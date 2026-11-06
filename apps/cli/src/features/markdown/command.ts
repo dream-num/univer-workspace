@@ -1,13 +1,13 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
+  parseDocMarkdownSourceMap,
   type WorkspaceCompileMarkdownFeature,
   type WorkspaceCompileMarkdownInput,
 } from "@univerjs/univer-workspace-client-core";
 import { Command } from "commander";
 import { executeCommand, present, type JsonOption } from "../../command.js";
 import { workspaceError } from "../../errors.js";
-import { readMarkdownSourceMap } from "./source-map.js";
 
 interface MarkdownOptions extends JsonOption {
   readonly apply?: boolean;
@@ -78,7 +78,9 @@ export function createWorkspaceCompileMarkdownCommand(
             )
           )
             invalid("Creation options cannot be used with --unit.");
-          const sourceMap = await readMarkdownSourceMap(options.sourceMap!);
+          const sourceMap = parseDocMarkdownSourceMap(
+            JSON.parse(await readFile(options.sourceMap!, "utf8")),
+          );
           return await feature.execute({
             ...input,
             update: {

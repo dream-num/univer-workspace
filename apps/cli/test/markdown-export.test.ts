@@ -52,35 +52,6 @@ async function run(args: string[], execute = vi.fn(async () => result)): Promise
 }
 
 describe("export-markdown command", () => {
-  it("rejects a source map file that is not JSON", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "uvw-markdown-export-map-"));
-    const mapPath = join(directory, "map.json");
-    await writeFile(mapPath, "not json");
-    const execute = vi.fn(async () => result);
-    try {
-      await expect(
-        run(
-          [
-            "--worktree",
-            "wt",
-            "--unit",
-            "doc",
-            "--source-map",
-            mapPath,
-            "--blocks",
-            "intro",
-            "--out",
-            join(directory, "out.md"),
-          ],
-          execute,
-        ),
-      ).rejects.toMatchObject({ code: "workspace.command.failed" });
-      expect(execute).not.toHaveBeenCalled();
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
-  });
-
   it("writes current native Markdown, sidecars and a revision-bound map", async () => {
     const directory = await mkdtemp(join(tmpdir(), "uvw-native-command-"));
     try {

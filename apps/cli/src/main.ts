@@ -8,12 +8,17 @@ import {
   workspaceDaemonSocketPath,
   workspaceResourceCacheRoot,
 } from "./config.js";
-import { reportFatalError } from "./fatal-error.js";
 import { PRODUCT_COMMAND_NAMES } from "./product-commands.js";
 import { workspaceDaemonIdentity } from "./runtime/daemon-identity.js";
 import { stopLegacyWorkspaceDaemonIfPresent } from "./runtime/legacy-daemon.js";
 
 const env = process.env;
+// Node would otherwise print the throwing line, which in a bundled SDK file is all of its source.
+process.on("uncaughtException", (error) => {
+  const debug = env["UNIVER_DEBUG"] === "1";
+  process.stderr.write(`${(debug ? error?.stack : error?.message) ?? String(error)}\n`);
+  process.exit(1);
+});
 const require = createRequire(import.meta.url);
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const daemonEntry = new URL(/* @vite-ignore */ "./runtime/daemon.js", import.meta.url);
@@ -25,36 +30,31 @@ const daemonOptions = {
   requestTimeoutMs: 1_000,
   socketPath,
 };
+await stopLegacyWorkspaceDaemonIfPresent({
+  currentStatus: await createDaemonControl(daemonOptions).status(),
+  socketPath,
+});
 const write = (text: string) => process.stdout.write(text);
 const writeError = (text: string) => process.stderr.write(text);
-try {
-  await stopLegacyWorkspaceDaemonIfPresent({
-    currentStatus: await createDaemonControl(daemonOptions).status(),
+const first = process.argv[2] ?? "";
+if (PRODUCT_COMMAND_NAMES.has(first) || first === "-v" || first === "--version") {
+  // Sign-in, repository, Issue and pull request commands never need the Univer runtime.
+  const { createProductProgram } = await import("./product-commands.js");
+  await createProductProgram({ config: createWorkspaceConfig(env), env, write, writeError }).parseAsync(
+    process.argv,
+  );
+} else {
+  const { createProgram } = await import("./program.js");
+  await createProgram({
+    renderPageRoot: resolve(appRoot, "dist/render-runtime"),
+    config: createWorkspaceConfig(env),
+    daemonEntry,
+    env,
+    resourceCacheRoot: workspaceResourceCacheRoot(env),
+    resourceManifestPath: require.resolve("@univerjs-pro/cli-assets/manifest.json"),
     socketPath,
-  });
-  const first = process.argv[2] ?? "";
-  if (PRODUCT_COMMAND_NAMES.has(first) || first === "-v" || first === "--version") {
-    // Sign-in, repository, Issue and pull request commands never need the Univer runtime.
-    const { createProductProgram } = await import("./product-commands.js");
-    await createProductProgram({ config: createWorkspaceConfig(env), env, write, writeError }).parseAsync(
-      process.argv,
-    );
-  } else {
-    const { createProgram } = await import("./program.js");
-    await createProgram({
-      renderPageRoot: resolve(appRoot, "dist/render-runtime"),
-      config: createWorkspaceConfig(env),
-      daemonEntry,
-      env,
-      resourceCacheRoot: workspaceResourceCacheRoot(env),
-      resourceManifestPath: require.resolve("@univerjs-pro/cli-assets/manifest.json"),
-      socketPath,
-      skillDataRoot: resolve(appRoot, "skill-data"),
-      write,
-      writeError,
-    }).parseAsync(process.argv);
-  }
-} catch (error) {
-  reportFatalError(error, { env, writeError });
-  process.exit(1);
+    skillDataRoot: resolve(appRoot, "skill-data"),
+    write,
+    writeError,
+  }).parseAsync(process.argv);
 }
