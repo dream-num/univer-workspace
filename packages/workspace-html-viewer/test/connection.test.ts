@@ -86,6 +86,26 @@ it("derives unload protection and inspection state from SDK state, without repea
   expect(connection.hasPendingChanges()).toBe(false);
   expect(onInspectChanged).toHaveBeenLastCalledWith(false);
 });
+it("reports local changes for edits until nothing is pending, not for confirmation alone", () => {
+  const connection = connectHtmlView(container, { source: "template", loadEngine });
+  const notify = sdk.view.subscribe.mock.calls[0]![0] as (state: HtmlViewState) => void;
+  const pending = (drafts: boolean, writes: boolean, confirmation: boolean) =>
+    notify(state({ pending: { drafts, writes, confirmation } }));
+  expect(connection.hasLocalChanges()).toBe(false);
+  pending(false, false, true);
+  expect(connection.hasLocalChanges()).toBe(false);
+  expect(connection.hasPendingChanges()).toBe(true);
+  pending(true, false, false);
+  expect(connection.hasLocalChanges()).toBe(true);
+  pending(false, false, true);
+  expect(connection.hasLocalChanges()).toBe(true);
+  pending(false, false, false);
+  expect(connection.hasLocalChanges()).toBe(false);
+  pending(false, false, true);
+  expect(connection.hasLocalChanges()).toBe(false);
+  pending(false, true, false);
+  expect(connection.hasLocalChanges()).toBe(true);
+});
 it("inspects the same authorized engine, including an in-flight load, without loading another engine", async () => {
   let finish!: (engine: HtmlViewEngine) => void;
   loadEngine.mockReturnValue(

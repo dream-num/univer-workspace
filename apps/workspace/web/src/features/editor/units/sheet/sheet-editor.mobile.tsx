@@ -1,4 +1,4 @@
-import { UniverSheetsExchangeClientMobileUIPlugin } from "@univerjs-pro/sheets-exchange-client";
+import { UniverSheetsExchangeClientPlugin } from "@univerjs-pro/sheets-exchange-client";
 import { UniverSheetsHistoryMobileUIPlugin } from "@univerjs-pro/sheets-history-ui";
 import SheetsHistoryUIEnUS from "@univerjs-pro/sheets-history-ui/locale/en-US";
 import SheetsHistoryUIZhCN from "@univerjs-pro/sheets-history-ui/locale/zh-CN";
@@ -26,6 +26,7 @@ import {
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
 import { createMobileExchangeFeaturePlugins } from "../../features/exchange-plugins";
+import { createWorkspaceImportExportFeature } from "../../features/import-export";
 import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
 import { createSheetMobilePresets } from "./sheet-mobile-presets";
 import { sheetEditorLocales } from "./sheet-presets";
@@ -65,9 +66,10 @@ export default createCollaborationEditor({
   exchangeFeaturePlugins: () =>
     createMobileExchangeFeaturePlugins([
       [
-        UniverSheetsExchangeClientMobileUIPlugin,
+        UniverSheetsExchangeClientPlugin,
         { minSheetRowCount: 100, minSheetColumnCount: 20 },
       ],
+      createWorkspaceImportExportFeature("sheet", { mobile: true }),
     ]),
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadSheetAsync(unitId),

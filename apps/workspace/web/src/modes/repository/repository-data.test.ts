@@ -4,19 +4,17 @@ import { api } from "../../shared/api/client";
 import {
   worktreePagesQueryOptions,
   worktreeQueryOptions,
-  worktreeSummaryQueryOptions,
 } from "../../features/worktrees/worktrees.queries";
 import { htmlViewPagesQueryOptions } from "../../features/views/html-views.queries";
 import {
   recentResourcePagesQueryOptions,
-  recentResourceSummaryQueryOptions,
 } from "../../features/views/recent.queries";
 import {
   DEFAULT_ISSUE_FILTERS,
   issueListQueryOptions,
-  issueSummaryQueryOptions,
 } from "../../features/issues/issues.queries";
 import { parseWorktreeDashboardSearch } from "../../features/worktrees/worktree-review-search";
+import { homeQueries } from "./data/queries";
 import { repositoryWorktreeSearch } from "./repository-worktree-link";
 import type { components } from "../../../../generated/http/schema.js";
 
@@ -46,19 +44,21 @@ describe("repository data boundaries", () => {
       response: new Response(),
     });
     await Promise.all([
-      client.fetchQuery(worktreeSummaryQueryOptions),
-      client.fetchQuery(recentResourceSummaryQueryOptions),
-      client.fetchQuery(issueSummaryQueryOptions),
+      client.fetchQuery(homeQueries[1]),
+      client.fetchQuery(homeQueries[0]),
+      client.fetchQuery(homeQueries[2]),
     ]);
     expect(api.GET).toHaveBeenCalledTimes(3);
     expect(api.GET).toHaveBeenCalledWith("/api/worktrees", {
-      params: { query: { scope: "active", limit: 5, order: "updatedAtDesc" } },
+      signal: expect.any(AbortSignal),
+      params: { query: { scope: "active", limit: 100, order: "updatedAtDesc" } },
     });
     expect(api.GET).toHaveBeenCalledWith("/api/recent-resources", {
       params: { query: { limit: 12 } },
     });
     expect(api.GET).toHaveBeenCalledWith("/api/issues", {
-      params: { query: { state: "open", sort: "updated", order: "desc", limit: 5 } },
+      signal: expect.any(AbortSignal),
+      params: { query: { state: "open", sort: "updated", order: "desc", limit: 100 } },
     });
     client.clear();
   });
@@ -70,6 +70,7 @@ describe("repository data boundaries", () => {
       pageParams: [undefined],
     });
     const task: components["schemas"]["WorktreeDetail"] = {
+      createdVia: "unknown",
       id: "older",
       number: null,
       name: "Budget review",

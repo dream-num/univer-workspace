@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# Isolated Univer Workspace instance for verification runs.
+# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | down
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+WORKSPACE_APP="$REPO/apps/workspace"
+CLI_MAIN="$REPO/apps/cli/dist/main.js"
+ROOT="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}"
+
+die() { echo "verify-uvw: $*" >&2; exit 1; }
+
+run_dir() {
+  local id="${VERIFY_UVW_RUN:-}"
+  if [[ -z "$id" ]]; then
+    [[ -L "$ROOT/current" ]] || die "no run; start one with: verify-uvw up"
+    id="$(basename "$(readlink "$ROOT/current")")"
+  fi
+  [[ -f "$ROOT/$id/run.env" ]] || die "run $id has no run.env under $ROOT"
+  echo "$ROOT/$id"
+}
+
+load_run() {
+  RUN="$(run_dir)"
+  # shellcheck disable=SC1091
+  source "$RUN/run.env"
+  ORIGIN="http://127.0.0.1:$WEB_PORT"
+  export UNIVER_HOME="$RUN/home"
+  export AGENT_BROWSER_SESSION="verify-uvw-$RUN_ID"
+}
+
+listener_pid() { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -n1 || true; }
+
+deps_fresh() { cmp -s "$REPO/pnpm-lock.yaml" "$REPO/node_modules/.pnpm/lock.yaml"; }
+
+cli_fresh() {
+  [[ -f "$CLI_MAIN" && -f "$REPO/packages/client-core/dist/index.js" ]] || return 1
+  [[ -z "$(find "$REPO/apps/cli/src" -newer "$CLI_MAIN" -type f -print -quit)" ]] || return 1
+  [[ -z "$(find "$REPO/packages/client-core/src" -newer "$REPO/packages/client-core/dist/index.js" -type f -print -quit)" ]]
+}
+
+wait_http() { # url timeout-seconds
+  local i
+  for ((i = 0; i < $2; i++)); do
+    curl -fsS -o /dev/null "$1" 2>/dev/null && return 0
+    sleep 1
+  done
+  return 1
+}
+
+uvw_raw() { node "$CLI_MAIN" "$@"; }
+
+cmd_up() {
+  deps_fresh || die "node_modules is older than pnpm-lock.yaml; run: pnpm install --frozen-lockfile"
+  cli_fresh || die "CLI build is stale; run: pnpm --filter 'univer-workspace-cli...' build"
+  local server_port="${VERIFY_UVW_SERVER_PORT:-3920}" web_port="${VERIFY_UVW_WEB_PORT:-5973}"
+  local port
+  for port in "$server_port" "$web_port"; do
+    [[ -z "$(listener_pid "$port")" ]] || die "port $port is already in use; not driving an instance this run did not start"
+  done
+
+  local id="${VERIFY_UVW_RUN:-$(date +%Y%m%d-%H%M%S)}"
+  local run="$ROOT/$id"
+  [[ ! -e "$run" ]] || die "$run already exists; pick another VERIFY_UVW_RUN"
+  mkdir -p "$run"/{data,home,logs,evidence}
+
+  # env -i keeps the developer's shell and apps/workspace/.env (OAuth, data paths) out of this instance.
+  (cd "$WORKSPACE_APP" && exec nohup env -i PATH="$PATH" HOME="$HOME" \
+    HOST=127.0.0.1 PORT="$server_port" LOG_LEVEL=info SECURE_COOKIES=false \
+    DATABASE_FILE="$run/data/univer-workspace.sqlite" \
+    COLLABORATION_DATABASE_FILE="$run/data/univer-collaboration.sqlite" \
+    BLOB_DIRECTORY="$run/data/blobs" \
+    node --import tsx server/src/main.ts >"$run/logs/server.log" 2>&1) &
+  local server_pid=$!
+  (cd "$WORKSPACE_APP" && exec nohup env -i PATH="$PATH" HOME="$HOME" WORKSPACE_DEV_API_PORT="$server_port" \
+    node node_modules/vite/bin/vite.js --host 127.0.0.1 --port "$web_port" --strictPort \
+    >"$run/logs/web.log" 2>&1) &
+  local web_pid=$!
+
+  cat >"$run/run.env" <<EOF
+RUN_ID=$id
+SERVER_PORT=$server_port
+WEB_PORT=$web_port
+SERVER_PID=$server_pid
+WEB_PID=$web_pid
+GIT_HEAD=$(git -C "$REPO" rev-parse HEAD)
+EOF
+  ln -sfn "$run" "$ROOT/current"
+
+  wait_http "http://127.0.0.1:$server_port/api/session" 120 \
+    || { tail -n 40 "$run/logs/server.log" >&2; die "server not ready; see $run/logs/server.log (run: verify-uvw down)"; }
+  wait_http "http://127.0.0.1:$web_port/api/session" 60 \
+    || { tail -n 40 "$run/logs/web.log" >&2; die "web not ready; see $run/logs/web.log (run: verify-uvw down)"; }
+  echo "run:      $id"
+  echo "web:      http://127.0.0.1:$web_port"
+  echo "server:   http://127.0.0.1:$server_port"
+  echo "evidence: $run/evidence"
+}
+
+cmd_doctor() {
+  local fail=0
+  ok() { echo "ok    $*"; }
+  bad() { echo "FAIL  $*"; fail=1; }
+  deps_fresh && ok "node_modules matches pnpm-lock.yaml" \
+    || bad "node_modules is stale: pnpm install --frozen-lockfile, then restart the run"
+  cli_fresh && ok "CLI build is newer than apps/cli/src and packages/client-core/src" \
+    || bad "CLI build is stale: pnpm --filter 'univer-workspace-cli...' build"
+  load_run
+  ok "run $RUN_ID at $RUN"
+  local name pid port
+  for name in SERVER WEB; do
+    pid="${name}_PID"; pid="${!pid}"; port="${name}_PORT"; port="${!port}"
+    if ! kill -0 "$pid" 2>/dev/null; then bad "$name pid $pid is not running"; continue; fi
+    [[ "$(listener_pid "$port")" == "$pid" ]] && ok "$name port $port is owned by this run (pid $pid)" \
+      || bad "$name port $port is owned by pid '$(listener_pid "$port")', not this run's $pid"
+  done
+  lsof -p "$SERVER_PID" 2>/dev/null | grep -q "$RUN/data/univer-workspace.sqlite" \
+    && ok "server has this run's product database open" \
+    || bad "server does not have $RUN/data/univer-workspace.sqlite open"
+  curl -fsS -o /dev/null "$ORIGIN/api/session" && ok "$ORIGIN/api/session answers through the web proxy" \
+    || bad "$ORIGIN/api/session does not answer"
+  [[ "$(git -C "$REPO" rev-parse HEAD)" == "$GIT_HEAD" ]] && ok "HEAD unchanged since launch" \
+    || bad "HEAD moved since launch; the server does not reload: down, then up"
+  if [[ -f "$RUN/user.env" ]]; then
+    # shellcheck disable=SC1091
+    source "$RUN/user.env"
+    uvw_raw auth status --json 2>/dev/null | grep -q "\"name\": \"Verify $RUN_ID\"" \
+      && ok "uvw is signed in to $ORIGIN as $USERNAME (UNIVER_HOME=$UNIVER_HOME)" \
+      || bad "uvw is not signed in as $USERNAME; run: verify-uvw user"
+  else
+    echo "info  no disposable user yet; run: verify-uvw user"
+  fi
+  return "$fail"
+}
+
+cmd_user() {
+  load_run
+  if [[ ! -f "$RUN/user.env" ]]; then
+    local username="${1:-verify-$RUN_ID}"
+    local password
+    password="$(openssl rand -hex 16)"
+    local status
+    status="$(curl -sS -o "$RUN/logs/register.json" -w '%{http_code}' -X POST "$ORIGIN/api/auth/password/register" \
+      -H 'content-type: application/json' \
+      -d "{\"username\":\"$username\",\"displayName\":\"Verify $RUN_ID\",\"password\":\"$password\"}")"
+    [[ "$status" == 201 ]] || die "register returned $status: $(cat "$RUN/logs/register.json")"
+    (umask 077 && printf '%s' "$password" >"$RUN/user.pw")
+    printf 'USERNAME=%s\n' "$username" >"$RUN/user.env"
+  fi
+  # shellcheck disable=SC1091
+  source "$RUN/user.env"
+  uvw_raw config set workspace.origin "$ORIGIN" >/dev/null
+  uvw_raw auth login --username "$USERNAME" --password-stdin --json <"$RUN/user.pw"
+  echo "username: $USERNAME"
+  echo "password: $RUN/user.pw"
+}
+
+cmd_env() {
+  load_run
+  cat <<EOF
+export VERIFY_UVW_RUN=$RUN_ID
+export UNIVER_HOME=$UNIVER_HOME
+export AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION
+export ORIGIN=$ORIGIN
+export EVIDENCE=$RUN/evidence
+EOF
+}
+
+cmd_cli() {
+  [[ $# -ge 2 ]] || die "usage: verify-uvw cli <label> <uvw args...>"
+  load_run
+  local label="$1"; shift
+  local base="$RUN/evidence/$label"
+  printf 'uvw' >"$base.cmd"; printf ' %q' "$@" >>"$base.cmd"; echo >>"$base.cmd"
+  local code=0
+  uvw_raw "$@" >"$base.out" 2>"$base.err" || code=$?
+  echo "$code" >"$base.exit"
+  cat "$base.out"; cat "$base.err" >&2
+  echo "[exit $code; evidence $base.{cmd,out,err,exit}]" >&2
+  return "$code"
+}
+
+stop_pid() { # pid expected-command-fragment
+  local pid="$1" children
+  kill -0 "$pid" 2>/dev/null || return 0
+  ps -p "$pid" -o command= | grep -q -- "$2" || { echo "skip pid $pid: not $2" >&2; return 0; }
+  children="$(pgrep -P "$pid" || true)"
+  kill "$pid" 2>/dev/null || true
+  for _ in {1..20}; do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+  kill -9 "$pid" 2>/dev/null || true
+  [[ -z "$children" ]] || kill $children 2>/dev/null || true
+}
+
+cmd_down() {
+  load_run
+  agent-browser close >/dev/null 2>&1 || true
+  uvw_raw daemon stop >/dev/null 2>&1 || true
+  stop_pid "$SERVER_PID" "server/src/main.ts"
+  stop_pid "$WEB_PID" "vite.js"
+  rm -rf "$RUN/data" "$RUN/home" "$RUN/user.pw"
+  [[ "$(readlink "$ROOT/current" 2>/dev/null)" != "$RUN" ]] || rm -f "$ROOT/current"
+  echo "stopped run $RUN_ID; kept $RUN/evidence and $RUN/logs"
+}
+
+case "${1:-}" in
+  up) shift; cmd_up "$@" ;;
+  doctor) shift; cmd_doctor "$@" ;;
+  user) shift; cmd_user "$@" ;;
+  env) shift; cmd_env "$@" ;;
+  uvw) shift; load_run; uvw_raw "$@" ;;
+  cli) shift; cmd_cli "$@" ;;
+  down) shift; cmd_down "$@" ;;
+  *) sed -n 2,3p "$0" >&2; exit 2 ;;
+esac

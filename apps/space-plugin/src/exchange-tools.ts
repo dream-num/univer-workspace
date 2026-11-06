@@ -3,7 +3,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
-import { importUnitData, exportUnitData, inferExportFormat, type LocalExchangeUnitType } from '@univerjs/univer-workspace-agent-runtime/workspace-exchange';
+import { configureLocalExchange, importUnitData, exportUnitData, inferExportFormat, type LocalExchangeUnitType } from '@univerjs/univer-workspace-agent-runtime/workspace-exchange';
+import { readRuntimeLicenseKey } from './runtime-license.js';
 import { authorizedSessionPath } from '@univerjs/univer-workspace-agent-runtime/workspace-session-path';
 import { createDocument } from '@univerjs/univer-workspace-agent-runtime/workspace-resources';
 import { createWorktreeLocalUnit } from '@univerjs/univer-workspace-agent-runtime/workspace-worktree-api';
@@ -36,6 +37,8 @@ export function registerExchangeTools(ctx: Context, workspace: WorkspaceConnecti
       const signal = AbortSignal.any([exec.signal, identity]);
       const spaceId = await resolveToolSpace(workspace, bindings, sessionId, args.spaceId, signal);
       const source = await authorizedSessionPath(exec.agent?.session.header.cwd, args.source, true);
+      await configureLocalExchange({ license: workspace.license, licenseKey: readRuntimeLicenseKey() });
+      signal.throwIfAborted();
       const imported = await importUnitData(new Uint8Array(await readFile(source.path)), basename(source.path), (args.unitType ?? (args.type === 'auto' ? undefined : args.type)) as LocalExchangeUnitType | undefined);
       signal.throwIfAborted();
       const parent = args.parentNodeId ?? (args.spaceId === undefined || args.spaceId === bindings.currentSpace(sessionId) ? bindings.currentParent(sessionId) : '');
@@ -74,6 +77,8 @@ export function registerExchangeTools(ctx: Context, workspace: WorkspaceConnecti
       const data = args.worktreeId
         ? await editing.exportDraft(sessionId, { ...args, nodeId: file.nodeId }, exec.signal)
         : await workspace.exportUnitData(file as FileReference & { type: 'doc' | 'sheet' | 'slide' | 'base' }, undefined, args.revision);
+      exec.signal.throwIfAborted(); identity.throwIfAborted();
+      await configureLocalExchange({ license: workspace.license, licenseKey: readRuntimeLicenseKey() });
       exec.signal.throwIfAborted(); identity.throwIfAborted();
       const bytes = await exportUnitData(data as unknown as Readonly<Record<string, unknown>>, file.type as LocalExchangeUnitType, destination.path);
       exec.signal.throwIfAborted(); identity.throwIfAborted();

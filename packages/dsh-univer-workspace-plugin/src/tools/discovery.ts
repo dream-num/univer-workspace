@@ -45,7 +45,7 @@ export function registerDiscoveryTools(ctx: Context): () => void {
       defineTool({
         name: "univer_spaces",
         description:
-          "List the Univer Workspace Spaces the current User can access. Each Space is where documents live; select one before listing or creating documents.",
+          "List owned, joined, and accessible explicitly linked Univer Workspace Spaces. Each Space is where documents live; select one before listing or creating documents.",
         parameters: {},
         output: {
           schema: {

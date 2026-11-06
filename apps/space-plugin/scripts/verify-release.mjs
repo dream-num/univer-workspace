@@ -68,10 +68,13 @@ try {
       `Unexpected development or Host dependency in runtime lock: ${name}`);
   }
   JSON.parse(await readFile(join(root, 'lib/resource-manifest.json'), 'utf8'));
-  const { readRuntimeLicense } = await import(pathToFileURL(join(root, 'lib/runtime-license.js')).href);
+  const { readRuntimeLicense, readRuntimeLicenseKey } = await import(pathToFileURL(join(root, 'lib/runtime-license.js')).href);
   const licenseSource = await readFile('../../apps/workspace/web/src/features/editor/features/license.ts', 'utf8');
   const match = licenseSource.match(/export const UNIVER_LICENSE\s*=\s*(["'])([^"']+)\1/);
   assert.ok(match && readRuntimeLicense() === match[2], 'Packaged Host license does not match the source');
+  const keySource = await readFile('../../apps/workspace/server/src/integrations/univer/license.ts', 'utf8');
+  const keyMatch = keySource.match(/export const UNIVER_LICENSE_KEY\s*=\s*(["'])([^"']+)\1/);
+  assert.ok(keyMatch && readRuntimeLicenseKey() === keyMatch[2], 'Packaged Host Exchange key does not match the source');
   console.log(`Verified Space Plugin ${manifest.version}: ${entries.size} scanned files, manifest, dependencies and runtime assets.`);
 } finally {
   await rm(directory, { recursive: true, force: true });

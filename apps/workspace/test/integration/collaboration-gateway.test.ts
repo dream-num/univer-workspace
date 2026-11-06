@@ -1854,6 +1854,65 @@ describe("content permission integration", () => {
     },
   );
 
+  function commentAnchor(f: Awaited<ReturnType<typeof fixture>>, sheetId: string, id: string) {
+    return {
+      comment: {
+        id,
+        threadId: id,
+        ref: "A1",
+        personId: f.viewer.id,
+        dT: "2026-11-06T00:00:00.000Z",
+        text: { dataStream: "Viewer anchor\r\n", textRuns: [], paragraphs: [{ startIndex: 13 }] },
+        unitId: f.unitId,
+        subUnitId: sheetId,
+      },
+    };
+  }
+
+  // The Trunk gate lets a Viewer submit comment anchors, but the installed SDK still collects
+  // Unit Edit for them, so commitChangeset rejects. Flip to it() once the SDK includes
+  // univer-collaboration-sdk#172 (comment anchors require only Unit Comment).
+  it.fails("lets a Viewer submit a comment-only changeset", async () => {
+    const f = await fixture();
+    const viewer = await sheetSubmit(f, f.viewer.cookie);
+    expect(
+      await viewer.submit(
+        1,
+        "thread-comment.mutation.add-comment",
+        commentAnchor(f, viewer.sheetId, "viewer-comment-1"),
+      ),
+    ).toBe("changeset_ack");
+  });
+
+  it("keeps rejecting Viewer edits, including edits mixed into a comment changeset", async () => {
+    const f = await fixture();
+    const viewer = await sheetSubmit(f, f.viewer.cookie);
+    expect(
+      await viewer.submit(1, "sheet.mutation.set-range-values", {
+        cellValue: { 0: { 0: { v: "viewer edit" } } },
+      }),
+    ).toBe("permission_rej");
+    const owner = await sheetSubmit(f, f.owner.cookie);
+    expect(
+      await owner.submit(1, "sheet.mutation.set-range-values", {
+        cellValue: { 0: { 0: { v: "owner edit" } } },
+      }),
+    ).toBe("changeset_ack");
+    // A mixed changeset is still an edit; the owner's commit moved the head to revision 2.
+    expect(
+      await viewer.submitMutations(2, [
+        {
+          id: "thread-comment.mutation.add-comment",
+          params: commentAnchor(f, viewer.sheetId, "viewer-comment-2"),
+        },
+        {
+          id: "sheet.mutation.set-range-values",
+          params: { cellValue: { 1: { 1: { v: "viewer edit" } } } },
+        },
+      ]),
+    ).toBe("permission_rej");
+  });
+
   async function sheetSubmit(f: Awaited<ReturnType<typeof fixture>>, cookie: string) {
     const connection = await joinUnit(f.origin, cookie, f.unitId);
     const snapshot = await fetch(
@@ -1866,6 +1925,12 @@ describe("content permission integration", () => {
     return {
       sheetId,
       async submit(baseRev: number, id: string, params: object) {
+        return this.submitMutations(baseRev, [{ id, params }]);
+      },
+      async submitMutations(
+        baseRev: number,
+        mutations: readonly { readonly id: string; readonly params: object }[],
+      ) {
         const reqId = ++requestId;
         const event = new Promise<string>((resolve, reject) => {
           const timer = setTimeout(() => {
@@ -1913,9 +1978,10 @@ describe("content permission integration", () => {
                 reqId,
                 userID: "untrusted-user",
                 memberID: connection.memberId,
-                mutations: [
-                  { id, data: JSON.stringify({ unitId: f.unitId, subUnitId: sheetId, ...params }) },
-                ],
+                mutations: mutations.map(({ id, params }) => ({
+                  id,
+                  data: JSON.stringify({ unitId: f.unitId, subUnitId: sheetId, ...params }),
+                })),
               },
             }),
           },

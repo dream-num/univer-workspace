@@ -4,7 +4,7 @@ import { ChevronRightIcon, UsersIcon } from "@univerjs/univer-workspace-ui";
 import { useCallback, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { cn } from "../../shared/utils/cn";
-import { spaceSupportsIssues, spacesQueryOptions } from "../spaces";
+import { spaceSupportsIssues, mySpacesQueryOptions } from "../spaces";
 import { IssueStateIcon } from "./issue-state";
 import { issueCountsQueryOptions, sidebarIssuesQueryOptions } from "./issues.queries";
 
@@ -15,10 +15,9 @@ import { issueCountsQueryOptions, sidebarIssuesQueryOptions } from "./issues.que
 export function IssuesSidebarSection(props: { readonly storageScope: string }) {
   const { t } = useI18n();
   const location = useLocation();
-  const spaces = useQuery(spacesQueryOptions);
-  // `createIssue` is granted to the owner and members only, not to public-read visitors.
+  const spaces = useQuery(mySpacesQueryOptions);
   const memberSpaces = (spaces.data?.spaces ?? []).filter(
-    (space) => spaceSupportsIssues(space) && space.capabilities.createIssue,
+    (space) => spaceSupportsIssues(space),
   );
   const match = /^\/spaces\/([^/]+)\/issues\/(\d+)$/.exec(location.pathname);
   const [sectionExpanded, setSectionExpanded] = useStoredFlag(

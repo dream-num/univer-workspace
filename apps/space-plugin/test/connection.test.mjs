@@ -8,6 +8,25 @@ import {
   SpaceError,
 } from '../lib/workspace.js';
 
+test('accessible discovery combines My, Explore and Starred without changing affiliation or duplicating Spaces', async () => {
+  const connection = new WorkspaceConnection();
+  const reads = [];
+  connection.json = async (path) => {
+    reads.push(path);
+    return { spaces: {
+      '/api/spaces': [{ id: 'mine', affiliation: 'owner' }, { id: 'joined', affiliation: 'member' }],
+      '/api/spaces/explore': [{ id: 'public', affiliation: 'none' }],
+      '/api/spaces/starred': [{ id: 'public', affiliation: 'none' }, { id: 'mine', affiliation: 'owner' }],
+    }[path] };
+  };
+  try {
+    assert.deepEqual((await connection.spaces(new AbortController().signal)).spaces, [
+      { id: 'mine', affiliation: 'owner' }, { id: 'joined', affiliation: 'member' }, { id: 'public', affiliation: 'none' },
+    ]);
+    assert.deepEqual(reads.sort(), ['/api/spaces', '/api/spaces/explore', '/api/spaces/starred']);
+  } finally { await connection.dispose(); }
+});
+
 test('endpoint validation prevents embedded credentials and insecure remote authentication', () => {
   assert.equal(
     normalizeEndpoint('https://workspace.example/'),
@@ -222,6 +241,7 @@ test('the metadata index discovers a Page under another Page without inventing a
   connection.json = async (path) => {
     reads.push(path.split('?')[0]);
     if (path === '/api/spaces') return { spaces: [{ id: 's' }] };
+    if (path === '/api/spaces/explore' || path === '/api/spaces/starred') return { spaces: [] };
     if (path.startsWith('/api/shared-with-me?')) return { items: [], nextCursor: null };
     if (path.startsWith('/api/spaces/s/nodes?')) return { nodes: [parent], nextCursor: null };
     if (path.startsWith('/api/html-views?')) return { items: [parent, child].map(node => ({ node, resource: node.resource })), nextCursor: null };
@@ -232,6 +252,6 @@ test('the metadata index discovers a Page under another Page without inventing a
     assert.equal(result.nodes.length, 2);
     assert.equal(result.nodes.find(node => node.id === child.id).parentNodeId, parent.id);
     assert.ok(result.nodes.every(node => node.resource.htmlView));
-    assert.deepEqual(reads, ['/api/spaces', '/api/shared-with-me', '/api/spaces/s/nodes', '/api/html-views']);
+    assert.deepEqual(reads, ['/api/spaces', '/api/spaces/explore', '/api/spaces/starred', '/api/shared-with-me', '/api/spaces/s/nodes', '/api/html-views']);
   } finally { await connection.dispose(); }
 });

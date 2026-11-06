@@ -8,7 +8,11 @@
     <script>
       // Apply the stored theme before first paint to avoid a flash.
       (function () {
+        document.documentElement.dataset.uiMode = "repository";
         try {
+          var mode = localStorage.getItem("univer-workspace-layout-theme");
+          document.documentElement.dataset.uiMode =
+            mode === "repository" || mode === "wiki" ? mode : "repository";
           var stored = localStorage.getItem("univer-workspace-theme");
           var dark =
             stored === "dark" ||

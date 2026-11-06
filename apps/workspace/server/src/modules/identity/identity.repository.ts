@@ -5,11 +5,13 @@ import type {
   ExternalIdentityProvider,
   User,
 } from "./identity.types.js";
+import type { WriteSource } from "./write-source.js";
 
 export interface StoredSession extends User {
   readonly sessionId: string;
   readonly secretHash: string;
   readonly expiresAt: number;
+  readonly writeSource: WriteSource | null;
 }
 
 export interface StoredCredential extends User {
@@ -28,8 +30,23 @@ export interface NewPasswordUser {
     readonly secretHash: string;
     readonly createdAt: number;
     readonly expiresAt: number;
+    readonly writeSource: WriteSource;
   };
   readonly createdAt: number;
+}
+
+export interface NewEmailUser {
+  readonly user: User;
+  readonly email: string;
+  readonly personalSpace: NewPasswordUser["personalSpace"];
+  readonly session: NewPasswordUser["session"];
+  readonly createdAt: number;
+}
+
+export interface StoredEmailLoginCode {
+  readonly id: string;
+  readonly codeHash: string;
+  readonly attempts: number;
 }
 
 export interface ExternalIdentityUser {
@@ -125,6 +142,40 @@ export class IdentityRepository {
           input.providerUsername,
           input.createdAt,
           input.createdAt
+        );
+      database
+        .prepare(
+          `INSERT INTO spaces
+            (id, type, name, owner_user_id, created_at, updated_at)
+           VALUES (?, 'personal', ?, ?, ?, ?)`
+        )
+        .run(
+          input.personalSpace.id,
+          input.personalSpace.name,
+          input.user.id,
+          input.createdAt,
+          input.createdAt
+        );
+      insertSession(database, input.user.id, input.session);
+    });
+  }
+
+  createEmailUser(input: NewEmailUser): void {
+    this._database.transaction((database) => {
+      database
+        .prepare(
+          `INSERT INTO users
+            (id, username, display_name, avatar_url, created_at, updated_at, email)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          input.user.id,
+          input.user.username,
+          input.user.displayName,
+          input.user.avatarUrl,
+          input.createdAt,
+          input.createdAt,
+          input.email
         );
       database
         .prepare(
@@ -349,6 +400,7 @@ export class IdentityRepository {
            login_sessions.id AS session_id,
            login_sessions.secret_hash,
            login_sessions.expires_at,
+           login_sessions.write_source,
            users.id,
            users.username,
            users.display_name,
@@ -364,6 +416,7 @@ export class IdentityRepository {
           sessionId: row.session_id,
           secretHash: row.secret_hash,
           expiresAt: row.expires_at,
+          writeSource: row.write_source,
         }
       : null;
   }
@@ -374,6 +427,9 @@ export class IdentityRepository {
         .prepare("SELECT 1 FROM password_credentials WHERE user_id = ?")
         .get(userId)
     );
+    const emailRow = this._database.connection
+      .prepare("SELECT email FROM users WHERE id = ?")
+      .get(userId) as { readonly email: string | null } | undefined;
     const rows = this._database.connection
       .prepare(
         `SELECT provider, provider_username
@@ -384,11 +440,134 @@ export class IdentityRepository {
       .all(userId) as unknown as ExternalIdentityRow[];
     return {
       password,
+      email: emailRow?.email ?? null,
       externalIdentities: rows.map((row) => ({
         provider: row.provider,
         providerUsername: row.provider_username,
       })),
     };
+  }
+
+  findUserByEmail(email: string): User | null {
+    const row = this._database.connection
+      .prepare(
+        `SELECT id, username, display_name, avatar_url
+         FROM users
+         WHERE email = ? COLLATE NOCASE`
+      )
+      .get(email) as UserRow | undefined;
+    return row ? toUser(row) : null;
+  }
+
+  createEmailLoginCode(input: {
+    readonly id: string;
+    readonly email: string;
+    readonly codeHash: string;
+    readonly createdAt: number;
+    readonly expiresAt: number;
+  }): void {
+    this._database.connection
+      .prepare(
+        `INSERT INTO email_login_codes
+          (id, email, code_hash, attempts, created_at, expires_at)
+         VALUES (?, ?, ?, 0, ?, ?)`
+      )
+      .run(
+        input.id,
+        input.email,
+        input.codeHash,
+        input.createdAt,
+        input.expiresAt
+      );
+  }
+
+  findEmailLoginCode(
+    email: string,
+    now: number
+  ): StoredEmailLoginCode | null {
+    const row = this._database.connection
+      .prepare(
+        `SELECT id, code_hash, attempts
+         FROM email_login_codes
+         WHERE email = ? COLLATE NOCASE
+           AND consumed_at IS NULL
+           AND expires_at > ?
+         ORDER BY created_at DESC
+         LIMIT 1`
+      )
+      .get(email, now) as EmailLoginCodeRow | undefined;
+    return row
+      ? { id: row.id, codeHash: row.code_hash, attempts: row.attempts }
+      : null;
+  }
+
+  incrementEmailLoginCodeAttempts(id: string): void {
+    this._database.connection
+      .prepare(
+        `UPDATE email_login_codes SET attempts = attempts + 1 WHERE id = ?`
+      )
+      .run(id);
+  }
+
+  consumeEmailLoginCode(id: string, consumedAt: number): boolean {
+    const result = this._database.connection
+      .prepare(
+        `UPDATE email_login_codes
+         SET consumed_at = ?
+         WHERE id = ? AND consumed_at IS NULL`
+      )
+      .run(consumedAt, id);
+    return Number(result.changes) > 0;
+  }
+
+  consumeOtherEmailLoginCodes(
+    email: string,
+    keepId: string,
+    consumedAt: number
+  ): void {
+    this._database.connection
+      .prepare(
+        `UPDATE email_login_codes
+         SET consumed_at = ?
+         WHERE email = ? COLLATE NOCASE
+           AND id <> ?
+           AND consumed_at IS NULL`
+      )
+      .run(consumedAt, email, keepId);
+  }
+
+  deleteEmailLoginCode(id: string): void {
+    this._database.connection
+      .prepare("DELETE FROM email_login_codes WHERE id = ?")
+      .run(id);
+  }
+
+  latestEmailLoginCodeCreatedAt(email: string): number | null {
+    const row = this._database.connection
+      .prepare(
+        `SELECT MAX(created_at) AS created_at
+         FROM email_login_codes
+         WHERE email = ? COLLATE NOCASE`
+      )
+      .get(email) as { readonly created_at: number | null } | undefined;
+    return row?.created_at ?? null;
+  }
+
+  countEmailLoginCodesSince(email: string, since: number): number {
+    const row = this._database.connection
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM email_login_codes
+         WHERE email = ? COLLATE NOCASE AND created_at > ?`
+      )
+      .get(email, since) as { readonly count: number };
+    return row.count;
+  }
+
+  deleteEmailLoginCodesBefore(cutoff: number): void {
+    this._database.connection
+      .prepare("DELETE FROM email_login_codes WHERE created_at <= ?")
+      .run(cutoff);
   }
 
   updateUser(user: User, updatedAt: number): void {
@@ -432,6 +611,7 @@ interface CredentialRow extends UserRow {
 }
 
 interface SessionRow extends UserRow {
+  readonly write_source: WriteSource | null;
   readonly session_id: string;
   readonly secret_hash: string;
   readonly expires_at: number;
@@ -442,6 +622,12 @@ interface ExternalIdentityRow {
   readonly provider_username: string;
 }
 
+interface EmailLoginCodeRow {
+  readonly id: string;
+  readonly code_hash: string;
+  readonly attempts: number;
+}
+
 function insertSession(
   database: DatabaseSync,
   userId: string,
@@ -450,15 +636,16 @@ function insertSession(
   database
     .prepare(
       `INSERT INTO login_sessions
-        (id, secret_hash, user_id, created_at, expires_at)
-       VALUES (?, ?, ?, ?, ?)`
+        (id, secret_hash, user_id, created_at, expires_at, write_source)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
     .run(
       session.id,
       session.secretHash,
       userId,
       session.createdAt,
-      session.expiresAt
+      session.expiresAt,
+      session.writeSource
     );
 }
 

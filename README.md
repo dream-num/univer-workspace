@@ -29,12 +29,12 @@ review. Humans can continue editing and stay in control of what gets merged.
 
 ## Why Univer Workspace
 
-| For people                                              | For agents                                                        | For operators                                                        |
-| ------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Organize content in Personal and Team Spaces            | Create and edit rich Office content through the Univer Facade API | Deploy one Browser and Server application                            |
-| Co-edit Sheets, Docs, Slides, Bases, and Boards         | Inspect data, render screenshots/PDFs, and run layout checks      | Keep product, collaboration, and Blob data under application control |
-| Share content with role- and node-aware access control, including anonymous viewing  | Discover version-matched Skills and APIs offline                  | Integrate password, GitHub, Discord, or application OAuth login      |
-| Use Recent, Trash, file import/export, and review views | Work through multiple rounds without changing trunk               | Operate a documented HTTP API with explicit recovery boundaries      |
+| For people                                                                          | For agents                                                        | For operators                                                        |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Organize content in Personal and Team Spaces                                        | Create and edit rich Office content through the Univer Facade API | Deploy one Browser and Server application                            |
+| Co-edit Sheets, Docs, Slides, Bases, and Boards                                     | Inspect data, render screenshots/PDFs, and run layout checks      | Keep product, collaboration, and Blob data under application control |
+| Share content with role- and node-aware access control, including anonymous viewing | Discover version-matched Skills and APIs offline                  | Integrate password, GitHub, Discord, or application OAuth login      |
+| Use Recent, Trash, file import/export, and review views                             | Work through multiple rounds without changing trunk               | Operate a documented HTTP API with explicit recovery boundaries      |
 
 ## Spreadsheet-based mini-apps · [Watch the demo](https://youtu.be/4PBVltY_WEc)
 
@@ -45,11 +45,11 @@ review. Humans can continue editing and stay in control of what gets merged.
 
 ## Choose your entry point
 
-| Entry point | Use it for | Get started |
-| --- | --- | --- |
-| **Workspace Browser** | Edit documents directly, collaborate, organize Spaces, and review changes | [Start Workspace](#quick-start) |
-| **Workspace Agent** | Chat with an agent beside your documents, reference local or remote files and folders, and review Worktree changes | [Install and use Agent](apps/agent/README.md#installation-and-first-use) |
-| **Workspace CLI** | Automate document tasks from a terminal, scripts, or an existing agent environment | [CLI installation and usage](apps/cli/README.md) |
+| Entry point           | Use it for                                                                                                         | Get started                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| **Workspace Browser** | Edit documents directly, collaborate, organize Spaces, and review changes                                          | [Start Workspace](#quick-start)                                          |
+| **Workspace Agent**   | Chat with an agent beside your documents, reference local or remote files and folders, and review Worktree changes | [Install and use Agent](apps/agent/README.md#installation-and-first-use) |
+| **Workspace CLI**     | Automate document tasks from a terminal, scripts, or an existing agent environment                                 | [CLI installation and usage](apps/cli/README.md)                         |
 
 The [Space Plugin candidate](apps/space-plugin/README.md) installs into the unchanged
 official DeepSeek Harness Desktop through Plugins → Add plugin. It is separate from
@@ -201,7 +201,7 @@ headless runtime, execution, inspection, and rendering capabilities.
 Workspace owns product identity, Spaces, hierarchy, ACLs, sharing, Trash, Recent,
 Blob storage policy, remote workflows, and deployment. Client Core shares storage-neutral authentication,
 Workspace workflows, local Node-hosted Blob/Asset transfer, and the worker-backed content runtime between
-repository applications, including Node-hosted Office exchange, Typst compile/materialize/apply, render Unit
+repository applications, including Node-hosted Office exchange, Markdown compile/create/native-readback/update, Typst compile/materialize/apply, render Unit
 assembly, screenshots, PNG/PDF output, Slide layout lint, the render-page source, and the SVG
 compile/measure/apply workflow; the reference-provider package remains Browser-only.
 Both are private implementation modules, not additional public applications or SDKs.
@@ -265,17 +265,17 @@ the actual package artifact before publication.
 
 ## Documentation
 
-| Resource                                                            | Scope                                                                        |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [Univer Runtime documentation](https://docs.univer.ai/)             | Browser Runtime, presets, plugins, Facade API, and editor capabilities       |
-| [Univer Office SDK documentation](https://office.univer.ai/)        | Office SDK stack: Runtime, Collaboration, CLI, and Worktree                  |
-| [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades                 |
-| [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract                   |
+| Resource                                                            | Scope                                                                           |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [Univer Runtime documentation](https://docs.univer.ai/)             | Browser Runtime, presets, plugins, Facade API, and editor capabilities          |
+| [Univer Office SDK documentation](https://office.univer.ai/)        | Office SDK stack: Runtime, Collaboration, CLI, and Worktree                     |
+| [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades                    |
+| [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract                      |
 | [Workspace Agent guide](apps/agent/README.md)                       | Local profile, browser OAuth, sessions, files, Worktree, and identity switching |
-| [Client Core package](packages/client-core/README.md)               | Private Node-hosted client capability boundary                               |
-| [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries                     |
-| [HTTP contract](apps/workspace/contracts/http/README.md)            | Product API source and generation workflow                                   |
-| [Reference-provider package](packages/reference-provider/README.md) | Private Browser referenced-Unit policy                                       |
+| [Client Core package](packages/client-core/README.md)               | Private Node-hosted client capability boundary                                  |
+| [Technical architecture](apps/workspace/docs/architecture.md)       | Browser, Server, storage, OpenAPI, and module boundaries                        |
+| [HTTP contract](apps/workspace/contracts/http/README.md)            | Product API source and generation workflow                                      |
+| [Reference-provider package](packages/reference-provider/README.md) | Private Browser referenced-Unit policy                                          |
 
 ## Contributing
 
@@ -286,10 +286,17 @@ affected boundary.
 
 ## Runtime development license
 
-The Browser and CLI contain synchronized copies of the approved runtime development
-credential for local use. It rotates every 90 days and is not the repository software
-license. Set `VITE_UNIVER_LICENSE` for Browser builds or `UNIVER_LICENSE` for the CLI
-to override it.
+The Browser, Workspace server, CLI and DSH plugin contain synchronized copies of the
+approved runtime development credential for local use. It rotates every 90 days and is
+not the repository software license. The server-side Collaboration and Exchange SDKs
+also verify it with a license key; without both they fall back to the free tier. Set
+`VITE_UNIVER_LICENSE` for Browser builds, or `UNIVER_LICENSE` together with
+`UNIVER_LICENSE_KEY` for the server and CLI, to override it. Rotate every copy at once
+with the generated-file script:
+
+```bash
+pnpm update:univer-license --license <license.txt> --license-key <licenseKey.txt>
+```
 
 ## License
 

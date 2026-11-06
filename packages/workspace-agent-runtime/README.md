@@ -2,4 +2,6 @@
 
 Private headless implementation shared by the existing Workspace Agent and the isolated Space app. It owns the Facade worker pool, snapshot reader, changeset commits, Workspace directory and Resource operations, and the version-matched API reference query; it does not own chat, document storage, permissions or an Agent Runtime. Host credentials cross only into its private child process. The original draft-write entry requires a Worktree; the explicit trunk entry serves ordinary Space Agent edits, with the Server authorizing every request.
 
-Build with `pnpm --filter @univerjs/univer-workspace-agent-runtime build` before building either consumer. Node 24, SDK 1.1.0.
+Build with `pnpm --filter @univerjs/univer-workspace-agent-runtime build` before building either consumer. Node 24, SDK 1.3.1.
+
+The shared worker registers the published Markdown runtime. `readWithRevision` reads native blocks and their authoritative revision under one lease; the revision is read metadata. Office conversion uses `configureLocalExchange` with a Host-supplied license/key pair. Its published Exchange wrapper remains external so Node owns native binding resolution.

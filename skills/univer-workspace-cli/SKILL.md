@@ -77,7 +77,8 @@ repository checkout, guessed installation paths, or a different CLI version's AP
 ## Complete the task
 
 - Name the repository as `-R <owner>/<slug>` (`<username>/personal` is a Personal Space) or set
-  `UVW_REPO`; find it with `uvw repo list`. Discover the intended file with `uvw space find`; use
+  `UVW_REPO`. `uvw repo list` shows repositories you own or have joined; open another public
+  repository with `uvw repo view <owner>/<slug>`. Discover the intended file with `uvw space find`; use
   returned IDs rather than treating names as IDs.
 - A pull request is a Worktree (`uvw pr ...`; `uvw worktree ...` is the same). For a new editable
   Unit task, create a new one with `uvw pr create`. Reuse a known one only to continue that same task.

@@ -20,6 +20,9 @@ source engines, and exposes the view's save and inspection controls through a re
 - `resume()` resumes the same sandbox after a later host operation cancels departure;
   it preserves the current page and source engines.
 - `hasPendingChanges()` includes drafts, writes and collaboration confirmation.
+- `hasLocalChanges()` covers drafts, writes and collaboration confirmation of edits
+  made since the page last had nothing pending. Confirmation alone on an untouched
+  page does not count, so hosts can skip the departure flush.
 
 Applications supply HTML source, an accessible title, `locale` (`zh-CN` or `en-US`),
 an external resource allowlist and a stable `loadEngine(unitId, signal)` callback.
@@ -37,8 +40,8 @@ Unavailable names use the SDK's `id: xxx` fallback.
 - Resolve identity, license, permissions and collaboration endpoints, and inject
   the reference policy into `createWorkspaceHtmlEngine`.
 - Present errors, an inspection toggle and browser unload protection.
-- Await `prepareToLeave()` before leaving; changing source/loader or unmounting
-  disposes the old view and is not an async save guard.
+- Await `prepareToLeave()` before leaving when `hasLocalChanges()` is true; changing
+  source/loader or unmounting disposes the old view and is not an async save guard.
 - Implement route/tab/account lifecycle. Current hosts dispose the view after a
   successful departure preparation.
 

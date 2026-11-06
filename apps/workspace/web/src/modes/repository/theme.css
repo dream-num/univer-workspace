@@ -1,0 +1,267 @@
+:root[data-ui-mode="repository"] {
+  color-scheme: light;
+  --font-sans:
+    "Plus Jakarta Sans Variable", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-mono:
+    "Geist Mono Variable", ui-monospace, "SF Mono", "PingFang SC",
+    "Microsoft YaHei", monospace;
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 14px;
+  --radius-xl: 14px;
+
+  --rd-page-bg: #FFFFFF;
+  --rd-page-ink: #24292E;
+  --rd-page-muted: #586069;
+  --rd-page-line: #EAECEF;
+  --rd-page-surface: #F6F8FA;
+  --rd-page-link: #0366D6;
+  --rd-bg: #FFFFFF;
+  --rd-panel: #FFFFFF;
+  --rd-panel-2: #F5F5F7;
+  --rd-sunken: #FAFAFB;
+  --rd-line: rgba(12,14,22,.09);
+  --rd-line-2: rgba(12,14,22,.16);
+  --rd-ink: #0A0C12;
+  --rd-ink-2: #4F545D;
+  --rd-ink-3: #686D76;
+  --rd-accent: #7C3AED;
+  --rd-on-accent: #FFFFFF;
+  --rd-accent-hover: #6D28D9;
+  --rd-accent-soft: #F3EDFE;
+  --rd-accent-text: #6D28D9;
+  --rd-merged: #0D9488;
+  --rd-merged-soft: #E3F5F3;
+  --rd-merged-text: #0F766E;
+  --rd-open: #15803D;
+  --rd-warn: #B45309;
+  --rd-warn-soft: #FEF3E2;
+  --rd-warn-text: #92400E;
+  --rd-danger: #DC2626;
+  --rd-danger-soft: #FDECEC;
+  --rd-danger-text: #B91C1C;
+  --rd-t-sheet: #16A34A;
+  --rd-t-doc: #0284C7;
+  --rd-t-slide: #EA580C;
+  --rd-t-folder: #5E636B;
+  --rd-sel: rgba(124,58,237,.18);
+  --rd-shadow: 0 12px 32px rgba(15,18,30,.12),0 2px 6px rgba(15,18,30,.06);
+  --rd-label-mix: black;
+  --rd-brand: #FF5A36;
+  --rd-on-brand: #FFF4F0;
+  --rd-mask: #000000;
+  --rd-actor-people: #2F6FEB;
+  --rd-actor-people-soft: #E9F0FE;
+  --rd-actor-people-text: #1D4FC4;
+  --rd-actor-agents: #DB2777;
+  --rd-actor-agents-soft: #FCE8F2;
+  --rd-actor-agents-text: #BE185D;
+  --rd-seg-merged: #0D9488;
+  --rd-seg-merged-soft: #E3F5F3;
+  --rd-seg-merged-text: #0F766E;
+  --rd-actor-unknown: #4F545D;
+  --rd-actor-unknown-soft: #F5F5F7;
+  --rd-actor-unknown-text: #4F545D;
+  --rd-t-group: #5E636B;
+  --rd-t-board: #7C3AED;
+  --rd-t-base: #0D9488;
+  --rd-open-soft: color-mix(in srgb, var(--rd-open) 12%, transparent);
+
+  /* Shared primitives and body portals inherit the same mode palette. */
+  --color-canvas: var(--rd-bg);
+  --color-background: var(--rd-bg);
+  --color-surface: var(--rd-sunken);
+  --color-muted: var(--rd-panel-2);
+  --color-foreground: var(--rd-ink);
+  --color-muted-foreground: var(--rd-ink-2);
+  --color-subtle-foreground: var(--rd-ink-3);
+  --color-accent: var(--rd-panel-2);
+  --color-accent-foreground: var(--rd-ink);
+  --color-border: var(--rd-line);
+  --color-border-strong: var(--rd-line-2);
+  --color-input: var(--rd-line-2);
+  --color-ring: var(--rd-accent);
+  --color-primary: var(--rd-accent);
+  --color-primary-hover: var(--rd-accent-hover);
+  --color-primary-foreground: var(--rd-on-accent);
+  --color-secondary: var(--rd-panel);
+  --color-secondary-hover: var(--rd-panel-2);
+  --color-secondary-foreground: var(--rd-ink);
+  --color-destructive: var(--rd-danger);
+  --color-destructive-hover: var(--rd-danger-text);
+  --color-destructive-foreground: var(--rd-on-accent);
+  --color-destructive-soft: var(--rd-danger-soft);
+  --color-destructive-soft-foreground: var(--rd-danger-text);
+  --color-success: var(--rd-open);
+  --color-success-soft: var(--rd-open-soft);
+  --color-success-soft-foreground: var(--rd-open);
+  --color-warning: var(--rd-warn);
+  --color-warning-soft: var(--rd-warn-soft);
+  --color-warning-soft-foreground: var(--rd-warn-text);
+  --color-info-soft: var(--rd-accent-soft);
+  --color-info-soft-foreground: var(--rd-accent-text);
+  --color-state-open: var(--rd-open);
+  --color-state-open-soft: var(--rd-open-soft);
+  --color-state-merged: var(--rd-merged);
+  --color-state-merged-soft: var(--rd-merged-soft);
+  --color-state-closed: var(--rd-danger);
+  --color-state-closed-soft: var(--rd-danger-soft);
+  --color-doc: var(--rd-t-doc);
+  --color-sheet: var(--rd-t-sheet);
+  --color-slide: var(--rd-t-slide);
+  --color-board: var(--rd-t-board);
+  --color-baseunit: var(--rd-t-base);
+  --color-group: var(--rd-t-group);
+  --color-resource: var(--rd-t-folder);
+  --color-repository-selected: var(--rd-accent);
+  --color-repository-counter: var(--rd-panel-2);
+  --color-repository-star: var(--rd-warn);
+  --color-doc-soft: color-mix(in srgb, var(--color-doc) 14%, transparent);
+  --color-sheet-soft: color-mix(in srgb, var(--color-sheet) 14%, transparent);
+  --color-slide-soft: color-mix(in srgb, var(--color-slide) 14%, transparent);
+  --color-board-soft: color-mix(in srgb, var(--color-board) 14%, transparent);
+  --color-baseunit-soft: color-mix(in srgb, var(--color-baseunit) 14%, transparent);
+  --color-group-soft: color-mix(in srgb, var(--color-group) 14%, transparent);
+  --color-resource-soft: color-mix(in srgb, var(--color-resource) 14%, transparent);
+  --color-brand-25: color-mix(in srgb, var(--rd-accent) 3%, var(--rd-bg));
+  --color-brand-50: color-mix(in srgb, var(--rd-accent) 6%, var(--rd-bg));
+  --color-brand-100: color-mix(in srgb, var(--rd-accent) 10%, var(--rd-bg));
+  --color-brand-200: color-mix(in srgb, var(--rd-accent) 20%, var(--rd-bg));
+  --color-brand-300: color-mix(in srgb, var(--rd-accent) 35%, var(--rd-bg));
+  --color-brand-400: color-mix(in srgb, var(--rd-accent) 55%, var(--rd-bg));
+  --color-brand-500: color-mix(in srgb, var(--rd-accent) 80%, var(--rd-bg));
+  --color-brand-600: color-mix(in srgb, var(--rd-accent) 100%, var(--rd-bg));
+  --color-brand-700: var(--rd-accent-text);
+  --color-brand-800: var(--rd-accent-text);
+  --color-label-gray: var(--rd-ink-2);
+  --color-label-gray-soft: color-mix(in srgb, var(--color-label-gray) 15%, transparent);
+  --color-label-blue: #2563EB;
+  --color-label-blue-soft: color-mix(in srgb, var(--color-label-blue) 15%, transparent);
+  --color-label-green: var(--rd-open);
+  --color-label-green-soft: color-mix(in srgb, var(--color-label-green) 15%, transparent);
+  --color-label-yellow: #967000;
+  --color-label-yellow-soft: color-mix(in srgb, var(--color-label-yellow) 15%, transparent);
+  --color-label-orange: var(--rd-t-slide);
+  --color-label-orange-soft: color-mix(in srgb, var(--color-label-orange) 15%, transparent);
+  --color-label-red: var(--rd-danger);
+  --color-label-red-soft: color-mix(in srgb, var(--color-label-red) 15%, transparent);
+  --color-label-purple: #7C3AED;
+  --color-label-purple-soft: color-mix(in srgb, var(--color-label-purple) 15%, transparent);
+  --color-label-pink: #BE185D;
+  --color-label-pink-soft: color-mix(in srgb, var(--color-label-pink) 15%, transparent);
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: var(--rd-shadow);
+  --shadow-lg: var(--rd-shadow);
+  --shadow-pop: var(--rd-shadow);
+
+  &.dark {
+    color-scheme: dark;
+    --rd-page-bg: #0D1117;
+    --rd-page-ink: #F0F6FC;
+    --rd-page-muted: #9198A1;
+    --rd-page-line: #3D444D;
+    --rd-page-surface: #151B23;
+    --rd-page-link: #58A6FF;
+    --rd-bg: #03080A;
+    --rd-panel: #070C0F;
+    --rd-panel-2: #0D1418;
+    --rd-sunken: #05090C;
+    --rd-line: rgba(255,255,255,.08);
+    --rd-line-2: rgba(255,255,255,.14);
+    --rd-ink: #FCFCFE;
+    --rd-ink-2: #A6ADB5;
+    --rd-ink-3: #7E868F;
+    --rd-accent: #C8FF00;
+    --rd-on-accent: #0B1000;
+    --rd-accent-hover: #D6FF4D;
+    --rd-accent-soft: rgba(200,255,0,.09);
+    --rd-accent-text: #D2FF33;
+    --rd-merged: #2DD4BF;
+    --rd-merged-soft: rgba(45,212,191,.13);
+    --rd-merged-text: #5EEAD4;
+    --rd-open: #4ADE80;
+    --rd-warn: #FBBF24;
+    --rd-warn-soft: rgba(251,191,36,.13);
+    --rd-warn-text: #FCD34D;
+    --rd-danger: #F87171;
+    --rd-danger-soft: rgba(248,113,113,.13);
+    --rd-danger-text: #FCA5A5;
+    --rd-t-sheet: #4ADE80;
+    --rd-t-doc: #38BDF8;
+    --rd-t-slide: #FB923C;
+    --rd-t-folder: #A6ADB5;
+    --rd-sel: rgba(200,255,0,.26);
+    --rd-shadow: 0 12px 32px rgba(0,0,0,.55),0 2px 6px rgba(0,0,0,.4);
+    --rd-label-mix: white;
+    --rd-brand: #FF5A36;
+    --rd-on-brand: #FFF4F0;
+    --rd-mask: #000000;
+    --rd-actor-people: #3B82F6;
+    --rd-actor-people-soft: rgba(59,130,246,.16);
+    --rd-actor-people-text: #93BBFC;
+    --rd-actor-agents: #F472B6;
+    --rd-actor-agents-soft: rgba(244,114,182,.15);
+    --rd-actor-agents-text: #F9A8D4;
+    --rd-seg-merged: #2DD4BF;
+    --rd-seg-merged-soft: rgba(45,212,191,.13);
+    --rd-seg-merged-text: #5EEAD4;
+    --rd-actor-unknown: #A6ADB5;
+    --rd-actor-unknown-soft: #0D1418;
+    --rd-actor-unknown-text: #A6ADB5;
+    --rd-t-group: #A6ADB5;
+    --rd-t-board: #C8FF00;
+    --rd-t-base: #2DD4BF;
+    --rd-open-soft: color-mix(in srgb, var(--rd-open) 12%, transparent);
+    --color-label-blue: #60A5FA;
+    --color-label-yellow: #FACC15;
+    --color-label-purple: #C4B5FD;
+    --color-label-pink: #F472B6;
+  }
+
+  background: var(--rd-bg);
+  color: var(--rd-ink);
+  caret-color: var(--rd-accent);
+  scrollbar-color: var(--rd-line-2) transparent;
+
+  & ::selection {
+    background: var(--rd-sel);
+    color: var(--rd-ink);
+  }
+
+  & * {
+    caret-color: var(--rd-accent);
+    scrollbar-color: var(--rd-line-2) transparent;
+  }
+
+  &::-webkit-scrollbar,
+  & ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb,
+  & ::-webkit-scrollbar-thumb {
+    background: var(--rd-line-2);
+    border-radius: 10px;
+    border: 2px solid var(--rd-bg);
+    background-clip: padding-box;
+  }
+
+  &::-webkit-scrollbar-thumb:hover,
+  & ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--rd-line-2);
+  }
+
+  &::-webkit-scrollbar-track,
+  & ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  & :focus-visible {
+    outline: 2px solid var(--rd-accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+}

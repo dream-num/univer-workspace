@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import policy from "../src/policy.cjs";
@@ -69,14 +69,19 @@ const pluginManifest = JSON.parse(await readFile(join(pluginSource, "package.jso
 for (const entry of pluginManifest.files) {
   await cp(join(pluginSource, entry), join(pluginStage, entry), { recursive: true });
 }
+// Wrappers declare their bindings as ranges (for example `~1.0.6`); pin the
+// binding version pnpm installed beside the wrapper so the desktop install is
+// reproducible.
 const nativeDependencies = {};
 for (const wrapper of ["engine-formula-rust", "exchange-node"]) {
-  const manifest = JSON.parse(await readFile(join(pluginSource,
-    "node_modules/@univerjs-pro", wrapper, "package.json"), "utf8"));
+  const wrapperRoot = await realpath(join(pluginSource, "node_modules/@univerjs-pro", wrapper));
+  const manifest = JSON.parse(await readFile(join(wrapperRoot, "package.json"), "utf8"));
   const name = `@univerjs-pro/${wrapper}-binding`;
-  const version = manifest.dependencies?.[name];
+  if (typeof manifest.dependencies?.[name] !== "string")
+    throw new Error(`Missing native dependency: ${name}`);
+  const { version } = JSON.parse(await readFile(join(wrapperRoot, "..", `${wrapper}-binding`, "package.json"), "utf8"));
   if (typeof version !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version))
-    throw new Error(`Missing exact native dependency: ${name}`);
+    throw new Error(`Missing exact installed native dependency: ${name}`);
   nativeDependencies[name] = version;
 }
 pluginManifest.dependencies = { ...nativeDependencies, ws: pluginManifest.dependencies.ws };

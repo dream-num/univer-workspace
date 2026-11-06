@@ -8,6 +8,7 @@ import { AgentEditing, registerEditingTools } from './editing.js';
 import { registerApiTool } from './api-tool.js';
 import { registerCreationTools } from './creation-tools.js';
 import { registerExchangeTools } from './exchange-tools.js';
+import { registerMarkdownTools } from './markdown-tools.js';
 import { registerBlobTool } from './blob-tool.js';
 import { registerHtmlViewTool } from './html-view-tool.js';
 import { registerSvgTool } from './svg-tool.js';
@@ -68,6 +69,7 @@ export function apply(ctx: Context) {
   ctx.effect(() => registerApiTool(ctx));
   ctx.effect(() => registerCreationTools(ctx, workspace, bindings));
   ctx.effect(() => registerExchangeTools(ctx, workspace, bindings, editing));
+  ctx.effect(() => registerMarkdownTools(ctx, workspace, bindings));
   ctx.effect(() => registerBlobTool(ctx, workspace, bindings));
   ctx.effect(() => registerHtmlViewTool(ctx, workspace, bindings));
   ctx.effect(() => registerSvgTool(ctx, editing));
@@ -187,7 +189,7 @@ export function apply(ctx: Context) {
           value = await workspace.sharing(input as any, signal);
           break;
         case 'spaces':
-          value = await workspace.json('/api/spaces', { signal });
+          value = await workspace.spaces(signal);
           break;
         case 'nodes': {
           const parent = string('parent', true);

@@ -110,6 +110,9 @@ export class WorkspaceConnection {
   async readUnitDraft(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, worktreeId: string, code: string, revision = -1) {
     return this.runtime.read(this.unitTarget(file, worktreeId, revision), code);
   }
+  async readDraftWithRevision(file: { endpoint: string; unitId: string; type: 'doc' }, worktreeId: string, code: string) {
+    return this.runtime.readWithRevision(this.unitTarget(file, worktreeId), code);
+  }
   async exportUnitData(file: { endpoint: string; unitId: string; type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' }, worktreeId?: string, revision = -1) {
     return this.runtime.exportUnitData(this.unitTarget(file, worktreeId, revision));
   }
@@ -301,12 +304,24 @@ export class WorkspaceConnection {
     }
   }
 
+  /** My, public and starred discovery are separate; direct file shares remain node-scoped. */
+  async spaces(signal: AbortSignal) {
+    const pages = await Promise.all(['/api/spaces', '/api/spaces/explore', '/api/spaces/starred']
+      .map(path => this.json(path, { signal })));
+    signal.throwIfAborted();
+    const spaces = new Map<string, Record<string, unknown>>();
+    for (const page of pages) for (const space of page.spaces) {
+      if (!spaces.has(space.id)) spaces.set(space.id, space);
+    }
+    return { spaces: [...spaces.values()] };
+  }
+
   /** Aggregate metadata using existing ACL-checked product endpoints; never load bodies. */
   async index(signal: AbortSignal) {
     const lifetime = this.lifetime;
     const read = (path: string) =>
       this.json(path, { signal: AbortSignal.any([signal, lifetime.signal]) });
-    const { spaces } = await read('/api/spaces');
+    const { spaces } = await this.spaces(AbortSignal.any([signal, lifetime.signal]));
     const nodes: any[] = [];
     const sharedNodeIds: string[] = [];
     const seen = new Set<string>();

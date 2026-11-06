@@ -18,9 +18,18 @@ explains behavior that spans multiple operations.
 
 ## Authentication
 
-Password Credentials and External Identities are optional authentication
-methods for the same User. GitHub and Discord login map the provider's stable user ID to an
-internal User. It never identifies or automatically links a User by email.
+Password Credentials, a verified Email address, and External Identities are
+optional authentication methods for the same User. GitHub, Google, and Discord
+login map the provider's stable user ID to an internal User. They never identify
+or automatically link a User by email.
+
+Email sign-in is passwordless: `POST /api/auth/email/code` emails a six-digit,
+single-use code and `POST /api/auth/email/login` exchanges it for a login
+session. A first successful verification creates the User and Personal Space;
+later verifications reuse that User. Codes expire after ten minutes, allow five
+incorrect attempts, and requests are rate limited per address. Responses never
+reveal whether an address already has an account. Email sign-in does not merge
+a User into an existing account created with another provider.
 
 External login and explicit linking use different OAuth intents. Both validate
 `state` and PKCE from a short-lived protected cookie. An access token used
@@ -31,7 +40,8 @@ CLI creates a ten-minute request containing a high-entropy device code and a
 human-verifiable code. A signed-in browser explicitly approves the matching
 code; the CLI then exchanges the device code exactly once for its own normal
 login session. Pending requests are bounded, process-local, and non-durable.
-They contain no browser cookie, password, or external OAuth access token.
+They contain no browser cookie, password, Email verification code, or external
+OAuth access token.
 
 `GET /api/session` returns `200` for both authenticated and anonymous clients so
 React can use it as its application bootstrap request.
@@ -63,6 +73,30 @@ Recent, global discovery, and Worktrees continue to require a login session.
 Both policies use existing settings: already-enabled sharing/public read becomes
 anonymous-readable on upgrade. No additional switch or database migration is needed.
 HTML and referenced Units retain independent source permission checks.
+
+## Space lists and pins
+
+`GET /api/spaces` returns only owned or joined Spaces, ordered with the caller's
+Personal Space first, then owned Spaces, then joined Spaces, with name and ID as ties.
+Every `SpaceView` has an `affiliation` derived from ownership and membership.
+It is `owner`, `member`, or `none`; Team viewer members remain `member`.
+Public readers are `none` even though both have the effective `viewer` role.
+
+`GET /api/spaces/starred` returns readable starred Spaces by star time descending,
+then ID. Stars survive access loss, but hidden Spaces are omitted until access returns.
+`GET /api/spaces/explore` returns public Spaces the caller neither owns nor has joined,
+including starred ones, ordered by star count descending, then name and ID. It is unpaginated.
+These lists do not change detail, full-name lookup, anonymous access, or Node Grants.
+
+`GET /api/spaces/pins` returns `{ customized, limit, spaces }`. Pins can contain owned
+or joined Spaces and starred public Spaces. Stored rows retain their order and survive
+loss of eligibility, but ineligible rows are omitted. If no eligible row survives,
+`customized` is false and the first eight owned or joined Spaces are returned.
+`PUT /api/spaces/pins` accepts 1 to 12 unique eligible `spaceIds` in order and replaces
+the rows atomically. All invalid IDs and invalid arrays return the same
+`400 INVALID_INPUT` with `field: spaceIds`; missing and hidden IDs are indistinguishable.
+`DELETE /api/spaces/pins` resets to defaults. Both writes are idempotent.
+All Space list and pin endpoints require a login session and operate only for that User.
 
 ## Node discovery
 

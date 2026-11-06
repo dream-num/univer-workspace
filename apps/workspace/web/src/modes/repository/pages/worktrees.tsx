@@ -12,8 +12,7 @@ import {
   worktreeQueryOptions,
   worktreeBelongsToSpace,
 } from "../../../features/worktrees";
-import { spacesQueryOptions } from "../../../features/spaces";
-import { RepositoryTabs } from "../repository-tabs";
+import { spaceQueryOptions } from "../../../features/spaces";
 import { WorktreeReviewPanel } from "../../../features/worktrees/worktree-review-panel";
 import { Button, Empty, Skeleton } from "../../../shared/ui";
 import { useI18n } from "../../../shared/i18n";
@@ -50,6 +49,7 @@ export function RepositoryWorktreesPage(props: WorktreesPageProps) {
 
   return (
     <WorkspaceLayout
+      contentMode={worktree && section === "files" ? "editor" : "default"}
       {...(spaceId ? { selectedSpaceId: spaceId } : {})}
       {...(repository
         ? { repositoryTab: "prs" as const }
@@ -64,7 +64,6 @@ export function RepositoryWorktreesPage(props: WorktreesPageProps) {
         )
       }
     >
-      {repository ? <RepositoryTabs spaceId={spaceId} active="prs" /> : null}
       {worktree ? (
         <div className="repository-chrome border-b border-border px-6 py-3">
           <Link
@@ -75,7 +74,7 @@ export function RepositoryWorktreesPage(props: WorktreesPageProps) {
               ...(props.kind ? { kind: props.kind } : {}),
               ...(props.teamSpaceId ? { teamSpaceId: props.teamSpaceId } : {}),
             }}
-            className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+            className="inline-flex items-center gap-2 text-sm text-foreground hover:underline"
           >
             <ArrowLeft aria-hidden="true" className="size-4" />
             {t("repositoryAllPullRequests")}
@@ -106,7 +105,9 @@ export function RepositoryWorktreesPage(props: WorktreesPageProps) {
                     ...listFilters,
                     ...(spaceId ? { spaceId } : {}),
                     worktree: selection.worktreeId,
-                    unit: selection.unitId,
+                    ...(selection.unitId === undefined
+                      ? {}
+                      : { unit: selection.unitId }),
                     view: selection.view,
                   }
                 : spaceId
@@ -137,7 +138,7 @@ function RepositoryPullRequestPage({
 }) {
   const { t } = useI18n();
   const query = useQuery(worktreeQueryOptions(worktreeId));
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(spaceQueryOptions(spaceId));
   const openPullRequest = usePullRequestNavigate();
   if (query.isPending || spaces.isPending)
     return (
@@ -160,7 +161,7 @@ function RepositoryPullRequestPage({
         </Button>
       </Empty>
     );
-  const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const space = spaces.data;
   if (!space || !worktreeBelongsToSpace(query.data.worktree, space))
     return (
       <Empty

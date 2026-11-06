@@ -4,6 +4,7 @@ import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { scanRelease } from './scan-release.mjs';
+import { productionLock } from './runtime-lock.mjs';
 
 const root = resolve('../..');
 const args = process.argv.slice(2);
@@ -30,7 +31,10 @@ try {
   if (!match) throw new Error('Workspace application development license not found.');
   const value = match[2];
   if (typeof value !== 'string' || !value.trim()) throw new Error('Workspace application development license is empty.');
-  await writeFile(join(stage, 'lib/runtime-license.json'), JSON.stringify({ scope: 'internal-desktop-test', license: value }) + '\n');
+  const serverLicenseSource = await readFile('../../apps/workspace/server/src/integrations/univer/license.ts', 'utf8');
+  const keyMatch = serverLicenseSource.match(/export const UNIVER_LICENSE_KEY\s*=\s*(["'])([^"']+)\1/);
+  if (!keyMatch) throw new Error('Workspace Exchange development license key not found.');
+  await writeFile(join(stage, 'lib/runtime-license.json'), JSON.stringify({ scope: 'internal-desktop-test', license: value, licenseKey: keyMatch[2] }) + '\n');
   const readme = await readFile('README.md', 'utf8');
   const instructions = readme.split('## Release candidate\n')[1];
   if (!instructions) throw new Error('Missing customer installation instructions.');
@@ -46,8 +50,7 @@ try {
   // Freeze the audited production closure; packaging must not resolve new
   // transitive versions. DSH's manager still owns its separate profile lock.
   const sourceLock = JSON.parse(await readFile('package-lock.json', 'utf8'));
-  const lock = { ...sourceLock, packages: Object.fromEntries(Object.entries(sourceLock.packages).filter(([path, entry]) => path && !entry.dev)) };
-  lock.packages[''] = { name, version, license, dependencies, engines };
+  const lock = productionLock(source, sourceLock);
   const entries = value => JSON.stringify(Object.entries(value ?? {}).sort(([a], [b]) => a.localeCompare(b)));
   if (sourceLock.name !== name || sourceLock.version !== version || entries(sourceLock.packages?.['']?.dependencies) !== entries(dependencies))
     throw new Error('Update package-lock.json for the changed release manifest before packaging.');

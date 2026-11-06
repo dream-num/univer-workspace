@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V12 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V16 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -41,14 +41,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V12；
-- V12：校验 Schema 指纹；
-- V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V12；
-- V0：一致性备份后直接迁移到 V12；
+- Fresh：创建 V16；
+- V16：校验 Schema 指纹；
+- V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V16；
+- V0：一致性备份后直接迁移到 V16；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V12 Query。
+Worktree 等业务模块只编译和运行 V16 Query。
 
 V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
@@ -62,6 +62,11 @@ Session 与 Access Resolver，公开读取者和已有成员均可 Star；收藏
 V11 为 `spaces` 增加纯文本 `description`（至多 350 字符）。`SpaceView.description` 随 `GET /api/spaces`、
 `GET /api/spaces/{spaceId}` 返回，`PATCH /api/spaces/{spaceId}` 可修改，权限与重命名 Space 相同；空字符串清除。
 Browser 的 Code tab 在 About 区展示该简介，Settings 提供编辑入口。简介不替代 HTML 页面，也不进入协同库。
+V13 扩展 External Identity Provider，允许 Google 登录。
+V14 为邮箱验证码登录在 `users` 上新增可空的 `email` 列（部分唯一索引 `users_email`）与
+`email_login_codes`：验证码只保存 scrypt Hash，十分钟过期、单次使用并限制尝试与请求频率；
+验证成功后才在同一事务中创建 User、Personal Space、`users.email` 和 Session。邮件发送由 `EmailSender` 接口承担，配置层提供 SMTP（含 SES SMTP）与
+仅写入 Server 日志的 console Provider，产品模块不依赖具体邮件厂商。
 V12 为 Team Space 增加 `slug`、为 Worktree 增加仓库级 `number`，供 Browser 与 CLI 以 `owner/slug` 和 `#N` 寻址。
 Spaces Module 在创建时校验或生成 slug（`POST /api/team-spaces` 的 `slug` 可选，供 DSH 插件等未更新的调用方继续使用），
 `PATCH /api/spaces/{spaceId}` 可修改，`GET /api/spaces/lookup?owner=&slug=` 解析 `owner/slug` 与 `owner/personal`，
@@ -72,13 +77,53 @@ Issue 分配逻辑与 Worktree 创建都在 `BEGIN IMMEDIATE` 事务内取最大
 Browser 的公共 Repository Header 与 Tabs 供 Code、Issues、PR、Pages 和 Settings 页面复用；
 不改 tab 内部内容，Watch/Fork 和没有对应能力的 GitHub tab 不渲染。
 
+V15 增加 `space_pins` 与 `space_stars_user` 索引，使用已有备份、事务回滚、指纹、外键和完整性检查流程。
+所有列表入口均要求 Session。`GET /api/spaces` 只返回本人拥有或加入的 Space；
+`/api/spaces/starred` 返回当前仍可见的收藏；`/api/spaces/explore` 返回本人未拥有或加入的公开 Space。
+Explore 当前不分页，按收藏总数倒序、名称与 ID 排序。公开链接、匿名访问、Node Grant 和详情权限不变。
+`SpaceView.affiliation` 由 `SpaceAccess` 推导为 `owner | member | none`，本人列表只允许前两种。
+
+Access Module 维护共享的 Space 可见性 SQL、列和 Membership Join，以及纯函数 `spaceAccessFromRow`。
+Spaces Repository 的 `listViews` 只接受 `mine | starred | explore | pins`，每种范围只执行一次 SQL，
+复用访问投影和角色推导。所有 SpaceView 由一个 `toSpaceView` 构造。
+
+`GET/PUT/DELETE /api/spaces/pins` 管理当前用户有序侧栏选择。可固定本人拥有或加入的 Space，以及已收藏的公开 Space。
+GET 过滤不符合条件的存储行，没有剩余行则返回本人列表前 8 个，`customized = false`。
+PUT 校验 1 至 12 个唯一 ID，在同一事务中检查资格并完整替换；无效输入统一返回字段 `spaceIds` 的 400。
+DELETE 删除选择并返回默认列表；两个写方法均幂等。返回 `limit = 12` 供客户端使用。
+
+V16 仅新增可空的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via`，
+CHECK 允许 `browser` 或 `agent`，`NULL` 表示未知；无默认值、回填或新索引。
+Session 签发时写入来源，HTTP Worktree 与 Issue 创建时复制该来源，摘要以 `createdVia` 返回；
+`NULL` 映射为 `unknown`，Worktree Operation 重试保留首次预留的来源。
+
+Password 注册、`POST /api/auth/password/login`、Email 登录和 GitHub/Google/Discord OAuth
+回调签发 `browser` Session。CLI device exchange、`POST /api/auth/cli/password/login`、
+OAuth `POST /api/auth/token` 的 Session scope 和 Discord bot-login 签发 `agent` Session。
+CLI password 路由与 Browser password 路由使用相同凭据及响应，额外设置 `Cache-Control: no-store`。
+`agent` 仅表示非 Browser 登录入口，不推断谁在输入。Session JSON 不暴露来源；历史行不回填。
+
+迁移前验证并备份 V15，事务失败回滚，成功后校验 V16 指纹，重复启动不重复备份。
+
+`GET /api/spaces/{spaceId}/activity?timeZone=<IANA>` 要求 Session 与有效 IANA 时区，返回规范化
+时区、截至该时区今天的 14 个日桶和窗口内最新 20 条事件。`opened` 按 `browser`、`agent`、
+`unknown` 汇总 Pull request 与 Issue 创建；`merged` 仅统计协同服务确认已合入的 Worktree。
+事件类型为 `pull-opened`、`pull-merged`、`issue-opened`、`issue-closed`，合入与关闭的来源均为
+`unknown`，不从创建来源推断。日桶使用时区的日历日期计算，跨月、闰日与 DST 不依赖固定 24 小时间隔。
+
+Worktrees 模块复用列表候选查询与 discoverability，Issues 模块复用 `requireSpace`；Team Space
+只汇总调用者可发现的 Worktree 与该 Space 的 Issue。Personal Space 仅向 Owner 返回其 User
+Worktree，不调用 Issues 模块，其他用户得到 404。每个来源最多汇总 1000 行，另读一行判断截断；
+协同状态查询按处理时间倒序最多 200 次。截断或任何协同查询失败时 `complete` 为 `false`，
+失败或超限行不贡献合入计数，创建事件仍可返回。未来可由 merge 写入产品侧 `merged_at` 消除逐行查询。
+
 ## Collaboration SDK 升级边界
 
 SDK 1.0.0 启动时先准备产品数据库，再运行隔离的 `prepareCollaborationDatabase`，最后构造
 应用 Service。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 2、Worktree 3、History 2；
-Comment 1 不变。产品数据库先准备到 V12，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Comment 1 不变。产品数据库先准备到 V16，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
@@ -115,8 +160,8 @@ Unit 加入继续使用现有资源权限检查；Link Sharing 变更保留既�
 Workspace CLI 通过 Browser 确认的 Device Flow 获取同一种 Login Session。Server 在进程内
 保存有容量上限、十分钟过期的待授权请求；已登录 Browser 确认人类可核对的验证码后，高熵
 Device Code 只能兑换一次，并为 CLI 创建独立、持久化的 `login_sessions` 行。Server 重启可以
-取消尚未确认或兑换的请求，但不影响已经签发的 CLI Session。Browser Cookie、密码、GitHub
-Token 和 Discord Token 都不会经过 Agent。
+取消尚未确认或兑换的请求，但不影响已经签发的 CLI Session。Browser Cookie、密码、邮箱验证码、
+GitHub、Google 和 Discord Token 都不会经过 Agent。
 
 ## Access Resolver
 
@@ -141,7 +186,7 @@ interface AccessResolver {
 - Resource Node 是否有子 Node（与内容访问彼此独立）。
 
 `SpaceAccess.member` 区分 Space Owner/成员与只靠 `public_read` 得到 `viewer` 的读者。Issue 写入按它判断，
-其余模块继续只看 Role。
+SpaceView 的 affiliation 也由该事实推导，权限判断仍使用 Role 和 Capability。
 
 调用者不直接查询授权表或从客户端字段推断权限。Move 同时验证 Source、Target、同
 Space 与后代链。

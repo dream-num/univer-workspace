@@ -17,7 +17,7 @@ export const queryClient = new QueryClient({
 
 export function Providers({ children }: PropsWithChildren) {
   return (
-    <UiModeProvider modes={MODE_IDS} fallback="wiki">
+    <UiModeProvider modes={MODE_IDS} fallback="repository">
       <ModeProviders>{children}</ModeProviders>
     </UiModeProvider>
   );

@@ -9,6 +9,10 @@ export async function scanRelease(file) {
   const licenseMatch = source.match(/export const UNIVER_LICENSE\s*=\s*(["'])([^"']+)\1/);
   if (!licenseMatch) throw new Error('Workspace application development license not found.');
   const credential = licenseMatch[2];
+  const keySource = await readFile('../../apps/workspace/server/src/integrations/univer/license.ts', 'utf8');
+  const keyMatch = keySource.match(/export const UNIVER_LICENSE_KEY\s*=\s*(["'])([^"']+)\1/);
+  if (!keyMatch) throw new Error('Workspace Exchange development license key not found.');
+  const credentialKey = keyMatch[2];
   const env = { ...process.env, LC_ALL: 'C' };
   const names = execFileSync('tar', ['-tzf', file], { encoding: 'utf8', env }).trim().split('\n');
   const findings = [], files = [], upstreamStrings = [];
@@ -21,18 +25,18 @@ export async function scanRelease(file) {
     if (name === 'package/lib/runtime-license.json') {
       let config;
       try { config = JSON.parse(data); } catch { /* Report no credential text. */ }
-      if (config?.scope !== 'internal-desktop-test' || config?.license !== credential)
+      if (config?.scope !== 'internal-desktop-test' || config?.license !== credential || config?.licenseKey !== credentialKey)
         findings.push({ file: name, kind: 'unexpected-packaged-license' });
       else packagedLicense = true;
     }
     for (const [kind, value] of [
-      ['development-license', credential], ['absolute-local-path', '/Users/'],
+      ['development-license', credential], ['development-license-key', credentialKey], ['absolute-local-path', '/Users/'],
       ['checkout-path', resolve('../..')], ['github-runner-path', '/home/runner/work/'],
       ['github-container-path', '/github/workspace/'],
       ['private-test-path', '/private/tmp/task'], ['test-path', '/tmp/task'],
       ['debug-service', 'ws://127.0.0.1:8000/'], ['temporary-instrumentation', 'TASK010_PREVIEW_'],
     ]) if (data.includes(value)) {
-      if (kind === 'development-license' && name === 'package/lib/runtime-license.json') continue;
+      if (['development-license', 'development-license-key'].includes(kind) && name === 'package/lib/runtime-license.json') continue;
       if (kind === 'debug-service' && name.startsWith('package/lib/render-runtime/assets/')) {
         upstreamStrings.push({ file: name, kind: 'unchanged-upstream-render-development-endpoint' });
         continue;

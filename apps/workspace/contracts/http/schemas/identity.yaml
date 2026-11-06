@@ -23,17 +23,21 @@ ExternalIdentitySummary:
   properties:
     provider:
       type: string
-      enum: [github, discord]
+      enum: [github, google, discord]
     providerUsername:
       type: string
 
 AuthenticationMethods:
   type: object
   additionalProperties: false
-  required: [password, externalIdentities]
+  required: [password, email, externalIdentities]
   properties:
     password:
       type: boolean
+    email:
+      type: [string, "null"]
+      format: email
+      description: Verified Email address used for passwordless sign-in, when the User has one.
     externalIdentities:
       type: array
       items:
@@ -42,15 +46,19 @@ AuthenticationMethods:
 AnonymousSession:
   type: object
   additionalProperties: false
-  required: [authenticated, githubOAuthEnabled, discordOAuthEnabled, passwordAuthEnabled]
+  required: [authenticated, githubOAuthEnabled, googleOAuthEnabled, discordOAuthEnabled, passwordAuthEnabled, emailAuthEnabled]
   properties:
     authenticated:
       const: false
     githubOAuthEnabled:
       type: boolean
+    googleOAuthEnabled:
+      type: boolean
     discordOAuthEnabled:
       type: boolean
     passwordAuthEnabled:
+      type: boolean
+    emailAuthEnabled:
       type: boolean
 
 AuthenticatedSession:
@@ -59,8 +67,10 @@ AuthenticatedSession:
   required:
     - authenticated
     - githubOAuthEnabled
+    - googleOAuthEnabled
     - discordOAuthEnabled
     - passwordAuthEnabled
+    - emailAuthEnabled
     - trialDeployment
     - user
     - authenticationMethods
@@ -69,9 +79,13 @@ AuthenticatedSession:
       const: true
     githubOAuthEnabled:
       type: boolean
+    googleOAuthEnabled:
+      type: boolean
     discordOAuthEnabled:
       type: boolean
     passwordAuthEnabled:
+      type: boolean
+    emailAuthEnabled:
       type: boolean
     trialDeployment:
       type: boolean
@@ -117,6 +131,43 @@ PasswordLogin:
       pattern: '^[\p{L}\p{N}._-]+$'
     password:
       type: string
+
+EmailLoginCodeRequest:
+  type: object
+  additionalProperties: false
+  required: [email]
+  properties:
+    email:
+      type: string
+      format: email
+      maxLength: 254
+
+EmailLoginCodeIssued:
+  type: object
+  additionalProperties: false
+  required: [expiresIn, resendAfter]
+  properties:
+    expiresIn:
+      type: integer
+      minimum: 1
+      description: Lifetime of the emailed code in seconds.
+    resendAfter:
+      type: integer
+      minimum: 1
+      description: Seconds before another code may be requested for the same address.
+
+EmailLogin:
+  type: object
+  additionalProperties: false
+  required: [email, code]
+  properties:
+    email:
+      type: string
+      format: email
+      maxLength: 254
+    code:
+      type: string
+      pattern: "^[0-9]{6}$"
 
 CliAuthorizationStart:
   type: object
@@ -227,3 +278,11 @@ UserProfilePatch:
     avatarUrl:
       type: [string, "null"]
       format: uri
+
+WriteSource:
+  type: string
+  enum: [browser, agent, unknown]
+  description: |
+    Entry point of the Session that made a write. `browser` = the Workspace web app's sign-in routes.
+    `agent` = any non-browser entry point (uvw CLI, Workspace Agent, OAuth clients, Discord bot); it does not
+    identify who was typing. `unknown` = recorded before attribution existed, or by a Session issued before it.

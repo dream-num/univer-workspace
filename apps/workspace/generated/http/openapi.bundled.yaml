@@ -16,7 +16,7 @@ tags:
   - name: Session
     description: Browser login session bootstrap and logout.
   - name: Authentication
-    description: Password, GitHub, Discord, and CLI browser authorization methods.
+    description: Password, Email code, GitHub, Google, Discord, and CLI browser authorization methods.
   - name: Users
     description: Current User profile and User discovery.
   - name: Spaces
@@ -266,6 +266,47 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/auth/cli/password/login:
+    post:
+      tags:
+        - Authentication
+      operationId: loginCliWithPassword
+      summary: Authenticate a non-browser client with a System Username and password.
+      description: Same credentials and response as `loginWithPassword`; the issued Session is attributed as `agent`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLogin'
+      responses:
+        '200':
+          description: Authenticated.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '401':
+          description: Username or password is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Password authentication is disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/password/login:
     post:
       tags:
@@ -292,6 +333,86 @@ paths:
                 $ref: '#/components/schemas/AuthenticatedSession'
         '401':
           description: Username or password is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/email/code:
+    post:
+      tags:
+        - Authentication
+      operationId: requestEmailLoginCode
+      summary: Email a one-time sign-in code for passwordless Email login.
+      description: |
+        The code is valid for ten minutes and can be used once. A User and
+        Personal Space are created only after the code is verified, and the
+        response never reveals whether the address already has an account.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailLoginCodeRequest'
+      responses:
+        '202':
+          description: Code accepted for delivery.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailLoginCodeIssued'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Email authentication is disabled for this deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: A code was requested too recently or too often for this address.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: The configured Email provider could not deliver the code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/email/login:
+    post:
+      tags:
+        - Authentication
+      operationId: loginWithEmailCode
+      summary: Verify an emailed sign-in code and create the User on first sign-in.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailLogin'
+      responses:
+        '200':
+          description: Authenticated; a User and Personal Space are created when necessary.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          description: The code is invalid, expired, already used, or exceeded its attempt limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Email authentication is disabled for this deployment.
           content:
             application/json:
               schema:
@@ -505,6 +626,105 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/google/login:
+    get:
+      tags:
+        - Authentication
+      operationId: startGoogleLogin
+      summary: Start the Google OAuth login flow.
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^/
+      responses:
+        '302':
+          description: Redirect to Google.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: uri
+  /api/auth/google/link:
+    get:
+      tags:
+        - Authentication
+      operationId: startGoogleLink
+      summary: Start Google OAuth to link the current User.
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^/
+      responses:
+        '302':
+          description: Redirect to Google.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/google/callback:
+    get:
+      tags:
+        - Authentication
+      operationId: finishGoogleOAuth
+      summary: Validate the OAuth callback and finish login or linking.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to a validated local application path.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+  /api/auth/google:
+    delete:
+      tags:
+        - Authentication
+      operationId: unlinkGoogle
+      summary: Unlink the current User's Google identity.
+      responses:
+        '200':
+          description: Updated authenticated session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Google is the last authentication method.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/discord/login:
     get:
       tags:
@@ -697,19 +917,145 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/spaces/{spaceId}/activity:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Spaces
+      operationId: getSpaceActivity
+      summary: Daily Pull request and Issue activity for a Space, split by Session source.
+      description: |
+        Pull requests and Issues opened per day in the caller's time zone, merged Pull requests per day, and the
+        newest events. Uses the same visibility as the Worktree and Issue lists. Personal Spaces report only
+        their owner's User Worktrees and no Issues.
+      parameters:
+        - name: timeZone
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: ^(UTC|[A-Za-z_]+(?:\/[A-Za-z0-9_+\-]+)+)$
+          description: IANA time zone accepted by Intl, for example `Asia/Shanghai`. Offset strings are rejected.
+      responses:
+        '200':
+          description: Activity window.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RepositoryActivity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/spaces:
     get:
       tags:
         - Spaces
       operationId: listSpaces
-      summary: List Spaces discoverable by the current User.
+      summary: List Spaces the current User owns or has joined.
+      description: Public Spaces belonging to others are available through Explore. Starred Spaces have a separate list.
       responses:
         '200':
           description: Personal Space followed by owned and joined Team Spaces.
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/MySpaceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/spaces/starred:
+    get:
+      tags:
+        - Spaces
+      operationId: listStarredSpaces
+      summary: List starred Spaces the current User can still read.
+      description: Ordered by newest star first, then Space ID. Stars retained after access loss are omitted until access returns.
+      responses:
+        '200':
+          description: Matching Spaces in display order.
+          content:
+            application/json:
+              schema:
                 $ref: '#/components/schemas/SpaceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/spaces/explore:
+    get:
+      tags:
+        - Spaces
+      operationId: exploreSpaces
+      summary: List public Spaces the current User neither owns nor has joined.
+      description: Ordered by total stars descending, then name and ID. Includes starred public Spaces. This list is unpaginated.
+      responses:
+        '200':
+          description: Matching Spaces in display order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/spaces/pins:
+    get:
+      tags:
+        - Spaces
+      operationId: getSpacePins
+      summary: Get the current User's ordered sidebar pins.
+      description: Owned or joined Spaces and starred public Spaces are eligible. Ineligible stored pins are omitted. If none survive, returns the first eight owned or joined Spaces with customized false. Stored pins remain available if eligibility returns.
+      responses:
+        '200':
+          description: Current pins or defaults.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacePins'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags:
+        - Spaces
+      operationId: setSpacePins
+      summary: Replace the ordered sidebar pins.
+      description: Accepts 1 to 12 unique IDs for owned or joined Spaces or starred public Spaces. Invalid, duplicate, over-limit, missing and ineligible IDs return the same 400 INVALID_INPUT with field spaceIds. Replacement is atomic and idempotent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetSpacePins'
+      responses:
+        '200':
+          description: Current pins or defaults.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacePins'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags:
+        - Spaces
+      operationId: resetSpacePins
+      summary: Reset the sidebar pins to their defaults.
+      description: Deletes stored pins and returns the first eight owned or joined Spaces with customized false. Idempotent.
+      responses:
+        '200':
+          description: Current pins or defaults.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacePins'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /api/team-spaces:
@@ -2807,6 +3153,44 @@ components:
       name: x-api-key
       description: Shared secret configured on Workspace and the trusted Discord Bot server.
   schemas:
+    RepositoryActivity:
+      type: object
+      additionalProperties: false
+      required:
+        - timeZone
+        - days
+        - events
+        - complete
+      properties:
+        timeZone:
+          type: string
+          description: Canonical IANA zone used for day boundaries.
+        days:
+          type: array
+          description: The 14 calendar days ending today in `timeZone`, oldest first.
+          minItems: 14
+          maxItems: 14
+          items:
+            $ref: '#/components/schemas/ActivityDay'
+        events:
+          type: array
+          maxItems: 20
+          description: Newest events in the window, newest first.
+          items:
+            $ref: '#/components/schemas/ActivityEvent'
+        complete:
+          type: boolean
+          description: False when a source exceeds 1000 touched rows, more than 200 processed Worktrees need state lookups, or a state lookup fails. Incomplete merge facts are omitted.
+    WriteSource:
+      type: string
+      enum:
+        - browser
+        - agent
+        - unknown
+      description: |
+        Entry point of the Session that made a write. `browser` = the Workspace web app's sign-in routes.
+        `agent` = any non-browser entry point (uvw CLI, Workspace Agent, OAuth clients, Discord bot); it does not
+        identify who was typing. `unknown` = recorded before attribution existed, or by a Session issued before it.
     Error:
       type: object
       additionalProperties: false
@@ -2863,6 +3247,7 @@ components:
         - type: object
           required:
             - accessRole
+            - affiliation
             - capabilities
             - owner
             - description
@@ -2897,6 +3282,8 @@ components:
                 username:
                   type: string
               description: The authoritative Space owner, including when viewed by another User.
+            affiliation:
+              $ref: '#/components/schemas/SpaceAffiliation'
             accessRole:
               $ref: '#/components/schemas/SpaceRole'
             capabilities:
@@ -3202,6 +3589,7 @@ components:
       type: object
       additionalProperties: false
       required:
+        - createdVia
         - id
         - number
         - space
@@ -3218,6 +3606,8 @@ components:
         - createdAt
         - updatedAt
       properties:
+        createdVia:
+          $ref: '#/components/schemas/WriteSource'
         id:
           type: string
         number:
@@ -3269,6 +3659,7 @@ components:
       type: object
       additionalProperties: false
       required:
+        - createdVia
         - id
         - number
         - name
@@ -3284,6 +3675,8 @@ components:
         - updatedAt
         - capabilities
       properties:
+        createdVia:
+          $ref: '#/components/schemas/WriteSource'
         id:
           type: string
         number:
@@ -3345,16 +3738,22 @@ components:
       required:
         - authenticated
         - githubOAuthEnabled
+        - googleOAuthEnabled
         - discordOAuthEnabled
         - passwordAuthEnabled
+        - emailAuthEnabled
       properties:
         authenticated:
           const: false
         githubOAuthEnabled:
           type: boolean
+        googleOAuthEnabled:
+          type: boolean
         discordOAuthEnabled:
           type: boolean
         passwordAuthEnabled:
+          type: boolean
+        emailAuthEnabled:
           type: boolean
     ExternalIdentitySummary:
       type: object
@@ -3367,6 +3766,7 @@ components:
           type: string
           enum:
             - github
+            - google
             - discord
         providerUsername:
           type: string
@@ -3375,10 +3775,17 @@ components:
       additionalProperties: false
       required:
         - password
+        - email
         - externalIdentities
       properties:
         password:
           type: boolean
+        email:
+          type:
+            - string
+            - 'null'
+          format: email
+          description: Verified Email address used for passwordless sign-in, when the User has one.
         externalIdentities:
           type: array
           items:
@@ -3389,8 +3796,10 @@ components:
       required:
         - authenticated
         - githubOAuthEnabled
+        - googleOAuthEnabled
         - discordOAuthEnabled
         - passwordAuthEnabled
+        - emailAuthEnabled
         - trialDeployment
         - user
         - authenticationMethods
@@ -3399,9 +3808,13 @@ components:
           const: true
         githubOAuthEnabled:
           type: boolean
+        googleOAuthEnabled:
+          type: boolean
         discordOAuthEnabled:
           type: boolean
         passwordAuthEnabled:
+          type: boolean
+        emailAuthEnabled:
           type: boolean
         trialDeployment:
           type: boolean
@@ -3445,6 +3858,45 @@ components:
           pattern: ^[\p{L}\p{N}._-]+$
         password:
           type: string
+    EmailLoginCodeRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+    EmailLoginCodeIssued:
+      type: object
+      additionalProperties: false
+      required:
+        - expiresIn
+        - resendAfter
+      properties:
+        expiresIn:
+          type: integer
+          minimum: 1
+          description: Lifetime of the emailed code in seconds.
+        resendAfter:
+          type: integer
+          minimum: 1
+          description: Seconds before another code may be requested for the same address.
+    EmailLogin:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - code
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        code:
+          type: string
+          pattern: ^[0-9]{6}$
     PasswordChange:
       type: object
       additionalProperties: false
@@ -3569,6 +4021,127 @@ components:
           maxItems: 20
           items:
             $ref: '#/components/schemas/User'
+    WriteSourceCounts:
+      type: object
+      additionalProperties: false
+      required:
+        - browser
+        - agent
+        - unknown
+      properties:
+        browser:
+          type: integer
+          minimum: 0
+        agent:
+          type: integer
+          minimum: 0
+        unknown:
+          type: integer
+          minimum: 0
+    ActivityDay:
+      type: object
+      additionalProperties: false
+      required:
+        - day
+        - opened
+        - merged
+      properties:
+        day:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+        opened:
+          $ref: '#/components/schemas/WriteSourceCounts'
+          description: Pull requests and Issues opened that day, by Session source.
+        merged:
+          type: integer
+          minimum: 0
+    PullActivityEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - at
+        - actor
+        - writeSource
+        - pull
+      properties:
+        kind:
+          type: string
+          enum:
+            - pull-opened
+            - pull-merged
+        at:
+          type: string
+          format: date-time
+        actor:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - type: 'null'
+        writeSource:
+          $ref: '#/components/schemas/WriteSource'
+          description: Source of this write; `unknown` for merges (not recorded).
+        pull:
+          type: object
+          additionalProperties: false
+          required:
+            - id
+            - number
+            - title
+            - spaceId
+          properties:
+            id:
+              type: string
+            number:
+              type:
+                - integer
+                - 'null'
+            title:
+              type: string
+            spaceId:
+              type: string
+    IssueActivityEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - at
+        - actor
+        - writeSource
+        - issue
+      properties:
+        kind:
+          type: string
+          enum:
+            - issue-opened
+            - issue-closed
+        at:
+          type: string
+          format: date-time
+        actor:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - type: 'null'
+        writeSource:
+          $ref: '#/components/schemas/WriteSource'
+          description: Source of this write; `unknown` for closes (not recorded).
+        issue:
+          type: object
+          additionalProperties: false
+          required:
+            - number
+            - title
+            - spaceId
+          properties:
+            number:
+              type: integer
+            title:
+              type: string
+            spaceId:
+              type: string
+    ActivityEvent:
+      oneOf:
+        - $ref: '#/components/schemas/PullActivityEvent'
+        - $ref: '#/components/schemas/IssueActivityEvent'
     SpaceType:
       type: string
       enum:
@@ -3592,6 +4165,13 @@ components:
         publicRead:
           type: boolean
           description: Whether anyone with a link can browse and open this Space read-only.
+    SpaceAffiliation:
+      type: string
+      enum:
+        - owner
+        - member
+        - none
+      description: Ownership or Team membership, independent of the effective access role. Public readers have none.
     SpaceRole:
       type: string
       enum:
@@ -3631,6 +4211,28 @@ components:
         manageIssueLabels:
           type: boolean
           description: The caller may create, change and delete this Space's Issue labels.
+    MySpaceView:
+      allOf:
+        - $ref: '#/components/schemas/SpaceView'
+        - type: object
+          required:
+            - affiliation
+          properties:
+            affiliation:
+              type: string
+              enum:
+                - owner
+                - member
+    MySpaceList:
+      type: object
+      additionalProperties: false
+      required:
+        - spaces
+      properties:
+        spaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/MySpaceView'
     SpaceList:
       type: object
       additionalProperties: false
@@ -3641,6 +4243,42 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SpaceView'
+    SpacePins:
+      type: object
+      additionalProperties: false
+      required:
+        - customized
+        - limit
+        - spaces
+      properties:
+        customized:
+          type: boolean
+          description: True when at least one stored pin is still eligible. Otherwise spaces contains the first eight owned or joined Spaces.
+        limit:
+          type: integer
+          const: 12
+          description: Maximum number of pins accepted by the server.
+        spaces:
+          type: array
+          maxItems: 12
+          description: Eligible Spaces in pin order, or the default order when customized is false.
+          items:
+            $ref: '#/components/schemas/SpaceView'
+    SetSpacePins:
+      type: object
+      additionalProperties: false
+      required:
+        - spaceIds
+      properties:
+        spaceIds:
+          type: array
+          minItems: 1
+          maxItems: 12
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+          description: Ordered owned or joined Spaces, or public Spaces starred by the current User.
     SpaceSlug:
       type: string
       minLength: 1

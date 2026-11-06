@@ -46,6 +46,7 @@ import {
 import { RuntimeManager } from "../runtime/manager.js";
 import type { WorkspaceRuntimeTarget } from "../runtime/target.js";
 import { spaceLinksDomainSpec } from "./space-links.ts";
+import { getSpace } from "./spaces-api.ts";
 import {
   addWorktreeTrunkUnit,
   createDocument as apiCreateDocument,
@@ -114,20 +115,30 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     const remote = await listSpaces(client);
     const table = await this.requireTable();
     const origin = new URL(client.origin).origin;
+    const links = new Map<string, string>();
+    for (const [key, record] of table.entries()) {
+      if (record.userId !== userId || (record.origin !== undefined && record.origin !== origin)) continue;
+      const directory = originSpaceDirectoryPath(this.config.workspaceRoot, origin, userId, record.spaceId);
+      if (this.ctx.workspaceRegistry.get(key as WorkspaceId)?.path === directory) {
+        links.set(record.spaceId, key);
+      }
+    }
+    const listed = new Set(remote.map(space => space.spaceId));
+    for (const spaceId of links.keys()) {
+      if (listed.has(spaceId)) continue;
+      const space = await getSpace(client, spaceId);
+      if (space !== undefined) remote.push(space);
+    }
     const spaces: WorkspaceSpace[] = [];
     for (const space of remote) {
-      const directory = originSpaceDirectoryPath(this.config.workspaceRoot, origin, userId, space.spaceId);
-      const linked = [...table.entries()].find(([key, record]) =>
-        record.userId === userId && record.spaceId === space.spaceId &&
-        (record.origin === undefined || record.origin === origin) &&
-        this.ctx.workspaceRegistry.get(key as WorkspaceId)?.path === directory,
-      );
+      const linked = links.get(space.spaceId);
       spaces.push({
         spaceId: space.spaceId,
         type: space.type,
         name: space.name,
         accessRole: space.accessRole,
-        ...(linked === undefined ? {} : { dshWorkspaceId: linked[0] }),
+        ...(space.affiliation === undefined ? {} : { affiliation: space.affiliation }),
+        ...(linked === undefined ? {} : { dshWorkspaceId: linked }),
         ...(space.capabilities === undefined ? {} : { capabilities: space.capabilities }),
       });
     }
@@ -136,7 +147,7 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
 
   async addSpace(userId: string, spaceId: string): Promise<{ dshWorkspaceId: string; path: string }> {
     const client = this.requireClient(userId);
-    const space = (await listSpaces(client)).find(space => space.spaceId === spaceId);
+    const space = await getSpace(client, spaceId);
     if (space === undefined) throw new Error("workspace_space_unavailable");
     const headers = await this.persistedSessionHeaders();
     const assertCurrent = () => {
@@ -336,6 +347,25 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
       license: this.config.license,
     };
     return await this.runtimeManager.read(target, input.code);
+  }
+
+  async readUnitWithRevision(
+    userId: string,
+    input: EditUnitInput,
+  ): Promise<{ readonly value: CollaborationRuntimeValue; readonly revision: number }> {
+    const client = this.requireClient(userId);
+    return await this.runtimeManager.readWithRevision(
+      {
+        origin: client.origin,
+        revision: input.revision ?? -1,
+        scope: input.scope,
+        unitId: input.unitId,
+        unitType: input.unitType,
+        sessionToken: client.sessionToken,
+        license: this.config.license,
+      },
+      input.code,
+    );
   }
 
   async inspectUnit(userId: string, input: InspectUnitInput): Promise<ContentInspectionResult> {

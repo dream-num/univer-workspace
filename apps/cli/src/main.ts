@@ -13,6 +13,12 @@ import { workspaceDaemonIdentity } from "./runtime/daemon-identity.js";
 import { stopLegacyWorkspaceDaemonIfPresent } from "./runtime/legacy-daemon.js";
 
 const env = process.env;
+// Node would otherwise print the throwing line, which in a bundled SDK file is all of its source.
+process.on("uncaughtException", (error) => {
+  const debug = env["UNIVER_DEBUG"] === "1";
+  process.stderr.write(`${(debug ? error?.stack : error?.message) ?? String(error)}\n`);
+  process.exit(1);
+});
 const require = createRequire(import.meta.url);
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const daemonEntry = new URL(/* @vite-ignore */ "./runtime/daemon.js", import.meta.url);

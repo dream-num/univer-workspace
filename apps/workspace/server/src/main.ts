@@ -17,6 +17,11 @@ const { createWorkspaceApplication } = await startupStageAsync(
   () => import("./app.js"),
 );
 const config = startupStage("config.load", () => loadConfig());
+if (config.emailAuth?.provider === "console") {
+  logger.warn(
+    "Email sign-in uses the console provider; verification codes are written to the server log. Configure SMTP before using it in production."
+  );
+}
 startupStage("database.product.prepare", () => prepareCurrentDatabase(config.databaseFilename));
 await startupStageAsync("database.collaboration.prepare", () =>
   prepareCollaborationDatabase(config.collaborationDatabaseFilename, config.databaseFilename),

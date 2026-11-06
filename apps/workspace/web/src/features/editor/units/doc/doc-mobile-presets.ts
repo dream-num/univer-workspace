@@ -18,6 +18,7 @@ import { UniverMobileUIPlugin } from "@univerjs/ui";
 import { getReferencedSheetPlugins } from "../../features/referenced-sheet-plugins";
 import {
   getDocMobileAuthoringUIPlugins,
+  getDocMobileFindReplacePlugins,
   getDocReplayCompatibilityPlugins,
 } from "./doc-features";
 
@@ -71,6 +72,7 @@ export function createDocMobilePresets({
       plugins: [
         ...getDocReplayCompatibilityPlugins(),
         ...getDocMobileAuthoringUIPlugins(),
+        ...getDocMobileFindReplacePlugins(),
       ],
     },
   ];

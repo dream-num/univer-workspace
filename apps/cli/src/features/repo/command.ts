@@ -17,7 +17,7 @@ import {
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 
 export const REPO_JSON_FIELDS = [
-  "id", "name", "type", "accessRole", "description", "fullName", "owner", "publicRead", "slug",
+  "id", "name", "type", "accessRole", "affiliation", "description", "fullName", "owner", "publicRead", "slug",
 ] as const satisfies readonly (keyof WorkspaceSpace)[];
 
 export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoContext): Command {
@@ -26,7 +26,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
   );
 
   const list = new Command("list")
-    .description("List repositories you can access")
+    .description("List repositories you own or have joined")
     .option("--owner <user>", "only repositories owned by this username, or @me")
     .option("--type <type>", "team or personal")
     .option("-L, --limit <n>", "maximum number of repositories", "30")
@@ -44,7 +44,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
               (space) =>
                 owner === undefined ||
                 (owner === "@me"
-                  ? space.accessRole === "owner"
+                  ? (space.affiliation ?? space.accessRole) === "owner"
                   : space.owner !== undefined && usernameKey(space.owner.username) === owner),
             )
             .slice(0, limit);

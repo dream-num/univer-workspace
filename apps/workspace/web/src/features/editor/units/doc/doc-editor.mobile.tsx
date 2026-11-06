@@ -5,6 +5,7 @@ import {
   type CollaborationEditorProps,
 } from "../../collaboration-editor";
 import { createMobileExchangeFeaturePlugins } from "../../features/exchange-plugins";
+import { createWorkspaceImportExportFeature } from "../../features/import-export";
 import { docEditorDefinition } from "./doc-editor";
 import { createDocMobilePresets } from "./doc-mobile-presets";
 
@@ -20,7 +21,10 @@ export default createCollaborationEditor({
   // See createMobileExchangeFeaturePlugins.
   exchangeProvidedByPreset: true,
   exchangeFeaturePlugins: () =>
-    createMobileExchangeFeaturePlugins([UniverDocsExchangeClientPlugin]),
+    createMobileExchangeFeaturePlugins([
+      UniverDocsExchangeClientPlugin,
+      createWorkspaceImportExportFeature("doc", { mobile: true }),
+    ]),
   createPresets: (container, _license, _collaborationScope, compact) =>
     createDocMobilePresets({ container, compact }),
 });

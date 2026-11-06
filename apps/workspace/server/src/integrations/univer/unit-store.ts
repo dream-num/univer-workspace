@@ -15,6 +15,10 @@ import type * as SlidesModule from "@univerjs-pro/slides";
 import type * as CoreModule from "@univerjs/core";
 import type * as ProtocolModule from "@univerjs/protocol";
 import type { UnitType } from "../../modules/access/index.js";
+import {
+  BUNDLED_UNIVER_LICENSE,
+  type UniverLicenseCredentials,
+} from "./univer-license.js";
 
 const moduleRequire = createRequire(import.meta.url);
 const { getBoardsEmptySnapshot } = moduleRequire(
@@ -127,13 +131,17 @@ export function createCollaborationRuntime(
   options: {
     readonly commentUserProvider?: CommentServiceModule.ICommentUserProvider;
     readonly historyUserProvider?: HistoryServiceModule.IHistoryUserProvider;
+    readonly license?: UniverLicenseCredentials;
   } = {}
 ): CollaborationRuntime {
   const database = new SQLiteDatabaseAdapter({ filename });
+  const { license, licenseKey } = options.license ?? BUNDLED_UNIVER_LICENSE;
   const service = new UniverCollabService({
     dbAdapter: database,
     enableUnitPermissionAnalysis: true,
     runtime: UNIT_RUNTIME,
+    license,
+    licenseKey,
   });
   const reviewCommit = new ReviewCommitCoordinator();
   for (const action of [

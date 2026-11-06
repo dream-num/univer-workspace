@@ -12,6 +12,8 @@ import { registerIssueTool } from "./issue.ts";
 import { registerWorktreeTools } from "./worktree.ts";
 import { registerEditTool } from "./edit.ts";
 import { registerExchangeTools } from "./exchange.ts";
+import { registerMarkdownTool } from "./markdown.ts";
+import { registerMarkdownExportTool } from "./markdown-export.ts";
 import { registerUnitTool } from "./unit.ts";
 import { registerApiTool } from "./api.ts";
 import { registerResourcesTool } from "./resources.ts";
@@ -24,6 +26,7 @@ export const inject = ["tools", "univerWorkspace"];
 
 export interface Config {
   readonly license: string;
+  readonly licenseKey: string;
 }
 
 /** Register every univer_ tool. */
@@ -35,7 +38,9 @@ export function apply(ctx: Context, config: Config): void {
     const disposeIssue = registerIssueTool(ctx);
     const disposeWorktree = registerWorktreeTools(ctx);
     const disposeEdit = registerEditTool(ctx);
-    const disposeExchange = registerExchangeTools(ctx);
+    const disposeExchange = registerExchangeTools(ctx, config);
+    const disposeMarkdown = registerMarkdownTool(ctx, config);
+    const disposeMarkdownExport = registerMarkdownExportTool(ctx);
     const disposeUnit = registerUnitTool(ctx);
     const disposeApi = registerApiTool(ctx);
     const disposeResources = registerResourcesTool(ctx);
@@ -61,6 +66,8 @@ export function apply(ctx: Context, config: Config): void {
       disposeHtmlView();
       disposeResources();
       disposeApi();
+      disposeMarkdown();
+      disposeMarkdownExport();
       disposeUnit();
       disposeExchange();
       disposeEdit();

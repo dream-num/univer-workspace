@@ -9,7 +9,10 @@ import {
   type DiscordOAuthProvider,
   IdentityRepository,
   type GitHubOAuthProvider,
+  type GoogleOAuthProvider,
 } from "../../server/src/modules/identity/index.js";
+
+import { expectSessionSource } from "../fixtures/session-source.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -35,6 +38,8 @@ describe("identity", () => {
         password: "correct horse battery staple",
       });
 
+      expectSessionSource(database.connection, issued.cookieValue, "browser");
+      expect(issued.view).not.toHaveProperty("writeSource");
       expect(issued.view).toMatchObject({
         authenticated: true,
         user: {
@@ -116,16 +121,20 @@ describe("identity", () => {
       ).toEqual({
         authenticated: false,
         githubOAuthEnabled: false,
+        googleOAuthEnabled: false,
         discordOAuthEnabled: false,
         passwordAuthEnabled: true,
+        emailAuthEnabled: false,
       });
 
       secondIdentity.logout(cookie);
       expect(secondIdentity.getSession(cookie)).toEqual({
         authenticated: false,
         githubOAuthEnabled: false,
+        googleOAuthEnabled: false,
         discordOAuthEnabled: false,
         passwordAuthEnabled: true,
+        emailAuthEnabled: false,
       });
     } finally {
       secondDatabase.close();
@@ -150,7 +159,7 @@ describe("identity", () => {
         identity.loginWithPassword({
           username: "Carol",
           password: "correct horse battery staple",
-        })
+        }, "browser")
       ).resolves.toMatchObject({
         view: {
           authenticated: true,
@@ -161,7 +170,7 @@ describe("identity", () => {
         identity.loginWithPassword({
           username: "carol",
           password: "wrong password",
-        })
+        }, "browser")
       ).rejects.toMatchObject<ApplicationError>({
         code: "INVALID_CREDENTIALS",
         status: 401,
@@ -211,6 +220,8 @@ describe("identity", () => {
         status: "authorized",
         issuedSession: { view: { user: { username: "device-user" } } },
       });
+      if (exchanged.status !== "authorized") throw new Error("Missing authorized session");
+      expectSessionSource(database.connection, exchanged.issuedSession.cookieValue, "agent");
       expect(tableCount(database, "login_sessions")).toBe(2);
       expect(() =>
         identity.exchangeCliAuthorization(started.deviceCode)
@@ -260,7 +271,7 @@ describe("identity", () => {
         identity.loginWithPassword({
           username: "dana",
           password: "original secure password",
-        })
+        }, "browser")
       ).rejects.toMatchObject<ApplicationError>({
         code: "INVALID_CREDENTIALS",
       });
@@ -268,7 +279,7 @@ describe("identity", () => {
         identity.loginWithPassword({
           username: "dana",
           password: "replacement secure password",
-        })
+        }, "browser")
       ).resolves.toMatchObject({
         view: { user: { username: "dana" } },
       });
@@ -332,6 +343,7 @@ describe("identity", () => {
         oauthCookieHeader: `${identity.githubOAuthCookieName}=${login.cookieValue}`,
         sessionCookieHeader: undefined,
       });
+      expectSessionSource(database.connection, loggedIn.issuedSession!.cookieValue, "browser");
       expect(loggedIn.returnTo).toBe("/worktrees");
       expect(loggedIn.issuedSession?.view).toMatchObject({
         user: { username: "octocat", displayName: "The Octocat" },
@@ -342,6 +354,15 @@ describe("identity", () => {
           ],
         },
       });
+      const repeatLogin = identity.startGitHubOAuth({ intent: "login", returnTo: "/worktrees", cookieHeader: undefined });
+      const repeated = await identity.finishGitHubOAuth({
+        code: "repeat-code",
+        state: new URL(repeatLogin.authorizationUrl).searchParams.get("state"),
+        providerError: undefined,
+        oauthCookieHeader: `${identity.githubOAuthCookieName}=${repeatLogin.cookieValue}`,
+        sessionCookieHeader: undefined,
+      });
+      expectSessionSource(database.connection, repeated.issuedSession!.cookieValue, "browser");
       expect(tableCount(database, "external_identities")).toBe(1);
       const githubCookie = `${identity.cookieName}=${loggedIn.issuedSession!.cookieValue}`;
       const cliLogin = identity.startCliAuthorization();
@@ -432,6 +453,115 @@ describe("identity", () => {
           externalIdentities: [],
         },
       });
+    } finally {
+      database.close();
+    }
+  });
+
+  it("logs in, links, and safely unlinks Google identities", async () => {
+    const database = openWorkspaceDatabase(":memory:");
+    let googleUser = {
+      subject: "google-subject-1",
+      username: "alice.gmail",
+      displayName: "Alice Gmail",
+      avatarUrl: "https://lh3.googleusercontent.com/alice.png",
+    };
+    const googleProvider: GoogleOAuthProvider = {
+      authorizationUrl: ({ state, codeChallenge }) =>
+        `https://google.example/authorize?state=${state}&code_challenge=${codeChallenge}`,
+      async exchangeCode() {
+        return googleUser;
+      },
+    };
+    const identity = createIdentityModule({
+      repository: new IdentityRepository(database),
+      sessionTtlMs: 60_000,
+      googleOAuthProvider: googleProvider,
+      oauthStateSecret: "test-oauth-state-secret",
+      now: () => 1_000,
+    });
+
+    try {
+      expect(identity.getSession(undefined)).toMatchObject({
+        authenticated: false,
+        googleOAuthEnabled: true,
+      });
+
+      const login = identity.startGoogleOAuth({
+        intent: "login",
+        returnTo: "/worktrees",
+        cookieHeader: undefined,
+      });
+      const loginState = new URL(login.authorizationUrl).searchParams.get(
+        "state"
+      );
+      const loggedIn = await identity.finishGoogleOAuth({
+        code: "google-login-code",
+        state: loginState,
+        providerError: undefined,
+        oauthCookieHeader: `${identity.googleOAuthCookieName}=${login.cookieValue}`,
+        sessionCookieHeader: undefined,
+      });
+      expect(loggedIn.returnTo).toBe("/worktrees");
+      expect(loggedIn.issuedSession?.view).toMatchObject({
+        googleOAuthEnabled: true,
+        user: { username: "alice.gmail", displayName: "Alice Gmail" },
+        authenticationMethods: {
+          password: false,
+          externalIdentities: [
+            { provider: "google", providerUsername: "alice.gmail" },
+          ],
+        },
+      });
+      const googleCookie = `${identity.cookieName}=${loggedIn.issuedSession!.cookieValue}`;
+      expect(() => identity.unlinkGoogle(googleCookie)).toThrowError(
+        expect.objectContaining({ code: "CONFLICT" })
+      );
+
+      const passwordUser = await identity.registerWithPassword({
+        username: "alice",
+        displayName: "Alice",
+        password: "correct horse battery staple",
+      });
+      const passwordCookie = `${identity.cookieName}=${passwordUser.cookieValue}`;
+      googleUser = {
+        subject: "google-subject-2",
+        username: "alice.work",
+        displayName: "Alice Work",
+        avatarUrl: null,
+      };
+      const link = identity.startGoogleOAuth({
+        intent: "link",
+        returnTo: "/",
+        cookieHeader: passwordCookie,
+      });
+      const linkState = new URL(link.authorizationUrl).searchParams.get(
+        "state"
+      );
+      await identity.finishGoogleOAuth({
+        code: "google-link-code",
+        state: linkState,
+        providerError: undefined,
+        oauthCookieHeader: `${identity.googleOAuthCookieName}=${link.cookieValue}`,
+        sessionCookieHeader: passwordCookie,
+      });
+      expect(identity.getSession(passwordCookie)).toMatchObject({
+        authenticationMethods: {
+          password: true,
+          externalIdentities: [
+            { provider: "google", providerUsername: "alice.work" },
+          ],
+        },
+      });
+      expect(identity.unlinkGoogle(passwordCookie)).toMatchObject({
+        authenticationMethods: {
+          password: true,
+          externalIdentities: [],
+        },
+      });
+      expect(() => identity.unlinkGoogle(undefined)).toThrowError(
+        expect.objectContaining({ code: "UNAUTHENTICATED" })
+      );
     } finally {
       database.close();
     }
@@ -556,8 +686,10 @@ describe("identity", () => {
       expect(disabled.getSession(undefined)).toEqual({
         authenticated: false,
         githubOAuthEnabled: false,
+        googleOAuthEnabled: false,
         discordOAuthEnabled: false,
         passwordAuthEnabled: false,
+        emailAuthEnabled: false,
       });
       expect(disabled.getSession(cookie)).toMatchObject({
         authenticated: true,
@@ -578,7 +710,7 @@ describe("identity", () => {
         disabled.loginWithPassword({
           username: "erin",
           password: "correct horse battery staple",
-        })
+        }, "browser")
       ).rejects.toMatchObject<ApplicationError>({
         code: "PASSWORD_AUTH_DISABLED",
         status: 403,

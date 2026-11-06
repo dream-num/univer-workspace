@@ -16,23 +16,23 @@ const factories = vi.hoisted(() => ({
   base: vi.fn(),
   board: vi.fn(() => [{ plugins: [] }]),
 }));
-vi.mock("../../web/src/features/editor/units/sheet/sheet-comparison-presets", () => ({
+vi.mock("@univerjs/univer-workspace-editor-presets/sheets", () => ({
   createSheetEditorPresets: factories.sheet,
   sheetEditorLocales: { "en-US": {}, "zh-CN": {} },
 }));
-vi.mock("../../web/src/features/editor/units/doc/doc-editor", () => ({
+vi.mock("@univerjs/univer-workspace-editor-presets/docs", () => ({
   createDocComparisonPresets: factories.doc,
   docEditorLocales: { "en-US": {}, "zh-CN": {} },
 }));
-vi.mock("../../web/src/features/editor/units/slide/slide-editor", () => ({
+vi.mock("@univerjs/univer-workspace-editor-presets/slides", () => ({
   createSlideComparisonPresets: factories.slide,
   slideEditorLocales: { "en-US": {}, "zh-CN": {} },
 }));
-vi.mock("../../web/src/features/editor/units/base/base-editor", () => ({
+vi.mock("@univerjs/univer-workspace-editor-presets/bases", () => ({
   createBaseComparisonPresets: factories.base,
   baseEditorLocales: { "en-US": {}, "zh-CN": {} },
 }));
-vi.mock("../../web/src/features/editor/units/board/board-editor", () => ({
+vi.mock("@univerjs/univer-workspace-editor-presets/boards", () => ({
   createBoardComparisonPresets: factories.board,
   boardEditorLocales: { "en-US": {}, "zh-CN": {} },
 }));

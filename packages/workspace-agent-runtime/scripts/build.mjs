@@ -2,7 +2,9 @@ import { build } from 'esbuild';
 import { copyFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 await mkdir('lib', { recursive: true });
-const external = ['node:*', '@univerjs-pro/engine-formula-rust-binding', '@univerjs-pro/exchange-node-binding', '@univer-cli/unit-layout-lint', '@univer-cli/unit-screenshot', '@univer-cli/univer-render-runtime'];
+// Exchange 1.3.1 owns a CJS native loader. Let Node resolve the public wrapper
+// from each consumer's production graph instead of inlining its require calls into ESM.
+const external = ['node:*', '@univerjs-pro/exchange-node', '@univerjs-pro/engine-formula-rust-binding', '@univerjs-pro/exchange-node-binding', '@univer-cli/unit-layout-lint', '@univer-cli/unit-screenshot', '@univer-cli/univer-render-runtime'];
 for (const [entry, outfile] of [['src/api-reference.ts', 'lib/api-reference.js'], ['src/manager.ts', 'lib/index.js'], ['src/manager.ts', 'lib/manager.js'], ['src/target.ts', 'lib/target.js'], ['src/worker-http.ts', 'lib/worker-http.js'], ['src/snapshot-adapter.ts', 'lib/snapshot-adapter.js'], ['src/worker.ts', 'lib/worker.js']]) {
   await build({ entryPoints: [entry], outfile, bundle: true, platform: 'node', format: 'esm', target: 'node24', external, logLevel: 'info' });
 }

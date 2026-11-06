@@ -1,5 +1,10 @@
 import { resolve } from "node:path";
+import type { EmailConfig } from "./integrations/email/index.js";
 import type { OAuthClientConfig } from "./modules/identity/oauth-clients.js";
+import {
+  resolveUniverLicense,
+  type UniverLicenseCredentials,
+} from "./integrations/univer/univer-license.js";
 
 export interface WorkspaceConfig {
   readonly host: string;
@@ -12,6 +17,8 @@ export interface WorkspaceConfig {
   readonly secureCookies: boolean;
   readonly sessionTtlMs: number;
   readonly passwordAuthEnabled: boolean;
+  /** Configured Email sign-in delivery; null disables Email sign-in. */
+  readonly emailAuth: EmailConfig | null;
   readonly trialDeployment?: boolean;
   readonly discordBotApiKey?: string;
   readonly githubOAuth?: {
@@ -20,27 +27,42 @@ export interface WorkspaceConfig {
     readonly callbackUrl: string;
     readonly allowedOrganizations: readonly string[];
   } | null;
+  readonly googleOAuth?: {
+    readonly clientId: string;
+    readonly clientSecret: string;
+    readonly callbackUrl: string;
+  } | null;
   readonly discordOAuth?: {
     readonly clientId: string;
     readonly clientSecret: string;
     readonly callbackUrl: string;
   } | null;
   readonly oauthClients: OAuthClientConfig | null;
+  /** Defaults to the bundled development license. */
+  readonly univerLicense?: UniverLicenseCredentials;
 }
 
 export function loadConfig(
   environment: NodeJS.ProcessEnv = process.env
 ): WorkspaceConfig {
   const githubOAuth = githubConfig(environment);
+  const googleOAuth = googleConfig(environment);
   const discordOAuth = discordConfig(environment);
   const passwordAuthEnabled = boolean(
     environment.PASSWORD_AUTH_ENABLED,
     true,
     "PASSWORD_AUTH_ENABLED"
   );
-  if (!passwordAuthEnabled && !githubOAuth && !discordOAuth) {
+  const emailAuth = emailConfig(environment);
+  if (
+    !passwordAuthEnabled &&
+    !emailAuth &&
+    !githubOAuth &&
+    !googleOAuth &&
+    !discordOAuth
+  ) {
     throw new Error(
-      "PASSWORD_AUTH_ENABLED=false requires GitHub or Discord OAuth so the deployment still has a browser sign-in method"
+      "PASSWORD_AUTH_ENABLED=false requires Email, GitHub, Google, or Discord sign-in so the deployment still has a browser sign-in method"
     );
   }
   const oauthClientsConfig = oauthClientConfig(environment);
@@ -81,6 +103,7 @@ export function loadConfig(
       "SESSION_TTL_MS"
     ),
     passwordAuthEnabled,
+    emailAuth,
     trialDeployment: boolean(
       environment.TRIAL_DEPLOYMENT,
       false,
@@ -89,8 +112,10 @@ export function loadConfig(
     ...(discordBotApiKey ? { discordBotApiKey } : {}),
     ...(metricsToken ? { metricsToken } : {}),
     githubOAuth,
+    googleOAuth,
     discordOAuth,
     oauthClients: oauthClientsConfig,
+    univerLicense: resolveUniverLicense(environment),
   };
 }
 
@@ -163,6 +188,31 @@ function convertStringArray(value: unknown, name: string): string[] {
   if (!Array.isArray(value)) return [];
   for (const item of value) requireString(item, name);
   return value.map((item) => item as string);
+}
+
+function googleConfig(
+  environment: NodeJS.ProcessEnv
+): {
+  readonly clientId: string;
+  readonly clientSecret: string;
+  readonly callbackUrl: string;
+} | null {
+  const values = [
+    environment.GOOGLE_CLIENT_ID,
+    environment.GOOGLE_CLIENT_SECRET,
+    environment.GOOGLE_CALLBACK_URL,
+  ];
+  if (values.every((value) => value === undefined)) return null;
+  if (values.some((value) => !value)) {
+    throw new Error(
+      "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL must be configured together"
+    );
+  }
+  return {
+    clientId: values[0]!,
+    clientSecret: values[1]!,
+    callbackUrl: new URL(values[2]!).toString(),
+  };
 }
 
 function discordConfig(
@@ -248,6 +298,79 @@ function githubAllowedOrganizations(value: string | undefined): string[] {
 
 function isGitHubLogin(value: string): boolean {
   return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(value);
+}
+
+function emailConfig(environment: NodeJS.ProcessEnv): EmailConfig | null {
+  const providerValue = environment.EMAIL_PROVIDER;
+  let provider: "smtp" | "console" | undefined;
+  if (providerValue !== undefined) {
+    if (providerValue !== "smtp" && providerValue !== "console") {
+      throw new Error('EMAIL_PROVIDER must be "smtp" or "console"');
+    }
+    provider = providerValue;
+  }
+  const smtpHost = environment.EMAIL_SMTP_HOST?.trim() || undefined;
+  const hasSmtpSettings =
+    smtpHost !== undefined ||
+    environment.EMAIL_SMTP_PORT !== undefined ||
+    environment.EMAIL_SMTP_SECURE !== undefined ||
+    environment.EMAIL_SMTP_USER !== undefined ||
+    environment.EMAIL_SMTP_PASSWORD !== undefined;
+  const configured =
+    provider !== undefined ||
+    hasSmtpSettings ||
+    environment.EMAIL_FROM !== undefined ||
+    environment.EMAIL_FROM_NAME !== undefined;
+  const enabled = boolean(
+    environment.EMAIL_AUTH_ENABLED,
+    configured,
+    "EMAIL_AUTH_ENABLED"
+  );
+  if (!enabled) return null;
+
+  const resolvedProvider =
+    provider ?? (hasSmtpSettings ? "smtp" : "console");
+  const fromAddress = (environment.EMAIL_FROM ?? "no-reply@localhost").trim();
+  if (!/^[^\s<>@]+@[^\s<>@]+$/u.test(fromAddress)) {
+    throw new Error("EMAIL_FROM must be an email address");
+  }
+  const fromName = environment.EMAIL_FROM_NAME?.trim();
+  const from =
+    fromName === undefined
+      ? { address: fromAddress }
+      : { address: fromAddress, name: fromName };
+
+  if (resolvedProvider === "console") {
+    return { provider: "console", from };
+  }
+  if (smtpHost === undefined) {
+    throw new Error("EMAIL_PROVIDER=smtp requires EMAIL_SMTP_HOST");
+  }
+  const port = integer(environment.EMAIL_SMTP_PORT, 587, "EMAIL_SMTP_PORT");
+  const secure = boolean(
+    environment.EMAIL_SMTP_SECURE,
+    port === 465,
+    "EMAIL_SMTP_SECURE"
+  );
+  const username = environment.EMAIL_SMTP_USER;
+  const password = environment.EMAIL_SMTP_PASSWORD;
+  if ((username === undefined) !== (password === undefined)) {
+    throw new Error(
+      "EMAIL_SMTP_USER and EMAIL_SMTP_PASSWORD must be configured together"
+    );
+  }
+  return {
+    provider: "smtp",
+    from,
+    smtp: {
+      host: smtpHost,
+      port,
+      secure,
+      ...(username === undefined
+        ? {}
+        : { username, password: password ?? "" }),
+    },
+  };
 }
 
 function boolean(

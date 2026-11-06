@@ -13,13 +13,13 @@ export interface RemoteSpace {
   readonly type: "personal" | "team";
   readonly name: string;
   readonly accessRole: "owner" | "admin" | "editor" | "viewer";
+  readonly affiliation?: "owner" | "member" | "none";
   readonly capabilities?: Readonly<Record<string, boolean>>;
 }
 function spaceType(value: unknown): "personal" | "team" {
   return value === "team" ? "team" : "personal";
 }
 
-/** Narrow one Space from the `/api/spaces` payload. */
 function narrowSpace(raw: unknown): RemoteSpace {
   const record = (raw ?? {}) as Record<string, unknown>;
   const spaceId = stringField(record.id);
@@ -44,6 +44,9 @@ function narrowSpace(raw: unknown): RemoteSpace {
     type: spaceType(record.type),
     name,
     accessRole: accessRole(record.accessRole),
+    ...(record.affiliation === "owner" || record.affiliation === "member" || record.affiliation === "none"
+      ? { affiliation: record.affiliation }
+      : {}),
     ...(capabilities === undefined ? {} : { capabilities }),
   };
 }
@@ -185,6 +188,12 @@ export function narrowNodes(raw: unknown, spaceId: string): WorkspaceDocument[] 
 export async function listSpaces(client: Pick<WorkspaceHttpClient, "request">): Promise<RemoteSpace[]> {
   const raw = await readJson(await client.request("/api/spaces"), "space list");
   return narrowSpaces(raw);
+}
+
+export async function getSpace(client: WorkspaceHttpClient, spaceId: string): Promise<RemoteSpace | undefined> {
+  const response = await client.request(`/api/spaces/${encodeURIComponent(spaceId)}`);
+  if (response.status === 404) return undefined;
+  return narrowSpace(await readJson(response, "space detail"));
 }
 /** Maximum number of product pages walked by one list request. */
 export const NODE_LIST_MAX_PAGES = 1_000;

@@ -50,7 +50,6 @@ describe("editor integration assets", () => {
       "@univerjs/design/lib/index.css",
       "@univerjs/ui/lib/index.css",
       "@univerjs-pro/bases-ui/lib/index.css",
-      "@univerjs-pro/bases-exchange-client/lib/index.css",
     ]);
     expectImportsInOrder(editorSources.slide, [
       "@univerjs/design/lib/index.css",
@@ -128,11 +127,15 @@ describe("editor integration assets", () => {
     for (const product of ["sheet", "doc", "slide", "board", "base"]) {
       expect(readEditorSource(product, ".mobile")).toContain("mobile: true");
     }
-    // Exchange-enabled mobile editors pair the Mobile exchange client.
-    for (const product of ["doc", "slide", "base"]) {
+    // Exchange-enabled mobile editors pair the shared exchange client and
+    // the mobile Workspace import/export UI.
+    for (const product of ["sheet", "doc", "slide", "base"]) {
       const source = readEditorSource(product, ".mobile");
       expect(source).toContain("exchangeProvidedByPreset: true");
       expect(source).toContain("createMobileExchangeFeaturePlugins");
+      expect(source).toContain(
+        `createWorkspaceImportExportFeature("${product}", { mobile: true })`
+      );
     }
   });
 
@@ -193,29 +196,33 @@ describe("editor integration assets", () => {
 
   it("keeps Base chrome out without clipping product content", () => {
     expect(editorSources.base).toContain("hideCollaborationStatus: true");
-    expect(editorSources.base).toContain("toolbar: false");
-    expect(editorSources.base).toContain("collaborationStatus: false");
-    expect(editorSources.base).toContain("footer: false");
+    expect(readSharedPreset("bases")).toContain("toolbar: false");
+    expect(readSharedPreset("bases")).toContain("collaborationStatus: false");
+    expect(readSharedPreset("bases")).toContain("footer: false");
     expect(globalStyles).not.toContain('[id^="univer-base-"]');
     expect(globalStyles).not.toContain("margin-bottom: -36px");
   });
 
   it("registers the supported output plugins for each editor", () => {
     expect(editorSources.sheet).toContain("exchangeProvidedByPreset: true");
-    expect(editorSources.doc).toContain(
-      "exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin]"
+    // SDK 1.3 exchange clients are headless; Workspace adds the import/export UI.
+    expect(editorSources.sheet).toContain(
+      'createWorkspaceImportExportFeature("sheet", { mobile: false })'
     );
+    for (const [product, plugin] of [
+      ["doc", "UniverDocsExchangeClientPlugin"],
+      ["slide", "UniverSlidesExchangeClientPlugin"],
+      ["base", "UniverBasesExchangeClientPlugin"],
+    ] as const) {
+      expect(editorSources[product]).toContain(
+        `exchangeFeaturePlugins: () => [\n    ${plugin},\n    createWorkspaceImportExportFeature("${product}", { mobile: false }),\n  ]`
+      );
+    }
     expect(editorSources.doc).toContain(
       "printFeaturePlugins: () => [UniverDocsPrintPlugin]"
     );
     expect(editorSources.slide).toContain(
-      "exchangeFeaturePlugins: () => [UniverSlidesExchangeClientPlugin]"
-    );
-    expect(editorSources.slide).toContain(
       "printFeaturePlugins: () => [UniverSlidesPrintPlugin]"
-    );
-    expect(editorSources.base).toContain(
-      "exchangeFeaturePlugins: () => [UniverBasesExchangeClientPlugin]"
     );
     expect(editorSources.board).toContain("exchangeEnabled: false");
     expect(editorSources.board).toContain(
@@ -225,9 +232,9 @@ describe("editor integration assets", () => {
 
   it("keeps Board chrome out and contains viewport overscroll", () => {
     expect(editorSources.board).toContain("hideCollaborationStatus: true");
-    expect(editorSources.board).toContain("header: false");
-    expect(editorSources.board).toContain("toolbar: false");
-    expect(editorSources.board).toContain("footer: false");
+    expect(readSharedPreset("boards")).toContain("header: false");
+    expect(readSharedPreset("boards")).toContain("toolbar: false");
+    expect(readSharedPreset("boards")).toContain("footer: false");
     expect(globalStyles).toContain("overscroll-behavior: none");
     expect(globalStyles).toContain(".univer-editor-shell");
     expect(globalStyles).toContain("overflow: hidden");
@@ -260,4 +267,8 @@ function expectImportsInOrder(
   expect(indexes, `incorrect import order: ${specifiers.join(" -> ")}`).toEqual(
     [...indexes].sort((left, right) => left - right)
   );
+}
+
+function readSharedPreset(product: string): string {
+  return readFileSync(new URL(import.meta.resolve(`@univerjs/univer-workspace-editor-presets/${product}`)), "utf8");
 }

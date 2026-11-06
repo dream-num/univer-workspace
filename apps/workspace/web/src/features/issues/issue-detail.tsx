@@ -32,7 +32,7 @@ import {
 import { cn } from "../../shared/utils/cn";
 import { sessionQueryOptions } from "../auth";
 import { NodeIcon } from "../nodes";
-import { spacesQueryOptions } from "../spaces";
+import { spaceQueryOptions } from "../spaces";
 import { useUpdateIssue, useAddIssueComment, useUpdateIssueComment, useDeleteIssueComment } from "./issues.commands";
 import { IssueComposer } from "./issue-composer";
 import { IssueLabelChip } from "./issue-label";
@@ -60,7 +60,7 @@ export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueD
   const issueQuery = useQuery(issueQueryOptions(spaceId, number));
   const timeline = useQuery(issueTimelineQueryOptions(spaceId, number));
   const session = useQuery(sessionQueryOptions);
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(spaceQueryOptions(spaceId));
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState("");
   const [editingBody, setEditingBody] = useState(false);
@@ -90,7 +90,7 @@ export function IssueDetail({ presentation, spaceId, number, canCreate }: IssueD
   }
   const issue = issueQuery.data;
   const me = session.data?.authenticated ? session.data.user.id : undefined;
-  const role = spaces.data?.spaces.find((space) => space.id === spaceId)?.accessRole;
+  const role = spaces.data?.accessRole;
   const canManageComments = role === "owner" || role === "admin";
   const busy = patch.isPending || postComment.isPending;
 

@@ -7,8 +7,7 @@ import { NodeBrowser, spaceNodesQueryOptions } from "../../../../features/nodes"
 import { sessionQueryOptions } from "../../../../features/auth";
 import { htmlViewsQueryOptions } from "../../../../features/views/html-views.queries";
 import { resourceOpenQueryOptions } from "../../../../features/resources";
-import { spacesQueryOptions } from "../../../../features/spaces";
-import { RepositoryTabs } from "../../repository-tabs";
+import { spaceQueryOptions } from "../../../../features/spaces";
 import { spaceDisplayName } from "../../space-name";
 import { WorkspaceLayout } from "../../../workspace-layout";
 import { useI18n } from "../../../../shared/i18n";
@@ -21,7 +20,7 @@ export function RepositorySpacePage({ spaceId, view }: SpacePageProps) {
   const query = useQuery(spaceNodesQueryOptions(spaceId));
   const session = useQuery(sessionQueryOptions);
   const spaces = useQuery({
-    ...spacesQueryOptions,
+    ...spaceQueryOptions(spaceId),
     enabled: session.data?.authenticated === true,
   });
   const navigate = useNavigate();
@@ -33,7 +32,7 @@ export function RepositorySpacePage({ spaceId, view }: SpacePageProps) {
       return undefined;
     }
   });
-  const space = session.data?.authenticated ? spaces.data?.spaces.find((item) => item.id === spaceId) : undefined;
+  const space = session.data?.authenticated ? spaces.data : undefined;
   const spaceName = spaceDisplayName(space, t, session.data?.authenticated ? session.data.user.username : undefined);
   const repositoryTheme = space !== undefined;
   const apps = useQuery({
@@ -42,11 +41,11 @@ export function RepositorySpacePage({ spaceId, view }: SpacePageProps) {
   });
   const worktrees = useQuery({
     ...worktreeListQueryOptions("active"),
-    enabled: repositoryTheme,
+    enabled: repositoryTheme && repositoryView === "prs",
   });
   const processedWorktrees = useQuery({
     ...worktreeListQueryOptions("processed"),
-    enabled: repositoryTheme,
+    enabled: repositoryTheme && repositoryView === "prs",
   });
   const spaceApps = (apps.data?.items ?? []).filter((item) => item.location.space.id === spaceId);
   const selectedApp = spaceApps.find((item) => item.node.id === landingNodeId) ?? spaceApps[0];
@@ -81,9 +80,8 @@ export function RepositorySpacePage({ spaceId, view }: SpacePageProps) {
   if (!query.data) return null;
   return (
     <WorkspaceLayout selectedSpaceId={spaceId} {...(repositoryTheme ? { repositoryTab: repositoryView } : {})}>
-      {repositoryTheme ? (
+      {space ? (
         <>
-          <RepositoryTabs spaceId={spaceId} active={repositoryView} />
           <RepositoryOverview
             spaceId={spaceId}
             space={space}

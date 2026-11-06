@@ -50,6 +50,7 @@ import {
   protocolUser,
 } from "./protocol-user.js";
 import { setFinalMutationSize } from "./changeset-observation.js";
+import { isCommentOnlyChangeset } from "./comment-changesets.js";
 import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.js";
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 import type { ReviewCommitCoordinator } from "./review-commit.js";
@@ -218,19 +219,11 @@ export function createCollaborationGateway(options: {
     await next();
   });
   service.use("submitChangeset", async (context, next) => {
-    requireUnitEdit(
-      access,
-      context.userID,
-      context.request.changeset.unitID
-    );
+    requireChangesetAccess(access, context.userID, context.request.changeset);
     await next();
   });
   service.use("applyChangeset", async (context, next) => {
-    requireUnitEdit(
-      access,
-      context.userID,
-      context.request.changeset.unitID
-    );
+    requireChangesetAccess(access, context.userID, context.request.changeset);
     await next();
   });
   service.use("commitChangeset", async (context, next) => {
@@ -372,11 +365,12 @@ export function createCollaborationGateway(options: {
       | CommitWorktreeChangesetMiddlewareContext,
     next: WorktreeMiddlewareNext
   ) {
+    // Comment anchors on a draft need review access only, like Unit Comment on Trunk.
     await requireWorktreeProtocolAccess(worktrees, {
       userId: context.userID,
       worktreeId: context.request.worktreeID,
       unitId: context.request.changeset.unitID,
-      write: true,
+      write: !isCommentOnlyChangeset(context.request.changeset),
     });
     await next();
   }
@@ -680,6 +674,17 @@ function requireUnitEdit(
     throw new CollabError("PERMISSION_DENIED", "Unit is read-only.");
   }
   return resource;
+}
+
+// Comment anchors need Unit Comment, which every reader holds; every other changeset needs Edit.
+function requireChangesetAccess(
+  access: AccessResolver,
+  userId: string,
+  changeset: { readonly unitID: string; readonly mutations: readonly { readonly id: string }[] }
+): ResourceContentAccess {
+  return isCommentOnlyChangeset(changeset)
+    ? requireUnitAccess(access, userId, changeset.unitID)
+    : requireUnitEdit(access, userId, changeset.unitID);
 }
 
 function protocolUnitType(unitType: UnitType | null): UniverType {

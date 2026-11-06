@@ -122,6 +122,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/cli/password/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Authenticate a non-browser client with a System Username and password.
+         * @description Same credentials and response as `loginWithPassword`; the issued Session is attributed as `agent`.
+         */
+        post: operations["loginCliWithPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/password/login": {
         parameters: {
             query?: never;
@@ -133,6 +153,45 @@ export interface paths {
         put?: never;
         /** Authenticate with a System Username and password. */
         post: operations["loginWithPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/email/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a one-time sign-in code for passwordless Email login.
+         * @description The code is valid for ten minutes and can be used once. A User and
+         *     Personal Space are created only after the code is verified, and the
+         *     response never reveals whether the address already has an account.
+         */
+        post: operations["requestEmailLoginCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/email/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify an emailed sign-in code and create the User on first sign-in. */
+        post: operations["loginWithEmailCode"];
         delete?: never;
         options?: never;
         head?: never;
@@ -275,6 +334,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/google/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start the Google OAuth login flow. */
+        get: operations["startGoogleLogin"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/google/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start Google OAuth to link the current User. */
+        get: operations["startGoogleLink"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/google/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Validate the OAuth callback and finish login or linking. */
+        get: operations["finishGoogleOAuth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink the current User's Google identity. */
+        delete: operations["unlinkGoogle"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/discord/login": {
         parameters: {
             query?: never;
@@ -401,6 +528,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spaces/{spaceId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Daily Pull request and Issue activity for a Space, split by Session source.
+         * @description Pull requests and Issues opened per day in the caller's time zone, merged Pull requests per day, and the
+         *     newest events. Uses the same visibility as the Worktree and Issue lists. Personal Spaces report only
+         *     their owner's User Worktrees and no Issues.
+         */
+        get: operations["getSpaceActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spaces": {
         parameters: {
             query?: never;
@@ -408,11 +559,82 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Spaces discoverable by the current User. */
+        /**
+         * List Spaces the current User owns or has joined.
+         * @description Public Spaces belonging to others are available through Explore. Starred Spaces have a separate list.
+         */
         get: operations["listSpaces"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/starred": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List starred Spaces the current User can still read.
+         * @description Ordered by newest star first, then Space ID. Stars retained after access loss are omitted until access returns.
+         */
+        get: operations["listStarredSpaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/explore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List public Spaces the current User neither owns nor has joined.
+         * @description Ordered by total stars descending, then name and ID. Includes starred public Spaces. This list is unpaginated.
+         */
+        get: operations["exploreSpaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the current User's ordered sidebar pins.
+         * @description Owned or joined Spaces and starred public Spaces are eligible. Ineligible stored pins are omitted. If none survive, returns the first eight owned or joined Spaces with customized false. Stored pins remain available if eligibility returns.
+         */
+        get: operations["getSpacePins"];
+        /**
+         * Replace the ordered sidebar pins.
+         * @description Accepts 1 to 12 unique IDs for owned or joined Spaces or starred public Spaces. Invalid, duplicate, over-limit, missing and ineligible IDs return the same 400 INVALID_INPUT with field spaceIds. Replacement is atomic and idempotent.
+         */
+        put: operations["setSpacePins"];
+        post?: never;
+        /**
+         * Reset the sidebar pins to their defaults.
+         * @description Deletes stored pins and returns the first eight owned or joined Spaces with customized false. Idempotent.
+         */
+        delete: operations["resetSpacePins"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1519,6 +1741,23 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RepositoryActivity: {
+            /** @description Canonical IANA zone used for day boundaries. */
+            timeZone: string;
+            /** @description The 14 calendar days ending today in `timeZone`, oldest first. */
+            days: components["schemas"]["ActivityDay"][];
+            /** @description Newest events in the window, newest first. */
+            events: components["schemas"]["ActivityEvent"][];
+            /** @description False when a source exceeds 1000 touched rows, more than 200 processed Worktrees need state lookups, or a state lookup fails. Incomplete merge facts are omitted. */
+            complete: boolean;
+        };
+        /**
+         * @description Entry point of the Session that made a write. `browser` = the Workspace web app's sign-in routes.
+         *     `agent` = any non-browser entry point (uvw CLI, Workspace Agent, OAuth clients, Discord bot); it does not
+         *     identify who was typing. `unknown` = recorded before attribution existed, or by a Session issued before it.
+         * @enum {string}
+         */
+        WriteSource: "browser" | "agent" | "unknown";
         Error: {
             /** @description Stable machine-readable error code. */
             code: string;
@@ -1554,6 +1793,7 @@ export interface components {
                 id: string;
                 username: string;
             };
+            affiliation: components["schemas"]["SpaceAffiliation"];
             accessRole: components["schemas"]["SpaceRole"];
             capabilities: components["schemas"]["SpaceCapabilities"];
         };
@@ -1655,6 +1895,7 @@ export interface components {
             capabilities: components["schemas"]["IssueCapabilities"];
         };
         IssueSummary: {
+            createdVia: components["schemas"]["WriteSource"];
             id: string;
             /** @description Human-facing number, unique inside the Space (#12). */
             number: number;
@@ -1676,6 +1917,7 @@ export interface components {
             updatedAt: string;
         };
         WorktreeSummary: {
+            createdVia: components["schemas"]["WriteSource"];
             id: string;
             /**
              * @description Repository-level number shown as `#N`. A Team Worktree shares the Team Space's Issue number sequence;
@@ -1705,24 +1947,33 @@ export interface components {
             /** @constant */
             authenticated: false;
             githubOAuthEnabled: boolean;
+            googleOAuthEnabled: boolean;
             discordOAuthEnabled: boolean;
             passwordAuthEnabled: boolean;
+            emailAuthEnabled: boolean;
         };
         ExternalIdentitySummary: {
             /** @enum {string} */
-            provider: "github" | "discord";
+            provider: "github" | "google" | "discord";
             providerUsername: string;
         };
         AuthenticationMethods: {
             password: boolean;
+            /**
+             * Format: email
+             * @description Verified Email address used for passwordless sign-in, when the User has one.
+             */
+            email: string | null;
             externalIdentities: components["schemas"]["ExternalIdentitySummary"][];
         };
         AuthenticatedSession: {
             /** @constant */
             authenticated: true;
             githubOAuthEnabled: boolean;
+            googleOAuthEnabled: boolean;
             discordOAuthEnabled: boolean;
             passwordAuthEnabled: boolean;
+            emailAuthEnabled: boolean;
             /** @description Whether this deployment is a trial environment without a data durability guarantee. */
             trialDeployment: boolean;
             user: components["schemas"]["User"];
@@ -1736,6 +1987,21 @@ export interface components {
         PasswordLogin: {
             username: string;
             password: string;
+        };
+        EmailLoginCodeRequest: {
+            /** Format: email */
+            email: string;
+        };
+        EmailLoginCodeIssued: {
+            /** @description Lifetime of the emailed code in seconds. */
+            expiresIn: number;
+            /** @description Seconds before another code may be requested for the same address. */
+            resendAfter: number;
+        };
+        EmailLogin: {
+            /** Format: email */
+            email: string;
+            code: string;
         };
         PasswordChange: {
             currentPassword: string;
@@ -1778,6 +2044,47 @@ export interface components {
         UserSearchResult: {
             users: components["schemas"]["User"][];
         };
+        WriteSourceCounts: {
+            browser: number;
+            agent: number;
+            unknown: number;
+        };
+        ActivityDay: {
+            day: string;
+            /** @description Pull requests and Issues opened that day, by Session source. */
+            opened: components["schemas"]["WriteSourceCounts"];
+            merged: number;
+        };
+        PullActivityEvent: {
+            /** @enum {string} */
+            kind: "pull-opened" | "pull-merged";
+            /** Format: date-time */
+            at: string;
+            actor: components["schemas"]["User"] | null;
+            /** @description Source of this write; `unknown` for merges (not recorded). */
+            writeSource: components["schemas"]["WriteSource"];
+            pull: {
+                id: string;
+                number: number | null;
+                title: string;
+                spaceId: string;
+            };
+        };
+        IssueActivityEvent: {
+            /** @enum {string} */
+            kind: "issue-opened" | "issue-closed";
+            /** Format: date-time */
+            at: string;
+            actor: components["schemas"]["User"] | null;
+            /** @description Source of this write; `unknown` for closes (not recorded). */
+            writeSource: components["schemas"]["WriteSource"];
+            issue: {
+                number: number;
+                title: string;
+                spaceId: string;
+            };
+        };
+        ActivityEvent: components["schemas"]["PullActivityEvent"] | components["schemas"]["IssueActivityEvent"];
         /** @enum {string} */
         SpaceType: "personal" | "team";
         SpaceSummary: {
@@ -1787,6 +2094,11 @@ export interface components {
             /** @description Whether anyone with a link can browse and open this Space read-only. */
             publicRead: boolean;
         };
+        /**
+         * @description Ownership or Team membership, independent of the effective access role. Public readers have none.
+         * @enum {string}
+         */
+        SpaceAffiliation: "owner" | "member" | "none";
         /** @enum {string} */
         SpaceRole: "owner" | "admin" | "editor" | "viewer";
         SpaceCapabilities: {
@@ -1802,8 +2114,30 @@ export interface components {
             /** @description The caller may create, change and delete this Space's Issue labels. */
             manageIssueLabels: boolean;
         };
+        MySpaceView: components["schemas"]["SpaceView"] & {
+            /** @enum {string} */
+            affiliation: "owner" | "member";
+        };
+        MySpaceList: {
+            spaces: components["schemas"]["MySpaceView"][];
+        };
         SpaceList: {
             spaces: components["schemas"]["SpaceView"][];
+        };
+        SpacePins: {
+            /** @description True when at least one stored pin is still eligible. Otherwise spaces contains the first eight owned or joined Spaces. */
+            customized: boolean;
+            /**
+             * @description Maximum number of pins accepted by the server.
+             * @constant
+             */
+            limit: 12;
+            /** @description Eligible Spaces in pin order, or the default order when customized is false. */
+            spaces: components["schemas"]["SpaceView"][];
+        };
+        SetSpacePins: {
+            /** @description Ordered owned or joined Spaces, or public Spaces starred by the current User. */
+            spaceIds: string[];
         };
         /** @description Letters, digits, `.`, `_` and `-`, starting with a letter or digit. Compared case-insensitively. `personal` is reserved. */
         SpaceSlug: string;
@@ -2694,6 +3028,50 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    loginCliWithPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordLogin"];
+            };
+        };
+        responses: {
+            /** @description Authenticated. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedSession"];
+                };
+            };
+            /** @description Username or password is invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Password authentication is disabled. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     loginWithPassword: {
         parameters: {
             query?: never;
@@ -2719,6 +3097,101 @@ export interface operations {
             };
             /** @description Username or password is invalid. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    requestEmailLoginCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailLoginCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Code accepted for delivery. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailLoginCodeIssued"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Email authentication is disabled for this deployment. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A code was requested too recently or too often for this address. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The configured Email provider could not deliver the code. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    loginWithEmailCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailLogin"];
+            };
+        };
+        responses: {
+            /** @description Authenticated; a User and Personal Space are created when necessary. */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedSession"];
+                };
+            };
+            /** @description The code is invalid, expired, already used, or exceeded its attempt limit. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Email authentication is disabled for this deployment. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2958,6 +3431,102 @@ export interface operations {
             };
         };
     };
+    startGoogleLogin: {
+        parameters: {
+            query?: {
+                returnTo?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to Google. */
+            302: {
+                headers: {
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    startGoogleLink: {
+        parameters: {
+            query?: {
+                returnTo?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to Google. */
+            302: {
+                headers: {
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    finishGoogleOAuth: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+                error?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to a validated local application path. */
+            302: {
+                headers: {
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unlinkGoogle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated authenticated session. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedSession"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Google is the last authentication method. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     startDiscordLogin: {
         parameters: {
             query?: {
@@ -3149,6 +3718,34 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    getSpaceActivity: {
+        parameters: {
+            query: {
+                /** @description IANA time zone accepted by Intl, for example `Asia/Shanghai`. Offset strings are rejected. */
+                timeZone: string;
+            };
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity window. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryActivity"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listSpaces: {
         parameters: {
             query?: never;
@@ -3164,7 +3761,117 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["MySpaceList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listStarredSpaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching Spaces in display order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["SpaceList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    exploreSpaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching Spaces in display order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getSpacePins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current pins or defaults. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpacePins"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setSpacePins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSpacePins"];
+            };
+        };
+        responses: {
+            /** @description Current pins or defaults. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpacePins"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    resetSpacePins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current pins or defaults. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpacePins"];
                 };
             };
             401: components["responses"]["Unauthorized"];

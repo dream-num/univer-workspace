@@ -14,6 +14,7 @@ the plugin's local build dependencies:
 ```sh
 pnpm --filter '@univerjs/univer-workspace-agent-runtime...' --filter '@univerjs/univer-workspace-client-core...' --filter '@univerjs/univer-workspace-reference-provider...' install --frozen-lockfile
 pnpm --filter @univerjs/univer-workspace-agent-runtime build
+pnpm --filter @univerjs/univer-workspace-client-core build
 pnpm --filter @univerjs/univer-workspace-reference-provider build
 cd apps/space-plugin
 npm ci --no-audit --no-fund
@@ -24,12 +25,12 @@ npm run package:release -- /absolute/output/outside/repository
 ```
 
 Install the resulting tarball with the official DSH Plugins manager. Coupled
-Univer dependencies are pinned to 1.1.0; React 18 is resolved by the official
+Univer dependencies are pinned to 1.3.1; React 18 is resolved by the official
 host module loader. Tailwind utilities are prefixed/scoped with preflight off.
 The packager copies the production closure from committed `package-lock.json`;
 it never resolves fresh transitive versions. Manifest/version changes require a
 matching package-lock update. Desktop packages include the repository's existing
-Workspace application license in Host-only `lib/runtime-license.json`. Packaging
+Workspace application license in Host-only `lib/runtime-license.json`, together with the matching Exchange verification key. Packaging
 and resource scans fail if it is missing or differs from the current source.
 No license value is written to build logs or committed generated files.
 Build-time PostCSS confines SDK global reset blocks and unprefixed utilities to
@@ -135,7 +136,14 @@ Facade reference lookup without needing document access. `univer_new` and
 `univer_create` reuse the original Resource creation path for all five Univer
 Unit types. `univer_workspace` uses the existing Workspace operations for Space,
 Folder and Page creation, rename, move and restore. The admitted Folder is the
-default destination. Inspection reads current Server
+default destination. `univer_compile_markdown` uses the shared Client Core compiler and
+materializer to create an editable Modern Doc in an explicitly supplied draft
+Worktree. It does not publish or merge. Save the returned `sourceMap`; use
+`univer_export_markdown` with that map and selected `blockIds` to read current
+native content, export image sidecars, and refresh the map before a block update.
+All source, asset and output paths stay inside the native Session workspace.
+These tools preserve the compiler's draft contract; ordinary edits of existing
+files still use trunk. Inspection reads current Server
 content, returns revision/hash and bounded text/cell/structured-Unit/HTML-source lines, and exposes
 `nextOffset` for paging. The discovery/read operations remain bounded and Session-scoped; draft inspection uses the existing headless inspection runtime. They do not yet provide the complete old plugin interface. Ordinary `univer_edit` calls select the document admitted with the native request, or an explicitly identified authorized Unit, and commit Facade mutations to trunk through the original collaboration runtime. An explicitly created Worktree retains the existing Docs/Sheets draft and Review workflow. Apply requires the displayed Server review token and rechecks revisions/ACL atomically; Reject/Cancel discard the draft. Removing the current-document association does not erase a durable message or
 revoke historical read grants; change identity/disconnect to clear grants.
@@ -192,7 +200,7 @@ The formal HTML Viewer is a build-time `file:` dependency on the Fork's existing
 `packages/workspace-html-viewer`; `.npmrc` materializes its sources with isolated
 consumer peers, rather than linking a second SDK/React graph. Browser JSX uses
 automatic transformation for that shared component. All coupled SDKs stay at
-1.1.0. Desktop packaging carries the Fork's existing development license through
+1.3.1. Desktop packaging carries the Fork's existing development license through
 the Host-only runtime configuration. A nonempty UNIVER_LICENSE overrides it;
 an ordinary Desktop launch needs no environment-variable setup. The license's
 existing scope and expiry still apply; the SDK remains responsible for validation.
@@ -233,3 +241,11 @@ The existing cloud registration accepts the exact loopback return `http://127.0.
 Reproduce the demo with a disposable Team Space and two accounts: create a Folder and all six content types; rename/move/trash/restore a file; edit Docs/Sheets from both clients; share with the second account and add a comment. Associate a Doc with the native conversation, ask the Agent to append a unique paragraph to a private Worktree and mark it ready, inspect Review, explicitly Apply, and verify the already-open second client and a reopen. Repeat with a Sheet formula, then with Reject and a shared edit after Review (the old Apply must conflict). Viewer / removed-member writes must fail. No test fixture, model credential or private Session archive is included.
 
 The release script stages only runtime files, a production-only manifest, notices and npm-shrinkwrap.json. npm consumers honor that lock; DSH's pnpm manager owns its profile lock and needs registry access. Preserve the profile lock for exact reinstall. Run the release scan and actual clean-profile install before distributing a new artifact.
+
+## SDK and lock updates
+
+After aligning this isolated application's exact SDK dependencies, regenerate
+`package-lock.json` with npm, then run `npm run lock:runtime`. The latter derives
+`runtime-lock.json` from the audited production closure used by the packager.
+Build the shared Runtime, Client Core and reference provider before `npm ci`,
+so copied local build dependencies include their current artifacts.

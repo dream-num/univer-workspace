@@ -408,7 +408,7 @@ export function registerReadTools(
         if (!session(exec)) throw new SpaceError(403, 'A native Agent Session is required.');
         const status = await workspace.status();
         if (status.state !== 'connected' || !status.user?.id) throw new SpaceError(401, 'Sign in to Workspace first.');
-        return workspace.json('/api/spaces', { signal: exec.signal });
+        return workspace.spaces(exec.signal);
       },
     }),
     ctx.tools.register(listTool('univer_documents')),

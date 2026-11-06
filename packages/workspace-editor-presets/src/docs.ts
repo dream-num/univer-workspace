@@ -1,3 +1,14 @@
+import UniverDocsColumnUIEnUS from "@univerjs-pro/docs-column-ui/locale/en-US";
+import UniverDocsColumnUIZhCN from "@univerjs-pro/docs-column-ui/locale/zh-CN";
+import UniverDocsListUIEnUS from "@univerjs-pro/docs-list-ui/locale/en-US";
+import UniverDocsListUIZhCN from "@univerjs-pro/docs-list-ui/locale/zh-CN";
+import UniverDocsQuoteUIEnUS from "@univerjs-pro/docs-quote-ui/locale/en-US";
+import UniverDocsQuoteUIZhCN from "@univerjs-pro/docs-quote-ui/locale/zh-CN";
+import FindReplaceEnUS from "@univerjs/find-replace/locale/en-US";
+import FindReplaceZhCN from "@univerjs/find-replace/locale/zh-CN";
+import "@univerjs-pro/docs-column/facade";
+import "@univerjs-pro/docs-list/facade";
+import "@univerjs-pro/docs-quote/facade";
 import { UniverDocsCorePreset } from "@univerjs/preset-docs-core";
 import UniverPresetDocsCoreEnUS from "@univerjs/preset-docs-core/locales/en-US";
 import UniverPresetDocsCoreZhCN from "@univerjs/preset-docs-core/locales/zh-CN";
@@ -19,8 +30,6 @@ import UniverDocsChartUIZhCN from "@univerjs-pro/docs-chart-ui/locale/zh-CN";
 import UniverDocsCodeUIEnUS from "@univerjs-pro/docs-code-ui/locale/en-US";
 import UniverDocsCodeUIZhCN from "@univerjs-pro/docs-code-ui/locale/zh-CN";
 import { UniverDocsExchangeClientPlugin } from "@univerjs-pro/docs-exchange-client";
-import UniverDocsExchangeClientEnUS from "@univerjs-pro/docs-exchange-client/locale/en-US";
-import UniverDocsExchangeClientZhCN from "@univerjs-pro/docs-exchange-client/locale/zh-CN";
 import { UniverDocsHistoryUIPlugin } from "@univerjs-pro/docs-history-ui";
 import DocsHistoryUIEnUS from "@univerjs-pro/docs-history-ui/locale/en-US";
 import DocsHistoryUIZhCN from "@univerjs-pro/docs-history-ui/locale/zh-CN";
@@ -51,7 +60,7 @@ import "@univerjs-pro/docs-latex/facade";
 import "@univerjs-pro/docs-shape/facade";
 import "@univerjs-pro/docs-table/facade";
 import "@univerjs-pro/engine-chart/facade";
-import { getDocAuthoringUIPlugins, getDocReplayCompatibilityPlugins } from "./doc-features.js";
+import { getDocAuthoringUIPlugins, getDocFindReplacePlugins, getDocReplayCompatibilityPlugins } from "./doc-features.js";
 import { getReferencedSheetPlugins } from "./referenced-sheets.js";
 export const docEditorLocales: Readonly<
   Record<"zh-CN" | "en-US", ILanguagePack>
@@ -63,12 +72,15 @@ export const docEditorLocales: Readonly<
     UniverPresetDocsDrawingZhCN,
     UniverPresetDocsHyperLinkZhCN,
     UniverPresetDocsThreadCommentZhCN,
+    FindReplaceZhCN,
     UniverDocsCalloutUIZhCN,
     UniverDocsChartUIZhCN,
     UniverDocsCodeUIZhCN,
-    UniverDocsExchangeClientZhCN,
+    UniverDocsColumnUIZhCN,
     UniverDocsLatexUIZhCN,
+    UniverDocsListUIZhCN,
     UniverDocsPrintZhCN,
+    UniverDocsQuoteUIZhCN,
     UniverDocsShapeUIZhCN,
     UniverDocsTableUIZhCN,
     UniverShapeEditorUIZhCN
@@ -80,12 +92,15 @@ export const docEditorLocales: Readonly<
     UniverPresetDocsDrawingEnUS,
     UniverPresetDocsHyperLinkEnUS,
     UniverPresetDocsThreadCommentEnUS,
+    FindReplaceEnUS,
     UniverDocsCalloutUIEnUS,
     UniverDocsChartUIEnUS,
     UniverDocsCodeUIEnUS,
-    UniverDocsExchangeClientEnUS,
+    UniverDocsColumnUIEnUS,
     UniverDocsLatexUIEnUS,
+    UniverDocsListUIEnUS,
     UniverDocsPrintEnUS,
+    UniverDocsQuoteUIEnUS,
     UniverDocsShapeUIEnUS,
     UniverDocsTableUIEnUS,
     UniverShapeEditorUIEnUS
@@ -109,6 +124,7 @@ export function createDocEditorPresets(container: HTMLElement, compact = false):
       plugins: [
         ...getDocReplayCompatibilityPlugins(),
         ...getDocAuthoringUIPlugins(),
+        ...getDocFindReplacePlugins(),
       ],
     },
   ];

@@ -1,0 +1,1004 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-06T08:23:17.079Z",
+  "title": "Design System: OfficeLab Repository",
+  "scope": "html[data-ui-mode=\"repository\"] (light on root, dark under nested .dark); Wiki mode excluded",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Signal Violet",
+        "canonical": "#7C3AED",
+        "oklch": "oklch(54.1% 0.247 293.0)",
+        "tonalRamp": [
+          "#0F002A",
+          "#2B0160",
+          "#4B019E",
+          "#6C1ED7",
+          "#8C52FF",
+          "#AA8FFF",
+          "#CCC0FF",
+          "#EFECFE"
+        ]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Signal Violet Deep",
+        "canonical": "#6D28D9",
+        "oklch": "oklch(49.1% 0.241 292.6)",
+        "tonalRamp": [
+          "#0F002A",
+          "#2B0161",
+          "#4B019F",
+          "#6A23D5",
+          "#8B53FF",
+          "#A98FFF",
+          "#CCC1FE",
+          "#EEECFF"
+        ]
+      },
+      "accent-text": {
+        "role": "primary",
+        "displayName": "Signal Violet Text",
+        "canonical": "#6D28D9",
+        "oklch": "oklch(49.1% 0.241 292.6)",
+        "tonalRamp": [
+          "#0F002A",
+          "#2B0161",
+          "#4B019F",
+          "#6A23D5",
+          "#8B53FF",
+          "#A98FFF",
+          "#CCC1FE",
+          "#EEECFF"
+        ]
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "Violet Wash",
+        "canonical": "#F3EDFE",
+        "oklch": "oklch(95.6% 0.023 302.0)",
+        "tonalRamp": [
+          "#0D0913",
+          "#26212E",
+          "#423D4A",
+          "#605B69",
+          "#837D8C",
+          "#A7A1B1",
+          "#CDC7D8",
+          "#F1EBFC"
+        ]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "On Violet",
+        "canonical": "#FFFFFF",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#404040",
+          "#5D5D5D",
+          "#808080",
+          "#A4A4A4",
+          "#CACACA",
+          "#EEEEEE"
+        ]
+      },
+      "accent-dark": {
+        "role": "primary",
+        "displayName": "Console Lime",
+        "canonical": "#C8FF00",
+        "oklch": "oklch(92.8% 0.230 124.0)",
+        "tonalRamp": [
+          "#080E00",
+          "#1E2900",
+          "#364702",
+          "#506802",
+          "#6E8E02",
+          "#8EB602",
+          "#AFDF01",
+          "#DBFF91"
+        ]
+      },
+      "accent-hover-dark": {
+        "role": "primary",
+        "displayName": "Console Lime Bright",
+        "canonical": "#D6FF4D",
+        "oklch": "oklch(94.0% 0.200 121.7)",
+        "tonalRamp": [
+          "#090D00",
+          "#1F2800",
+          "#384601",
+          "#536704",
+          "#738D02",
+          "#94B409",
+          "#B6DD12",
+          "#DDFF81"
+        ]
+      },
+      "accent-text-dark": {
+        "role": "primary",
+        "displayName": "Console Lime Text",
+        "canonical": "#D2FF33",
+        "oklch": "oklch(93.6% 0.215 122.2)",
+        "tonalRamp": [
+          "#090D00",
+          "#1F2800",
+          "#384701",
+          "#536704",
+          "#728D03",
+          "#93B40A",
+          "#B5DE08",
+          "#DDFF85"
+        ]
+      },
+      "accent-soft-dark": {
+        "role": "primary",
+        "displayName": "Lime Wash",
+        "canonical": "rgba(200,255,0,.09)"
+      },
+      "on-accent-dark": {
+        "role": "primary",
+        "displayName": "On Lime",
+        "canonical": "#0B1000",
+        "oklch": "oklch(16.2% 0.039 121.7)",
+        "tonalRamp": [
+          "#090D00",
+          "#212711",
+          "#3C432C",
+          "#5A6149",
+          "#7C846A",
+          "#A0A98E",
+          "#C6CFB3",
+          "#EAF3D6"
+        ]
+      },
+      "brand": {
+        "role": "primary",
+        "displayName": "Flask Vermilion",
+        "canonical": "#FF5A36",
+        "oklch": "oklch(68.4% 0.207 33.9)",
+        "tonalRamp": [
+          "#1C0200",
+          "#470A00",
+          "#761701",
+          "#A92500",
+          "#E03C13",
+          "#FE7456",
+          "#FFB6A5",
+          "#FFE9E4"
+        ]
+      },
+      "on-brand": {
+        "role": "primary",
+        "displayName": "Flask Highlight",
+        "canonical": "#FFF4F0",
+        "oklch": "oklch(97.5% 0.013 41.2)",
+        "tonalRamp": [
+          "#100907",
+          "#2A221F",
+          "#463E3A",
+          "#645B58",
+          "#877E7A",
+          "#ACA29E",
+          "#D2C8C4",
+          "#F7ECE8"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "canonical": "#FFFFFF",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#404040",
+          "#5D5D5D",
+          "#808080",
+          "#A4A4A4",
+          "#CACACA",
+          "#EEEEEE"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "#FFFFFF",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#404040",
+          "#5D5D5D",
+          "#808080",
+          "#A4A4A4",
+          "#CACACA",
+          "#EEEEEE"
+        ]
+      },
+      "panel-2": {
+        "role": "neutral",
+        "displayName": "Panel 2",
+        "canonical": "#F5F5F7",
+        "oklch": "oklch(97.1% 0.003 286.4)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#242425",
+          "#3F3F41",
+          "#5D5D5F",
+          "#808082",
+          "#A4A4A6",
+          "#CACACC",
+          "#EEEEF0"
+        ]
+      },
+      "sunken": {
+        "role": "neutral",
+        "displayName": "Sunken",
+        "canonical": "#FAFAFB",
+        "oklch": "oklch(98.5% 0.001 286.4)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#242425",
+          "#404040",
+          "#5D5D5E",
+          "#808081",
+          "#A4A4A5",
+          "#CACACB",
+          "#EEEEEF"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "rgba(12,14,22,.09)"
+      },
+      "line-2": {
+        "role": "neutral",
+        "displayName": "Line 2",
+        "canonical": "rgba(12,14,22,.16)"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#0A0C12",
+        "oklch": "oklch(15.5% 0.013 270.4)",
+        "tonalRamp": [
+          "#090B11",
+          "#21242B",
+          "#3D4047",
+          "#5B5D65",
+          "#7D8088",
+          "#A1A4AD",
+          "#C7CAD3",
+          "#EBEEF8"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink 2",
+        "canonical": "#4F545D",
+        "oklch": "oklch(44.5% 0.016 262.3)",
+        "tonalRamp": [
+          "#080B12",
+          "#20242C",
+          "#3B4048",
+          "#595E67",
+          "#7B808A",
+          "#9FA5AF",
+          "#C5CBD5",
+          "#E9EFFA"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink 3",
+        "canonical": "#686D76",
+        "oklch": "oklch(53.4% 0.015 262.3)",
+        "tonalRamp": [
+          "#080B12",
+          "#20242C",
+          "#3B4048",
+          "#595E67",
+          "#7B808A",
+          "#9FA5AF",
+          "#C5CBD5",
+          "#E9EFF9"
+        ]
+      },
+      "ground-dark": {
+        "role": "neutral",
+        "displayName": "Ground Dark",
+        "canonical": "#03080A",
+        "oklch": "oklch(12.8% 0.013 218.2)",
+        "tonalRamp": [
+          "#060C0F",
+          "#1D2628",
+          "#394144",
+          "#565F62",
+          "#788285",
+          "#9CA7AA",
+          "#C2CDD0",
+          "#E6F1F4"
+        ]
+      },
+      "panel-dark": {
+        "role": "neutral",
+        "displayName": "Panel Dark",
+        "canonical": "#070C0F",
+        "oklch": "oklch(15.0% 0.011 233.1)",
+        "tonalRamp": [
+          "#070C0F",
+          "#1F2528",
+          "#3A4145",
+          "#585F63",
+          "#7A8186",
+          "#9EA6AA",
+          "#C4CCD0",
+          "#E8F0F5"
+        ]
+      },
+      "panel-2-dark": {
+        "role": "neutral",
+        "displayName": "Panel 2 Dark",
+        "canonical": "#0D1418",
+        "oklch": "oklch(18.6% 0.013 233.5)",
+        "tonalRamp": [
+          "#060C10",
+          "#1E252A",
+          "#394146",
+          "#565F64",
+          "#798287",
+          "#9DA6AC",
+          "#C2CCD2",
+          "#E6F0F6"
+        ]
+      },
+      "sunken-dark": {
+        "role": "neutral",
+        "displayName": "Sunken Dark",
+        "canonical": "#05090C",
+        "oklch": "oklch(13.6% 0.011 235.2)",
+        "tonalRamp": [
+          "#070C0F",
+          "#1F2528",
+          "#3B4145",
+          "#585F63",
+          "#7A8186",
+          "#9FA6AA",
+          "#C4CCD0",
+          "#E8F0F5"
+        ]
+      },
+      "line-dark": {
+        "role": "neutral",
+        "displayName": "Line Dark",
+        "canonical": "rgba(255,255,255,.08)"
+      },
+      "line-2-dark": {
+        "role": "neutral",
+        "displayName": "Line 2 Dark",
+        "canonical": "rgba(255,255,255,.14)"
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Ink Dark",
+        "canonical": "#FCFCFE",
+        "oklch": "oklch(99.2% 0.003 286.4)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#242425",
+          "#3F3F41",
+          "#5D5D5F",
+          "#808082",
+          "#A4A4A6",
+          "#CACACC",
+          "#EEEEF0"
+        ]
+      },
+      "ink-2-dark": {
+        "role": "neutral",
+        "displayName": "Ink 2 Dark",
+        "canonical": "#A6ADB5",
+        "oklch": "oklch(74.5% 0.014 251.6)",
+        "tonalRamp": [
+          "#070C11",
+          "#1F252B",
+          "#3A4047",
+          "#585E65",
+          "#7A8189",
+          "#9EA5AD",
+          "#C4CBD4",
+          "#E8EFF8"
+        ]
+      },
+      "ink-3-dark": {
+        "role": "neutral",
+        "displayName": "Ink 3 Dark",
+        "canonical": "#7E868F",
+        "oklch": "oklch(61.6% 0.017 251.2)",
+        "tonalRamp": [
+          "#060C12",
+          "#1E252C",
+          "#394148",
+          "#575E67",
+          "#79818A",
+          "#9DA6AF",
+          "#C3CCD5",
+          "#E7F0FA"
+        ]
+      },
+      "merged": {
+        "role": "secondary",
+        "displayName": "Merged Teal",
+        "canonical": "#0D9488",
+        "oklch": "oklch(60.0% 0.104 184.7)",
+        "tonalRamp": [
+          "#000F0C",
+          "#002B27",
+          "#044A44",
+          "#046D63",
+          "#0D9488",
+          "#48BAAD",
+          "#73E1D3",
+          "#B8FFF4"
+        ]
+      },
+      "merged-text": {
+        "role": "secondary",
+        "displayName": "Merged Teal Text",
+        "canonical": "#0F766E",
+        "oklch": "oklch(51.1% 0.086 186.4)",
+        "tonalRamp": [
+          "#000F0D",
+          "#022B27",
+          "#024A45",
+          "#086C65",
+          "#369188",
+          "#5FB6AD",
+          "#86DDD3",
+          "#B7FFF6"
+        ]
+      },
+      "merged-soft": {
+        "role": "secondary",
+        "displayName": "Merged Teal Wash",
+        "canonical": "#E3F5F3",
+        "oklch": "oklch(95.6% 0.019 188.8)",
+        "tonalRamp": [
+          "#030E0D",
+          "#192726",
+          "#344342",
+          "#526160",
+          "#748482",
+          "#98A9A7",
+          "#BDCFCD",
+          "#E1F3F1"
+        ]
+      },
+      "merged-dark": {
+        "role": "secondary",
+        "displayName": "Merged Teal (dark)",
+        "canonical": "#2DD4BF",
+        "oklch": "oklch(78.5% 0.133 181.9)",
+        "tonalRamp": [
+          "#000F0C",
+          "#002B26",
+          "#044B42",
+          "#066D61",
+          "#069585",
+          "#05BEAA",
+          "#49E6D1",
+          "#BAFFF2"
+        ]
+      },
+      "open": {
+        "role": "tertiary",
+        "displayName": "Open Green",
+        "canonical": "#15803D",
+        "oklch": "oklch(52.7% 0.137 150.1)",
+        "tonalRamp": [
+          "#001003",
+          "#002D10",
+          "#014E20",
+          "#027132",
+          "#349652",
+          "#5DBC75",
+          "#84E49A",
+          "#C7FFD1"
+        ]
+      },
+      "open-dark": {
+        "role": "tertiary",
+        "displayName": "Open Green (dark)",
+        "canonical": "#4ADE80",
+        "oklch": "oklch(80.0% 0.182 151.7)",
+        "tonalRamp": [
+          "#000F04",
+          "#012D12",
+          "#034D24",
+          "#037137",
+          "#039A4D",
+          "#22C367",
+          "#5AEB8C",
+          "#C7FFD4"
+        ]
+      },
+      "warn": {
+        "role": "tertiary",
+        "displayName": "Ready Amber",
+        "canonical": "#B45309",
+        "oklch": "oklch(55.5% 0.146 49.0)",
+        "tonalRamp": [
+          "#180600",
+          "#3E1700",
+          "#672C02",
+          "#944202",
+          "#C36120",
+          "#EC864A",
+          "#FEB893",
+          "#FFEADF"
+        ]
+      },
+      "warn-text": {
+        "role": "tertiary",
+        "displayName": "Ready Amber Text",
+        "canonical": "#92400E",
+        "oklch": "oklch(47.3% 0.125 46.2)",
+        "tonalRamp": [
+          "#180500",
+          "#3F1600",
+          "#692A01",
+          "#944211",
+          "#BC663A",
+          "#E48A5E",
+          "#FFB896",
+          "#FFEAE0"
+        ]
+      },
+      "warn-soft": {
+        "role": "tertiary",
+        "displayName": "Ready Amber Wash",
+        "canonical": "#FEF3E2",
+        "oklch": "oklch(96.8% 0.025 78.9)",
+        "tonalRamp": [
+          "#110A02",
+          "#2B2316",
+          "#473E31",
+          "#655C4E",
+          "#897F70",
+          "#ADA393",
+          "#D4C9B9",
+          "#F8EDDC"
+        ]
+      },
+      "warn-dark": {
+        "role": "tertiary",
+        "displayName": "Ready Amber (dark)",
+        "canonical": "#FBBF24",
+        "oklch": "oklch(83.7% 0.164 84.4)",
+        "tonalRamp": [
+          "#110A00",
+          "#302101",
+          "#523C02",
+          "#775800",
+          "#A27903",
+          "#CF9B07",
+          "#FCC026",
+          "#FEEDC9"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Discard Red",
+        "canonical": "#DC2626",
+        "oklch": "oklch(57.7% 0.215 27.3)",
+        "tonalRamp": [
+          "#1F0000",
+          "#4B0103",
+          "#7C0208",
+          "#B20110",
+          "#E4312E",
+          "#FE7366",
+          "#FFB5AC",
+          "#FEE9E6"
+        ]
+      },
+      "danger-text": {
+        "role": "tertiary",
+        "displayName": "Discard Red Text",
+        "canonical": "#B91C1C",
+        "oklch": "oklch(50.5% 0.190 27.5)",
+        "tonalRamp": [
+          "#1F0001",
+          "#4B0103",
+          "#7C0107",
+          "#B00C13",
+          "#DB423A",
+          "#FE7366",
+          "#FEB5AC",
+          "#FFE9E6"
+        ]
+      },
+      "danger-soft": {
+        "role": "tertiary",
+        "displayName": "Discard Red Wash",
+        "canonical": "#FDECEC",
+        "oklch": "oklch(95.7% 0.018 17.5)",
+        "tonalRamp": [
+          "#120808",
+          "#2C2121",
+          "#493C3C",
+          "#685A5A",
+          "#8B7C7C",
+          "#B0A0A0",
+          "#D6C6C6",
+          "#FBEAEA"
+        ]
+      },
+      "danger-dark": {
+        "role": "tertiary",
+        "displayName": "Discard Red (dark)",
+        "canonical": "#F87171",
+        "oklch": "oklch(71.1% 0.166 22.2)",
+        "tonalRamp": [
+          "#1F0002",
+          "#4B000A",
+          "#7C0117",
+          "#A7242F",
+          "#D14E51",
+          "#FB7474",
+          "#FEB5B1",
+          "#FFE9E7"
+        ]
+      },
+      "kind-sheet": {
+        "role": "tertiary",
+        "displayName": "Sheet Green",
+        "canonical": "#16A34A",
+        "oklch": "oklch(62.7% 0.170 149.2)",
+        "tonalRamp": [
+          "#001003",
+          "#012D0F",
+          "#034E1F",
+          "#02712F",
+          "#029A43",
+          "#43C166",
+          "#6FE98B",
+          "#C8FFD0"
+        ]
+      },
+      "kind-doc": {
+        "role": "tertiary",
+        "displayName": "Doc Sky",
+        "canonical": "#0284C7",
+        "oklch": "oklch(58.8% 0.139 242.0)",
+        "tonalRamp": [
+          "#000C18",
+          "#01273F",
+          "#014469",
+          "#036397",
+          "#0E88CB",
+          "#46AEF3",
+          "#98D2FF",
+          "#E1F1FE"
+        ]
+      },
+      "kind-slide": {
+        "role": "tertiary",
+        "displayName": "Slide Orange",
+        "canonical": "#EA580C",
+        "oklch": "oklch(64.6% 0.194 41.1)",
+        "tonalRamp": [
+          "#1A0400",
+          "#421301",
+          "#6E2401",
+          "#9E3802",
+          "#D54E05",
+          "#FF763F",
+          "#FEB79D",
+          "#FEEAE2"
+        ]
+      },
+      "kind-folder": {
+        "role": "tertiary",
+        "displayName": "Folder Grey",
+        "canonical": "#5E636B",
+        "oklch": "oklch(49.8% 0.014 259.8)",
+        "tonalRamp": [
+          "#080B11",
+          "#20242B",
+          "#3B4047",
+          "#595E66",
+          "#7B8189",
+          "#9FA5AE",
+          "#C5CBD4",
+          "#E9EFF8"
+        ]
+      },
+      "actor-people": {
+        "role": "tertiary",
+        "displayName": "People Blue (reserved, unused)",
+        "canonical": "#2F6FEB",
+        "oklch": "oklch(57.3% 0.199 261.8)",
+        "tonalRamp": [
+          "#000827",
+          "#001D5B",
+          "#003497",
+          "#1151CB",
+          "#3778F5",
+          "#71A3FF",
+          "#AFCBFF",
+          "#E6EFFE"
+        ]
+      },
+      "actor-agents": {
+        "role": "tertiary",
+        "displayName": "Agents Pink (reserved, unused)",
+        "canonical": "#DB2777",
+        "oklch": "oklch(59.2% 0.218 0.6)",
+        "tonalRamp": [
+          "#1D000A",
+          "#480121",
+          "#77023C",
+          "#AB0158",
+          "#DE2B79",
+          "#FF689E",
+          "#FEB1C7",
+          "#FFE8ED"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Home headline only; leading count in accent-text. zh-CN 32px/-0.01em; under 720px 28px (24px zh)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page, repository and settings titles; Pull request detail title steps to 28px."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Home section heads."
+      },
+      "title-sm": {
+        "displayName": "Title small",
+        "purpose": "Card titles (15.5px), issue titles (14.5px), chart title."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "App default text."
+      },
+      "body-sm": {
+        "displayName": "Body small",
+        "purpose": "Metadata runs, descriptions, file notes."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Sentence-case side-nav group headings in ink-3; chips at 12px."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Counts, chart axes, ranks, fact numbers, CLI command, kbd hint. Never prose."
+      }
+    },
+    "shadows": [
+      {
+        "name": "float",
+        "value": "0 12px 32px rgba(15,18,30,.12), 0 2px 6px rgba(15,18,30,.06)",
+        "purpose": "Tooltips, popovers, menus, dialogs only (--rd-shadow; --shadow-md/lg/pop)."
+      },
+      {
+        "name": "float-dark",
+        "value": "0 12px 32px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4)",
+        "purpose": "Float in dark."
+      },
+      {
+        "name": "rest",
+        "value": "none",
+        "purpose": "Every in-flow surface (--shadow-xs, --shadow-sm)."
+      },
+      {
+        "name": "inset-ring",
+        "value": "inset 0 0 0 1px var(--rd-line)",
+        "purpose": "Layout-neutral outline on tiles, avatars, badges, pressed segments."
+      },
+      {
+        "name": "focus-ring",
+        "value": "outline: 2px solid var(--rd-accent); outline-offset: 2px",
+        "purpose": "Keyboard focus everywhere in the mode."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state",
+        "value": "0.15s",
+        "purpose": "Colour, background and border transitions on links, rows, buttons, inputs."
+      },
+      {
+        "name": "chart-dim",
+        "value": "opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "Non-hovered or non-picked chart columns fade to 0.28."
+      },
+      {
+        "name": "card-press",
+        "value": "translateY(1px)",
+        "purpose": "Active state on linked item cards."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "top-compact",
+        "value": "1360px"
+      },
+      {
+        "name": "home-two-col",
+        "value": "1240px"
+      },
+      {
+        "name": "stack-asides",
+        "value": "1080px"
+      },
+      {
+        "name": "mobile",
+        "value": "760px"
+      }
+    ],
+    "surfaces": [
+      {
+        "name": "top-bar",
+        "value": "background: color-mix(in srgb, var(--rd-bg) 92%, transparent); backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--rd-line); min-height: 56px",
+        "purpose": "Translucent top bar."
+      },
+      {
+        "name": "frame",
+        "value": "max-width: 1312px; padding-inline: 32px (16px mobile)",
+        "purpose": "Global and repository frames."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Accent-filled primary action (New, Install Workspace CLI, New issue). Lime with near-black text in dark.",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M12 5v14M5 12h14\"/></svg>New</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border:1px solid transparent;border-radius:9px;background:var(--rd-accent,#7C3AED);color:var(--rd-on-accent,#fff);font:600 13.5px/1 var(--font-sans),sans-serif;cursor:pointer;transition:background .15s}.ds-btn-primary:hover{background:var(--rd-accent-hover,#6D28D9)}.ds-btn-primary:focus-visible{outline:2px solid var(--rd-accent,#7C3AED);outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Panel-filled hairline button for secondary actions.",
+      "html": "<button class=\"ds-btn-secondary\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M12 3v12m0 0l-4-4m4 4l4-4M4 19h16\"/></svg>Download Workspace Agent</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:5px 12px;border:1px solid var(--rd-line,rgba(12,14,22,.09));border-radius:9px;background:var(--rd-panel,#fff);color:var(--rd-ink,#0A0C12);font:600 13px/1.2 var(--font-sans),sans-serif;cursor:pointer;transition:background .15s}.ds-btn-secondary:hover{background:var(--rd-panel-2,#F5F5F7)}.ds-btn-secondary:focus-visible{outline:2px solid var(--rd-accent,#7C3AED);outline-offset:2px}"
+    },
+    {
+      "name": "Top-bar Search",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "Hairline search field with Cmd-K hint; accent border on focus.",
+      "html": "<label class=\"ds-search\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"M20 20l-3.5-3.5\"/></svg><input placeholder=\"Search repositories\"><kbd>⌘</kbd><kbd>K</kbd></label>",
+      "css": ".ds-search{display:flex;align-items:center;gap:8px;width:340px;height:34px;padding:0 8px 0 11px;border:1px solid var(--rd-line-2,rgba(12,14,22,.16));border-radius:9px;background:var(--rd-panel,#fff);color:var(--rd-ink-3,#686D76);transition:border-color .15s,background .15s}.ds-search:hover{border-color:color-mix(in srgb,var(--rd-ink,#0A0C12) 22%,transparent)}.ds-search:focus-within{border-color:var(--rd-accent,#7C3AED);background:var(--rd-panel-2,#F5F5F7)}.ds-search input{flex:1;min-width:0;border:0;background:none;outline:none;color:var(--rd-ink,#0A0C12);font:400 13.5px var(--font-sans),sans-serif}.ds-search kbd{font:500 10px/1.3 var(--font-mono),monospace;padding:2px 4px;border:1px solid var(--rd-line,rgba(12,14,22,.09));border-radius:4px;background:var(--rd-panel-2,#F5F5F7)}"
+    },
+    {
+      "name": "Repository Tabs",
+      "kind": "nav",
+      "refersTo": "tab-active",
+      "description": "GitHub-order tabs with mono counts; current tab accent text and 2px accent underline.",
+      "html": "<nav class=\"ds-tabs\"><a href=\"#\" aria-current=\"page\">Code</a><a href=\"#\">Issues <span class=\"ds-count\">4</span></a><a href=\"#\">Pull requests <span class=\"ds-count\">2</span></a><a href=\"#\">Pages</a><a href=\"#\">Settings</a></nav>",
+      "css": ".ds-tabs{display:flex;gap:4px;border-bottom:1px solid var(--rd-line,rgba(12,14,22,.09));font:500 14px/1.5 var(--font-sans),sans-serif}.ds-tabs a{position:relative;display:inline-flex;align-items:center;gap:8px;padding:11px 12px 13px;color:var(--rd-ink-2,#4F545D);text-decoration:none;border-radius:8px 8px 0 0;transition:color .15s,background .15s}.ds-tabs a:hover{color:var(--rd-ink,#0A0C12);background:var(--rd-panel-2,#F5F5F7)}.ds-tabs a:focus-visible{outline:2px solid var(--rd-accent,#7C3AED);outline-offset:2px}.ds-tabs a[aria-current=page]{color:var(--rd-accent-text,#6D28D9);font-weight:600}.ds-tabs a[aria-current=page]::after{content:\"\";position:absolute;left:8px;right:8px;bottom:0;height:2px;border-radius:2px;background:var(--rd-accent,#7C3AED)}.ds-count{font:500 12px/1 var(--font-mono),monospace;color:var(--rd-ink-2,#4F545D);padding:3px 6px;border-radius:5px;background:var(--rd-panel-2,#F5F5F7)}"
+    },
+    {
+      "name": "Top Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Horizontal top-bar nav; current page is ink 600 with no fill.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\" aria-current=\"page\">Home</a><a href=\"#\">Pull requests</a><a href=\"#\">Issues</a><a href=\"#\">Recent</a><a href=\"#\">Pages</a></nav>",
+      "css": ".ds-nav{display:flex;gap:2px;font:500 14px var(--font-sans),sans-serif}.ds-nav a{padding:7px 11px;border-radius:8px;color:var(--rd-ink-2,#4F545D);text-decoration:none;transition:color .15s,background .15s}.ds-nav a:hover{color:var(--rd-ink,#0A0C12);background:var(--rd-panel-2,#F5F5F7)}.ds-nav a:focus-visible{outline:2px solid var(--rd-accent,#7C3AED);outline-offset:2px}.ds-nav a[aria-current=page]{color:var(--rd-ink,#0A0C12);font-weight:600}"
+    },
+    {
+      "name": "Item Card",
+      "kind": "card",
+      "refersTo": "item-card",
+      "description": "Flat Pull request / Continue-working card: kind tile, title, state chip, description, hairline-separated meta.",
+      "html": "<a href=\"#\" class=\"ds-card\"><div class=\"ds-card-t\"><span class=\"ds-tile\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"2\"/><path d=\"M4 10h16M10 4v16\"/></svg></span>Add risk section to Q4 plan<span class=\"ds-chip-ready\">Ready</span></div><div class=\"ds-card-d\">Contains 1 file in Q4 Marketing Plan.</div><div class=\"ds-card-m\"><span>#3</span><span>Q4 Marketing Plan</span><span>Today 01:36 PM</span></div></a>",
+      "css": ".ds-card{display:block;padding:15px 20px 14px;border:1px solid var(--rd-line,rgba(12,14,22,.09));border-radius:12px;background:var(--rd-panel,#fff);color:var(--rd-ink,#0A0C12);text-decoration:none;font:400 14px/1.5 var(--font-sans),sans-serif;transition:background .15s,border-color .15s}.ds-card:hover{background:var(--rd-panel-2,#F5F5F7);border-color:var(--rd-line-2,rgba(12,14,22,.16))}.ds-card:active{transform:translateY(1px)}.ds-card:focus-visible{outline:2px solid var(--rd-accent,#7C3AED);outline-offset:2px}.ds-card-t{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15.5px;line-height:1.35}.ds-tile{--c:#16A34A;display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 26%,transparent)}.ds-chip-ready{font-size:12px;font-weight:500;line-height:18px;padding:1px 7px;border-radius:5px;color:var(--rd-warn-text,#92400E);background:var(--rd-warn-soft,#FEF3E2);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--rd-warn,#B45309) 40%,transparent)}.ds-card-d{margin-top:6px;color:var(--rd-ink-2,#4F545D);font-size:13.5px}.ds-card-m{display:flex;column-gap:20px;margin-top:7px;color:var(--rd-ink-2,#4F545D);font-size:13px;overflow:hidden}.ds-card-m>*{position:relative}.ds-card-m>*+*::before{content:\"\";position:absolute;left:-10px;top:3px;bottom:3px;border-left:1px solid var(--rd-line-2,rgba(12,14,22,.16))}"
+    },
+    {
+      "name": "Issue Label",
+      "kind": "chip",
+      "refersTo": "issue-label",
+      "description": "Pill label: hue mixed 62% toward ink for text, 15% fill, 32% inset ring, 7px dot.",
+      "html": "<span class=\"ds-label\" style=\"--l:#2563EB\"><i></i>finance</span> <span class=\"ds-label\" style=\"--l:#DC2626\"><i></i>blocked</span>",
+      "css": ".ds-label{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;font:600 12px var(--font-sans),sans-serif;color:color-mix(in oklab,var(--l) 62%,black);background:color-mix(in oklab,var(--l) 15%,transparent);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--l) 32%,transparent)}.ds-label i{width:7px;height:7px;border-radius:50%;background:var(--l)}"
+    },
+    {
+      "name": "Issue View Nav",
+      "kind": "nav",
+      "refersTo": "view-active",
+      "description": "Side view list; current view accent text on accent wash with mono count.",
+      "html": "<nav class=\"ds-views\"><a href=\"#\" aria-current=\"page\"><span>Open</span><b>4</b></a><a href=\"#\"><span>Assigned to me</span><b>1</b></a><a href=\"#\"><span>Closed</span><b>0</b></a></nav>",
+      "css": ".ds-views{display:grid;gap:2px;width:216px;font:500 14px var(--font-sans),sans-serif}.ds-views a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;color:var(--rd-ink-2,#4F545D);text-decoration:none;transition:background .15s,color .15s}.ds-views a span{flex:1}.ds-views a:hover{background:var(--rd-panel-2,#F5F5F7);color:var(--rd-ink,#0A0C12)}.ds-views a:focus-visible{outline:2px solid var(--rd-accent,#7C3AED);outline-offset:2px}.ds-views a[aria-current=page]{background:var(--rd-accent-soft,#F3EDFE);color:var(--rd-accent-text,#6D28D9);font-weight:600}.ds-views b{font:400 12px/1.5 var(--font-mono),monospace;color:inherit;opacity:.8}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Activity Console",
+    "overview": "This system governs the Workspace Browser's **Repository mode only**: every token and rule lives under `html[data-ui-mode=\"repository\"]` (light on the root, dark under the nested `.dark` class). Wiki mode keeps its own look and is not part of this world. Repository mode keeps GitHub's habits (top bar search, Code / Issues / Pull requests / Pages / Settings tabs, file table, About panel, issue filters) and dresses them in an OpenRouter-style console: a near-white or near-black ground, hairline borders, one saturated accent, and live figures set in a monospace.\n\nA repository introduces itself with identity and numbers before files: name, copyable slug, Private badge and Star, an inline run of metadata (Members, Files, Last updated), the tabs, then a stacked daily activity chart above the file table. Home leads with a counted headline and a ranked bar list of open work per repository. Density is office-work density: 14px body, 50px file rows, 36px controls. Light is the default appearance, because the audience works in daylit offices; dark is the console variant with electric lime.\n\nThe system is flat, quiet and precise. Office content stays the hero; chrome is hairlines and fills one step off the ground.",
+    "keyCharacteristics": [
+      "Two themes, one accent slot: violet in light, lime in dark, never both.",
+      "Flat at rest; one soft shadow, only for floating layers.",
+      "Plus Jakarta Sans for all words; Geist Mono only for figures and identifiers.",
+      "Content kinds tinted on small rounded tiles; people shown as circular initials.",
+      "Hairline borders at 9% and 16% ink, never solid grey rules."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Slot Rule",
+        "body": "Violet belongs to light and lime belongs to dark; they fill the same roles (primary action, current tab or view, pressed toggle, focus ring, selection) and never appear together. The chart's Pull request series and the Board kind follow the accent, so they flip with the theme.",
+        "section": "colors"
+      },
+      {
+        "name": "The Kind Is a Tint Rule",
+        "body": "Content-kind colour appears only on the 26px icon tile: the hue as icon colour, 14% as fill, 26% as an inset ring. Rows, names and text never take the kind hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Reserved Pair Rule",
+        "body": "People blue and agents pink are spent on nothing until attribution ships: not on charts, labels, avatars or decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mark Owns Vermilion Rule",
+        "body": "Flask Vermilion appears in the OfficeLab mark and nowhere else.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Counts Rule",
+        "body": "Geist Mono is for numbers, identifiers and code only. Words, labels and headings are always Plus Jakarta Sans. Inside card metadata runs, numbers return to the sans with tabular figures so a sentence does not change face midway.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tight Heading Rule",
+        "body": "Everything 18px and up is 700 or 800 with negative tracking (-0.025em to -0.032em); Chinese eases to -0.01em.",
+        "section": "typography"
+      },
+      {
+        "name": "The Published Pages Exception",
+        "body": "The Pages directory renders in a GitHub Pages (Primer) look: system UI stack at 16px with its own page palette (`--rd-page-*`, light and dark). It is scoped to `.repository-pages` and is the only place the system font stack is the face.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-at-Rest Rule",
+        "body": "Hover changes fill (to panel-2) and border (to line-2), never lift. The only motion on press is a 1px downward nudge on item cards.",
+        "section": "elevation"
+      },
+      {
+        "name": "Tiles for Things, Circles for People",
+        "body": "Repositories and content kinds sit on rounded-square tiles (24 to 34px, 7 to 10px radius); people are circular initial avatars (20, 24 or 32px). The two shapes never swap.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do scope every Repository-mode rule under `:root[data-ui-mode=\"repository\"]` and its nested `.dark`; Wiki mode is a separate world.",
+      "Do route the primary action, current tab or view, focus ring and selection through the accent slot so it reads violet in light and lime in dark.",
+      "Do set counts, axes, ranks, identifiers and commands in Geist Mono with tabular figures.",
+      "Do show content kind on a tinted 26px tile (14% fill, 26% inset ring) and people as circular initials.",
+      "Do separate inline metadata with 1px line-2 vertical rules.",
+      "Do keep in-flow surfaces flat: hover is a fill step to panel-2 and a border step to line-2."
+    ],
+    "donts": [
+      "Don't use the people blue or agents pink series colours until the attribution feature ships; they are reserved and currently unused.",
+      "Don't show violet in dark or lime in light, or put white text on lime.",
+      "Don't add drop shadows to cards, list frames or the chart card; the float shadow is for tooltips, popovers, menus and dialogs only.",
+      "Don't set prose, labels or headings in the mono.",
+      "Don't use Flask Vermilion outside the OfficeLab mark.",
+      "Don't put small uppercase eyebrow labels above headings; group labels are sentence case, 12.5px, ink-3.",
+      "Don't colour row text or file names with content-kind hues."
+    ]
+  }
+}

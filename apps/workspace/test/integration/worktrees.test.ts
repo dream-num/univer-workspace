@@ -16,6 +16,7 @@ import type {
 } from "../../server/src/modules/worktrees/index.js";
 
 import type { ReviewedMergeJournal } from "../../server/src/modules/worktrees/worktrees.types.js";
+import { expectSessionSource } from "../fixtures/session-source.js";
 
 const applications: WorkspaceApplication[] = [];
 const temporaryDirectories: string[] = [];
@@ -29,6 +30,121 @@ afterEach(async () => {
 });
 
 describe("Worktrees", () => {
+  it.each(["browser", "agent", "unknown"] as const)(
+    "attributes HTTP Worktrees and Issues to %s without exposing session source",
+    async (source) => {
+      const application = createTestApplication();
+      const server = createServer(application.app);
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      try {
+        const address = server.address();
+        if (!address || typeof address === "string") throw new Error("Missing test address");
+        const origin = `http://127.0.0.1:${address.port}`;
+        const credentials = { username: "source-user", password: "correct horse battery staple" };
+        const registration = await fetch(`${origin}/api/auth/password/register`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...credentials, displayName: "Source User" }),
+        });
+        expect(registration.status).toBe(201);
+        const registered = await registration.json();
+        expect(registered).not.toHaveProperty("writeSource");
+        expect(registered.user).not.toHaveProperty("writeSource");
+        const registrationCookie = registration.headers.get("set-cookie")!.split(";", 1)[0]!;
+        expectSessionSource(application.database.connection, registrationCookie, "browser");
+        const team = application.spaces.createTeamSpace(registered.user.id, { name: "Attribution" });
+        const route = source === "agent" ? "/api/auth/cli/password/login" : "/api/auth/password/login";
+        const login = await fetch(`${origin}${route}`, {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(credentials),
+        });
+        expect(login.status).toBe(200);
+        if (source === "agent") expect(login.headers.get("cache-control")).toBe("no-store");
+        const session = await login.json();
+        expect(session).not.toHaveProperty("writeSource");
+        expect(session.user).not.toHaveProperty("writeSource");
+        const cookie = login.headers.get("set-cookie")!.split(";", 1)[0]!;
+        expectSessionSource(application.database.connection, cookie, source === "agent" ? "agent" : "browser");
+        if (source === "unknown") {
+          const sessionId = cookie.slice("workspace_session=".length).split(".", 1)[0]!;
+          application.database.connection.prepare("UPDATE login_sessions SET write_source = NULL WHERE id = ?").run(sessionId);
+          expectSessionSource(application.database.connection, cookie, null);
+        }
+        const restored = await fetch(`${origin}/api/session`, { headers: { cookie } });
+        expect(restored.status).toBe(200);
+        expect(await restored.json()).toEqual(session);
+
+        const input = { kind: "team", teamSpaceId: team.id, name: "Attributed draft", summary: null, visibility: "space" };
+        const worktreeResponse = await fetch(`${origin}/api/worktrees`, {
+          method: "POST", headers: { cookie, "content-type": "application/json", "idempotency-key": "source-worktree-create" },
+          body: JSON.stringify(input),
+        });
+        expect(worktreeResponse.status).toBe(201);
+        const worktree = await worktreeResponse.json();
+        expect(worktree.createdVia).toBe(source);
+        const detail = await fetch(`${origin}/api/worktrees/${worktree.id}`, { headers: { cookie } });
+        expect((await detail.json()).worktree.createdVia).toBe(source);
+        const worktreeList = await fetch(`${origin}/api/worktrees`, { headers: { cookie } });
+        expect((await worktreeList.json()).items[0].createdVia).toBe(source);
+
+        const issueResponse = await fetch(`${origin}/api/spaces/${team.id}/issues`, {
+          method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ title: "Attributed issue" }),
+        });
+        expect(issueResponse.status).toBe(201);
+        const issue = await issueResponse.json();
+        expect(issue.createdVia).toBe(source);
+        const issueDetail = await fetch(`${origin}/api/spaces/${team.id}/issues/${issue.number}`, { headers: { cookie } });
+        expect((await issueDetail.json()).createdVia).toBe(source);
+        const issueList = await fetch(`${origin}/api/spaces/${team.id}/issues`, { headers: { cookie } });
+        expect((await issueList.json()).items[0].createdVia).toBe(source);
+        expect(application.database.connection.prepare("SELECT COUNT(*) AS count FROM issue_events WHERE issue_id = ?").get(issue.id))
+          .toEqual({ count: 0 });
+
+        const other = application.identity.issueSession(registered.user, source === "browser" ? "agent" : "browser");
+        const replay = await fetch(`${origin}/api/worktrees`, {
+          method: "POST", headers: { cookie: `workspace_session=${other.cookieValue}`, "content-type": "application/json", "idempotency-key": "source-worktree-create" },
+          body: JSON.stringify(input),
+        });
+        expect(replay.status).toBe(201);
+        expect(await replay.json()).toMatchObject({ id: worktree.id, createdVia: source });
+        expect((await application.worktrees.create(registered.user.id, "source-internal-create", { kind: "user", name: "Internal", summary: null })).body.createdVia)
+          .toBe("unknown");
+        expect(application.issues.create(registered.user.id, team.id, { title: "Internal" }).createdVia).toBe("unknown");
+      } finally {
+        await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      }
+    },
+  );
+
+  it("preserves an agent reservation when a browser retries the failed HTTP create", async () => {
+    const application = createTestApplication(new FailOnceCreateWorktreeBackend());
+    const issued = await application.identity.registerWithPassword({
+      username: "source-retry", displayName: "Retry", password: "correct horse battery staple",
+    });
+    const agent = application.identity.issueSession(issued.view.user, "agent");
+    const server = createServer(application.app);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Missing test address");
+      const origin = `http://127.0.0.1:${address.port}`;
+      const operationId = "source-retry-create-worktree";
+      const failed = await fetch(`${origin}/api/worktrees`, {
+        method: "POST", headers: { cookie: `workspace_session=${agent.cookieValue}`, "content-type": "application/json", "idempotency-key": operationId },
+        body: JSON.stringify({ kind: "user", name: "Retry source", summary: null }),
+      });
+      expect(failed.status).toBe(409);
+      expect(application.operations.get(issued.view.user.id, operationId).state).toBe("failed");
+      const retried = await fetch(`${origin}/api/operations/${operationId}/retry`, {
+        method: "POST", headers: { cookie: `workspace_session=${issued.cookieValue}` },
+      });
+      expect(retried.status).toBe(202);
+      expect(await retried.json()).toMatchObject({ state: "completed" });
+      const listed = await fetch(`${origin}/api/worktrees`, { headers: { cookie: `workspace_session=${issued.cookieValue}` } });
+      expect((await listed.json()).items).toEqual([expect.objectContaining({ name: "Retry source", createdVia: "agent" })]);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
   it("exposes creation history only for the authenticated HTTP caller", async () => {
     const application = createTestApplication();
     const creator = await register(application, "history-creator");

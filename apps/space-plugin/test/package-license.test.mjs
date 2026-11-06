@@ -12,19 +12,23 @@ test('release scan requires the repository license and confines it to Host confi
   const licenseMatch = source.match(/export const UNIVER_LICENSE\s*=\s*(["'])([^"']+)\1/);
   assert.ok(licenseMatch);
   const license = licenseMatch[2];
+  const keySource = await readFile('../../apps/workspace/server/src/integrations/univer/license.ts', 'utf8');
+  const keyMatch = keySource.match(/export const UNIVER_LICENSE_KEY\s*=\s*(["'])([^"']+)\1/);
+  assert.ok(keyMatch);
+  const licenseKey = keyMatch[2];
   const tarball = join(directory, 'fixture.tgz');
   const pack = () => execFileSync('tar', ['-czf', tarball, '-C', directory, 'package/lib/runtime-license.json', 'package/lib/client.js', 'package/package.json']);
   try {
     await mkdir(join(directory, 'package/lib'), { recursive: true });
     await writeFile(join(directory, 'package/package.json'), JSON.stringify({ dependencies: {} }));
     await writeFile(join(directory, 'package/lib/client.js'), 'export {};');
-    await writeFile(join(directory, 'package/lib/runtime-license.json'), JSON.stringify({ scope: 'internal-desktop-test', license }));
+    await writeFile(join(directory, 'package/lib/runtime-license.json'), JSON.stringify({ scope: 'internal-desktop-test', license, licenseKey }));
     pack();
     assert.equal((await scanRelease(tarball)).licensing, 'internal-desktop-test');
     await writeFile(join(directory, 'package/lib/runtime-license.json'), JSON.stringify({ scope: 'internal-desktop-test', license: '' }));
     pack();
     await assert.rejects(scanRelease(tarball), /missing-desktop-test-license/);
-    await writeFile(join(directory, 'package/lib/runtime-license.json'), JSON.stringify({ scope: 'internal-desktop-test', license }));
+    await writeFile(join(directory, 'package/lib/runtime-license.json'), JSON.stringify({ scope: 'internal-desktop-test', license, licenseKey }));
     await writeFile(join(directory, 'package/lib/client.js'), JSON.stringify(license));
     pack();
     await assert.rejects(scanRelease(tarball), /development-license/);

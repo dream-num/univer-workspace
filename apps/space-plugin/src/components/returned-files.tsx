@@ -1,14 +1,15 @@
 import React from 'react';
+import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client';
 import { WorkspaceReferenceButton } from './file-reference.js';
 
-type Reference = { label: string; nodeId: string; resourceId: string; unitId: string };
-export function ReturnedFiles({ matched, sessionId, openFile }: {
-  matched: { files: readonly Reference[] };
+export function ReturnedFiles({ turn, sessionId, openFile }: Pick<TurnTailOwnerProps, 'turn'> & {
   sessionId: string;
   openFile(node: string, resource: string, unit: string, session: string): Promise<void>;
 }) {
-  if (!matched.files.length) return null;
+  // turnTail is a list slot: its owner is passed directly, without a chain match.
+  const files = turn.data.get('spaceReturnedFiles')?.files ?? [];
+  if (!files.length) return null;
   return <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0' }}>
-    {matched.files.map(file => <WorkspaceReferenceButton key={`${file.resourceId}/${file.nodeId}`} file={file} interactive sessionId={sessionId} openFile={openFile} />)}
+    {files.map(file => <WorkspaceReferenceButton key={`${file.resourceId}/${file.nodeId}`} file={file} interactive sessionId={sessionId} openFile={openFile} />)}
   </div>;
 }

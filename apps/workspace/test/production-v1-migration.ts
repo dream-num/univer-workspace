@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { createWorkspaceApplication } from "../dist/server/app.js";
 import { DROP_V12_SQL } from "./support/v12-downgrade.js";
+import { DROP_V14_SQL } from "./support/v14-downgrade.js";
 
 const directory = mkdtempSync(join(tmpdir(), "workspace-production-v1-migration-"));
 const databaseFilename = join(directory, "workspace.sqlite");
@@ -102,6 +103,7 @@ try {
     CREATE INDEX operations_actor
       ON operations(actor_user_id, created_at DESC);
     ${DROP_V12_SQL}
+    ${DROP_V14_SQL}
     ALTER TABLE spaces DROP COLUMN description;
     DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
@@ -124,7 +126,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 12);
+    assert.equal(version.user_version, 16);
     const resource = migrated.database.connection
       .prepare("SELECT id, kind FROM resources")
       .get() as { readonly id: string; readonly kind: string };

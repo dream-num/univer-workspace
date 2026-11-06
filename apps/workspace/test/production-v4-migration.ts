@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { createWorkspaceApplication } from "../dist/server/app.js";
 import { DROP_V12_SQL } from "./support/v12-downgrade.js";
+import { DROP_V14_SQL } from "./support/v14-downgrade.js";
 
 const directory = mkdtempSync(join(tmpdir(), "workspace-production-v4-migration-"));
 const databaseFilename = join(directory, "workspace.sqlite");
@@ -55,6 +56,7 @@ try {
     INSERT INTO external_identities SELECT * FROM external_identities_v5;
     DROP TABLE external_identities_v5;
     ${DROP_V12_SQL}
+    ${DROP_V14_SQL}
     ALTER TABLE spaces DROP COLUMN description;
     DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
@@ -77,7 +79,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 12);
+    assert.equal(version.user_version, 16);
     const identity = migrated.database.connection
       .prepare(
         "SELECT provider, provider_subject, user_id FROM external_identities"

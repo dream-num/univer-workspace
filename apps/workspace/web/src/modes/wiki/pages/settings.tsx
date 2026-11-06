@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { useUpdateSpace, spacesQueryOptions } from "../../../features/spaces";
+import { useUpdateSpace, spaceQueryOptions } from "../../../features/spaces";
 import { WorkspaceLayout } from "../../workspace-layout";
 import { useI18n } from "../../../shared/i18n";
 import { Button, Field, Input, Textarea, toast } from "../../../shared/ui";
@@ -29,9 +29,9 @@ export function WikiSpaceSettingsPage({ spaceId }: SpaceSettingsPageProps) {
 
 function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
   const navigate = useNavigate();
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(spaceQueryOptions(spaceId));
   const { t } = useI18n();
-  const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const space = spaces.data;
   const [name, setName] = useState(space?.name ?? "");
   const [publicRead, setPublicRead] = useState(space?.publicRead ?? false);
   const [description, setDescription] = useState(space?.description ?? "");

@@ -2,7 +2,7 @@ import type { SpaceSettingsPageProps } from "../../page.types";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { TeamMemberManager } from "../../../features/permissions";
-import { spacesQueryOptions } from "../../../features/spaces";
+import { spaceQueryOptions } from "../../../features/spaces";
 import { RepositorySettingsLayout } from "../repository-settings-layout";
 import { useI18n } from "../../../shared/i18n";
 import { Input } from "../../../shared/ui";
@@ -11,8 +11,8 @@ import { WorkspaceLayout } from "../../workspace-layout";
 export function RepositoryTeamMembersPage({ spaceId }: SpaceSettingsPageProps) {
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
-  const spaces = useQuery(spacesQueryOptions);
-  const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const spaces = useQuery(spaceQueryOptions(spaceId));
+  const space = spaces.data;
   if (!space || space.type !== "team") return null;
   const manager = (
     <TeamMemberManager

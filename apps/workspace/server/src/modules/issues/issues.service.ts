@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
+import { writeSourceView } from "../identity/index.js";
 import type { AccessResolver, SpaceAccess } from "../access/index.js";
 import type { PublicUser } from "../permissions/index.js";
 import {
@@ -29,6 +30,7 @@ import {
 const MAX_TITLE = 256;
 const MAX_TEXT = 65_536;
 const MAX_LABELS_PER_SPACE = 100;
+const MAX_ACTIVITY_ROWS = 1000;
 const MAX_LABELS_PER_ISSUE = 20;
 const MAX_ASSIGNEES = 10;
 const MAX_REFERENCES = 20;
@@ -99,6 +101,7 @@ export function createIssuesModule(options: {
       assignees: (assignees.get(row.id) ?? []).map((assignee) => user(users, assignee.user_id)),
       commentCount: comments.get(row.id) ?? 0,
       referenceCount: references.get(row.id) ?? 0,
+      createdVia: writeSourceView(row.created_via),
       createdAt: iso(row.created_at),
       updatedAt: iso(row.updated_at),
     }));
@@ -239,6 +242,24 @@ export function createIssuesModule(options: {
   }
 
   return {
+    activity(userId, spaceId, since) {
+      requireSpace(userId, spaceId);
+      const rows = repository.activityRows(spaceId, since, MAX_ACTIVITY_ROWS + 1);
+      const page = rows.slice(0, MAX_ACTIVITY_ROWS);
+      const users = repository.users(page.flatMap((row) => [
+        row.author_user_id, ...(row.closed_by_user_id ? [row.closed_by_user_id] : []),
+      ]));
+      return {
+        items: page.map((row) => ({
+          number: row.number, title: row.title, author: user(users, row.author_user_id),
+          createdVia: row.created_via, createdAt: row.created_at,
+          closedBy: row.closed_by_user_id ? user(users, row.closed_by_user_id) : null,
+          closedAt: row.closed_at,
+        })),
+        complete: rows.length <= MAX_ACTIVITY_ROWS,
+      };
+    },
+
     list(userId, spaceId, query) {
       requireSpace(userId, spaceId);
       return listFor(userId, { kind: "space", spaceId }, query);
@@ -248,7 +269,7 @@ export function createIssuesModule(options: {
       return listFor(userId, { kind: "member", userId }, query);
     },
 
-    create(userId, spaceId, input) {
+    create(userId, spaceId, input, createdVia = null) {
       const space = requireSpace(userId, spaceId);
       if (!space.capabilities.createIssue) throw forbidden();
       const body = record(input, ["title", "body", "labelIds", "assigneeUserIds", "nodeIds"]);
@@ -261,7 +282,7 @@ export function createIssuesModule(options: {
       const at = now();
       repository.transaction(() => {
         repository.insertIssue({
-          id, spaceId, number: repository.nextNumber(spaceId), title, body: text, authorUserId: userId, now: at,
+          id, spaceId, number: repository.nextNumber(spaceId), title, body: text, authorUserId: userId, now: at, createdVia,
         });
         applyRelations(userId, space, id, relations, at);
       });

@@ -20,7 +20,7 @@ import { useEffect, useState } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../../features/auth";
 import { AppsSidebarSection } from "../../features/html-views/apps-sidebar";
 import { IssuesSidebarSection } from "../../features/issues";
-import { spacesQueryOptions } from "../../features/spaces";
+import { spaceQueryOptions, mySpacesQueryOptions } from "../../features/spaces";
 import { WorkspaceNavigationTree } from "../../features/nodes";
 import { isOpenWorktree, useWorktreeChangeFeed, worktreeListQueryOptions } from "../../features/worktrees";
 import { api } from "../../shared/api/client";
@@ -55,7 +55,8 @@ export function WikiShell({
   selectedNodePath,
 }: WorkspaceShellProps) {
   const session = useQuery(sessionQueryOptions);
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(mySpacesQueryOptions);
+  const selected = useQuery(spaceQueryOptions(selectedSpaceId));
   const activeWorktrees = useQuery({
     ...worktreeListQueryOptions("active"),
     enabled: session.data?.authenticated === true,
@@ -84,7 +85,7 @@ export function WikiShell({
   }, [location.href]);
 
   const allSpaces = spaces.data?.spaces ?? [];
-  const selectedSpace = allSpaces.find((space) => space.id === selectedSpaceId);
+  const selectedSpace = selected.data;
   const spaceTitle = selectedSpace?.type === "personal" ? t("personalSpace") : selectedSpace?.name;
   const logout = useMutation({
     mutationFn: async () => {
@@ -97,8 +98,10 @@ export function WikiShell({
       queryClient.setQueryData(sessionQueryKey, {
         authenticated: false,
         githubOAuthEnabled: currentSession.githubOAuthEnabled,
+        googleOAuthEnabled: currentSession.googleOAuthEnabled,
         discordOAuthEnabled: currentSession.discordOAuthEnabled,
         passwordAuthEnabled: currentSession.passwordAuthEnabled,
+        emailAuthEnabled: currentSession.emailAuthEnabled,
       });
       await navigate({
         to: "/login",
@@ -108,7 +111,7 @@ export function WikiShell({
     },
   });
 
-  if (session.isPending || spaces.isPending) {
+  if (session.isPending || (selectedSpaceId !== undefined && selected.isPending)) {
     return <LoadingScreen />;
   }
   if (!session.data?.authenticated) {
@@ -118,7 +121,7 @@ export function WikiShell({
   if (spaces.error) throw spaces.error;
 
   const currentSession = session.data;
-  const personalSpaces = allSpaces.filter((space) => space.type === "personal" && space.accessRole === "owner");
+  const personalSpaces = allSpaces.filter((space) => space.type === "personal" && space.affiliation === "owner");
   const personalSpace = personalSpaces[0];
   const teamSpaces = allSpaces.filter((space) => space.type === "team");
   const trashSpaceId = selectedSpaceId ?? personalSpaces[0]?.id;

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { UniverType, type IChangeset } from "@univerjs/protocol";
 import { ApplicationError } from "../../middleware/errors.js";
+import { writeSourceView, type WriteSource } from "../identity/index.js";
 import type { TrashModule } from "../trash/index.js";
 import type {
   AccessResolver,
@@ -161,6 +162,40 @@ export function createWorktreesModule(options: {
       return { worktree: detailView(await contextFromData(userId, value.row, data)) };
     },
 
+    async activity(userId, scope, since) {
+      const rows = options.repository.listCandidates({
+        userId, scope: "all", kind: scope.kind,
+        teamSpaceId: scope.kind === "team" ? scope.teamSpaceId : null,
+        search: "", order: "createdAtDesc", cursor: null, limit: MAX_ACTIVITY_ROWS + 1, touchedSince: since,
+      });
+      const visible = rows.slice(0, MAX_ACTIVITY_ROWS).filter((row) => isDiscoverable(userId, row));
+      let complete = rows.length <= MAX_ACTIVITY_ROWS;
+      const processed = visible.filter((row) => row.processed_at !== null && row.processed_at >= since)
+        .sort((a, b) => b.processed_at! - a.processed_at! || a.id.localeCompare(b.id));
+      const merged = new Set<string>();
+      // ponytail: MAX_MERGE_LOOKUPS bounds Collaboration calls per request; replace with product-side merged_at written by merge.
+      if (processed.length > MAX_MERGE_LOOKUPS) complete = false;
+      for (const row of processed.slice(0, MAX_MERGE_LOOKUPS)) {
+        try {
+          if ((await options.backend.getWorktree(row.id, userId)).status === "merged") merged.add(row.id);
+        } catch {
+          complete = false;
+        }
+      }
+      return {
+        items: visible.map((row) => ({
+          id: row.id, number: row.number, name: row.name,
+          creator: {
+            id: row.creator_user_id, username: row.creator_username,
+            displayName: row.creator_display_name, avatarUrl: row.creator_avatar_url,
+          },
+          createdVia: row.created_via, createdAt: row.created_at,
+          mergedAt: merged.has(row.id) ? row.processed_at : null,
+        })),
+        complete,
+      };
+    },
+
     async list(userId, query) {
       const limit = validLimit(query.limit);
       const scope = validScope(query.scope);
@@ -263,7 +298,7 @@ export function createWorktreesModule(options: {
       };
     },
 
-    async create(userId, operationIdValue, inputValue) {
+    async create(userId, operationIdValue, inputValue, createdVia = null) {
       const operationId = validOperationId(operationIdValue);
       const input = validCreate(inputValue);
       if (input.kind === "team") {
@@ -280,6 +315,7 @@ export function createWorktreesModule(options: {
       const payload = {
         ...input,
         worktreeId: randomUUID(),
+        createdVia,
       };
       const reserved = options.repository.reserveOperation({
         id: operationId,
@@ -295,6 +331,7 @@ export function createWorktreesModule(options: {
         readonly visibility: WorktreeVisibility;
         readonly teamSpaceId: string | null;
         readonly worktreeId: string;
+        readonly createdVia?: WriteSource | null;
       }>(reserved.row, "create_worktree", userId);
       assertSameCreate(input, stable);
       if (reserved.row.state !== "completed") {
@@ -311,6 +348,7 @@ export function createWorktreesModule(options: {
             teamSpaceId: stable.teamSpaceId,
             visibility: stable.visibility,
             createdAt: now(),
+            createdVia: stable.createdVia ?? null,
           });
           options.repository.completeOperation(
             operationId,
@@ -1246,6 +1284,7 @@ function summaryView(
 ): WorktreeSummary {
   return {
     id: row.id,
+    createdVia: writeSourceView(row.created_via),
     number: row.number,
     name: row.name,
     summary: row.summary,
@@ -1585,6 +1624,8 @@ function validNumber(value: unknown): number {
   return number;
 }
 
+const MAX_ACTIVITY_ROWS = 1000;
+const MAX_MERGE_LOOKUPS = 200;
 const WORKTREE_STATES: readonly WorktreeState[] = ["draft", "ready", "merging", "merged", "discarded"];
 
 /** `state` may repeat; an absent filter returns every state. */

@@ -959,7 +959,6 @@ export function apply(ctx: any) {
   ctx.effect(() => ctx.uiConversation.events.register(spaceReturnedFilesDefinition));
   ctx.effect(() => ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail', id: 'space-returned-files',
-    select: (owner: any) => owner.turn.data.get('spaceReturnedFiles'),
     inject: (sessionId: string) => ({ sessionId, openFile: openWorkspaceReference }),
   }, ReturnedFiles)));
   ctx.effect(() =>

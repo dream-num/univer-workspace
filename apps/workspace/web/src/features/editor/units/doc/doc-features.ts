@@ -1,1 +1,1 @@
-export { getDocReplayCompatibilityPlugins, getDocAuthoringUIPlugins, getDocMobileAuthoringUIPlugins } from "@univerjs/univer-workspace-editor-presets/doc-features";
+export * from "@univerjs/univer-workspace-editor-presets/doc-features";

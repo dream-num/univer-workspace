@@ -13,6 +13,10 @@ const sdkCss = await Promise.all(
     '@univerjs-pro/docs-callout-ui',
     '@univerjs-pro/docs-chart-ui',
     '@univerjs-pro/docs-code-ui',
+    '@univerjs-pro/docs-column-ui',
+    '@univerjs-pro/docs-list-ui',
+    '@univerjs-pro/docs-quote-ui',
+    '@univerjs/find-replace',
     '@univerjs-pro/docs-latex-ui',
     '@univerjs-pro/docs-print',
     '@univerjs-pro/docs-shape-ui',
@@ -42,7 +46,6 @@ const sdkCss = await Promise.all(
     '@univerjs-pro/slides-thread-comment-ui',
     '@univerjs-pro/edit-history-ui',
     '@univerjs-pro/embed-ui',
-    '@univerjs-pro/exchange-client',
     '@univerjs/thread-comment-ui',
     '@univerjs-pro/boards-ui',
     '@univerjs-pro/ink-ui',
@@ -56,7 +59,6 @@ const sdkCss = await Promise.all(
     '@univerjs-pro/bases-ui',
     '@univerjs-pro/bases-history-ui',
     '@univerjs-pro/bases-thread-comment-ui',
-    '@univerjs-pro/bases-exchange-client',
     '@univerjs-pro/collaboration-client-ui',
     '@univerjs/preset-docs-thread-comment',
     '@univerjs/preset-docs-drawing',
@@ -110,6 +112,7 @@ await build({
     'src/api-tool.ts',
     'src/creation-tools.ts',
     'src/exchange-tools.ts',
+    'src/markdown-tools.ts',
     'src/blob-tool.ts',
     'src/html-view-tool.ts',
     'src/svg-tool.ts',
@@ -132,6 +135,7 @@ await build({
   splitting: true,
   plugins: [{ name: 'bundle-shared-content-runtime', setup(build) {
     build.onResolve({ filter: /^@univerjs-labs\/html-view$/ }, () => ({ path: 'html-view', namespace: 'space-html-view' }));
+    build.onResolve({ filter: /^@univerjs\/univer-workspace-client-core\/(?:markdown|document-materialize)$/ }, args => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
     build.onLoad({ filter: /.*/, namespace: 'space-html-view' }, () => ({ contents: htmlViewBundle, loader: 'js' }));
     build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime(?:\/(?:api-reference|workspace-spaces|workspace-resources|workspace-exchange|workspace-session-path|workspace-inspection|workspace-blob|workspace-html-view|workspace-svg|workspace-skill-resources|workspace-resource-library|workspace-issues|workspace-issue-operations|workspace-render|workspace-screenshot|workspace-file-state-api|workspace-worktree-api|workspace-state|workspace-status|workspace-unit-operations))?$/ }, (args) => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
   } }],

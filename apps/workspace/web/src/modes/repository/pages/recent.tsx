@@ -49,7 +49,7 @@ export function RepositoryRecentPage({ q = "" }: RecentPageProps) {
             <div className="repository-panel-heading">
               <h2>{t("name")}</h2>
               <span className="text-xs text-muted-foreground">
-                {query.data ? t("dashboardLoaded", { count: items.length }) : ""}
+                {query.hasNextPage ? t("repositoryMoreItemsAvailable") : ""}
               </span>
             </div>
             <RepositoryQueryState

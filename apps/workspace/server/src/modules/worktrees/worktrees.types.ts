@@ -6,6 +6,7 @@ import type { IChangeset } from "@univerjs/protocol";
 import type { UnitType } from "../access/index.js";
 import type { OperationState } from "../resources/resources.types.js";
 import type { PublicUser } from "../permissions/index.js";
+import type { WriteSource, WriteSourceView } from "../identity/index.js";
 
 export type WorktreeKind = "user" | "team";
 export type WorktreeVisibility = "private" | "space";
@@ -23,6 +24,7 @@ export interface WorktreeCapabilities {
 }
 
 export interface WorktreeSummary {
+  readonly createdVia: WriteSourceView;
   readonly id: string;
   readonly number: number | null;
   readonly name: string;
@@ -193,7 +195,25 @@ export type WorktreeChangesetSubmitResult =
       };
     };
 
+export interface WorktreeActivity {
+  readonly id: string;
+  readonly number: number | null;
+  readonly name: string;
+  readonly creator: PublicUser;
+  readonly createdVia: WriteSource | null;
+  readonly createdAt: number;
+  readonly mergedAt: number | null;
+}
+
+export type WorktreeActivityScope =
+  | { readonly kind: "team"; readonly teamSpaceId: string }
+  | { readonly kind: "user" };
+
 export interface WorktreesModule {
+  activity(userId: string, scope: WorktreeActivityScope, since: number): Promise<{
+    readonly items: readonly WorktreeActivity[];
+    readonly complete: boolean;
+  }>;
   setUnitRemoved(
     userId: string,
     worktreeId: string,
@@ -220,7 +240,8 @@ export interface WorktreesModule {
   create(
     userId: string,
     operationId: unknown,
-    input: unknown
+    input: unknown,
+    createdVia?: WriteSource | null
   ): Promise<{ readonly status: 201; readonly body: WorktreeSummary }>;
   get(
     userId: string,

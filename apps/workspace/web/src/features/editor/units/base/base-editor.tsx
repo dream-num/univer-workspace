@@ -3,8 +3,7 @@ import { UniverBasesPlugin } from "@univerjs-pro/bases";
 import UniverBasesEnUS from "@univerjs-pro/bases/locale/en-US";
 import UniverBasesZhCN from "@univerjs-pro/bases/locale/zh-CN";
 import { UniverBasesExchangeClientPlugin } from "@univerjs-pro/bases-exchange-client";
-import UniverBasesExchangeClientEnUS from "@univerjs-pro/bases-exchange-client/locale/en-US";
-import UniverBasesExchangeClientZhCN from "@univerjs-pro/bases-exchange-client/locale/zh-CN";
+import { createWorkspaceImportExportFeature } from "../../features/import-export";
 import { UniverBasesHistoryUIPlugin } from "@univerjs-pro/bases-history-ui";
 import BasesHistoryUIEnUS from "@univerjs-pro/bases-history-ui/locale/en-US";
 import BasesHistoryUIZhCN from "@univerjs-pro/bases-history-ui/locale/zh-CN";
@@ -40,7 +39,6 @@ import "@univerjs-pro/bases-thread-comment-ui/lib/index.css";
 import "@univerjs/design/lib/index.css";
 import "@univerjs/ui/lib/index.css";
 import "@univerjs-pro/bases-ui/lib/index.css";
-import "@univerjs-pro/bases-exchange-client/lib/index.css";
 import "@univerjs/thread-comment-ui/lib/index.css";
 
 import {
@@ -77,7 +75,10 @@ export const baseEditorDefinition: ICollaborationEditorDefinition = {
   locales: baseEditorLocales,
   collaborationFeaturePlugins: () =>
     getThreadCommentCollaborationPlugins(UniverBasesThreadCommentUIPlugin),
-  exchangeFeaturePlugins: () => [UniverBasesExchangeClientPlugin],
+  exchangeFeaturePlugins: () => [
+    UniverBasesExchangeClientPlugin,
+    createWorkspaceImportExportFeature("base", { mobile: false }),
+  ],
   createPresets: (container) => createBaseEditorPresets(container,
     new Worker(new URL("./base-worker.ts", import.meta.url), { type: "module" })),
   load: (univerAPI, unitId) =>

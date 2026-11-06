@@ -6,6 +6,7 @@ import {
   BaseExportMode,
   BaseFormulaPolicy,
   BaseImportMode,
+  configureExchange,
   DocxCompatibilityMode,
   ExchangeError,
   ExchangeFormat,
@@ -26,6 +27,10 @@ import {
 import { UniverInstanceType } from "@univerjs/core";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import type { UnitSnapshotStore } from "../../integrations/univer/unit-store.js";
+import {
+  BUNDLED_UNIVER_LICENSE,
+  type UniverLicenseCredentials,
+} from "../../integrations/univer/univer-license.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver, UnitType } from "../access/index.js";
 import type { ResourcesModule } from "../resources/index.js";
@@ -134,8 +139,11 @@ export function createExchangeModule(options: {
   readonly store: BlobStore;
   readonly now?: () => number;
   readonly maxFileBytes?: number;
+  readonly license?: UniverLicenseCredentials;
 }): ExchangeModule {
   const now = options.now ?? Date.now;
+  const license = options.license ?? BUNDLED_UNIVER_LICENSE;
+  let configured: Promise<void> | undefined;
   const maxFileBytes = options.maxFileBytes ?? MAX_EXCHANGE_FILE_BYTES;
   const artifacts = new Map<string, ExchangeArtifact>();
   const tasks = new Map<string, ExchangeTask>();
@@ -198,7 +206,14 @@ export function createExchangeModule(options: {
       status: "pending",
       expiresAt: now() + ARTIFACT_TTL_MS,
     });
-    const running = execute()
+    // Exchange credentials are process-wide; set them once before the first
+    // conversion and retry on the next task if the SDK rejected them.
+    configured ??= configureExchange(license).catch((error: unknown) => {
+      configured = undefined;
+      throw error;
+    });
+    const running = configured
+      .then(execute)
       .then(
         (task) =>
           tasks.set(id, {

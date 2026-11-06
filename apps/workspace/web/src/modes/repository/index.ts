@@ -1,5 +1,12 @@
-import "./styles.css";
-import "./dashboard.css";
+import "@fontsource-variable/plus-jakarta-sans";
+import "@fontsource-variable/geist-mono";
+import "./theme.css";
+import "./pages.css";
+import "./shell.css";
+import "./repo.css";
+import "./home.css";
+import "./issues.css";
+import "./components.css";
 import { RepositoryDirectoryPage } from "./pages/repositories";
 import { RepositoryRecentPage } from "./pages/recent";
 import { RepositoryAppsPage } from "./pages/apps";

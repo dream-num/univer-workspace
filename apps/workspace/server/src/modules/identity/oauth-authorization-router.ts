@@ -150,7 +150,7 @@ export function createOAuthAuthorizationRouter(options: {
     options.authorizationStore.delete(code);
 
     if (scopeIncludesSession(authorization.scope)) {
-      const issued = options.identity.issueSession(user);
+      const issued = options.identity.issueSession(user, "agent");
       response.json({
         access_token: issued.cookieValue,
         token_type: "Bearer",

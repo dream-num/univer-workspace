@@ -3,7 +3,7 @@ import { Navigate, createFileRoute, notFound } from "@tanstack/react-router";
 import { requireAuthenticatedSession } from "../features/auth";
 import { IssueNewForm } from "../features/issues";
 import { ResourceUnavailablePage } from "../features/nodes";
-import { spacesQueryOptions } from "../features/spaces";
+import { ensureSpace, spaceQueryOptions } from "../features/spaces";
 import { useI18n } from "../shared/i18n";
 import { IssueRouteLayout } from "./-issue-layout";
 
@@ -13,8 +13,8 @@ export const Route = createFileRoute("/spaces_/$spaceId/issues/new")({
   }),
   loader: async ({ context, params, location }) => {
     await requireAuthenticatedSession(context.queryClient, location.href);
-    const spaces = await context.queryClient.ensureQueryData(spacesQueryOptions);
-    if (spaces.spaces.every((space) => space.id !== params.spaceId || space.type !== "team")) {
+    const space = await ensureSpace(context.queryClient, params.spaceId);
+    if (space.type !== "team") {
       throw notFound();
     }
   },
@@ -26,8 +26,8 @@ function NewIssuePage() {
   const { spaceId } = Route.useParams();
   const { node } = Route.useSearch();
   const { t } = useI18n();
-  const spaces = useQuery(spacesQueryOptions);
-  const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const spaces = useQuery(spaceQueryOptions(spaceId));
+  const space = spaces.data;
   if (space && !space.capabilities.createIssue) {
     return <Navigate to="/spaces/$spaceId/issues" params={{ spaceId }} search={{}} replace />;
   }

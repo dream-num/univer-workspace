@@ -1,3 +1,4 @@
+import type { WriteSource, WriteSourceView } from "../identity/index.js";
 import type { PublicUser } from "../permissions/index.js";
 
 export type IssueState = "open" | "closed";
@@ -48,6 +49,7 @@ export interface IssueReferenceView {
 }
 
 export interface IssueSummaryView {
+  readonly createdVia: WriteSourceView;
   readonly id: string;
   readonly number: number;
   readonly space: { readonly id: string; readonly name: string };
@@ -143,10 +145,24 @@ export interface IssueListQuery {
   readonly limit?: unknown;
 }
 
+export interface IssueActivity {
+  readonly number: number;
+  readonly title: string;
+  readonly author: PublicUser;
+  readonly createdVia: WriteSource | null;
+  readonly createdAt: number;
+  readonly closedBy: PublicUser | null;
+  readonly closedAt: number | null;
+}
+
 export interface IssuesModule {
+  activity(userId: string, spaceId: string, since: number): {
+    readonly items: readonly IssueActivity[];
+    readonly complete: boolean;
+  };
   list(userId: string, spaceId: string, query: IssueListQuery): IssueList;
   listMine(userId: string, query: IssueListQuery): IssueList;
-  create(userId: string, spaceId: string, input: unknown): IssueView;
+  create(userId: string, spaceId: string, input: unknown, createdVia?: WriteSource | null): IssueView;
   get(userId: string, spaceId: string, number: unknown): IssueView;
   update(userId: string, spaceId: string, number: unknown, input: unknown): IssueView;
   timeline(

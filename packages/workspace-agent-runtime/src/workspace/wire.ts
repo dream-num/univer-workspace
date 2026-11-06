@@ -15,6 +15,7 @@ export interface WorkspaceSpace {
   readonly type: "personal" | "team";
   readonly name: string;
   readonly accessRole: "owner" | "admin" | "editor" | "viewer";
+  readonly affiliation?: "owner" | "member" | "none";
   /** Present only after the user adds this Space to the local session list. */
   readonly dshWorkspaceId?: string;
   readonly capabilities?: Readonly<{

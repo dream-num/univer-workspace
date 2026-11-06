@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { BookMarked, LockKeyhole } from "lucide-react";
-import { spacesQueryOptions } from "../../../features/spaces";
+import { BookMarked } from "lucide-react";
+import { mySpacesQueryOptions, starredSpacesQueryOptions, exploreSpacesQueryOptions } from "../../../features/spaces";
 import { useI18n, type MessageKey } from "../../../shared/i18n";
 import { Button, Select } from "../../../shared/ui";
 import { WorkspaceLayout } from "../../workspace-layout";
@@ -15,19 +15,23 @@ import {
   RepositoryQueryState,
   RepositorySearchField,
 } from "../repository-controls";
+import { CurrentLink } from "../current-link";
+import { RepositoryStar } from "../repository-star";
 import { spaceDisplayName } from "../space-name";
 
 const roleKeys = {
   owner: "accessOwner",
-  admin: "accessAdmin",
-  editor: "accessEditor",
-  viewer: "accessViewer",
+  member: "repositoryAffiliationMember",
+  none: "repositoryVisibilityPublic",
 } as const satisfies Record<string, MessageKey>;
 
 export function RepositoryDirectoryPage(props: RepositorySearch) {
   const { t, language } = useI18n();
   const navigate = useNavigate();
-  const spaces = useQuery(spacesQueryOptions);
+  const mine = useQuery({ ...mySpacesQueryOptions, enabled: props.view === undefined });
+  const starred = useQuery({ ...starredSpacesQueryOptions, enabled: props.view === "starred" });
+  const explore = useQuery({ ...exploreSpacesQueryOptions, enabled: props.view === "explore" });
+  const spaces = props.view === "starred" ? starred : props.view === "explore" ? explore : mine;
   const update = (patch: { [K in keyof RepositorySearch]?: RepositorySearch[K] | undefined }) =>
     void navigate({
       to: "/repositories",
@@ -52,6 +56,17 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
             </div>
             <RepositoryCreateButton />
           </div>
+          <nav className="rd-directory-tabs" aria-label={t("allSpaces")}>
+            {([
+              { view: undefined, label: "repositoryYours" },
+              { view: "starred", label: "repositoryStarred" },
+              { view: "explore", label: "repositoryExplore" },
+             ] satisfies readonly { view: RepositorySearch["view"]; label: MessageKey }[]).map(({ view, label }) => (
+              <CurrentLink key={label} to="/repositories" search={view ? { view } : {}} current={props.view === view}>
+                {t(label)}
+              </CurrentLink>
+            ))}
+          </nav>
           <div className="repository-toolbar">
             <RepositorySearchField
               value={props.q ?? ""}
@@ -99,7 +114,7 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => void navigate({ to: "/repositories", search: {}, replace: true })}
+                  onClick={() => void navigate({ to: "/repositories", search: props.view ? { view: props.view } : {}, replace: true })}
                 >
                   {t("clearFilters")}
                 </Button>
@@ -109,11 +124,9 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
               <ul className="repository-directory-list">
                 {items.map((space) => (
                   <li key={space.id}>
-                    {space.publicRead ? (
+                    <span className="rd-repo-ic">
                       <BookMarked aria-hidden="true" />
-                    ) : (
-                      <LockKeyhole aria-hidden="true" />
-                    )}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
@@ -127,6 +140,13 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
                           ) : null}
                           {spaceDisplayName(space, t)}
                         </Link>
+                      </div>
+                      {space.description ? (
+                        <p className="mt-2 line-clamp-2 max-w-3xl text-sm text-muted-foreground">
+                          {space.description}
+                        </p>
+                      ) : null}
+                      <p className="repository-row-meta mt-3">
                         <span className="repository-label">
                           {t(
                             space.type === "personal"
@@ -136,37 +156,30 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
                                 : "repositoryVisibilityPrivate",
                           )}
                         </span>
-                      </div>
-                      {space.description ? (
-                        <p className="mt-2 line-clamp-2 max-w-3xl text-sm text-muted-foreground">
-                          {space.description}
-                        </p>
-                      ) : null}
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        {t(space.type === "personal" ? "personalSpace" : "teamSpace")}
-                        {" · "}
-                        {t(roleKeys[space.accessRole])}
+                        {space.type === "team" ? <span>{t("teamSpace")}</span> : null}
+                        <span>{t(roleKeys[space.affiliation])}</span>
                       </p>
                     </div>
+                    <RepositoryStar showCount spaceId={space.id} name={spaceDisplayName(space, t) ?? space.name} />
                   </li>
                 ))}
               </ul>
             ) : (
               <div className="repository-empty">
                 <BookMarked aria-hidden="true" />
-                <h2>{t(filtered ? "repositoriesNoMatch" : "repositoriesEmpty")}</h2>
+                <h2>{t(filtered ? "repositoriesNoMatch" : props.view === "starred" ? "repositoryStarredEmpty" : props.view === "explore" ? "repositoryExploreEmpty" : "repositoriesEmpty")}</h2>
                 {filtered ? (
                   <Button
                     variant="secondary"
                     onClick={() =>
-                      void navigate({ to: "/repositories", search: {}, replace: true })
+                      void navigate({ to: "/repositories", search: props.view ? { view: props.view } : {}, replace: true })
                     }
                   >
                     {t("clearFilters")}
                   </Button>
-                ) : (
+                ) : !props.view ? (
                   <RepositoryCreateButton />
-                )}
+                ) : null}
               </div>
             )}
           </RepositoryQueryState>

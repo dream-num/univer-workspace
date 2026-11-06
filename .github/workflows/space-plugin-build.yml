@@ -54,6 +54,7 @@ jobs:
       - name: Build shared plugin dependencies
         run: |
           pnpm --filter @univerjs/univer-workspace-agent-runtime build
+          pnpm --filter @univerjs/univer-workspace-client-core build
           pnpm --filter @univerjs/univer-workspace-reference-provider build
 
       - name: Install locked Space Plugin dependencies

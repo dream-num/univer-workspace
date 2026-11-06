@@ -10,6 +10,8 @@ import {
 } from "../../server/src/app.js";
 import { loadConfig, type WorkspaceConfig } from "../../server/src/config.js";
 
+import { expectSessionSource } from "../fixtures/session-source.js";
+
 const CLIENT_ID = "internal-client";
 const CLIENT_SECRET = "test-client-secret-at-least-32-characters";
 const CALLBACK_URL = "https://client.example.test/auth/callback";
@@ -262,6 +264,7 @@ describe("OAuth authorization", () => {
       readonly user: { readonly id: string };
     };
     expect(body.access_token).not.toBe("");
+    expectSessionSource(application!.database.connection, body.access_token, "agent");
     expect(body.expires_in).toBe(60);
     expect(body.user.id).toBe(session.user.id);
 

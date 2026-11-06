@@ -19,6 +19,7 @@ const user = { avatarUrl: null, displayName: "Agent", id: "u1", username: "agent
 const issue = (state: "open" | "closed") => ({
   assignees: [], author: user, body: "", capabilities: { close: true, comment: true, edit: true, triage: true },
   closedAt: state === "closed" ? "2026-09-29T00:00:00.000Z" : null, closedBy: state === "closed" ? user : null,
+  createdVia: "agent",
   commentCount: 0, createdAt: "2026-09-29T00:00:00.000Z", id: "i3", labels: [], number: 3,
   referenceCount: 0, references: [], space: { id: "s1", name: "Team" }, state,
   stateReason: state === "closed" ? "not_planned" : null, title: "Third", updatedAt: "2026-09-29T00:00:00.000Z",
@@ -35,7 +36,7 @@ describe("Workspace CLI Issue commands", () => {
           response.writeHead(status, { "content-type": "application/json", ...headers });
           response.end(JSON.stringify(value));
         };
-        if (path === "/api/auth/password/login") {
+        if (path === "/api/auth/cli/password/login") {
           respond(200, { authenticated: true, user: { displayName: "Agent", id: "u1" } }, {
             "set-cookie": "workspace_session=test; Path=/; HttpOnly",
           });
@@ -45,7 +46,9 @@ describe("Workspace CLI Issue commands", () => {
         if (path.endsWith("/comments")) {
           respond(201, { author: user, body: "closing note\n", createdAt: "2026-09-29T00:00:00.000Z", id: "c1", updatedAt: "2026-09-29T00:00:00.000Z" });
         } else if (path.startsWith("/api/spaces/s1/issues?")) {
-          respond(200, { counts: { closed: 0, open: 0 }, items: [], nextCursor: null });
+          respond(200, { counts: { closed: 0, open: 0 }, items: [issue("open")], nextCursor: null });
+        } else if (path === "/api/worktrees/wt-1") {
+          respond(200, { worktree: { id: "wt-1", name: "Draft", state: "draft", createdVia: "agent" } });
         } else {
           respond(200, issue(request.method === "PATCH" ? "closed" : "open"));
         }
@@ -78,6 +81,16 @@ describe("Workspace CLI Issue commands", () => {
         { body: { state: "closed", stateReason: "not_planned" }, method: "PATCH", path: "/api/spaces/s1/issues/3" },
         { body: undefined, method: "GET", path: "/api/spaces/s1/issues?state=open&label=bug&label=docs&assignee=me&limit=30" },
       ]);
+      for (const [args, expected] of [
+        [["issue", "list", "-R", "s1"], [{ createdVia: "agent" }]],
+        [["issue", "view", "3", "-R", "s1"], { createdVia: "agent" }],
+        [["pr", "view", "wt-1"], { createdVia: "agent" }],
+        [["worktree", "get", "wt-1"], { createdVia: "agent" }],
+      ] as const) {
+        const result = await runCli([...args, "--json", "createdVia"], env);
+        expect(result).toMatchObject({ code: 0, stderr: "" });
+        expect(JSON.parse(result.stdout)).toEqual(expected);
+      }
       expect(rejected.code).not.toBe(0);
       expect(rejected.stderr).toContain("workspace-argument-invalid");
     } finally {

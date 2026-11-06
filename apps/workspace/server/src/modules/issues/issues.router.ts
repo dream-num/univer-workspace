@@ -16,9 +16,10 @@ export function createIssuesRouter(options: {
     response.json(options.issues.list(userId(request.headers.cookie), request.params.spaceId, request.query));
   });
   router.post("/spaces/:spaceId/issues", (request, response) => {
+    const { user, writeSource } = options.identity.requireSession(request.headers.cookie);
     response
       .status(201)
-      .json(options.issues.create(userId(request.headers.cookie), request.params.spaceId, request.body));
+      .json(options.issues.create(user.id, request.params.spaceId, request.body, writeSource));
   });
   router.get("/spaces/:spaceId/issues/:number", (request, response) => {
     response.json(options.issues.get(userId(request.headers.cookie), request.params.spaceId, request.params.number));

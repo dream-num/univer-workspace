@@ -44,6 +44,7 @@ WorktreeSummary:
   type: object
   additionalProperties: false
   required:
+    - createdVia
     - id
     - number
     - name
@@ -59,6 +60,8 @@ WorktreeSummary:
     - updatedAt
     - capabilities
   properties:
+    createdVia:
+      $ref: ./identity.yaml#/WriteSource
     id:
       type: string
     number:

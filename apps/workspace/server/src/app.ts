@@ -1,3 +1,4 @@
+import { createActivityModule, createActivityRouter } from "./modules/activity/index.js";
 import { createStandaloneAppRouter } from "./modules/views/standalone-app.router.js";
 import { existsSync } from "node:fs";
 import type { Server } from "node:http";
@@ -9,6 +10,10 @@ import express from "express";
 import type { WorkspaceConfig } from "./config.js";
 import type { WorkspaceDatabase } from "./db/database.js";
 import { openWorkspaceDatabase } from "./db/initialize.js";
+import {
+  createEmailSender,
+  type EmailSender,
+} from "./integrations/email/index.js";
 import {
   createCollaborationRuntime,
   type CollaborationRuntime,
@@ -55,8 +60,10 @@ import {
   createIdentityRouter,
   createGitHubOAuthProvider,
   createDiscordOAuthProvider,
+  createGoogleOAuthProvider,
   createOAuthAuthorizationRouter,
   type DiscordOAuthProvider,
+  type GoogleOAuthProvider,
   type GitHubOAuthProvider,
   type IssuedAuthorization,
   IdentityRepository,
@@ -154,7 +161,9 @@ export function createWorkspaceApplication(
     readonly worktreeBackend?: WorktreeBackend;
     readonly blobStore?: BlobStore;
     readonly githubOAuthProvider?: GitHubOAuthProvider;
+    readonly googleOAuthProvider?: GoogleOAuthProvider;
     readonly discordOAuthProvider?: DiscordOAuthProvider;
+    readonly emailSender?: EmailSender;
     readonly oauthStateSecret?: string;
   } = {},
 ): WorkspaceApplication {
@@ -162,7 +171,11 @@ export function createWorkspaceApplication(
   const oauthStateSecret =
     dependencies.oauthStateSecret ??
     config.githubOAuth?.clientSecret ??
+    config.googleOAuth?.clientSecret ??
     config.discordOAuth?.clientSecret;
+  const emailSender =
+    dependencies.emailSender ??
+    (config.emailAuth ? createEmailSender(config.emailAuth) : null);
   const identity = createIdentityModule({
     repository: new IdentityRepository(database),
     sessionTtlMs: config.sessionTtlMs,
@@ -171,6 +184,11 @@ export function createWorkspaceApplication(
       (config.githubOAuth
         ? createGitHubOAuthProvider(config.githubOAuth)
         : null),
+    googleOAuthProvider:
+      dependencies.googleOAuthProvider ??
+      (config.googleOAuth
+        ? createGoogleOAuthProvider(config.googleOAuth)
+        : null),
     discordOAuthProvider:
       dependencies.discordOAuthProvider ??
       (config.discordOAuth
@@ -178,6 +196,8 @@ export function createWorkspaceApplication(
         : null),
     ...(oauthStateSecret ? { oauthStateSecret } : {}),
     passwordAuthEnabled: config.passwordAuthEnabled,
+    emailSender,
+    emailAuthEnabled: emailSender !== null,
     trialDeployment: config.trialDeployment ?? false,
   });
   const resourcesRepository = new ResourcesRepository(database);
@@ -187,6 +207,7 @@ export function createWorkspaceApplication(
     (collaboration = createCollaborationRuntime(
       config.collaborationDatabaseFilename,
       {
+        ...(config.univerLicense ? { license: config.univerLicense } : {}),
         commentUserProvider: {
           async getUsers(userIds) {
             return identity.findUsers(userIds).map(protocolUser);
@@ -266,6 +287,7 @@ export function createWorkspaceApplication(
       univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds),
     onChanged: (change) => worktreeChangeFeed.publish(change),
   });
+  const activity = createActivityModule({ access, worktrees, issues });
   const univerAssets = createUniverAssetsModule({
     repository: univerAssetsRepository,
     access,
@@ -284,6 +306,7 @@ export function createWorkspaceApplication(
     spaces,
     snapshots: unitSnapshotStore,
     store: blobStore,
+    ...(config.univerLicense ? { license: config.univerLicense } : {}),
   });
   const collaborationGateway: CollaborationGateway | null = collaboration
     ? createCollaborationGateway({
@@ -371,6 +394,7 @@ export function createWorkspaceApplication(
   );
   app.use("/api", createTrashRouter({ identity, trash }));
   app.use("/api", createIssuesRouter({ identity, issues }));
+  app.use("/api", createActivityRouter({ identity, activity }));
   app.use(
     "/api",
     createOperationsRouter({ identity, operations })

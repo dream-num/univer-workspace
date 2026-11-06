@@ -6,19 +6,19 @@ SQLite 数据目录。
 
 ## 技术栈
 
-| 关注点 | 选择 |
-| --- | --- |
-| 前端 | React、TypeScript、Vite |
-| UI | Base UI、Tailwind CSS、应用 UI Primitive |
-| 路由 | TanStack Router 文件路由 |
-| 服务端状态 | TanStack Query |
-| Web 本地状态 | React 本地状态 |
-| HTTP | Express 5 |
-| 产品实时失效 | 认证 WebSocket、TanStack Query invalidation |
-| 产品数据库 | Node `node:sqlite`、显式 SQL schema |
-| API 客户端 | `openapi-typescript`、`openapi-fetch` |
-| API 文档 | OpenAPI 3.1、Redocly CLI、Scalar |
-| 单元与集成测试 | Vitest |
+| 关注点         | 选择                                        |
+| -------------- | ------------------------------------------- |
+| 前端           | React、TypeScript、Vite                     |
+| UI             | Base UI、Tailwind CSS、应用 UI Primitive    |
+| 路由           | TanStack Router 文件路由                    |
+| 服务端状态     | TanStack Query                              |
+| Web 本地状态   | React 本地状态                              |
+| HTTP           | Express 5                                   |
+| 产品实时失效   | 认证 WebSocket、TanStack Query invalidation |
+| 产品数据库     | Node `node:sqlite`、显式 SQL schema         |
+| API 客户端     | `openapi-typescript`、`openapi-fetch`       |
+| API 文档       | OpenAPI 3.1、Redocly CLI、Scalar            |
+| 单元与集成测试 | Vitest                                      |
 
 OpenAPI 是独立的 HTTP 契约，用于文档、Web API 类型生成和契约检查，不参与 Express
 运行时路由。每个服务端业务模块显式注册自己的 Router。
@@ -155,18 +155,23 @@ mode 不依赖 routes 或 app，也不导入另一个 mode。routes 只通过 re
 这些边界由 `test/unit/web-architecture.test.ts` 扫描静态／动态 import、类型 import 和再导出验证。
 
 明暗主题仅由 `shared/theme.tsx` 管理，UI mode 由 `shared/ui-mode.tsx` 管理；后者接收注册表的合法值，
-沿用 localStorage `univer-workspace-layout-theme`。`app/providers.tsx` 注入 mode 文案覆盖并设置 html
-的 `data-ui-mode`，保持 QueryClient 与产品缓存跨 mode 复用。repository 样式和色彩令牌仅在该属性
-为 repository 时生效；Wiki／未知 mode 不继承其样式。两种 mode 的通用 feature 通过呈现参数或布局插槽复用。
+沿用 localStorage `univer-workspace-layout-theme`，未存储或未知值时默认 repository。`web/index.html`
+在首次绘制前设置 html 的 `data-ui-mode`，`app/providers.tsx` 注入 mode 文案覆盖并保持同步，QueryClient
+与产品缓存跨 mode 复用。repository 样式和色彩令牌挂在 `:root[data-ui-mode="repository"]` 上，portal
+中的弹层同样继承；Wiki 不继承其样式，`modes/repository/css-scope.test.ts` 拒绝未限定作用域的规则。
+两种 mode 的通用 feature 通过呈现参数、布局插槽或无界面的模型 hook（如 `useIssueListModel`）复用。
 
-Repository 的全局页面通过 `repositoryView` 显式选择 Dashboard 导航外壳；仓库内页面使用
-现有 Header / Tabs。`/repositories` 是 Repository 目录入口，Wiki 将其导向首页；`/recent`
+Repository Shell 由纯函数 `resolveFrame` 在 home、global、repository、document、immersive 五种
+外壳之间选择：全局页面共用顶栏 `TopBar`，仓库内页面由外壳渲染 `RepositoryMasthead`（标题与 Tabs），
+页面不再各自挂载 Tabs。`/repositories` 是 Repository 目录入口，Wiki 将其导向首页；`/recent`
 按 mode 分派，Wiki 保留到首页的跳转。`/apps` 在 Repository 中默认展示目录，显式选中 Node
 后才挂载 `modes/html-app-page.tsx` 的嵌入查看器组合。该组合位于 modes 层，features 不反向依赖布局。
 文件编辑器与嵌入查看器保留既有运行时和外壳语义。注册表仍同步加载。
 
-首页 Recent、Worktree、Issue 使用各 Feature 的独立有限摘要 query（上限分别为 12、5、5），
+Repository 首页 Recent、Worktree、Issue 使用独立有限摘要 query（上限分别为 12、100、100），
 key 保留既有失效前缀并与 infinite 列表 key 分开，避免返回首页或变更订阅触发已加载多页的顺序重取。
+仓库页的 14 天活动图、待合并文件标记和成员数由 `modes/repository/data` 从现有 Worktree、Issue 与成员
+接口派生；按时间窗扫描时每个来源最多 5 页，超出时以 `complete: false` 在界面上标明数据不完整。
 完整列表保留服务端 cursor；没有服务端全文搜索的 Recent / Pages 明示仅搜索已加载内容。
 PR 摘要仅依据 `capabilities.review` 提供审阅链接；直接 Worktree 深链按 ID 读取，不依赖首屏列表中
 是否存在该任务，再解析仓库上下文并保留返回筛选参数。
@@ -227,7 +232,10 @@ Express Request/Response 和 Univer SDK class 不进入业务 Module 的公开 I
 
 Univer 集中在 `integrations/univer`，向业务 Module 提供产品语义的 Interface，不对 SDK
 方法做一一对应的空壳封装。外部 OAuth Provider 位于 Identity Module，并通过
-`GitHubOAuthProvider` / `DiscordOAuthProvider` Interface 在测试中替换。Identity Router
+`GitHubOAuthProvider` / `GoogleOAuthProvider` / `DiscordOAuthProvider` Interface 在测试中替换。
+邮箱验证码登录同样属于 Identity Module：一次性验证码保存在产品库（只存 scrypt Hash），
+邮件通过 `EmailSender` Interface 发送，SMTP 与 console 实现由配置选择，业务代码不依赖
+具体邮件厂商。Identity Router
 为部署注册的 OAuth client 提供通用 authorize/token 交接：authorize 复用
 `workspace_session`，未登录时回到现有登录流程；token 只兑换一次性、短期、绑定 PKCE
 和已注册 redirect URI 的 code。Workspace Session 仍是唯一的身份权威来源，现有登录、
@@ -279,14 +287,20 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 ## 产品数据库
 
-产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V8 结构，`initialize.ts`
-负责在业务 Module 初始化前识别数据库状态：空数据库应用 V8；V8 校验指纹；V7/V6/V5/V4/V3/V2/V1/V0
+产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V16 结构，`initialize.ts`
+负责在业务 Module 初始化前识别数据库状态：空数据库应用 V16；V16 校验指纹；V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
+
+V16 的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via` 是可空来源列，
+仅允许 `browser` 或 `agent`，`NULL` 表示未知。迁移不回填已有行，不新增索引。
+Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Principal { user, writeSource }`，
+登录及 Session JSON 保持原状。HTTP Worktree/Issue 创建复制来源，摘要的 `createdVia` 将 `NULL`
+映射为 `unknown`。Worktree 创建将来源预留在 Operation payload 中，重试读取首次预留值。
 
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。
 - 默认数据库文件为 `.data/univer-workspace.sqlite`。
-- 部署和普通重启均保留数据库；V8 不重复备份或迁移。
+- 部署和普通重启均保留数据库；V16 不重复备份或迁移。
 - 普通进程重启不清理数据库。
 - 每个测试使用独立的临时数据库文件或内存数据库。
 
@@ -299,7 +313,14 @@ changeset 重建的分段索引。SDK 1.0.0 的 Core/Worktree SQLite Adapter 在
 `changeset.createTime`，并返回实际保存的 changeset；重复提交保留原时间。两者不把协作内容写入产品数据库。
 
 Office Exchange Module 使用已发布的 `@univerjs-pro/exchange-node` 将 Office 字节与 Univer
-数据互转。`/universer-api/exchange/**`、Exchange File Upload 和签名下载遵循 Universer
+数据互转。SDK 1.3 起 Collaboration Service 与 Exchange 都校验 license 与 license key，缺失时
+降级为免费额度；Server 从配置读取同一对凭据，构造 Collaboration Service 时传入，并在首个
+Exchange 任务前对当前进程调用一次 `configureExchange`。SDK 1.3 的 exchange client 只提供
+headless service 与 Facade，不再内置导入/导出菜单、进度提示、导出格式对话框或 Mobile UI 插件；
+Browser 在 `web/src/features/editor/features/import-export/` 按 Unit 类型重建这套 UI，沿用 SDK 1.1
+的菜单位置、导出格式和 operation id（`@univerjs/docs`、`@univerjs-pro/bases` 与 `embed-ui` 仍按这些
+id 分发或过滤），转换仍只经 Server 的 `/universer-api/exchange/**`；导入完成后的链接指向
+Personal Space 中新建的 Node。`/universer-api/exchange/**`、Exchange File Upload 和签名下载遵循 Universer
 协议形状，不进入产品 OpenAPI。导入为 Unit 时通过 Resource Module 创建 Personal Space
 根目录下的正式 Node/Resource/Unit；导出时通过 Collaboration Service 固定当前 Trunk head，
 读取包含 Sheet blocks 的恢复材料，再由 `UnitSnapshotMaterializer` 补全 snapshot 后交给 Exchange
@@ -341,6 +362,14 @@ contracts/http/openapi.yaml + paths + schemas
 - 不生成服务端业务代码。
 - 目录随真实代码创建，不预先建立空层。
 
+## Space 列表与访问
+
+Access Module 共享 Space 可见性 SQL、Membership Join、投影与 `spaceAccessFromRow`；
+Spaces Module 的 `mine`、`starred`、`explore`、`pins` 范围各自只做一次列表查询。
+`toSpaceView` 统一产生详情与列表，`affiliation` 从所有者和成员事实派生。
+Pins 保存在产品库 V16 的 `space_pins`，不进入协同库。其资格校验和完整替换使用同一个产品事务。
+列表成员关系不充当访问授权；详情、全名、公开链接和匿名读取继续通过现有 Access Resolver。
+
 ## 匿名查看
 
 Node 与 Space 页面复用现有查询、目录与只读编辑器，未登录时使用轻量访客布局，不加载工作台
@@ -366,6 +395,7 @@ are Trunk; draft selection and editing belong to the existing file/review routes
 `features/editor/preview.ts` is the public navigation-contract entry; actual
 Facade navigation stays inside the editor frame. Details and the page interface
 are in [native preview](../../../docs/design/html-views/native-preview.md).
+
 ## Collaborator presence lifecycle
 
 The editor observes room membership through the published SDK `MemberService`.
@@ -402,3 +432,15 @@ TASK-010S extends the exact Operation receipt with an opaque `reviewProof` in it
 Only the exact validated/completed Operation can finalize an already merged SDK result. A terminated or superseded Operation cannot claim a later intent's success. Multi-Unit merge remains per-Unit, not atomic: some approved Units can already be visible when the remainder terminates. Re-review previews show current trunk for frozen successful Units because another Apply will skip them. Recovery is entered by replaying the original Apply with the same actor/token/Idempotency-Key (or retrying a failed Operation); it is not a startup privileged content writer. Deploy one writer Server only. For pre-TASK-010S `review_validated` receipts without version proof, recovery only reconciles provable past SDK facts, then terminates remaining work for fresh Review; reconstructed hashes never authorize a new content write. Missing/corrupt SDK history or invalid proof still fails closed; never reset status manually. Termination records `review_aborted` and failed Operation state in one product write.
 
 SDK `removed` is a terminal content-exclusion fact, not a product Trash receipt. Product finalization checks its accepted trunk head again, including after SDK Merge already finished. A stale/unproven deferred removal terminates the old Operation without trashing the document. Because the SDK cannot reopen a terminal removed Unit, that case requires a new Worktree and fresh Review. Known content commits from a terminated multi-Unit intent may still reconcile activation/assets under their matching proof and current permissions; the failed parent Operation never becomes completed from that reconciliation.
+
+## Modern Markdown authoring
+
+Workspace CLI 的 `compile-markdown`、Workspace Agent 与 Space Plugin 的 `univer_compile_markdown` 通过 private
+Client Core 复用 Univer AI SDK 的 `@univer-cli/doc-markdown-facade`。SDK 负责 Markdown/GFM 与
+Univer directive 解析、原生 Facade program、diagnostic 和 source map；application 负责本地授权资源
+目录、Workspace 身份、Worktree Unit 创建和提交。编译产物沿用 Univer SDK Modern 文档的默认
+正文与标题排版，不保存一份 application-specific 默认样式。
+
+创建在临时 headless runtime 中完成，并保存执行后的段落、对象 ID 映射。局部更新使用显式 source
+block ID 和上次执行 source map，执行时校验原生对象映射与 block 边界，失败不提交。读取 revision
+仅作为元信息返回，不是更新前置条件。原生文档是用户编辑后的权威内容，Markdown 不自动反向同步。
