@@ -237,9 +237,25 @@ single React version, add broad overrides, patch installed SDK files, or weaken
 typechecking to mask the mismatch. Keep any remaining workaround version-scoped
 and document its evidence and removal condition.
 
+## 多 PR 任务与 PR stack
+
+任务拆成多个 PR，且后一个 PR 建立在前一个之上（例如 schema、Server、Browser 依次叠加）时，用 GitHub
+原生 Stacked PRs 组织。互不依赖的 PR 各自从 `main` 开分支，不组成 stack。
+
+- 开 stack 前先 rebase 到最新 `main`。每层一个分支，PR 的 base 是下一层分支，每层单独评审。
+- 用 `gh stack`（`gh extension install github/gh-stack`）管理。新 stack 用 `gh stack init`、`gh stack add`、
+  `gh stack submit --open` 创建；已有 PR 用 `gh stack link <下层> <上层>` 关联。修改下层后运行
+  `gh stack rebase --upstack` 和 `gh stack push`。
+- 用 `gh stack merge <顶层 PR> --merge -y` 一次合入顶层及其下所有层。stack 只用 merge commit 合入，
+  下层原始提交原样进入 `main`，上层无需 rebase。squash 和 rebase 方式会改写下层提交，使上层出现重复改动和假冲突。
+- 只合入部分下层后，运行 `gh stack sync` 同步剩余各层。手工维护时用
+  `git rebase --onto origin/main <下层原 head>` 移动上层，不把 `main` merge 进上层分支。
+- 对自己的 stack 分支执行 `git push --force-with-lease` 是正常步骤。被权限拦截时停下请用户放行，不改用 merge。
+- stack 内每个提交都会进入 `main` 历史，提交信息同样遵循下文的 Conventional Commits。
+
 ## PR 标题与 Commit Message
 
 PR 标题与 commit message 遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)，
 使用英文，格式为 `type(scope): description`，其中 scope 可省略。
 常用 type 包括 `feat`、`fix`、`docs`、`refactor`、`test`、`build`、`ci` 和 `chore`。
-不兼容变更使用 `!` 或正文中的 `BREAKING CHANGE:` 标记；合并时的 squash commit 标题也遵循此格式。
+不兼容变更使用 `!` 或正文中的 `BREAKING CHANGE:` 标记；合并时的 squash commit 和 merge commit 标题也遵循此格式，仓库设置让 merge commit 标题取自 PR 标题。
