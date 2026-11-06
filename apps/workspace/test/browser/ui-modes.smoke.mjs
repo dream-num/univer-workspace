@@ -30,6 +30,7 @@ const actual = join(baseline, "actual");
 const password = "disposable-ui-modes-password";
 const teamName = "ui-modes-team";
 const createdName = "Created via UI";
+const repositorySearch = 'header input[aria-label="Find a repository…"]';
 
 function browser(...args) {
   const result = JSON.parse(
@@ -128,8 +129,48 @@ function capture(mode, slug, path, mobile = false, prepare) {
   })()`);
   assert.equal(value.url, `${origin}${path}`, `${mode}/${slug} 最终 URL`);
   if (mode === "wiki" && !mobile) assert.equal(value.sidebar, true, `${slug} wiki 侧栏`);
-  if (mode === "repository" && slug === "team")
-    assert.equal(value.tabs.length, 1, "repository tab 栏");
+  if (mode === "repository") {
+    Object.assign(value, evaluate(`(() => {
+      const visible = selector => [...document.querySelectorAll(selector)].filter(e => e.getClientRects().length > 0);
+      return {
+        brand: visible('header a[aria-label="OfficeLab"]').map(e => e.textContent.trim()),
+        navigation: visible('header nav[aria-label="Main navigation"] a').map(e => e.textContent.trim()),
+        searchPlaceholders: visible(${JSON.stringify(repositorySearch)}).map(e => e.placeholder),
+        pageSearches: visible('main input[aria-label]').map(e => e.getAttribute('aria-label')),
+        repositoryHeadings: visible('section[aria-label="Repository"] h1').map(e => e.textContent.trim()),
+        selectedRepositoryTabs: visible('nav[aria-label="Repository"] a[aria-current="page"]').map(e => e.textContent.trim()),
+        activityChart: visible('main [role="group"][aria-label="Change activity"]').length > 0,
+        pullRequestStates: visible('main [role="group"][aria-label="Pull requests"] button').map(e => e.textContent.trim()),
+      };
+    })()`));
+    assert.deepEqual(value.brand, ["OfficeLab"], `${slug} repository 品牌`);
+    assert.equal(value.sidebar, false, `${slug} repository 顶栏导航`);
+    assert.deepEqual(value.navigation, slug === "sheet" ? [] : ["Home", "Pull requests", "Issues", "Recent", "Pages"], `${slug} 主导航`);
+    assert.deepEqual(value.searchPlaceholders, slug === "sheet" ? [] : ["Search repositories"], `${slug} 顶栏搜索`);
+    const pageSearch = {
+      home: "Find a repository…",
+      "home-shared": "Find a repository…",
+      repositories: "Find a name or description…",
+      recent: "Search by name…",
+      apps: "Search by name…",
+      team: "Search files",
+      folder: "Search files",
+      worktrees: "Search pull requests",
+      issues: "Search issues",
+      "global-issues": "Search issues",
+    }[slug];
+    if (pageSearch) assert.ok(value.pageSearches.includes(pageSearch), `${slug} 页面搜索`);
+    if (slug === "worktrees") {
+      assert.equal(value.pullRequestStates.length, 2, "Pull requests 状态筛选");
+      assert.match(value.pullRequestStates[0], /^Open\s*\d+\+?$/);
+      assert.match(value.pullRequestStates[1], /^Closed\s*\d+\+?$/);
+    }
+    if (slug === "team" || slug === "team-mobile") {
+      assert.deepEqual(value.repositoryHeadings, [teamName], "repository masthead 标题");
+      assert.deepEqual(value.selectedRepositoryTabs, ["Code"], "repository 当前 tab");
+      assert.equal(value.activityChart, true, "repository 活动图");
+    }
+  }
   compareJson(mode, slug, value);
   // 时间和动画不属于本轮视觉回归；保留 time 元素本身的样式与布局。
   evaluate(`(() => {
@@ -159,36 +200,29 @@ function capture(mode, slug, path, mobile = false, prepare) {
   }
 }
 
-// 即使其他 mode 意外保留类名，也不能激活 repository 的局部配色。
+// Repository 根令牌只在对应 mode 下生效。
 function assertModeStyles(mode) {
   const result = evaluate(`(() => {
     const root = document.documentElement;
-    const probe = document.createElement('div');
-    document.body.append(probe);
-    const read = () => [
-      ['repository-chrome', '--color-border'],
-      ['repository-pages', '--color-border'],
-      ['repository-settings', '--color-primary'],
-      ['repository-issues', '--color-primary'],
-      ['repository-pull-requests', '--color-primary'],
-    ].map(([className, token]) => {
-      probe.className = className;
-      return getComputedStyle(probe).getPropertyValue(token).trim() !== getComputedStyle(root).getPropertyValue(token).trim();
-    });
+    const read = () => {
+      const style = getComputedStyle(root);
+      return {
+        tokens: ['--rd-accent', '--rd-brand'].map(token => style.getPropertyValue(token).trim()),
+        primary: style.getPropertyValue('--color-primary').trim(),
+      };
+    };
     try {
       const active = read();
-      const counter = getComputedStyle(root).getPropertyValue('--color-repository-counter').trim();
       root.dataset.uiMode = 'scope-probe';
-      return { active, counter, unknown: read(), unknownCounter: getComputedStyle(root).getPropertyValue('--color-repository-counter').trim() };
+      return { active, unknown: read() };
     } finally {
       root.dataset.uiMode = ${JSON.stringify(mode)};
-      probe.remove();
     }
   })()`);
-  assert.deepEqual(result.active, Array(5).fill(mode === "repository"), `${mode} 样式作用域`);
-  assert.equal(Boolean(result.counter), mode === "repository", `${mode} 色彩令牌作用域`);
-  assert.deepEqual(result.unknown, Array(5).fill(false), "未知 mode 不继承 repository 样式");
-  assert.equal(result.unknownCounter, "", "未知 mode 不继承 repository 令牌");
+  assert.deepEqual(result.active.tokens.map(Boolean), Array(2).fill(mode === "repository"), `${mode} 根令牌作用域`);
+  assert.deepEqual(result.unknown.tokens, ["", ""], "未知 mode 不继承 repository 令牌");
+  if (mode === "repository") assert.notEqual(result.active.primary, result.unknown.primary, "repository 主色只在对应 mode 下生效");
+  else assert.equal(result.active.primary, result.unknown.primary, "wiki 保持默认主色");
 }
 
 function recordWrite(mode, slug, method, path, action, expectedUrl, expectedBody) {
@@ -238,6 +272,10 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
   if (!existsSync(fixturePath)) assert.ok(update, "缺少基线；先用 UI_MODES_UPDATE=1 运行");
   try {
     browser("open", origin);
+    evaluate("localStorage.clear()");
+    browser("open", origin);
+    browser("wait", "--fn", "document.documentElement.dataset.uiMode === 'repository'");
+    assert.equal(evaluate("document.documentElement.dataset.uiMode"), "repository", "新浏览器默认 Repository");
     if (existsSync(fixturePath)) {
       fixture = json(fixturePath);
       assert.equal(fixture.origin, origin, "夹具 origin 必须与当前服务一致");
@@ -313,7 +351,10 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       // 先打开 Sheet，使第一次运行的 Recent 列表与后续运行相同。
       open(`/nodes/${fixture.sheetId}`);
       assertModeStyles(mode);
-      for (const [slug, path] of pages) capture(mode, slug, path);
+      const modePages = mode === "repository"
+        ? [...pages, ["repositories", "/repositories"], ["recent", "/recent"], ["global-issues", "/issues"]]
+        : pages;
+      for (const [slug, path] of modePages) capture(mode, slug, path);
       capture(mode, "account-open", "/home", false, () => {
         click("button", "Account");
         browser("wait", "[role=menu]");
@@ -326,11 +367,13 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
         } else click("button", "Application settings");
         browser("wait", "[role=dialog]");
       });
-      capture(mode, "sidebar-collapsed", "/apps", false, () => {
-        click("button", "Collapse main navigation");
-        browser("wait", "button[aria-label='Expand main navigation']");
-      });
-      click("button", "Expand main navigation");
+      if (mode === "wiki") {
+        capture(mode, "sidebar-collapsed", "/apps", false, () => {
+          click("button", "Collapse main navigation");
+          browser("wait", "button[aria-label='Expand main navigation']");
+        });
+        click("button", "Expand main navigation");
+      }
       browser("set", "viewport", "390", "844");
       for (const [slug, path] of pages.filter(([slug]) => ["home", "team"].includes(slug))) {
         capture(mode, `${slug}-mobile`, path, true);
@@ -367,7 +410,7 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
           "POST",
           "/api/nodes",
           () => {
-            browser("click", 'main button[aria-haspopup="menu"]');
+            browser("click", mode === "repository" ? 'main .rd-file-new button[aria-haspopup="menu"]' : 'main button[aria-haspopup="menu"]');
             browser("wait", '[role="menuitem"]');
             click("menuitem", "Group");
             browser("wait", '[role="dialog"] input');
@@ -382,13 +425,13 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       } finally {
         cleanupFolder();
       }
-      console.log(`${mode}: 20 张截图、2 个写操作通过`);
+      console.log(`${mode}: ${modePages.length + (mode === "wiki" ? 5 : 4)} 张截图、2 个写操作通过`);
     }
     open("/home");
     for (const nextMode of ["wiki", "repository", "wiki"]) {
       const currentMode = evaluate("document.documentElement.dataset.uiMode");
       if (currentMode === "wiki" && !evaluate("document.querySelector('header input') !== null")) click("button", "Search content on this page");
-      browser("fill", currentMode === "repository" ? "main input" : "header input", "mode-reset-probe");
+      browser("fill", currentMode === "repository" ? repositorySearch : "header input", "mode-reset-probe");
       if (currentMode === "repository") {
         click("button", "Account");
         browser("wait", "[role=menu]");
@@ -401,12 +444,12 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
         queryClient.setQueryData(['mode-switch-probe'], 'retained');
         window.previousModeMain = document.querySelector('main');
       })()`);
-      click("button", nextMode === "wiki" ? "Wiki" : "Repository (experimental)");
+      click("button", nextMode === "wiki" ? "Wiki" : "Repository");
       browser("wait", "--fn", `document.documentElement.dataset.uiMode === '${nextMode}' && !document.querySelector('[role=dialog]')`);
       settle();
       assert.equal(evaluate("previousModeMain.isConnected"), false, "切换 mode 必须重新挂载 shell");
       if (nextMode === "wiki") click("button", "Search content on this page");
-      assert.equal(evaluate(`document.querySelector('${nextMode === "repository" ? "main input" : "header input"}').value`), "", "首页搜索在切换后重置");
+      assert.equal(evaluate(`document.querySelector(${JSON.stringify(nextMode === "repository" ? repositorySearch : "header input")}).value`), "", "首页搜索在切换后重置");
       assert.equal(evaluate("localStorage.getItem('univer-workspace-layout-theme')"), nextMode);
       assert.equal(browser("get", "url").url, `${origin}/home`);
       assert.equal(evaluate("document.title"), json(join(baseline, nextMode, "home.json")).title);
@@ -424,20 +467,20 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
         click("menuitem", "Application settings");
       } else click("button", "Application settings");
       browser("wait", "[role=dialog]");
-      click("button", nextMode === "wiki" ? "Wiki" : "Repository (experimental)");
+      click("button", nextMode === "wiki" ? "Wiki" : "Repository");
       browser("wait", "--fn", `document.documentElement.dataset.uiMode === '${nextMode}' && !document.querySelector('[role=dialog]')`);
       settle();
     };
     const resetCases = [
-      ["space", team, 'main input[aria-label="Go to file"]'],
-      ["folder", `/nodes/${fixture.folderId}`, 'main input[aria-label="Go to file"]'],
+      ["space", team, 'main input[aria-label="Search files"]'],
+      ["folder", `/nodes/${fixture.folderId}`, 'main input[aria-label="Search files"]'],
       ["settings", `${team}/settings`, "#space-name"],
       ["members", `${team}/members`, 'main input[aria-label="Find a collaborator"]'],
       ["trash", `${team}/trash`, 'main input[aria-label="Search items in Trash"]'],
-      ["worktrees", "/worktrees", "header input", "Search tasks, documents, or creators"],
-      ["space-worktrees", `/worktrees?spaceId=${fixture.teamId}`, "header input", "Search tasks, documents, or creators"],
-      ["issues", `${team}/issues`, 'main form[role="search"] input'],
-      ["global-issues", "/issues", 'main form[role="search"] input'],
+      ["worktrees", "/worktrees", 'main input[aria-label="Search pull requests"]'],
+      ["space-worktrees", `/worktrees?spaceId=${fixture.teamId}`, 'header input[aria-label="Search tasks, documents, or creators"]', "Search tasks, documents, or creators"],
+      ["issues", `${team}/issues`, 'main input[aria-label="Search issues"]'],
+      ["global-issues", "/issues", 'main input[aria-label="Search issues"]'],
     ];
     open(`/nodes/${fixture.folderId}`);
     click("button", "Search content on this page");

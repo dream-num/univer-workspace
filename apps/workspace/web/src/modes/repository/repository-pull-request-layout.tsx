@@ -187,7 +187,7 @@ export function RepositoryPullRequestLayout({
   );
 
   return (
-    <div className="repository-chrome repository-pull-requests min-h-0 flex-1 overflow-y-auto bg-background">
+    <div className="repository-chrome repository-pull-requests rd-pull-detail min-h-0 flex-1 overflow-y-auto bg-background">
       <div
         className={cn(
           "mx-auto grid gap-4 px-8 py-6 max-[720px]:px-4",
@@ -225,7 +225,7 @@ export function RepositoryPullRequestLayout({
             </span>
           </div>
         </header>
-        <nav aria-label={t("repositoryPullRequests")} className="flex gap-1 border-b border-border">
+        <nav aria-label={t("repositoryPullRequests")} className="rd-detail-tabs">
           {(["overview", "files"] as const).map((value) => {
             const Icon = value === "overview" ? MessageSquareText : FileDiff;
             return (

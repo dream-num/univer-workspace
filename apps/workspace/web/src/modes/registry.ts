@@ -49,7 +49,7 @@ export const MODE_IDS = Object.keys(modes) as readonly WorkspaceMode[];
 
 export function useModeDefinition() {
   const { mode } = useUiMode();
-  return modes[parseUiMode(mode, MODE_IDS, "wiki")];
+  return modes[parseUiMode(mode, MODE_IDS, "repository")];
 }
 
 export type { RepositoryTab, RepositoryBreadcrumb } from "./repository/repository-tabs";

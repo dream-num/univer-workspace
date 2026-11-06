@@ -13,11 +13,13 @@ export function RepositoryCreateButton({ compact = false }: { readonly compact?:
     <>
       <Button
         className="repository-create-button"
+        variant={compact ? "secondary" : "primary"}
         size={compact ? "sm" : "md"}
+        aria-label={t("createTeamSpace")}
         onClick={() => setOpen(true)}
       >
         <Plus aria-hidden="true" />
-        {t(compact ? "dashboardNew" : "createTeamSpace")}
+        {t(compact ? "new" : "createTeamSpace")}
       </Button>
       <CreateTeamDialog
         open={open}

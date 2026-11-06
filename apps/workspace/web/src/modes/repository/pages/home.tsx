@@ -1,220 +1,318 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { BookMarked, ChevronRight, ExternalLink, Terminal } from "lucide-react";
-import { isHtmlViewFilename } from "@univerjs-labs/html-view";
-import type { HomePageProps } from "../../page.types";
+import {
+  ArrowRight,
+  CircleDot,
+  Copy,
+  ExternalLink,
+  GitPullRequest,
+  History,
+  MessageSquare,
+  Terminal,
+} from "lucide-react";
 import { sessionQueryOptions } from "../../../features/auth";
-import { mySpacesQueryOptions } from "../../../features/spaces";
-import { recentResourceSummaryQueryOptions } from "../../../features/views/recent.queries";
-import { worktreeSummaryQueryOptions } from "../../../features/worktrees/worktrees.queries";
-import { issueSummaryQueryOptions } from "../../../features/issues/issues.queries";
+import { IssueLabelChip } from "../../../features/issues/issue-label";
+import { IssueStateIcon } from "../../../features/issues/issue-state";
 import { CLI_GUIDE_URL } from "../../../features/worktrees/worktree-onboarding";
 import { formatRelativeDate } from "../../../shared/format-relative-date";
 import { useI18n } from "../../../shared/i18n";
+import { toast } from "../../../shared/ui";
+import type { HomePageProps } from "../../page.types";
 import { WorkspaceLayout } from "../../workspace-layout";
-import { RepositoryCreateButton, RepositoryQueryState } from "../repository-controls";
-import {
-  RepositoryIssueRows,
-  RepositoryResourceIcon,
-  RepositoryResourceRows,
-  RepositoryWorktreeRows,
-} from "../repository-summary-rows";
+import { ActorAvatar } from "../code/actor-avatar";
+import { TypeBadge } from "../code/repository-file-table";
+import { useHomeWork, type HomeHeadline as Headline, type HomeWork } from "../data";
+import { PullRequestCard } from "../pull-request-card";
+import { HomeFrame } from "../shell/home-frame";
 import { spaceDisplayName } from "../space-name";
 
 export function RepositoryHomePage(_props: HomePageProps) {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const session = useQuery(sessionQueryOptions);
-  const spaces = useQuery(mySpacesQueryOptions);
-  const recent = useQuery(recentResourceSummaryQueryOptions);
-  const prs = useQuery(worktreeSummaryQueryOptions);
-  const issues = useQuery(issueSummaryQueryOptions);
-  const resources = recent.data?.items ?? [];
-  const recentFiles = resources.filter(
-    (item) => !(item.resource.kind === "blob" && isHtmlViewFilename(item.node.name)),
-  );
-  const tasks = prs.data?.items ?? [];
-  const openIssues = issues.data?.items ?? [];
-  const personal = spaces.data?.spaces.find(
-    (space) => space.type === "personal" && space.accessRole === "owner",
-  );
-  const newUser =
-    recent.isSuccess &&
-    resources.length === 0 &&
-    prs.isSuccess &&
-    !prs.data.hasCreatedWorktree &&
-    tasks.length === 0 &&
-    issues.isSuccess &&
-    openIssues.length === 0;
+  const work = useHomeWork();
+  if (work.status === "error") throw work.error;
   return (
     <WorkspaceLayout repositoryView="home" selectedView="home" headerTitle={t("home")}>
-      <div className="repository-global-scroll">
-        <div className="repository-dashboard">
-          <div className="repository-dashboard-main">
-            <div className="repository-page-heading">
-              <div>
-                <h1>{t("home")}</h1>
-                <p>
-                  {t("dashboardGreeting", {
-                    name: session.data?.authenticated ? session.data.user.displayName : "",
-                  })}
-                </p>
-              </div>
-            </div>
-            {newUser ? (
-              <section className="repository-guide">
-                <BookMarked aria-hidden="true" className="mb-4 size-6 text-muted-foreground" />
-                <h2>{t("dashboardWelcome")}</h2>
-                <p>{t("dashboardWelcomeDescription")}</p>
-                <div className="flex flex-wrap gap-3">
-                  <RepositoryCreateButton />
-                  {personal ? (
-                    <Link
-                      className="repository-secondary-link"
-                      to="/spaces/$spaceId"
-                      params={{ spaceId: personal.id }}
-                      search={{}}
-                    >
-                      {t("dashboardOpenPersonal")}
-                    </Link>
-                  ) : null}
-                </div>
-              </section>
+      <HomeFrame
+        rightRail={<CliCard />}
+        updatedBySpace={work.status === "success" ? work.data.updatedBySpace : undefined}
+        openBySpace={work.status === "success" ? work.data.openBySpace : undefined}
+      >
+        {work.status === "pending" ? (
+          <p className="rd-home-empty" role="status">
+            {t("dashboardLoading")}
+          </p>
+        ) : (
+          <>
+            <HomeHeadline headline={work.data.headline} />
+            <p className="rd-welcome">
+              {t("dashboardGreeting", {
+                name: session.data?.authenticated ? session.data.user.displayName : "",
+              })}
+            </p>
+            <LoadRanking items={work.data.ranking} />
+            {!work.data.complete ? (
+              <p className="rd-data-note">{t("repositoryHomePartial")}</p>
             ) : null}
-            <section aria-labelledby="dashboard-recent-title">
-              <div className="repository-section-heading">
-                <h2 id="dashboard-recent-title">{t("dashboardContinue")}</h2>
-                <Link to="/recent" search={{}} className="flex items-center gap-1">
-                  {t("recent")}
-                  <ChevronRight aria-hidden="true" />
-                </Link>
-              </div>
-              <RepositoryQueryState
-                pending={recent.isPending}
-                failed={recent.isError && !recent.data}
-                retry={recent.refetch}
-              >
-                {recentFiles.length ? (
-                  <div className="repository-resume">
-                    {recentFiles.slice(0, 2).map((item) => (
-                      <Link
-                        key={item.resource.id}
-                        to="/nodes/$nodeId"
-                        params={{ nodeId: item.node.id }}
-                        search={{}}
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <RepositoryResourceIcon item={item} />
-                          <div className="min-w-0">
-                            <p className="repository-row-title line-clamp-2">{item.node.name}</p>
-                            <p className="mt-1 truncate text-xs text-muted-foreground">
-                              {spaceDisplayName(item.location.space, t)}
-                            </p>
-                          </div>
-                        </div>
-                        <time
-                          dateTime={item.lastOpenedAt}
-                          className="text-xs text-muted-foreground"
-                        >
-                          {t("lastOpened")} · {formatRelativeDate(item.lastOpenedAt, language)}
-                        </time>
-                      </Link>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="repository-panel">
-                    <p className="p-5 text-sm leading-6 text-muted-foreground">
-                      {t("dashboardNoRecent")}
-                    </p>
-                  </div>
-                )}
-              </RepositoryQueryState>
-            </section>
-            <section aria-labelledby="dashboard-pr-title">
-              <div className="repository-section-heading">
-                <h2 id="dashboard-pr-title">{t("repositoryPullRequests")}</h2>
-                <Link to="/worktrees" search={{}} className="flex items-center gap-1">
+            <section className="rd-home-sec" aria-labelledby="home-pulls-title">
+              <div className="rd-home-sec-h">
+                <h2 id="home-pulls-title">
+                  <GitPullRequest aria-hidden="true" />
+                  {t("repositoryPullRequests")}
+                </h2>
+                <Link to="/worktrees" search={{}}>
                   {t("viewAll")}
-                  <ChevronRight aria-hidden="true" />
+                  <ArrowRight aria-hidden="true" />
                 </Link>
               </div>
-              <div className="repository-panel">
-                <RepositoryQueryState
-                  pending={prs.isPending}
-                  failed={prs.isError && !prs.data}
-                  retry={prs.refetch}
-                >
-                  {tasks.length ? (
-                    <RepositoryWorktreeRows items={tasks.slice(0, 5)} />
-                  ) : (
-                    <p className="p-5 text-sm leading-6 text-muted-foreground">
-                      {t("dashboardNoPullRequests")}
-                    </p>
-                  )}
-                </RepositoryQueryState>
-              </div>
+              <PullCards items={work.data.pulls} />
             </section>
-            <section aria-labelledby="dashboard-issues-title">
-              <div className="repository-section-heading">
-                <h2 id="dashboard-issues-title">{t("issues")}</h2>
-                <Link to="/issues" search={{ sort: "updated" }} className="flex items-center gap-1">
+            <section className="rd-home-sec" aria-labelledby="home-recent-title">
+              <div className="rd-home-sec-h">
+                <h2 id="home-recent-title">
+                  <History aria-hidden="true" />
+                  {t("dashboardContinue")}
+                </h2>
+                <Link to="/recent" search={{}}>
                   {t("viewAll")}
-                  <ChevronRight aria-hidden="true" />
+                  <ArrowRight aria-hidden="true" />
                 </Link>
               </div>
-              <div className="repository-panel">
-                <RepositoryQueryState
-                  pending={issues.isPending}
-                  failed={issues.isError && !issues.data}
-                  retry={issues.refetch}
-                >
-                  {openIssues.length ? (
-                    <RepositoryIssueRows items={openIssues.slice(0, 5)} />
-                  ) : (
-                    <p className="p-5 text-sm leading-6 text-muted-foreground">
-                      {t("dashboardNoIssues")}
-                    </p>
-                  )}
-                </RepositoryQueryState>
+              <ContinueCards items={work.data.continueWorking} />
+            </section>
+            <section className="rd-home-sec" aria-labelledby="home-issues-title">
+              <div className="rd-home-sec-h">
+                <h2 id="home-issues-title">
+                  <CircleDot aria-hidden="true" />
+                  {t("issues")}
+                </h2>
+                <Link to="/issues" search={{ sort: "updated" }}>
+                  {t("viewAll")}
+                  <ArrowRight aria-hidden="true" />
+                </Link>
               </div>
+              <IssueRows items={work.data.issues} />
             </section>
-            <footer className="repository-global-footer">
-              OfficeLab ·{" "}
-              <a
-                className="hover:underline"
-                href="https://github.com/dream-num/univer-workspace"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Univer Workspace
-              </a>
-            </footer>
-          </div>
-          <aside className="repository-dashboard-aside">
-            {recentFiles.length > 2 ? (
-              <section>
-                <div className="repository-section-heading">
-                  <h2>{t("dashboardRecentFiles")}</h2>
-                </div>
-                <RepositoryResourceRows items={recentFiles.slice(2, 5)} />
-              </section>
-            ) : null}
-            <section className="repository-guide">
-              <Terminal aria-hidden="true" className="mb-3 size-5 text-muted-foreground" />
-              <h2>{t("dashboardCliTitle")}</h2>
-              <p>{t("dashboardCliDescription")}</p>
-              <a
-                className="repository-secondary-link"
-                href={CLI_GUIDE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {t("onboardingCliLink")}
-                <ExternalLink aria-hidden="true" />
-              </a>
-            </section>
-          </aside>
+          </>
+        )}
+      </HomeFrame>
+    </WorkspaceLayout>
+  );
+}
+
+function HomeHeadline({ headline }: { readonly headline: Headline }) {
+  const { t } = useI18n();
+  return (
+    <h1 className="rd-headline">
+      {headline.kind === "quiet" ? (
+        t("repositoryHomeQuiet")
+      ) : (
+        <>
+          <em>{headline.pulls}</em> {t("repositoryHomeOpenPulls", { count: headline.pulls })}{" "}
+          <span className="rd-headline-phrase">{t("repositoryHomeAcross", { count: headline.repositories })}</span>
+        </>
+      )}
+    </h1>
+  );
+}
+
+function LoadRanking({ items }: { readonly items: HomeWork["ranking"] }) {
+  const { t } = useI18n();
+  const maximum = Math.max(1, ...items.map((item) => item.total));
+  return (
+    <section className="rd-who-chg" aria-labelledby="home-ranking-title">
+      <div className="rd-wh">
+        <h2 id="home-ranking-title">{t("repositoryHomeRankingTitle")}</h2>
+        <p>{t("repositoryHomeRankingBasis")}</p>
+        <div className="rd-home-key">
+          <span>
+            <i style={{ background: "var(--rd-seg-pulls)" }} />
+            {t("repositoryPullRequests")}
+          </span>
+          <span>
+            <i style={{ background: "var(--rd-seg-issues)" }} />
+            {t("issues")}
+          </span>
         </div>
       </div>
-    </WorkspaceLayout>
+      {items.length ? (
+        <ol className="rd-rank">
+          {items.map((item, index) => (
+            <li key={item.space.id}>
+              <Link to="/spaces/$spaceId" params={{ spaceId: item.space.id }} search={{}}>
+                <span className="rd-no">{index + 1}</span>
+                <span className="rd-nm">{item.space.name}</span>
+                <span className="rd-track" aria-hidden="true">
+                  {item.segments.map((segment) =>
+                    segment.value > 0 ? (
+                      <i
+                        key={segment.key}
+                        style={{
+                          width: `${(segment.value / maximum) * 100}%`,
+                          background: `var(--rd-seg-${segment.key})`,
+                        }}
+                      />
+                    ) : null,
+                  )}
+                </span>
+                <span className="rd-rank-fig">
+                  {item.segments.map((segment, i) => (
+                    <span key={segment.key}>
+                      {i ? " · " : ""}
+                      {t(segment.key === "pulls" ? "repositoryPullRequests" : "issues")}{" "}
+                      <b>{segment.value}</b>
+                    </span>
+                  ))}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="rd-home-empty">{t("repositoryHomeNoOpenWork")}</p>
+      )}
+    </section>
+  );
+}
+
+function PullCards({ items }: { readonly items: HomeWork["pulls"] }) {
+  const { t } = useI18n();
+  if (!items.length) return <p className="rd-home-empty">{t("dashboardNoPullRequests")}</p>;
+  return (
+    <div className="rd-mcards">
+      {items.map((item) => <PullRequestCard key={item.pull.id} item={item} />)}
+    </div>
+  );
+}
+
+function ContinueCards({ items }: { readonly items: HomeWork["continueWorking"] }) {
+  const { t, language } = useI18n();
+  if (!items.length) return <p className="rd-home-empty">{t("dashboardNoRecent")}</p>;
+  return (
+    <div className="rd-mcards">
+      {items.map((item) => {
+        const type = item.resource.kind === "univer" ? item.resource.unitType : "blob";
+        const typeName = t(type === "blob" ? "file" : type);
+        const repository = spaceDisplayName(item.location.space, t);
+        return (
+          <Link
+            key={item.resource.id}
+            className="rd-mcard"
+            to="/nodes/$nodeId"
+            params={{ nodeId: item.node.id }}
+            search={{}}
+          >
+            <div className="rd-mc-t">
+              <TypeBadge type={type} />
+              <span className="rd-tt">{item.node.name}</span>
+            </div>
+            <time className="rd-mc-fig" dateTime={item.lastOpenedAt}>
+              {formatRelativeDate(item.lastOpenedAt, language)}
+            </time>
+            <p className="rd-mc-d">
+              {repository} · {typeName}
+            </p>
+            <div className="rd-mc-m">
+              <span>{repository}</span>
+              <span>{typeName}</span>
+              <span>{t("lastOpened")}</span>
+            </div>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function IssueRows({ items }: { readonly items: HomeWork["issues"] }) {
+  const { t, language } = useI18n();
+  if (!items.length) return <p className="rd-home-empty">{t("dashboardNoIssues")}</p>;
+  return (
+    <ul className="rd-home-issues">
+      {items.map(({ summary: issue }) => (
+        <li key={issue.id}>
+          <Link
+            className="rd-home-issue"
+            to="/spaces/$spaceId/issues/$number"
+            params={{ spaceId: issue.space.id, number: String(issue.number) }}
+            search={{}}
+          >
+            <IssueStateIcon issue={issue} />
+            <div className="rd-home-issue-main">
+              <div className="rd-home-issue-title">
+                <span>{issue.title}</span>
+                {issue.labels.map((label) => (
+                  <IssueLabelChip key={label.id} name={label.name} color={label.color} />
+                ))}
+              </div>
+              <div className="rd-mc-m">
+                <span>
+                  {t("issueOpenedBy", {
+                    number: issue.number,
+                    name: issue.author.displayName,
+                    date: formatRelativeDate(issue.createdAt, language),
+                  })}
+                </span>
+                <span>{issue.space.name}</span>
+              </div>
+            </div>
+            <div className="rd-home-issue-side">
+              {issue.assignees.slice(0, 3).map((user) => (
+                <ActorAvatar key={user.id} actor={{ user, source: "unknown" }} size="sm" />
+              ))}
+              <span
+                className="rd-comments"
+                aria-label={t("issueCommentCount", { count: issue.commentCount })}
+              >
+                <MessageSquare aria-hidden="true" />
+                {issue.commentCount}
+              </span>
+            </div>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const CLI_INSTALL = "npm install --global univer-workspace-cli@latest";
+
+function CliCard() {
+  const { t } = useI18n();
+  return (
+    <section className="rd-cli-card" aria-labelledby="home-cli-title">
+      <h2 id="home-cli-title">
+        <span className="rd-repo-ic">
+          <Terminal aria-hidden="true" />
+        </span>
+        {t("dashboardCliTitle")}
+      </h2>
+      <p>{t("dashboardCliDescription")}</p>
+      <div className="rd-cli-code">
+        <code>
+          <b aria-hidden="true">$ </b>
+          {CLI_INSTALL}
+        </code>
+        <button
+          className="rd-iconbtn"
+          type="button"
+          aria-label={t("repositoryHomeCopyCommand")}
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(CLI_INSTALL);
+              toast.success(t("repositoryHomeCommandCopied"));
+            } catch {
+              toast.error(t("onboardingCopyFailed"));
+            }
+          }}
+        >
+          <Copy aria-hidden="true" />
+        </button>
+      </div>
+      <a className="rd-cli-guide" href={CLI_GUIDE_URL} target="_blank" rel="noopener noreferrer">
+        {t("onboardingCliLink")}
+        <ExternalLink aria-hidden="true" />
+      </a>
+    </section>
   );
 }

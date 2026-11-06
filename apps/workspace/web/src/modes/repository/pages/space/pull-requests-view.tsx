@@ -1,12 +1,9 @@
-import { FileDiff, GitPullRequest, Search, X } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { GitPullRequest, Search, X } from "lucide-react";
 import { useState } from "react";
-import { formatRelativeDate } from "../../../../shared/format-relative-date";
 import { useI18n } from "../../../../shared/i18n";
 import { isOpenWorktree } from "../../../../features/worktrees";
 import { Button, Empty, Input, Skeleton } from "../../../../shared/ui";
-import { RepositoryPrState } from "../../repository-pr-state";
-import { PullRequestLink } from "../../repository-pull-request-link";
+import { RepositoryWorktreeRows } from "../../repository-summary-rows";
 import { cn } from "../../../../shared/utils/cn";
 import type { Worktree } from "./types";
 
@@ -25,7 +22,7 @@ export function PullRequestsView({
   readonly error: boolean;
   readonly onRetry: () => void;
 }) {
-  const { language, t } = useI18n();
+  const { t } = useI18n();
   const [stateFilter, setStateFilter] = useState<"open" | "closed">("open");
   const [search, setSearch] = useState("");
   const normalizedSearch = search.trim().toLocaleLowerCase();
@@ -52,7 +49,7 @@ export function PullRequestsView({
           {t("repositoryOpenWorkbench")}
         </Button>
       </div>
-      <div className="relative">
+      <div className="repository-toolbar relative">
         <Search
           className="pointer-events-none absolute top-2 left-3 size-4 text-muted-foreground"
           aria-hidden="true"
@@ -76,9 +73,9 @@ export function PullRequestsView({
           </Button>
         ) : null}
       </div>
-      <div className="overflow-hidden rounded-md border border-border bg-background">
-        <div className="flex flex-wrap items-center gap-4 border-b border-border bg-surface px-4 py-3">
-          <div className="flex items-center gap-4 text-sm">
+      <div className="rd-pull-list">
+        <div className="rd-pull-list-heading">
+          <div className="rd-seg">
             <button
               type="button"
               onClick={() => setStateFilter("open")}
@@ -123,69 +120,7 @@ export function PullRequestsView({
             <Skeleton className="h-4 w-1/2" />
           </div>
         ) : visible.length ? (
-          <ul className="m-0 list-none p-0">
-            {visible.map((worktree) => (
-              <li key={worktree.id} className="relative border-b border-border last:border-b-0">
-                <div className="flex items-start gap-2 px-4 py-3 hover:bg-accent/60">
-                  <RepositoryPrState state={worktree.state} />
-                  <div className="min-w-0 flex-1">
-                    <PullRequestLink
-                      target={{ spaceId, worktree }}
-                      className="text-base leading-5 font-semibold break-words text-foreground no-underline after:absolute after:inset-0 hover:text-brand-700 dark:hover:text-brand-400"
-                    >
-                      {worktree.name}
-                    </PullRequestLink>
-                    {worktree.number !== null ? (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {t("repositoryPrNumber", { number: worktree.number })}
-                      </span>
-                    ) : null}
-                    <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <FileDiff className="size-3.5" aria-hidden="true" />
-                      {worktree.unitCount === 1
-                        ? t("repositoryWorktreeUnit")
-                        : t("repositoryWorktreeUnits", { count: worktree.unitCount })}
-                    </span>
-                    <p className="mt-1 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                      <span>
-                        {t("repositoryWorktreeCreatedBy", {
-                          name: worktree.creator.displayName,
-                          date: formatRelativeDate(worktree.createdAt, language),
-                        })}
-                      </span>
-                      {worktree.processedAt ? (
-                        <span>
-                          {t("repositoryWorktreeProcessedAt", {
-                            state: t(
-                              worktree.state === "merged"
-                                ? "worktreeStateMerged"
-                                : "worktreeStateDiscarded",
-                            ),
-                            date: formatRelativeDate(worktree.processedAt, language),
-                          })}
-                        </span>
-                      ) : (
-                        <span>
-                          {t(
-                            worktree.state === "draft"
-                              ? "worktreeStateDraft"
-                              : worktree.state === "merging"
-                                ? "worktreeStateMerging"
-                                : "worktreeStateReady",
-                          )}
-                        </span>
-                      )}
-                    </p>
-                    {worktree.summary ? (
-                      <p className="mt-1 mb-0 line-clamp-2 text-xs text-muted-foreground">
-                        {worktree.summary}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <RepositoryWorktreeRows items={visible} spaceId={spaceId} />
         ) : (
           <Empty
             icon={GitPullRequest}

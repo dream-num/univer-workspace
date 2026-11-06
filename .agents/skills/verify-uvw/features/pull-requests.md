@@ -23,6 +23,7 @@ Trunk for the CLI and in the browser.
 Preconditions:
 
 - Baseline run with `$V user` done. `R=verify-$VERIFY_UVW_RUN/personal`.
+- Pin the Wiki page theme before opening any route: `agent-browser storage local set univer-workspace-layout-theme wiki`. A fresh session starts in Repository.
 - The Personal Space ID from `$V uvw repo list --json` (`id` of the `personal` entry) is in `S`.
 
 - **Open PR.** Run `$V cli pr-create pr create -R $R -t "Verify sales sheet" --json`.

@@ -75,7 +75,7 @@ function RepositoryPagesDirectory({ spaceId, q = "" }: AppsPageProps) {
             <div className="repository-panel-heading">
               <h2>{t("pages")}</h2>
               <span className="text-xs text-muted-foreground">
-                {query.data ? t("dashboardLoaded", { count: items.length }) : ""}
+                {query.hasNextPage ? t("repositoryMoreItemsAvailable") : ""}
               </span>
             </div>
             <RepositoryQueryState
@@ -84,7 +84,7 @@ function RepositoryPagesDirectory({ spaceId, q = "" }: AppsPageProps) {
               retry={query.refetch}
             >
               {visible.length ? (
-                <ul className="repository-rows">
+                <ul className="repository-rows repository-page-cards">
                   {visible.map((item) => (
                     <li key={item.node.id}>
                       <Globe
@@ -101,7 +101,6 @@ function RepositoryPagesDirectory({ spaceId, q = "" }: AppsPageProps) {
                         </Link>
                         <div className="repository-row-meta">
                           <span>{spaceDisplayName(item.location.space, t)}</span>
-                          <span aria-hidden="true">·</span>
                           <time dateTime={item.node.updatedAt}>
                             {formatRelativeDate(item.node.updatedAt, language)}
                           </time>

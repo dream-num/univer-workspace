@@ -23,6 +23,7 @@ there after a reload and from the CLI.
 Preconditions:
 
 - Browser signed in as the baseline user (see [auth](./auth.md)), on `$ORIGIN/home`.
+- Pin the Wiki page theme before opening any route: `agent-browser storage local set univer-workspace-layout-theme wiki`. A fresh session starts in Repository.
 - No file named `Verify Budget` exists.
 
 - **Open the New menu.** Run `agent-browser find role button click --name "New Create a document to start collaborating"`.

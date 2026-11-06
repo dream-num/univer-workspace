@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { FolderUp, Search } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
-import { useUpdateNode } from "./nodes.commands";
+import { useState, type ReactNode } from "react";
+import { useNodeEditDialog } from "./node-edit-dialog";
+import { filterNodes, type NodeFilter } from "./filter-nodes";
 import type { components } from "../../../../generated/http/schema.js";
 import { NodeIcon } from "./node-icon";
 import { CreateNodeDropdown } from "./create-node-dropdown";
@@ -12,24 +13,14 @@ import { formatRelativeDate } from "../../shared/format-relative-date";
 import {
   Breadcrumb,
   Button,
-  Dialog,
-  DialogClose,
   Empty,
-  Field,
   Input,
   Select,
-  toast,
 } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 
 type NodePage = components["schemas"]["NodePage"];
 type Node = NodePage["nodes"][number];
-type UnitType = components["schemas"]["UnitType"];
-type NodeFilter =
-  | "all"
-  | "group"
-  | "blob"
-  | UnitType;
 
 const nodeGrid =
   "grid items-center gap-5 grid-cols-[minmax(280px,1fr)_132px_180px_40px] max-[980px]:grid-cols-[minmax(220px,1fr)_160px_40px] max-[720px]:grid-cols-[minmax(160px,1fr)_40px] max-[720px]:gap-3";
@@ -56,10 +47,8 @@ export function NodeBrowser(props: {
   readonly compact?: boolean;
   readonly className?: string;
 }) {
-  const [editNode, setEditNode] = useState<Node | null>(null);
+  const edit = useNodeEditDialog();
   const [typeFilter, setTypeFilter] = useState<NodeFilter>("all");
-  const [editName, setEditName] = useState("");
-  const [editParentNodeId, setEditParentNodeId] = useState("");
   const { language, t } = useI18n();
   const parentNodeId = props.page.parentNode?.id ?? null;
   const canCreate =
@@ -73,20 +62,7 @@ export function NodeBrowser(props: {
   const rowHeightClass = props.compact ? "min-h-10 max-[720px]:min-h-12" : "min-h-14";
   const searchLabel = props.searchPlaceholder ?? t("searchNodes");
   const parentRow = props.showParentRow ? nodeParentRow(props.page, props.spaceName) : undefined;
-  const visibleNodes = props.page.nodes.filter((node) => {
-    const matchesType =
-      typeFilter === "all" ||
-      (typeFilter === "group"
-        ? node.resource === null
-        : typeFilter === "blob"
-          ? node.resource?.kind === "blob"
-          : node.resource?.kind === "univer" &&
-            node.resource.unitType === typeFilter);
-    const matchesSearch =
-      !normalizedSearch ||
-      node.name.toLocaleLowerCase().includes(normalizedSearch);
-    return matchesType && matchesSearch;
-  });
+  const visibleNodes = filterNodes(props.page.nodes, typeFilter, normalizedSearch);
   const itemCount =
     typeFilter !== "all" || normalizedSearch
       ? t("filteredItemsCount", { count: visibleNodes.length, total: props.page.nodes.length })
@@ -106,30 +82,6 @@ export function NodeBrowser(props: {
   const canClearFilters =
     typeFilter !== "all" ||
     Boolean(normalizedSearch && (props.onClearSearch || props.onSearchChange));
-
-  const updateNode = useUpdateNode();
-
-  const submitEdit = (event: FormEvent) => {
-    event.preventDefault();
-    if (!editName.trim()) return;
-    if (!editNode) {
-      toast.error("No node is selected.");
-      return;
-    }
-    updateNode.mutate({
-      nodeId: editNode.id,
-      body: {
-        ...(editNode.capabilities.rename ? { name: editName.trim() } : {}),
-        ...(editNode.capabilities.move ? { parentNodeId: editParentNodeId.trim() || null } : {}),
-      },
-    }, {
-      onSuccess: () => {
-        setEditNode(null);
-        toast.success(t("itemUpdated"));
-      },
-      onError: (error) => toast.error(error instanceof Error ? error.message : t("updateFailed")),
-    });
-  };
 
   return (
     <>
@@ -315,11 +267,7 @@ export function NodeBrowser(props: {
                   <NodeActionsMenu
                     key={node.id}
                     node={node}
-                    onEdit={() => {
-                      setEditName(node.name);
-                      setEditParentNodeId("");
-                      setEditNode(node);
-                    }}
+                    onEdit={() => edit.onEdit(node)}
                   >
                     {(actions) => (
                       <div
@@ -391,55 +339,7 @@ export function NodeBrowser(props: {
         </div>
       </div>
 
-      <Dialog
-        open={Boolean(editNode)}
-        onOpenChange={(next) => {
-          if (!next) setEditNode(null);
-        }}
-        title={
-          editNode
-            ? t("editNodeTitle", { name: editNode.name })
-            : t("editNodeFallback")
-        }
-        footer={
-          <>
-            <DialogClose
-              render={<Button variant="secondary">{t("cancel")}</Button>}
-            />
-            <Button onClick={submitEdit} disabled={updateNode.isPending}>
-              {t("save")}
-            </Button>
-          </>
-        }
-      >
-        <form onSubmit={submitEdit} className="grid gap-4">
-          {editNode?.capabilities.rename ? (
-            <Field label={t("name")} htmlFor="edit-node-name" required>
-              <Input
-                id="edit-node-name"
-                maxLength={255}
-                value={editName}
-                onChange={(event) => setEditName(event.target.value)}
-              />
-            </Field>
-          ) : null}
-          {editNode?.capabilities.move ? (
-            <Field
-              label={t("destinationParentNodeId")}
-              htmlFor="edit-node-parent"
-              hint={t("destinationParentNodeHint")}
-            >
-              <Input
-                id="edit-node-parent"
-                value={editParentNodeId}
-                onChange={(event) =>
-                  setEditParentNodeId(event.target.value)
-                }
-              />
-            </Field>
-          ) : null}
-        </form>
-      </Dialog>
+      {edit.dialog}
     </>
   );
 }

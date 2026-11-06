@@ -7,7 +7,7 @@ import {
   type WorkspaceFileSpace,
   type WorkspaceFileUser,
 } from "@univerjs/univer-workspace-file-browser";
-import { useQueryClient } from "@tanstack/react-query";
+import { isCancelledError, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 import type { components } from "../../../../generated/http/schema.js";
@@ -65,8 +65,8 @@ export function WorkspaceNavigationTree(props: {
         throwIfAborted(signal);
         const page =
           parentNodeId === null
-            ? await queryClient.fetchQuery(spaceNodesQueryOptions(spaceId))
-            : await queryClient.fetchQuery(nodeChildrenQueryOptions(parentNodeId));
+            ? await fetchJoiningRefetch(() => queryClient.fetchQuery(spaceNodesQueryOptions(spaceId)), signal)
+            : await fetchJoiningRefetch(() => queryClient.fetchQuery(nodeChildrenQueryOptions(parentNodeId)), signal);
         throwIfAborted(signal);
         return page.nodes.map(toWorkspaceFileNode);
       },
@@ -195,6 +195,18 @@ function toWorkspaceFileNode(node: Node): WorkspaceFileNode {
     accessRole: node.accessRole,
     capabilities: node.capabilities,
   };
+}
+
+// An invalidation (for example from the change feed) cancels the shared in-flight fetch and
+// starts a new one; join the new fetch instead of reporting the cancellation as a load failure.
+async function fetchJoiningRefetch<T>(fetch: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  for (;;) {
+    try {
+      return await fetch();
+    } catch (error) {
+      if (!isCancelledError(error) || signal.aborted) throw error;
+    }
+  }
 }
 
 function throwIfAborted(signal: AbortSignal): void {

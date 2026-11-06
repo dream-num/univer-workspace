@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { BookMarked, LockKeyhole } from "lucide-react";
+import { BookMarked } from "lucide-react";
 import { mySpacesQueryOptions, starredSpacesQueryOptions, exploreSpacesQueryOptions } from "../../../features/spaces";
 import { useI18n, type MessageKey } from "../../../shared/i18n";
 import { Button, Select } from "../../../shared/ui";
@@ -15,7 +15,8 @@ import {
   RepositoryQueryState,
   RepositorySearchField,
 } from "../repository-controls";
-import { RepositoryStar } from "../repository-header";
+import { CurrentLink } from "../current-link";
+import { RepositoryStar } from "../repository-star";
 import { spaceDisplayName } from "../space-name";
 
 const roleKeys = {
@@ -55,15 +56,15 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
             </div>
             <RepositoryCreateButton />
           </div>
-          <nav className="mb-4 flex gap-2" aria-label={t("allSpaces")}>
+          <nav className="rd-directory-tabs" aria-label={t("allSpaces")}>
             {([
               { view: undefined, label: "repositoryYours" },
               { view: "starred", label: "repositoryStarred" },
               { view: "explore", label: "repositoryExplore" },
              ] satisfies readonly { view: RepositorySearch["view"]; label: MessageKey }[]).map(({ view, label }) => (
-              <Link key={label} to="/repositories" search={view ? { view } : {}} aria-current={props.view === view ? "page" : undefined} className={`rounded-md px-3 py-2 text-sm font-medium ${props.view === view ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+              <CurrentLink key={label} to="/repositories" search={view ? { view } : {}} current={props.view === view}>
                 {t(label)}
-              </Link>
+              </CurrentLink>
             ))}
           </nav>
           <div className="repository-toolbar">
@@ -123,11 +124,9 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
               <ul className="repository-directory-list">
                 {items.map((space) => (
                   <li key={space.id}>
-                    {space.publicRead ? (
+                    <span className="rd-repo-ic">
                       <BookMarked aria-hidden="true" />
-                    ) : (
-                      <LockKeyhole aria-hidden="true" />
-                    )}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
@@ -141,6 +140,13 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
                           ) : null}
                           {spaceDisplayName(space, t)}
                         </Link>
+                      </div>
+                      {space.description ? (
+                        <p className="mt-2 line-clamp-2 max-w-3xl text-sm text-muted-foreground">
+                          {space.description}
+                        </p>
+                      ) : null}
+                      <p className="repository-row-meta mt-3">
                         <span className="repository-label">
                           {t(
                             space.type === "personal"
@@ -150,19 +156,11 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
                                 : "repositoryVisibilityPrivate",
                           )}
                         </span>
-                      </div>
-                      {space.description ? (
-                        <p className="mt-2 line-clamp-2 max-w-3xl text-sm text-muted-foreground">
-                          {space.description}
-                        </p>
-                      ) : null}
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        {t(space.type === "personal" ? "personalSpace" : "teamSpace")}
-                        {" · "}
-                        {t(roleKeys[space.affiliation])}
+                        {space.type === "team" ? <span>{t("teamSpace")}</span> : null}
+                        <span>{t(roleKeys[space.affiliation])}</span>
                       </p>
                     </div>
-                    <RepositoryStar spaceId={space.id} name={spaceDisplayName(space, t) ?? space.name} />
+                    <RepositoryStar showCount spaceId={space.id} name={spaceDisplayName(space, t) ?? space.name} />
                   </li>
                 ))}
               </ul>

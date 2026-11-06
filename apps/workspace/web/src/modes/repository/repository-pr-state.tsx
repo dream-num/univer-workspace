@@ -36,15 +36,15 @@ export function RepositoryPrState({
       title={t(repositoryPrStateLabels[state])}
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5",
-        badge ? "rounded-full px-3 py-1.5 text-sm font-medium text-white" : "mt-0.5",
+        badge ? "rounded-full px-3 py-1.5 text-sm font-medium" : "mt-0.5",
         badge
           ? state === "draft"
-            ? "bg-muted-foreground"
+            ? "bg-muted text-muted-foreground"
             : state === "merged"
-              ? "bg-state-merged"
+              ? "bg-state-merged-soft text-[var(--rd-merged-text)]"
               : state === "discarded"
-                ? "bg-state-closed"
-                : "bg-primary"
+                ? "bg-state-closed-soft text-destructive-soft-foreground"
+                : "bg-state-open-soft text-state-open"
           : state === "draft"
             ? "text-muted-foreground"
             : state === "merged"

@@ -1,0 +1,40 @@
+:root[data-ui-mode="repository"] {
+  /* Published Primer theme: scoped to the Pages directory, never its HTML iframe. */
+  & .repository-pages {
+    font-family:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif,
+      "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--color-foreground);
+    --color-background: var(--rd-page-bg);
+    --color-foreground: var(--rd-page-ink);
+    --color-muted-foreground: var(--rd-page-muted);
+    --color-border: var(--rd-page-line);
+    --color-surface: var(--rd-page-surface);
+    --color-primary: var(--rd-page-link);
+    --color-ring: var(--rd-page-link);
+  }
+
+  & .repository-pages a,
+  & .repository-pages-action {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  & .repository-pages a:hover,
+  & .repository-pages-action:hover {
+    text-decoration: underline;
+  }
+
+  & .repository-pages-action {
+    cursor: pointer;
+    font: inherit;
+    text-align: start;
+  }
+
+  & .repository-pages :is(a, button):focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 3px;
+  }
+}
