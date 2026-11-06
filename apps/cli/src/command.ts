@@ -52,9 +52,6 @@ export async function executeCommand<Result>(
         exitCode: authenticationRequired ? EXIT_AUTHENTICATION_REQUIRED : 1,
       });
     }
-    if (isDiagnosticError(error)) {
-      command.error(error.message, { code: "workspace.command.failed", exitCode: 1 });
-    }
     throw error;
   }
 }
@@ -150,14 +147,6 @@ export async function readText(
     text += typeof chunk === "string" ? chunk : decoder.write(chunk);
   }
   return text + decoder.end();
-}
-
-/** SDK compile and read failures carry their code in diagnostics and in the message. */
-function isDiagnosticError(error: unknown): error is Error {
-  return (
-    error instanceof Error &&
-    Array.isArray((error as { readonly diagnostics?: unknown }).diagnostics)
-  );
 }
 
 function isCodedError(error: unknown): error is Error & { readonly code: string } {

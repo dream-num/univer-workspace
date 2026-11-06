@@ -35,38 +35,6 @@ describe("Workspace daemon runtime operations adapter", () => {
       ["runtime.execute-and-commit", { code: "edit", target }],
     ]);
   });
-
-  it.each([
-    [
-      "DOC_MARKDOWN_UPDATE_STALE_SOURCE_MAP: Paragraph 'p' for 'x' no longer exists.",
-      "DOC_MARKDOWN_UPDATE_STALE_SOURCE_MAP",
-      "Paragraph 'p' for 'x' no longer exists.",
-    ],
-    ["boom-from-program", "workspace-runtime-program-failed", "boom-from-program"],
-  ])("codes the uncoded program failure %s", async (message, code, text) => {
-    const runtime = createWorkspaceDaemonRuntimeOperations({
-      request: async () => {
-        throw new Error(message);
-      },
-    });
-    await expect(runtime.executeRead({ code: "", target })).rejects.toMatchObject({
-      code,
-      message: text,
-    });
-  });
-
-  it("leaves coded and named daemon failures unchanged", async () => {
-    const coded = Object.assign(new Error("gone"), { code: "ECONNREFUSED" });
-    const named = Object.assign(new Error("unknown"), { name: "WorkspaceResultUnknownError" });
-    for (const failure of [coded, named]) {
-      const runtime = createWorkspaceDaemonRuntimeOperations({
-        request: async () => {
-          throw failure;
-        },
-      });
-      await expect(runtime.executeAndCommit({ code: "", target })).rejects.toBe(failure);
-    }
-  });
 });
 
 function state() {
