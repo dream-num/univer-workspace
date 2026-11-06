@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { GitPullRequest, Search } from "lucide-react";
+import { GitPullRequest } from "lucide-react";
 import { useEffect, useState } from "react";
 import { mySpacesQueryOptions } from "../../../features/spaces";
 import {
@@ -30,6 +30,10 @@ export function RepositoryPullRequestsPage(props: WorktreeListFilters) {
     ...(props.teamSpaceId ? { teamSpaceId: props.teamSpaceId } : {}),
   };
   const query = useInfiniteQuery(worktreePagesQueryOptions(filters));
+  const other = useInfiniteQuery(worktreePagesQueryOptions({
+    ...filters,
+    scope: props.scope === "processed" ? "active" : "processed",
+  }));
   const spaces = useQuery(mySpacesQueryOptions);
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const update = (patch: {
@@ -64,13 +68,6 @@ export function RepositoryPullRequestsPage(props: WorktreeListFilters) {
               onChange={setSearch}
               label={t("repositorySearchPullRequests")}
             />
-            <Button
-              type="submit"
-              variant="secondary"
-              aria-label={t("repositorySearchPullRequests")}
-            >
-              <Search aria-hidden="true" />
-            </Button>
             <Select
               aria-label={t("repositoryType")}
               value={props.kind ?? "all"}
@@ -116,29 +113,38 @@ export function RepositoryPullRequestsPage(props: WorktreeListFilters) {
           ) : null}
           <div className="repository-panel">
             <div className="repository-panel-heading">
-              <div className="flex gap-5">
-                {(["active", "processed"] as const).map((scope) => (
-                  <button
-                    key={scope}
-                    type="button"
-                    aria-pressed={(props.scope ?? "active") === scope}
-                    className={
-                      (props.scope ?? "active") === scope
-                        ? "font-semibold"
-                        : "text-muted-foreground"
-                    }
-                    onClick={() => update({ scope })}
-                  >
-                    {t(
-                      scope === "active"
-                        ? "repositoryPullRequestsOpen"
-                        : "repositoryPullRequestsClosed",
-                    )}
-                  </button>
-                ))}
+              <div className="rd-seg" role="group" aria-label={t("repositoryPullRequests")}>
+                {(["active", "processed"] as const).map((scope) => {
+                  const result = (props.scope ?? "active") === scope ? query : other;
+                  const pages = result.data?.pages;
+                  const count = pages?.reduce((total, page) => total + page.items.length, 0);
+                  return (
+                    <button
+                      key={scope}
+                      type="button"
+                      aria-pressed={(props.scope ?? "active") === scope}
+                      className={
+                        (props.scope ?? "active") === scope
+                          ? "font-semibold"
+                          : "text-muted-foreground"
+                      }
+                      onClick={() => update({ scope })}
+                    >
+                      {t(
+                        scope === "active"
+                          ? "repositoryPullRequestsOpen"
+                          : "repositoryPullRequestsClosed",
+                      )}
+                      <span className="rd-count">
+                        {count ?? (result.isError ? "?" : "…")}
+                        {pages?.at(-1)?.nextCursor ? "+" : ""}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               <span className="text-xs text-muted-foreground">
-                {query.data ? t("dashboardLoaded", { count: items.length }) : ""}
+                {query.hasNextPage ? t("repositoryMoreItemsAvailable") : ""}
               </span>
             </div>
             <RepositoryQueryState

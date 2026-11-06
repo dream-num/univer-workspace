@@ -185,7 +185,7 @@ pnpm package:workspace-cli
 - 不直接修改生成文件或 Git 忽略的本地产物；修改其 source 或生成脚本后重新生成。
 - 不把尚未实现的能力写成当前事实。
 - 修复跨 SDK 问题前先判断所有权位于本仓库还是上游 SDK，并向用户说明判断依据。
-- 不自行创建 Git commit、发布 artifact、推送 image 或触发部署；只有用户明确要求时才执行。
+- 不自行发布 artifact、推送 image 或触发部署；只有用户明确要求时才执行。
 
 ## Unit Comparison Viewer 同步
 

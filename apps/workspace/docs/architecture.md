@@ -155,18 +155,23 @@ mode 不依赖 routes 或 app，也不导入另一个 mode。routes 只通过 re
 这些边界由 `test/unit/web-architecture.test.ts` 扫描静态／动态 import、类型 import 和再导出验证。
 
 明暗主题仅由 `shared/theme.tsx` 管理，UI mode 由 `shared/ui-mode.tsx` 管理；后者接收注册表的合法值，
-沿用 localStorage `univer-workspace-layout-theme`。`app/providers.tsx` 注入 mode 文案覆盖并设置 html
-的 `data-ui-mode`，保持 QueryClient 与产品缓存跨 mode 复用。repository 样式和色彩令牌仅在该属性
-为 repository 时生效；Wiki／未知 mode 不继承其样式。两种 mode 的通用 feature 通过呈现参数或布局插槽复用。
+沿用 localStorage `univer-workspace-layout-theme`，未存储或未知值时默认 repository。`web/index.html`
+在首次绘制前设置 html 的 `data-ui-mode`，`app/providers.tsx` 注入 mode 文案覆盖并保持同步，QueryClient
+与产品缓存跨 mode 复用。repository 样式和色彩令牌挂在 `:root[data-ui-mode="repository"]` 上，portal
+中的弹层同样继承；Wiki 不继承其样式，`modes/repository/css-scope.test.ts` 拒绝未限定作用域的规则。
+两种 mode 的通用 feature 通过呈现参数、布局插槽或无界面的模型 hook（如 `useIssueListModel`）复用。
 
-Repository 的全局页面通过 `repositoryView` 显式选择 Dashboard 导航外壳；仓库内页面使用
-现有 Header / Tabs。`/repositories` 是 Repository 目录入口，Wiki 将其导向首页；`/recent`
+Repository Shell 由纯函数 `resolveFrame` 在 home、global、repository、document、immersive 五种
+外壳之间选择：全局页面共用顶栏 `TopBar`，仓库内页面由外壳渲染 `RepositoryMasthead`（标题与 Tabs），
+页面不再各自挂载 Tabs。`/repositories` 是 Repository 目录入口，Wiki 将其导向首页；`/recent`
 按 mode 分派，Wiki 保留到首页的跳转。`/apps` 在 Repository 中默认展示目录，显式选中 Node
 后才挂载 `modes/html-app-page.tsx` 的嵌入查看器组合。该组合位于 modes 层，features 不反向依赖布局。
 文件编辑器与嵌入查看器保留既有运行时和外壳语义。注册表仍同步加载。
 
-首页 Recent、Worktree、Issue 使用各 Feature 的独立有限摘要 query（上限分别为 12、5、5），
+Repository 首页 Recent、Worktree、Issue 使用独立有限摘要 query（上限分别为 12、100、100），
 key 保留既有失效前缀并与 infinite 列表 key 分开，避免返回首页或变更订阅触发已加载多页的顺序重取。
+仓库页的 14 天活动图、待合并文件标记和成员数由 `modes/repository/data` 从现有 Worktree、Issue 与成员
+接口派生；按时间窗扫描时每个来源最多 5 页，超出时以 `complete: false` 在界面上标明数据不完整。
 完整列表保留服务端 cursor；没有服务端全文搜索的 Recent / Pages 明示仅搜索已加载内容。
 PR 摘要仅依据 `capabilities.review` 提供审阅链接；直接 Worktree 深链按 ID 读取，不依赖首屏列表中
 是否存在该任务，再解析仓库上下文并保留返回筛选参数。

@@ -237,7 +237,7 @@ function SpaceGeneralSettings({ spaceId }: { readonly spaceId: string }) {
           {t("save")}
         </Button>
       </form>
-      <section aria-labelledby="settings-danger-heading">
+      <section className="rd-danger-zone" aria-labelledby="settings-danger-heading">
         <h3 id="settings-danger-heading" className="mb-2 text-2xl leading-9 font-normal">
           {t("settingsDangerZone")}
         </h3>

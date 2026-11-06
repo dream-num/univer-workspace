@@ -8,7 +8,6 @@ import { sessionQueryOptions } from "../../../../features/auth";
 import { htmlViewsQueryOptions } from "../../../../features/views/html-views.queries";
 import { resourceOpenQueryOptions } from "../../../../features/resources";
 import { spaceQueryOptions } from "../../../../features/spaces";
-import { RepositoryTabs } from "../../repository-tabs";
 import { spaceDisplayName } from "../../space-name";
 import { WorkspaceLayout } from "../../../workspace-layout";
 import { useI18n } from "../../../../shared/i18n";
@@ -42,11 +41,11 @@ export function RepositorySpacePage({ spaceId, view }: SpacePageProps) {
   });
   const worktrees = useQuery({
     ...worktreeListQueryOptions("active"),
-    enabled: repositoryTheme,
+    enabled: repositoryTheme && repositoryView === "prs",
   });
   const processedWorktrees = useQuery({
     ...worktreeListQueryOptions("processed"),
-    enabled: repositoryTheme,
+    enabled: repositoryTheme && repositoryView === "prs",
   });
   const spaceApps = (apps.data?.items ?? []).filter((item) => item.location.space.id === spaceId);
   const selectedApp = spaceApps.find((item) => item.node.id === landingNodeId) ?? spaceApps[0];
@@ -81,9 +80,8 @@ export function RepositorySpacePage({ spaceId, view }: SpacePageProps) {
   if (!query.data) return null;
   return (
     <WorkspaceLayout selectedSpaceId={spaceId} {...(repositoryTheme ? { repositoryTab: repositoryView } : {})}>
-      {repositoryTheme ? (
+      {space ? (
         <>
-          <RepositoryTabs spaceId={spaceId} active={repositoryView} />
           <RepositoryOverview
             spaceId={spaceId}
             space={space}

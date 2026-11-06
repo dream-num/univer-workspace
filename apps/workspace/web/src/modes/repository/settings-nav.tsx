@@ -1,5 +1,5 @@
 import { Settings, Trash2, Users } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { CurrentLink } from "./current-link";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "../../shared/i18n";
 import { spaceQueryOptions } from "../../features/spaces/spaces.queries";
@@ -8,7 +8,7 @@ import { spaceSupportsMembers } from "../../features/spaces/space.rules";
 export type SpaceSettingsSection = "general" | "members" | "trash";
 
 /**
- * GitHub-style settings navigation for a Space. The repository theme renders it
+ * Settings navigation for a repository. The mode renders it
  * next to the space settings pages; sections the current User cannot manage are
  * hidden instead of being disabled.
  */
@@ -54,56 +54,45 @@ export function SpaceSettingsNav({
       : []),
   ];
   return (
-    <nav aria-label={t("spaceSettings")} className="w-64 shrink-0 max-[767px]:w-full">
-      <ul className="m-0 grid list-none gap-0.5 p-0">
+    <nav aria-label={t("spaceSettings")} className="rd-settings-nav">
+      <ul>
         {items.map(({ section, label, icon: Icon, group }) => (
-          <li key={section} className={group ? "mt-2 border-t border-border pt-4" : undefined}>
-            {group ? (
-              <h2 className="mb-2 px-2 text-xs font-semibold text-muted-foreground">{group}</h2>
-            ) : null}
+          <li key={section}>
+            {group ? <h2>{group}</h2> : null}
             {section === "general" ? (
-              <Link
+              <CurrentLink
                 to="/spaces/$spaceId/settings"
                 params={{ spaceId }}
-                aria-current={current === section ? "page" : undefined}
-                className={settingsNavItemClass(current === section)}
+                current={current === section}
+                className="rd-issue-view"
               >
                 <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
                 {label}
-              </Link>
+              </CurrentLink>
             ) : section === "members" ? (
-              <Link
+              <CurrentLink
                 to="/spaces/$spaceId/members"
                 params={{ spaceId }}
-                aria-current={current === section ? "page" : undefined}
-                className={settingsNavItemClass(current === section)}
+                current={current === section}
+                className="rd-issue-view"
               >
                 <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
                 {label}
-              </Link>
+              </CurrentLink>
             ) : (
-              <Link
+              <CurrentLink
                 to="/spaces/$spaceId/trash"
                 params={{ spaceId }}
-                aria-current={current === section ? "page" : undefined}
-                className={settingsNavItemClass(current === section)}
+                current={current === section}
+                className="rd-issue-view"
               >
                 <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
                 {label}
-              </Link>
+              </CurrentLink>
             )}
           </li>
         ))}
       </ul>
     </nav>
   );
-}
-
-function settingsNavItemClass(current: boolean): string {
-  return [
-    "relative flex min-h-8 items-center gap-2 rounded-md px-2 text-sm no-underline before:absolute before:-left-2 before:top-1 before:bottom-1 before:w-1 before:rounded-full",
-    current
-      ? "bg-accent font-semibold text-foreground before:bg-ring"
-      : "text-foreground hover:bg-accent",
-  ].join(" ");
 }

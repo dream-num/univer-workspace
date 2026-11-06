@@ -50,7 +50,7 @@ export function RepositoryDirectPullRequest(
               ...(props.kind ? { kind: props.kind } : {}),
               ...(props.teamSpaceId ? { teamSpaceId: props.teamSpaceId } : {}),
             }}
-            className="text-sm text-primary hover:underline"
+            className="text-sm text-foreground hover:underline"
           >
             {t("repositoryAllPullRequests")}
           </Link>

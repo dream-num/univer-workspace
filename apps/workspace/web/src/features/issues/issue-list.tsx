@@ -1,8 +1,5 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
-  Check,
-  ChevronDown,
   CircleDot,
   MessageSquare,
   Paperclip,
@@ -10,7 +7,6 @@ import {
   Tag,
   X,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode, type FormEvent } from "react";
 import type { components } from "../../../../generated/http/schema.js";
 import { formatRelativeDate } from "../../shared/format-relative-date";
 import { useI18n } from "../../shared/i18n";
@@ -20,102 +16,35 @@ import {
   buttonVariants,
   Empty,
   Input,
-  MenuContent,
-  MenuItem,
-  MenuRoot,
-  MenuTrigger,
   Spinner,
 } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { IssueLabelChip } from "./issue-label";
 import { IssueStateIcon } from "./issue-state";
-import {
-  DEFAULT_ISSUE_FILTERS,
-  issueLabelsQueryOptions,
-  issueListQueryOptions,
-  type IssueFilters,
-} from "./issues.queries";
+import type { IssueFilters } from "./issues.queries";
+import { IssueFilterMenu } from "./issue-filter-menu";
+import { ISSUE_FILTER_ANY as ANY, ISSUE_SORTS as SORTS, ISSUE_SORT_LABELS as SORT_LABELS, useIssueListModel, type IssueListModelProps } from "./use-issue-list-model";
 
 type IssueSummary = components["schemas"]["IssueSummary"];
-
-const ANY = "__any";
-const SORTS = ["created-desc", "created-asc", "updated-desc", "updated-asc"] as const;
 
 /**
  * Filterable Issue list for one Space, or for every Team Space when `spaceId` is omitted.
  * Filters live in the URL, so the parent owns them.
  */
-export interface IssueListProps {
-  readonly spaceId?: string;
-  readonly filters: IssueFilters;
-  readonly onFiltersChange: (filters: IssueFilters) => void;
+export interface IssueListProps extends IssueListModelProps {
   readonly canCreate?: boolean;
-  readonly presentation: "standard" | "compact";
-  readonly viewsNav?: ReactNode;
-  readonly viewsNavToggle?: ReactNode;
-  readonly filterMenuClassName?: string;
+  readonly presentation?: "standard";
 }
 
-export function IssueList({
-  spaceId,
-  filters,
-  onFiltersChange,
-  canCreate,
-  presentation,
-  viewsNav,
-  viewsNavToggle,
-  filterMenuClassName,
-}: IssueListProps) {
+export function IssueList({ spaceId, filters, onFiltersChange, canCreate }: IssueListProps) {
   const { t } = useI18n();
-  const compact = presentation === "compact";
-  const query = useInfiniteQuery(issueListQueryOptions(spaceId, filters));
-  const labels = useQuery({
-    ...issueLabelsQueryOptions(spaceId ?? ""),
-    enabled: spaceId !== undefined,
+  const { query, labels, issues, counts, narrowed, search, setSearch, submitSearch, clearSearch, resetFilters, clearNarrowing } = useIssueListModel({
+    ...(spaceId !== undefined ? { spaceId } : {}), filters, onFiltersChange,
   });
-  const [search, setSearch] = useState(filters.q ?? "");
-  useEffect(() => setSearch(filters.q ?? ""), [filters.q]);
-
-  const pages = query.data?.pages ?? [];
-  const issues = pages.flatMap((page) => page.items);
-  const counts = pages[0]?.counts ?? { open: 0, closed: 0 };
-  const narrowed =
-    filters.labels.length > 0 ||
-    Boolean(filters.assignee) ||
-    Boolean(filters.author) ||
-    Boolean(filters.q);
-  const submitSearch = (event: FormEvent) => {
-    event.preventDefault();
-    onFiltersChange({ ...filters, q: search.trim() || undefined });
-  };
 
   return (
-    <div className={cn("min-w-0", compact && "flex h-full min-h-0")}>
-      {viewsNav}
-      <div
-        className={cn(
-          "grid min-w-0 flex-1 content-start gap-4",
-          compact && "min-h-0 auto-rows-max gap-6 overflow-y-auto p-6 max-[720px]:p-4",
-        )}
-      >
-        {compact ? (
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              {viewsNavToggle}
-              <h1 className="m-0 text-xl font-semibold">{t("issues")}</h1>
-            </div>
-            {spaceId && canCreate ? (
-              <Link
-                to="/spaces/$spaceId/issues/new"
-                params={{ spaceId }}
-                search={{}}
-                className={cn(buttonVariants({ size: "sm" }), "no-underline")}
-              >
-                {t("issueNew")}
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
+    <div className="min-w-0">
+      <div className="grid min-w-0 flex-1 content-start gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <form role="search" onSubmit={submitSearch} className="relative min-w-52 flex-1">
             <Search
@@ -125,7 +54,7 @@ export function IssueList({
             <Input
               aria-label={t("issueSearch")}
               placeholder={t("issueSearch")}
-              className={cn("pl-9 pr-16", compact && "h-8 rounded-sm bg-background shadow-none")}
+              className="pl-9 pr-16"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -135,10 +64,7 @@ export function IssueList({
                   variant="ghost"
                   size="icon-sm"
                   aria-label={t("issueClearSearch")}
-                  onClick={() => {
-                    setSearch("");
-                    onFiltersChange({ ...filters, q: undefined });
-                  }}
+                  onClick={clearSearch}
                 >
                   <X />
                 </Button>
@@ -161,14 +87,13 @@ export function IssueList({
               className={cn(
                 buttonVariants({ variant: "secondary", size: "sm" }),
                 "no-underline",
-                compact && Boolean(viewsNav) && "min-[901px]:hidden",
               )}
             >
               <Tag />
               {t("issueLabels")}
             </Link>
           ) : null}
-          {spaceId && canCreate && !compact ? (
+          {spaceId && canCreate ? (
             <Link
               to="/spaces/$spaceId/issues/new"
               params={{ spaceId }}
@@ -207,10 +132,7 @@ export function IssueList({
               variant="ghost"
               size="sm"
               className="w-fit justify-start text-muted-foreground"
-              onClick={() => {
-                setSearch("");
-                onFiltersChange({ ...DEFAULT_ISSUE_FILTERS, state: filters.state });
-              }}
+              onClick={resetFilters}
             >
               <X />
               {t("issueClearFilters")}
@@ -219,16 +141,10 @@ export function IssueList({
         ) : null}
         <section
           aria-label={t("issues")}
-          className={cn(
-            "overflow-hidden rounded-lg border border-border bg-background",
-            compact && "rounded-sm",
-          )}
+          className="overflow-hidden rounded-lg border border-border bg-background"
         >
           <div
-            className={cn(
-              "flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5",
-              compact && "gap-2 bg-surface py-2",
-            )}
+            className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5"
           >
             <div
               className="flex items-center gap-4 text-sm"
@@ -238,7 +154,7 @@ export function IssueList({
               <StateToggle
                 active={filters.state === "open"}
                 onClick={() => onFiltersChange({ ...filters, state: "open" })}
-                icon={compact ? undefined : <CircleDot className="size-4" />}
+                icon={<CircleDot className="size-4" />}
                 label={t("issueStateOpen")}
                 count={counts.open}
               />
@@ -250,8 +166,7 @@ export function IssueList({
               />
             </div>
             <div className="flex flex-wrap items-center gap-2 max-[720px]:w-full">
-              <FilterMenu
-                className={filterMenuClassName}
+              <IssueFilterMenu
                 label={t("issueFilterAuthor")}
                 value={filters.author ?? ANY}
                 onValueChange={(value) =>
@@ -263,8 +178,7 @@ export function IssueList({
                 ]}
               />
               {spaceId ? (
-                <FilterMenu
-                  className={filterMenuClassName}
+                <IssueFilterMenu
                   label={t("issueLabels")}
                   value={filters.labels[0] ?? ANY}
                   onValueChange={(value) =>
@@ -279,8 +193,7 @@ export function IssueList({
                   ]}
                 />
               ) : null}
-              <FilterMenu
-                className={filterMenuClassName}
+              <IssueFilterMenu
                 label={t("issueAssignees")}
                 value={filters.assignee ?? ANY}
                 onValueChange={(value) =>
@@ -292,8 +205,7 @@ export function IssueList({
                   { value: "none", label: t("issueFilterAssigneeNone") },
                 ]}
               />
-              <FilterMenu
-                className={filterMenuClassName}
+              <IssueFilterMenu
                 label={t(SORT_LABELS[`${filters.sort}-${filters.order}`])}
                 value={`${filters.sort}-${filters.order}`}
                 onValueChange={(value) => {
@@ -325,15 +237,7 @@ export function IssueList({
               state={filters.state}
               canCreate={Boolean(spaceId && canCreate)}
               {...(spaceId ? { spaceId } : {})}
-              onClear={() =>
-                onFiltersChange({
-                  ...filters,
-                  labels: [],
-                  assignee: undefined,
-                  author: undefined,
-                  q: undefined,
-                })
-              }
+              onClear={clearNarrowing}
             />
           ) : (
             <>
@@ -343,7 +247,6 @@ export function IssueList({
                     key={issue.id}
                     issue={issue}
                     showSpace={spaceId === undefined}
-                    compact={compact}
                   />
                 ))}
               </ul>
@@ -365,13 +268,6 @@ export function IssueList({
     </div>
   );
 }
-
-const SORT_LABELS = {
-  "created-desc": "issueSortNewest",
-  "created-asc": "issueSortOldest",
-  "updated-desc": "issueSortRecentlyUpdated",
-  "updated-asc": "issueSortLeastRecentlyUpdated",
-} as const;
 
 function StateToggle({
   active,
@@ -458,11 +354,9 @@ function EmptyIssues({
 function IssueRow({
   issue,
   showSpace,
-  compact,
 }: {
   readonly issue: IssueSummary;
   readonly showSpace: boolean;
-  readonly compact: boolean;
 }) {
   const { language, t } = useI18n();
   const closed = issue.state === "closed";
@@ -471,19 +365,13 @@ function IssueRow({
       <Link
         to="/spaces/$spaceId/issues/$number"
         params={{ spaceId: issue.space.id, number: String(issue.number) }}
-        className={cn(
-          "group flex items-start gap-2 px-4 py-3.5 no-underline hover:bg-accent/60",
-          compact && "py-2.5",
-        )}
+        className="group flex items-start gap-2 px-4 py-3.5 no-underline hover:bg-accent/60"
       >
         <IssueStateIcon issue={issue} className="mt-0.5" />
         <div className="min-w-0 flex-1">
           <p className="m-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             <span
-              className={cn(
-                "font-medium text-foreground group-hover:underline",
-                compact && "text-base leading-6 font-semibold",
-              )}
+              className="font-medium text-foreground group-hover:underline"
             >
               {issue.title}
             </span>
@@ -491,7 +379,7 @@ function IssueRow({
               <IssueLabelChip key={label.id} name={label.name} color={label.color} />
             ))}
           </p>
-          <p className={cn("mt-1 mb-0 text-sm text-muted-foreground", compact && "text-xs")}>
+          <p className="mt-1 mb-0 text-sm text-muted-foreground">
             {showSpace ? <span>{issue.space.name} · </span> : null}
             {closed && issue.closedAt
               ? t("issueClosedBy", {
@@ -549,50 +437,5 @@ function IssueRow({
         </div>
       </Link>
     </li>
-  );
-}
-
-function FilterMenu({
-  className,
-  label,
-  value,
-  options,
-  onValueChange,
-}: {
-  readonly className?: string | undefined;
-  readonly label: string;
-  readonly value: string;
-  readonly options: readonly { readonly value: string; readonly label: string }[];
-  readonly onValueChange: (value: string) => void;
-}) {
-  return (
-    <MenuRoot>
-      <MenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className="px-2 text-muted-foreground"
-            aria-label={label}
-          >
-            {label}
-            <ChevronDown className="size-3" />
-          </Button>
-        }
-      />
-      <MenuContent align="end" className={cn("max-h-72 overflow-y-auto", className)}>
-        {options.map((option) => (
-          <MenuItem
-            key={option.value}
-            role="menuitemradio"
-            aria-checked={option.value === value}
-            onClick={() => onValueChange(option.value)}
-          >
-            <Check className={cn("size-4", option.value !== value && "invisible")} />
-            {option.label}
-          </MenuItem>
-        ))}
-      </MenuContent>
-    </MenuRoot>
   );
 }

@@ -1,17 +1,18 @@
-import { ExternalLink } from "lucide-react";
+import { BookOpen, ExternalLink } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { NodeBrowser } from "../../../../features/nodes";
+import { sliceSeries, useRepositoryActivity, usePendingChanges, type DayKey } from "../../data";
+import { ActivityChart } from "../../code/activity-chart";
+import { RepositoryFileTable } from "../../code/repository-file-table";
 import { BlobPreview } from "../../../../features/blobs";
 import { useI18n } from "../../../../shared/i18n";
 import { Button, Empty, buttonVariants } from "../../../../shared/ui";
 import { cn } from "../../../../shared/utils/cn";
 import type { SpaceView, RepositoryPage, RepositoryApp, RepositoryBlob } from "./types";
-import { RepositoryAbout } from "./about";
+import { AboutRail } from "./about";
 import { displayAppName } from "./display-app-name";
 
-export function FilesView({
-  spaceId,
+export function CodeTab({
   page,
   apps,
   selectedApp,
@@ -23,7 +24,6 @@ export function FilesView({
   space,
   spaceName,
 }: {
-  readonly spaceId: string;
   readonly page: RepositoryPage;
   readonly apps: readonly RepositoryApp[];
   readonly selectedApp: RepositoryApp | undefined;
@@ -32,28 +32,62 @@ export function FilesView({
   readonly error: boolean;
   readonly onRetry: () => void;
   readonly onSelectApp: (nodeId: string) => void;
-  readonly space: SpaceView | undefined;
+  readonly space: SpaceView;
   readonly spaceName: string | undefined;
 }) {
   const { t } = useI18n();
   const showDefaultApp = loading || error || apps.length > 0;
   const [searchQuery, setSearchQuery] = useState("");
+  const [range, setRange] = useState<7 | 14>(14);
+  const [pickedDay, setPickedDay] = useState<DayKey | null>(null);
+  const activity = useRepositoryActivity(space);
+  const pending = usePendingChanges(space);
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_296px]">
-      <div className="grid min-w-0 content-start gap-4">
-        <NodeBrowser
+    <div className="rd-rgrid">
+      <div className="rd-code-main">
+        {activity.status === "success" ? (
+          <ActivityChart
+            series={sliceSeries(activity.data.series, range)}
+            range={range}
+            onRangeChange={(next) => {
+              setRange(next);
+              if (
+                pickedDay &&
+                !sliceSeries(activity.data.series, next).days.some((day) => day.day === pickedDay)
+              )
+                setPickedDay(null);
+            }}
+            pickedDay={pickedDay}
+            onPickDay={setPickedDay}
+          />
+        ) : (
+          <section className="rd-card rd-chart">
+            <h2>{t("repositoryChangeActivity")}</h2>
+            <p className="rd-data-note" role="status">
+              {t(activity.status === "pending" ? "dashboardLoading" : "dashboardLoadFailed")}
+            </p>
+          </section>
+        )}
+        <RepositoryFileTable
           page={page}
-          canCreateAtRoot={space?.capabilities.createAtRoot ?? false}
-          showParentRow={page.parentNode !== null}
+          canCreateAtRoot={space.capabilities.createAtRoot}
           spaceName={spaceName}
+          pending={pending.status === "success" ? pending.data : undefined}
+          latest={activity.status === "success" ? activity.data.events[0] : undefined}
+          pickedDay={pickedDay}
+          onClearDay={() => setPickedDay(null)}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          searchPlaceholder={t("repositoryGoToFile")}
-          compact
         />
+        {pending.status === "error" ? (
+          <p className="rd-data-note" role="status">
+            {t("repositoryPendingFailed")}
+          </p>
+        ) : null}
         {showDefaultApp ? (
-          <section className="min-w-0 overflow-hidden rounded-md border border-border bg-background">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-4">
+          <section className="rd-card rd-readme">
+            <div className="rd-readme-head">
+              <BookOpen aria-hidden="true" />
               {apps.length > 1 ? (
                 <div
                   role="tablist"
@@ -126,7 +160,7 @@ export function FilesView({
           </section>
         ) : null}
       </div>
-      {space ? <RepositoryAbout spaceId={spaceId} space={space} selectedApp={selectedApp} /> : null}
+      <AboutRail space={space} activity={activity} />
     </div>
   );
 }

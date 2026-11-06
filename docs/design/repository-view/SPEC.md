@@ -1,8 +1,8 @@
 # Spec: Repository View
 
-## Experimental status
+## Status
 
-Repository View is an experimental browser-only theme. Wiki-style remains the default and is unchanged for users who do not opt in. The selected theme is stored in browser local storage; the server does not receive or persist it.
+Repository View is the default browser page theme. Wiki-style stays available in Application settings and is unchanged for users who choose it. The selected theme is stored in browser local storage; the server does not receive or persist it.
 
 ## Objective
 
@@ -18,7 +18,7 @@ The product mapping is intentionally one-to-one:
 | Pages | Team Space Apps (`.univer.html`) |
 | Repository landing document | Selected Team Space `.univer.html` |
 
-The accepted C-style sidebar composition is the design reference for this experimental view. The throwaway prototype is not part of the product source tree.
+The visual language follows `apps/workspace/DESIGN.md` (top bar, repository masthead, activity console). The throwaway prototypes are not part of the product source tree.
 
 ## Scope
 
@@ -48,11 +48,11 @@ No new database table is required for the first implementation. Team Space ident
 
 ### Landing App selection
 
-The experimental theme stores the selected App in browser local storage under a key scoped by Team Space. `NULL` is represented by an absent key. If the stored Node is missing, inaccessible, or no longer a `.univer.html`, the browser falls back to the first readable matching App returned by the existing HTML View query. The choice does not change server data or permissions.
+The Repository theme stores the selected App in browser local storage under a key scoped by Team Space. `NULL` is represented by an absent key. If the stored Node is missing, inaccessible, or no longer a `.univer.html`, the browser falls back to the first readable matching App returned by the existing HTML View query. The choice does not change server data or permissions.
 
 ## Navigation and routes
 
-The wiki view remains available at its current Space route. The experimental theme is selected in the global settings dialog and stored locally in the browser. It changes the navigation and page composition only; it does not change the URL contract, server data, or permission model.
+The wiki view remains available at its current Space route. The page theme is selected in the global settings dialog and stored locally in the browser. It changes the navigation and page composition only; it does not change the URL contract, server data, or permission model.
 
 - `/spaces/{spaceId}?view=repository` — repository overview
 - `/spaces/{spaceId}/repositories/apps` — Apps/Pages list and landing selection
@@ -206,6 +206,6 @@ pnpm --filter @univerjs/univer-workspace test:production-import
 
 ## Open questions
 
-1. Should “Set as repository Page” later become a shared Team Space preference? V1 keeps it browser-local because Repository View is experimental.
+1. Should “Set as repository Page” later become a shared Team Space preference? V1 keeps it browser-local because the page theme itself is a browser-local setting.
 2. Should the first repository-mode URL be a new route segment or `?view=repository` on the existing Space route? V1 uses the global local theme setting.
 3. Should “Set as repository Page” require Space editor access, or Space admin access, if it becomes server-backed? The recommended default is editor, matching content organization permissions.
