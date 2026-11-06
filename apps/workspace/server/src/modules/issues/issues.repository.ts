@@ -110,6 +110,19 @@ export class IssuesRepository {
     ) as unknown as IssueRow[];
   }
 
+  activityRows(spaceId: string, since: number, limit: number): Array<Pick<IssueRow,
+    "number" | "title" | "author_user_id" | "created_via" | "created_at" | "closed_by_user_id" | "closed_at"
+  >> {
+    return this._all(
+      `SELECT number, title, author_user_id, created_via, created_at, closed_by_user_id, closed_at
+       FROM issues WHERE space_id = ? AND (created_at >= ? OR closed_at >= ?)
+       ORDER BY MAX(created_at, COALESCE(closed_at, created_at)) DESC, id LIMIT ?`,
+      spaceId, since, since, limit,
+    ) as unknown as Array<Pick<IssueRow,
+      "number" | "title" | "author_user_id" | "created_via" | "created_at" | "closed_by_user_id" | "closed_at"
+    >>;
+  }
+
   countIssues(filter: IssueFilter): { open: number; closed: number } {
     const where = filterClause(filter, false);
     const rows = this._all(

@@ -1,0 +1,90 @@
+RepositoryActivity:
+  type: object
+  additionalProperties: false
+  required: [timeZone, days, events, complete]
+  properties:
+    timeZone:
+      type: string
+      description: Canonical IANA zone used for day boundaries.
+    days:
+      type: array
+      description: The 14 calendar days ending today in `timeZone`, oldest first.
+      minItems: 14
+      maxItems: 14
+      items: { $ref: "#/ActivityDay" }
+    events:
+      type: array
+      maxItems: 20
+      description: Newest events in the window, newest first.
+      items: { $ref: "#/ActivityEvent" }
+    complete:
+      type: boolean
+      description: False when a source exceeds 1000 touched rows, more than 200 processed Worktrees need state lookups, or a state lookup fails. Incomplete merge facts are omitted.
+
+ActivityDay:
+  type: object
+  additionalProperties: false
+  required: [day, opened, merged]
+  properties:
+    day: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+    opened:
+      $ref: "#/WriteSourceCounts"
+      description: Pull requests and Issues opened that day, by Session source.
+    merged: { type: integer, minimum: 0 }
+
+WriteSourceCounts:
+  type: object
+  additionalProperties: false
+  required: [browser, agent, unknown]
+  properties:
+    browser: { type: integer, minimum: 0 }
+    agent: { type: integer, minimum: 0 }
+    unknown: { type: integer, minimum: 0 }
+
+ActivityEvent:
+  oneOf:
+    - $ref: "#/PullActivityEvent"
+    - $ref: "#/IssueActivityEvent"
+
+PullActivityEvent:
+  type: object
+  additionalProperties: false
+  required: [kind, at, actor, writeSource, pull]
+  properties:
+    kind: { type: string, enum: [pull-opened, pull-merged] }
+    at: { type: string, format: date-time }
+    actor:
+      oneOf: [{ $ref: ./identity.yaml#/PublicUser }, { type: "null" }]
+    writeSource:
+      $ref: ./identity.yaml#/WriteSource
+      description: Source of this write; `unknown` for merges (not recorded).
+    pull:
+      type: object
+      additionalProperties: false
+      required: [id, number, title, spaceId]
+      properties:
+        id: { type: string }
+        number: { type: [integer, "null"] }
+        title: { type: string }
+        spaceId: { type: string }
+
+IssueActivityEvent:
+  type: object
+  additionalProperties: false
+  required: [kind, at, actor, writeSource, issue]
+  properties:
+    kind: { type: string, enum: [issue-opened, issue-closed] }
+    at: { type: string, format: date-time }
+    actor:
+      oneOf: [{ $ref: ./identity.yaml#/PublicUser }, { type: "null" }]
+    writeSource:
+      $ref: ./identity.yaml#/WriteSource
+      description: Source of this write; `unknown` for closes (not recorded).
+    issue:
+      type: object
+      additionalProperties: false
+      required: [number, title, spaceId]
+      properties:
+        number: { type: integer }
+        title: { type: string }
+        spaceId: { type: string }

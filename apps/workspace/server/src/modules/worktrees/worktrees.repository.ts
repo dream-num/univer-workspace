@@ -125,6 +125,7 @@ export class WorktreesRepository {
   listCandidates(input: {
     readonly userId: string;
     readonly scope: "active" | "processed" | "all";
+    readonly touchedSince?: number;
     readonly search: string;
     readonly order: "updatedAtDesc" | "createdAtDesc";
     readonly kind: WorktreeKind | null;
@@ -152,6 +153,10 @@ export class WorktreesRepository {
     if (input.teamSpaceId) {
       predicates.push("worktree.team_space_id = ?");
       parameters.push(input.teamSpaceId);
+    }
+    if (input.touchedSince !== undefined) {
+      predicates.push("(worktree.created_at >= ? OR worktree.processed_at >= ?)");
+      parameters.push(input.touchedSince, input.touchedSince);
     }
     if (input.search) {
       predicates.push(`(

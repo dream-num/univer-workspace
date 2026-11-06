@@ -1,3 +1,4 @@
+import { createActivityModule, createActivityRouter } from "./modules/activity/index.js";
 import { createStandaloneAppRouter } from "./modules/views/standalone-app.router.js";
 import { existsSync } from "node:fs";
 import type { Server } from "node:http";
@@ -284,6 +285,7 @@ export function createWorkspaceApplication(
       univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds),
     onChanged: (change) => worktreeChangeFeed.publish(change),
   });
+  const activity = createActivityModule({ access, worktrees, issues });
   const univerAssets = createUniverAssetsModule({
     repository: univerAssetsRepository,
     access,
@@ -388,6 +390,7 @@ export function createWorkspaceApplication(
   );
   app.use("/api", createTrashRouter({ identity, trash }));
   app.use("/api", createIssuesRouter({ identity, issues }));
+  app.use("/api", createActivityRouter({ identity, activity }));
   app.use(
     "/api",
     createOperationsRouter({ identity, operations })

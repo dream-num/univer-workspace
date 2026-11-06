@@ -145,7 +145,21 @@ export interface IssueListQuery {
   readonly limit?: unknown;
 }
 
+export interface IssueActivity {
+  readonly number: number;
+  readonly title: string;
+  readonly author: PublicUser;
+  readonly createdVia: WriteSource | null;
+  readonly createdAt: number;
+  readonly closedBy: PublicUser | null;
+  readonly closedAt: number | null;
+}
+
 export interface IssuesModule {
+  activity(userId: string, spaceId: string, since: number): {
+    readonly items: readonly IssueActivity[];
+    readonly complete: boolean;
+  };
   list(userId: string, spaceId: string, query: IssueListQuery): IssueList;
   listMine(userId: string, query: IssueListQuery): IssueList;
   create(userId: string, spaceId: string, input: unknown, createdVia?: WriteSource | null): IssueView;

@@ -100,6 +100,8 @@ paths:
     $ref: ./paths/auth.yaml#/~1api~1users~1me
   /api/users/search:
     $ref: ./paths/permissions.yaml#/~1api~1users~1search
+  /api/spaces/{spaceId}/activity:
+    $ref: ./paths/spaces.yaml#/~1api~1spaces~1{spaceId}~1activity
   /api/spaces:
     $ref: ./paths/spaces.yaml#/~1api~1spaces
   /api/spaces/starred:
@@ -225,6 +227,8 @@ components:
       name: x-api-key
       description: Shared secret configured on Workspace and the trusted Discord Bot server.
   schemas:
+    RepositoryActivity:
+      $ref: ./schemas/activity.yaml#/RepositoryActivity
     WriteSource:
       $ref: ./schemas/identity.yaml#/WriteSource
     Error:

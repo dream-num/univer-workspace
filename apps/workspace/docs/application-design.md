@@ -105,6 +105,18 @@ CLI password 路由与 Browser password 路由使用相同凭据及响应，额�
 
 迁移前验证并备份 V15，事务失败回滚，成功后校验 V16 指纹，重复启动不重复备份。
 
+`GET /api/spaces/{spaceId}/activity?timeZone=<IANA>` 要求 Session 与有效 IANA 时区，返回规范化
+时区、截至该时区今天的 14 个日桶和窗口内最新 20 条事件。`opened` 按 `browser`、`agent`、
+`unknown` 汇总 Pull request 与 Issue 创建；`merged` 仅统计协同服务确认已合入的 Worktree。
+事件类型为 `pull-opened`、`pull-merged`、`issue-opened`、`issue-closed`，合入与关闭的来源均为
+`unknown`，不从创建来源推断。日桶使用时区的日历日期计算，跨月、闰日与 DST 不依赖固定 24 小时间隔。
+
+Worktrees 模块复用列表候选查询与 discoverability，Issues 模块复用 `requireSpace`；Team Space
+只汇总调用者可发现的 Worktree 与该 Space 的 Issue。Personal Space 仅向 Owner 返回其 User
+Worktree，不调用 Issues 模块，其他用户得到 404。每个来源最多汇总 1000 行，另读一行判断截断；
+协同状态查询按处理时间倒序最多 200 次。截断或任何协同查询失败时 `complete` 为 `false`，
+失败或超限行不贡献合入计数，创建事件仍可返回。未来可由 merge 写入产品侧 `merged_at` 消除逐行查询。
+
 ## Collaboration SDK 升级边界
 
 SDK 1.0.0 启动时先准备产品数据库，再运行隔离的 `prepareCollaborationDatabase`，最后构造
