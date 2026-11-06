@@ -106,7 +106,9 @@ export function RepositoryWorktreesPage(props: WorktreesPageProps) {
                     ...listFilters,
                     ...(spaceId ? { spaceId } : {}),
                     worktree: selection.worktreeId,
-                    unit: selection.unitId,
+                    ...(selection.unitId === undefined
+                      ? {}
+                      : { unit: selection.unitId }),
                     view: selection.view,
                   }
                 : spaceId
