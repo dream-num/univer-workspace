@@ -244,9 +244,9 @@ and document its evidence and removal condition.
 
 - 开 stack 前先 rebase 到最新 `main`。每层一个分支，PR 的 base 是下一层分支，每层单独评审。
 - 用 `gh stack`（`gh extension install github/gh-stack`）管理。新 stack 用 `gh stack init`、`gh stack add`、
-  `gh stack submit` 创建；已有 PR 用 `gh stack link <下层> <上层>` 关联。修改下层后运行
+  `gh stack submit --open` 创建；已有 PR 用 `gh stack link <下层> <上层>` 关联。修改下层后运行
   `gh stack rebase --upstack` 和 `gh stack push`。
-- 用 `gh stack merge <顶层 PR> --merge` 一次合入顶层及其下所有层。stack 只用 merge commit 合入，
+- 用 `gh stack merge <顶层 PR> --merge -y` 一次合入顶层及其下所有层。stack 只用 merge commit 合入，
   下层原始提交原样进入 `main`，上层无需 rebase。squash 和 rebase 方式会改写下层提交，使上层出现重复改动和假冲突。
 - 只合入部分下层后，运行 `gh stack sync` 同步剩余各层。手工维护时用
   `git rebase --onto origin/main <下层原 head>` 移动上层，不把 `main` merge 进上层分支。
