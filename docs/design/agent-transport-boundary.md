@@ -66,3 +66,4 @@ Workspace files and collaboration still work. Account directory restoration and
 remote permission checks remain covered separately.
 
 No upstream DSH changes or new public transport interfaces are required by this design.
+
