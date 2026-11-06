@@ -1,4 +1,4 @@
-import { workspaceError } from "./errors.js";
+import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import {
   isWorkspaceRecord,
   readWorkspaceJsonResponse,
@@ -32,11 +32,17 @@ export async function loginWithPassword(
   http: WorkspaceHttp,
   input: { readonly password: string; readonly username: string },
 ): Promise<WorkspaceAuthentication> {
-  const response = await http.request("/api/auth/password/login", {
-    authenticated: false,
-    body: input,
-    method: "POST",
-  });
+  const request = { authenticated: false, body: input, method: "POST" };
+  let response: Response;
+  try {
+    response = await http.request("/api/auth/cli/password/login", request);
+  } catch (error) {
+    if (!(error instanceof WorkspaceApplicationError) || !isWorkspaceRecord(error.detail) || error.detail["status"] !== 404) {
+      throw error;
+    }
+    // shortcut: older servers lack the CLI route; delete once every supported Workspace server has it.
+    response = await http.request("/api/auth/password/login", request);
+  }
   return authenticationFromResponse(http.origin, response, "Login");
 }
 

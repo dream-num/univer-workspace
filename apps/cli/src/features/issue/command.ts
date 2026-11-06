@@ -21,7 +21,7 @@ import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 import { issueUrl } from "../../urls.js";
 
 export const ISSUE_LIST_JSON_FIELDS = [
-  "assignees", "author", "closedAt", "closedBy", "commentCount", "createdAt", "id", "labels", "number",
+  "assignees", "author", "closedAt", "closedBy", "commentCount", "createdAt", "createdVia", "id", "labels", "number",
   "referenceCount", "space", "state", "stateReason", "title", "updatedAt",
 ] as const satisfies readonly (keyof WorkspaceIssueSummary)[];
 export const ISSUE_JSON_FIELDS = [

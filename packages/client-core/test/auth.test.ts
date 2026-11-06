@@ -33,13 +33,62 @@ describe("Workspace authentication protocol", () => {
       origin,
       subject: { id: "user-1", name: "Alice" },
     });
-    expect(request?.url).toBe(`${origin}/api/auth/password/login`);
+    expect(request?.url).toBe(`${origin}/api/auth/cli/password/login`);
     expect(request?.method).toBe("POST");
     expect(request?.headers.get("cookie")).toBeNull();
     const body = (await request?.json()) as Record<string, unknown>;
     expect(Object.keys(body).sort()).toEqual(["password", "username"]);
     expect(body["username"]).toBe("alice");
     expect(body["password"] === password).toBe(true);
+  });
+
+  it("retries the legacy password route once after a 404", async () => {
+    const requests: Request[] = [];
+    const http = new WorkspaceHttp({
+      cookie: "workspace_session=existing",
+      fetcher: async (input, init) => {
+        requests.push(new Request(input, init));
+        return requests.length === 1
+          ? new Response("Not found", { status: 404 })
+          : Response.json(
+              { authenticated: true, user: validUser() },
+              { headers: { "set-cookie": "workspace_session=legacy; Path=/; HttpOnly" } },
+            );
+      },
+      origin,
+      role: "client",
+    });
+    const input = { username: "alice", password: "test-password" };
+
+    await expect(loginWithPassword(http, input)).resolves.toMatchObject({ cookie: "workspace_session=legacy" });
+    expect(requests.map((request) => request.url)).toEqual([
+      `${origin}/api/auth/cli/password/login`, `${origin}/api/auth/password/login`,
+    ]);
+    for (const request of requests) {
+      expect(request.method).toBe("POST");
+      expect(request.headers.get("cookie")).toBeNull();
+      await expect(request.json()).resolves.toEqual(input);
+    }
+  });
+
+  it.each([401, 403, 429, 500])("does not retry password login after HTTP %s", async (status) => {
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json(
+      { error: { code: "LOGIN_FAILED", message: "Login failed" } }, { status },
+    ));
+    const http = new WorkspaceHttp({ fetcher, origin, role: "client" });
+
+    await expect(loginWithPassword(http, { username: "alice", password: "wrong" }))
+      .rejects.toMatchObject({ code: "LOGIN_FAILED", detail: { status, path: "/api/auth/cli/password/login" } });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops after a 404 from the legacy password route", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(null, { status: 404 }));
+    const http = new WorkspaceHttp({ fetcher, origin, role: "client" });
+
+    await expect(loginWithPassword(http, { username: "alice", password: "test-password" }))
+      .rejects.toMatchObject({ code: "HTTP_404", detail: { path: "/api/auth/password/login" } });
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
   it.each([

@@ -139,7 +139,7 @@ async function handleRequest(
     requestOrigin: request.headers.origin,
     role: typeof request.headers["x-univer-cli-sdk-role"] === "string" ? request.headers["x-univer-cli-sdk-role"] : undefined,
   });
-  if (request.method === "POST" && request.url === "/api/auth/password/login") {
+  if (request.method === "POST" && request.url === "/api/auth/cli/password/login") {
     writeJson(
       response,
       200,

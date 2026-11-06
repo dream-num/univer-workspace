@@ -27,6 +27,7 @@ const teamSpace = {
 };
 const worktree = (overrides: Record<string, unknown> = {}) => ({
   createdAt: "2026-10-01T00:00:00.000Z",
+  createdVia: "agent",
   creator: { id: "u1", username: "alice" },
   id: "wt-1",
   name: "Add chart",
@@ -46,6 +47,7 @@ const issue = (overrides: Record<string, unknown> = {}) => ({
   closedAt: null,
   closedBy: null,
   commentCount: 0,
+  createdVia: "browser",
   createdAt: "2026-10-01T00:00:00.000Z",
   id: "i3",
   labels: [],
@@ -918,6 +920,17 @@ describe("uvw read command JSON field contracts", () => {
       { id: "wt-1", spaceId: "space-1", summary: null },
       { id: "wt-personal" },
     ]);
+  });
+
+  it.each([
+    [["issue", "list", "-R", "alice/docs"], [{ createdVia: "browser" }]],
+    [["issue", "view", "3", "-R", "alice/docs"], { createdVia: "browser" }],
+    [["pr", "list", "-R", "alice/docs"], [{ createdVia: "agent" }, {}]],
+    [["pr", "view", "12", "-R", "alice/docs"], { createdVia: "agent" }],
+    [["worktree", "list", "-R", "alice/docs"], [{ createdVia: "agent" }, {}]],
+    [["worktree", "get", "12", "-R", "alice/docs"], { createdVia: "agent" }],
+  ] as const)("projects createdVia for %j", async (args, expected) => {
+    expect(JSON.parse(await run(commands().program, [...args, "--json", "createdVia"]))).toEqual(expected);
   });
 
   it("omits absent optional fields in PR details and older repository summaries", async () => {

@@ -154,6 +154,25 @@ describe("Issue user resolution", () => {
 });
 
 describe("Workspace Issue feature", () => {
+  it.each(["browser", "agent", "unknown"])("preserves createdVia %s in Issue lists and details", async (createdVia) => {
+    const raw = rawIssue({ createdVia });
+    const { feature: issues } = feature(({ path }) => path.includes("?")
+      ? { items: [raw], nextCursor: null, counts: { open: 1, closed: 0 } }
+      : raw);
+    expect((await issues.list({ spaceId: "s1", state: "all" })).issues[0]?.createdVia).toBe(createdVia);
+    expect((await issues.get("s1", 7)).createdVia).toBe(createdVia);
+  });
+
+  it("maps absent Issue attribution from older servers to unknown", async () => {
+    const { feature: issues } = feature(() => rawIssue());
+    expect((await issues.get("s1", 7)).createdVia).toBe("unknown");
+  });
+
+  it.each([null, "person", "", 1, true, {}])("rejects invalid Issue createdVia %j", async (createdVia) => {
+    const { feature: issues } = feature(() => rawIssue({ createdVia }));
+    await expect(issues.get("s1", 7)).rejects.toMatchObject({ code: "workspace-invalid-response" });
+  });
+
   it("lists one Space or every Team Space with repeated label filters", async () => {
     const page = { items: [rawIssue()], nextCursor: null, counts: { open: 1, closed: 0 } };
     const { feature: issues, calls } = feature(() => page);
