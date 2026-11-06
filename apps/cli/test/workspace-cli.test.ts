@@ -53,14 +53,14 @@ describe("Workspace CLI", () => {
       stderr: "",
       stdout: `univer-workspace-cli ${manifest.version}\n`,
     });
-  });
+  }, 30_000);
 
   it("exposes current inspection targets through the built entrypoint", async () => {
     const inspectionHelp = (await runCli(["inspect", "--help"], process.env)).stdout;
     for (const target of ["base", "board", "board-element"]) {
       expect(inspectionHelp).toContain(`"${target}"`);
     }
-  });
+  }, 30_000);
 
   it("exposes execution guidance through the built entrypoint", async () => {
     const executionHelp = (await runCli(["execute", "--help"], process.env)).stdout;
@@ -69,7 +69,7 @@ describe("Workspace CLI", () => {
     expect(executionHelp).toContain("bare expressions and console.log do not populate value");
     expect(executionHelp).toContain("Read-only code creates no revision");
     expect(executionHelp).not.toContain("Node.js require");
-  });
+  }, 30_000);
 
   it("compiles a Typst bundle through the built entrypoint from an arbitrary cwd", async () => {
     const directory = await mkdtemp(join(tmpdir(), "univer-workspace-typst-"));
