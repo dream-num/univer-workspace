@@ -2,17 +2,27 @@ import {
   createHash,
   createHmac,
   randomBytes,
+  randomInt,
   randomUUID,
   scrypt as scryptCallback,
   timingSafeEqual,
 } from "node:crypto";
 import { promisify } from "node:util";
-import { ApplicationError } from "../../middleware/errors.js";
+import {
+  ApplicationError,
+  type ApplicationErrorCode,
+} from "../../middleware/errors.js";
+import { logger } from "../../logging/logger.js";
+import type { EmailSender } from "../../integrations/email/index.js";
 import { IdentityRepository } from "./identity.repository.js";
+import { emailLoginMessage } from "./email-login-mail.js";
 import type {
   AuthenticatedSession,
   CliAuthorizationExchange,
   CliAuthorizationStart,
+  EmailLogin,
+  EmailLoginCodeRequest,
+  IssuedEmailLoginCode,
   IssuedSession,
   PasswordChange,
   PasswordLogin,
@@ -26,16 +36,23 @@ import type {
   ExternalIdentityProvider,
   ExternalOAuthProvider,
   GitHubOAuthProvider,
+  GoogleOAuthProvider,
 } from "./identity.types.js";
 
 const scrypt = promisify(scryptCallback);
 const COOKIE_NAME = "workspace_session";
 const GITHUB_OAUTH_COOKIE_NAME = "workspace_github_oauth";
+const GOOGLE_OAUTH_COOKIE_NAME = "workspace_google_oauth";
 const DISCORD_OAUTH_COOKIE_NAME = "workspace_discord_oauth";
 const CLI_AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
 const CLI_AUTHORIZATION_POLL_INTERVAL_SECONDS = 2;
 const CLI_AUTHORIZATION_CAPACITY = 10_000;
 const CLI_USER_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const EMAIL_CODE_TTL_MS = 10 * 60 * 1000;
+const EMAIL_CODE_RESEND_INTERVAL_MS = 60 * 1000;
+const EMAIL_CODE_WINDOW_MS = 60 * 60 * 1000;
+const EMAIL_CODE_WINDOW_LIMIT = 5;
+const EMAIL_CODE_MAX_ATTEMPTS = 5;
 
 interface PendingCliAuthorization {
   readonly deviceCodeHash: string;
@@ -48,9 +65,14 @@ export interface IdentityModule {
   readonly cookieName: string;
   readonly sessionTtlMs: number;
   readonly githubOAuthCookieName: string;
+  readonly googleOAuthCookieName: string;
   readonly discordOAuthCookieName: string;
   registerWithPassword(input: PasswordRegistration): Promise<IssuedSession>;
   loginWithPassword(input: PasswordLogin): Promise<IssuedSession>;
+  requestEmailLoginCode(
+    input: EmailLoginCodeRequest
+  ): Promise<IssuedEmailLoginCode>;
+  loginWithEmailCode(input: EmailLogin): Promise<IssuedSession>;
   loginWithDiscordBot(input: DiscordBotLogin): IssuedSession;
   startCliAuthorization(): CliAuthorizationStart;
   approveCliAuthorization(
@@ -89,6 +111,25 @@ export interface IdentityModule {
     readonly issuedSession: IssuedSession | null;
   }>;
   unlinkGitHub(cookieHeader: string | undefined): AuthenticatedSession;
+  startGoogleOAuth(input: {
+    readonly intent: "login" | "link";
+    readonly returnTo: unknown;
+    readonly cookieHeader: string | undefined;
+  }): {
+    readonly authorizationUrl: string;
+    readonly cookieValue: string;
+  };
+  finishGoogleOAuth(input: {
+    readonly code: unknown;
+    readonly state: unknown;
+    readonly providerError: unknown;
+    readonly oauthCookieHeader: string | undefined;
+    readonly sessionCookieHeader: string | undefined;
+  }): Promise<{
+    readonly returnTo: string;
+    readonly issuedSession: IssuedSession | null;
+  }>;
+  unlinkGoogle(cookieHeader: string | undefined): AuthenticatedSession;
   startDiscordOAuth(input: {
     readonly intent: "login" | "link";
     readonly returnTo: unknown;
@@ -116,23 +157,33 @@ export function createIdentityModule(options: {
   readonly sessionTtlMs: number;
   readonly now?: () => number;
   readonly githubOAuthProvider?: GitHubOAuthProvider | null;
+  readonly googleOAuthProvider?: GoogleOAuthProvider | null;
   readonly discordOAuthProvider?: DiscordOAuthProvider | null;
   readonly oauthStateSecret?: string;
   readonly passwordAuthEnabled?: boolean;
+  readonly emailSender?: EmailSender | null;
+  readonly emailAuthEnabled?: boolean;
   readonly trialDeployment?: boolean;
 }): IdentityModule {
   const now = options.now ?? Date.now;
   const repository = options.repository;
   const githubOAuthProvider = options.githubOAuthProvider ?? null;
+  const googleOAuthProvider = options.googleOAuthProvider ?? null;
   const discordOAuthProvider = options.discordOAuthProvider ?? null;
   const oauthStateSecret = options.oauthStateSecret ?? "";
   const githubOAuthEnabled = Boolean(
     githubOAuthProvider && oauthStateSecret
   );
+  const googleOAuthEnabled = Boolean(
+    googleOAuthProvider && oauthStateSecret
+  );
   const discordOAuthEnabled = Boolean(
     discordOAuthProvider && oauthStateSecret
   );
   const passwordAuthEnabled = options.passwordAuthEnabled ?? true;
+  const emailSender = options.emailSender ?? null;
+  const emailAuthEnabled =
+    options.emailAuthEnabled ?? emailSender !== null;
   const trialDeployment = options.trialDeployment ?? false;
   const cliAuthorizations = new Map<string, PendingCliAuthorization>();
   const cliAuthorizationDevices = new Map<string, string>();
@@ -142,8 +193,10 @@ export function createIdentityModule(options: {
     return {
       authenticated: false,
       githubOAuthEnabled,
+      googleOAuthEnabled,
       discordOAuthEnabled,
       passwordAuthEnabled,
+      emailAuthEnabled,
     };
   }
 
@@ -156,12 +209,25 @@ export function createIdentityModule(options: {
     );
   }
 
+  function requireEmailSender(): EmailSender {
+    if (!emailAuthEnabled || emailSender === null) {
+      throw new ApplicationError(
+        "EMAIL_AUTH_DISABLED",
+        403,
+        "Email authentication is disabled."
+      );
+    }
+    return emailSender;
+  }
+
   function authenticatedSession(user: User): AuthenticatedSession {
     return {
       authenticated: true,
       githubOAuthEnabled,
+      googleOAuthEnabled,
       discordOAuthEnabled,
       passwordAuthEnabled,
+      emailAuthEnabled,
       trialDeployment,
       user: {
         id: user.id,
@@ -218,6 +284,7 @@ export function createIdentityModule(options: {
   return {
     cookieName: COOKIE_NAME,
     githubOAuthCookieName: GITHUB_OAUTH_COOKIE_NAME,
+    googleOAuthCookieName: GOOGLE_OAUTH_COOKIE_NAME,
     discordOAuthCookieName: DISCORD_OAUTH_COOKIE_NAME,
     sessionTtlMs: options.sessionTtlMs,
 
@@ -283,6 +350,146 @@ export function createIdentityModule(options: {
       }
 
       return issueSession(credential);
+    },
+
+    async requestEmailLoginCode(input) {
+      const sender = requireEmailSender();
+      const email = validEmail(input.email);
+      const requestedAt = now();
+      repository.deleteEmailLoginCodesBefore(
+        requestedAt - EMAIL_CODE_WINDOW_MS
+      );
+      const lastRequestedAt = repository.latestEmailLoginCodeCreatedAt(email);
+      if (
+        lastRequestedAt !== null &&
+        requestedAt - lastRequestedAt < EMAIL_CODE_RESEND_INTERVAL_MS
+      ) {
+        throw new ApplicationError(
+          "EMAIL_CODE_RATE_LIMITED",
+          429,
+          "A sign-in code was sent recently. Wait a moment before requesting another.",
+          "email"
+        );
+      }
+      if (
+        repository.countEmailLoginCodesSince(
+          email,
+          requestedAt - EMAIL_CODE_WINDOW_MS
+        ) >= EMAIL_CODE_WINDOW_LIMIT
+      ) {
+        throw new ApplicationError(
+          "EMAIL_CODE_RATE_LIMITED",
+          429,
+          "Too many sign-in codes were requested. Try again later.",
+          "email"
+        );
+      }
+
+      const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+      const id = randomUUID();
+      repository.createEmailLoginCode({
+        id,
+        email,
+        codeHash: await hashPassword(code),
+        createdAt: requestedAt,
+        expiresAt: requestedAt + EMAIL_CODE_TTL_MS,
+      });
+      try {
+        await sender.send(
+          emailLoginMessage({
+            to: email,
+            code,
+            ttlMinutes: Math.round(EMAIL_CODE_TTL_MS / 60_000),
+          })
+        );
+      } catch (error) {
+        logger.error({ err: error }, "email sign-in code delivery failed");
+        repository.deleteEmailLoginCode(id);
+        throw new ApplicationError(
+          "EMAIL_DELIVERY_FAILED",
+          503,
+          "The sign-in code could not be delivered. Try again later.",
+          "email"
+        );
+      }
+      repository.consumeOtherEmailLoginCodes(email, id, requestedAt);
+      return {
+        expiresIn: Math.floor(EMAIL_CODE_TTL_MS / 1_000),
+        resendAfter: Math.floor(EMAIL_CODE_RESEND_INTERVAL_MS / 1_000),
+      };
+    },
+
+    async loginWithEmailCode(input) {
+      requireEmailSender();
+      const email = validEmail(input.email);
+      const code = validEmailCode(input.code);
+      const verifiedAt = now();
+      const stored = repository.findEmailLoginCode(email, verifiedAt);
+      if (stored === null) {
+        throw invalidEmailCode();
+      }
+      if (stored.attempts >= EMAIL_CODE_MAX_ATTEMPTS) {
+        repository.deleteEmailLoginCode(stored.id);
+        throw new ApplicationError(
+          "INVALID_EMAIL_CODE",
+          400,
+          "Too many incorrect attempts. Request a new sign-in code.",
+          "code"
+        );
+      }
+      if (!(await verifyPassword(code, stored.codeHash))) {
+        repository.incrementEmailLoginCodeAttempts(stored.id);
+        throw invalidEmailCode();
+      }
+      if (!repository.consumeEmailLoginCode(stored.id, verifiedAt)) {
+        throw invalidEmailCode();
+      }
+      repository.consumeOtherEmailLoginCodes(email, stored.id, verifiedAt);
+
+      const existing = repository.findUserByEmail(email);
+      if (existing) return issueSession(existing);
+
+      const createdAt = verifiedAt;
+      const issued = createSessionToken(
+        createdAt,
+        createdAt + options.sessionTtlMs
+      );
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const user: User = {
+          id: randomUUID(),
+          username: usernameFromEmail(email, attempt),
+          displayName: displayNameFromEmail(email),
+          avatarUrl: null,
+        };
+        try {
+          repository.createEmailUser({
+            user,
+            email,
+            personalSpace: {
+              id: randomUUID(),
+              name: `${user.displayName} 的个人空间`,
+            },
+            session: issued.stored,
+            createdAt,
+          });
+        } catch (error) {
+          if (isUniqueConstraint(error, "users.username")) continue;
+          if (isUniqueConstraint(error, "users.email")) {
+            const concurrent = repository.findUserByEmail(email);
+            if (concurrent) return issueSession(concurrent);
+          }
+          throw error;
+        }
+        return {
+          cookieValue: issued.cookieValue,
+          view: authenticatedSession(user),
+        };
+      }
+      throw new ApplicationError(
+        "CONFLICT",
+        409,
+        "A Workspace account could not be created for this email address."
+      );
     },
 
     loginWithDiscordBot(input) {
@@ -544,6 +751,10 @@ export function createIdentityModule(options: {
       return startExternalOAuth("github", githubOAuthProvider, input);
     },
 
+    startGoogleOAuth(input) {
+      return startExternalOAuth("google", googleOAuthProvider, input);
+    },
+
     startDiscordOAuth(input) {
       return startExternalOAuth("discord", discordOAuthProvider, input);
     },
@@ -552,12 +763,20 @@ export function createIdentityModule(options: {
       return finishExternalOAuth("github", githubOAuthProvider, input);
     },
 
+    async finishGoogleOAuth(input) {
+      return finishExternalOAuth("google", googleOAuthProvider, input);
+    },
+
     async finishDiscordOAuth(input) {
       return finishExternalOAuth("discord", discordOAuthProvider, input);
     },
 
     unlinkGitHub(cookieHeader) {
       return unlinkExternalIdentity("github", cookieHeader);
+    },
+
+    unlinkGoogle(cookieHeader) {
+      return unlinkExternalIdentity("google", cookieHeader);
     },
 
     unlinkDiscord(cookieHeader) {
@@ -925,7 +1144,9 @@ function verifyOAuthState(
     if (
       typeof parsed.state !== "string" ||
       typeof parsed.verifier !== "string" ||
-      (parsed.provider !== "github" && parsed.provider !== "discord") ||
+      (parsed.provider !== "github" &&
+        parsed.provider !== "google" &&
+        parsed.provider !== "discord") ||
       (parsed.intent !== "login" && parsed.intent !== "link") ||
       (parsed.linkedUserId !== null &&
         typeof parsed.linkedUserId !== "string") ||
@@ -982,30 +1203,55 @@ function availableExternalUsername(
   return `${base.slice(0, 64 - randomSuffix.length)}${randomSuffix}`;
 }
 
+const OAUTH_PROVIDERS: Record<
+  ExternalIdentityProvider,
+  {
+    readonly displayName: string;
+    readonly cookieName: string;
+    readonly unavailableCode: ApplicationErrorCode;
+    readonly failedCode: ApplicationErrorCode;
+  }
+> = {
+  github: {
+    displayName: "GitHub",
+    cookieName: GITHUB_OAUTH_COOKIE_NAME,
+    unavailableCode: "GITHUB_OAUTH_UNAVAILABLE",
+    failedCode: "GITHUB_OAUTH_FAILED",
+  },
+  google: {
+    displayName: "Google",
+    cookieName: GOOGLE_OAUTH_COOKIE_NAME,
+    unavailableCode: "GOOGLE_OAUTH_UNAVAILABLE",
+    failedCode: "GOOGLE_OAUTH_FAILED",
+  },
+  discord: {
+    displayName: "Discord",
+    cookieName: DISCORD_OAUTH_COOKIE_NAME,
+    unavailableCode: "DISCORD_OAUTH_UNAVAILABLE",
+    failedCode: "DISCORD_OAUTH_FAILED",
+  },
+};
+
 function oauthUnavailable(provider: ExternalIdentityProvider): ApplicationError {
   return new ApplicationError(
-    provider === "github"
-      ? "GITHUB_OAUTH_UNAVAILABLE"
-      : "DISCORD_OAUTH_UNAVAILABLE",
+    OAUTH_PROVIDERS[provider].unavailableCode,
     503,
     `${providerDisplayName(provider)} OAuth is not configured.`
   );
 }
 
-function oauthFailedCode(provider: ExternalIdentityProvider) {
-  return provider === "github"
-    ? ("GITHUB_OAUTH_FAILED" as const)
-    : ("DISCORD_OAUTH_FAILED" as const);
+function oauthFailedCode(
+  provider: ExternalIdentityProvider
+): ApplicationErrorCode {
+  return OAUTH_PROVIDERS[provider].failedCode;
 }
 
 function providerDisplayName(provider: ExternalIdentityProvider): string {
-  return provider === "github" ? "GitHub" : "Discord";
+  return OAUTH_PROVIDERS[provider].displayName;
 }
 
 function oauthCookieName(provider: ExternalIdentityProvider): string {
-  return provider === "github"
-    ? GITHUB_OAUTH_COOKIE_NAME
-    : DISCORD_OAUTH_COOKIE_NAME;
+  return OAUTH_PROVIDERS[provider].cookieName;
 }
 
 function createSessionToken(
@@ -1122,6 +1368,50 @@ function validDiscordUserId(value: unknown): string {
 
 function validDisplayName(value: unknown): string {
   return requiredText(value, "displayName", 100);
+}
+
+function validEmail(value: unknown): string {
+  if (typeof value !== "string") {
+    throw invalidInput("Email is required.", "email");
+  }
+  const email = value.trim().toLowerCase();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
+    throw invalidInput("Enter a valid email address.", "email");
+  }
+  return email;
+}
+
+function validEmailCode(value: unknown): string {
+  if (typeof value !== "string" || !/^[0-9]{6}$/u.test(value.trim())) {
+    throw invalidInput("Enter the 6-digit sign-in code.", "code");
+  }
+  return value.trim();
+}
+
+function invalidEmailCode(): ApplicationError {
+  return new ApplicationError(
+    "INVALID_EMAIL_CODE",
+    400,
+    "The sign-in code is invalid or has expired.",
+    "code"
+  );
+}
+
+function usernameFromEmail(email: string, attempt: number): string {
+  const local = (email.split("@")[0] ?? "")
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}._-]+/gu, ".")
+    .replace(/^[._-]+|[._-]+$/gu, "")
+    .slice(0, 48);
+  const base = local || "user";
+  return attempt === 0
+    ? base
+    : `${base}-${randomBytes(3).toString("hex")}`;
+}
+
+function displayNameFromEmail(email: string): string {
+  const local = (email.split("@")[0] ?? "").trim().slice(0, 100);
+  return local || "Workspace User";
 }
 
 function validPassword(

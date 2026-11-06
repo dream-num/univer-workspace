@@ -9,6 +9,19 @@ import {
 } from "../src/index.js";
 
 describe("Workspace Space and Node workflows", () => {
+  it.each(["owner", "member", "none", "unknown", undefined, null, 1])(
+    "preserves supported Space affiliation %s and drops unknown values",
+    async (affiliation) => {
+      const feature = featureFor(async () => jsonResponse({
+        spaces: [{ id: "space-1", name: "Team", affiliation }],
+      }));
+      const expected = affiliation === "owner" || affiliation === "member" || affiliation === "none"
+        ? { affiliation }
+        : {};
+      await expect(feature.list()).resolves.toEqual([{ id: "space-1", name: "Team", ...expected }]);
+    },
+  );
+
   it("gets the current authenticated HTTP instance for each operation", async () => {
     let calls = 0;
     const authenticatedHttp: AuthenticatedWorkspaceHttp = async () => {

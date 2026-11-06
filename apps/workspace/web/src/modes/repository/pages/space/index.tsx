@@ -7,7 +7,7 @@ import { NodeBrowser, spaceNodesQueryOptions } from "../../../../features/nodes"
 import { sessionQueryOptions } from "../../../../features/auth";
 import { htmlViewsQueryOptions } from "../../../../features/views/html-views.queries";
 import { resourceOpenQueryOptions } from "../../../../features/resources";
-import { spacesQueryOptions } from "../../../../features/spaces";
+import { spaceQueryOptions } from "../../../../features/spaces";
 import { RepositoryTabs } from "../../repository-tabs";
 import { spaceDisplayName } from "../../space-name";
 import { WorkspaceLayout } from "../../../workspace-layout";
@@ -21,7 +21,7 @@ export function RepositorySpacePage({ spaceId, view }: SpacePageProps) {
   const query = useQuery(spaceNodesQueryOptions(spaceId));
   const session = useQuery(sessionQueryOptions);
   const spaces = useQuery({
-    ...spacesQueryOptions,
+    ...spaceQueryOptions(spaceId),
     enabled: session.data?.authenticated === true,
   });
   const navigate = useNavigate();
@@ -33,7 +33,7 @@ export function RepositorySpacePage({ spaceId, view }: SpacePageProps) {
       return undefined;
     }
   });
-  const space = session.data?.authenticated ? spaces.data?.spaces.find((item) => item.id === spaceId) : undefined;
+  const space = session.data?.authenticated ? spaces.data : undefined;
   const spaceName = spaceDisplayName(space, t, session.data?.authenticated ? session.data.user.username : undefined);
   const repositoryTheme = space !== undefined;
   const apps = useQuery({

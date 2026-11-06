@@ -190,6 +190,9 @@ uvw auth status --json
 uvw repo list --json
 ```
 
+`repo list` shows repositories you own or have joined. Open another public repository with
+`uvw repo view <owner>/<slug>`.
+
 Exit code 4 means sign-in is required: run `uvw auth login`, do not retry the failed command.
 `--json` prints the bare object or array (no `{ issue }` or `{ worktree }` wrapper); `--json id,number`
 keeps only those top-level fields.
@@ -206,7 +209,8 @@ same handoff.
 When the user asks you to handle an Issue ("work on #12"), the Issue is the brief. Do not ask the user
 to restate it.
 
-1. Resolve the repository with `repo list` and read the Issue with its whole discussion:
+1. Resolve an owned or joined repository with `repo list`, or a public repository with
+   `uvw repo view <owner>/<slug>`, and read the Issue with its whole discussion:
 
    ```bash
    uvw issue view 12 -R <owner>/<slug> -c --json
@@ -245,7 +249,8 @@ working around it. Use `issue create` to record follow-up work you found but wer
 
 ### Modify an existing file
 
-1. Resolve the owning repository with `repo list`.
+1. Resolve an owned or joined repository with `repo list`, or a public repository with
+   `uvw repo view <owner>/<slug>`.
 2. Find the Resource Node. Prefer `space find`; use `space browse` when tree context matters.
 3. If multiple candidates match, compare `path`, `spaceId`, `nodeId`, `resourceId`, and Unit type. Ask the user
    when the target remains ambiguous; never pick one by name alone.
@@ -410,11 +415,11 @@ same-task correction follows the rework flow above.
 Use `uvw <command> --help` as the syntax authority. `-R <owner>/<slug>` (or `UVW_REPO`) selects the
 repository; there is no stored default repository.
 
-| Intent                    | Commands                                                                                             |
-| ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Connect                   | `config set workspace.origin`, `auth login`, `auth status`, `auth logout`                            |
-| Discover repositories     | `repo list`, `repo view`, `repo create/edit/rename`                                                  |
-| Discover/organize files   | `space browse`, `space find`, `space node create/rename/move`                                        |
+| Intent                    | Commands                                                                    |
+| ------------------------- | --------------------------------------------------------------------------- |
+| Connect                   | `config set workspace.origin`, `auth login`, `auth status`, `auth logout`   |
+| List owned/joined repositories or view a public repository | `repo list`, `repo view <owner>/<slug>`, `repo create/edit/rename` |
+| Discover/organize files   | `space browse`, `space find`, `space node create/rename/move`               |
 | Read and update Issues    | `issue list/view/create/edit/comment/close/reopen`, `label list/create/edit/delete`, `search issues` |
 | Preserve original files   | `blob upload`, `blob get`, `blob download`, `blob replace`                                           |
 | Start a task              | `pr create`, `unit create`, `unit add`                                                               |

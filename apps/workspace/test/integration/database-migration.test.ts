@@ -14,6 +14,9 @@ import {
   seedRichLegacyV0,
 } from "../fixtures/legacy-v0.js";
 import { DROP_V12_SQL } from "../support/v12-downgrade.js";
+import { DROP_V14_SQL } from "../support/v14-downgrade.js";
+import { verifyV13Migration } from "../support/v13-migration-checks.js";
+import { verifyV14Migration } from "../support/v14-migration-checks.js";
 
 const directories: string[] = [];
 
@@ -23,7 +26,15 @@ afterEach(() => {
   }
 });
 
-describe("automatic product database migration to V12", () => {
+describe("automatic product database migration to V15", () => {
+  it("preserves V13 identities through Email and pins upgrades", () => {
+    verifyV13Migration(openWorkspaceDatabase);
+  });
+
+  it("preserves V14 data, enforces pins constraints, rolls back failures and restarts without another backup", () => {
+    verifyV14Migration(openWorkspaceDatabase);
+  });
+
   it("backs up a WAL database, migrates all mappings, and is idempotent on restart", () => {
     const { directory, filename, legacy } = legacyDatabase();
     legacy.exec("PRAGMA journal_mode = WAL");
@@ -51,7 +62,7 @@ describe("automatic product database migration to V12", () => {
     backupDatabase.close();
 
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 15,
     });
     expect(
       migrated.connection.prepare("SELECT id, name FROM nodes ORDER BY id").all()
@@ -234,7 +245,7 @@ describe("automatic product database migration to V12", () => {
     const filename = join(directory, "workspace.sqlite");
     const database = openWorkspaceDatabase(filename);
     expect(database.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 15,
     });
     database.close();
     expect(backups(directory)).toEqual([]);
@@ -264,13 +275,14 @@ describe("automatic product database migration to V12", () => {
       DROP TABLE IF EXISTS issues;
       DROP TABLE IF EXISTS content_permission_collaborators;
       DROP TABLE IF EXISTS content_permission_objects;
+      ${DROP_V14_SQL}
       PRAGMA user_version = 5;
     `);
     current.close();
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 15,
     });
     expect(
       migrated.connection
@@ -389,7 +401,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 15,
     });
     expect(
       migrated.connection
@@ -477,6 +489,7 @@ describe("automatic product database migration to V12", () => {
       DROP TABLE IF EXISTS issues;
       DROP TABLE IF EXISTS content_permission_collaborators;
       DROP TABLE IF EXISTS content_permission_objects;
+      ${DROP_V14_SQL}
       PRAGMA user_version = 4;
       COMMIT;
       PRAGMA foreign_keys = ON;
@@ -485,7 +498,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 15,
     });
     expect(
       migrated.connection.prepare("SELECT * FROM external_identities").get()
@@ -534,7 +547,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 15,
     });
     expect(
       migrated.connection.prepare("PRAGMA table_info(univer_asset_uploads)").all()
@@ -561,7 +574,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 15,
     });
     expect(
       migrated.connection.prepare("PRAGMA table_info(univer_asset_uploads)").all()
@@ -642,7 +655,7 @@ describe("automatic product database migration to V12", () => {
     damaged.close();
 
     expect(() => openWorkspaceDatabase(filename)).toThrow(
-      /V3 to V12 migration failed.*consistent backup is at/
+      /V3 to V15 migration failed.*consistent backup is at/
     );
     expect(onlyBackup(directory)).toContain(".v3-backup-");
     const original = new DatabaseSync(filename, { readOnly: true });
@@ -679,7 +692,7 @@ describe("automatic product database migration to V12", () => {
     );
     try {
       expect(application.database.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-        user_version: 12,
+        user_version: 15,
       });
       expect(count(application.database.connection, "univer_asset_uploads")).toBe(0);
       expect(count(application.database.connection, "univer_assets")).toBe(2);
@@ -708,7 +721,7 @@ describe("automatic product database migration to V12", () => {
 
     const migrated = openWorkspaceDatabase(filename);
     expect(migrated.connection.prepare("PRAGMA user_version").get()).toMatchObject({
-      user_version: 12,
+      user_version: 15,
     });
     expect(count(migrated.connection, "blob_resources")).toBe(1);
     expect(count(migrated.connection, "blob_upload_sessions")).toBe(1);
@@ -779,7 +792,7 @@ describe("automatic product database migration to V12", () => {
     damaged.close();
 
     expect(() => openWorkspaceDatabase(filename)).toThrow(
-      /V2 to V12 migration failed.*consistent backup is at/
+      /V2 to V15 migration failed.*consistent backup is at/
     );
     expect(onlyBackup(directory)).toContain(".v2-backup-");
     const original = new DatabaseSync(filename, { readOnly: true });
@@ -857,10 +870,10 @@ describe("automatic product database migration to V12", () => {
     const directory = temporaryDirectory();
     const filename = join(directory, "workspace.sqlite");
     const database = new DatabaseSync(filename);
-    database.exec("PRAGMA user_version = 13");
+    database.exec("PRAGMA user_version = 16");
     database.close();
     expect(() => openWorkspaceDatabase(filename)).toThrow(
-      /Unsupported product database version 13/
+      /Unsupported product database version 16/
     );
     expect(backups(directory)).toEqual([]);
   });
@@ -993,6 +1006,7 @@ function richV1Database(): {
     DROP TABLE IF EXISTS issues;
     DROP TABLE IF EXISTS content_permission_collaborators;
     DROP TABLE IF EXISTS content_permission_objects;
+    ${DROP_V14_SQL}
     PRAGMA user_version = 1;
     COMMIT;
     PRAGMA foreign_keys = ON;
@@ -1144,6 +1158,7 @@ function richV3Database(): {
     DROP TABLE IF EXISTS issues;
     DROP TABLE IF EXISTS content_permission_collaborators;
     DROP TABLE IF EXISTS content_permission_objects;
+    ${DROP_V14_SQL}
     PRAGMA user_version = 3;
     COMMIT;
     PRAGMA foreign_keys = ON;
@@ -1259,6 +1274,7 @@ function richV2Database(): {
     DROP TABLE IF EXISTS issues;
     DROP TABLE IF EXISTS content_permission_collaborators;
     DROP TABLE IF EXISTS content_permission_objects;
+    ${DROP_V14_SQL}
     PRAGMA user_version = 2;
     COMMIT;
     PRAGMA foreign_keys = ON;

@@ -179,17 +179,69 @@ organization for GitHub login, first-time registration, and account linking.
 This enables the GitHub `read:org` OAuth scope and checks membership during every
 GitHub OAuth callback. Existing Workspace sessions remain valid until they expire
 or are logged out. This setting restricts only GitHub OAuth; password registration,
-Discord login, and trusted Discord Bot login remain separate authentication paths.
+Google login, Discord login, and trusted Discord Bot login remain separate
+authentication paths.
 
 Password registration, password login, and password changes stay available unless
 `PASSWORD_AUTH_ENABLED` is `false`. A restricted deployment sets that value
-together with `GITHUB_ALLOWED_ORGANIZATIONS` and leaves Discord unset, so the
-only browser sign-in path is GitHub membership in a listed organization. The
-process refuses to start when password authentication is off and neither GitHub
-nor Discord OAuth is configured. Existing sessions remain valid until they
+together with `GITHUB_ALLOWED_ORGANIZATIONS` and leaves Google and Discord
+unset, so the only browser sign-in path is GitHub membership in a listed
+organization. The process refuses to start when password authentication is off
+and no Email, GitHub, Google, or Discord sign-in method is configured. Existing sessions remain valid until they
 expire or are logged out. A user who only has a password cannot sign in again
 after that, and a stored password no longer counts as a remaining sign-in
-method when unlinking GitHub or Discord.
+method when unlinking GitHub, Google, or Discord.
+
+Passwordless Email sign-in is enabled when `EMAIL_AUTH_ENABLED=true` or when any
+`EMAIL_SMTP_*` or `EMAIL_FROM` value is configured. The browser requests a
+six-digit code, and the first successful verification creates the User and
+Personal Space. Codes expire after ten minutes, allow five incorrect attempts,
+and can be requested at most once per minute and five times per hour per address.
+Requests never reveal whether an address already has an account.
+`EMAIL_PROVIDER=console` writes codes to the server log and is intended for local
+development only. For production, point SMTP at your provider; any SMTP provider
+works, including the AWS SES SMTP endpoint:
+
+```text
+EMAIL_PROVIDER=smtp
+EMAIL_FROM=no-reply@example.com
+EMAIL_FROM_NAME=Univer Workspace
+EMAIL_SMTP_HOST=email-smtp.us-east-1.amazonaws.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=<SES SMTP username>
+EMAIL_SMTP_PASSWORD=<SES SMTP password>
+```
+
+The verification email itself is English-only and does not follow the browser
+interface language. `EMAIL_SMTP_USER` and `EMAIL_SMTP_PASSWORD` are written
+exactly as the provider shows them; the SMTP client performs the AUTH encoding, so do not Base64-encode
+or URL-escape them yourself. SES SMTP credentials are separate from IAM access
+keys; create them in the SES console after verifying the sending domain or address. A sandbox SES account can
+only send to verified recipients. `EMAIL_SMTP_PORT=465` enables implicit TLS and
+is used when `EMAIL_SMTP_SECURE` is unset.
+
+An `Invalid login: 535 5.7.8 Authentication Credentials Invalid` response from
+SES means the credentials, not the message, were rejected. Check in this order:
+the SMTP username is the access key ID shown when generating SES SMTP
+credentials (not an IAM user name or IAM secret key), the SMTP password is the
+generated value for that username, and both were created in the same region as
+`EMAIL_SMTP_HOST` (SES SMTP credentials are region-scoped). Regenerating the
+IAM access key invalidates the derived SMTP password. To isolate the deployment
+from the mail settings, verify the same values directly:
+
+```bash
+node --env-file=.env --input-type=module -e '
+import nodemailer from "nodemailer";
+const transport = nodemailer.createTransport({
+  host: process.env.EMAIL_SMTP_HOST,
+  port: Number(process.env.EMAIL_SMTP_PORT ?? 587),
+  secure: process.env.EMAIL_SMTP_SECURE === "true",
+  auth: { user: process.env.EMAIL_SMTP_USER, pass: process.env.EMAIL_SMTP_PASSWORD },
+});
+await transport.verify();
+console.log("SMTP authentication succeeded");
+'
+```
 
 Set `TRIAL_DEPLOYMENT=true` on a public trial deployment. After signing in, each
 User sees a dialog stating that the environment does not guarantee data
@@ -203,12 +255,30 @@ creates a ten-minute, one-time authorization request and prints a `/cli-login`
 URL plus verification code, persists the pending request locally, and exits.
 After the user approves the matching code in their own browser, the Agent runs
 `uvw auth login --complete` to exchange it once; neither command
-waits or polls. If necessary, the user can first sign in with GitHub, Discord,
-or a password and return to the approval page. The CLI receives a separate
+waits or polls. If necessary, the user can first sign in with an Email code, GitHub,
+Google, Discord, or a password and return to the approval page. The CLI receives a separate
 normal `workspace_session`; it never
 receives the browser cookie, Workspace password, or provider access token.
 Pending authorization requests are process-local and intentionally disappear
 on server restart; completed CLI sessions remain normal persisted login sessions.
+
+Google OAuth login and account linking are enabled when
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_CALLBACK_URL` are all
+configured. Create an OAuth 2.0 Client ID of type **Web application** in Google
+Cloud Console and register both redirect URIs you use:
+
+```text
+http://127.0.0.1:5173/api/auth/google/callback
+https://workspace.example.com/api/auth/google/callback
+```
+
+The redirect must exactly match `GOOGLE_CALLBACK_URL`. Workspace requests the
+`openid email profile` scopes, sends PKCE plus the client secret on the token
+exchange, and stores the stable OpenID Connect `sub` claim as the Provider
+Subject. The access token is used only to load the Google profile during
+sign-in and is not persisted. Google login does not identify or automatically
+link a User by email address; the same person who signs in both with Google and
+with an Email code gets two separate Workspace accounts.
 
 Discord OAuth login and account linking are enabled when
 `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `DISCORD_CALLBACK_URL` are
@@ -267,10 +337,17 @@ issuance itself stays silent exactly like identity-only grants.
 
 The browser uses the same built-in runtime development license as Workspace
 CLI. Both copies are rotated every 90 days and are application credentials, not
-the repository software license. The built-in credential is for `localhost`;
-set `VITE_UNIVER_LICENSE` at build time for any non-local deployment or to
-override it locally. Server, database, GitHub, and Discord settings are runtime
-values.
+the repository software license. The built-in credential authorizes the domains
+listed in its generated `license.ts` comment; set `VITE_UNIVER_LICENSE` at build
+time for any other deployment host or to override it locally. The Collaboration
+endpoint rejects browser pages served from an unlisted host with 403 (code 9018).
+
+The server passes a license and its key to the Collaboration service and to
+Office exchange; without them both SDKs run on their free tier (one
+collaboration node, three editing connections and ten exports per month). It
+uses the bundled development pair unless `UNIVER_LICENSE` and
+`UNIVER_LICENSE_KEY` are set, which must be configured together. Server,
+database, GitHub, and Discord settings are runtime values.
 
 An authenticated Browser keeps one `/api/worktree-events` WebSocket open. AI or
 CLI Worktree writes publish a cache-invalidation signal only after the combined
@@ -300,6 +377,9 @@ docker run --name univer-workspace \
   -e GITHUB_CLIENT_SECRET \
   -e GITHUB_CALLBACK_URL=https://workspace.example.com/api/auth/github/callback \
   -e GITHUB_ALLOWED_ORGANIZATIONS \
+  -e GOOGLE_CLIENT_ID \
+  -e GOOGLE_CLIENT_SECRET \
+  -e GOOGLE_CALLBACK_URL=https://workspace.example.com/api/auth/google/callback \
   -e DISCORD_CLIENT_ID \
   -e DISCORD_CLIENT_SECRET \
   -e DISCORD_CALLBACK_URL=https://workspace.example.com/api/auth/discord/callback \
@@ -322,19 +402,19 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V11 product databases to V12 automatically.
+backs up and migrates supported V0 through V14 product databases to V15 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` is unchanged. Product V12 adds Space slugs and Worktree numbers; V11 added the Space description; V10 added Space stars; V9 added
+`history=2`; `comment=1` is unchanged. Product V15 adds ordered Space pins and a per-user stars index. V14 added Email identities and Email login codes; V13 added the Google Provider; V12 added Space slugs and Worktree numbers; V11 added the Space description; V10 added Space stars; V9 added
 Issue tables and V8 added content-permission tables. Before creating
 application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V12,
+2. Start a single new instance. Startup first prepares the product database to V15,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -385,8 +465,42 @@ Startup creates and validates a `.v11-backup-…sqlite` backup before the V11 �
 transaction. A failed step rolls back; subsequent successful startups do not
 repeat migration or backup. Rollback requires stopping V12 and restoring the
 pre-upgrade product backup, not just running the old application image.
+V13 extends the External Identity Provider CHECK to allow `google`. The migration
+rebuilds only `external_identities` and preserves every existing row, column and
+constraint.
+V14 adds an optional `users.email` column and `email_login_codes` for passwordless Email sign-in.
+The migration is additive: no existing table or row is rewritten. For a V14
+rollout, stop every old Workspace instance, start one V14 instance and wait for
+migration and health checks to succeed, then restore normal service; do not let
+V13 and V14 processes write the same SQLite file concurrently. Startup creates and
+validates a `.v13-backup-…sqlite` backup before the V13 → V14 transaction.
+Rollback requires stopping V14 and restoring the pre-upgrade product backup.
+
+V15 adds `space_pins` and `space_stars_user` without changing existing rows, content,
+Blob identities, or recovery state. Stop every old instance, start one V15 instance,
+and wait for migration and health checks before restoring service. Startup validates
+V14, creates a readable `.v14-backup-…sqlite` backup, then creates the table and index
+in one transaction with foreign-key and integrity checks. A failed transaction rolls
+back; successful restarts do not repeat migration or backup. To roll back, stop V15
+and restore the V14 backup. Never run V14 and V15 writers on the same SQLite file.
+
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
 addresses repositories by `owner/slug`.
+
+### Space lists and sidebar pins
+
+`GET /api/spaces` returns only owned and joined Spaces. Every Space response includes
+`affiliation` as `owner`, `member`, or `none`; the owned/joined list uses only the first two.
+`GET /api/spaces/starred` returns currently readable starred Spaces, newest star first.
+`GET /api/spaces/explore` lists other public Spaces by star count, then name and ID.
+Explore is currently unpaginated. Public URLs, detail and lookup access remain unchanged.
+
+`GET /api/spaces/pins` returns `{ customized, limit, spaces }` in saved order. Eligible
+pins are owned or joined Spaces and starred public Spaces. If no stored pin remains
+eligible, the response contains the first eight owned or joined Spaces with
+`customized: false`. `PUT /api/spaces/pins` accepts `{ spaceIds }` with 1 to 12 unique
+eligible IDs and replaces the list atomically. `DELETE` restores the defaults.
+Both writes are idempotent. All list and pin endpoints require a login session.
 
 ### Repository stars
 
@@ -396,7 +510,7 @@ persist across refresh and restart, and never grant access. The product API expo
 `GET`, `PUT` and `DELETE /api/spaces/{spaceId}/star`; writes are idempotent and all
 three return `{ starred, starCount }`. All require login and current Space access.
 `SpaceView.owner` supplies the existing owner's ID and username for the breadcrumb.
-Watch, Fork, star lists and GitHub-only tabs are not provided. See the
+Watch, Fork and GitHub-only tabs are not provided. See the
 [comparison and verification record](docs/proposals/repository-framework-star.md).
 
 Repository Pull requests use the existing Worktree workflow. The list keeps Open/Closed

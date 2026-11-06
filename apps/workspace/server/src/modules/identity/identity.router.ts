@@ -35,6 +35,23 @@ export function createIdentityRouter(options: {
     response.json(issued.view);
   });
 
+  router.post("/auth/email/code", async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    const issued = await identity.requestEmailLoginCode({
+      email: request.body?.email,
+    });
+    response.status(202).json(issued);
+  });
+
+  router.post("/auth/email/login", async (request, response) => {
+    const issued = await identity.loginWithEmailCode({
+      email: request.body?.email,
+      code: request.body?.code,
+    });
+    setSessionCookie(response, identity, issued.cookieValue, options);
+    response.json(issued.view);
+  });
+
   router.post("/auth/cli/authorizations", (_request, response) => {
     response.set("Cache-Control", "no-store");
     response.status(201).json(identity.startCliAuthorization());
@@ -163,6 +180,72 @@ export function createIdentityRouter(options: {
     response.json(identity.unlinkGitHub(request.headers.cookie));
   });
 
+  router.get("/auth/google/login", (request, response) => {
+    const started = identity.startGoogleOAuth({
+      intent: "login",
+      returnTo: request.query.returnTo,
+      cookieHeader: request.headers.cookie,
+    });
+    setOAuthCookie(
+      response,
+      identity.googleOAuthCookieName,
+      started.cookieValue,
+      options
+    );
+    response.redirect(started.authorizationUrl);
+  });
+
+  router.get("/auth/google/link", (request, response) => {
+    const started = identity.startGoogleOAuth({
+      intent: "link",
+      returnTo: request.query.returnTo,
+      cookieHeader: request.headers.cookie,
+    });
+    setOAuthCookie(
+      response,
+      identity.googleOAuthCookieName,
+      started.cookieValue,
+      options
+    );
+    response.redirect(started.authorizationUrl);
+  });
+
+  router.get("/auth/google/callback", async (request, response) => {
+    try {
+      const result = await identity.finishGoogleOAuth({
+        code: request.query.code,
+        state: request.query.state,
+        providerError: request.query.error,
+        oauthCookieHeader: request.headers.cookie,
+        sessionCookieHeader: request.headers.cookie,
+      });
+      if (result.issuedSession) {
+        setSessionCookie(
+          response,
+          identity,
+          result.issuedSession.cookieValue,
+          options
+        );
+      }
+      response.clearCookie(identity.googleOAuthCookieName, { path: "/" });
+      response.redirect(result.returnTo);
+    } catch (error) {
+      logOAuthFailure("Google", error);
+      response.clearCookie(identity.googleOAuthCookieName, { path: "/" });
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Google authentication failed.";
+      response.redirect(
+        `/login?oauthError=${encodeURIComponent(message)}`
+      );
+    }
+  });
+
+  router.delete("/auth/google", (request, response) => {
+    response.json(identity.unlinkGoogle(request.headers.cookie));
+  });
+
   router.get("/auth/discord/login", (request, response) => {
     const started = identity.startDiscordOAuth({
       intent: "login",
@@ -266,7 +349,10 @@ function secretsMatch(actual: string, expected: string): boolean {
   return timingSafeEqual(actualHash, expectedHash);
 }
 
-function logOAuthFailure(provider: "GitHub" | "Discord", error: unknown): void {
+function logOAuthFailure(
+  provider: "GitHub" | "Google" | "Discord",
+  error: unknown
+): void {
   console.error(`[identity] ${provider} OAuth callback failed`, error);
 }
 

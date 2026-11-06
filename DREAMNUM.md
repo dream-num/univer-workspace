@@ -50,7 +50,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   `univer-workspace-cli`, one program; gh-style `repo`/`issue`/`pr` commands addressing `owner/slug` and `#N`) for agent-driven remote
   Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, including Blob
   download, ETag-guarded content replacement, and HTML View validation/publication, with browser-approved
-  passwordless CLI session handoff for password and external-identity users. Contract:
+  passwordless CLI session handoff for password, Email-code, and external-identity users. Contract:
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli-manual.yml).
 
 - **Univer Workspace Agent** — the local browser application for conversations, document references,
@@ -115,9 +115,17 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   V9 → V10 startup migration; V11 adds the plain-text `SpaceView.description` (at most 350 characters, editable by
   users who can rename the Space) through a backed-up V10 → V11 startup migration; V12 adds the Team Space `slug` (addressed as `owner/slug`, with every
   Personal Space as `owner/personal`) and the repository-level Worktree `number` shared with Issues in a Team Space,
-  through a backed-up V11 → V12 startup migration that backfills nothing. Old and new writers must not
+  through a backed-up V11 → V12 startup migration that backfills nothing. V14 adds an optional verified Email address on Users
+  (`users.email`) and single-use Email login codes through a backed-up V13 → V14 startup migration. Old and new writers must not
   share the product file.
-- Login sessions, password hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), sharing state, and user-authored
+- `GET /api/spaces` lists only Spaces the caller owns or has joined, and every `SpaceView` carries
+  `affiliation` (`owner`, `member`, or `none`). Public Spaces the caller has not joined are listed only by
+  `GET /api/spaces/explore`; starred Spaces by `GET /api/spaces/starred`, filtered by current access. Listing
+  never grants or reveals more than `GET /api/spaces/{spaceId}`. Sidebar pins are protected product User-Space
+  preferences, not memberships or access grants: `GET/PUT/DELETE /api/spaces/pins` read, replace, and reset the
+  caller's ordered list. Product V15 adds them, with a `space_stars(user_id)` index, through a backed-up
+  V14 → V15 startup migration that backfills nothing.
+- Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), sharing state, and user-authored
   content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal
   persisted login session and does not pass a browser cookie, password, or OAuth access token through the agent.

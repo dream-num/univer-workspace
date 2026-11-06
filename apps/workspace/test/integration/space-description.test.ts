@@ -70,7 +70,7 @@ it("stores a trimmed Space description, validates it, and restricts edits to Spa
       body: { description: "Docs and pages", name: "Renamed" },
     });
     expect(
-      application.spaces.list(reader.view.user.id).spaces.find((space) => space.id === team.id),
+      application.spaces.get(reader.view.user.id, team.id),
     ).toMatchObject({ description: "Docs and pages" });
     expect((await patch(owner.cookieValue, { description: "x".repeat(351) })).status).toBe(400);
     expect((await patch(owner.cookieValue, { description: 7 })).status).toBe(400);

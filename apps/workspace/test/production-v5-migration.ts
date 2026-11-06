@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openWorkspaceDatabase } from "../dist/server/db/initialize.js";
 import { DROP_V12_SQL } from "./support/v12-downgrade.js";
+import { DROP_V14_SQL } from "./support/v14-downgrade.js";
 
 const directory = mkdtempSync(join(tmpdir(), "workspace-production-v5-migration-"));
 const databaseFilename = join(directory, "workspace.sqlite");
@@ -18,6 +19,7 @@ try {
     VALUES ('space', 'personal', 'Existing space', 'owner', 1, 1);
     ALTER TABLE spaces DROP COLUMN public_read;
     ${DROP_V12_SQL}
+    ${DROP_V14_SQL}
     ALTER TABLE spaces DROP COLUMN description;
     DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
@@ -38,7 +40,7 @@ try {
     const version = migrated.connection.prepare("PRAGMA user_version").get() as {
       readonly user_version: number;
     };
-    assert.equal(version.user_version, 12);
+    assert.equal(version.user_version, 15);
     const space = migrated.connection
       .prepare("SELECT id, name, public_read FROM spaces")
       .get() as Record<string, unknown>;

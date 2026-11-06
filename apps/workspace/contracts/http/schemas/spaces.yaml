@@ -58,7 +58,7 @@ SpaceView:
   allOf:
     - $ref: "#/SpaceSummary"
     - type: object
-      required: [accessRole, capabilities, owner, description, slug, fullName]
+      required: [accessRole, affiliation, capabilities, owner, description, slug, fullName]
       properties:
         slug:
           type: [string, "null"]
@@ -82,6 +82,8 @@ SpaceView:
             username:
               type: string
           description: The authoritative Space owner, including when viewed by another User.
+        affiliation:
+          $ref: "#/SpaceAffiliation"
         accessRole:
           $ref: "#/SpaceRole"
         capabilities:
@@ -152,3 +154,62 @@ SpaceStar:
       type: integer
       minimum: 0
       description: Total stars on the Space, calculated from unique User-Space relations.
+
+SpaceAffiliation:
+  type: string
+  enum: [owner, member, none]
+  description: Ownership or Team membership, independent of the effective access role. Public readers have none.
+
+MySpaceView:
+  allOf:
+    - $ref: "#/SpaceView"
+    - type: object
+      required: [affiliation]
+      properties:
+        affiliation:
+          type: string
+          enum: [owner, member]
+
+MySpaceList:
+  type: object
+  additionalProperties: false
+  required: [spaces]
+  properties:
+    spaces:
+      type: array
+      items:
+        $ref: "#/MySpaceView"
+
+SpacePins:
+  type: object
+  additionalProperties: false
+  required: [customized, limit, spaces]
+  properties:
+    customized:
+      type: boolean
+      description: True when at least one stored pin is still eligible. Otherwise spaces contains the first eight owned or joined Spaces.
+    limit:
+      type: integer
+      const: 12
+      description: Maximum number of pins accepted by the server.
+    spaces:
+      type: array
+      maxItems: 12
+      description: Eligible Spaces in pin order, or the default order when customized is false.
+      items:
+        $ref: "#/SpaceView"
+
+SetSpacePins:
+  type: object
+  additionalProperties: false
+  required: [spaceIds]
+  properties:
+    spaceIds:
+      type: array
+      minItems: 1
+      maxItems: 12
+      uniqueItems: true
+      items:
+        type: string
+        minLength: 1
+      description: Ordered owned or joined Spaces, or public Spaces starred by the current User.

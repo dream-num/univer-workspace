@@ -3,15 +3,15 @@ import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { requireAuthenticatedSession } from "../features/auth";
 import { filtersFromSearch, searchFromFilters, validateIssueSearch, type IssueFilters } from "../features/issues";
 import { ResourceUnavailablePage } from "../features/nodes";
-import { spacesQueryOptions } from "../features/spaces";
+import { ensureSpace, spaceQueryOptions } from "../features/spaces";
 import { useModeDefinition } from "../modes/registry";
 
 export const Route = createFileRoute("/spaces_/$spaceId/issues/")({
   validateSearch: validateIssueSearch,
   loader: async ({ context, params, location }) => {
     await requireAuthenticatedSession(context.queryClient, location.href);
-    const spaces = await context.queryClient.ensureQueryData(spacesQueryOptions);
-    if (spaces.spaces.every((space) => space.id !== params.spaceId || space.type !== "team")) {
+    const space = await ensureSpace(context.queryClient, params.spaceId);
+    if (space.type !== "team") {
       throw notFound();
     }
   },
@@ -24,8 +24,8 @@ function SpaceIssuesPage() {
   const { spaceId } = Route.useParams();
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const spaces = useQuery(spacesQueryOptions);
-  const space = spaces.data?.spaces.find((item) => item.id === spaceId);
+  const spaces = useQuery(spaceQueryOptions(spaceId));
+  const space = spaces.data;
   return (
     <pages.issueList
       spaceId={spaceId}

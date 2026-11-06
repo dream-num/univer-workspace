@@ -87,9 +87,9 @@ function logRuntimeDiagnostic(payload: Record<string, unknown>): void {
 }
 
 export class RuntimeManager {
-  private pool:
-    | Promise<ReturnType<typeof createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>>>
-    | undefined;
+  private pool: Promise<ReturnType<
+    typeof createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>
+  >> | undefined;
   private closed = false;
   private readonly workerUrl: URL;
   /** Last worker-side error code observed before the pool reports a crash. */
@@ -101,23 +101,22 @@ export class RuntimeManager {
 
   private getPool(): NonNullable<RuntimeManager["pool"]> {
     if (this.closed) throw new Error("Workspace runtime manager is closed");
-    return (this.pool ??= import("@univer-cli/univer-collaboration-runtime-pool").then(
-      ({ createUniverCollaborationRuntimePool }) =>
-        createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>({
-          entry: this.workerUrl,
-          onEvent: (event: UniverCollaborationRuntimePoolEvent) => {
-            if (event.type === "instance-failed") {
-              this.workerFailures.set(event.key, event.errorCode);
-              logRuntimeDiagnostic({
-                event: "worker-instance-failed",
-                key: event.key,
-                errorCode: event.errorCode,
-                at: new Date().toISOString(),
-              });
-            }
-          },
-        }),
-    ));
+    return this.pool ??= import("@univer-cli/univer-collaboration-runtime-pool").then(
+      ({ createUniverCollaborationRuntimePool }) => createUniverCollaborationRuntimePool<WorkspaceRuntimeTarget>({
+        entry: this.workerUrl,
+        onEvent: (event: UniverCollaborationRuntimePoolEvent) => {
+          if (event.type === "instance-failed") {
+            this.workerFailures.set(event.key, event.errorCode);
+            logRuntimeDiagnostic({
+              event: "worker-instance-failed",
+              key: event.key,
+              errorCode: event.errorCode,
+              at: new Date().toISOString(),
+            });
+          }
+        },
+      }),
+    );
   }
 
   public async close(): Promise<void> {
@@ -135,17 +134,13 @@ export class RuntimeManager {
     target: WorkspaceRuntimeTarget,
     code: string,
   ): Promise<CollaborationRuntimeValue> {
-    const { prepareContentExecutionProgram } = await import("@univer-cli/content-execution");
-    return (
-      await this.readWithRevision(
-        target,
-        prepareContentExecutionProgram({
-          code,
-          unitId: target.unitId,
-          unitType: target.unitType,
-        }),
-      )
-    ).value;
+    const { prepareContentExecutionProgram } = await import('@univer-cli/content-execution');
+    const prepared = prepareContentExecutionProgram({
+      code,
+      unitId: target.unitId,
+      unitType: target.unitType,
+    });
+    return (await this.readWithRevision(target, prepared)).value;
   }
 
   /** Execute an SDK read program and return its authoritative revision under the same lease. */
@@ -158,10 +153,7 @@ export class RuntimeManager {
       let reusable = false;
       try {
         await this.synchronize(lease, target);
-        const result = await lease.execute({
-          code,
-          mode: "read",
-        });
+        const result = await lease.execute({ code, mode: "read" });
         reusable = true;
         return { value: result.value, revision: result.state.baseRevision };
       } finally {
@@ -181,7 +173,7 @@ export class RuntimeManager {
       let reusable = false;
       try {
         await this.synchronize(lease, target);
-        const { inspectContent } = await import("@univer-cli/content-inspection");
+        const { inspectContent } = await import('@univer-cli/content-inspection');
         const result = await inspectContent(
           {
             unitId: lease.unitId,
@@ -229,7 +221,7 @@ export class RuntimeManager {
       let reusable = false;
       try {
         await this.synchronize(lease, target);
-        const { prepareContentExecutionProgram } = await import("@univer-cli/content-execution");
+        const { prepareContentExecutionProgram } = await import('@univer-cli/content-execution');
         const executed = await lease.execute({
           code: prepareContentExecutionProgram({
             code,
@@ -254,7 +246,7 @@ export class RuntimeManager {
 
   private async acquire(target: WorkspaceRuntimeTarget): Promise<UniverCollaborationRuntimeLease> {
     const pool = await this.getPool();
-    if (this.closed) throw new Error("Workspace runtime manager is closed");
+    if (this.closed) throw new Error('Workspace runtime manager is closed');
     return await pool.acquire({ init: target, key: workspaceRuntimeKey(target) });
   }
 

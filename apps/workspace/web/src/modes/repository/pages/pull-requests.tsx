@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { GitPullRequest, Search } from "lucide-react";
 import { useEffect, useState } from "react";
-import { spacesQueryOptions } from "../../../features/spaces";
+import { mySpacesQueryOptions } from "../../../features/spaces";
 import {
   worktreePagesQueryOptions,
   type WorktreeListFilters,
@@ -30,7 +30,7 @@ export function RepositoryPullRequestsPage(props: WorktreeListFilters) {
     ...(props.teamSpaceId ? { teamSpaceId: props.teamSpaceId } : {}),
   };
   const query = useInfiniteQuery(worktreePagesQueryOptions(filters));
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(mySpacesQueryOptions);
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const update = (patch: {
     [K in keyof WorktreeListFilters]?: WorktreeListFilters[K] | undefined;

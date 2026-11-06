@@ -2,6 +2,7 @@ import { UniverBasesPlugin } from "@univerjs-pro/bases";
 import UniverBasesEnUS from "@univerjs-pro/bases/locale/en-US";
 import UniverBasesZhCN from "@univerjs-pro/bases/locale/zh-CN";
 import { UniverBasesExchangeClientPlugin } from "@univerjs-pro/bases-exchange-client";
+import { createWorkspaceImportExportFeature } from "../../features/import-export";
 import { UniverBasesHistoryUIPlugin } from "@univerjs-pro/bases-history-ui";
 import BasesHistoryUIEnUS from "@univerjs-pro/bases-history-ui/locale/en-US";
 import BasesHistoryUIZhCN from "@univerjs-pro/bases-history-ui/locale/zh-CN";
@@ -145,7 +146,10 @@ export const baseEditorDefinition: ICollaborationEditorDefinition = {
   locales: baseEditorLocales,
   collaborationFeaturePlugins: () =>
     getThreadCommentCollaborationPlugins(UniverBasesThreadCommentUIPlugin),
-  exchangeFeaturePlugins: () => [UniverBasesExchangeClientPlugin],
+  exchangeFeaturePlugins: () => [
+    UniverBasesExchangeClientPlugin,
+    createWorkspaceImportExportFeature("base", { mobile: false }),
+  ],
   createPresets: (container) => [
     {
       plugins: [

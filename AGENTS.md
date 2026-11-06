@@ -86,6 +86,9 @@ CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时
 
 必须同时提交所有受影响的 manifest 和 `pnpm-lock.yaml`，不得手工只更新其中一部分。
 
+应用内置的 runtime 开发 license 与 license key 由 `pnpm update:univer-license --license <file>
+--license-key <file>` 生成到各应用的 `license.ts`，轮换时只运行该脚本，不手工编辑这些文件。
+
 ## 标准能力与临时代码
 
 - 优先在应用边界直接组合上游公开能力；只有承担了新的职责或生命周期时才增加抽象，不为简单转发制造

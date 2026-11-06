@@ -97,10 +97,7 @@ export abstract class UniverWorkspaceService extends Service {
   abstract listSpaces(userId: string): Promise<ReconciledSpaces>;
 
   /** Explicitly add one accessible Space to the local DSH workspace registry. */
-  abstract addSpace(
-    userId: string,
-    spaceId: string,
-  ): Promise<{ dshWorkspaceId: string; path: string }>;
+  abstract addSpace(userId: string, spaceId: string): Promise<{ dshWorkspaceId: string; path: string }>;
 
   /** List a Space's Nodes, with optional hierarchy/search/resource filters. */
   abstract listDocuments(

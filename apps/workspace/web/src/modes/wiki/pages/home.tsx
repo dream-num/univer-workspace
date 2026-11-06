@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { CreateNodeDropdown } from "../../../features/nodes";
-import { spacesQueryOptions } from "../../../features/spaces";
+import { mySpacesQueryOptions } from "../../../features/spaces";
 import { OwnedByMe, RecentResources, SharedWithMe } from "../../../features/views";
 import {
   ownedByMeQueryOptions,
@@ -18,7 +18,7 @@ import { WorkspaceHeaderSearch, WorkspaceLayout } from "../../workspace-layout";
 export function WikiHomePage({ view = "recent" }: HomePageProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(mySpacesQueryOptions);
   const [searchQuery, setSearchQuery] = useState("");
   const recent = useQuery({ ...recentResourcesQueryOptions, enabled: view === "recent" });
   const owned = useQuery({ ...ownedByMeQueryOptions, enabled: view === "owned" });

@@ -28,6 +28,7 @@ import {
   sheetEditorLocales,
 } from "./sheet-presets";
 import { getThreadCommentCollaborationPlugins } from "../../features/thread-comment-features";
+import { createWorkspaceImportExportFeature } from "../../features/import-export";
 
 export type SheetEditorProps = CollaborationEditorProps;
 
@@ -50,6 +51,9 @@ export default createCollaborationEditor({
   theme: greenTheme,
   collaborationProvidedByPreset: true,
   exchangeProvidedByPreset: true,
+  exchangeFeaturePlugins: () => [
+    createWorkspaceImportExportFeature("sheet", { mobile: false }),
+  ],
   licenseProvidedByPreset: true,
   locales: sheetEditorLocales,
   createPresets: (container, license) =>

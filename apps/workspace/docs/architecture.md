@@ -227,7 +227,10 @@ Express Request/Response 和 Univer SDK class 不进入业务 Module 的公开 I
 
 Univer 集中在 `integrations/univer`，向业务 Module 提供产品语义的 Interface，不对 SDK
 方法做一一对应的空壳封装。外部 OAuth Provider 位于 Identity Module，并通过
-`GitHubOAuthProvider` / `DiscordOAuthProvider` Interface 在测试中替换。Identity Router
+`GitHubOAuthProvider` / `GoogleOAuthProvider` / `DiscordOAuthProvider` Interface 在测试中替换。
+邮箱验证码登录同样属于 Identity Module：一次性验证码保存在产品库（只存 scrypt Hash），
+邮件通过 `EmailSender` Interface 发送，SMTP 与 console 实现由配置选择，业务代码不依赖
+具体邮件厂商。Identity Router
 为部署注册的 OAuth client 提供通用 authorize/token 交接：authorize 复用
 `workspace_session`，未登录时回到现有登录流程；token 只兑换一次性、短期、绑定 PKCE
 和已注册 redirect URI 的 code。Workspace Session 仍是唯一的身份权威来源，现有登录、
@@ -299,7 +302,14 @@ changeset 重建的分段索引。SDK 1.0.0 的 Core/Worktree SQLite Adapter 在
 `changeset.createTime`，并返回实际保存的 changeset；重复提交保留原时间。两者不把协作内容写入产品数据库。
 
 Office Exchange Module 使用已发布的 `@univerjs-pro/exchange-node` 将 Office 字节与 Univer
-数据互转。`/universer-api/exchange/**`、Exchange File Upload 和签名下载遵循 Universer
+数据互转。SDK 1.3 起 Collaboration Service 与 Exchange 都校验 license 与 license key，缺失时
+降级为免费额度；Server 从配置读取同一对凭据，构造 Collaboration Service 时传入，并在首个
+Exchange 任务前对当前进程调用一次 `configureExchange`。SDK 1.3 的 exchange client 只提供
+headless service 与 Facade，不再内置导入/导出菜单、进度提示、导出格式对话框或 Mobile UI 插件；
+Browser 在 `web/src/features/editor/features/import-export/` 按 Unit 类型重建这套 UI，沿用 SDK 1.1
+的菜单位置、导出格式和 operation id（`@univerjs/docs`、`@univerjs-pro/bases` 与 `embed-ui` 仍按这些
+id 分发或过滤），转换仍只经 Server 的 `/universer-api/exchange/**`；导入完成后的链接指向
+Personal Space 中新建的 Node。`/universer-api/exchange/**`、Exchange File Upload 和签名下载遵循 Universer
 协议形状，不进入产品 OpenAPI。导入为 Unit 时通过 Resource Module 创建 Personal Space
 根目录下的正式 Node/Resource/Unit；导出时通过 Collaboration Service 固定当前 Trunk head，
 读取包含 Sheet blocks 的恢复材料，再由 `UnitSnapshotMaterializer` 补全 snapshot 后交给 Exchange
@@ -340,6 +350,14 @@ contracts/http/openapi.yaml + paths + schemas
 - 不建立 BaseRepository、BaseService、依赖注入容器或 Event Bus。
 - 不生成服务端业务代码。
 - 目录随真实代码创建，不预先建立空层。
+
+## Space 列表与访问
+
+Access Module 共享 Space 可见性 SQL、Membership Join、投影与 `spaceAccessFromRow`；
+Spaces Module 的 `mine`、`starred`、`explore`、`pins` 范围各自只做一次列表查询。
+`toSpaceView` 统一产生详情与列表，`affiliation` 从所有者和成员事实派生。
+Pins 保存在产品库 V15 的 `space_pins`，不进入协同库。其资格校验和完整替换使用同一个产品事务。
+列表成员关系不充当访问授权；详情、全名、公开链接和匿名读取继续通过现有 Access Resolver。
 
 ## 匿名查看
 

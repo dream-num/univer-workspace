@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { BookMarked, LockKeyhole } from "lucide-react";
-import { spacesQueryOptions } from "../../../features/spaces";
+import { mySpacesQueryOptions, starredSpacesQueryOptions, exploreSpacesQueryOptions } from "../../../features/spaces";
 import { useI18n, type MessageKey } from "../../../shared/i18n";
 import { Button, Select } from "../../../shared/ui";
 import { WorkspaceLayout } from "../../workspace-layout";
@@ -15,19 +15,22 @@ import {
   RepositoryQueryState,
   RepositorySearchField,
 } from "../repository-controls";
+import { RepositoryStar } from "../repository-header";
 import { spaceDisplayName } from "../space-name";
 
 const roleKeys = {
   owner: "accessOwner",
-  admin: "accessAdmin",
-  editor: "accessEditor",
-  viewer: "accessViewer",
+  member: "repositoryAffiliationMember",
+  none: "repositoryVisibilityPublic",
 } as const satisfies Record<string, MessageKey>;
 
 export function RepositoryDirectoryPage(props: RepositorySearch) {
   const { t, language } = useI18n();
   const navigate = useNavigate();
-  const spaces = useQuery(spacesQueryOptions);
+  const mine = useQuery({ ...mySpacesQueryOptions, enabled: props.view === undefined });
+  const starred = useQuery({ ...starredSpacesQueryOptions, enabled: props.view === "starred" });
+  const explore = useQuery({ ...exploreSpacesQueryOptions, enabled: props.view === "explore" });
+  const spaces = props.view === "starred" ? starred : props.view === "explore" ? explore : mine;
   const update = (patch: { [K in keyof RepositorySearch]?: RepositorySearch[K] | undefined }) =>
     void navigate({
       to: "/repositories",
@@ -52,6 +55,17 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
             </div>
             <RepositoryCreateButton />
           </div>
+          <nav className="mb-4 flex gap-2" aria-label={t("allSpaces")}>
+            {([
+              { view: undefined, label: "repositoryYours" },
+              { view: "starred", label: "repositoryStarred" },
+              { view: "explore", label: "repositoryExplore" },
+             ] satisfies readonly { view: RepositorySearch["view"]; label: MessageKey }[]).map(({ view, label }) => (
+              <Link key={label} to="/repositories" search={view ? { view } : {}} aria-current={props.view === view ? "page" : undefined} className={`rounded-md px-3 py-2 text-sm font-medium ${props.view === view ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+                {t(label)}
+              </Link>
+            ))}
+          </nav>
           <div className="repository-toolbar">
             <RepositorySearchField
               value={props.q ?? ""}
@@ -99,7 +113,7 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => void navigate({ to: "/repositories", search: {}, replace: true })}
+                  onClick={() => void navigate({ to: "/repositories", search: props.view ? { view: props.view } : {}, replace: true })}
                 >
                   {t("clearFilters")}
                 </Button>
@@ -145,28 +159,29 @@ export function RepositoryDirectoryPage(props: RepositorySearch) {
                       <p className="mt-3 text-xs text-muted-foreground">
                         {t(space.type === "personal" ? "personalSpace" : "teamSpace")}
                         {" · "}
-                        {t(roleKeys[space.accessRole])}
+                        {t(roleKeys[space.affiliation])}
                       </p>
                     </div>
+                    <RepositoryStar spaceId={space.id} name={spaceDisplayName(space, t) ?? space.name} />
                   </li>
                 ))}
               </ul>
             ) : (
               <div className="repository-empty">
                 <BookMarked aria-hidden="true" />
-                <h2>{t(filtered ? "repositoriesNoMatch" : "repositoriesEmpty")}</h2>
+                <h2>{t(filtered ? "repositoriesNoMatch" : props.view === "starred" ? "repositoryStarredEmpty" : props.view === "explore" ? "repositoryExploreEmpty" : "repositoriesEmpty")}</h2>
                 {filtered ? (
                   <Button
                     variant="secondary"
                     onClick={() =>
-                      void navigate({ to: "/repositories", search: {}, replace: true })
+                      void navigate({ to: "/repositories", search: props.view ? { view: props.view } : {}, replace: true })
                     }
                   >
                     {t("clearFilters")}
                   </Button>
-                ) : (
+                ) : !props.view ? (
                   <RepositoryCreateButton />
-                )}
+                ) : null}
               </div>
             )}
           </RepositoryQueryState>

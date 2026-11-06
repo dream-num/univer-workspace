@@ -32,6 +32,14 @@ V9 → V10 沿用启动迁移边界：校验旧指纹、一致性备份、事务
 失败回滚并保留备份，成功后重复启动不再迁移/备份。部署前停全部旧实例，由一个新实例完成升级；
 回退需停止新实例并恢复备份，不能让 V9/V10 同时写入。
 
+## V15 服务端扩展
+
+2026-11-05 的服务端扩展将本人列表限制为 owned 与 joined Spaces，并增加 Starred、Explore 与 Pins API。
+`SpaceView.affiliation` 区分 owner、member 和公开读者。V15 只新增 `space_pins` 与 `space_stars_user` 索引；
+已有 Star 和访问策略不变。升级、回滚与 HTTP 规则见 [数据模型](../data-model.md) 和
+[HTTP concepts](../../contracts/http/concepts.md)。以下视觉与 Browser 验证记录保留原实施范围，
+不代表新增列表或 Pins 界面已经完成。
+
 ## 参考与对比记录
 
 实施时已完成截图对比；按要求不在仓库保留图片，以下保留参考来源、对比方法和结论。
@@ -55,7 +63,7 @@ V9 → V10 沿用启动迁移边界：校验旧指纹、一致性备份、事务
 | 移动导航 | 使用横向滚动，未实现 GitHub 的 More 折叠菜单；选中 tab 会自动滚入可视范围。 |
 | 移动标题行 | 仅有 Star，空间足够时与名称同行；GitHub 参考页把多项操作放在下一行。 |
 | owner | 显示真实用户名，但没有用户主页链接，因为 Workspace 没有对应页面。 |
-| Star 的附属功能 | 没有收藏列表、计数详情和下拉菜单；按本任务要求使用 Unstar，而非 GitHub 部分状态中的 Starred。大计数显示精确数值而非 k 缩写。 |
+| Star 的附属功能 | 此实施记录中的 Browser 没有收藏列表、计数详情和下拉菜单；按本任务要求使用 Unstar，而非 GitHub 部分状态中的 Starred。大计数显示精确数值而非 k 缩写。 |
 
 ## 验证
 

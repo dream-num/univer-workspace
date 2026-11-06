@@ -282,10 +282,17 @@ affected boundary.
 
 ## Runtime development license
 
-The Browser and CLI contain synchronized copies of the approved runtime development
-credential for local use. It rotates every 90 days and is not the repository software
-license. Set `VITE_UNIVER_LICENSE` for Browser builds or `UNIVER_LICENSE` for the CLI
-to override it.
+The Browser, Workspace server, CLI and DSH plugin contain synchronized copies of the
+approved runtime development credential for local use. It rotates every 90 days and is
+not the repository software license. The server-side Collaboration and Exchange SDKs
+also verify it with a license key; without both they fall back to the free tier. Set
+`VITE_UNIVER_LICENSE` for Browser builds, or `UNIVER_LICENSE` together with
+`UNIVER_LICENSE_KEY` for the server and CLI, to override it. Rotate every copy at once
+with the generated-file script:
+
+```bash
+pnpm update:univer-license --license <license.txt> --license-key <licenseKey.txt>
+```
 
 ## License
 

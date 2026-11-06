@@ -18,15 +18,22 @@ import UniverDocsChartUIEnUS from "@univerjs-pro/docs-chart-ui/locale/en-US";
 import UniverDocsChartUIZhCN from "@univerjs-pro/docs-chart-ui/locale/zh-CN";
 import UniverDocsCodeUIEnUS from "@univerjs-pro/docs-code-ui/locale/en-US";
 import UniverDocsCodeUIZhCN from "@univerjs-pro/docs-code-ui/locale/zh-CN";
+import UniverDocsColumnUIEnUS from "@univerjs-pro/docs-column-ui/locale/en-US";
+import UniverDocsColumnUIZhCN from "@univerjs-pro/docs-column-ui/locale/zh-CN";
 import { UniverDocsExchangeClientPlugin } from "@univerjs-pro/docs-exchange-client";
+import { createWorkspaceImportExportFeature } from "../../features/import-export";
 import { UniverDocsHistoryUIPlugin } from "@univerjs-pro/docs-history-ui";
 import DocsHistoryUIEnUS from "@univerjs-pro/docs-history-ui/locale/en-US";
 import DocsHistoryUIZhCN from "@univerjs-pro/docs-history-ui/locale/zh-CN";
 import UniverDocsLatexUIEnUS from "@univerjs-pro/docs-latex-ui/locale/en-US";
 import UniverDocsLatexUIZhCN from "@univerjs-pro/docs-latex-ui/locale/zh-CN";
+import UniverDocsListUIEnUS from "@univerjs-pro/docs-list-ui/locale/en-US";
+import UniverDocsListUIZhCN from "@univerjs-pro/docs-list-ui/locale/zh-CN";
 import { UniverDocsPrintPlugin } from "@univerjs-pro/docs-print";
 import UniverDocsPrintEnUS from "@univerjs-pro/docs-print/locale/en-US";
 import UniverDocsPrintZhCN from "@univerjs-pro/docs-print/locale/zh-CN";
+import UniverDocsQuoteUIEnUS from "@univerjs-pro/docs-quote-ui/locale/en-US";
+import UniverDocsQuoteUIZhCN from "@univerjs-pro/docs-quote-ui/locale/zh-CN";
 import UniverDocsShapeUIEnUS from "@univerjs-pro/docs-shape-ui/locale/en-US";
 import UniverDocsShapeUIZhCN from "@univerjs-pro/docs-shape-ui/locale/zh-CN";
 import UniverDocsTableUIEnUS from "@univerjs-pro/docs-table-ui/locale/en-US";
@@ -35,6 +42,8 @@ import EngineChartEnUS from "@univerjs-pro/engine-chart/locale/en-US";
 import EngineChartZhCN from "@univerjs-pro/engine-chart/locale/zh-CN";
 import UniverShapeEditorUIEnUS from "@univerjs-pro/shape-editor-ui/locale/en-US";
 import UniverShapeEditorUIZhCN from "@univerjs-pro/shape-editor-ui/locale/zh-CN";
+import FindReplaceEnUS from "@univerjs/find-replace/locale/en-US";
+import FindReplaceZhCN from "@univerjs/find-replace/locale/zh-CN";
 import { mergeLocales } from "@univerjs/presets";
 import { defaultTheme } from "@univerjs/themes";
 import type { ILanguagePack } from "@univerjs/core";
@@ -44,8 +53,11 @@ import "@univerjs-pro/chart-ui/facade";
 import "@univerjs-pro/docs-callout/facade";
 import "@univerjs-pro/docs-chart/facade";
 import "@univerjs-pro/docs-code/facade";
+import "@univerjs-pro/docs-column/facade";
 import "@univerjs-pro/docs-exchange-client/facade";
 import "@univerjs-pro/docs-latex/facade";
+import "@univerjs-pro/docs-list/facade";
+import "@univerjs-pro/docs-quote/facade";
 import "@univerjs-pro/docs-shape/facade";
 import "@univerjs-pro/docs-table/facade";
 import "@univerjs-pro/engine-chart/facade";
@@ -53,13 +65,17 @@ import "@univerjs/preset-docs-core/lib/index.css";
 import "@univerjs/preset-docs-drawing/lib/index.css";
 import "@univerjs/preset-docs-hyper-link/lib/index.css";
 import "@univerjs/preset-docs-thread-comment/lib/index.css";
+import "@univerjs/find-replace/lib/index.css";
 import "@univerjs-pro/chart-ui/lib/index.css";
 import "@univerjs-pro/shape-editor-ui/lib/index.css";
 import "@univerjs-pro/docs-callout-ui/lib/index.css";
 import "@univerjs-pro/docs-chart-ui/lib/index.css";
 import "@univerjs-pro/docs-code-ui/lib/index.css";
+import "@univerjs-pro/docs-column-ui/lib/index.css";
 import "@univerjs-pro/docs-latex-ui/lib/index.css";
+import "@univerjs-pro/docs-list-ui/lib/index.css";
 import "@univerjs-pro/docs-print/lib/index.css";
+import "@univerjs-pro/docs-quote-ui/lib/index.css";
 import "@univerjs-pro/docs-shape-ui/lib/index.css";
 import "@univerjs-pro/docs-table-ui/lib/index.css";
 
@@ -70,6 +86,7 @@ import {
 } from "../../collaboration-editor";
 import {
   getDocAuthoringUIPlugins,
+  getDocFindReplacePlugins,
   getDocReplayCompatibilityPlugins,
 } from "./doc-features";
 import { getDocThreadCommentCollaborationPlugins } from "../../workarounds/doc-thread-comment-delete";
@@ -87,11 +104,15 @@ export const docEditorLocales: Readonly<
     UniverPresetDocsDrawingZhCN,
     UniverPresetDocsHyperLinkZhCN,
     UniverPresetDocsThreadCommentZhCN,
+    FindReplaceZhCN,
     UniverDocsCalloutUIZhCN,
     UniverDocsChartUIZhCN,
     UniverDocsCodeUIZhCN,
+    UniverDocsColumnUIZhCN,
     UniverDocsLatexUIZhCN,
+    UniverDocsListUIZhCN,
     UniverDocsPrintZhCN,
+    UniverDocsQuoteUIZhCN,
     UniverDocsShapeUIZhCN,
     UniverDocsTableUIZhCN,
     UniverShapeEditorUIZhCN
@@ -103,11 +124,15 @@ export const docEditorLocales: Readonly<
     UniverPresetDocsDrawingEnUS,
     UniverPresetDocsHyperLinkEnUS,
     UniverPresetDocsThreadCommentEnUS,
+    FindReplaceEnUS,
     UniverDocsCalloutUIEnUS,
     UniverDocsChartUIEnUS,
     UniverDocsCodeUIEnUS,
+    UniverDocsColumnUIEnUS,
     UniverDocsLatexUIEnUS,
+    UniverDocsListUIEnUS,
     UniverDocsPrintEnUS,
+    UniverDocsQuoteUIEnUS,
     UniverDocsShapeUIEnUS,
     UniverDocsTableUIEnUS,
     UniverShapeEditorUIEnUS
@@ -160,7 +185,10 @@ export const docEditorDefinition: ICollaborationEditorDefinition = {
   locales: docEditorLocales,
   collaborationFeaturePlugins: () =>
     getDocThreadCommentCollaborationPlugins(),
-  exchangeFeaturePlugins: () => [UniverDocsExchangeClientPlugin],
+  exchangeFeaturePlugins: () => [
+    UniverDocsExchangeClientPlugin,
+    createWorkspaceImportExportFeature("doc", { mobile: false }),
+  ],
   printFeaturePlugins: () => [UniverDocsPrintPlugin],
   createPresets: (container, _license, _collaborationScope, compact) => [
     { plugins: getReferencedSheetPlugins() },
@@ -178,6 +206,7 @@ export const docEditorDefinition: ICollaborationEditorDefinition = {
       plugins: [
         ...getDocReplayCompatibilityPlugins(),
         ...getDocAuthoringUIPlugins(),
+        ...getDocFindReplacePlugins(),
       ],
     },
   ],

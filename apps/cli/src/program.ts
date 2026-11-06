@@ -34,7 +34,7 @@ import {
   WorkspaceUnitLayoutLintFeature,
 } from "@univerjs/univer-workspace-client-core";
 import type { Command } from "commander";
-import { resolveUniverLicense } from "./config.js";
+import { resolveUniverLicense, resolveUniverLicenseKey } from "./config.js";
 import { createAssetCommand } from "./features/asset/command.js";
 import { createBlobCommand } from "./features/blob/command.js";
 import { createContentExecuteCommand } from "./features/content/command.js";
@@ -123,11 +123,9 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
   );
   const units = new WorkspaceUnitFeature(authenticatedHttp);
   const blobs = new WorkspaceBlobFeature(authenticatedHttp);
+  const license = resolveUniverLicense(options.env);
   const compileMarkdown = new WorkspaceCompileMarkdownFeature({
-    materializer: new HeadlessWorkspaceDocumentMaterializer(
-      "Markdown",
-      resolveUniverLicense(options.env),
-    ),
+    materializer: new HeadlessWorkspaceDocumentMaterializer("Markdown", license),
     units,
     contentExecution,
   });
@@ -145,6 +143,8 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     runtime: runtimeOperations,
   });
   const exchange = new WorkspaceUnitExchangeFeature({
+    license,
+    licenseKey: resolveUniverLicenseKey(options.env),
     runtime: runtimeOperations,
     resolveImageAsset: async (input) =>
       await new WorkspaceContentSource(await auth.authenticatedHttp("client")).resolveImageAsset(
@@ -160,7 +160,6 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     runtime: runtimeOperations,
     openSource: async () => new WorkspaceContentSource(await auth.authenticatedHttp("client")),
   });
-  const license = resolveUniverLicense(options.env);
   const screenshot = new WorkspaceScreenshotFeature({
     renderPageRoot: options.renderPageRoot,
     license,

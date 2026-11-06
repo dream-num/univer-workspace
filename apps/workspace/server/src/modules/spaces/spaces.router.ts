@@ -32,6 +32,31 @@ export function createSpacesRouter(options: {
     response.json(options.spaces.lookup(session.user.id, request.query.owner, request.query.slug));
   });
 
+  router.get("/spaces/starred", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(options.spaces.listStarred(session.user.id));
+  });
+
+  router.get("/spaces/explore", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(options.spaces.explore(session.user.id));
+  });
+
+  router.get("/spaces/pins", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(options.spaces.getPins(session.user.id));
+  });
+
+  router.put("/spaces/pins", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(options.spaces.setPins(session.user.id, request.body?.spaceIds));
+  });
+
+  router.delete("/spaces/pins", (request, response) => {
+    const session = options.identity.requireSession(request.headers.cookie);
+    response.json(options.spaces.resetPins(session.user.id));
+  });
+
   router.get("/spaces/:spaceId", (request, response) => {
     const session = options.identity.requireSession(request.headers.cookie);
     response.json(

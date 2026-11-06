@@ -15,9 +15,9 @@ export function createWorkspaceExchangeClientConfig(origin: string) {
 
 /**
  * Mobile editors register the shared exchange client through their feature
- * list. SDK 1.2 provides one exchange client for both layouts, so these
- * editors set exchangeProvidedByPreset to avoid duplicate registration and
- * keep the factory's trunk/sign-in gating through exchangeFeaturePlugins.
+ * list, so those editors set exchangeProvidedByPreset and keep the factory's
+ * trunk/sign-in gating through exchangeFeaturePlugins. Since SDK 1.3 the
+ * exchange clients are headless and no longer ship a separate Mobile UI plugin.
  */
 export function createMobileExchangeFeaturePlugins(
   unitPlugins: readonly IPresetPlugin[]

@@ -10,6 +10,7 @@ export interface WorkspaceSpace {
   readonly type?: "personal" | "team";
   /** Present on full Space views, absent on the Space summaries embedded in other responses. */
   readonly accessRole?: WorkspaceAccessRole;
+  readonly affiliation?: "owner" | "member" | "none";
   readonly description?: string;
   /** `<owner>/<slug>`, `<owner>/personal`, or null for a Team Space without a slug. */
   readonly fullName?: string | null;
@@ -141,6 +142,9 @@ export function parseSpace(value: unknown): WorkspaceSpace {
     name: value["name"],
     ...(value["type"] === undefined ? {} : { type: value["type"] }),
     ...(isAccessRole(value["accessRole"]) ? { accessRole: value["accessRole"] } : {}),
+    ...(value["affiliation"] === "owner" || value["affiliation"] === "member" || value["affiliation"] === "none"
+      ? { affiliation: value["affiliation"] }
+      : {}),
     ...(typeof value["description"] === "string" ? { description: value["description"] } : {}),
     ...(value["fullName"] === null || typeof value["fullName"] === "string"
       ? { fullName: value["fullName"] }

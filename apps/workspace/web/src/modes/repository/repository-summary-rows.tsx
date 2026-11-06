@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { FileDiff, MessageSquare } from "lucide-react";
 import type { components } from "../../../../generated/http/schema.js";
 import { NodeIcon } from "../../features/nodes/node-icon";
-import { spacesQueryOptions } from "../../features/spaces";
+import { mySpacesQueryOptions } from "../../features/spaces";
 import { IssueStateIcon } from "../../features/issues/issue-state";
 import type { WorktreeListFilters } from "../../features/worktrees/worktrees.queries";
 import { useI18n } from "../../shared/i18n";
@@ -83,7 +83,7 @@ export function RepositoryWorktreeRows({
   readonly filters?: WorktreeListFilters;
 }) {
   const { t, language } = useI18n();
-  const spaces = useQuery(spacesQueryOptions);
+  const spaces = useQuery(mySpacesQueryOptions);
   const personal = spaces.data?.spaces.find(
     (s) => s.type === "personal" && s.accessRole === "owner",
   );
