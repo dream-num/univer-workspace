@@ -9,8 +9,25 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        stage:
+          - name: static
+            run: pnpm --filter @univerjs/univer-workspace api:verify && pnpm typecheck
+          - name: test-workspace
+            run: pnpm --filter @univerjs/univer-workspace test
+          - name: test-rest
+            run: pnpm test:sdk-dependencies && pnpm test:univer-license && pnpm test:release && pnpm -r --no-sort --filter '!@univerjs/univer-workspace' test
+          - name: package
+            run: pnpm build && pnpm package:workspace-cli && pnpm --filter univer-workspace-cli package:smoke && pnpm --filter @univerjs/univer-workspace test:production-import
+    name: ${{ matrix.stage.name }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,10 +37,4 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @univerjs/univer-workspace api:verify
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm build
-      - run: pnpm package:workspace-cli
-      - run: pnpm --filter univer-workspace-cli package:smoke
-      - run: pnpm --filter @univerjs/univer-workspace test:production-import
+      - run: ${{ matrix.stage.run }}
