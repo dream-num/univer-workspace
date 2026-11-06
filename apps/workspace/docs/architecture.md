@@ -287,14 +287,20 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 ## 产品数据库
 
-产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V8 结构，`initialize.ts`
-负责在业务 Module 初始化前识别数据库状态：空数据库应用 V8；V8 校验指纹；V7/V6/V5/V4/V3/V2/V1/V0
+产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V16 结构，`initialize.ts`
+负责在业务 Module 初始化前识别数据库状态：空数据库应用 V16；V16 校验指纹；V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
+
+V16 的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via` 是可空来源列，
+仅允许 `browser` 或 `agent`，`NULL` 表示未知。迁移不回填已有行，不新增索引。
+Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Principal { user, writeSource }`，
+登录及 Session JSON 保持原状。HTTP Worktree/Issue 创建复制来源，摘要的 `createdVia` 将 `NULL`
+映射为 `unknown`。Worktree 创建将来源预留在 Operation payload 中，重试读取首次预留值。
 
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。
 - 默认数据库文件为 `.data/univer-workspace.sqlite`。
-- 部署和普通重启均保留数据库；V8 不重复备份或迁移。
+- 部署和普通重启均保留数据库；V16 不重复备份或迁移。
 - 普通进程重启不清理数据库。
 - 每个测试使用独立的临时数据库文件或内存数据库。
 
@@ -361,7 +367,7 @@ contracts/http/openapi.yaml + paths + schemas
 Access Module 共享 Space 可见性 SQL、Membership Join、投影与 `spaceAccessFromRow`；
 Spaces Module 的 `mine`、`starred`、`explore`、`pins` 范围各自只做一次列表查询。
 `toSpaceView` 统一产生详情与列表，`affiliation` 从所有者和成员事实派生。
-Pins 保存在产品库 V15 的 `space_pins`，不进入协同库。其资格校验和完整替换使用同一个产品事务。
+Pins 保存在产品库 V16 的 `space_pins`，不进入协同库。其资格校验和完整替换使用同一个产品事务。
 列表成员关系不充当访问授权；详情、全名、公开链接和匿名读取继续通过现有 Access Resolver。
 
 ## 匿名查看

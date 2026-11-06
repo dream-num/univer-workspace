@@ -54,6 +54,8 @@ paths:
     $ref: ./paths/auth.yaml#/~1api~1auth~1logout
   /api/auth/password/register:
     $ref: ./paths/auth.yaml#/~1api~1auth~1password~1register
+  /api/auth/cli/password/login:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1cli~1password~1login
   /api/auth/password/login:
     $ref: ./paths/auth.yaml#/~1api~1auth~1password~1login
   /api/auth/email/code:
@@ -223,6 +225,8 @@ components:
       name: x-api-key
       description: Shared secret configured on Workspace and the trusted Discord Bot server.
   schemas:
+    WriteSource:
+      $ref: ./schemas/identity.yaml#/WriteSource
     Error:
       $ref: ./schemas/common.yaml#/Error
     ErrorResponse:

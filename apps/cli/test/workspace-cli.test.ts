@@ -607,7 +607,7 @@ async function handleWorkspaceRequest(
       ? { workerPid: request.headers["x-univer-cli-sdk-worker-pid"] }
       : {}),
   });
-  if (request.method === "POST" && request.url === "/api/auth/password/login") {
+  if (request.method === "POST" && request.url === "/api/auth/cli/password/login") {
     const body = await readJsonBody(request);
     if (body["username"] !== "alice" || body["password"] !== "secret") {
       writeJson(response, 401, { error: { code: "INVALID_CREDENTIALS" } });

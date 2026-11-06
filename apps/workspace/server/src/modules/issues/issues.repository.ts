@@ -1,9 +1,11 @@
 import type { SQLInputValue } from "node:sqlite";
 import type { WorkspaceDatabase } from "../../db/database.js";
+import type { WriteSource } from "../identity/index.js";
 import type { PublicUser } from "../permissions/index.js";
 import type { IssueEventKind, IssueState, IssueStateReason } from "./issues.types.js";
 
 export interface IssueRow {
+  readonly created_via: WriteSource | null;
   readonly id: string;
   readonly space_id: string;
   readonly space_name: string;
@@ -185,12 +187,13 @@ export class IssuesRepository {
     title: string;
     body: string;
     authorUserId: string;
+    createdVia: WriteSource | null;
     now: number;
   }): void {
     this._run(
-      `INSERT INTO issues (id, space_id, number, title, body, state, author_user_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)`,
-      input.id, input.spaceId, input.number, input.title, input.body, input.authorUserId, input.now, input.now,
+      `INSERT INTO issues (id, space_id, number, title, body, state, author_user_id, created_at, updated_at, created_via)
+       VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`,
+      input.id, input.spaceId, input.number, input.title, input.body, input.authorUserId, input.now, input.now, input.createdVia,
     );
   }
 

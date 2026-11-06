@@ -62,7 +62,7 @@ export function verifyV14Migration(
       original.close();
       const migrated = open(filename);
       assert.deepEqual(rows(migrated.connection), before);
-      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 15);
+      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 16);
       assert.deepEqual(migrated.connection.prepare("SELECT * FROM space_pins").all(), []);
       assert.deepEqual(migrated.connection.prepare("PRAGMA index_info(space_stars_user)").all().map((row) => row.name), ["user_id", "created_at"]);
       if (seeded) {
@@ -91,7 +91,7 @@ export function verifyV14Migration(
       assert.equal(backup.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
       backup.close();
       const restarted = open(filename);
-      assert.equal(restarted.connection.prepare("PRAGMA user_version").get()?.user_version, 15);
+      assert.equal(restarted.connection.prepare("PRAGMA user_version").get()?.user_version, 16);
       assert.deepEqual(rows(restarted.connection), before);
       assert.equal(restarted.connection.prepare("SELECT COUNT(*) AS count FROM space_pins").get()?.count, seeded ? 1 : 0);
       restarted.close();
@@ -101,7 +101,7 @@ export function verifyV14Migration(
     const broken = createV14(filename);
     broken.exec("PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)");
     broken.close();
-    assert.throws(() => open(filename), /V14 to V15 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V14 to V16 migration failed.*rolled back.*backup/);
     for (const name of ["rollback.sqlite", readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v14-backup-"))!]) {
       const preserved = new DatabaseSync(join(root, name), { readOnly: true });
       assert.equal(preserved.prepare("PRAGMA user_version").get()?.user_version, 14);

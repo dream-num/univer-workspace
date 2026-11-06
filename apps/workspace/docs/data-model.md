@@ -1,15 +1,15 @@
 # Univer Workspace 数据模型
 
-状态：V15，已实现
+状态：V16，已实现
 
 权威定义：`server/src/db/schema.sql`
 
 产品数据库使用 SQLite，开启 Foreign Key，Schema 版本为
-`PRAGMA user_version = 15`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+`PRAGMA user_version = 16`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿另存于
-`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V15
+`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V16
 Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
 `__record_id`，并把每条 Record ID 投影到该字段；Row/Column/Cell Map 是可从 Field 与 Record
 重建的派生数据。现有持久化 Base Snapshot 均使用该表示。
@@ -28,7 +28,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-启动入口先将产品数据库准备到 V15，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+启动入口先将产品数据库准备到 V16，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份，在副本上按 Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件
@@ -36,7 +36,7 @@ Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V15，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V16，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -109,9 +109,15 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 
 ### `login_sessions`
 
-只持久化 Session ID、Secret Hash、User 和过期时间。原始 Cookie Secret 不入库。Browser
+持久化 Session ID、Secret Hash、User、创建与过期时间，以及可空的 `write_source`。原始 Cookie Secret 不入库。Browser
 授权 CLI 后会为 CLI 创建独立的普通 Session 行；十分钟内待确认的一次性授权请求仅存在于
 Server 进程内存，不进入产品数据库，进程重启后由用户重新发起。
+
+`write_source`（V16，`TEXT`，可空）记录签发 Session 的入口：`browser` 表示 Workspace Web 登录路由，
+`agent` 表示任意非 Browser 入口；`NULL` 表示未知。CHECK 仅允许 `browser`、`agent` 或 `NULL`，
+无默认值，不回填已有 Session。Session 签发流程写入 `write_source`，HTTP Worktree/Issue 创建复制到 `created_via`；
+摘要以 `createdVia` 暴露该值，`NULL` 返回 `unknown`。Worktree Operation payload 保存首次预留的来源，
+后续重试保留它。Session JSON 不暴露 `writeSource`。
 
 ### `spaces`
 
@@ -305,6 +311,9 @@ Recent 行。
 User Worktree 必须是 Private 且没有 Team Space；Team Worktree 必须绑定 Team Space。
 `processed_at` 标记已 Merge 或 Discard。
 
+`created_via`（V16，`TEXT`，可空）保存创建 Session 的 `write_source`，取值为 `browser` 或 `agent`；
+`NULL` 表示未知，无默认值，不回填已有 Worktree。
+
 `number`（V12，可空）是展示为 `#N` 的仓库级编号。Team Worktree 与同一 Team Space 的 Issue
 共用一个递增序列（`MAX(issues.number, team worktrees.number) + 1`，在 `BEGIN IMMEDIATE` 事务内分配，
 Issue 分配逻辑同样计入 Worktree）；User Worktree 在创建者名下单独编号，经创建者自己的 Personal Space 寻址。
@@ -356,6 +365,7 @@ Issue 只属于 Team Space，不保存 snapshot、changeset 或 revision，也�
 | `state`, `state_reason` | `open` 时原因为空；`closed` 时为 `completed | not_planned`，由表级 CHECK 保证 |
 | `author_user_id`, `closed_by_user_id`, `closed_at` | 作者与关闭信息 |
 | `created_at`, `updated_at` | 评论、事件和关系变更都会刷新 `updated_at` |
+| `created_via` | V16，可空 `TEXT`；复制创建 Session 的 `write_source`（`browser` 或 `agent`），`NULL` 表示未知；无默认值，不回填 |
 
 V1 不允许删除 Issue，所以编号不会复用。以后加入删除，需要改用独立计数表。
 
@@ -455,11 +465,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V15，不备份；
-2. 完整 V15：校验指纹后正常启动，不重复备份；
-3. 完整 V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V15；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V15；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V15；
+1. 不存在或空文件：创建 V16，不备份；
+2. 完整 V16：校验指纹后正常启动，不重复备份；
+3. 完整 V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V16；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V16；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V16；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -484,12 +494,13 @@ Operation JSON。V0 迁移前要求没有 Pending/Failed Operation；后续版�
 - V12 External Identity 被无损扩展为支持 Google Provider；
 - V13 → V14 只新增 `users.email`、`users_email` 部分唯一索引与 `email_login_codes`；既有 User 的 `email` 为 `NULL`，其它行不变；
 - V14 → V15 新增 `space_pins` 和 `space_stars_user` 索引；既有行、Blob 身份与恢复状态不变；
-- 旧表全部删除且 `user_version = 15`。
+- V15 → V16 仅新增可空的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via`，CHECK 允许 `browser` 或 `agent`；已有行均为 `NULL`，无默认值、回填或新索引；
+- 旧表全部删除且 `user_version = 16`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
 一致性备份始终保留，下一次启动可继续升级或由运维恢复。错误中会给出备份路径。
 迁移实现是唯一兼容边界；线上数据库全部完成升级后，可以删除 `migrations/`、
-`legacy-v0/` 及初始化函数中的一次调用，不影响 V15 Schema 或业务代码。
+`legacy-v0/` 及初始化函数中的一次调用，不影响 V16 Schema 或业务代码。
 
 V6 → V7 只重建 Operation 和删除任务表以扩展 CHECK 枚举，完整保留所有行和恢复字段；
 Blob 及上传会话表不变。升级前自动创建一致性备份；停旧实例后由单个新实例完成迁移。
@@ -541,12 +552,18 @@ V12 → V13 只重建 `external_identities`，把 Provider CHECK 从 `('github',
 `('github', 'google', 'discord')`；SQLite 不能原地修改 CHECK，因此迁移在同一事务内外键关闭后重命名旧表、
 创建新表并按原值复制，再逐行比对新旧 External Identity，确认列、约束和行完全保留。准备阶段在业务 Repository
 初始化前校验 V12 指纹、生成并验证一致性备份；事务提交前重新开启外键，检查 `foreign_key_check` 与
-`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都继续前进到 V15。失败事务回滚至 V12，备份保留且
+`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都继续前进到 V16。失败事务回滚至 V12，备份保留且
 启动失败。重复启动不重复迁移或备份。部署须先停全部旧实例，由单个 V13 实例完成迁移和健康检查后恢复服务；
 回退须停新实例并恢复 V12 备份。
 
 V14 → V15 在单个事务内新增 `space_pins` 和 `space_stars_user` 索引，不改写已有表、业务行、Blob 身份或恢复状态。
 准备阶段在业务 Repository 初始化前校验 V14 指纹，生成并验证一致性备份；事务提交前检查外键与完整性，
-随后校验 V15 指纹。V0 与所有旧版本升级链都落到 V15。失败事务回滚至 V14，备份保留，启动失败。
+随后校验 V15 指纹。V0 与所有旧版本升级链都落到 V16。失败事务回滚至 V14，备份保留，启动失败。
 重复启动不重复迁移或备份。部署先停止全部旧实例，由单个 V15 实例完成迁移和健康检查后恢复服务；
 回退先停止新实例，再恢复 V14 备份，不允许新旧版本同时写同一 SQLite 文件。
+
+V15 → V16 在单个 `BEGIN IMMEDIATE` 事务内新增上述三个来源列，保留全部已有行、Blob 身份与恢复状态。
+准备阶段先校验 V15 指纹，生成并验证 `.v15-backup-…sqlite` 一致性备份；事务提交前检查外键与完整性，
+随后校验 V16 指纹。失败事务回滚至 V15，备份保留且启动失败；成功后重复启动不重复迁移或备份。
+部署先停止全部旧实例，由单个 V16 实例完成迁移和健康检查后恢复服务；回退先停止新实例，再恢复 V15 备份。
+不得让 V15 与 V16 进程同时写同一 SQLite 文件。

@@ -12,6 +12,8 @@ import {
   type GoogleOAuthProvider,
 } from "../../server/src/modules/identity/index.js";
 
+import { expectSessionSource } from "../fixtures/session-source.js";
+
 const temporaryDirectories: string[] = [];
 
 afterEach(() => {
@@ -36,6 +38,8 @@ describe("identity", () => {
         password: "correct horse battery staple",
       });
 
+      expectSessionSource(database.connection, issued.cookieValue, "browser");
+      expect(issued.view).not.toHaveProperty("writeSource");
       expect(issued.view).toMatchObject({
         authenticated: true,
         user: {
@@ -155,7 +159,7 @@ describe("identity", () => {
         identity.loginWithPassword({
           username: "Carol",
           password: "correct horse battery staple",
-        })
+        }, "browser")
       ).resolves.toMatchObject({
         view: {
           authenticated: true,
@@ -166,7 +170,7 @@ describe("identity", () => {
         identity.loginWithPassword({
           username: "carol",
           password: "wrong password",
-        })
+        }, "browser")
       ).rejects.toMatchObject<ApplicationError>({
         code: "INVALID_CREDENTIALS",
         status: 401,
@@ -216,6 +220,8 @@ describe("identity", () => {
         status: "authorized",
         issuedSession: { view: { user: { username: "device-user" } } },
       });
+      if (exchanged.status !== "authorized") throw new Error("Missing authorized session");
+      expectSessionSource(database.connection, exchanged.issuedSession.cookieValue, "agent");
       expect(tableCount(database, "login_sessions")).toBe(2);
       expect(() =>
         identity.exchangeCliAuthorization(started.deviceCode)
@@ -265,7 +271,7 @@ describe("identity", () => {
         identity.loginWithPassword({
           username: "dana",
           password: "original secure password",
-        })
+        }, "browser")
       ).rejects.toMatchObject<ApplicationError>({
         code: "INVALID_CREDENTIALS",
       });
@@ -273,7 +279,7 @@ describe("identity", () => {
         identity.loginWithPassword({
           username: "dana",
           password: "replacement secure password",
-        })
+        }, "browser")
       ).resolves.toMatchObject({
         view: { user: { username: "dana" } },
       });
@@ -337,6 +343,7 @@ describe("identity", () => {
         oauthCookieHeader: `${identity.githubOAuthCookieName}=${login.cookieValue}`,
         sessionCookieHeader: undefined,
       });
+      expectSessionSource(database.connection, loggedIn.issuedSession!.cookieValue, "browser");
       expect(loggedIn.returnTo).toBe("/worktrees");
       expect(loggedIn.issuedSession?.view).toMatchObject({
         user: { username: "octocat", displayName: "The Octocat" },
@@ -347,6 +354,15 @@ describe("identity", () => {
           ],
         },
       });
+      const repeatLogin = identity.startGitHubOAuth({ intent: "login", returnTo: "/worktrees", cookieHeader: undefined });
+      const repeated = await identity.finishGitHubOAuth({
+        code: "repeat-code",
+        state: new URL(repeatLogin.authorizationUrl).searchParams.get("state"),
+        providerError: undefined,
+        oauthCookieHeader: `${identity.githubOAuthCookieName}=${repeatLogin.cookieValue}`,
+        sessionCookieHeader: undefined,
+      });
+      expectSessionSource(database.connection, repeated.issuedSession!.cookieValue, "browser");
       expect(tableCount(database, "external_identities")).toBe(1);
       const githubCookie = `${identity.cookieName}=${loggedIn.issuedSession!.cookieValue}`;
       const cliLogin = identity.startCliAuthorization();
@@ -694,7 +710,7 @@ describe("identity", () => {
         disabled.loginWithPassword({
           username: "erin",
           password: "correct horse battery staple",
-        })
+        }, "browser")
       ).rejects.toMatchObject<ApplicationError>({
         code: "PASSWORD_AUTH_DISABLED",
         status: 403,

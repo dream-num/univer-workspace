@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS login_sessions (
   user_id TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
+  write_source TEXT CHECK (write_source IN ('browser', 'agent')),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS login_sessions_user
@@ -209,6 +210,7 @@ CREATE TABLE IF NOT EXISTS worktrees (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   number INTEGER,
+  created_via TEXT CHECK (created_via IN ('browser', 'agent')),
   CHECK (
     (kind = 'user' AND team_space_id IS NULL AND visibility = 'private')
     OR
@@ -608,6 +610,7 @@ CREATE TABLE IF NOT EXISTS issues (
   closed_at INTEGER,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
+  created_via TEXT CHECK (created_via IN ('browser', 'agent')),
   CHECK ((state = 'open' AND state_reason IS NULL AND closed_at IS NULL)
       OR (state = 'closed' AND state_reason IS NOT NULL AND closed_at IS NOT NULL)),
   UNIQUE (space_id, number),
@@ -698,4 +701,4 @@ CREATE TABLE IF NOT EXISTS space_pins (
   UNIQUE (user_id, position)
 );
 
-PRAGMA user_version = 15;
+PRAGMA user_version = 16;

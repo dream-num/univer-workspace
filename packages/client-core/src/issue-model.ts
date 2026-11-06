@@ -1,6 +1,8 @@
 import { workspaceError } from "./errors.js";
 import { isWorkspaceRecord } from "./http.js";
 
+export type WriteSource = "browser" | "agent" | "unknown";
+
 export type WorkspaceIssueState = "open" | "closed";
 export type WorkspaceIssueStateReason = "completed" | "not_planned";
 
@@ -34,6 +36,7 @@ export interface WorkspaceIssueSummary {
   readonly closedBy: WorkspaceIssueUser | null;
   readonly commentCount: number;
   readonly createdAt: string;
+  readonly createdVia: WriteSource;
   readonly id: string;
   readonly labels: readonly WorkspaceIssueLabel[];
   readonly number: number;
@@ -128,6 +131,10 @@ export function parseIssueSummary(value: unknown): WorkspaceIssueSummary {
   if (value["closedAt"] !== null && typeof value["closedAt"] !== "string") {
     throw invalidResponse("Workspace Issue has an invalid closed time");
   }
+  const createdVia = value["createdVia"];
+  if (createdVia !== undefined && createdVia !== "browser" && createdVia !== "agent" && createdVia !== "unknown") {
+    throw invalidResponse("Workspace Issue has an invalid write source");
+  }
   return {
     assignees: value["assignees"].map((user) => parseUser(user)),
     author: parseUser(value["author"]),
@@ -135,6 +142,7 @@ export function parseIssueSummary(value: unknown): WorkspaceIssueSummary {
     closedBy: value["closedBy"] === null ? null : parseUser(value["closedBy"]),
     commentCount: value["commentCount"],
     createdAt: value["createdAt"],
+    createdVia: createdVia ?? "unknown",
     id: value["id"],
     labels: value["labels"].map((label) => parseLabel(label)),
     number: value["number"] as number,

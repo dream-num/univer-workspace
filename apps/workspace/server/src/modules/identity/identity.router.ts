@@ -30,7 +30,17 @@ export function createIdentityRouter(options: {
     const issued = await identity.loginWithPassword({
       username: request.body?.username,
       password: request.body?.password,
-    });
+    }, "browser");
+    setSessionCookie(response, identity, issued.cookieValue, options);
+    response.json(issued.view);
+  });
+
+  router.post("/auth/cli/password/login", async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    const issued = await identity.loginWithPassword({
+      username: request.body?.username,
+      password: request.body?.password,
+    }, "agent");
     setSessionCookie(response, identity, issued.cookieValue, options);
     response.json(issued.view);
   });

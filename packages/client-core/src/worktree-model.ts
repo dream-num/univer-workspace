@@ -1,5 +1,6 @@
 import { workspaceError } from "./errors.js";
 import { isWorkspaceRecord } from "./http.js";
+import type { WriteSource } from "./issue-model.js";
 import { parseUnitType, type WorkspaceUnitType } from "./space-model.js";
 
 export type WorkspaceWorktreeState = "draft" | "ready" | "merging" | "merged" | "discarded";
@@ -36,6 +37,7 @@ export interface WorkspaceWorktree {
   readonly visibility?: "private" | "space";
   readonly creator?: { readonly id: string; readonly username: string };
   readonly createdAt?: string;
+  readonly createdVia?: WriteSource;
   readonly updatedAt?: string;
   readonly state: WorkspaceWorktreeState;
   readonly units: readonly WorkspaceUnit[];
@@ -76,6 +78,9 @@ export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWor
     ...(value["kind"] === "user" || value["kind"] === "team" ? { kind: value["kind"] } : {}),
     ...(value["visibility"] === "private" || value["visibility"] === "space"
       ? { visibility: value["visibility"] }
+      : {}),
+    ...(value["createdVia"] === "browser" || value["createdVia"] === "agent" || value["createdVia"] === "unknown"
+      ? { createdVia: value["createdVia"] }
       : {}),
     ...parseCreator(value["creator"]),
     ...(typeof value["createdAt"] === "string" ? { createdAt: value["createdAt"] } : {}),

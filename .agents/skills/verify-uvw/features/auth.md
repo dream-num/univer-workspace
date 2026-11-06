@@ -8,7 +8,9 @@ in non-interactively with a username and a password piped on stdin.
 
 - `auth-register-web` creates an account from the `Create account` mode of `/login`.
 - `auth-signin-web` signs an existing user in from `/login`.
-- `auth-cli-password` signs uvw in with `--username` and `--password-stdin`.
+- `auth-cli-password` signs uvw in with `--username` and `--password-stdin`. It uses
+  `/api/auth/cli/password/login` to create an Agent session, with one retry on
+  `/api/auth/password/login` only after HTTP 404 from an older server.
 - `auth-cli-status` shows the signed-in origin and user.
 
 ## How to get to it (user POV)

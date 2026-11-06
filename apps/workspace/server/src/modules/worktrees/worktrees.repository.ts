@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { WorkspaceDatabase } from "../../db/database.js";
 import type { UnitType } from "../access/index.js";
+import type { WriteSource } from "../identity/index.js";
 import type { OperationState } from "../resources/resources.types.js";
 import type {
   WorktreeKind,
@@ -14,6 +15,7 @@ export interface WorktreeCursor {
 }
 
 export interface WorktreeRow {
+  readonly created_via: WriteSource | null;
   readonly id: string;
   readonly name: string;
   readonly summary: string | null;
@@ -232,6 +234,7 @@ export class WorktreesRepository {
     readonly kind: WorktreeKind;
     readonly teamSpaceId: string | null;
     readonly visibility: WorktreeVisibility;
+    readonly createdVia: WriteSource | null;
     readonly createdAt: number;
   }): void {
     // The number is allocated inside the insert transaction (BEGIN IMMEDIATE), so
@@ -254,9 +257,9 @@ export class WorktreesRepository {
           `INSERT INTO worktrees
             (
               id, number, name, summary, creator_user_id, kind, team_space_id,
-              visibility, created_at, updated_at
+              visibility, created_at, updated_at, created_via
             )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           input.id,
@@ -268,7 +271,8 @@ export class WorktreesRepository {
           input.teamSpaceId,
           input.visibility,
           input.createdAt,
-          input.createdAt
+          input.createdAt,
+          input.createdVia
         );
     });
   }

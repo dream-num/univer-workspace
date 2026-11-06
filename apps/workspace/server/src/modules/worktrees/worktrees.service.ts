@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { UniverType, type IChangeset } from "@univerjs/protocol";
 import { ApplicationError } from "../../middleware/errors.js";
+import { writeSourceView, type WriteSource } from "../identity/index.js";
 import type { TrashModule } from "../trash/index.js";
 import type {
   AccessResolver,
@@ -245,7 +246,7 @@ export function createWorktreesModule(options: {
       };
     },
 
-    async create(userId, operationIdValue, inputValue) {
+    async create(userId, operationIdValue, inputValue, createdVia = null) {
       const operationId = validOperationId(operationIdValue);
       const input = validCreate(inputValue);
       if (input.kind === "team") {
@@ -262,6 +263,7 @@ export function createWorktreesModule(options: {
       const payload = {
         ...input,
         worktreeId: randomUUID(),
+        createdVia,
       };
       const reserved = options.repository.reserveOperation({
         id: operationId,
@@ -277,6 +279,7 @@ export function createWorktreesModule(options: {
         readonly visibility: WorktreeVisibility;
         readonly teamSpaceId: string | null;
         readonly worktreeId: string;
+        readonly createdVia?: WriteSource | null;
       }>(reserved.row, "create_worktree", userId);
       assertSameCreate(input, stable);
       if (reserved.row.state !== "completed") {
@@ -293,6 +296,7 @@ export function createWorktreesModule(options: {
             teamSpaceId: stable.teamSpaceId,
             visibility: stable.visibility,
             createdAt: now(),
+            createdVia: stable.createdVia ?? null,
           });
           options.repository.completeOperation(
             operationId,
@@ -1148,6 +1152,7 @@ function summaryView(
 ): WorktreeSummary {
   return {
     id: row.id,
+    createdVia: writeSourceView(row.created_via),
     number: row.number,
     name: row.name,
     summary: row.summary,

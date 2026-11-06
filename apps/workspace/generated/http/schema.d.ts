@@ -122,6 +122,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/cli/password/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Authenticate a non-browser client with a System Username and password.
+         * @description Same credentials and response as `loginWithPassword`; the issued Session is attributed as `agent`.
+         */
+        post: operations["loginCliWithPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/password/login": {
         parameters: {
             query?: never;
@@ -1672,6 +1692,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description Entry point of the Session that made a write. `browser` = the Workspace web app's sign-in routes.
+         *     `agent` = any non-browser entry point (uvw CLI, Workspace Agent, OAuth clients, Discord bot); it does not
+         *     identify who was typing. `unknown` = recorded before attribution existed, or by a Session issued before it.
+         * @enum {string}
+         */
+        WriteSource: "browser" | "agent" | "unknown";
         Error: {
             /** @description Stable machine-readable error code. */
             code: string;
@@ -1809,6 +1836,7 @@ export interface components {
             capabilities: components["schemas"]["IssueCapabilities"];
         };
         IssueSummary: {
+            createdVia: components["schemas"]["WriteSource"];
             id: string;
             /** @description Human-facing number, unique inside the Space (#12). */
             number: number;
@@ -1830,6 +1858,7 @@ export interface components {
             updatedAt: string;
         };
         WorktreeSummary: {
+            createdVia: components["schemas"]["WriteSource"];
             id: string;
             /**
              * @description Repository-level number shown as `#N`. A Team Worktree shares the Team Space's Issue number sequence;
@@ -2897,6 +2926,50 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    loginCliWithPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordLogin"];
+            };
+        };
+        responses: {
+            /** @description Authenticated. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedSession"];
+                };
+            };
+            /** @description Username or password is invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Password authentication is disabled. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     loginWithPassword: {

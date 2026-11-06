@@ -70,6 +70,7 @@ describe("repository data boundaries", () => {
       pageParams: [undefined],
     });
     const task: components["schemas"]["WorktreeDetail"] = {
+      createdVia: "unknown",
       id: "older",
       number: null,
       name: "Budget review",

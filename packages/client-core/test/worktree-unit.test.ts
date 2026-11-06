@@ -11,6 +11,14 @@ import {
 } from "../src/index.js";
 
 describe("Workspace Worktree model and workflow", () => {
+  it.each(["browser", "agent", "unknown"])("preserves Worktree createdVia %s", (createdVia) => {
+    expect(parseWorktree({ ...rawWorktree("wt-1"), createdVia }).createdVia).toBe(createdVia);
+  });
+
+  it.each([undefined, null, "person", "", 1, true, {}])("omits absent or invalid optional Worktree createdVia %j", (createdVia) => {
+    expect(parseWorktree({ ...rawWorktree("wt-1"), createdVia })).not.toHaveProperty("createdVia");
+  });
+
   it("strictly parses Worktrees and Units and binds an expected Worktree identity", () => {
     expect(parseWorktree(rawWorktree("wt-1"), "wt-1")).toMatchObject({
       id: "wt-1",

@@ -108,6 +108,8 @@ uvw auth login --username <name>
 ```
 
 `--password-stdin` remains available for controlled automation that already owns a password secret.
+Password login creates an Agent session on servers that support the CLI password route. Older servers
+use the legacy password route when the CLI route returns HTTP 404.
 
 ## Commands
 
@@ -125,6 +127,11 @@ Worktree; `uvw worktree ...` is the same command group under its product name.
 means sign-in is required. `pr discard` is irreversible; there is no `pr close` or `pr reopen`
 (use `pr ready --undo` to return to draft). Content commands take `--worktree <id>`, the `id` from
 `uvw pr view <n> -R <repo> --json id`.
+
+Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
+`agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or
+`uvw pr view <n> -R <repo> --json createdVia`. An Issue without attribution returns `unknown`;
+a pull request without attribution omits the field.
 
 ## Modern Docs from Markdown
 

@@ -6,6 +6,7 @@ import type { IChangeset } from "@univerjs/protocol";
 import type { UnitType } from "../access/index.js";
 import type { OperationState } from "../resources/resources.types.js";
 import type { PublicUser } from "../permissions/index.js";
+import type { WriteSource, WriteSourceView } from "../identity/index.js";
 
 export type WorktreeKind = "user" | "team";
 export type WorktreeVisibility = "private" | "space";
@@ -23,6 +24,7 @@ export interface WorktreeCapabilities {
 }
 
 export interface WorktreeSummary {
+  readonly createdVia: WriteSourceView;
   readonly id: string;
   readonly number: number | null;
   readonly name: string;
@@ -196,7 +198,8 @@ export interface WorktreesModule {
   create(
     userId: string,
     operationId: unknown,
-    input: unknown
+    input: unknown,
+    createdVia?: WriteSource | null
   ): Promise<{ readonly status: 201; readonly body: WorktreeSummary }>;
   get(
     userId: string,

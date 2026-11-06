@@ -14,10 +14,12 @@ import {
 } from "../../middleware/errors.js";
 import { logger } from "../../logging/logger.js";
 import type { EmailSender } from "../../integrations/email/index.js";
-import { IdentityRepository } from "./identity.repository.js";
+import type { WriteSource } from "./write-source.js";
+import { IdentityRepository, type StoredSession } from "./identity.repository.js";
 import { emailLoginMessage } from "./email-login-mail.js";
 import type {
   AuthenticatedSession,
+  Principal,
   CliAuthorizationExchange,
   CliAuthorizationStart,
   EmailLogin,
@@ -68,7 +70,10 @@ export interface IdentityModule {
   readonly googleOAuthCookieName: string;
   readonly discordOAuthCookieName: string;
   registerWithPassword(input: PasswordRegistration): Promise<IssuedSession>;
-  loginWithPassword(input: PasswordLogin): Promise<IssuedSession>;
+  loginWithPassword(
+    input: PasswordLogin,
+    writeSource: WriteSource
+  ): Promise<IssuedSession>;
   requestEmailLoginCode(
     input: EmailLoginCodeRequest
   ): Promise<IssuedEmailLoginCode>;
@@ -85,8 +90,8 @@ export interface IdentityModule {
     input: PasswordChange
   ): Promise<void>;
   getSession(cookieHeader: string | undefined): SessionView;
-  requireSession(cookieHeader: string | undefined): AuthenticatedSession;
-  issueSession(user: User): IssuedSession;
+  requireSession(cookieHeader: string | undefined): Principal;
+  issueSession(user: User, writeSource: WriteSource): IssuedSession;
   logout(cookieHeader: string | undefined): void;
   updateCurrentUser(
     cookieHeader: string | undefined,
@@ -239,40 +244,50 @@ export function createIdentityModule(options: {
     };
   }
 
-  function getSession(cookieHeader: string | undefined): SessionView {
+  function storedSession(cookieHeader: string | undefined): StoredSession | null {
     const token = readSessionToken(cookieHeader);
-    if (!token) return anonymousSession();
+    if (!token) return null;
     const stored = repository.findSession(token.id);
-    if (!stored) return anonymousSession();
+    if (!stored) return null;
     if (stored.expiresAt <= now()) {
       repository.deleteSession(stored.sessionId);
-      return anonymousSession();
+      return null;
     }
-    if (!secretMatches(token.secret, stored.secretHash)) {
-      return anonymousSession();
-    }
-    return authenticatedSession(stored);
+    if (!secretMatches(token.secret, stored.secretHash)) return null;
+    return stored;
   }
 
-  function requireSession(
-    cookieHeader: string | undefined
-  ): AuthenticatedSession {
-    const session = getSession(cookieHeader);
-    if (!session.authenticated) {
+  function getSession(cookieHeader: string | undefined): SessionView {
+    const stored = storedSession(cookieHeader);
+    return stored ? authenticatedSession(stored) : anonymousSession();
+  }
+
+  function requireSession(cookieHeader: string | undefined): Principal {
+    const stored = storedSession(cookieHeader);
+    if (!stored) {
       throw new ApplicationError(
         "UNAUTHENTICATED",
         401,
         "Authentication is required."
       );
     }
-    return session;
+    return {
+      user: {
+        id: stored.id,
+        username: stored.username,
+        displayName: stored.displayName,
+        avatarUrl: stored.avatarUrl,
+      },
+      writeSource: stored.writeSource,
+    };
   }
 
-  function issueSession(user: User): IssuedSession {
+  function issueSession(user: User, writeSource: WriteSource): IssuedSession {
     const createdAt = now();
     const issued = createSessionToken(
       createdAt,
-      createdAt + options.sessionTtlMs
+      createdAt + options.sessionTtlMs,
+      writeSource
     );
     repository.createSession(user.id, issued.stored);
     return {
@@ -306,7 +321,8 @@ export function createIdentityModule(options: {
       };
       const issued = createSessionToken(
         createdAt,
-        createdAt + options.sessionTtlMs
+        createdAt + options.sessionTtlMs,
+        "browser"
       );
 
       try {
@@ -333,7 +349,7 @@ export function createIdentityModule(options: {
       };
     },
 
-    async loginWithPassword(input) {
+    async loginWithPassword(input, writeSource) {
       requirePasswordAuth();
       const username = validUsername(input.username);
       const password = validPassword(input.password);
@@ -349,7 +365,7 @@ export function createIdentityModule(options: {
         );
       }
 
-      return issueSession(credential);
+      return issueSession(credential, writeSource);
     },
 
     async requestEmailLoginCode(input) {
@@ -447,12 +463,13 @@ export function createIdentityModule(options: {
       repository.consumeOtherEmailLoginCodes(email, stored.id, verifiedAt);
 
       const existing = repository.findUserByEmail(email);
-      if (existing) return issueSession(existing);
+      if (existing) return issueSession(existing, "browser");
 
       const createdAt = verifiedAt;
       const issued = createSessionToken(
         createdAt,
-        createdAt + options.sessionTtlMs
+        createdAt + options.sessionTtlMs,
+        "browser"
       );
       for (let attempt = 0; attempt < 5; attempt += 1) {
         const user: User = {
@@ -476,7 +493,7 @@ export function createIdentityModule(options: {
           if (isUniqueConstraint(error, "users.username")) continue;
           if (isUniqueConstraint(error, "users.email")) {
             const concurrent = repository.findUserByEmail(email);
-            if (concurrent) return issueSession(concurrent);
+            if (concurrent) return issueSession(concurrent, "browser");
           }
           throw error;
         }
@@ -514,7 +531,7 @@ export function createIdentityModule(options: {
             now()
           );
         }
-        return issueSession(existing.user);
+        return issueSession(existing.user, "agent");
       }
 
       const providerUsername =
@@ -541,7 +558,8 @@ export function createIdentityModule(options: {
       };
       const token = createSessionToken(
         createdAt,
-        createdAt + options.sessionTtlMs
+        createdAt + options.sessionTtlMs,
+        "agent"
       );
       try {
         repository.createExternalUser({
@@ -562,7 +580,7 @@ export function createIdentityModule(options: {
             "discord",
             discordUserId
           );
-          if (concurrent) return issueSession(concurrent.user);
+          if (concurrent) return issueSession(concurrent.user, "agent");
         }
         throw error;
       }
@@ -624,7 +642,7 @@ export function createIdentityModule(options: {
         );
       }
       authorization.approvedUserId = session.user.id;
-      return session;
+      return authenticatedSession(session.user);
     },
 
     exchangeCliAuthorization(inputDeviceCode) {
@@ -652,7 +670,7 @@ export function createIdentityModule(options: {
         deleteCliAuthorization(authorization);
         throw invalidCliAuthorization();
       }
-      const issuedSession = issueSession(user);
+      const issuedSession = issueSession(user, "agent");
       deleteCliAuthorization(authorization);
       return { status: "authorized", issuedSession };
     },
@@ -930,7 +948,7 @@ export function createIdentityModule(options: {
           : existing.user;
       return {
         returnTo: oauth.returnTo,
-        issuedSession: issueSession(user),
+        issuedSession: issueSession(user, "browser"),
       };
     }
 
@@ -948,7 +966,8 @@ export function createIdentityModule(options: {
     };
     const token = createSessionToken(
       createdAt,
-      createdAt + options.sessionTtlMs
+      createdAt + options.sessionTtlMs,
+      "browser"
     );
     repository.createExternalUser({
       provider,
@@ -1256,7 +1275,8 @@ function oauthCookieName(provider: ExternalIdentityProvider): string {
 
 function createSessionToken(
   createdAt: number,
-  expiresAt: number
+  expiresAt: number,
+  writeSource: WriteSource
 ): {
   readonly cookieValue: string;
   readonly stored: {
@@ -1264,6 +1284,7 @@ function createSessionToken(
     readonly secretHash: string;
     readonly createdAt: number;
     readonly expiresAt: number;
+    readonly writeSource: WriteSource;
   };
 } {
   const id = randomUUID();
@@ -1275,6 +1296,7 @@ function createSessionToken(
       secretHash: hashSessionSecret(secret),
       createdAt,
       expiresAt,
+      writeSource,
     },
   };
 }
