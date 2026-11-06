@@ -9,6 +9,10 @@ import {
 } from "@univerjs-pro/docs-exchange-client";
 import { ExchangeDocType, ExchangeFormat } from "@univerjs-pro/exchange-client";
 import {
+  IPdfExchangeService,
+  UniverPdfsExchangeClientPlugin,
+} from "@univerjs-pro/pdfs-exchange-client";
+import {
   ISheetExchangeService,
   UniverSheetsExchangeClientPlugin,
 } from "@univerjs-pro/sheets-exchange-client";
@@ -33,7 +37,7 @@ import { WorkbookExportPermission } from "@univerjs/sheets";
 import { getCurrentRangeDisable$ } from "@univerjs/sheets-ui";
 import type { Observable } from "rxjs";
 
-export type WorkspaceExchangeUnitType = "sheet" | "doc" | "slide" | "base";
+export type WorkspaceExchangeUnitType = "sheet" | "doc" | "slide" | "base" | "pdf";
 
 export interface ExportTargets {
   readonly items: readonly { readonly label: string; readonly value: string }[];
@@ -209,6 +213,29 @@ export const SLIDE_EXCHANGE: WorkspaceExchangeDefinition = {
   },
 };
 
+export const PDF_EXCHANGE: WorkspaceExchangeDefinition = {
+  unitType: "pdf",
+  instanceType: UniverInstanceType.UNIVER_PDF,
+  namespace: "pdfs-exchange-client",
+  importExtensions: ["pdf"],
+  exportFormats: [ExchangeFormat.PDF],
+  headlessPlugin: UniverPdfsExchangeClientPlugin,
+  placement: { kind: "ribbon", order: 0.3 },
+  bind(injector) {
+    const service = () => injector.get(IPdfExchangeService);
+    return {
+      currentUnit: () =>
+        currentUnit<UnitModel<{ readonly name?: string }>>(
+          injector,
+          UniverInstanceType.UNIVER_PDF,
+          (unit) => unit.getSnapshot().name
+        ),
+      importToUnit: (file) => service().importPdfToUnitId(file),
+      exportByUnitId: (unitId) => service().exportPdfByUnitId(unitId),
+    };
+  },
+};
+
 export const BASE_EXCHANGE: WorkspaceExchangeDefinition = {
   unitType: "base",
   instanceType: UniverInstanceType.UNIVER_BASE,
@@ -260,4 +287,5 @@ export const WORKSPACE_EXCHANGE_DEFINITIONS: Readonly<
   doc: DOC_EXCHANGE,
   slide: SLIDE_EXCHANGE,
   base: BASE_EXCHANGE,
+  pdf: PDF_EXCHANGE,
 };

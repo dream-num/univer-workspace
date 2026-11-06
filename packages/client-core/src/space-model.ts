@@ -1,7 +1,7 @@
 import { workspaceError } from "./errors.js";
 import { isWorkspaceRecord } from "./http.js";
 
-export type WorkspaceUnitType = "sheet" | "doc" | "slide" | "base" | "board";
+export type WorkspaceUnitType = "sheet" | "doc" | "slide" | "base" | "board" | "pdf";
 export type WorkspaceAccessRole = "owner" | "admin" | "editor" | "viewer";
 
 export interface WorkspaceSpace {
@@ -380,7 +380,8 @@ export function parseUnitType(value: unknown): WorkspaceUnitType {
     value === "doc" ||
     value === "slide" ||
     value === "base" ||
-    value === "board"
+    value === "board" ||
+    value === "pdf"
   ) {
     return value;
   }

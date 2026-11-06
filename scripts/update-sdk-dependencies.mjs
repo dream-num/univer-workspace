@@ -18,6 +18,9 @@ const INDEPENDENTLY_VERSIONED_PACKAGES = new Set([
   "@univerjs/icons",
   "@univerjs-pro/cli-assets",
   "@univerjs-pro/doc-typst-native-binding",
+  // Optional peer of @univerjs-pro/exchange-node: the wrapper does not pull it
+  // in, so the application declares it to enable PDF conversion.
+  "@univerjs-pro/exchange-pdf-node-binding",
 ]);
 // Native bindings owned by a wrapper package manifest. The repository consumes
 // them through that wrapper, so it never declares them itself.

@@ -2,7 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 
 export type WorkspaceFileLocale = "en-US" | "zh-CN";
 export type WorkspaceFileAccessRole = "owner" | "admin" | "editor" | "viewer";
-export type WorkspaceUnitType = "sheet" | "doc" | "slide" | "board" | "base";
+export type WorkspaceUnitType = "sheet" | "doc" | "slide" | "board" | "base" | "pdf";
 
 export interface WorkspaceFileSpaceCapabilities {
   readonly browseRoot: boolean;

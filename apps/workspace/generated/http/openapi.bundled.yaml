@@ -4306,6 +4306,7 @@ components:
         - slide
         - board
         - base
+        - pdf
     WorktreeUnitTarget:
       type: object
       additionalProperties: false

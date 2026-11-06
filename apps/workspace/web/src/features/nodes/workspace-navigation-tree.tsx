@@ -17,6 +17,7 @@ import { useSetNodeGrant, useRemoveNodeGrant, useSetLinkSharing } from "../permi
 import { useI18n } from "../../shared/i18n";
 import { useCreateTeamSpace } from "../spaces/spaces.commands";
 import { useCreateFolder, useCreateUniverResource, useUploadBlob, useImportDocument, useUpdateNode, useTrashNode } from "./nodes.commands";
+import { isImportableDocument } from "./node-transfers";
 import { nodeChildrenQueryOptions, spaceNodesQueryOptions } from "./nodes.queries";
 
 type Space = components["schemas"]["SpaceView"];
@@ -86,7 +87,7 @@ export function WorkspaceNavigationTree(props: {
         }
       },
       async uploadFile(input) {
-        if (IMPORTABLE_DOCUMENT_EXTENSION.test(input.file.name)) await importDocument(input);
+        if (isImportableDocument(input.file.name)) await importDocument(input);
         else await uploadBlob(input);
       },
       async renameNode({ node, name }) {
@@ -166,8 +167,6 @@ export function WorkspaceNavigationTree(props: {
     />
   );
 }
-
-const IMPORTABLE_DOCUMENT_EXTENSION = /\.(?:xls|xlsx|csv|tsv|doc|docx|ppt|pptx)$/iu;
 
 function toWorkspaceFileSpace(space: Space): WorkspaceFileSpace {
   return {

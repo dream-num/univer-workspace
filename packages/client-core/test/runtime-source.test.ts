@@ -255,7 +255,7 @@ function rawUnit(overrides: Partial<Record<string, unknown>> = {}): Record<strin
 }
 
 function snapshot(type: WorkspaceUnitType, unitId: string, revision: number): Record<string, unknown> {
-  const wire = { base: 5, board: 6, doc: 1, sheet: 2, slide: 3 }[type];
+  const wire = { base: 5, board: 6, doc: 1, pdf: 7, sheet: 2, slide: 3 }[type];
   if (type === "sheet" || type === "base") {
     return { rev: revision, type: wire, unitID: unitId, workbook: { originalMeta: "YQ==", sheets: {} } };
   }

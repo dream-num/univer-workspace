@@ -580,6 +580,9 @@
     --rd-a-soft: var(--rd-actor-agents-soft);
     --rd-a-text: var(--rd-actor-agents-text);
   }
+  .rd-tb-pdf {
+    --c: var(--rd-t-pdf);
+  }
   .rd-pending {
     display: inline-flex;
     align-items: center;

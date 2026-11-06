@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS univer_resources (
   resource_id TEXT PRIMARY KEY,
   unit_id TEXT NOT NULL UNIQUE,
   unit_type TEXT NOT NULL CHECK (
-    unit_type IN ('sheet', 'doc', 'slide', 'board', 'base')
+    unit_type IN ('sheet', 'doc', 'slide', 'board', 'base', 'pdf')
   ),
   FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE
 );
@@ -250,7 +250,7 @@ CREATE TABLE IF NOT EXISTS worktree_node_intents (
   target_parent_node_id TEXT,
   name TEXT NOT NULL,
   unit_type TEXT NOT NULL CHECK (
-    unit_type IN ('sheet', 'doc', 'slide', 'board', 'base')
+    unit_type IN ('sheet', 'doc', 'slide', 'board', 'base', 'pdf')
   ),
   created_by TEXT NOT NULL,
   activated_at INTEGER,
@@ -701,4 +701,4 @@ CREATE TABLE IF NOT EXISTS space_pins (
   UNIQUE (user_id, position)
 );
 
-PRAGMA user_version = 16;
+PRAGMA user_version = 17;

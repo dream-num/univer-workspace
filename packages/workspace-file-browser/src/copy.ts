@@ -169,8 +169,8 @@ export const browserCopy = {
 
 export function unitLabel(locale: WorkspaceFileLocale, unitType: WorkspaceUnitType): string {
   const names = {
-    "zh-CN": { doc: "文档", sheet: "表格", slide: "幻灯片", board: "白板", base: "数据表" },
-    "en-US": { doc: "Document", sheet: "Sheet", slide: "Slides", board: "Board", base: "Base" },
+    "zh-CN": { doc: "文档", sheet: "表格", slide: "幻灯片", board: "白板", base: "数据表", pdf: "PDF" },
+    "en-US": { doc: "Document", sheet: "Sheet", slide: "Slides", board: "Board", base: "Base", pdf: "PDF" },
   } as const;
   return names[locale][unitType];
 }

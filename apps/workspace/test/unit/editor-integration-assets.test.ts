@@ -124,7 +124,7 @@ describe("editor integration assets", () => {
   });
 
   it("marks every mobile editor so the factory skips desktop-only Embed UI", () => {
-    for (const product of ["sheet", "doc", "slide", "board", "base"]) {
+    for (const product of ["sheet", "doc", "slide", "board", "base", "pdf"]) {
       expect(readEditorSource(product, ".mobile")).toContain("mobile: true");
     }
     // Exchange-enabled mobile editors pair the shared exchange client and

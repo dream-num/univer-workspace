@@ -1,6 +1,13 @@
 import { workspaceError } from "./errors.js";
 import type { WorkspaceUnitType } from "./space-model.js";
 
+/**
+ * Unit types the worker-backed content runtime can materialize. PDF Units are
+ * catalogued by Workspace but have no headless runtime yet, so a target naming
+ * one is rejected at the boundary instead of failing inside the worker.
+ */
+export type WorkspaceRuntimeUnitType = Exclude<WorkspaceUnitType, "pdf">;
+
 export type WorkspaceRuntimeScope =
   | { readonly kind: "trunk" }
   | { readonly kind: "worktree"; readonly worktreeId: string };
@@ -10,7 +17,7 @@ export type WorkspaceRuntimeTarget = {
   readonly revision: number;
   readonly scope: WorkspaceRuntimeScope;
   readonly unitId: string;
-  readonly unitType: WorkspaceUnitType;
+  readonly unitType: WorkspaceRuntimeUnitType;
 };
 
 export function workspaceSnapshotPrefix(scope: WorkspaceRuntimeScope): string {
@@ -113,7 +120,7 @@ function nonEmpty(value: string, name: string): string {
   return value;
 }
 
-function isUnitType(value: unknown): value is WorkspaceUnitType {
+function isUnitType(value: unknown): value is WorkspaceRuntimeUnitType {
   return (
     value === "sheet" ||
     value === "doc" ||
