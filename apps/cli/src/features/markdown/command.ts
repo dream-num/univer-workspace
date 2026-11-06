@@ -123,7 +123,11 @@ export function createWorkspaceCompileMarkdownCommand(
           ...(options.out === undefined ? {} : { out: options.out }),
         },
         result.committed
-          ? `Applied Markdown to Modern Doc ${result.unit?.unitId ?? result.targetUnitId}`
+          ? `Applied Markdown to Modern Doc ${result.unit?.unitId ?? result.targetUnitId}${
+              options.sourceMapOut === undefined
+                ? "; pass --source-map-out to keep the block map for later updates and exports"
+                : ""
+            }`
           : `Compiled Markdown into ${options.out ?? result.targetUnitId}`,
       );
     });

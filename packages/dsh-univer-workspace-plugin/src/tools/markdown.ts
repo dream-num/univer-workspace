@@ -1,8 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
-import { compileWorkspaceMarkdownFile } from "@univerjs/univer-workspace-client-core/markdown";
+import {
+  compileWorkspaceMarkdownFile,
+  workspaceMarkdownTargetUnitId,
+} from "@univerjs/univer-workspace-client-core/markdown";
 import { materializeWorkspaceDocument } from "@univerjs/univer-workspace-client-core/document-materialize";
 import { parseDocMarkdownSourceMap } from "@univer-cli/doc-markdown-facade";
 import type { JsonValue } from "../json-value.ts";
@@ -91,7 +93,7 @@ export function registerMarkdownTool(
         const compiled = await compileWorkspaceMarkdownFile(
           source.path,
           {
-            targetUnitId: args.unitId ?? `markdown-${randomUUID()}`,
+            targetUnitId: args.unitId ?? workspaceMarkdownTargetUnitId(args.idempotencyKey),
             ...(args.title === undefined ? {} : { title: args.title }),
             ...(sourceMap === undefined ? {} : { update: { sourceMap, blockIds: args.blockIds! } }),
           },
@@ -125,6 +127,9 @@ export function registerMarkdownTool(
           { javascript: compiled.javascript, targetUnitId: compiled.targetUnitId },
           { format: "Markdown", license: options.license },
         );
+        // Validate before creating so a contract failure cannot leave an unreported Doc behind.
+        const materializedSourceMap =
+          compiled.sourceMap.length === 0 ? [] : parseDocMarkdownSourceMap(materialized.value);
         exec.signal?.throwIfAborted();
         const unit = await service.createWorktreeLocalUnit(resolved.userId, {
           worktreeId: args.worktreeId,
@@ -139,8 +144,7 @@ export function registerMarkdownTool(
           operation: "compile-markdown",
           unit,
           diagnostics: compiled.diagnostics,
-          sourceMap:
-            compiled.sourceMap.length === 0 ? [] : parseDocMarkdownSourceMap(materialized.value),
+          sourceMap: materializedSourceMap,
         } as unknown as JsonValue;
       },
       presentCall: () => ({

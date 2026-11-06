@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import {
   compileDocMarkdown,
@@ -20,6 +21,18 @@ export type WorkspaceMarkdownUpdate = Pick<
 export type WorkspaceMarkdownOptions = Parameters<typeof compileDocMarkdown>[1] & {
   readonly update?: WorkspaceMarkdownUpdate;
 };
+
+/**
+ * The server compares initialData on idempotent retries and the Doc id is part of that data, so a
+ * retried creation must compile to the same id.
+ */
+export function workspaceMarkdownTargetUnitId(idempotencyKey?: string): string {
+  const identity =
+    idempotencyKey === undefined
+      ? randomUUID()
+      : createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 32);
+  return `markdown-${identity}`;
+}
 
 /** Resolve every source resource inside the caller-authorized source workspace. */
 export async function compileWorkspaceMarkdownFile(

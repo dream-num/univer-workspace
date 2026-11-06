@@ -9,14 +9,17 @@ import { registerMarkdownTool } from "../src/tools/markdown.ts";
 const core = vi.hoisted(() => ({ compile: vi.fn(), materialize: vi.fn() }));
 vi.mock("@univerjs/univer-workspace-client-core/markdown", () => ({
   compileWorkspaceMarkdownFile: core.compile,
+  workspaceMarkdownTargetUnitId: (key?: string) => `markdown-${key ?? "random"}`,
 }));
 
 vi.mock("@univerjs/univer-workspace-client-core/document-materialize", () => ({
   materializeWorkspaceDocument: core.materialize,
 }));
 vi.mock("@univer-cli/doc-markdown-facade", () => ({
-  parseDocMarkdownSourceMap: (value: unknown) =>
-    Array.isArray(value) ? value : (value as { sourceMap: unknown }).sourceMap,
+  parseDocMarkdownSourceMap: (value: unknown) => {
+    if (value === undefined) throw new Error("invalid source map");
+    return Array.isArray(value) ? value : (value as { sourceMap: unknown }).sourceMap;
+  },
 }));
 
 async function setup() {
@@ -53,6 +56,48 @@ async function setup() {
 }
 
 describe("Markdown agent tool", () => {
+  it("rejects an invalid materialized source map before creating a Doc", async () => {
+    core.compile.mockResolvedValue({
+      targetUnitId: "compiled-doc",
+      title: "Report",
+      javascript: "return {};",
+      diagnostics: [],
+      sourceMap: [{ id: "intro" }],
+    });
+    core.materialize.mockResolvedValue({ initialData: { id: "compiled-doc" } });
+    const { directory, run, service } = await setup();
+    try {
+      await expect(run({ source: "report.md", worktreeId: "wt" })).rejects.toThrow(
+        "invalid source map",
+      );
+      expect(service.createWorktreeLocalUnit).not.toHaveBeenCalled();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("derives the compiled Doc id from the idempotency key", async () => {
+    core.compile.mockResolvedValue({
+      targetUnitId: "compiled-doc",
+      title: "Report",
+      javascript: "return {};",
+      diagnostics: [],
+      sourceMap: [],
+    });
+    core.materialize.mockResolvedValue({ initialData: { id: "compiled-doc" } });
+    const { directory, run } = await setup();
+    try {
+      await run({ source: "report.md", worktreeId: "wt", idempotencyKey: "retry-1" });
+      expect(core.compile).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ targetUnitId: "markdown-retry-1" }),
+        expect.any(String),
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("uses shared compilation/materialization to create a draft Doc", async () => {
     core.compile.mockResolvedValue({
       targetUnitId: "compiled-doc",

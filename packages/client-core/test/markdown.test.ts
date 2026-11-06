@@ -60,6 +60,23 @@ describe("Workspace Markdown generation", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("compiles the same Doc id for retries of one idempotency key", async () => {
+    const { feature, compile } = setup();
+    const apply = (idempotencyKey: string) => ({
+      file: "report.md",
+      apply: { spaceId: "s", worktreeId: "wt-1", idempotencyKey },
+    });
+    await feature.execute(apply("request-1"));
+    await feature.execute(apply("request-1"));
+    await feature.execute(apply("request-2"));
+    const ids = (compile.mock.calls as unknown as [string, { targetUnitId: string }][]).map(
+      ([, options]) => options.targetUnitId,
+    );
+    expect(ids[0]).toMatch(/^markdown-[0-9a-f]{32}$/);
+    expect(ids[1]).toBe(ids[0]);
+    expect(ids[2]).not.toBe(ids[0]);
+  });
+
   it("creates a staged Doc and returns the actual native ID mapping", async () => {
     const { feature, create, materialize } = setup();
     const result = await feature.execute({

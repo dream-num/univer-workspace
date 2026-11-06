@@ -80,6 +80,49 @@ describe("Workspace document materialization adapter", () => {
     );
   });
 
+  it("scopes seeded randomness to overlapping calls and restores globals after the last", async () => {
+    const entropy = vi.spyOn(Math, "random").mockReturnValue(0.25);
+    const mathBefore = Object.getOwnPropertyDescriptor(Math, "random");
+    const cryptoBefore = Object.getOwnPropertyDescriptor(globalThis.crypto, "getRandomValues");
+    const gates = new Map<string, () => void>();
+    const entered = new Map<string, () => void>();
+    const reached = (javascript: string): Promise<void> =>
+      new Promise((resolve) => entered.set(javascript, resolve));
+    sdk.materialize.mockImplementation(async ({ javascript }: { javascript: string }) => {
+      const before = Math.random();
+      entered.get(javascript)?.();
+      await new Promise<void>((resolve) => gates.set(javascript, resolve));
+      return { data: { id: "doc", before, after: Math.random() } };
+    });
+    const materializer = new HeadlessWorkspaceTypstMaterializer();
+    const soloEntered = reached("a");
+    const solo = materializer.materialize({ ...input, javascript: "a" });
+    await soloEntered;
+    gates.get("a")?.();
+    const expectedA = (await solo).initialData;
+
+    const firstEntered = reached("a");
+    const first = materializer.materialize({ ...input, javascript: "a" });
+    await firstEntered;
+    const secondEntered = reached("b");
+    const second = materializer.materialize({ ...input, javascript: "b" });
+    await secondEntered;
+
+    // Another session running during materialization keeps real entropy.
+    expect(Math.random()).toBe(0.25);
+
+    gates.get("a")?.();
+    expect((await first).initialData).toEqual(expectedA);
+    expect(Object.getOwnPropertyDescriptor(Math, "random")).not.toEqual(mathBefore);
+    gates.get("b")?.();
+    await second;
+    expect(Object.getOwnPropertyDescriptor(Math, "random")).toEqual(mathBefore);
+    expect(Object.getOwnPropertyDescriptor(globalThis.crypto, "getRandomValues")).toEqual(
+      cryptoBefore,
+    );
+    entropy.mockRestore();
+  });
+
   it("preserves SDK execution errors and restores randomness after failure", async () => {
     const mathBefore = Object.getOwnPropertyDescriptor(Math, "random");
     const cryptoBefore = Object.getOwnPropertyDescriptor(globalThis.crypto, "getRandomValues");

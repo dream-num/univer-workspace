@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type {
   WorkspaceContentExecutionFeature,
   WorkspaceContentExecuteResult,
@@ -9,6 +8,7 @@ import type { WorkspaceUnitFeature } from "./unit.js";
 import type { WorkspaceUnit } from "./worktree-model.js";
 import {
   compileWorkspaceMarkdownFile,
+  workspaceMarkdownTargetUnitId,
   type WorkspaceMarkdownCompilation,
   type WorkspaceMarkdownUpdate,
 } from "./markdown-source.js";
@@ -61,7 +61,8 @@ export class WorkspaceCompileMarkdownFeature {
       throw workspaceError("workspace-argument-invalid", "Choose create or update, not both.");
     }
     const compiled = await (this.dependencies.compile ?? compileWorkspaceMarkdownFile)(input.file, {
-      targetUnitId: input.update?.unitId ?? `markdown-${randomUUID()}`,
+      targetUnitId:
+        input.update?.unitId ?? workspaceMarkdownTargetUnitId(input.apply?.idempotencyKey),
       ...(input.title === undefined ? {} : { title: input.title }),
       ...(input.update === undefined
         ? {}
