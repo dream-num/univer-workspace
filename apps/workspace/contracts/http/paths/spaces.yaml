@@ -259,3 +259,37 @@
         $ref: ../schemas/common.yaml#/NotFound
       "409":
         $ref: ../schemas/common.yaml#/Conflict
+
+/api/spaces/{spaceId}/activity:
+  parameters:
+    - name: spaceId
+      in: path
+      required: true
+      schema: { type: string }
+  get:
+    tags: [Spaces]
+    operationId: getSpaceActivity
+    summary: Daily Pull request and Issue activity for a Space, split by Session source.
+    description: |
+      Pull requests and Issues opened per day in the caller's time zone, merged Pull requests per day, and the
+      newest events. Uses the same visibility as the Worktree and Issue lists. Personal Spaces report only
+      their owner's User Worktrees and no Issues.
+    parameters:
+      - name: timeZone
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^(UTC|[A-Za-z_]+(?:\/[A-Za-z0-9_+\-]+)+)$'
+        description: IANA time zone accepted by Intl, for example `Asia/Shanghai`. Offset strings are rejected.
+    responses:
+      "200":
+        description: Activity window.
+        content:
+          application/json:
+            schema: { $ref: ../schemas/activity.yaml#/RepositoryActivity }
+      "400": { $ref: ../schemas/common.yaml#/BadRequest }
+      "401": { $ref: ../schemas/common.yaml#/Unauthorized }
+      "404": { $ref: ../schemas/common.yaml#/NotFound }

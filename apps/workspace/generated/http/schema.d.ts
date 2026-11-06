@@ -528,6 +528,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spaces/{spaceId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Daily Pull request and Issue activity for a Space, split by Session source.
+         * @description Pull requests and Issues opened per day in the caller's time zone, merged Pull requests per day, and the
+         *     newest events. Uses the same visibility as the Worktree and Issue lists. Personal Spaces report only
+         *     their owner's User Worktrees and no Issues.
+         */
+        get: operations["getSpaceActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spaces": {
         parameters: {
             query?: never;
@@ -1692,6 +1716,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RepositoryActivity: {
+            /** @description Canonical IANA zone used for day boundaries. */
+            timeZone: string;
+            /** @description The 14 calendar days ending today in `timeZone`, oldest first. */
+            days: components["schemas"]["ActivityDay"][];
+            /** @description Newest events in the window, newest first. */
+            events: components["schemas"]["ActivityEvent"][];
+            /** @description False when a source exceeds 1000 touched rows, more than 200 processed Worktrees need state lookups, or a state lookup fails. Incomplete merge facts are omitted. */
+            complete: boolean;
+        };
         /**
          * @description Entry point of the Session that made a write. `browser` = the Workspace web app's sign-in routes.
          *     `agent` = any non-browser entry point (uvw CLI, Workspace Agent, OAuth clients, Discord bot); it does not
@@ -1985,6 +2019,47 @@ export interface components {
         UserSearchResult: {
             users: components["schemas"]["User"][];
         };
+        WriteSourceCounts: {
+            browser: number;
+            agent: number;
+            unknown: number;
+        };
+        ActivityDay: {
+            day: string;
+            /** @description Pull requests and Issues opened that day, by Session source. */
+            opened: components["schemas"]["WriteSourceCounts"];
+            merged: number;
+        };
+        PullActivityEvent: {
+            /** @enum {string} */
+            kind: "pull-opened" | "pull-merged";
+            /** Format: date-time */
+            at: string;
+            actor: components["schemas"]["User"] | null;
+            /** @description Source of this write; `unknown` for merges (not recorded). */
+            writeSource: components["schemas"]["WriteSource"];
+            pull: {
+                id: string;
+                number: number | null;
+                title: string;
+                spaceId: string;
+            };
+        };
+        IssueActivityEvent: {
+            /** @enum {string} */
+            kind: "issue-opened" | "issue-closed";
+            /** Format: date-time */
+            at: string;
+            actor: components["schemas"]["User"] | null;
+            /** @description Source of this write; `unknown` for closes (not recorded). */
+            writeSource: components["schemas"]["WriteSource"];
+            issue: {
+                number: number;
+                title: string;
+                spaceId: string;
+            };
+        };
+        ActivityEvent: components["schemas"]["PullActivityEvent"] | components["schemas"]["IssueActivityEvent"];
         /** @enum {string} */
         SpaceType: "personal" | "team";
         SpaceSummary: {
@@ -3616,6 +3691,34 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getSpaceActivity: {
+        parameters: {
+            query: {
+                /** @description IANA time zone accepted by Intl, for example `Asia/Shanghai`. Offset strings are rejected. */
+                timeZone: string;
+            };
+            header?: never;
+            path: {
+                spaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity window. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryActivity"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     listSpaces: {

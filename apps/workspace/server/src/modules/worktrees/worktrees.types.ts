@@ -171,7 +171,25 @@ export type WorktreeChangesetSubmitResult =
       };
     };
 
+export interface WorktreeActivity {
+  readonly id: string;
+  readonly number: number | null;
+  readonly name: string;
+  readonly creator: PublicUser;
+  readonly createdVia: WriteSource | null;
+  readonly createdAt: number;
+  readonly mergedAt: number | null;
+}
+
+export type WorktreeActivityScope =
+  | { readonly kind: "team"; readonly teamSpaceId: string }
+  | { readonly kind: "user" };
+
 export interface WorktreesModule {
+  activity(userId: string, scope: WorktreeActivityScope, since: number): Promise<{
+    readonly items: readonly WorktreeActivity[];
+    readonly complete: boolean;
+  }>;
   setUnitRemoved(
     userId: string,
     worktreeId: string,

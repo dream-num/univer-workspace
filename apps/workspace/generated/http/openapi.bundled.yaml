@@ -917,6 +917,45 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/spaces/{spaceId}/activity:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Spaces
+      operationId: getSpaceActivity
+      summary: Daily Pull request and Issue activity for a Space, split by Session source.
+      description: |
+        Pull requests and Issues opened per day in the caller's time zone, merged Pull requests per day, and the
+        newest events. Uses the same visibility as the Worktree and Issue lists. Personal Spaces report only
+        their owner's User Worktrees and no Issues.
+      parameters:
+        - name: timeZone
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: ^(UTC|[A-Za-z_]+(?:\/[A-Za-z0-9_+\-]+)+)$
+          description: IANA time zone accepted by Intl, for example `Asia/Shanghai`. Offset strings are rejected.
+      responses:
+        '200':
+          description: Activity window.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RepositoryActivity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/spaces:
     get:
       tags:
@@ -3046,6 +3085,34 @@ components:
       name: x-api-key
       description: Shared secret configured on Workspace and the trusted Discord Bot server.
   schemas:
+    RepositoryActivity:
+      type: object
+      additionalProperties: false
+      required:
+        - timeZone
+        - days
+        - events
+        - complete
+      properties:
+        timeZone:
+          type: string
+          description: Canonical IANA zone used for day boundaries.
+        days:
+          type: array
+          description: The 14 calendar days ending today in `timeZone`, oldest first.
+          minItems: 14
+          maxItems: 14
+          items:
+            $ref: '#/components/schemas/ActivityDay'
+        events:
+          type: array
+          maxItems: 20
+          description: Newest events in the window, newest first.
+          items:
+            $ref: '#/components/schemas/ActivityEvent'
+        complete:
+          type: boolean
+          description: False when a source exceeds 1000 touched rows, more than 200 processed Worktrees need state lookups, or a state lookup fails. Incomplete merge facts are omitted.
     WriteSource:
       type: string
       enum:
@@ -3886,6 +3953,127 @@ components:
           maxItems: 20
           items:
             $ref: '#/components/schemas/User'
+    WriteSourceCounts:
+      type: object
+      additionalProperties: false
+      required:
+        - browser
+        - agent
+        - unknown
+      properties:
+        browser:
+          type: integer
+          minimum: 0
+        agent:
+          type: integer
+          minimum: 0
+        unknown:
+          type: integer
+          minimum: 0
+    ActivityDay:
+      type: object
+      additionalProperties: false
+      required:
+        - day
+        - opened
+        - merged
+      properties:
+        day:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+        opened:
+          $ref: '#/components/schemas/WriteSourceCounts'
+          description: Pull requests and Issues opened that day, by Session source.
+        merged:
+          type: integer
+          minimum: 0
+    PullActivityEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - at
+        - actor
+        - writeSource
+        - pull
+      properties:
+        kind:
+          type: string
+          enum:
+            - pull-opened
+            - pull-merged
+        at:
+          type: string
+          format: date-time
+        actor:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - type: 'null'
+        writeSource:
+          $ref: '#/components/schemas/WriteSource'
+          description: Source of this write; `unknown` for merges (not recorded).
+        pull:
+          type: object
+          additionalProperties: false
+          required:
+            - id
+            - number
+            - title
+            - spaceId
+          properties:
+            id:
+              type: string
+            number:
+              type:
+                - integer
+                - 'null'
+            title:
+              type: string
+            spaceId:
+              type: string
+    IssueActivityEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - at
+        - actor
+        - writeSource
+        - issue
+      properties:
+        kind:
+          type: string
+          enum:
+            - issue-opened
+            - issue-closed
+        at:
+          type: string
+          format: date-time
+        actor:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - type: 'null'
+        writeSource:
+          $ref: '#/components/schemas/WriteSource'
+          description: Source of this write; `unknown` for closes (not recorded).
+        issue:
+          type: object
+          additionalProperties: false
+          required:
+            - number
+            - title
+            - spaceId
+          properties:
+            number:
+              type: integer
+            title:
+              type: string
+            spaceId:
+              type: string
+    ActivityEvent:
+      oneOf:
+        - $ref: '#/components/schemas/PullActivityEvent'
+        - $ref: '#/components/schemas/IssueActivityEvent'
     SpaceType:
       type: string
       enum:
