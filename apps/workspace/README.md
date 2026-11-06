@@ -402,19 +402,23 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V14 product databases to V15 automatically.
+backs up and migrates supported V0 through V15 product databases to V16 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` is unchanged. Product V15 adds ordered Space pins and a per-user stars index. V14 added Email identities and Email login codes; V13 added the Google Provider; V12 added Space slugs and Worktree numbers; V11 added the Space description; V10 added Space stars; V9 added
-Issue tables and V8 added content-permission tables. Before creating
+`history=2`; `comment=1` is unchanged. Product V16 adds nullable Session, Worktree
+and Issue source columns without backfilling existing rows. V15 added ordered Space
+pins and a per-user stars index. V14 added Email identities and Email login codes;
+V13 added the Google Provider; V12 added Space slugs and Worktree numbers;
+V11 added the Space description; V10 added Space stars; V9 added Issue tables
+and V8 added content-permission tables. Before creating
 application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V15,
+2. Start a single new instance. Startup first prepares the product database to V16,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -483,6 +487,15 @@ V14, creates a readable `.v14-backup-…sqlite` backup, then creates the table a
 in one transaction with foreign-key and integrity checks. A failed transaction rolls
 back; successful restarts do not repeat migration or backup. To roll back, stop V15
 and restore the V14 backup. Never run V14 and V15 writers on the same SQLite file.
+
+V16 adds `login_sessions.write_source`, `worktrees.created_via`, and `issues.created_via`
+with CHECK constraints allowing `browser` or `agent`. All are nullable with no default;
+existing rows stay `NULL`, meaning unknown. This unit adds storage only.
+Stop all old writers, start one V16 instance, and wait for migration and health checks
+before restoring service. Startup validates V15 and creates a readable
+`.v15-backup-…sqlite` before the transaction. A failure rolls back; successful restarts
+do not repeat migration or backup. To roll back, stop V16 and restore the V15 backup.
+Never run V15 and V16 writers on the same SQLite file.
 
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
 addresses repositories by `owner/slug`.
