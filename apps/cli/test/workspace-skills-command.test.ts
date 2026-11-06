@@ -242,6 +242,13 @@ describe("Workspace CLI skills command", () => {
     );
 
     expect(board).toContain("uvw inspect board");
+    expect(board).toContain("--mode model --json");
+    expect(board).toContain("--mode both");
+    expect(board).toContain("FBoard.planGraphLayout");
+    expect(board).toContain("FBoard.applyLayoutPlan");
+    expect(board).toContain("--plan-ports");
+    expect(board).toContain("analyses[].portPlan");
+    expect(board).toContain("incomplete");
     expect(board).toContain("inspect board-element id:<element-id>");
     expect(board).not.toContain("Native `inspect` is not supported");
   });

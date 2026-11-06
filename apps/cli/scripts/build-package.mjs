@@ -2,10 +2,7 @@ import { spawnSync } from "node:child_process";
 import { rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  assemblePackageArtifact,
-  assertExactSemver,
-} from "./package-artifact.mjs";
+import { assemblePackageArtifact, assertExactSemver } from "./package-artifact.mjs";
 
 const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(scriptRoot, "..");
@@ -40,7 +37,8 @@ function run(command, args, cwd, env) {
   const result = spawnSync(command, args, {
     cwd,
     env,
-    shell: process.platform === "win32",
+    shell: process.platform === "win32" && command !== process.execPath,
+    windowsHide: true,
     stdio: "inherit",
   });
   if (result.status !== 0) process.exit(result.status ?? 1);

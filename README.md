@@ -198,7 +198,7 @@ Workspace owns product identity, Spaces, hierarchy, ACLs, sharing, Trash, Recent
 Blob storage policy, remote workflows, and deployment. Client Core shares storage-neutral authentication,
 Workspace workflows, local Node-hosted Blob/Asset transfer, and the worker-backed content runtime between
 repository applications, including Node-hosted Office exchange, Typst compile/materialize/apply, render Unit
-assembly, screenshots, PNG/PDF output, Slide layout lint, the render-page source, and the SVG
+assembly, screenshots, PNG/PDF output, Slide and Board layout lint, the render-page source, and the SVG
 compile/measure/apply workflow; the reference-provider package remains Browser-only.
 Both are private implementation modules, not additional public applications or SDKs.
 
