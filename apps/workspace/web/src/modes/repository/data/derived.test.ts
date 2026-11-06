@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildRepositoryActivity } from "./activity";
-import { actorOf } from "./actor";
-import { ACTIVITY_DAYS, dayKeyOf, dayWindow, sliceSeries } from "./days";
+import { parseRepositoryActivity } from "./activity";
+import { actorOf, segmentsOf } from "./actor";
+import { ACTIVITY_DAYS, asDayKey, browserTimeZone, dayKeyOf, dayWindow, sliceSeries } from "./days";
 import { buildHomeWork } from "./home-work";
 import { buildIssueFacets } from "./issue-facets";
 import { buildPendingIndex, pendingAncestryPlan, pendingDetailPlan, type NodeAncestry } from "./pending";
 import { at, detail, issue, now, pull, recent, space, unit, user } from "./fixtures.test-support";
 
-const full = <T>(items: T[]) => ({ items, complete: true });
 const page = <T>(items: T[], nextCursor: string | null = null) => ({ items, nextCursor });
 const ancestry = new Map<string, NodeAncestry>([
   ["file", { spaceId: space.id, ancestors: ["outer", "inner"], complete: true }],
@@ -33,40 +32,46 @@ describe("Repository calendar and activity", () => {
     expect(() => dayKeyOf("invalid")).toThrow(RangeError);
   });
 
-  it("counts opened pulls and issues, keeps empty days, and merges by processed day", () => {
-    const result = buildRepositoryActivity(dayWindow(now), full([
-      pull({ state: "merged", createdAt: at(1), processedAt: at(6) }),
-      pull({ id: "old", state: "merged", createdAt: at(-10), processedAt: at(5) }),
-      pull({ id: "discarded", state: "discarded", createdAt: at(-10), processedAt: at(6) }),
-    ]), full([
-      issue({ state: "closed", closedAt: at(6, 10), closedBy: user }),
-      issue({ id: "old-closed", createdAt: at(-10), state: "closed", closedAt: at(-9) }),
-      issue({ id: "reopened", state: "open", closedAt: at(6, 11) }),
-    ]));
+  it("parses server days and all event kinds without inferring source from the user", () => {
+    const events = [
+      { kind: "pull-merged", at: at(6), actor: null, writeSource: "unknown", pull: { id: "p", number: 1, title: "Plan", spaceId: space.id } },
+      { kind: "issue-closed", at: at(5), actor: user, writeSource: "unknown", issue: { number: 2, title: "Review", spaceId: space.id } },
+      { kind: "issue-opened", at: at(4), actor: user, writeSource: "agent", issue: { number: 2, title: "Review", spaceId: space.id } },
+      { kind: "pull-opened", at: at(3), actor: user, writeSource: "browser", pull: { id: "p", number: 1, title: "Plan", spaceId: space.id } },
+    ] satisfies import("./types").WireActivity["events"];
+    const result = parseRepositoryActivity({
+      timeZone: browserTimeZone(),
+      days: dayWindow(now).days.map((day, i) => ({ day, opened: { browser: i === 0 ? 2 : 0, agent: i === 0 ? 3 : 0, unknown: i === 0 ? 1 : 0 }, merged: i === 0 ? 4 : 0 })),
+      events,
+      complete: false,
+    });
     expect(result.series.days).toHaveLength(14);
-    expect(result.series.days[0]).toMatchObject({ total: 0, merged: 0, segments: [{ key: "pulls", value: 0 }, { key: "issues", value: 0 }] });
-    expect(result.series.days.find((day) => day.day === "2026-11-01")).toMatchObject({ total: 1, segments: [{ key: "pulls", value: 1 }, { key: "issues", value: 0 }] });
-    expect(result.series.days.find((day) => day.day === "2026-11-05")).toMatchObject({ total: 2, merged: 1 });
-    expect(result.series.days.at(-1)).toMatchObject({ total: 0, merged: 1 });
-    expect(result.events.map((event) => event.kind)).toEqual(["pull-merged", "issue-closed", "pull-merged", "issue-opened", "issue-opened", "pull-opened"]);
-    expect(result.events.every((event) => event.actor.source === "unknown")).toBe(true);
-    expect(result.events[0]?.actor.user).toBeNull();
+    expect(result.series.days[0]).toEqual({ day: "2026-10-24", segments: [{ key: "people", value: 2 }, { key: "agents", value: 3 }, { key: "unknown", value: 1 }], total: 6, merged: 4 });
+    expect(result.series.days[1]).toMatchObject({ segments: [{ key: "people", value: 0 }, { key: "agents", value: 0 }], total: 0, merged: 0 });
+    expect(result.events).toEqual([
+      { kind: "pull-merged", at: at(6), actor: { user: null, kind: "unknown" }, pull: events[0]?.pull },
+      { kind: "issue-closed", at: at(5), actor: { user, kind: "unknown" }, issue: events[1]?.issue },
+      { kind: "issue-opened", at: at(4), actor: { user, kind: "agents" }, issue: events[2]?.issue },
+      { kind: "pull-opened", at: at(3), actor: { user, kind: "people" }, pull: events[3]?.pull },
+    ]);
     expect(result.lastActivityAt).toBe(at(6));
-    expect(result.complete).toBe(true);
-    const sliced = sliceSeries(result.series, 7);
-    expect(sliced.days).toEqual(result.series.days.slice(-7));
-    expect(sliced.complete).toBe(true);
-    expect(result.series.days).toHaveLength(14);
+    expect(result.complete).toBe(false);
+    expect(sliceSeries(result.series, 7)).toEqual({ days: result.series.days.slice(-7), complete: false });
+    expect(parseRepositoryActivity({ timeZone: "UTC", days: [], events: [], complete: true })).toMatchObject({ lastActivityAt: null, complete: true, series: { complete: true } });
+    expect(() => asDayKey("invalid")).toThrow(RangeError);
+    expect(browserTimeZone()).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
   });
 
-  it("propagates partial scans and limits newest-first activity to twenty events", () => {
-    const result = buildRepositoryActivity(dayWindow(now), { items: Array.from({ length: 30 }, (_, i) => pull({ id: String(i), createdAt: at(6, i % 12) })), complete: false }, full([]));
-    expect(result.events).toHaveLength(20);
-    expect(result.events[0]?.at).toBe(at(6, 11));
-    expect(result.complete).toBe(false);
-    expect(sliceSeries(result.series, 7).complete).toBe(false);
-    expect(buildRepositoryActivity(dayWindow(now), full([]), full([])).lastActivityAt).toBeNull();
-    expect(actorOf(user)).toEqual({ user, source: "unknown" });
+  it("always includes people and agents, and shows unknown only above zero", () => {
+    expect(segmentsOf({ people: 0, agents: 0, unknown: 0 })).toEqual([{ key: "people", value: 0 }, { key: "agents", value: 0 }]);
+    expect(segmentsOf({ people: 1, agents: 2, unknown: 3 })).toEqual([{ key: "people", value: 1 }, { key: "agents", value: 2 }, { key: "unknown", value: 3 }]);
+  });
+
+  it.each([
+    ["browser", "people"], ["agent", "agents"], ["unknown", "unknown"],
+  ] as const)("maps %s writes to %s without changing identity", (source, kind) => {
+    expect(actorOf(user, source)).toEqual({ user, kind });
+    expect(actorOf(null, source)).toEqual({ user: null, kind });
   });
 });
 
@@ -84,7 +89,7 @@ describe("Repository pending changes", () => {
       ["deleted", { spaceId: space.id, ancestors: ["outer", "inner"], complete: true }],
       ["created", { spaceId: space.id, ancestors: ["outer", "inner"], complete: true }],
     ]), true);
-    expect(result.byNode.get("file")?.[0]).toMatchObject({ kind: "modified", scope: "self", actor: { user, source: "unknown" } });
+    expect(result.byNode.get("file")?.[0]).toMatchObject({ kind: "modified", scope: "self", actor: { user, kind: "unknown" } });
     expect(result.byNode.get("deleted")?.[0]?.kind).toBe("deleted");
     expect(result.byNode.get("created")?.[0]?.kind).toBe("added");
     expect(result.byNode.get("inner")).toHaveLength(4);
@@ -142,7 +147,7 @@ describe("Repository Home and issue facets", () => {
     const beta = { ...space, id: "beta", name: "Beta" };
     const result = buildHomeWork(page([pull(), pull({ id: "beta-pull", teamSpace: beta, updatedAt: at(5) }), pull({ id: "merged", state: "merged" })]), page([issue({ space: beta })]), []);
     expect(result.ranking.map((row) => [row.space.id, row.total])).toEqual([["beta", 2], [space.id, 1]]);
-    expect(result.ranking[0]?.segments).toEqual([{ key: "pulls", value: 1 }, { key: "issues", value: 1 }]);
+    expect(result.ranking[0]?.segments).toEqual([{ key: "people", value: 0 }, { key: "agents", value: 0 }, { key: "unknown", value: 2 }]);
     expect(result.headline).toEqual({ kind: "open-work", pulls: 2, repositories: 2 });
     expect(result.openBySpace.get("beta")).toEqual({ pulls: 1, issues: 1 });
     expect(result.pulls.map((item) => item.pull.id)).toEqual(["pull", "beta-pull"]);
@@ -152,6 +157,21 @@ describe("Repository Home and issue facets", () => {
     expect(sameName.ranking.map((row) => row.space.id)).toEqual(["a", "b"]);
     expect(buildHomeWork(page([pull({ capabilities: { ...pull().capabilities, review: false } })]), page([]), []).pulls[0]?.canReview).toBe(false);
     expect(result.complete).toBe(true);
+  });
+
+  it("counts Agent drafts with unknown pulls in the denominator and segments all open work by kind", () => {
+    const result = buildHomeWork(page([
+      pull({ createdVia: "agent" }), pull({ id: "legacy", createdVia: "unknown" }),
+      pull({ id: "human", createdVia: "browser" }), pull({ id: "merged", createdVia: "agent", state: "merged" }),
+    ]), page([issue({ createdVia: "agent" }), issue({ id: "closed", state: "closed", createdVia: "browser" })]), []);
+    expect(result.headline).toEqual({ kind: "agents-drafted", agents: 1, pulls: 3 });
+    expect(result.ranking[0]?.segments).toEqual([{ key: "people", value: 1 }, { key: "agents", value: 2 }, { key: "unknown", value: 1 }]);
+    expect(result.ranking[0]?.total).toBe(4);
+    expect(result.pulls.map((item) => item.actor.kind)).toEqual(["agents", "unknown", "people"]);
+    expect(result.issues[0]?.author.kind).toBe("agents");
+    expect(buildHomeWork(page([pull({ createdVia: "browser" })]), page([issue({ createdVia: "agent" })]), []).headline).toEqual({ kind: "open-work", pulls: 1, repositories: 1 });
+    expect(buildHomeWork(page([pull({ createdVia: "agent" })]), page([]), []).headline).toEqual({ kind: "agents-drafted", agents: 1, pulls: 1 });
+    expect(buildPendingIndex(space.id, [detail({ createdVia: "agent" })], ancestry, true).byNode.get("file")?.[0]?.actor.kind).toBe("agents");
   });
 
   it("uses the newest known file update per repository even when the last-opened order differs", () => {

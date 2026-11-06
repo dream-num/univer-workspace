@@ -7,8 +7,10 @@ import type { IssueListModelProps } from "../../../features/issues/use-issue-lis
 import { ISSUE_FILTER_ANY as ANY, ISSUE_SORTS, ISSUE_SORT_LABELS, useIssueListModel } from "../../../features/issues/use-issue-list-model";
 import { formatRelativeDate } from "../../../shared/format-relative-date";
 import { useI18n } from "../../../shared/i18n";
-import { Avatar, Button, buttonVariants, Empty, Input, Spinner } from "../../../shared/ui";
+import { Button, buttonVariants, Empty, Input, Spinner } from "../../../shared/ui";
 import { cn } from "../../../shared/utils/cn";
+import { ActorAvatar } from "../code/actor-avatar";
+import { actorOf } from "../data";
 import { IssueSubnav } from "./issue-subnav";
 
 type IssueSummary = components["schemas"]["IssueSummary"];
@@ -133,12 +135,12 @@ function RepositoryIssueRow({ issue, showSpace }: { readonly issue: IssueSummary
           </div>
           <div className="rd-issue-meta">
             {showSpace ? <span>{issue.space.name}</span> : null}
-            <span>{closed ? t("repositoryIssueClosedBy", { number: issue.number, date: formatRelativeDate(closed, language), name: (issue.closedBy ?? issue.author).displayName }) : t("repositoryIssueOpenedBy", { number: issue.number, date: formatRelativeDate(issue.createdAt, language), name: issue.author.displayName })}</span>
+            <span><ActorAvatar actor={actorOf(closed ? issue.closedBy ?? issue.author : issue.author, closed ? "unknown" : issue.createdVia)} size="sm" /> {closed ? t("repositoryIssueClosedBy", { number: issue.number, date: formatRelativeDate(closed, language), name: (issue.closedBy ?? issue.author).displayName }) : t("repositoryIssueOpenedBy", { number: issue.number, date: formatRelativeDate(issue.createdAt, language), name: issue.author.displayName })}</span>
           </div>
         </div>
         <div className="rd-issue-right">
           <span className="rd-issue-assignees" title={issue.assignees.map((user) => user.displayName).join(", ")}>
-            {issue.assignees.slice(0, 3).map((user) => <span key={user.id} className="rd-avatar"><Avatar name={user.displayName} src={user.avatarUrl} size="xs" /></span>)}
+            {issue.assignees.slice(0, 3).map((user) => <ActorAvatar key={user.id} actor={actorOf(user, "unknown")} />)}
             {issue.assignees.length > 3 ? <span className="rd-issue-count">+{issue.assignees.length - 3}</span> : null}
           </span>
           {issue.referenceCount ? <span className="rd-issue-comments" title={t("issueReferenceCount", { count: issue.referenceCount })}><Paperclip aria-hidden="true" />{issue.referenceCount}</span> : null}

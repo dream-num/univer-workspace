@@ -19,9 +19,9 @@ import { useI18n } from "../../../shared/i18n";
 import { toast } from "../../../shared/ui";
 import type { HomePageProps } from "../../page.types";
 import { WorkspaceLayout } from "../../workspace-layout";
-import { ActorAvatar } from "../code/actor-avatar";
+import { ACTOR_LABEL, ActorAvatar } from "../code/actor-avatar";
 import { TypeBadge } from "../code/repository-file-table";
-import { useHomeWork, type HomeHeadline as Headline, type HomeWork } from "../data";
+import { ACTOR_KINDS, actorOf, useHomeWork, type HomeHeadline as Headline, type HomeWork } from "../data";
 import { PullRequestCard } from "../pull-request-card";
 import { HomeFrame } from "../shell/home-frame";
 import { spaceDisplayName } from "../space-name";
@@ -103,9 +103,15 @@ export function RepositoryHomePage(_props: HomePageProps) {
 function HomeHeadline({ headline }: { readonly headline: Headline }) {
   const { t } = useI18n();
   return (
-    <h1 className="rd-headline">
+    <h1 className="rd-headline" data-headline={headline.kind}>
       {headline.kind === "quiet" ? (
         t("repositoryHomeQuiet")
+      ) : headline.kind === "agents-drafted" ? (
+        <>
+          {t("repositoryHomeAgentsDraftedBefore", { count: headline.pulls })}
+          <em>{t("repositoryHomeAgentsDraftedShare", { agents: headline.agents, count: headline.pulls })}</em>
+          {t("repositoryHomeAgentsDraftedAfter", { count: headline.pulls })}
+        </>
       ) : (
         <>
           <em>{headline.pulls}</em> {t("repositoryHomeOpenPulls", { count: headline.pulls })}{" "}
@@ -119,20 +125,19 @@ function HomeHeadline({ headline }: { readonly headline: Headline }) {
 function LoadRanking({ items }: { readonly items: HomeWork["ranking"] }) {
   const { t } = useI18n();
   const maximum = Math.max(1, ...items.map((item) => item.total));
+  const kinds = ACTOR_KINDS.filter((kind) => kind !== "unknown" || items.some((item) => item.segments.some((segment) => segment.key === kind)));
   return (
     <section className="rd-who-chg" aria-labelledby="home-ranking-title">
       <div className="rd-wh">
         <h2 id="home-ranking-title">{t("repositoryHomeRankingTitle")}</h2>
         <p>{t("repositoryHomeRankingBasis")}</p>
         <div className="rd-home-key">
-          <span>
-            <i style={{ background: "var(--rd-seg-pulls)" }} />
-            {t("repositoryPullRequests")}
-          </span>
-          <span>
-            <i style={{ background: "var(--rd-seg-issues)" }} />
-            {t("issues")}
-          </span>
+          {kinds.map((kind) => (
+            <span key={kind}>
+              <i style={{ background: `var(--rd-actor-${kind})` }} />
+              {t(ACTOR_LABEL[kind])}
+            </span>
+          ))}
         </div>
       </div>
       {items.length ? (
@@ -149,7 +154,7 @@ function LoadRanking({ items }: { readonly items: HomeWork["ranking"] }) {
                         key={segment.key}
                         style={{
                           width: `${(segment.value / maximum) * 100}%`,
-                          background: `var(--rd-seg-${segment.key})`,
+                          background: `var(--rd-actor-${segment.key})`,
                         }}
                       />
                     ) : null,
@@ -159,7 +164,7 @@ function LoadRanking({ items }: { readonly items: HomeWork["ranking"] }) {
                   {item.segments.map((segment, i) => (
                     <span key={segment.key}>
                       {i ? " · " : ""}
-                      {t(segment.key === "pulls" ? "repositoryPullRequests" : "issues")}{" "}
+                      {t(ACTOR_LABEL[segment.key])}{" "}
                       <b>{segment.value}</b>
                     </span>
                   ))}
@@ -258,7 +263,7 @@ function IssueRows({ items }: { readonly items: HomeWork["issues"] }) {
             </div>
             <div className="rd-home-issue-side">
               {issue.assignees.slice(0, 3).map((user) => (
-                <ActorAvatar key={user.id} actor={{ user, source: "unknown" }} size="sm" />
+                <ActorAvatar key={user.id} actor={actorOf(user, "unknown")} size="sm" />
               ))}
               <span
                 className="rd-comments"

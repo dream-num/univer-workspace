@@ -17,6 +17,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("Repository count messages", () => {
   it.each([
+    ["repositoryHomeAgentsDraftedAfter", " open Pull request", " open Pull requests"],
     ["repositoryWorktreeUnits", "1 file", "2 files"],
     ["repositoryAboutMembers", "member", "members"],
     ["repositoryAboutStars", "star", "stars"],

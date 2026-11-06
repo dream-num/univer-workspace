@@ -1,7 +1,8 @@
 import { ChartColumn } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../../../shared/i18n";
-import type { DailySeries, DayKey } from "../data";
+import { ACTOR_KINDS, type DailySeries, type DayKey, type SegmentKey } from "../data";
+import { ACTOR_LABEL } from "./actor-avatar";
 import { chartLayout } from "./chart-layout";
 
 export function formatChartDay(day: DayKey, language: string) {
@@ -42,15 +43,14 @@ export function ActivityChart({
   const layout = chartLayout(series, width);
   const selected = series.days.find((day) => day.day === hovered);
   const selectedColumn = layout.columns.find((column) => column.day === hovered);
-  const totals = new Map(
-    series.days.flatMap((day) => day.segments).map((segment) => [segment.key, 0]),
-  );
+  const totals = new Map(ACTOR_KINDS
+    .filter((kind) => series.days.some((day) => day.segments.some((segment) => segment.key === kind)))
+    .map((kind) => [kind, 0]));
   for (const day of series.days)
     for (const segment of day.segments)
       totals.set(segment.key, (totals.get(segment.key) ?? 0) + segment.value);
   const merged = series.days.reduce((sum, day) => sum + day.merged, 0);
-  const label = (key: "pulls" | "issues") =>
-    t(key === "pulls" ? "repositoryActivityPulls" : "repositoryActivityIssues");
+  const label = (key: SegmentKey) => t(ACTOR_LABEL[key]);
   const first = series.days[0]?.day;
   const last = series.days.at(-1)?.day;
   const pick = (day: DayKey) => onPickDay(pickedDay === day ? null : day);
@@ -137,7 +137,7 @@ export function ActivityChart({
                         width={layout.barWidth}
                         height={rect.height}
                         rx={2.5}
-                        fill={`var(--rd-seg-${rect.key})`}
+                        fill={`var(--rd-actor-${rect.key})`}
                       />
                     ))}
                   {column.merged > 0 ? (
@@ -225,7 +225,7 @@ export function ActivityChart({
               <div className="rd-d">{formatChartDay(selected.day, language)}</div>
               {selected.segments.map((segment) => (
                 <div className="rd-r" key={segment.key}>
-                  <span className="rd-sw" style={{ background: `var(--rd-seg-${segment.key})` }} />
+                  <span className="rd-sw" style={{ background: `var(--rd-actor-${segment.key})` }} />
                   {label(segment.key)}
                   <span className="rd-num">{segment.value}</span>
                 </div>
@@ -241,7 +241,7 @@ export function ActivityChart({
         <div className="rd-legend">
           {[...totals].map(([key, total]) => (
             <div className="rd-r" key={key}>
-              <span className="rd-sw" style={{ background: `var(--rd-seg-${key})` }} />
+              <span className="rd-sw" style={{ background: `var(--rd-actor-${key})` }} />
               {label(key)}
               <span className="rd-num">{total}</span>
             </div>

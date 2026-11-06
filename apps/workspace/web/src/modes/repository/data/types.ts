@@ -5,12 +5,12 @@ export interface DayWindow {
   readonly days: readonly DayKey[];
   readonly startIso: string;
 }
-export type WriteSource = "unknown" | "browser" | "agent";
+export type ActorKind = "people" | "agents" | "unknown";
 export interface ActorRef {
   readonly user: components["schemas"]["User"] | null;
-  readonly source: WriteSource;
+  readonly kind: ActorKind;
 }
-export type SegmentKey = "pulls" | "issues";
+export type SegmentKey = ActorKind;
 export interface Segment {
   readonly key: SegmentKey;
   readonly value: number;
@@ -40,7 +40,6 @@ export type ActivityEvent =
   | { readonly kind: "pull-opened" | "pull-merged"; readonly at: string; readonly actor: ActorRef; readonly pull: PullRef }
   | { readonly kind: "issue-opened" | "issue-closed"; readonly at: string; readonly actor: ActorRef; readonly issue: IssueRef };
 export interface RepositoryActivity {
-  readonly window: DayWindow;
   readonly series: DailySeries;
   readonly events: readonly ActivityEvent[];
   readonly lastActivityAt: string | null;
@@ -81,6 +80,7 @@ export interface RepositoryLoad {
   readonly total: number;
 }
 export type HomeHeadline =
+  | { readonly kind: "agents-drafted"; readonly agents: number; readonly pulls: number }
   | { readonly kind: "open-work"; readonly pulls: number; readonly repositories: number }
   | { readonly kind: "quiet" };
 export interface HomeWork {
@@ -116,7 +116,6 @@ export interface Page<T> {
   readonly items: readonly T[];
   readonly nextCursor: string | null;
 }
-export interface WindowPage<T> {
-  readonly items: readonly T[];
-  readonly complete: boolean;
-}
+
+export type WireWriteSource = components["schemas"]["WriteSource"];
+export type WireActivity = components["schemas"]["RepositoryActivity"];

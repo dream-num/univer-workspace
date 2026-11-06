@@ -3,60 +3,25 @@ import { api } from "../../../shared/api/client";
 import { apiError } from "../../../shared/api/errors";
 import { recentResourceSummaryQueryOptions } from "../../../features/views/recent.queries";
 import type { NodeAncestry } from "./pending";
-import type { Issue, Page, Space, WindowPage, Worktree } from "./types";
-
-const MAX_WINDOW_PAGES = 5;
-
-async function scanWindow<T extends { readonly updatedAt: string }>(
-  startIso: string,
-  fetchPage: (cursor: string | undefined) => Promise<Page<T>>,
-): Promise<WindowPage<T>> {
-  const items: T[] = [];
-  let cursor: string | undefined;
-  for (let page = 0; page < MAX_WINDOW_PAGES; page += 1) {
-    const data = await fetchPage(cursor);
-    items.push(...data.items);
-    const tail = data.items.at(-1);
-    if (!data.nextCursor || (tail && Date.parse(tail.updatedAt) < Date.parse(startIso))) {
-      return { items, complete: true };
-    }
-    cursor = data.nextCursor;
-  }
-  // shortcut: five pages per activity source, replace with server activity buckets in PR2.
-  return { items, complete: false };
-}
+import { activityQueryKey } from "../../../features/worktrees/worktrees.queries";
+import { parseRepositoryActivity } from "./activity";
+import type { Space } from "./types";
 
 function spaceFilter(space: Space) {
   return space.type === "team" ? { teamSpaceId: space.id } : { kind: "user" as const };
 }
 
-export function worktreeWindowQueryOptions(space: Space, startIso: string) {
+export function repositoryActivityQueryOptions(spaceId: string, timeZone: string) {
   return queryOptions({
-    queryKey: ["worktrees", "repository", space.id, space.type, "window", startIso],
-    queryFn: ({ signal }) => scanWindow<Worktree>(startIso, async (cursor) => {
-      const { data, error } = await api.GET("/api/worktrees", {
+    queryKey: [...activityQueryKey, spaceId, timeZone],
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET("/api/spaces/{spaceId}/activity", {
         signal,
-        params: { query: { ...spaceFilter(space), scope: "all", order: "updatedAtDesc", limit: 100, ...(cursor ? { cursor } : {}) } },
+        params: { path: { spaceId }, query: { timeZone } },
       });
       if (error) throw apiError(error);
-      return data;
-    }),
-  });
-}
-
-export function issueWindowQueryOptions(space: Space, startIso: string) {
-  return queryOptions({
-    queryKey: ["issues", "repository", space.id, space.type, "window", startIso],
-    queryFn: ({ signal }): Promise<WindowPage<Issue>> => space.type === "personal"
-      ? Promise.resolve({ items: [], complete: true })
-      : scanWindow<Issue>(startIso, async (cursor) => {
-        const { data, error } = await api.GET("/api/spaces/{spaceId}/issues", {
-          signal,
-          params: { path: { spaceId: space.id }, query: { state: "all", sort: "updated", order: "desc", limit: 200, ...(cursor ? { cursor } : {}) } },
-        });
-        if (error) throw apiError(error);
-        return data;
-      }),
+      return parseRepositoryActivity(data);
+    },
   });
 }
 

@@ -13,6 +13,7 @@
     letter-spacing: -0.01em;
   }
   .rd-headline-phrase { white-space: nowrap; }
+  .rd-headline[data-headline="agents-drafted"] em { color: var(--rd-actor-agents-text); white-space: nowrap; }
   .rd-headline em {
     font-style: normal;
     color: var(--rd-accent-text);

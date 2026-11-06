@@ -5,6 +5,7 @@ import { spaceStarQueryOptions } from "../../../../features/spaces";
 import { teamMembersQueryOptions } from "../../../../features/permissions/permissions.queries";
 import { useI18n } from "../../../../shared/i18n";
 import type { QueryView, RepositoryActivity } from "../../data";
+import { actorOf } from "../../data";
 import { ActorAvatar } from "../../code/actor-avatar";
 import { ActivityEventLine } from "../../code/activity-event";
 import { repositoryMembers } from "../../code/team-members";
@@ -65,7 +66,7 @@ export function AboutRail({
           <h3>{t("repositoryMetaMembers")}</h3>
           <div className="rd-stack">
             {people.map((user) => (
-              <ActorAvatar key={user.id} actor={{ user, source: "unknown" }} />
+              <ActorAvatar key={user.id} actor={actorOf(user, "unknown")} />
             ))}
           </div>
         </section>

@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { invalidateProductLists } from "../nodes/nodes.commands";
 import { issuesQueryKey } from "../issues/issues.queries";
-import { worktreesQueryKey } from "./worktrees.queries";
+import { activityQueryKey, worktreesQueryKey } from "./worktrees.queries";
 
 const RECONNECT_DELAY_MS = 1_000;
 
@@ -47,6 +47,7 @@ export function useWorktreeChangeFeed(enabled: boolean): void {
         socket.addEventListener("message", (event) => {
           const message = parseWorktreeChangeFeedMessage(event.data);
           if (!message) return;
+          void queryClient.invalidateQueries({ queryKey: activityQueryKey });
           if (message.event === "issuesChanged") {
             void queryClient.invalidateQueries({ queryKey: issuesQueryKey });
             return;
