@@ -66,3 +66,15 @@ vi.mock("./repository/pages/issues", () => ({
   RepositoryIssueListPage: () => null,
   RepositoryIssueDetailPage: () => null,
 }));
+
+
+it("provides both locales for Repository actor and draft-headline messages", () => {
+  const keys = [
+    "repositoryActorPeople", "repositoryActorAgents", "repositoryActorAgent", "repositoryActorUnknown",
+    "repositoryHomeAgentsDraftedBefore", "repositoryHomeAgentsDraftedShare", "repositoryHomeAgentsDraftedAfter",
+  ] as const;
+  for (const language of ["zh-CN", "en-US"] as const) {
+    for (const key of keys) expect(messages[language][key].length).toBeGreaterThan(0);
+  }
+  expect(messages["zh-CN"].repositoryActorPeople).toBe("人");
+});

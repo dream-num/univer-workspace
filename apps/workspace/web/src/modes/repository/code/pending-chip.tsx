@@ -1,4 +1,4 @@
-import { UserRound } from "lucide-react";
+import { Bot, UserRound } from "lucide-react";
 import { useI18n } from "../../../shared/i18n";
 import type { PendingChange } from "../data";
 import { PullRequestLink } from "../repository-pull-request-link";
@@ -13,9 +13,10 @@ export function PendingChip({ change }: { readonly change: PendingChange }) {
   return (
     <PullRequestLink
       className="rd-pending"
+      data-actor={change.actor.kind}
       target={{ spaceId: change.pull.spaceId ?? undefined, worktree: change.pull }}
     >
-      <UserRound aria-hidden="true" />
+      {change.actor.kind === "agents" ? <Bot aria-hidden="true" /> : <UserRound aria-hidden="true" />}
       <span className="rd-num">
         {change.pull.number === null ? t("repositoryPullRequest") : `#${change.pull.number}`}
       </span>

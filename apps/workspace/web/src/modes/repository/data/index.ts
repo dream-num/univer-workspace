@@ -1,7 +1,9 @@
+export { actorOf, ACTOR_KINDS } from "./actor";
 export { useRepositoryActivity, usePendingChanges, useHomeWork, useOpenIssueFacets } from "./hooks";
 export { dayKeyOf, sliceSeries, ACTIVITY_DAYS } from "./days";
 export type {
   ActorRef,
+  ActorKind,
   ActivityEvent,
   DailySeries,
   DayKey,
@@ -22,5 +24,4 @@ export type {
   Segment,
   SegmentKey,
   SeriesDay,
-  WriteSource,
 } from "./types";

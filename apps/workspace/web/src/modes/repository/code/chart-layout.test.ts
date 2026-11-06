@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { dayKeyOf, type DailySeries, type SeriesDay } from "../data";
+import { segmentsOf } from "../data/actor";
 import { chartLayout } from "./chart-layout";
 
-const day = (at: string, pulls: number, issues: number, merged = 0): SeriesDay => ({
+const day = (at: string, people: number, agents: number, merged = 0): SeriesDay => ({
   day: dayKeyOf(at),
-  segments: [
-    { key: "pulls", value: pulls },
-    { key: "issues", value: issues },
-  ],
-  total: pulls + issues,
+  segments: segmentsOf({ people, agents, unknown: 0 }),
+  total: people + agents,
   merged,
 });
 const series = (days: readonly SeriesDay[]): DailySeries => ({ days, complete: true });
@@ -29,7 +27,7 @@ describe("chartLayout", () => {
     const layout = chartLayout(series([day("2026-11-06", 8, 6, 400)]), 500);
     expect(layout.ticks.map((tick) => tick.value)).toEqual([0, 5, 10, 15]);
     const column = layout.columns[0];
-    expect(column?.rects.map((rect) => rect.key)).toEqual(["pulls", "issues"]);
+    expect(column?.rects.map((rect) => rect.key)).toEqual(["people", "agents"]);
     const [pulls, issues] = column?.rects ?? [];
     expect((pulls?.y ?? 0) + (pulls?.height ?? 0)).toBeCloseTo(layout.baseline);
     expect((issues?.y ?? 0) + (issues?.height ?? 0) + 1.5).toBeCloseTo(pulls?.y ?? 0);

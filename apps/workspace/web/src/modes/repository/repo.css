@@ -565,15 +565,30 @@
   .rd-tb-base {
     --c: var(--rd-t-base);
   }
+  .rd-avatar, .rd-pending {
+    --rd-a: var(--rd-actor-unknown);
+    --rd-a-soft: var(--rd-actor-unknown-soft);
+    --rd-a-text: var(--rd-actor-unknown-text);
+  }
+  [data-actor="people"] {
+    --rd-a: var(--rd-actor-people);
+    --rd-a-soft: var(--rd-actor-people-soft);
+    --rd-a-text: var(--rd-actor-people-text);
+  }
+  [data-actor="agents"] {
+    --rd-a: var(--rd-actor-agents);
+    --rd-a-soft: var(--rd-actor-agents-soft);
+    --rd-a-text: var(--rd-actor-agents-text);
+  }
   .rd-pending {
     display: inline-flex;
     align-items: center;
     gap: 5px;
     padding: 3px 6px;
     border-radius: 4px;
-    border: 1px solid color-mix(in srgb, var(--rd-actor-unknown) 35%, transparent);
-    background: var(--rd-actor-unknown-soft);
-    color: var(--rd-actor-unknown-text);
+    border: 1px solid color-mix(in srgb, var(--rd-a) 35%, transparent);
+    background: var(--rd-a-soft);
+    color: var(--rd-a-text);
     font-size: 11.5px;
     line-height: 1.2;
     font-weight: 500;
@@ -599,10 +614,17 @@
     height: 24px;
     border-radius: 50%;
     font-size: 10px;
-    background: var(--rd-actor-unknown-soft);
-    color: var(--rd-actor-unknown-text);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rd-actor-unknown) 35%, transparent);
+    background: var(--rd-a-soft);
+    color: var(--rd-a-text);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rd-a) 35%, transparent);
   }
+  .rd-avatar[data-actor="agents"] > span {
+    display: inline-grid;
+    place-items: center;
+    border-radius: 7px;
+  }
+  .rd-avatar-sm[data-actor="agents"] > span { border-radius: 6px; }
+  .rd-avatar[data-actor="agents"] svg { width: 60%; height: 60%; }
   .rd-avatar-sm > span {
     width: 20px;
     height: 20px;

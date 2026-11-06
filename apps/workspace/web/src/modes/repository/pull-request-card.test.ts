@@ -54,6 +54,15 @@ describe("shared Repository Pull request cards", () => {
     }
   });
 
+  it.each([
+    ["browser", "people", false], ["agent", "agents", true], ["unknown", "unknown", false],
+  ] as const)("renders recorded %s attribution in summary rows", (createdVia, kind, bot) => {
+    const html = renderRows(pull({ createdVia }));
+    expect(html).toContain(`data-actor="${kind}"`);
+    expect(html.includes("lucide-bot")).toBe(bot);
+    if (bot) expect(html).toContain("Me · Agent");
+  });
+
   it("preserves legacy review filters and keeps summary-only work without a review link", () => {
     const legacy = renderRows(pull({ number: null }));
     expect(legacy).toContain('href="/worktrees"');

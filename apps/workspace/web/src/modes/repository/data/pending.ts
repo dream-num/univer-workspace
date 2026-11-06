@@ -64,7 +64,7 @@ export function buildPendingIndex(
         unitName: unit.name,
         unitType: unit.unitType,
         scope: "self",
-        actor: actorOf(detail.creator),
+        actor: actorOf(detail.creator, detail.createdVia),
       };
       if (unit.nodeId) append(byNode, unit.nodeId, change);
       if (unit.change === "added") {

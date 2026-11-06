@@ -6,6 +6,15 @@ function isDayKey(value: string): value is DayKey {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+export function asDayKey(value: string): DayKey {
+  if (!isDayKey(value)) throw new RangeError("Invalid activity day");
+  return value;
+}
+
+export function browserTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
 export function dayKeyOf(at: string | Date): DayKey {
   const date = new Date(at);
   if (!Number.isFinite(date.getTime())) throw new RangeError("Invalid activity date");

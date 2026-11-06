@@ -6,6 +6,7 @@ import { mySpacesQueryOptions } from "../../features/spaces";
 import type { WorktreeListFilters } from "../../features/worktrees/worktrees.queries";
 import { useI18n } from "../../shared/i18n";
 import { formatRelativeDate } from "../../shared/format-relative-date";
+import { actorOf } from "./data";
 import { PullRequestCard } from "./pull-request-card";
 import { repositoryWorktreeSearch } from "./repository-worktree-link";
 import { spaceDisplayName } from "./space-name";
@@ -84,7 +85,7 @@ export function RepositoryWorktreeRows({
                   spaceId: spaceId ?? search?.spaceId ?? null,
                 },
                 space: task.teamSpace ?? (task.kind === "user" ? personal ?? null : null),
-                actor: { user: task.creator, source: "unknown" },
+                actor: actorOf(task.creator, task.createdVia),
                 canReview: task.capabilities.review,
                 files: task.unitCount,
                 summary: task.summary,

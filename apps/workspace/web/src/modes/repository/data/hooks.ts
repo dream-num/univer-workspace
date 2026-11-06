@@ -1,32 +1,24 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { worktreeQueryOptions } from "../../../features/worktrees/worktrees.queries";
 import { mySpacesQueryOptions } from "../../../features/spaces";
-import { buildRepositoryActivity } from "./activity";
-import { dayWindow } from "./days";
+import { browserTimeZone } from "./days";
 import { buildHomeWork } from "./home-work";
 import { buildIssueFacets } from "./issue-facets";
 import { buildPendingIndex, pendingAncestryPlan, pendingDetailPlan, type NodeAncestry } from "./pending";
 import {
   ancestryQueryOptions,
   homeQueries,
-  issueWindowQueryOptions,
+  repositoryActivityQueryOptions,
   openIssueFacetsQueryOptions,
   openWorktreesQueryOptions,
-  worktreeWindowQueryOptions,
 } from "./queries";
 import type { HomeWork, IssueFacets, PendingChangeIndex, QueryView, RepositoryActivity, Space, WorktreeDetail } from "./types";
 
 export function useRepositoryActivity(space: Space): QueryView<RepositoryActivity> {
-  const window = dayWindow(new Date());
-  return useQueries({
-    queries: [worktreeWindowQueryOptions(space, window.startIso), issueWindowQueryOptions(space, window.startIso)],
-    combine: ([pulls, issues]) => {
-      if (pulls.isError) return { status: "error", error: pulls.error };
-      if (issues.isError) return { status: "error", error: issues.error };
-      if (!pulls.isSuccess || !issues.isSuccess) return { status: "pending" };
-      return { status: "success", data: buildRepositoryActivity(window, pulls.data, issues.data) };
-    },
-  });
+  const query = useQuery(repositoryActivityQueryOptions(space.id, browserTimeZone()));
+  if (query.isError) return { status: "error", error: query.error };
+  if (!query.isSuccess) return { status: "pending" };
+  return { status: "success", data: query.data };
 }
 
 export function usePendingChanges(space: Space): QueryView<PendingChangeIndex> {

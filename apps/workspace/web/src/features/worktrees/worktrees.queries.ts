@@ -4,6 +4,8 @@ import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { resolveMergeReviewStatus, type MergeReviewStatus } from "../editor/merge-review";
 
+export const activityQueryKey = ["activity"] as const;
+
 export const worktreesQueryKey = ["worktrees"] as const;
 
 // Home stays bounded even when the full list has many cached pages.

@@ -4,14 +4,13 @@ import { api } from "../../../shared/api/client";
 import { worktreePagesQueryOptions, worktreeQueryOptions } from "../../../features/worktrees/worktrees.queries";
 import { DEFAULT_ISSUE_FILTERS, issueListQueryOptions } from "../../../features/issues/issues.queries";
 import { recentResourcePagesQueryOptions } from "../../../features/views/recent.queries";
-import { dayWindow } from "./days";
 import { buildHomeWork } from "./home-work";
 import { pendingAncestryPlan, pendingDetailPlan } from "./pending";
 import {
   ancestryQueryOptions, homeIssuesQueryOptions, homeQueries, homeWorktreesQueryOptions,
-  issueWindowQueryOptions, openIssueFacetsQueryOptions, openWorktreesQueryOptions, worktreeWindowQueryOptions,
+  repositoryActivityQueryOptions, openIssueFacetsQueryOptions, openWorktreesQueryOptions,
 } from "./queries";
-import { at, detail, issue, now, pull, space, unit } from "./fixtures.test-support";
+import { detail, pull, space, unit } from "./fixtures.test-support";
 
 vi.mock("../../../shared/api/client", () => ({ api: { GET: vi.fn() } }));
 const clients: QueryClient[] = [];
@@ -25,7 +24,6 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 const ok = (data: unknown) => ({ data, response: new Response() });
-const start = dayWindow(now).startIso;
 
 describe("Repository derived-data request boundaries", () => {
   it("keeps Home at three bounded list requests despite twenty cached infinite-list pages", async () => {
@@ -48,46 +46,17 @@ describe("Repository derived-data request boundaries", () => {
     expect(api.GET).toHaveBeenCalledWith("/api/issues", { signal: expect.any(AbortSignal), params: { query: { state: "open", sort: "updated", order: "desc", limit: 100 } } });
   });
 
-  it("pages a space-scoped worktree window until the tail passes local midnight", async () => {
-    vi.mocked(api.GET)
-      .mockResolvedValueOnce(ok({ items: [pull()], nextCursor: "next" }))
-      .mockResolvedValueOnce(ok({ items: [pull({ id: "boundary", updatedAt: start })], nextCursor: "boundary" }))
-      .mockResolvedValueOnce(ok({ items: [pull({ id: "old", updatedAt: new Date(Date.parse(start) - 1).toISOString() })], nextCursor: "older" }));
-    const result = await client().fetchQuery(worktreeWindowQueryOptions(space, start));
-    expect(result.items).toHaveLength(3);
-    expect(result.complete).toBe(true);
-    expect(api.GET).toHaveBeenCalledTimes(3);
-    expect(api.GET).toHaveBeenNthCalledWith(2, "/api/worktrees", {
-      signal: expect.any(AbortSignal),
-      params: { query: { teamSpaceId: space.id, scope: "all", order: "updatedAtDesc", limit: 100, cursor: "next" } },
-    });
-  });
-
-  it("caps both activity scans at five pages and uses state=all, updated order and limit 200 for issues", async () => {
-    vi.mocked(api.GET).mockResolvedValue(ok({ items: [issue()], nextCursor: "more" }));
-    const result = await client().fetchQuery(issueWindowQueryOptions(space, start));
-    expect(result.complete).toBe(false);
-    expect(result.items).toHaveLength(5);
-    expect(api.GET).toHaveBeenCalledTimes(5);
-    expect(api.GET).toHaveBeenLastCalledWith("/api/spaces/{spaceId}/issues", {
-      signal: expect.any(AbortSignal),
-      params: { path: { spaceId: space.id }, query: { state: "all", sort: "updated", order: "desc", limit: 200, cursor: "more" } },
-    });
-    vi.mocked(api.GET).mockClear().mockResolvedValue(ok({ items: [pull()], nextCursor: "more" }));
-    expect((await client().fetchQuery(worktreeWindowQueryOptions(space, start))).complete).toBe(false);
-    expect(api.GET).toHaveBeenCalledTimes(5);
-  });
-
-  it("stops on exhausted issues and skips the team-only issues endpoint for Personal Spaces", async () => {
-    vi.mocked(api.GET).mockResolvedValue(ok({ items: [], nextCursor: null }));
-    expect(await client().fetchQuery(issueWindowQueryOptions(space, start))).toEqual({ items: [], complete: true });
-    const personal = { id: "personal", type: "personal" } as const;
-    expect(await client().fetchQuery(issueWindowQueryOptions(personal, start))).toEqual({ items: [], complete: true });
+  it.each([space.id, "personal"])("loads %s activity with a zone-specific cache key and one request", async (spaceId) => {
+    vi.mocked(api.GET).mockResolvedValueOnce(ok({ timeZone: "Asia/Shanghai", days: [{ day: "2026-11-06", opened: { browser: 1, agent: 2, unknown: 0 }, merged: 3 }], events: [], complete: true }));
+    const options = repositoryActivityQueryOptions(spaceId, "Asia/Shanghai");
+    expect(options.queryKey).toEqual(["activity", spaceId, "Asia/Shanghai"]);
+    expect(options.queryKey).not.toEqual(repositoryActivityQueryOptions(spaceId, "UTC").queryKey);
+    const result = await client().fetchQuery(options);
     expect(api.GET).toHaveBeenCalledTimes(1);
-    await client().fetchQuery(worktreeWindowQueryOptions(personal, start));
-    expect(api.GET).toHaveBeenLastCalledWith("/api/worktrees", {
-      signal: expect.any(AbortSignal), params: { query: { kind: "user", scope: "all", order: "updatedAtDesc", limit: 100 } },
+    expect(api.GET).toHaveBeenCalledWith("/api/spaces/{spaceId}/activity", {
+      signal: expect.any(AbortSignal), params: { path: { spaceId }, query: { timeZone: "Asia/Shanghai" } },
     });
+    expect(result.series.days[0]).toEqual({ day: "2026-11-06", segments: [{ key: "people", value: 1 }, { key: "agents", value: 2 }], total: 3, merged: 3 });
   });
 
   it("requests at most twenty reviewable details and forty unique ancestry contexts", async () => {
@@ -118,8 +87,8 @@ describe("Repository derived-data request boundaries", () => {
   });
 
   it("keeps facet fetches bounded, errors visible and all new query keys under feed roots", async () => {
-    const options = [worktreeWindowQueryOptions(space, start), issueWindowQueryOptions(space, start), openWorktreesQueryOptions(space), ancestryQueryOptions("file"), openIssueFacetsQueryOptions(space.id), homeWorktreesQueryOptions, homeIssuesQueryOptions];
-    expect(options.every((option) => option.queryKey[0] === "worktrees" || option.queryKey[0] === "issues")).toBe(true);
+    const options = [repositoryActivityQueryOptions(space.id, "UTC"), openWorktreesQueryOptions(space), ancestryQueryOptions("file"), openIssueFacetsQueryOptions(space.id), homeWorktreesQueryOptions, homeIssuesQueryOptions];
+    expect(options.every((option) => option.queryKey[0] === "worktrees" || option.queryKey[0] === "issues" || option.queryKey[0] === "activity")).toBe(true);
     vi.mocked(api.GET).mockResolvedValueOnce(ok({ items: [], nextCursor: "more", counts: { open: 201, closed: 0 } }));
     const result = await client().fetchQuery(openIssueFacetsQueryOptions(space.id));
     expect(result.nextCursor).toBe("more");
@@ -127,6 +96,6 @@ describe("Repository derived-data request boundaries", () => {
       signal: expect.any(AbortSignal), params: { path: { spaceId: space.id }, query: { state: "open", sort: "updated", order: "desc", limit: 200 } },
     });
     vi.mocked(api.GET).mockResolvedValueOnce({ error: { error: { code: "FORBIDDEN", message: "Denied" } }, response: new Response(null, { status: 403 }) });
-    await expect(client().fetchQuery(worktreeWindowQueryOptions(space, at(1)))).rejects.toThrow("Denied");
+    await expect(client().fetchQuery(repositoryActivityQueryOptions(space.id, "UTC"))).rejects.toThrow("Denied");
   });
 });
