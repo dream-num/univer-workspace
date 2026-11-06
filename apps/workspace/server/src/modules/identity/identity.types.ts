@@ -1,3 +1,10 @@
+import type { WriteSource } from "./write-source.js";
+
+export interface Principal {
+  readonly user: User;
+  readonly writeSource: WriteSource | null;
+}
+
 export interface User {
   readonly id: string;
   readonly username: string;

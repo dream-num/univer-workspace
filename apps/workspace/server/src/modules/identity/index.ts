@@ -3,6 +3,7 @@ export { createIdentityModule } from "./identity.service.js";
 export type { IdentityModule } from "./identity.service.js";
 export type {
   AuthenticatedSession,
+  Principal,
   SessionView,
   User,
 } from "./identity.types.js";
@@ -21,3 +22,4 @@ export type {
   GitHubOAuthProvider,
   GoogleOAuthProvider,
 } from "./identity.types.js";
+export { writeSourceView, type WriteSource, type WriteSourceView } from "./write-source.js";

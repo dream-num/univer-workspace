@@ -5,11 +5,13 @@ import type {
   ExternalIdentityProvider,
   User,
 } from "./identity.types.js";
+import type { WriteSource } from "./write-source.js";
 
 export interface StoredSession extends User {
   readonly sessionId: string;
   readonly secretHash: string;
   readonly expiresAt: number;
+  readonly writeSource: WriteSource | null;
 }
 
 export interface StoredCredential extends User {
@@ -28,6 +30,7 @@ export interface NewPasswordUser {
     readonly secretHash: string;
     readonly createdAt: number;
     readonly expiresAt: number;
+    readonly writeSource: WriteSource;
   };
   readonly createdAt: number;
 }
@@ -397,6 +400,7 @@ export class IdentityRepository {
            login_sessions.id AS session_id,
            login_sessions.secret_hash,
            login_sessions.expires_at,
+           login_sessions.write_source,
            users.id,
            users.username,
            users.display_name,
@@ -412,6 +416,7 @@ export class IdentityRepository {
           sessionId: row.session_id,
           secretHash: row.secret_hash,
           expiresAt: row.expires_at,
+          writeSource: row.write_source,
         }
       : null;
   }
@@ -606,6 +611,7 @@ interface CredentialRow extends UserRow {
 }
 
 interface SessionRow extends UserRow {
+  readonly write_source: WriteSource | null;
   readonly session_id: string;
   readonly secret_hash: string;
   readonly expires_at: number;
@@ -630,15 +636,16 @@ function insertSession(
   database
     .prepare(
       `INSERT INTO login_sessions
-        (id, secret_hash, user_id, created_at, expires_at)
-       VALUES (?, ?, ?, ?, ?)`
+        (id, secret_hash, user_id, created_at, expires_at, write_source)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
     .run(
       session.id,
       session.secretHash,
       userId,
       session.createdAt,
-      session.expiresAt
+      session.expiresAt,
+      session.writeSource
     );
 }
 

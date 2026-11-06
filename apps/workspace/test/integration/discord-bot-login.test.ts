@@ -8,6 +8,9 @@ import {
   type WorkspaceApplication,
 } from "../../server/src/app.js";
 
+
+import { expectSessionSource } from "../fixtures/session-source.js";
+
 const API_KEY = "discord-bot-test-api-key-32-characters";
 
 let application: WorkspaceApplication | undefined;
@@ -84,6 +87,8 @@ describe("Discord Bot login", () => {
       discordUserId: "123456789012345678",
       username: "alice.updated",
     });
+    expectSessionSource(application!.database.connection, first.cookie, "agent");
+    expectSessionSource(application!.database.connection, second.cookie, "agent");
     expect(second.response.status).toBe(200);
     expect(second.body).toMatchObject({
       user: { id: first.body.user.id },

@@ -266,6 +266,47 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/auth/cli/password/login:
+    post:
+      tags:
+        - Authentication
+      operationId: loginCliWithPassword
+      summary: Authenticate a non-browser client with a System Username and password.
+      description: Same credentials and response as `loginWithPassword`; the issued Session is attributed as `agent`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLogin'
+      responses:
+        '200':
+          description: Authenticated.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '401':
+          description: Username or password is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Password authentication is disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/password/login:
     post:
       tags:
@@ -3005,6 +3046,16 @@ components:
       name: x-api-key
       description: Shared secret configured on Workspace and the trusted Discord Bot server.
   schemas:
+    WriteSource:
+      type: string
+      enum:
+        - browser
+        - agent
+        - unknown
+      description: |
+        Entry point of the Session that made a write. `browser` = the Workspace web app's sign-in routes.
+        `agent` = any non-browser entry point (uvw CLI, Workspace Agent, OAuth clients, Discord bot); it does not
+        identify who was typing. `unknown` = recorded before attribution existed, or by a Session issued before it.
     Error:
       type: object
       additionalProperties: false
@@ -3403,6 +3454,7 @@ components:
       type: object
       additionalProperties: false
       required:
+        - createdVia
         - id
         - number
         - space
@@ -3419,6 +3471,8 @@ components:
         - createdAt
         - updatedAt
       properties:
+        createdVia:
+          $ref: '#/components/schemas/WriteSource'
         id:
           type: string
         number:
@@ -3470,6 +3524,7 @@ components:
       type: object
       additionalProperties: false
       required:
+        - createdVia
         - id
         - number
         - name
@@ -3485,6 +3540,8 @@ components:
         - updatedAt
         - capabilities
       properties:
+        createdVia:
+          $ref: '#/components/schemas/WriteSource'
         id:
           type: string
         number:

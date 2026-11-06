@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
+import { writeSourceView } from "../identity/index.js";
 import type { AccessResolver, SpaceAccess } from "../access/index.js";
 import type { PublicUser } from "../permissions/index.js";
 import {
@@ -99,6 +100,7 @@ export function createIssuesModule(options: {
       assignees: (assignees.get(row.id) ?? []).map((assignee) => user(users, assignee.user_id)),
       commentCount: comments.get(row.id) ?? 0,
       referenceCount: references.get(row.id) ?? 0,
+      createdVia: writeSourceView(row.created_via),
       createdAt: iso(row.created_at),
       updatedAt: iso(row.updated_at),
     }));
@@ -248,7 +250,7 @@ export function createIssuesModule(options: {
       return listFor(userId, { kind: "member", userId }, query);
     },
 
-    create(userId, spaceId, input) {
+    create(userId, spaceId, input, createdVia = null) {
       const space = requireSpace(userId, spaceId);
       if (!space.capabilities.createIssue) throw forbidden();
       const body = record(input, ["title", "body", "labelIds", "assigneeUserIds", "nodeIds"]);
@@ -261,7 +263,7 @@ export function createIssuesModule(options: {
       const at = now();
       repository.transaction(() => {
         repository.insertIssue({
-          id, spaceId, number: repository.nextNumber(spaceId), title, body: text, authorUserId: userId, now: at,
+          id, spaceId, number: repository.nextNumber(spaceId), title, body: text, authorUserId: userId, now: at, createdVia,
         });
         applyRelations(userId, space, id, relations, at);
       });

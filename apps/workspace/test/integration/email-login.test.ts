@@ -9,6 +9,8 @@ import {
   type IdentityModule,
 } from "../../server/src/modules/identity/index.js";
 
+import { expectSessionSource } from "../fixtures/session-source.js";
+
 const workspaces: WorkspaceDatabase[] = [];
 
 afterEach(() => {
@@ -45,6 +47,7 @@ describe("passwordless Email sign-in", () => {
       code: codeFrom(harness.sent[0]!),
     });
 
+    expectSessionSource(harness.database, issued.cookieValue, "browser");
     expect(issued.view).toMatchObject({
       authenticated: true,
       emailAuthEnabled: true,
@@ -87,6 +90,8 @@ describe("passwordless Email sign-in", () => {
     harness.advance(61_000);
     const second = await signIn(harness, "ALICE@example.com");
 
+    expectSessionSource(harness.database, first.cookieValue, "browser");
+    expectSessionSource(harness.database, second.cookieValue, "browser");
     expect(second.view.user.id).toBe(first.view.user.id);
     expect(tableCount(harness.database, "users")).toBe(1);
     expect(

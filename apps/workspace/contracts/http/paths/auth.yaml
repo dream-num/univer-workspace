@@ -194,6 +194,47 @@
             schema:
               $ref: ../schemas/common.yaml#/ErrorResponse
 
+/api/auth/cli/password/login:
+  post:
+    tags: [Authentication]
+    operationId: loginCliWithPassword
+    summary: Authenticate a non-browser client with a System Username and password.
+    description: Same credentials and response as `loginWithPassword`; the issued Session is attributed as `agent`.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/PasswordLogin
+    responses:
+      "200":
+        description: Authenticated.
+        headers:
+          Cache-Control:
+            schema:
+              type: string
+              const: no-store
+          Set-Cookie:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthenticatedSession
+      "401":
+        description: Username or password is invalid.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "403":
+        description: Password authentication is disabled.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
 /api/auth/email/code:
   post:
     tags: [Authentication]

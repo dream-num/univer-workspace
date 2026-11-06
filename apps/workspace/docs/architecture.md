@@ -292,7 +292,10 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 先生成一致性备份，再调用隔离的一次性迁移器。
 
 V16 的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via` 是可空来源列，
-仅允许 `browser` 或 `agent`，`NULL` 表示未知。迁移不回填已有行，不新增索引，本次尚无服务读写。
+仅允许 `browser` 或 `agent`，`NULL` 表示未知。迁移不回填已有行，不新增索引。
+Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Principal { user, writeSource }`，
+登录及 Session JSON 保持原状。HTTP Worktree/Issue 创建复制来源，摘要的 `createdVia` 将 `NULL`
+映射为 `unknown`。Worktree 创建将来源预留在 Operation payload 中，重试读取首次预留值。
 
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。

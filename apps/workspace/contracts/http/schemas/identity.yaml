@@ -278,3 +278,11 @@ UserProfilePatch:
     avatarUrl:
       type: [string, "null"]
       format: uri
+
+WriteSource:
+  type: string
+  enum: [browser, agent, unknown]
+  description: |
+    Entry point of the Session that made a write. `browser` = the Workspace web app's sign-in routes.
+    `agent` = any non-browser entry point (uvw CLI, Workspace Agent, OAuth clients, Discord bot); it does not
+    identify who was typing. `unknown` = recorded before attribution existed, or by a Session issued before it.

@@ -115,7 +115,9 @@ Server 进程内存，不进入产品数据库，进程重启后由用户重新�
 
 `write_source`（V16，`TEXT`，可空）记录签发 Session 的入口：`browser` 表示 Workspace Web 登录路由，
 `agent` 表示任意非 Browser 入口；`NULL` 表示未知。CHECK 仅允许 `browser`、`agent` 或 `NULL`，
-无默认值，不回填已有 Session。后续由 Session 签发和 Worktree/Issue 创建流程写入这些来源列，本次仅提供存储。
+无默认值，不回填已有 Session。Session 签发流程写入 `write_source`，HTTP Worktree/Issue 创建复制到 `created_via`；
+摘要以 `createdVia` 暴露该值，`NULL` 返回 `unknown`。Worktree Operation payload 保存首次预留的来源，
+后续重试保留它。Session JSON 不暴露 `writeSource`。
 
 ### `spaces`
 

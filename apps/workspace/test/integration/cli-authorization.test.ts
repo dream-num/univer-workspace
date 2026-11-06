@@ -8,6 +8,8 @@ import {
   type WorkspaceApplication,
 } from "../../server/src/app.js";
 
+import { expectSessionSource } from "../fixtures/session-source.js";
+
 let application: WorkspaceApplication | undefined;
 let server: Server | undefined;
 let directory: string | undefined;
@@ -81,6 +83,8 @@ describe("CLI browser authorization", () => {
     const cliCookie = cookieFrom(exchanged);
     expect(cliCookie).toMatch(/^workspace_session=[^;]+$/u);
     expect(cliCookie).not.toBe(browserCookie);
+    expectSessionSource(application!.database.connection, browserCookie, "browser");
+    expectSessionSource(application!.database.connection, cliCookie, "agent");
     expect(await exchanged.json()).toMatchObject({
       authenticated: true,
       user: { username: "browser-user" },

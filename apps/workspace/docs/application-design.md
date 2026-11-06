@@ -93,7 +93,16 @@ PUT 校验 1 至 12 个唯一 ID，在同一事务中检查资格并完整替换
 DELETE 删除选择并返回默认列表；两个写方法均幂等。返回 `limit = 12` 供客户端使用。
 
 V16 仅新增可空的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via`，
-CHECK 允许 `browser` 或 `agent`，`NULL` 表示未知；无默认值、回填或新索引，本次仅增加存储。
+CHECK 允许 `browser` 或 `agent`，`NULL` 表示未知；无默认值、回填或新索引。
+Session 签发时写入来源，HTTP Worktree 与 Issue 创建时复制该来源，摘要以 `createdVia` 返回；
+`NULL` 映射为 `unknown`，Worktree Operation 重试保留首次预留的来源。
+
+Password 注册、`POST /api/auth/password/login`、Email 登录和 GitHub/Google/Discord OAuth
+回调签发 `browser` Session。CLI device exchange、`POST /api/auth/cli/password/login`、
+OAuth `POST /api/auth/token` 的 Session scope 和 Discord bot-login 签发 `agent` Session。
+CLI password 路由与 Browser password 路由使用相同凭据及响应，额外设置 `Cache-Control: no-store`。
+`agent` 仅表示非 Browser 登录入口，不推断谁在输入。Session JSON 不暴露来源；历史行不回填。
+
 迁移前验证并备份 V15，事务失败回滚，成功后校验 V16 指纹，重复启动不重复备份。
 
 ## Collaboration SDK 升级边界

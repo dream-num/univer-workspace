@@ -27,13 +27,14 @@ export function createWorktreesRouter(options: {
     );
   });
   router.post("/worktrees", async (request, response) => {
-    const user = options.identity.requireSession(
+    const { user, writeSource } = options.identity.requireSession(
       request.headers.cookie
-    ).user;
+    );
     const result = await options.worktrees.create(
       user.id,
       request.headers["idempotency-key"],
-      request.body
+      request.body,
+      writeSource
     );
     response.status(result.status).json(result.body);
   });

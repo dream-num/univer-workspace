@@ -490,7 +490,9 @@ and restore the V14 backup. Never run V14 and V15 writers on the same SQLite fil
 
 V16 adds `login_sessions.write_source`, `worktrees.created_via`, and `issues.created_via`
 with CHECK constraints allowing `browser` or `agent`. All are nullable with no default;
-existing rows stay `NULL`, meaning unknown. This unit adds storage only.
+existing rows stay `NULL`, meaning unknown. Session issuance records its entry point
+in `write_source`. HTTP Worktree and Issue creation copy it into `created_via`, exposed as `createdVia` (`browser`, `agent`, or
+`unknown`). Operation retries preserve the source reserved by the first Worktree create.
 Stop all old writers, start one V16 instance, and wait for migration and health checks
 before restoring service. Startup validates V15 and creates a readable
 `.v15-backup-…sqlite` before the transaction. A failure rolls back; successful restarts
