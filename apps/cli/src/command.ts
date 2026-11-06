@@ -14,22 +14,20 @@ export interface JsonFieldsOption {
 
 /** Validate the command's field contract before its handler makes any requests. */
 export function jsonFieldsOption(available: readonly string[]): Option {
-  return new Option(
-    "--json [fields]",
-    "write JSON, optionally only these comma-separated fields",
-  ).argParser((value: string) => {
-    const names = value.split(",").map((name) => name.trim());
-    const unknown = names.filter((name) => !available.includes(name));
-    if (names.includes("") || unknown.length > 0) {
-      throw new InvalidArgumentError(
-        "workspace-argument-invalid: " +
-          (names.includes("")
-            ? "--json fields must not be empty."
-            : `Unknown --json field: ${unknown.join(", ")}. Available fields: ${available.join(", ")}.`),
-      );
-    }
-    return names;
-  });
+  return new Option("--json [fields]", "write JSON, optionally only these comma-separated fields")
+    .argParser((value: string) => {
+      const names = value.split(",").map((name) => name.trim());
+      const unknown = names.filter((name) => !available.includes(name));
+      if (names.includes("") || unknown.length > 0) {
+        throw new InvalidArgumentError(
+          "workspace-argument-invalid: " +
+            (names.includes("")
+              ? "--json fields must not be empty."
+              : `Unknown --json field: ${unknown.join(", ")}. Available fields: ${available.join(", ")}.`),
+        );
+      }
+      return names;
+    });
 }
 
 /** Exit status 4 tells an agent that signing in, not retrying, is the next step. */
@@ -107,12 +105,7 @@ export function table(rows: readonly (readonly string[])[]): string {
     return all;
   }, []);
   return rows
-    .map((row) =>
-      row
-        .map((cell, index) => cell.padEnd(widths[index] ?? 0))
-        .join("  ")
-        .trimEnd(),
-    )
+    .map((row) => row.map((cell, index) => cell.padEnd(widths[index] ?? 0)).join("  ").trimEnd())
     .join("\n");
 }
 
@@ -135,10 +128,7 @@ export function collect(value: string, previous: readonly string[] = []): string
 export function limitOf(value: string | undefined): number {
   if (value === undefined) return 30;
   if (!/^[1-9]\d{0,5}$/.test(value)) {
-    throw workspaceError(
-      "workspace-argument-invalid",
-      `--limit must be a positive integer, got "${value}".`,
-    );
+    throw workspaceError("workspace-argument-invalid", `--limit must be a positive integer, got "${value}".`);
   }
   return Number(value);
 }
