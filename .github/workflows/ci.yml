@@ -1,10 +1,24 @@
 name: CI
 
+# Only Markdown that no build, test, or package step reads. Required status
+# checks stay pending on skipped runs, so a ruleset requiring `verify` needs a
+# job-level skip instead.
 on:
   pull_request:
+    paths-ignore: &docs-only
+      - "**/AGENTS.md"
+      - README.md
+      - README.zh-CN.md
+      - DREAMNUM.md
+      - docs/**
+      - apps/workspace/*.md
+      - apps/workspace/docs/**
+      - apps/agent/desktop/docs/**
+      - tasks/**
   push:
     branches:
       - main
+    paths-ignore: *docs-only
 
 permissions:
   contents: read
