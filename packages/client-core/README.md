@@ -20,6 +20,11 @@
 - 提供 Node-hosted Office import/export、格式与 Unit 类型校验、Worktree Unit/runtime 集成和默认 exchange adapter。
   导出通过当前 Worktree 的已认证 Asset 读取解析图片 ID，仅在导出副本中恢复内嵌图片；
   缺失、无权限或无效图片使导出失败，不静默丢图，也不写回 Unit 或产生新 revision。
+  除文件路径方法外，`importBuffer`/`exportBuffer` 直接收发字节，与路径方法共享同一套校验与创建逻辑。
+  `licenseMode` 默认 `"process"`（进程内配置一次，CLI 行为不变）；`"per-operation"` 从不调用
+  `configureExchange`，每次导出随选项携带 license 与 licenseKey，供单进程服务多个调用方；导入不需要 license。
+  一个 feature 实例只持有一组 license；服务多个 license 的宿主为每个 license 构造一个实例。
+  两项均为空表示免费版；只给其中一项在构造时以 `workspace-exchange-license-incomplete` 拒绝。
 - 提供 Markdown 到原生 Modern Doc 的共享编译适配、资源边界校验、创建和按稳定 ID 的局部更新；沿用 SDK 默认排版。
 - 通过共享 SDK 只读程序把当前原生选中块反转换为 Markdown 和资源文件，返回同次 runtime 读取的 revision 与刷新后的 source map，支持编辑后安全局部更新。
 - 提供 Typst bundle 编译、确定性 Doc materialization，以及可选的 Worktree Unit apply workflow。

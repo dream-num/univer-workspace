@@ -93,8 +93,12 @@ export {
 export { WorkspaceOpenFeature, type WorkspaceOpenResult } from "./open.js";
 export {
   WorkspaceUnitExchangeFeature,
+  type WorkspaceExportBufferInput,
+  type WorkspaceExportBufferResult,
   type WorkspaceExportFileInput,
   type WorkspaceExportFileResult,
+  type WorkspaceImportBufferInput,
+  type WorkspaceImportBufferResult,
   type WorkspaceImportFileInput,
   type WorkspaceImportFileResult,
   type WorkspaceUnitExchangeDependencies,
