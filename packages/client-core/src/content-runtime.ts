@@ -1,5 +1,6 @@
 import {
   createUniverCollaborationRuntimePool,
+  UniverCollaborationRuntimePoolError,
   type CollaborationCommitResult,
   type CollaborationRuntimeReadResult,
   type CollaborationUnitData,
@@ -71,6 +72,31 @@ export interface WorkspaceContentRuntimePoolOptions {
   readonly maxWorkers?: number;
   readonly openTimeoutMs?: number;
   readonly operationTimeoutMs?: number;
+  /**
+   * Wait up to `timeoutMs` for one of `maxWorkers` runtime-key slots instead of failing at once
+   * with the pool capacity error; unset keeps the immediate error. Requires `maxWorkers`.
+   */
+  readonly queue?: { readonly timeoutMs: number };
+}
+
+interface RuntimeSlotWaiter {
+  readonly admit: () => void;
+  readonly reject: (error: Error) => void;
+}
+
+/**
+ * Runtime keys admitted to the pool, FIFO beyond `capacity`. Operations that join a key already
+ * holding or awaiting a slot ride that slot and never take a second worker, so a continuously busy
+ * key can delay other keys until their deadline. That is deliberate.
+ */
+interface RuntimeSlots {
+  readonly capacity: number;
+  closed: boolean;
+  readonly timeoutMs: number;
+  /** Admitted key to its count of unsettled operations; each key holds one slot. */
+  readonly held: Map<string, number>;
+  /** Waiting key to its waiters; Map insertion order is the FIFO. */
+  readonly waiting: Map<string, RuntimeSlotWaiter[]>;
 }
 
 interface AcquiredWorkspaceRuntime {
@@ -86,6 +112,7 @@ export function createWorkspaceContentRuntime(
   const initByKey = new Map<string, Promise<WorkspaceContentWorkerInit>>();
   const operationByKey = new Map<string, Promise<void>>();
   const poolOptions = options.pool;
+  const slots = createRuntimeSlots(poolOptions);
   const cache = {
     ...(poolOptions?.idleTtlMs === undefined ? {} : { idleTtlMs: poolOptions.idleTtlMs }),
     ...(poolOptions?.maxWorkers === undefined ? {} : { maxEntries: poolOptions.maxWorkers }),
@@ -107,17 +134,47 @@ export function createWorkspaceContentRuntime(
     },
   });
 
+  async function run<T>(
+    input: { readonly caller?: WorkspaceRuntimeCaller; readonly target: WorkspaceRuntimeTarget },
+    operation: (deadline: number | undefined) => Promise<T>,
+  ): Promise<T> {
+    const key = workspaceRuntimeKey(input.target, input.caller);
+    if (slots === undefined) {
+      return await runForRuntimeKey(operationByKey, key, () => operation(undefined));
+    }
+    const started = performance.now();
+    await enterRuntimeSlot(slots, key, started + slots.timeoutMs);
+    // The capacity retry gets the slot budget left over, counted from when the operation leaves
+    // the same-key chain, so waiting behind same-key operations is not charged as capacity wait.
+    const remainingMs = slots.timeoutMs - (performance.now() - started);
+    try {
+      return await runForRuntimeKey(operationByKey, key, () =>
+        operation(performance.now() + remainingMs),
+      );
+    } finally {
+      leaveRuntimeSlot(slots, key);
+    }
+  }
+
   return {
     async close() {
       try {
+        if (slots !== undefined) closeRuntimeSlots(slots);
         await pool.close();
       } finally {
         initByKey.clear();
       }
     },
     async executeRead(input) {
-      return await runForRuntimeKey(operationByKey, input, async () => {
-        const { lease } = await acquire(pool, initByKey, options, input.target, input.caller);
+      return await run(input, async (deadline) => {
+        const { lease } = await acquire(
+          pool,
+          initByKey,
+          options,
+          input.target,
+          input.caller,
+          deadline,
+        );
         try {
           await synchronize(lease, input.target);
           return await lease.execute({ code: input.code, mode: "read" });
@@ -131,13 +188,14 @@ export function createWorkspaceContentRuntime(
         throw workspaceError("WORKSPACE_TARGET_NOT_EDITABLE", "Execute requires a Worktree target");
       }
       const worktreeId = input.target.scope.worktreeId;
-      return await runForRuntimeKey(operationByKey, input, async () => {
+      return await run(input, async (deadline) => {
         const { init, initEntry, key, lease } = await acquire(
           pool,
           initByKey,
           options,
           input.target,
           input.caller,
+          deadline,
         );
         let reusable = false;
         try {
@@ -185,8 +243,15 @@ export function createWorkspaceContentRuntime(
       });
     },
     async exportUnitData(input) {
-      return await runForRuntimeKey(operationByKey, input, async () => {
-        const { lease } = await acquire(pool, initByKey, options, input.target, input.caller);
+      return await run(input, async (deadline) => {
+        const { lease } = await acquire(
+          pool,
+          initByKey,
+          options,
+          input.target,
+          input.caller,
+          deadline,
+        );
         try {
           await synchronize(lease, input.target);
           return await lease.exportUnitData();
@@ -198,15 +263,124 @@ export function createWorkspaceContentRuntime(
   };
 }
 
+function createRuntimeSlots(
+  poolOptions: WorkspaceContentRuntimePoolOptions | undefined,
+): RuntimeSlots | undefined {
+  const queue = poolOptions?.queue;
+  if (queue === undefined) return undefined;
+  if (poolOptions?.maxWorkers === undefined) {
+    throw workspaceError("workspace-argument-invalid", "pool.queue requires pool.maxWorkers.");
+  }
+  if (!Number.isInteger(poolOptions.maxWorkers) || poolOptions.maxWorkers < 1) {
+    throw workspaceError(
+      "workspace-argument-invalid",
+      "pool.maxWorkers must be a positive integer when pool.queue is set.",
+    );
+  }
+  if (!Number.isInteger(queue.timeoutMs) || queue.timeoutMs < 0 || queue.timeoutMs > MAX_TIMER_MS) {
+    throw workspaceError(
+      "workspace-argument-invalid",
+      `pool.queue.timeoutMs must be an integer from 0 to ${String(MAX_TIMER_MS)}.`,
+    );
+  }
+  return {
+    capacity: poolOptions.maxWorkers,
+    closed: false,
+    held: new Map(),
+    timeoutMs: queue.timeoutMs,
+    waiting: new Map(),
+  };
+}
+
+/** Node clamps a larger `setTimeout` delay to 1 ms. */
+const MAX_TIMER_MS = 2_147_483_647;
+
+/** `deadline` is a `performance.now()` reading, immune to wall-clock steps. */
+function enterRuntimeSlot(slots: RuntimeSlots, key: string, deadline: number): Promise<void> {
+  if (slots.closed) return Promise.reject(runtimeClosedError());
+  const count = slots.held.get(key);
+  if (count !== undefined) {
+    slots.held.set(key, count + 1);
+    return Promise.resolve();
+  }
+  if (slots.waiting.size === 0 && slots.held.size < slots.capacity) {
+    slots.held.set(key, 1);
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const waiter: RuntimeSlotWaiter = {
+      admit() {
+        clearTimeout(timer);
+        resolve();
+      },
+      reject(error) {
+        clearTimeout(timer);
+        reject(error);
+      },
+    };
+    const timer = setTimeout(
+      () => {
+        const waiters = slots.waiting.get(key) ?? [];
+        waiters.splice(waiters.indexOf(waiter), 1);
+        if (waiters.length === 0) slots.waiting.delete(key);
+        reject(runtimeBusyError());
+      },
+      Math.max(0, deadline - performance.now()),
+    );
+    const waiters = slots.waiting.get(key);
+    if (waiters === undefined) slots.waiting.set(key, [waiter]);
+    else waiters.push(waiter);
+  });
+}
+
+function closeRuntimeSlots(slots: RuntimeSlots): void {
+  slots.closed = true;
+  const waiting = [...slots.waiting.values()].flat();
+  slots.waiting.clear();
+  for (const waiter of waiting) waiter.reject(runtimeClosedError());
+}
+
+function leaveRuntimeSlot(slots: RuntimeSlots, key: string): void {
+  const count = (slots.held.get(key) ?? 1) - 1;
+  if (count > 0) {
+    slots.held.set(key, count);
+    return;
+  }
+  slots.held.delete(key);
+  while (slots.held.size < slots.capacity) {
+    const next = slots.waiting.entries().next();
+    if (next.done === true) return;
+    const [nextKey, waiters] = next.value;
+    slots.waiting.delete(nextKey);
+    slots.held.set(nextKey, waiters.length);
+    for (const waiter of waiters) waiter.admit();
+  }
+}
+
+function runtimeBusyError() {
+  return workspaceError(
+    "workspace-runtime-busy",
+    "All Workspace runtime workers are busy. Retry later.",
+    { retryable: true },
+  );
+}
+
+function runtimeClosedError() {
+  return workspaceError("workspace-runtime-closed", "The Workspace runtime has been closed.");
+}
+
+function isPoolCapacityError(error: unknown): boolean {
+  return (
+    error instanceof UniverCollaborationRuntimePoolError &&
+    error.code === "COLLABORATION_POOL_CAPACITY_EXCEEDED"
+  );
+}
+
 async function runForRuntimeKey<T>(
   operationByKey: Map<string, Promise<void>>,
-  {
-    caller,
-    target,
-  }: { readonly caller?: WorkspaceRuntimeCaller; readonly target: WorkspaceRuntimeTarget },
+  key: string,
   operation: () => Promise<T>,
 ): Promise<T> {
-  const key = workspaceRuntimeKey(target, caller);
   const previous = operationByKey.get(key);
   let finish!: () => void;
   const current = new Promise<void>((resolve) => {
@@ -228,6 +402,7 @@ async function acquire(
   options: WorkspaceContentRuntimeOptions,
   target: WorkspaceRuntimeTarget,
   caller: WorkspaceRuntimeCaller | undefined,
+  capacityDeadline: number | undefined,
 ): Promise<AcquiredWorkspaceRuntime> {
   const key = workspaceRuntimeKey(target, caller);
   let pending = initByKey.get(key);
@@ -240,10 +415,37 @@ async function acquire(
   }
   const init = await pending;
   try {
-    return { init, initEntry: pending, key, lease: await pool.acquire({ init, key }) };
+    return {
+      init,
+      initEntry: pending,
+      key,
+      lease: await acquireLease(pool, init, key, capacityDeadline),
+    };
   } catch (error) {
     if (initByKey.get(key) === pending) initByKey.delete(key);
     throw error;
+  }
+}
+
+/**
+ * A slot freed by invalidate or destroy may still count in the pool while it tears down, so an
+ * admitted operation retries the capacity error with backoff until its deadline.
+ */
+async function acquireLease(
+  pool: UniverCollaborationRuntimePool<WorkspaceContentWorkerInit>,
+  init: WorkspaceContentWorkerInit,
+  key: string,
+  capacityDeadline: number | undefined,
+): Promise<UniverCollaborationRuntimeLease> {
+  for (let delayMs = 10; ; delayMs = Math.min(delayMs * 2, 200)) {
+    try {
+      return await pool.acquire({ init, key });
+    } catch (error) {
+      if (capacityDeadline === undefined || !isPoolCapacityError(error)) throw error;
+      const remainingMs = capacityDeadline - performance.now();
+      if (remainingMs <= 0) throw runtimeBusyError();
+      await new Promise((resolve) => setTimeout(resolve, Math.min(delayMs, remainingMs)));
+    }
   }
 }
 

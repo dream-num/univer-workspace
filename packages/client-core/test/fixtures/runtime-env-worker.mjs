@@ -19,6 +19,13 @@ export default {
           writeFileSync(code.slice(5), "held");
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
+        if (code.startsWith("gate:")) {
+          const gate = code.slice(5);
+          writeFileSync(`${gate}.started`, "");
+          while (!existsSync(`${gate}.release`)) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+        }
         return { state, value: Object.keys(process.env) };
       },
       getState: () => state,
