@@ -133,6 +133,28 @@ describe("Blob content replacement", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it("replaces from in-memory bytes with the same request as from a file", async () => {
+    const seen: unknown[] = [];
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const request = new Request(input, init);
+      seen.push({
+        body: await request.text(),
+        headers: [...request.headers].sort(),
+        method: request.method,
+        url: request.url,
+      });
+      return Response.json(result);
+    });
+    await feature(fetcher).replace({ ...intent, filePath: await source("new bytes") });
+    await feature(fetcher).replaceBytes({
+      ...intent,
+      bytes: new TextEncoder().encode("new bytes"),
+      fileName: "edited.bin",
+    });
+    expect(seen).toHaveLength(2);
+    expect(seen[1]).toEqual(seen[0]);
+  });
+
   it.each(["", "v1", "*", 'W/"v1"', '"a", "b"', '"a\nb"', `"${"a".repeat(200)}"`])(
     "rejects an invalid ETag %j before authentication",
     async (etag) => {

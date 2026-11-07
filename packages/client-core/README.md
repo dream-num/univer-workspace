@@ -23,6 +23,12 @@
 - 提供 Markdown 到原生 Modern Doc 的共享编译适配、资源边界校验、创建和按稳定 ID 的局部更新；沿用 SDK 默认排版。
 - 通过共享 SDK 只读程序把当前原生选中块反转换为 Markdown 和资源文件，返回同次 runtime 读取的 revision 与刷新后的 source map，支持编辑后安全局部更新。
 - 提供 Typst bundle 编译、确定性 Doc materialization，以及可选的 Worktree Unit apply workflow。
+- Markdown、SVG、Typst bundle 与 Blob 的上传/替换除文件路径外也接受内存输入（`markdown`/`svg` 字符串加
+  `WorkspaceSourceFiles` 资源表、`bundle` 文件表、`bytes` 加 `fileName`）。内存输入与路径输入共用读取之后的全部
+  步骤；文件表的键必须是不含空段、`.`、`..`、反斜杠的相对 POSIX 路径，入口处校验一次。zip 解包由调用方负责，
+  Typst 内存 bundle 在私有临时目录中编译并总是清理，且不支持 `previewDir`。
+  入口还拒绝在大小写或 Unicode 规范化（NFC）折叠后相同的键，以及互为文件与目录前缀的键。内存资源查找区分大小写，
+  且不做 Unicode 规范化；Blob `fileName` 会去除首尾空白并拒绝 `.`、`..`，调用方的 `bytes` 在入口被复制。
 - 提供 render Unit 装配、browser screenshot capture、PNG 输出、PDF 打印、Slide layout lint，以及配套 render page 构建源。
 - 提供本机 SVG/relative asset 编译、真实或估算字体测量、Slide page 包装与 Worktree apply workflow。
 - 通过独立 worker subpath 交付共享 worker implementation；Client Shell 显式提供 packaged worker entry、
