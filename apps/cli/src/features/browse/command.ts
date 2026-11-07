@@ -1,13 +1,15 @@
 import { Command } from "commander";
 import {
+  issueUrl,
   parseRepoReference,
+  pullUrl,
+  repoUrl,
   workspaceError,
   type WorkspaceIssueFeature,
   type WorkspaceWorktreeFeature,
 } from "@univerjs/univer-workspace-client-core/product";
 import { emit, executeCommand, jsonFieldsOption, type JsonFieldsOption } from "../../command.js";
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
-import { issueUrl, pullUrl, repoUrl } from "../../urls.js";
 
 /** Prints a Browser URL; it never opens a browser. */
 export function createBrowseCommand(deps: {

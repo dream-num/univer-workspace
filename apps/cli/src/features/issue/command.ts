@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import {
+  issueUrl,
   workspaceError,
   type WorkspaceIssue,
   type WorkspaceIssueFeature,
@@ -18,7 +19,6 @@ import {
   type JsonFieldsOption,
 } from "../../command.js";
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
-import { issueUrl } from "../../urls.js";
 
 export const ISSUE_LIST_JSON_FIELDS = [
   "assignees", "author", "closedAt", "closedBy", "commentCount", "createdAt", "createdVia", "id", "labels", "number",
