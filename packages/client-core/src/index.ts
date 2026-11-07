@@ -155,6 +155,7 @@ export {
   type WorkspaceContentRuntime,
   type WorkspaceContentRuntimeOperations,
   type WorkspaceContentRuntimeOptions,
+  type WorkspaceContentRuntimePoolOptions,
   type WorkspaceContentRuntimeWriteResult,
 } from "./content-runtime.js";
 export {
@@ -189,6 +190,7 @@ export {
   serializeWorkspaceRuntimeTarget,
   workspaceRuntimeKey,
   workspaceSnapshotPrefix,
+  type WorkspaceRuntimeCaller,
   type WorkspaceRuntimeScope,
   type WorkspaceRuntimeTarget,
   type WorkspaceRuntimeUnitType,

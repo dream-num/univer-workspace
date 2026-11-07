@@ -26,18 +26,24 @@ export function workspaceSnapshotPrefix(scope: WorkspaceRuntimeScope): string {
     : `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/snapshot`;
 }
 
-export function workspaceRuntimeKey(target: WorkspaceRuntimeTarget): string {
+export type WorkspaceRuntimeCaller = { readonly userId: string };
+
+export function workspaceRuntimeKey(
+  target: WorkspaceRuntimeTarget,
+  caller?: WorkspaceRuntimeCaller,
+): string {
   const scope =
     target.scope.kind === "trunk"
       ? "trunk"
       : `worktree:${encodeURIComponent(target.scope.worktreeId)}`;
-  return [
+  const key = [
     "workspace",
     encodeURIComponent(target.origin),
     scope,
     encodeURIComponent(target.unitId),
     target.unitType,
   ].join(":");
+  return caller === undefined ? key : `${key}:caller:${encodeURIComponent(caller.userId)}`;
 }
 
 export function parseWorkspaceRuntimeTarget(value: unknown): WorkspaceRuntimeTarget {

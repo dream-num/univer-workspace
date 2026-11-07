@@ -67,6 +67,33 @@ describe("Workspace content runtime owner", () => {
     expect(acquire.mock.calls[0]![0].key).not.toContain("secret");
   });
 
+  it("keys workers and credentials per caller and resolves once per caller", async () => {
+    const acquire = vi.fn<UniverCollaborationRuntimePool<unknown>["acquire"]>(async () => lease());
+    const resolveCredential = vi.fn(
+      async (_target: WorkspaceRuntimeTarget, caller?: { readonly userId: string }) =>
+        `cookie-of-${caller?.userId ?? "none"}`,
+    );
+    const resolveLicense = vi.fn(async () => "license");
+    const runtime = createRuntime({ acquire, resolveCredential, resolveLicense });
+    const alice = { userId: "alice" };
+    const bob = { userId: "bob" };
+
+    await runtime.executeRead({ caller: alice, code: "return 1", target });
+    await runtime.executeRead({ caller: bob, code: "return 1", target });
+    await runtime.executeRead({ caller: alice, code: "return 2", target });
+
+    expect(resolveCredential.mock.calls).toEqual([
+      [target, alice],
+      [target, bob],
+    ]);
+    expect(resolveLicense.mock.calls).toEqual([[alice], [bob]]);
+    const inputs = acquire.mock.calls.map(([input]) => input);
+    expect(inputs[0]!.key).not.toBe(inputs[1]!.key);
+    expect(inputs[2]).toEqual(inputs[0]);
+    expect(inputs[0]).toMatchObject({ init: { credential: "cookie-of-alice" } });
+    expect(inputs[1]).toMatchObject({ init: { credential: "cookie-of-bob" } });
+  });
+
   it("re-resolves dependencies after worker creation fails before a lease forms", async () => {
     const current = lease();
     const acquire = vi

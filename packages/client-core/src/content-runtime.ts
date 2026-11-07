@@ -17,20 +17,24 @@ import { WorkspaceHttp } from "./http.js";
 import {
   serializeWorkspaceRuntimeTarget,
   workspaceRuntimeKey,
+  type WorkspaceRuntimeCaller,
   type WorkspaceRuntimeTarget,
 } from "./runtime-target.js";
 import type { WorkspaceContentWorkerInit } from "./content-worker.js";
 
 export interface WorkspaceContentRuntimeOperations {
   executeAndCommit(input: {
+    readonly caller?: WorkspaceRuntimeCaller;
     readonly code: string;
     readonly target: WorkspaceRuntimeTarget;
   }): Promise<WorkspaceContentRuntimeWriteResult>;
   executeRead(input: {
+    readonly caller?: WorkspaceRuntimeCaller;
     readonly code: string;
     readonly target: WorkspaceRuntimeTarget;
   }): Promise<CollaborationRuntimeReadResult>;
   exportUnitData(input: {
+    readonly caller?: WorkspaceRuntimeCaller;
     readonly target: WorkspaceRuntimeTarget;
   }): Promise<CollaborationUnitData>;
 }
@@ -51,9 +55,22 @@ export interface WorkspaceContentRuntime extends WorkspaceContentRuntimeOperatio
 export interface WorkspaceContentRuntimeOptions {
   readonly resolveCredential: (
     target: WorkspaceRuntimeTarget,
+    caller?: WorkspaceRuntimeCaller,
   ) => Promise<string | undefined> | string | undefined;
-  readonly resolveLicense: () => Promise<string | undefined> | string | undefined;
+  readonly resolveLicense: (
+    caller?: WorkspaceRuntimeCaller,
+  ) => Promise<string | undefined> | string | undefined;
   readonly workerEntry: string | URL;
+  readonly pool?: WorkspaceContentRuntimePoolOptions;
+}
+
+export interface WorkspaceContentRuntimePoolOptions {
+  /** Exact worker child environment; unset inherits the host environment. */
+  readonly env?: NodeJS.ProcessEnv;
+  readonly idleTtlMs?: number;
+  readonly maxWorkers?: number;
+  readonly openTimeoutMs?: number;
+  readonly operationTimeoutMs?: number;
 }
 
 interface AcquiredWorkspaceRuntime {
@@ -68,8 +85,21 @@ export function createWorkspaceContentRuntime(
 ): WorkspaceContentRuntime {
   const initByKey = new Map<string, Promise<WorkspaceContentWorkerInit>>();
   const operationByKey = new Map<string, Promise<void>>();
+  const poolOptions = options.pool;
+  const cache = {
+    ...(poolOptions?.idleTtlMs === undefined ? {} : { idleTtlMs: poolOptions.idleTtlMs }),
+    ...(poolOptions?.maxWorkers === undefined ? {} : { maxEntries: poolOptions.maxWorkers }),
+  };
   const pool = createUniverCollaborationRuntimePool<WorkspaceContentWorkerInit>({
+    ...(Object.keys(cache).length === 0 ? {} : { cache }),
     entry: options.workerEntry,
+    ...(poolOptions?.env === undefined ? {} : { env: poolOptions.env }),
+    ...(poolOptions?.openTimeoutMs === undefined
+      ? {}
+      : { openTimeoutMs: poolOptions.openTimeoutMs }),
+    ...(poolOptions?.operationTimeoutMs === undefined
+      ? {}
+      : { operationTimeoutMs: poolOptions.operationTimeoutMs }),
     onEvent(event) {
       if (event.type === "destroy-start" || event.type === "instance-failed") {
         initByKey.delete(event.key);
@@ -86,8 +116,8 @@ export function createWorkspaceContentRuntime(
       }
     },
     async executeRead(input) {
-      return await runForRuntimeKey(operationByKey, input.target, async () => {
-        const { lease } = await acquire(pool, initByKey, options, input.target);
+      return await runForRuntimeKey(operationByKey, input, async () => {
+        const { lease } = await acquire(pool, initByKey, options, input.target, input.caller);
         try {
           await synchronize(lease, input.target);
           return await lease.execute({ code: input.code, mode: "read" });
@@ -98,18 +128,16 @@ export function createWorkspaceContentRuntime(
     },
     async executeAndCommit(input) {
       if (input.target.scope.kind !== "worktree") {
-        throw workspaceError(
-          "WORKSPACE_TARGET_NOT_EDITABLE",
-          "Execute requires a Worktree target",
-        );
+        throw workspaceError("WORKSPACE_TARGET_NOT_EDITABLE", "Execute requires a Worktree target");
       }
       const worktreeId = input.target.scope.worktreeId;
-      return await runForRuntimeKey(operationByKey, input.target, async () => {
+      return await runForRuntimeKey(operationByKey, input, async () => {
         const { init, initEntry, key, lease } = await acquire(
           pool,
           initByKey,
           options,
           input.target,
+          input.caller,
         );
         let reusable = false;
         try {
@@ -157,8 +185,8 @@ export function createWorkspaceContentRuntime(
       });
     },
     async exportUnitData(input) {
-      return await runForRuntimeKey(operationByKey, input.target, async () => {
-        const { lease } = await acquire(pool, initByKey, options, input.target);
+      return await runForRuntimeKey(operationByKey, input, async () => {
+        const { lease } = await acquire(pool, initByKey, options, input.target, input.caller);
         try {
           await synchronize(lease, input.target);
           return await lease.exportUnitData();
@@ -172,10 +200,13 @@ export function createWorkspaceContentRuntime(
 
 async function runForRuntimeKey<T>(
   operationByKey: Map<string, Promise<void>>,
-  target: WorkspaceRuntimeTarget,
+  {
+    caller,
+    target,
+  }: { readonly caller?: WorkspaceRuntimeCaller; readonly target: WorkspaceRuntimeTarget },
   operation: () => Promise<T>,
 ): Promise<T> {
-  const key = workspaceRuntimeKey(target);
+  const key = workspaceRuntimeKey(target, caller);
   const previous = operationByKey.get(key);
   let finish!: () => void;
   const current = new Promise<void>((resolve) => {
@@ -196,11 +227,12 @@ async function acquire(
   initByKey: Map<string, Promise<WorkspaceContentWorkerInit>>,
   options: WorkspaceContentRuntimeOptions,
   target: WorkspaceRuntimeTarget,
+  caller: WorkspaceRuntimeCaller | undefined,
 ): Promise<AcquiredWorkspaceRuntime> {
-  const key = workspaceRuntimeKey(target);
+  const key = workspaceRuntimeKey(target, caller);
   let pending = initByKey.get(key);
   if (pending === undefined) {
-    pending = resolveWorkerInit(options, target);
+    pending = resolveWorkerInit(options, target, caller);
     initByKey.set(key, pending);
     void pending.catch(() => {
       if (initByKey.get(key) === pending) initByKey.delete(key);
@@ -248,10 +280,11 @@ async function commitStableChangeset(
 async function resolveWorkerInit(
   options: WorkspaceContentRuntimeOptions,
   target: WorkspaceRuntimeTarget,
+  caller: WorkspaceRuntimeCaller | undefined,
 ): Promise<WorkspaceContentWorkerInit> {
   let credential: string | undefined;
   try {
-    credential = await options.resolveCredential(target);
+    credential = await options.resolveCredential(target, caller);
   } catch {
     throw workspaceError(
       "workspace-authentication-required",
@@ -266,7 +299,7 @@ async function resolveWorkerInit(
   }
   let license: string | undefined;
   try {
-    license = await options.resolveLicense();
+    license = await options.resolveLicense(caller);
   } catch {
     throw workspaceError("workspace-license-required", "Univer license is required.");
   }
