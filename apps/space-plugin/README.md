@@ -74,12 +74,12 @@ These workflow artifacts are builds for review, not GitHub Releases or npm publi
    Workspace cookies stay Host-only; an isolated grant is persisted by the official credential provider: SDK HTTP uses the existing owner Connection;
    WebSocket connects directly to Workspace using its one-time session ticket.
    Slides/Canvas/Relational Table keep detached previews. Pages maps specifically to Server
-   `.univer.html` Blobs, using the Fork's shared formal sandbox and binding engine (up to 1 MiB source). It supports scripts, authenticated Sheet bindings, inspection, and save-before-leave with resume after a failed connection change. License uses the Fork's existing source through official SDK initialization. Docs/Sheets Comments use the formal presets and remote datasource; the document toolbar opens the native panel. Docs supports selection anchors, replies, Resolve/Reopen and retained discussions when original text is removed. History remains unaccepted.
+   `.univer.html` Blobs, using the Fork's shared formal sandbox and binding engine. It supports scripts, authenticated Sheet bindings, inspection, and save-before-leave with resume after a failed connection change. License uses the Fork's existing source through official SDK initialization. Docs/Sheets Comments use the formal presets and remote datasource; the document toolbar opens the native panel. Docs supports selection anchors, replies, Resolve/Reopen and retained discussions when original text is removed. History remains unaccepted.
 5. Floating chat provides compact-message, expanded and minimized states. Move
    its grip, resize either side, restore it, create a Host Conversation or choose
    an existing one from History. It is one DSH composer/transcript, with DSH-owned
    messages, model, running state and tools. It never reserves editor width.
-6. Opening any of the six supported file types visibly associates its stable identity with the selected
+6. Opening any of the six supported content types or a Markdown Blob visibly associates its stable identity with the selected
    native Session in `conversation.input.dock`. Remove/reassociate there. Ask
    “总结当前文档”; the native Agent receives a short runtime-context identity and
    reads current Server content through `univer_inspect` (Docs text, Sheets cells,
@@ -101,6 +101,35 @@ Space Share manages actual Team membership. File Share distinguishes Team inheri
 local pinned metadata cards, with no fabricated templates or recommendations.
 The native DSH composer is taller than Space's 52px input capsule; it is kept
 intact.
+
+Markdown `.md` / `.markdown` Blobs open with the shared read-only Markdown Viewer's
+Preview / Source controls. Both modes use the complete validated UTF-8 source,
+including original line endings; opening does not convert a Blob into a Doc.
+The file header reuses Workspace Browser's **Download** action for Blobs. It uses
+the Server's original-byte download and original filename (including UTF-8 BOM),
+not the decoded Preview/Source text. Every click rechecks the current account,
+Node/Resource identity and Server download permission; cached previews grant no
+download after access is revoked.
+The shared classifier also supports Markdown MIME types and historical
+`application/octet-stream` uploads with Markdown filenames. Binary, invalid UTF-8,
+partial and denied reads fail visibly. Markdown remains outside Create / New.
+
+Pages load the complete HTML source without Space's former 1 MiB cutoff; partial
+responses are rejected. The optional HTML source cache retains at most 16 entries
+and 16 MiB of UTF-8 source. This is a cache budget, not an opening limit. Every
+open still checks the current Node/Resource ACL before any cached bytes are used.
+The formal HTML sandbox, scripts, Sheet bindings and departure save/resume
+protocol are unchanged.
+
+Docs selection tools require unique IDs compatible with the SDK's public
+`PARAGRAPH_ID_PREFIX`. Capture validates
+IDs before the SDK resolves paragraph offsets. A capture error clears the old
+selection target, aborts an outstanding proposal and shows a diagnostic while
+native editing/saving remain available. A later valid selection recovers the
+selection controls. This guard does not generate or persist missing IDs, repair
+the source document or establish why its IDs were invalid. Newly inserted
+paragraphs in a selection replacement use the SDK's public `createParagraphId`
+factory; unchanged source paragraph identities are retained by the SDK diff.
 
 Current protocol and real Server regression (use an isolated local Server with the exact OAuth callback registered):
 
@@ -249,3 +278,28 @@ After aligning this isolated application's exact SDK dependencies, regenerate
 `runtime-lock.json` from the audited production closure used by the packager.
 Build the shared Runtime, Client Core and reference provider before `npm ci`,
 so copied local build dependencies include their current artifacts.
+
+## Plugin-owned menu positioning
+
+Space dropdowns and content-list right-click menus use one body portal and the
+public `@floating-ui/dom` positioning API. Actual menu dimensions determine
+flip/shift and scrollable size within the owning Space shell and visual viewport.
+The portal retains scoped shell utilities and inherited theme tokens; listeners
+exist only while a menu is open. Native DSH, Univer and formal File Tree menus
+keep their existing implementations. File actions and Server capability checks
+remain in the shared `FileActions` component.
+
+Run `node scripts/check-floating-menu-regression.mjs` with
+`SPACE_PLAYWRIGHT_MODULE`, optional `SPACE_BROWSER_EXECUTABLE` and
+`SPACE_EVIDENCE_DIR` to exercise actual React components in an isolated browser
+fixture: corners, resize, ancestor scroll, long menus, theme switching, CSS and
+visual viewport scaling, outside-click and keyboard behavior. This fixture does
+not certify the original reported scene or Electron Desktop. The existing
+`check-create-menu-regression.mjs` checks the eight-entry creation workflow.
+
+`node scripts/check-navigation-menu-regression.mjs` uses the same browser/evidence
+environment to check the actual Navigation nested scroll container. Placement
+continues to use the shell boundary; hidden-reference detection uses the
+reference's clipping ancestors. A partly clipped trigger keeps its menu; a fully
+clipped trigger dismisses it. The check also verifies multiline Create labels in
+a 190px shell without fixed-height text overflow.

@@ -1,4 +1,4 @@
-import { contentTypes, contentType, creationName } from './content-types.js';
+import { contentTypes, contentType, creationName, type FileKind } from './content-types.js';
 export interface FileReference {
   endpoint: string;
   nodeId: string;
@@ -74,8 +74,9 @@ export interface OpenFile {
   resourceId: string;
   unitId: string;
   name: string;
-  type: 'doc' | 'sheet' | 'slide' | 'board' | 'base' | 'site';
+  type: FileKind;
   html?: string;
+  markdown?: string;
   node?: Node;
   space?: Space;
   breadcrumbs?: { id: string; name: string }[];

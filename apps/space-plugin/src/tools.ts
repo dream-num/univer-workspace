@@ -6,6 +6,7 @@ import { referenceText, type Content, type FileReference } from './model.js';
 export type { FileReference } from './model.js';
 import { SpaceError, type WorkspaceConnection } from './workspace.js';
 import type { DocFocus } from './doc-focus.js';
+import { blobPreviewKind } from './content-types.js';
 
 interface Binding {
   endpoint: string;
@@ -55,9 +56,10 @@ export class ToolBindings {
           { method: 'POST' },
         )
       ).resource;
-      if (!opened.originalFilename?.toLowerCase().endsWith('.univer.html'))
+      const preview = blobPreviewKind(opened.originalFilename ?? node.name, opened.mediaType ?? 'application/octet-stream');
+      if (!preview)
         throw new SpaceError(400, 'This file type has no supported preview.');
-      type = 'site';
+      type = preview;
     } else if (
       ['doc', 'sheet', 'slide', 'board', 'base'].includes(resource.unitType)
     ) {
@@ -68,7 +70,7 @@ export class ToolBindings {
       endpoint: status.endpoint,
       nodeId: node.id,
       resourceId: resource.id,
-      unitId: type === 'site' ? '' : resource.unitId,
+      unitId: resource.kind === 'blob' ? '' : resource.unitId,
       name: node.name,
       type,
     };
@@ -261,7 +263,7 @@ export class ToolBindings {
         'Resource identity changed. Reassociate the file.',
       );
     const rows =
-      file.type === 'doc'
+      file.type === 'doc' || file.type === 'markdown'
         ? file.content.text.replace(/\r\n?/g, '\n').split('\n')
         : file.type === 'site'
           ? (file.html ?? '').split('\n')
@@ -299,6 +301,7 @@ export class ToolBindings {
             ? 'sheet-cells'
             : file.type === 'site'
               ? 'html-source'
+              : file.type === 'markdown' ? 'markdown-source'
               : 'univer-unit-json',
       userId: binding.userId,
       revision: file.revision,

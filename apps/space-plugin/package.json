@@ -1,6 +1,6 @@
 {
   "name": "dsh-space-plugin",
-  "version": "0.18.4-preview.0",
+  "version": "0.18.4-preview.1",
   "private": true,
   "type": "module",
   "description": "Space content workspace for official DeepSeek Harness Desktop",
@@ -192,7 +192,10 @@
     "@univerjs/univer-workspace-editor-presets": "file:../../packages/workspace-editor-presets",
     "@univerjs/univer-workspace-html-viewer": "file:../../packages/workspace-html-viewer",
     "@univerjs/univer-workspace-reference-provider": "file:../../packages/reference-provider",
-    "@univerjs/univer-workspace-client-core": "file:../../packages/client-core"
+    "@univerjs/univer-workspace-client-core": "file:../../packages/client-core",
+    "@univerjs/univer-workspace-markdown-viewer": "file:../../packages/workspace-markdown-viewer",
+    "sass": "1.89.2",
+    "@floating-ui/dom": "1.8.0"
   },
   "engines": {
     "node": ">=24.9.0"

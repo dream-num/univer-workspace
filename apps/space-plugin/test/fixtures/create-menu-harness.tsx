@@ -14,8 +14,8 @@ const initial: any = {
   all: [], recent: [], recentCursor: null, page: null, location: 'home', trash: [], action: null,
   sharing: null, space: '', parent: '', content: null, context: null, sessionId: null,
   sessionTitle: '', sessions: [], error: '', busy: false, settings: false, ai: false, query: '',
-  filter: 'all', discovery: 'Suggested', chatMode: 'compact', pins: [], spaceTab: 'Overview', notice: '',
-  hostNavigation: 'active',
+  filter: 'all', discovery: 'Your items', chatMode: 'compact', pins: [], spaceTab: 'Overview', notice: '',
+  hostNavigation: 'active', navigation: { pinned: true, recent: true, spaces: true, recentLimit: 5, expandedPages: [] },
 };
 function App() {
   const [state, setState] = useState(initial);
@@ -53,9 +53,9 @@ function App() {
       ...prev, spaces: [{ ...prev.spaces[0], capabilities: { createAtRoot: allowed } }],
     })),
   };
-  return <div className="sp-shell" style={{ display: 'flex', minHeight: 700 }}>
+  return <div className="sp-shell" style={{ display: 'flex', height: 700, minHeight: 700 }}>
     <Navigation face={face} v={state} />
-    <main style={{ flex: 1 }}>
+    <main style={{ flex: 1, display: 'flex', minWidth: 0 }}>
       {editor ? <div data-testid="editor-fixture">Editor fixture</div> : <ContentBrowser face={face} v={state} />}
     </main>
   </div>;

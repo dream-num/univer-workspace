@@ -2,6 +2,7 @@ import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { scopeSdkCss } from './scope-sdk-css.mjs';
 import { releaseSdkDefaults } from './release-sdk-defaults.mjs';
+import { markdownStyles, markdownCssPlaceholder, writeClientBundle } from './markdown-css.mjs';
 import { readFile, writeFile, mkdir, copyFile, rm, cp } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 await rm('lib', { recursive: true, force: true });
@@ -136,13 +137,14 @@ await build({
   plugins: [{ name: 'bundle-shared-content-runtime', setup(build) {
     build.onResolve({ filter: /^@univerjs-labs\/html-view$/ }, () => ({ path: 'html-view', namespace: 'space-html-view' }));
     build.onResolve({ filter: /^@univerjs\/univer-workspace-client-core\/(?:markdown|document-materialize)$/ }, args => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
+    build.onResolve({ filter: /^@univerjs\/univer-workspace-markdown-viewer\/content$/ }, args => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
     build.onLoad({ filter: /.*/, namespace: 'space-html-view' }, () => ({ contents: htmlViewBundle, loader: 'js' }));
     build.onResolve({ filter: /^@univerjs\/univer-workspace-agent-runtime(?:\/(?:api-reference|workspace-spaces|workspace-resources|workspace-exchange|workspace-session-path|workspace-inspection|workspace-blob|workspace-html-view|workspace-svg|workspace-skill-resources|workspace-resource-library|workspace-issues|workspace-issue-operations|workspace-render|workspace-screenshot|workspace-file-state-api|workspace-worktree-api|workspace-state|workspace-status|workspace-unit-operations))?$/ }, (args) => ({ path: fileURLToPath(import.meta.resolve(args.path)) }));
   } }],
   target: 'node24',
   logLevel: 'info',
 });
-await build({
+const clientBundle = await build({
   entryPoints: ['src/client.tsx'],
   outfile: 'lib/client.js',
   bundle: true,
@@ -151,7 +153,9 @@ await build({
   jsx: 'automatic',
   external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'],
   target: 'es2022',
-  plugins: [releaseSdkDefaults()],
+  plugins: [releaseSdkDefaults(), markdownStyles()],
+  write: false,
+  define: { __SPACE_MARKDOWN_CSS__: JSON.stringify(markdownCssPlaceholder) },
   loader: { '.css': 'text' },
   banner: {
     js: 'window.__ModuleLoader__.load({id:"dsh-space-plugin",factory:(require)=>{var module={exports:{}};var exports=module.exports;',
@@ -159,6 +163,7 @@ await build({
   footer: { js: 'return module.exports;}});' },
   logLevel: 'info',
 });
+await writeClientBundle(clientBundle, writeFile);
 
 // Public shared runtime artifacts are packaged with the plugin. No file: path
 // or second DSH cohort is required in an installed Host profile.

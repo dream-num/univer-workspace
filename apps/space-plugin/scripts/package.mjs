@@ -42,10 +42,11 @@ try {
   await writeFile(join(stage, 'README.md'), `# Space Plugin ${version} release candidate\n\n${licensing}\n\n` + instructions.trim() + '\n');
   await cp('../../LICENSE', join(stage, 'LICENSE'));
   const notices = ['Space Plugin third-party notices', '', 'DSH and React are provided by the official Host.', licensing, ''];
-  for (const name of Object.keys({ ...source.devDependencies, ...dependencies }).filter(name => /^@univer|^lucide|^rxjs|^zustand|^immer/.test(name)).sort()) {
+  for (const name of Object.keys({ ...source.devDependencies, ...dependencies }).filter(name => /^@univer|^@floating-ui|^lucide|^rxjs|^zustand|^immer/.test(name)).sort()) {
     const pkg = JSON.parse(await readFile(`node_modules/${name}/package.json`, 'utf8'));
     notices.push(`${name}@${pkg.version} — ${pkg.license ?? 'See upstream package license'} — ${typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url ?? pkg.homepage ?? ''}`);
   }
+  notices.push(await readFile('THIRD_PARTY_NOTICES.txt', 'utf8'));
   await writeFile(join(stage, 'THIRD_PARTY_NOTICES.txt'), notices.join('\n') + '\n');
   // Freeze the audited production closure; packaging must not resolve new
   // transitive versions. DSH's manager still owns its separate profile lock.

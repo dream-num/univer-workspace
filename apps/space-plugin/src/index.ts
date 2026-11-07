@@ -48,6 +48,22 @@ export function apply(ctx: Context) {
       });
     },
   }));
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: '/api/space/blob-download', methods: ['GET'], requestBody: 'buffered',
+    async fetch(request) {
+      try {
+        const query = new URL(request.url).searchParams;
+        return await workspace.blobDownload({
+          endpoint: query.get('endpoint') ?? '', userId: query.get('userId') ?? '',
+          nodeId: query.get('nodeId') ?? '', resourceId: query.get('resourceId') ?? '',
+        }, request);
+      } catch (error) {
+        return Response.json({ error: { message: error instanceof Error ? error.message : 'Workspace download failed.' } }, {
+          status: error instanceof SpaceError ? error.status : 502, headers: { 'cache-control': 'private, no-store' },
+        });
+      }
+    },
+  }));
   for (const kind of ['editor-upload', 'editor-asset'] as const) {
     ctx.effect(() => ctx.connection.fetch.register({
       path: `/api/space/${kind}`, methods: [kind === 'editor-upload' ? 'POST' : 'GET'],

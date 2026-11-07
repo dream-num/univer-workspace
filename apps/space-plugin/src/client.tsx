@@ -27,6 +27,8 @@ import { Settings } from './components/settings.js';
 import type { DocFocus } from './doc-focus.js';
 import { EditorResources, type EditorBinding, type EditorResource } from './editor-lifecycle.js';
 
+declare const __SPACE_MARKDOWN_CSS__: string;
+
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
     spacePlugin: true;
@@ -875,7 +877,7 @@ export function apply(ctx: any) {
   ctx.effect(() => {
     const style = document.createElement('style');
     style.dataset.plugin = PANEL;
-    style.textContent = `${sdkCss}\n${css}\n${tailwind}\n${hiddenEditorInputCss}`;
+    style.textContent = `${sdkCss}\n${css}\n${tailwind}\n${hiddenEditorInputCss}\n${__SPACE_MARKDOWN_CSS__}`;
     document.head.appendChild(style);
     return () => style.remove();
   });

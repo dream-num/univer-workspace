@@ -1,3 +1,5 @@
+import { PARAGRAPH_ID_PREFIX } from '@univerjs/core';
+
 /** Body-free identity carried by the native request. Text is read by a Tool. */
 export interface DocFocus {
   id: string;
@@ -41,6 +43,26 @@ export interface DocTarget {
   text: string;
 }
 export const FOCUS_TEXT_LIMIT = 24000;
+export class DocFocusUnavailableError extends Error {
+  readonly code = 'INVALID_PARAGRAPH_IDENTITY';
+  constructor() {
+    super('Selection tools cannot use missing, invalid or duplicate paragraph IDs. Native editor controls remain available. Select the text again after the document is repaired.');
+    this.name = 'DocFocusUnavailableError';
+  }
+}
+
+// SDK 1.3.1 FDocumentParagraph resolves getInfo/getText by ID, and throws for
+// duplicate IDs (including undefined). Validate the entire segment first.
+// The published prefix also guards targets the server runtime cannot persist.
+// This is a selection safety check, not a repair of persisted document data.
+function assertParagraphIdentity(paragraphs: Paragraph[]) {
+  const ids = new Set<string>();
+  for (const paragraph of paragraphs) {
+    const id = paragraph.getId();
+    if (typeof id !== 'string' || !id.startsWith(PARAGRAPH_ID_PREFIX) || ids.has(id)) throw new DocFocusUnavailableError();
+    ids.add(id);
+  }
+}
 // Plain text plus tab/paragraph/newline only. Embedded objects, table markers,
 // section breaks and other document control tokens require their own Facades.
 const controls = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/;
@@ -64,6 +86,7 @@ export function captureDocTarget(doc: FocusDocument, ranges: readonly { startOff
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start) return null;
   const segmentId = range.segmentId ?? '';
   const all = doc.getParagraphs(segmentId);
+  assertParagraphIdentity(all);
   const first = all.findIndex(p => { const i = p.getInfo(); return start >= i.startOffset && start <= i.endOffset; });
   if (first < 0) return null;
   const kind = start === end ? 'paragraph' : 'selection';
@@ -91,6 +114,7 @@ export function captureDocTarget(doc: FocusDocument, ranges: readonly { startOff
  * target paragraph invalidate it; never relocate by quote/first occurrence. */
 export function resolveDocTarget(doc: FocusDocument, target: DocTarget) {
   const all = doc.getParagraphs(target.segmentId);
+  assertParagraphIdentity(all);
   const first = all.findIndex(p => p.getId() === target.paragraphs[0]?.id);
   if (first < 0 || target.paragraphs.some((p, i) => all[first + i]?.getId() !== p.id || all[first + i]?.getText() !== p.text))
     throw new Error('目标段落已更改或删除，请重新选择后发送指令。');

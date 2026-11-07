@@ -1,6 +1,7 @@
 import React from 'react';
 import { CollaborativeEditor } from '../collaborative-editor.js';
 import { HtmlViewer } from '../html-viewer.js';
+import { MarkdownViewer } from '../markdown-viewer.js';
 import type { OpenFile } from '../model.js';
 
 type Adapter = {
@@ -29,4 +30,5 @@ export const viewerAdapters: Record<OpenFile['type'], Adapter> = {
     body: 'sp-sheet-body',
     Editor: HtmlViewer,
   },
+  markdown: { comments: false, review: false, body: 'sp-sheet-body', Editor: MarkdownViewer },
 };

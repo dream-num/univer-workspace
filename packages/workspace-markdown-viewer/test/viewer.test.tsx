@@ -83,6 +83,8 @@ describe("Markdown viewer", () => {
         document.getElementById(decodeURIComponent(anchor.getAttribute("href")!.slice(1))),
       ).not.toBeNull();
     }
+    const reference = container.querySelector('a[aria-describedby]')!;
+    expect(document.getElementById(reference.getAttribute('aria-describedby')!)).not.toBeNull();
   });
 
   it("renders the entire large document, including references defined at its end", () => {

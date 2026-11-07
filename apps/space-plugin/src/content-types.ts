@@ -1,3 +1,5 @@
+import { isMarkdownFile } from '@univerjs/univer-workspace-markdown-viewer/content';
+
 /** Product taxonomy shared by every Space surface; wire kinds stay compatible. */
 export const contentTypes = [
   {
@@ -44,12 +46,21 @@ export const contentTypes = [
   },
 ] as const;
 export type ContentKind = (typeof contentTypes)[number]['kind'];
+// Read-only Blob previews are not new Unit types or creation entries.
+const viewTypes = [...contentTypes, {
+  kind: 'markdown', label: 'Markdown', createLabel: 'Markdown', runtime: 'viewer', resource: 'blob',
+}] as const;
+export type FileKind = (typeof viewTypes)[number]['kind'];
+export function blobPreviewKind(filename: string, mediaType: string): 'site' | 'markdown' | null {
+  if (filename.toLowerCase().endsWith('.univer.html')) return 'site';
+  return isMarkdownFile(filename, mediaType) ? 'markdown' : null;
+}
 export const createTypes = [
   ...contentTypes,
   { kind: 'folder', label: 'Folder', createLabel: 'Folder', resource: null },
   { kind: 'space', label: 'Space', createLabel: 'Space', resource: null },
 ] as const;
 export const contentType = (kind: string) =>
-  contentTypes.find((type) => type.kind === kind);
+  viewTypes.find((type) => type.kind === kind);
 export const creationName = (kind: string) =>
   createTypes.find((type) => type.kind === kind)?.createLabel ?? kind;

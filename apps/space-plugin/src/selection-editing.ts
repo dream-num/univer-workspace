@@ -4,7 +4,7 @@ import { DocSelectionManagerService, DocSkeletonManagerService, RichTextEditingM
 import { DocCanvasPopManagerService, DocSelectionRenderService, FLOAT_TOOLBAR_MENU_POSITION } from '@univerjs/docs-ui';
 import { IMenuManagerService, MenuItemType } from '@univerjs/ui';
 import { BehaviorSubject, Subscription } from 'rxjs';
-import { captureDocTarget, resolveDocTarget, type DocTarget } from './doc-focus.js';
+import { captureDocTarget, resolveDocTarget, DocFocusUnavailableError, type DocTarget } from './doc-focus.js';
 import type { OpenFile } from './model.js';
 import type { Face } from './client.js';
 import { IRenderManagerService, registerDocumentLayoutPresentation } from '@univerjs/engine-render';
@@ -98,13 +98,20 @@ export class SelectionEditing {
     const service = univer.__getInjector().get(DocSelectionManagerService);
     this.subscription.add(service.textSelection$.subscribe(event => {
       if (this.disposed || !this.ownsView()) return;
+      if (this.projection || this.applying || this.syncing) return;
       // Events from embedded/comment editors must never reuse the host's cached
       // ranges. Empty/collapsed host ranges invalidate an unsubmitted operation.
-      const target = event.unitId === file.unitId && event.subUnitId === file.unitId ? this.captureSelection() : null;
-      if (this.projection || this.applying || this.syncing) return;
-      if (sameTarget(target, this.state.target)) return;
-      this.request?.abort();
-      this.set(target ? { phase: 'selected', target } : { phase: 'idle' });
+      try {
+        const target = event.unitId === file.unitId && event.subUnitId === file.unitId ? this.captureSelection() : null;
+        if (sameTarget(target, this.state.target)) return;
+        this.request?.abort();
+        this.set(target ? { phase: 'selected', target } : { phase: 'idle' });
+      } catch (error) {
+        // RxJS reports thrown observer callbacks asynchronously. Keep optional
+        // selection failures local and invalidate any previously captured target.
+        this.request?.abort();
+        this.set({ phase: 'idle', error: error instanceof Error ? error.message : 'Cannot capture this selection. Select the text again.' });
+      }
     }));
     this.subscription.add(univer.__getInjector().get(IUniverInstanceService).focused$.subscribe(unitId => {
       if (this.disposed) return;
@@ -186,8 +193,10 @@ export class SelectionEditing {
     this.request?.abort();
     if (this.state.candidate !== undefined) this.set({ ...this.state, phase: 'reviewing', error: undefined });
     else {
-      const target = this.captureSelection();
-      this.set(target ? { phase: 'selected', target } : { phase: 'idle' });
+      try {
+        const target = this.captureSelection();
+        this.set(target ? { phase: 'selected', target } : { phase: 'idle' });
+      } catch (error) { this.set({ phase: 'idle', error: (error as Error).message }); }
     }
   };
   submit = (instruction: string) => this.propose(instruction);
@@ -234,6 +243,11 @@ export class SelectionEditing {
       if (!this.isCurrentDocument()) {
         this.clearProjection();
         this.set({ phase: 'idle', error: 'This document was closed or replaced. Select the text again.' });
+        return;
+      }
+      if (error instanceof DocFocusUnavailableError) {
+        this.clearProjection();
+        this.set({ phase: 'idle', error: error.message });
         return;
       }
       const changed = this.document().getDocumentDataModel().getMutationRevision() !== revision;
@@ -395,6 +409,7 @@ export class SelectionEditing {
       this.set({ ...this.state, phase: 'reviewing', candidate: result.text });
     } catch (error) {
       if (controller.signal.aborted || this.disposed || !this.ownsView() || this.request !== controller || this.state.target !== target) return;
+      if (error instanceof DocFocusUnavailableError) { this.set({ phase: 'idle', error: error.message }); return; }
       if (!this.isCurrentDocument()) { this.set({ phase: 'idle', error: (error as Error).message }); return; }
       this.set({ ...this.state, phase: candidate === undefined ? 'instruction' : 'reviewing', error: (error as Error).message });
     }

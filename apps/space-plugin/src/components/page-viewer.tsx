@@ -55,6 +55,13 @@ function ResourceViewer({ face, v }: { face: Face; v: State }) {
         </Menu>
         <div className="tw-ml-auto tw-flex tw-items-center tw-gap-1">
           <Collaborators members={members} currentUserId={v.status.user?.id} />
+          {file.node?.resource?.kind === 'blob' && v.status.user?.id && (
+            <a className={button} download href={'/api/space/blob-download?' + new URLSearchParams({
+              endpoint: file.endpoint, userId: v.status.user.id, nodeId: file.nodeId, resourceId: file.resourceId,
+            })}>
+              <Icon name="download" size={16} />Download
+            </a>
+          )}
           {adapter.comments && (
             <button
               className={button}

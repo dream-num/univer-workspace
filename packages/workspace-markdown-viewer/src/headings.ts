@@ -18,7 +18,7 @@ export function markdownHeadings({ prefix }: { prefix: string }) {
         node.properties.id = `${prefix}footnote-label`;
       }
       if (node.type === "element" && node.properties.ariaDescribedBy) {
-        node.properties.ariaDescribedBy = `${prefix}footnote-label`;
+        node.properties.ariaDescribedBy = [`${prefix}footnote-label`];
       }
       for (const child of node.children) if (child.type === "element") visit(child);
     }

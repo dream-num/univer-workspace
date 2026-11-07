@@ -10,7 +10,8 @@ import {
   transformSnapshotToBaseData,
 } from '@univerjs-pro/collaboration';
 import { UnitSnapshotMaterializer } from '@univerjs-pro/collaboration-service';
-import { contentType } from './content-types.js';
+import { blobPreviewKind, contentType } from './content-types.js';
+import { readMarkdownContent } from '@univerjs/univer-workspace-markdown-viewer/content';
 import { readRuntimeLicense } from './runtime-license.js';
 
 export class SpaceError extends Error {
@@ -54,7 +55,7 @@ export class WorkspaceConnection {
   readonly license = readRuntimeLicense();
   endpoint = '';
   private contentGeneration = 0;
-  private htmlCache = new Map<string, { html: string; etag: string | null; sha256?: string }>();
+  private htmlCache = new Map<string, { html: string; byteSize: number; etag: string | null; sha256?: string }>();
   get contentVersion() { return this.contentGeneration; }
   noteContentChanged() { this.contentGeneration++; }
   get sessionCookie() { return this.cookie; }
@@ -500,6 +501,39 @@ export class WorkspaceConnection {
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers: { 'content-type': response.headers.get('content-type') ?? 'application/json', 'cache-control': 'no-store' } });
   }
 
+  /** Native download anchor over the product Blob route; never re-encode a preview. */
+  async blobDownload(input: { endpoint: string; userId: string; nodeId: string; resourceId: string }, request: Request) {
+    const identity = this.lifetime;
+    if (input.endpoint !== this.endpoint) throw new SpaceError(409, 'Workspace connection changed.');
+    const status = await this.status();
+    if (identity !== this.lifetime || status.state !== 'connected' || status.user?.id !== input.userId)
+      throw new SpaceError(401, 'Workspace identity changed.');
+    if ([input.nodeId, input.resourceId].some(id => !id || id.length > 256 || /[\\/]/.test(id)))
+      throw new SpaceError(400, 'Invalid Blob identity.');
+    const signal = AbortSignal.any([identity.signal, request.signal]);
+    const { node } = await this.json(`/api/nodes/${encodeURIComponent(input.nodeId)}`, { signal });
+    if (node?.resource?.id !== input.resourceId || node.resource.kind !== 'blob')
+      throw new SpaceError(409, 'Resource identity changed. Reopen the file.');
+    if (!node.resource.capabilities?.openContent || !node.resource.capabilities.downloadContent)
+      throw new SpaceError(403, 'No permission to download this file.');
+    // Use the product's original-byte download, not the decoded preview text.
+    // This endpoint rechecks ACL again and owns Content-Disposition/filename.
+    const response = await this.rawRequest(`/api/blob-resources/${encodeURIComponent(input.resourceId)}/download`, {
+      signal, headers: { 'accept-encoding': 'identity' },
+    });
+    signal.throwIfAborted();
+    if (!response.ok) throw new SpaceError(response.status, 'Cannot download this Workspace file.');
+    if (response.status !== 200 || response.headers.has('content-range') ||
+      !/^attachment(?:;|$)/i.test(response.headers.get('content-disposition') ?? ''))
+      throw new SpaceError(502, 'Workspace did not return a complete file download.');
+    const headers = new Headers({ 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' });
+    for (const name of ['content-type', 'content-length', 'content-disposition', 'etag']) {
+      const value = response.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+    return new Response(response.body, { status: response.status, headers });
+  }
+
   /** Forward only a Server-authorized image/export file; cookies remain in Host memory. */
   async editorAsset(input: { endpoint: string; userId: string; fileId: string }, request: Request) {
     const identity = this.lifetime;
@@ -890,12 +924,23 @@ export class WorkspaceConnection {
       this.htmlCache.delete(resourceId);
       throw new SpaceError(response.status, 'Cannot load this Workspace Page.');
     }
+    if (response.status === 206 || response.headers.has('content-range'))
+      throw new SpaceError(502, 'Workspace returned incomplete Page content. Reopen the file to retry.');
     const html = await response.text();
     active.throwIfAborted();
-    if (Buffer.byteLength(html, 'utf8') > 1024 * 1024) throw new SpaceError(413, 'HTML preview exceeds 1 MiB. Open this file in Workspace.');
+    const byteSize = Buffer.byteLength(html, 'utf8');
     this.htmlCache.delete(resourceId);
-    this.htmlCache.set(resourceId, { html, sha256, etag: response.headers.get('etag') });
-    while (this.htmlCache.size > 16) this.htmlCache.delete(this.htmlCache.keys().next().value!);
+    // Bound retained cache bytes, not the files the formal viewer can open.
+    const budget = 16 * 1024 * 1024;
+    if (byteSize <= budget) {
+      this.htmlCache.set(resourceId, { html, byteSize, sha256, etag: response.headers.get('etag') });
+      let retained = [...this.htmlCache.values()].reduce((size, entry) => size + entry.byteSize, 0);
+      while (this.htmlCache.size > 16 || retained > budget) {
+        const first = this.htmlCache.keys().next().value!;
+        retained -= this.htmlCache.get(first)!.byteSize;
+        this.htmlCache.delete(first);
+      }
+    }
     return html;
   }
 
@@ -934,34 +979,36 @@ export class WorkspaceConnection {
       })
     ).resource;
     if (resource.kind === 'blob') {
-      if (!opened.originalFilename?.toLowerCase().endsWith('.univer.html'))
+      const kind = blobPreviewKind(opened.originalFilename ?? node.name, opened.mediaType ?? 'application/octet-stream');
+      if (!kind)
         throw new SpaceError(
           400,
-          'This file has no supported preview. Pages require a .univer.html file.',
+          'This file has no supported preview. Open a .univer.html Page or a Markdown file.',
         );
-      if (opened.byteSize > 1024 * 1024)
-        throw new SpaceError(
-          413,
-          'HTML preview exceeds 1 MiB. Open this file in Workspace.',
-        );
-      const html = await this.htmlContent(resource.id, typeof opened.sha256 === 'string' ? opened.sha256 : undefined, signal);
+      const active = AbortSignal.any([lifetime.signal, ...(signal ? [signal] : [])]);
+      const text = kind === 'site'
+        ? await this.htmlContent(resource.id, typeof opened.sha256 === 'string' ? opened.sha256 : undefined, active)
+        : opened.byteSize === 0 ? '' : await readMarkdownContent(await this.rawRequest(
+          `/api/blob-resources/${encodeURIComponent(resource.id)}/content`, { signal: active },
+        ));
+      active.throwIfAborted();
       lifetime.signal.throwIfAborted();
       return {
         endpoint,
         nodeId,
         resourceId: resource.id,
         unitId: '',
-        type: 'site',
+        type: kind,
         name: node.name,
         node,
         space: nodeResult.space,
         breadcrumbs: nodeResult.breadcrumbs,
         revision: 0,
-        sha256: createHash('sha256').update(html).digest('hex'),
+        sha256: createHash('sha256').update(text).digest('hex'),
         capturedAt: new Date().toISOString(),
         data: null,
-        html,
-        content: { text: '', sheets: [] },
+        ...(kind === 'site' ? { html: text } : { markdown: text }),
+        content: { text: kind === 'markdown' ? text : '', sheets: [] },
       };
     }
     const types: Record<string, number> = {

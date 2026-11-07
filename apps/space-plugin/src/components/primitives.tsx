@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { FloatingMenu, focusMenuItem } from './floating-menu.js';
 import { InvitePicker } from './sharing.js';
 import { createTypes, creationName } from '../content-types.js';
 import {
@@ -34,6 +35,7 @@ import {
   Share2,
   Check,
   Copy,
+  Download,
   File,
   PanelsTopLeft,
   Database,
@@ -46,6 +48,7 @@ const icons: Record<string, LucideIcon> = {
   base: Database,
   board: SquareMousePointer,
   doc: FileText,
+  markdown: FileText,
   sheet: Table2,
   folder: Folder,
   search: Search,
@@ -77,6 +80,7 @@ const icons: Record<string, LucideIcon> = {
   share: Share2,
   check: Check,
   copy: Copy,
+  download: Download,
   file: File,
 };
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
@@ -119,58 +123,41 @@ export function Menu({
   className?: string;
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    const close = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node))
-        ref.current?.removeAttribute('open');
-    };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
-  }, []);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [initialFocus, setInitialFocus] = useState<'first' | 'last'>();
   return (
-    <details
-      ref={ref}
-      className={'sp-menu ' + className}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          e.stopPropagation();
-          ref.current?.removeAttribute('open');
+    <details ref={ref} className={'sp-menu ' + className} open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      onKeyDown={(event) => {
+        if (!(event.target as HTMLElement).closest('summary')) return;
+        if (event.key === 'Escape') {
+          event.stopPropagation(); setOpen(false);
           ref.current?.querySelector('summary')?.focus();
         }
-        if (e.key === 'Tab') ref.current?.removeAttribute('open');
-        if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
-          e.preventDefault();
-          if (ref.current) ref.current.open = true;
-          const items = Array.from(
-            ref.current?.querySelectorAll<HTMLButtonElement>(
-              '[role="menu"] button:not(:disabled)',
-            ) ?? [],
-          );
-          const n = items.indexOf(document.activeElement as HTMLButtonElement);
-          const index = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 :
-            n < 0 ? (e.key === 'ArrowDown' ? 0 : items.length - 1) :
-            (n + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-          items[index]?.focus();
+        if (event.key === 'Tab') setOpen(false);
+        if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+          event.preventDefault();
+          if (open) focusMenuItem(menuRef.current, event.key);
+          else {
+            setInitialFocus(event.key === 'ArrowUp' || event.key === 'End' ? 'last' : 'first');
+            setOpen(true);
+          }
         }
-      }}
-    >
-      <summary aria-label={label} aria-haspopup="menu" className={button}>
+      }}>
+      <summary aria-label={label} aria-haspopup="menu" aria-expanded={open} className={button}
+        onClick={(event) => { event.preventDefault(); setInitialFocus(undefined); setOpen(!open); }}>
         {trigger}
       </summary>
-      <div
-        role="menu"
-        aria-label={label}
-        className={'sp-menu-body sp-menu-' + align}
-        onClick={(e) => {
-          if ((e.target as HTMLElement).closest('button:not(:disabled)'))
-            ref.current?.removeAttribute('open');
-        }}
-      >
+      {open && ref.current && <FloatingMenu
+        anchor={ref.current.querySelector('summary')!} label={label} align={align}
+        className={className} initialFocus={initialFocus} menuRef={menuRef} onClose={() => setOpen(false)}>
         {children}
-      </div>
+      </FloatingMenu>}
     </details>
   );
 }
+
 export function GapAction({ children }: { children: React.ReactNode }) {
   return (
     <button

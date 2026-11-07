@@ -26,7 +26,7 @@ function fixture({ text = 'Alpha red kite. Link', candidate = 'Alpha blue kite. 
   univer.registerPlugin(UniverDocsPlugin);
   const data = { id: 'selection-correctness', documentStyle: {}, body: {
     dataStream: `${text}\r\n`,
-    paragraphs: [{ startIndex: text.length, paragraphId: 'p1' }],
+    paragraphs: [{ startIndex: text.length, paragraphId: 'para_1' }],
     sectionBreaks: [{ startIndex: text.length + 1 }],
     textRuns: [{ st: 0, ed: 5, ts: { bl: 1 } }],
     customRanges: text.endsWith('Link') ? [{ startIndex: text.length - 4, endIndex: text.length - 1, rangeId: 'link', rangeType: CustomRangeType.HYPERLINK, properties: { url: 'https://example.test/' } }] : [],
@@ -281,7 +281,7 @@ test('reopening a different Document model with the same Unit id rejects a pendi
     const applying = f.editor.accept();
     f.editor.api.disposeUnit('selection-correctness');
     f.univer.createUnit(UniverInstanceType.UNIVER_DOC, { id: 'selection-correctness', body: {
-      dataStream: `${f.text}\r\n`, paragraphs: [{ startIndex: f.text.length, paragraphId: 'p1' }], sectionBreaks: [{ startIndex: f.text.length + 1 }],
+      dataStream: `${f.text}\r\n`, paragraphs: [{ startIndex: f.text.length, paragraphId: 'para_1' }], sectionBreaks: [{ startIndex: f.text.length + 1 }],
     } });
     release({ node: { resource: { id: 'resource', capabilities: { editContent: true } } } });
     await applying;
@@ -307,5 +307,63 @@ test('dispose aborts a pending proposal and ignores its late result', async () =
     await pending;
     assert.equal(f.editor.getSnapshot(), snapshot);
     assert.equal(f.doc.getDocumentDataModel().getBody().dataStream, `${f.text}\r\n`);
+  } finally { f.dispose(); }
+});
+
+test('a failed capture invalidates the old target, aborts generation and ignores its late candidate', async () => {
+  let release, signal;
+  const f = fixture({ selectionProposal: (_, s) => { signal = s; return new Promise(r => { release = r; }); } });
+  try {
+    f.editor.undo(); f.select(0, 5); f.editor.begin();
+    const generating = f.editor.submit('Change Alpha');
+    const before = structuredClone(f.doc.getDocumentDataModel().getSnapshot());
+    delete f.doc.getDocumentDataModel().getBody().paragraphs[0].paragraphId;
+    f.select(6, 9);
+    assert.equal(signal.aborted, true);
+    assert.equal(f.editor.getSnapshot().target, undefined);
+    assert.match(f.editor.getSnapshot().error, /paragraph IDs/);
+    release({ text: 'Stale write' }); await generating; await f.editor.accept();
+    assert.equal(f.editor.getSnapshot().phase, 'idle');
+    assert.equal(f.editor.preview, false);
+    assert.equal(f.doc.getDocumentDataModel().getBody().dataStream, before.body.dataStream);
+    // Repair only the disposable in-memory fixture to check a fresh capture.
+    f.doc.getDocumentDataModel().getBody().paragraphs[0].paragraphId = 'para_1';
+    f.select(6, 9);
+    assert.equal(f.editor.getSnapshot().target.text, 'red');
+    assert.equal(f.editor.getSnapshot().error, undefined);
+  } finally { f.dispose(); }
+});
+
+test('Accept rejects newly ambiguous paragraph identity without a mutation or repeatable old target', async () => {
+  let flushes = 0;
+  const f = fixture({ flush: async () => { flushes++; } });
+  try {
+    const body = f.doc.getDocumentDataModel().getBody();
+    body.paragraphs.push({ startIndex: body.dataStream.length - 2, paragraphId: 'para_1' });
+    const before = structuredClone(body);
+    await f.editor.accept();
+    assert.equal(f.editor.getSnapshot().phase, 'idle');
+    assert.equal(f.editor.getSnapshot().target, undefined);
+    assert.match(f.editor.getSnapshot().error, /paragraph IDs/);
+    await f.editor.accept();
+    assert.deepEqual(body, before); assert.equal(flushes, 0);
+  } finally { f.dispose(); }
+});
+
+test('new replacement paragraphs use SDK-compatible IDs while retaining source identity and native Undo', async () => {
+  const f = fixture({ text: 'Alpha red kite. Link', candidate: 'Alpha red\rNew paragraph\rkite. Link' });
+  try {
+    const original = structuredClone(f.doc.getDocumentDataModel().getSnapshot());
+    await f.editor.accept();
+    assert.equal(f.editor.getSnapshot().syncState, 'complete');
+    const paragraphs = f.doc.getDocumentDataModel().getBody().paragraphs;
+    assert.ok(paragraphs.length > original.body.paragraphs.length);
+    assert.ok(paragraphs.every(p => p.paragraphId.startsWith('para_')));
+    assert.equal(new Set(paragraphs.map(p => p.paragraphId)).size, paragraphs.length);
+    assert.ok(paragraphs.some(p => p.paragraphId === original.body.paragraphs[0].paragraphId));
+    assert.equal(f.doc.undo(), true);
+    assert.equal(f.doc.getDocumentDataModel().getBody().dataStream, original.body.dataStream);
+    assert.equal(f.doc.getDocumentDataModel().getBody().paragraphs.length, original.body.paragraphs.length);
+    assert.ok(f.doc.getDocumentDataModel().getBody().paragraphs.every(p => p.paragraphId.startsWith('para_')));
   } finally { f.dispose(); }
 });

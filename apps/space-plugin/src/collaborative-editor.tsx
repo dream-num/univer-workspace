@@ -112,6 +112,7 @@ export function CollaborativeEditor({
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [selectionEditing, setSelectionEditing] = useState<SelectionEditing | null>(null);
+  const [focusError, setFocusError] = useState('');
   const loadId = face.store.getSnapshot().contentLoadId;
   const [status, setStatus] = useState('loading'),
     [error, setError] = useState('');
@@ -161,6 +162,7 @@ export function CollaborativeEditor({
     publishError('');
     publishMembers([]);
     publishLoaded(false);
+    setFocusError('');
     const syncState = (state: CollaborationStatus) => {
       if (canceled || !initialized || accessDenied) return;
       const synced = state === CollaborationStatus.SYNCED && sessionStatus === SessionStatus.ONLINE;
@@ -376,12 +378,21 @@ export function CollaborativeEditor({
         ? univer.__getInjector().get(DocSelectionManagerService)
         : undefined;
       const publishDocFocus = () => {
-        if (!selectionService || canceled || abort.signal.aborted) return;
-        const current = selectionService.__getCurrentSelection();
-        const info = current?.unitId === file.unitId && current.subUnitId === file.unitId
-          ? selectionService.getSelectionInfo(current) : undefined;
-        const target = info ? captureDocTarget(api.getDocument(file.unitId)!, info.textRanges, !!info.rectRanges.length) : null;
-        face.updateDocFocus(target ? { ...target, id: crypto.randomUUID(), channel: focusChannel, nodeId: file.nodeId, resourceId: file.resourceId, unitId: file.unitId } : null);
+        if (!selectionService || !ownsView()) return;
+        try {
+          const current = selectionService.__getCurrentSelection();
+          const info = current?.unitId === file.unitId && current.subUnitId === file.unitId
+            ? selectionService.getSelectionInfo(current) : undefined;
+          const doc = api.getDocument(file.unitId);
+          const target = doc && info ? captureDocTarget(doc, info.textRanges, !!info.rectRanges.length) : null;
+          face.updateDocFocus(target ? { ...target, id: crypto.randomUUID(), channel: focusChannel, nodeId: file.nodeId, resourceId: file.resourceId, unitId: file.unitId } : null);
+          setFocusError('');
+        } catch (cause) {
+          // Current-document association must never retain a stale edit target.
+          // This optional capture cannot fail native editor startup or saving.
+          face.updateDocFocus(null, focusChannel);
+          setFocusError(cause instanceof Error ? cause.message : 'Cannot capture document focus. Select the text again.');
+        }
       };
       if (selectionService) {
         const focusSubscription = selectionService.textSelection$.subscribe(publishDocFocus);
@@ -642,8 +653,6 @@ export function CollaborativeEditor({
         visible: commentPanel.panelVisible,
         toggle: toggleComments,
       });
-      initialized = true;
-      publishLoaded(true);
       publishDocFocus();
       if (file.type === 'doc') {
         const selection = new SelectionEditing(univer, api, file, face,
@@ -653,6 +662,8 @@ export function CollaborativeEditor({
         disposables.push(selection);
         setSelectionEditing(selection);
       }
+      initialized = true;
+      publishLoaded(true);
       syncState(collaboration.getCollaborationStatus(file.unitId));
     };
     startup = mount().catch(cause => {
@@ -764,6 +775,7 @@ export function CollaborativeEditor({
       </div>
       <div className="sp-sdk" ref={container} />
       {selectionEditing && <SelectionEditingNotice editor={selectionEditing} />}
+      {focusError && <div className="sp-editor-error" role="alert" data-doc-focus-error>{focusError}</div>}
       {status === 'loading' && (
         <div className="sp-viewer-message" role="status">
           <span className="sp-spinner" />

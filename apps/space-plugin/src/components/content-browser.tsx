@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { FloatingMenu } from './floating-menu.js';
 import type { Face } from '../client.js';
 import {
   contentKinds,
@@ -19,22 +20,10 @@ import { FileActions } from './file-actions.js';
 export function ContentBrowser({ face, v }: { face: Face; v: State }) {
   const [context, setContext] = useState<{
     node: Node;
+    anchor: HTMLElement;
     x: number;
     y: number;
   } | null>(null);
-  const contextRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!context) return;
-    contextRef.current
-      ?.querySelector<HTMLButtonElement>('button:not(:disabled)')
-      ?.focus();
-    const close = (event: PointerEvent) => {
-      if (!contextRef.current?.contains(event.target as globalThis.Node))
-        setContext(null);
-    };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
-  }, [context]);
   const [selected, setSelected] = useState<string[]>([]),
     [grid, setGrid] = useState(false),
     [kind, setKind] = useState('all'),
@@ -414,8 +403,9 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
                       event.preventDefault();
                       setContext({
                         node,
-                        x: Math.min(event.clientX, window.innerWidth - 240),
-                        y: Math.min(event.clientY, window.innerHeight - 310),
+                        anchor: event.currentTarget.querySelector<HTMLElement>('.sp-file-open')!,
+                        x: event.clientX,
+                        y: event.clientY,
                       });
                     }}
                   >
@@ -508,25 +498,10 @@ export function ContentBrowser({ face, v }: { face: Face; v: State }) {
           </>
         )}
       </div>
-      {context && (
-        <div
-          ref={contextRef}
-          role="menu"
-          aria-label={`Actions for ${context.node.name}`}
-          className="sp-menu-body sp-context-menu"
-          style={{
-            position: 'fixed',
-            left: Math.max(0, context.x),
-            top: Math.max(0, context.y),
-          }}
-          onClick={() => setContext(null)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') setContext(null);
-          }}
-        >
-          <FileActions face={face} v={v} node={context.node} />
-        </div>
-      )}
+      {context && <FloatingMenu key={context.node.id} anchor={context.anchor} point={context}
+        label={`Actions for ${context.node.name}`} initialFocus="first" onClose={() => setContext(null)}>
+        <FileActions face={face} v={v} node={context.node} />
+      </FloatingMenu>}
       {selected.length > 0 && (
         <div role="toolbar" aria-label="Selection" className="sp-selection">
           <span>{selected.length} selected</span>

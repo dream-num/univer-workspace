@@ -1,13 +1,16 @@
-import { BooleanNumber, BuildTextUtils, DocumentDataModel, TextDecoration, TextX, TextXActionType, type IDocumentData, type TextXAction } from '@univerjs/core';
+import { BooleanNumber, BuildTextUtils, createParagraphId, DocumentDataModel, TextDecoration, TextX, TextXActionType, type IDocumentData, type TextXAction } from '@univerjs/core';
 
 /** SDK-owned text diff. Retained text keeps its existing rich metadata rather
  * than taking empty styles from the model's plain-text replacement body. */
 export function selectionEditActions(model: DocumentDataModel, start: number, end: number, candidate: string): TextXAction[] {
+  const ids = new Set((model.getBody()?.paragraphs ?? []).map(paragraph => paragraph.paragraphId).filter((id): id is string => !!id));
   const edits = BuildTextUtils.selection.replace({
     doc: model, selection: { startOffset: start, endOffset: end, collapsed: start === end },
     body: {
       dataStream: candidate,
-      paragraphs: [...candidate.matchAll(/\r/g)].map(match => ({ startIndex: match.index!, paragraphId: crypto.randomUUID() })),
+      // Only newly inserted paragraphs get SDK-created identities. Existing
+      // source IDs are retained by the diff; this never repairs stored data.
+      paragraphs: [...candidate.matchAll(/\r/g)].map(match => ({ startIndex: match.index!, paragraphId: createParagraphId(ids) })),
     },
   });
   if (!edits) throw new Error('This selection cannot be replaced safely.');
