@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | down
+# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-logs | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 WORKSPACE_APP="$REPO/apps/workspace"
 CLI_MAIN="$REPO/apps/cli/dist/main.js"
 ROOT="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}"
+
+MCP_CALL="$REPO/.agents/skills/verify-uvw/bin/mcp-call.mjs"
+MCP_BUILD_INPUTS=(package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc patches 'tsconfig*.json' apps/mcp packages/client-core)
 
 die() { echo "verify-uvw: $*" >&2; exit 1; }
 
@@ -50,6 +53,139 @@ wait_http() { # url timeout-seconds
 
 uvw_raw() { node "$CLI_MAIN" "$@"; }
 
+mcp_digest() {
+  git -C "$REPO" ls-files -co --exclude-standard -z -- "${MCP_BUILD_INPUTS[@]}" | node -e '
+    const fs = require("node:fs"), crypto = require("node:crypto");
+    process.chdir(process.argv[1]);
+    const paths = [...new Set(fs.readFileSync(0, "utf8").split("\0").filter(Boolean))].sort();
+    const hash = crypto.createHash("sha256");
+    for (const path of paths) {
+      if (!fs.existsSync(path)) continue;
+      hash.update(path).update("\0").update(fs.readFileSync(path)).update("\0");
+    }
+    console.log(hash.digest("hex"));
+  ' "$REPO"
+}
+
+mcp_compose() {
+  VERIFY_UVW_MCP_PROJECT="$MCP_PROJECT" VERIFY_UVW_MCP_IMAGE="$MCP_IMAGE" \
+    VERIFY_UVW_ORIGIN="$ORIGIN" VERIFY_UVW_SERVER_PORT="$SERVER_PORT" \
+    VERIFY_UVW_MCP_PORT="$MCP_PORT" VERIFY_UVW_METRICS_TOKEN="$(cat "$RUN/home/metrics-token" 2>/dev/null || echo removed)" \
+    docker compose -p "$MCP_PROJECT" -f "$REPO/apps/mcp/docker/compose.verify.yml" "$@"
+}
+
+mcp_client() {
+  node "$MCP_CALL" --repo "$REPO" --run "$RUN" --url "http://127.0.0.1:$MCP_PORT/mcp" \
+    --project "$MCP_PROJECT" --image "$MCP_IMAGE" --origin "$ORIGIN" --server-port "$SERVER_PORT" "$@"
+}
+
+mcp_up() {
+  load_run
+  local digest
+  digest="$(mcp_digest)"
+  node -e 'const fs=require("node:fs"); fs.writeFileSync(process.argv[1], JSON.stringify({started_at:new Date().toISOString(),git_head:process.argv[2],source_digest:process.argv[3],image_id:null},null,2)+"\n")' \
+    "$RUN/mcp-build.json" "$GIT_HEAD" "$digest"
+  docker build -f "$REPO/apps/mcp/Dockerfile" -t "$MCP_IMAGE" \
+    --label "org.opencontainers.image.revision=$GIT_HEAD" --label "dev.univer.verify-uvw.run=$RUN_ID" "$REPO" \
+    >"$RUN/logs/mcp-build.log" 2>&1 \
+    || { tail -n 40 "$RUN/logs/mcp-build.log" >&2; die "MCP build failed; run: verify-uvw down"; }
+  MCP_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$MCP_IMAGE")"
+  printf 'MCP_IMAGE_ID=%s\n' "$MCP_IMAGE_ID" >>"$RUN/run.env"
+  node -e 'const fs=require("node:fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.image_id=process.argv[2];fs.writeFileSync(p,JSON.stringify(v,null,2)+"\n")' "$RUN/mcp-build.json" "$MCP_IMAGE_ID"
+  (umask 077 && openssl rand -hex 24 >"$RUN/home/metrics-token")
+  mcp_compose up -d --wait --wait-timeout 60 \
+    || die "MCP gateway not ready; see compose logs and run: verify-uvw down"
+  wait_http "http://127.0.0.1:$MCP_PORT/healthz" 60 || die "MCP healthz failed; run: verify-uvw down"
+}
+
+mcp_doctor() {
+  local desktop digest cid inspect mapping gateway_logs who
+  if desktop="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null)" && [[ "$desktop" == 'Docker Desktop' ]]; then
+    ok "MCP Docker Desktop is available"
+  else bad "MCP Docker Desktop unavailable; start Docker Desktop"; fi
+  if digest="$(mcp_digest)" && node -e 'const fs=require("node:fs");process.exit(JSON.parse(fs.readFileSync(process.argv[1])).source_digest===process.argv[2]?0:1)' "$RUN/mcp-build.json" "$digest" 2>/dev/null; then
+    ok "MCP image matches build inputs"
+  else bad "MCP image is stale or build record missing: down, then up"; fi
+  if cid="$(mcp_compose ps -q gateway 2>/dev/null)" && [[ -n "$cid" ]] && inspect="$(docker inspect "$cid" 2>/dev/null)"; then
+    if node -e 'const c=JSON.parse(process.argv[1])[0];process.exit(c.State.Running&&c.State.Health?.Status==="healthy"&&c.Image===process.argv[2]?0:1)' "$inspect" "${MCP_IMAGE_ID:-}"; then
+      ok "MCP gateway is healthy and uses this run's image"
+    else bad "MCP gateway state or image mismatch: down, then up"; fi
+    if node -e 'const e=JSON.parse(process.argv[1])[0].Config.Env;process.exit(e.includes("WORKSPACE_ORIGIN="+process.argv[2])&&e.includes("WORKSPACE_TRANSPORT_URL=http://host.docker.internal:"+process.argv[3])?0:1)' "$inspect" "$ORIGIN" "$SERVER_PORT"; then
+      ok "MCP identity origin and Workspace transport match this run"
+    else bad "MCP configuration drift: down, then up"; fi
+  else
+    bad "MCP cannot inspect gateway: down, then up"
+    bad "MCP cannot verify container configuration: down, then up"
+  fi
+  if mapping="$(mcp_compose port gateway 3000 2>/dev/null)" && [[ "$mapping" == "127.0.0.1:$MCP_PORT" ]] && curl -fsS -o /dev/null "http://127.0.0.1:$MCP_PORT/healthz"; then
+    ok "MCP loopback port mapping and healthz match this run"
+  else bad "MCP port is occupied or mapped incorrectly"; fi
+  if mcp_compose exec -T gateway node -e 'fetch(process.env.WORKSPACE_TRANSPORT_URL+"/api/session").then(r=>process.exit(r.status===200?0:1),()=>process.exit(1))' >/dev/null 2>&1; then
+    ok "MCP container reaches this run's Workspace"
+  else bad "MCP container cannot reach host Workspace; see local-verification section 2.1"; fi
+  if [[ -f "$RUN/home/metrics-token" ]] && \
+    [[ "$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$MCP_PORT/metrics")" == 401 ]] && \
+    [[ "$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(cat "$RUN/home/metrics-token")" "http://127.0.0.1:$MCP_PORT/metrics")" == 200 ]]; then
+    ok "MCP metrics reject missing token and accept this run's token"
+  else bad "MCP metrics token protection failed"; fi
+  if [[ -f "$RUN/user.env" ]]; then
+    if who="$(mcp_client doctor doctor-whoami whoami)" && node -e 'const v=JSON.parse(process.argv[1]);process.exit(v.subject?.name===process.argv[2]&&v.origin===process.argv[3]?0:1)' "$who" "Verify $RUN_ID" "$ORIGIN"; then
+      ok "MCP whoami returns this run's user"
+    else bad "MCP whoami failed: run verify-uvw user"; fi
+    if gateway_logs="$(mcp_compose logs --no-color --no-log-prefix gateway 2>/dev/null)" && [[ -s "$RUN/home/mcp-session" ]]; then
+      if printf '%s' "$gateway_logs" | node -e 'const fs=require("node:fs"),s=fs.readFileSync(process.argv[1],"utf8").trim();process.exit(fs.readFileSync(0,"utf8").includes(s)?1:0)' "$RUN/home/mcp-session"; then
+        ok "MCP gateway logs contain no session credential"
+      else bad "MCP gateway leaks session credential; blocking defect"; fi
+    else bad "MCP cannot check gateway logs or session; run verify-uvw user"; fi
+  fi
+}
+
+mcp_user() {
+  node --input-type=module - "$RUN" "$ORIGIN" "$USERNAME" "$MCP_PORT" <<'JS'
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {randomBytes} from 'node:crypto';
+const [run,origin,username,port]=process.argv.slice(2);
+const response=await fetch(origin+'/api/auth/cli/password/login', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username,password:readFileSync(run+'/user.pw','utf8')})});
+if (!response.ok) throw new Error('MCP password login returned '+response.status);
+const session=response.headers.getSetCookie().map(c=>/^workspace_session=([^;]+)/.exec(c)?.[1]).find(Boolean);
+if (!session) throw new Error('MCP password login returned no session cookie');
+writeFileSync(run+'/home/mcp-session',session,{mode:0o600});
+const dir=run+'/home/opencode-'+randomBytes(4).toString('hex');
+mkdirSync(dir,{mode:0o700});
+writeFileSync(dir+'/opencode.json',JSON.stringify({$schema:'https://opencode.ai/config.json',mcp:{'verify-uvw':{type:'remote',url:`http://127.0.0.1:${port}/mcp`,enabled:true,headers:{Authorization:'Bearer '+session}}},permission:{edit:'deny',bash:'deny',webfetch:'deny'}},null,2)+'\n',{mode:0o600});
+writeFileSync(run+'/home/opencode-dir',dir+'\n',{mode:0o600});
+JS
+}
+
+mcp_down() {
+  mcp_compose logs --no-color --timestamps >"$RUN/logs/mcp-gateway.log" 2>&1 || echo "warning: cannot save MCP logs" >&2
+  mcp_compose down --volumes --remove-orphans || echo "warning: MCP compose down failed; retry down" >&2
+  if docker image inspect "$MCP_IMAGE" >/dev/null 2>&1; then
+    docker image rm "$MCP_IMAGE" || echo "warning: cannot remove MCP image $MCP_IMAGE" >&2
+  fi
+  local kind remaining resource clean=1
+  for kind in container network volume; do
+    if remaining="$(docker "$kind" ls -q --filter "label=com.docker.compose.project=$MCP_PROJECT" 2>/dev/null)"; then
+      if [[ -n "$remaining" ]]; then
+        clean=0
+        while IFS= read -r resource; do
+          echo "warning: remaining MCP $kind $resource; remove with docker $kind rm $resource" >&2
+        done <<<"$remaining"
+      fi
+    else clean=0; echo "warning: cannot list MCP $kind resources" >&2; fi
+  done
+  if remaining="$(docker image ls -q "$MCP_IMAGE" 2>/dev/null)"; then
+    if [[ -n "$remaining" ]]; then clean=0; echo "warning: remaining MCP image $MCP_IMAGE; remove with docker image rm $MCP_IMAGE" >&2; fi
+  else clean=0; echo "warning: cannot list MCP image" >&2; fi
+  [[ "$clean" != 1 ]] || echo "ok    MCP resources removed"
+}
+
+cmd_mcp() {
+  load_run
+  [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
+  mcp_client "$@"
+}
+
 cmd_up() {
   deps_fresh || die "node_modules is older than pnpm-lock.yaml; run: pnpm install --frozen-lockfile"
   cli_fresh || die "CLI build is stale; run: pnpm --filter 'univer-workspace-cli...' build"
@@ -60,6 +196,15 @@ cmd_up() {
   done
 
   local id="${VERIFY_UVW_RUN:-$(date +%Y%m%d-%H%M%S)}"
+  local mcp_enabled=0 mcp_port="${VERIFY_UVW_MCP_PORT:-3930}" desktop
+  if [[ "${VERIFY_UVW_MCP:-0}" == 1 ]]; then
+    mcp_enabled=1
+    [[ "$id" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "MCP run id must match ^[a-z0-9][a-z0-9_-]*$; choose VERIFY_UVW_RUN"
+    desktop="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null)" || die "start Docker Desktop before MCP verification"
+    [[ "$desktop" == 'Docker Desktop' && "$(uname -s)" == Darwin ]] || die "MCP verification requires macOS Docker Desktop"
+    [[ "$mcp_port" =~ ^[0-9]+$ && "$mcp_port" -ge 1 && "$mcp_port" -le 65535 ]] || die "choose VERIFY_UVW_MCP_PORT between 1 and 65535"
+    [[ "$mcp_port" != "$server_port" && "$mcp_port" != "$web_port" && -z "$(listener_pid "$mcp_port")" ]] || die "MCP port $mcp_port is occupied; choose VERIFY_UVW_MCP_PORT"
+  fi
   local run="$ROOT/$id"
   [[ ! -e "$run" ]] || die "$run already exists; pick another VERIFY_UVW_RUN"
   mkdir -p "$run"/{data,home,logs,evidence}
@@ -85,15 +230,21 @@ SERVER_PID=$server_pid
 WEB_PID=$web_pid
 GIT_HEAD=$(git -C "$REPO" rev-parse HEAD)
 EOF
+  printf 'MCP_ENABLED=%s\n' "$mcp_enabled" >>"$run/run.env"
+  if [[ "$mcp_enabled" == 1 ]]; then
+    printf 'MCP_PORT=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\n' "$mcp_port" "$id" "$id" >>"$run/run.env"
+  fi
   ln -sfn "$run" "$ROOT/current"
 
   wait_http "http://127.0.0.1:$server_port/api/session" 120 \
     || { tail -n 40 "$run/logs/server.log" >&2; die "server not ready; see $run/logs/server.log (run: verify-uvw down)"; }
   wait_http "http://127.0.0.1:$web_port/api/session" 60 \
     || { tail -n 40 "$run/logs/web.log" >&2; die "web not ready; see $run/logs/web.log (run: verify-uvw down)"; }
+  [[ "$mcp_enabled" != 1 ]] || mcp_up
   echo "run:      $id"
   echo "web:      http://127.0.0.1:$web_port"
   echo "server:   http://127.0.0.1:$server_port"
+  [[ "$mcp_enabled" != 1 ]] || echo "mcp:      http://127.0.0.1:$mcp_port/mcp"
   echo "evidence: $run/evidence"
 }
 
@@ -130,6 +281,7 @@ cmd_doctor() {
   else
     echo "info  no disposable user yet; run: verify-uvw user"
   fi
+  [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_doctor
   return "$fail"
 }
 
@@ -151,6 +303,7 @@ cmd_user() {
   source "$RUN/user.env"
   uvw_raw config set workspace.origin "$ORIGIN" >/dev/null
   uvw_raw auth login --username "$USERNAME" --password-stdin --json <"$RUN/user.pw"
+  [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_user
   echo "username: $USERNAME"
   echo "password: $RUN/user.pw"
 }
@@ -164,6 +317,16 @@ export AGENT_BROWSER_SESSION=$AGENT_BROWSER_SESSION
 export ORIGIN=$ORIGIN
 export EVIDENCE=$RUN/evidence
 EOF
+  if [[ "${MCP_ENABLED:-0}" == 1 ]]; then
+    cat <<EOF
+export MCP_URL=http://127.0.0.1:$MCP_PORT/mcp
+export MCP_PROJECT=$MCP_PROJECT
+export MCP_IMAGE=$MCP_IMAGE
+export MCP_OPENCODE_DIR=$(cat "$RUN/home/opencode-dir" 2>/dev/null || true)
+export MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high
+# opencode: (cd "\$MCP_OPENCODE_DIR" && opencode run --format json -m "\$MCP_OPENCODE_MODEL" "<prompt>" < /dev/null)
+EOF
+  fi
 }
 
 cmd_cli() {
@@ -193,6 +356,7 @@ stop_pid() { # pid expected-command-fragment
 
 cmd_down() {
   load_run
+  [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_down
   agent-browser close >/dev/null 2>&1 || true
   uvw_raw daemon stop >/dev/null 2>&1 || true
   stop_pid "$SERVER_PID" "server/src/main.ts"
@@ -209,6 +373,9 @@ case "${1:-}" in
   env) shift; cmd_env "$@" ;;
   uvw) shift; load_run; uvw_raw "$@" ;;
   cli) shift; cmd_cli "$@" ;;
+  mcp) shift; cmd_mcp call "$@" ;;
+  mcp-tools) shift; cmd_mcp tools "$@" ;;
+  mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway ;;
   down) shift; cmd_down "$@" ;;
   *) sed -n 2,3p "$0" >&2; exit 2 ;;
 esac

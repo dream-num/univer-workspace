@@ -154,6 +154,46 @@ One run per port pair. A second concurrent run needs its own ports and an explic
 **every** call, because `current` follows the newest `up`:
 
 ```bash
-VERIFY_UVW_RUN=b VERIFY_UVW_SERVER_PORT=3921 VERIFY_UVW_WEB_PORT=5974 $V up
+VERIFY_UVW_RUN=b VERIFY_UVW_SERVER_PORT=3921 VERIFY_UVW_WEB_PORT=5974 VERIFY_UVW_MCP_PORT=3931 $V up
 VERIFY_UVW_RUN=b $V doctor
 ```
+
+## MCP gateway, Stage A
+
+On macOS Docker Desktop, opt in with `VERIFY_UVW_MCP=1 $V up`. This builds
+`apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
+port 3930. Override it with `VERIFY_UVW_MCP_PORT`. Without opt-in, existing commands
+keep their behavior and output, including runs created before MCP support.
+
+Run `$V user` to create an independent MCP session and a fresh opencode directory.
+`$V env` exports `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR`, and
+`MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high`. Sessions, opencode config,
+and the metrics token stay under `home/` with credential files mode 0600.
+
+```bash
+$V mcp [--protocol 2026-07-28|2025-11-25] [--auth dev|none|invalid] [--toolsets list] <label> <tool> [json]
+$V mcp-tools [--protocol version] [--toolsets list] <label>
+$V mcp-logs
+```
+
+Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
+object. The default protocol is 2026-07-28 and default authentication is `dev`.
+`mcp-tools` saves the ordered tool definitions. `mcp-logs` prints current gateway logs.
+Use [the MCP journeys](features/mcp.md) for exact commands and pass conditions.
+
+Calls save `<label>.cmd`, `.out`, `.result.json`, `.err`, `.exit`, `.gateway.log`,
+and `.workspace.log` in `$EVIDENCE`. Tool calls also save `.event.json` and check its
+fields, Workspace request correlation, and Bearer leakage. HTTP failures preserve the
+status, authentication challenge, and body. Exit codes are 0 for success, 1 for a tool
+error, 2 for usage, 3 for transport or protocol failure, 4 for HTTP 401, and 5 for a
+completed call with invalid evidence.
+
+`doctor` checks Docker Desktop, the source digest, container health and image identity,
+port mapping, container configuration and Workspace access, protected metrics, and,
+after `user`, MCP identity and session leakage. Rebuild with `down`, then `up` when
+inputs change. `mcp-build.json` and `logs/mcp-build.log` retain build evidence.
+
+`down` saves `logs/mcp-gateway.log`, removes this run's compose containers, networks,
+volumes and image tag, then deletes `home/` with the other disposable data. It prints
+`ok    MCP resources removed` only after checking resource removal. Cleanup failures
+warn and continue. Run `down` after failures too. Build cache and evidence survive.

@@ -61,3 +61,5 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   recent and pages views.
 - [Issues](./issues.md): Team Space repo creation, Issue open via uvw, comment and close
   in the browser, timeline readback via uvw.
+- [MCP gateway](./mcp.md): Docker Desktop opt-in, both protocols, repository parity,
+  authentication, usage evidence, opencode, and cleanup.
