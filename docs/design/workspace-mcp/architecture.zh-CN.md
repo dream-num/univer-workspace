@@ -295,7 +295,7 @@ MCP 不连数据库（D12），所以第一版的“统计接口”由两部分�
 | `tool`、`toolset` | 工具与所属 toolset |
 | `repo`、`unit_type` | 解析后的仓库与 Unit 类型（没有则为空） |
 | `outcome` | `ok`、`tool_error`、`auth_error`、`rate_limited`、`timeout`、`internal_error` |
-| `error_code` | `workspace-*` 错误码（如有） |
+| `error_code` | 工具错误的错误码，与返回给客户端的 `code` 相同。Workspace 自己的错误码（如 `NOT_FOUND`）原样记录 |
 | `duration_ms` | 网关总耗时 |
 | `executor` | `cold_start`、`warm`、`none` |
 | `cost` | 成本单位：`worker_cpu_ms`、`worker_peak_rss_mb`、`render_pages`、`export_bytes`、`upload_bytes`、`committed_revisions` |
