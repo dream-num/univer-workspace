@@ -135,7 +135,7 @@ B、C、F 可以在 A 之后并行推进。G 是对外开放前的硬门禁：G 
 | [架构](architecture.zh-CN.md) | 组件划分、部署拓扑、本机组件的去向、认证、存储、统计、`client-core` 改造 | 开始任何阶段之前 |
 | [工具规格](tools.zh-CN.md) | 工具映射、命名与输出约定、差异、结果大小、文件进出、长任务 | 阶段 B、D、E |
 | [阶段计划](stages.zh-CN.md) | 每个阶段的交付物、验收标准、不做什么 | 每个阶段开始时 |
-| `local-verification.zh-CN.md`（待编写） | Docker 原型和 `verify-uvw` 扩展的规格。由阶段 A 的实施者在动手前编写，范围见阶段计划的阶段 A | 阶段 A，以及每次验收 |
+| [本地验证环境](local-verification.zh-CN.md) | Docker 原型和 `verify-uvw` 扩展的规格。由阶段 A 的实施者在动手前编写，范围见阶段计划的阶段 A | 阶段 A，以及每次验收 |
 
 ## 7. 术语
 
