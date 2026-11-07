@@ -30,6 +30,8 @@ export {
   type WorkspaceRequestOptions,
 } from "./http.js";
 export {
+  listIssues,
+  issueApiUsername,
   WorkspaceIssueFeature,
   type ListIssuesInput,
   type UpdateIssueInput,
@@ -49,11 +51,14 @@ export type {
 export {
   parseItemNumber,
   parseRepoReference,
+  resolveItemTarget,
   resolveRepoReference,
+  type ItemTarget,
   type ResolvedWorkspaceRepo,
   type WorkspaceRepoReference,
 } from "./repo-ref.js";
 export {
+  selectRepos,
   WorkspaceSpaceFeature,
   type BrowseSpaceInput,
   type WorkspaceResourceKindFilter,

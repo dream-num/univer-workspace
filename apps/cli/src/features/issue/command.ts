@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import {
   issueUrl,
+  listIssues,
+  issueApiUsername,
   workspaceError,
   type WorkspaceIssue,
   type WorkspaceIssueFeature,
@@ -43,31 +45,6 @@ export interface IssueCommandDependencies {
   readonly context: RepoContext;
   readonly feature: WorkspaceIssueFeature;
   readonly origin: () => Promise<string>;
-}
-
-/** `@me` is gh's spelling; the Issue API says `me`. */
-export function userSpelling(value: string): string {
-  return value === "@me" ? "me" : value;
-}
-
-/** Follows cursors until `limit` Issues are collected or the list ends. */
-export async function listIssues(
-  feature: WorkspaceIssueFeature,
-  input: Parameters<WorkspaceIssueFeature["list"]>[0],
-  limit: number,
-): Promise<readonly WorkspaceIssueSummary[]> {
-  const issues: WorkspaceIssueSummary[] = [];
-  let cursor: string | undefined;
-  do {
-    const page = await feature.list({
-      ...input,
-      limit: Math.min(limit - issues.length, 100),
-      ...(cursor === undefined ? {} : { cursor }),
-    });
-    issues.push(...page.issues);
-    cursor = page.nextCursor ?? undefined;
-  } while (cursor !== undefined && issues.length < limit);
-  return issues;
 }
 
 export function issueRows(issues: readonly WorkspaceIssueSummary[], showRepo = false): string {
@@ -117,8 +94,8 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
               spaceId,
               state: oneOf(options.state, ["open", "closed", "all"], "--state"),
               ...(options.label === undefined ? {} : { labels: options.label }),
-              ...(options.assignee === undefined ? {} : { assignee: userSpelling(options.assignee) }),
-              ...(options.author === undefined ? {} : { author: userSpelling(options.author) }),
+              ...(options.assignee === undefined ? {} : { assignee: issueApiUsername(options.assignee) }),
+              ...(options.author === undefined ? {} : { author: issueApiUsername(options.author) }),
               ...(options.search === undefined ? {} : { search: options.search }),
             },
             limitOf(options.limit),
@@ -192,7 +169,7 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
             title: options.title,
             ...(body === undefined ? {} : { body }),
             ...(options.label === undefined ? {} : { labels: options.label }),
-            ...(options.assignee === undefined ? {} : { assignees: options.assignee.map(userSpelling) }),
+            ...(options.assignee === undefined ? {} : { assignees: options.assignee.map(issueApiUsername) }),
             ...(options.node === undefined ? {} : { nodeIds: options.node }),
           });
         });
@@ -237,8 +214,8 @@ export function createIssueCommand({ context, feature, origin }: IssueCommandDep
             ...(body === undefined ? {} : { body }),
             ...(options.addLabel === undefined ? {} : { addLabels: options.addLabel }),
             ...(options.removeLabel === undefined ? {} : { removeLabels: options.removeLabel }),
-            ...(options.addAssignee === undefined ? {} : { addAssignees: options.addAssignee.map(userSpelling) }),
-            ...(options.removeAssignee === undefined ? {} : { removeAssignees: options.removeAssignee.map(userSpelling) }),
+            ...(options.addAssignee === undefined ? {} : { addAssignees: options.addAssignee.map(issueApiUsername) }),
+            ...(options.removeAssignee === undefined ? {} : { removeAssignees: options.removeAssignee.map(issueApiUsername) }),
             ...(options.addNode === undefined ? {} : { addNodes: options.addNode }),
             ...(options.removeNode === undefined ? {} : { removeNodes: options.removeNode }),
           });

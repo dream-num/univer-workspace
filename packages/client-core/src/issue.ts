@@ -10,6 +10,7 @@ import {
   type WorkspaceIssue,
   type WorkspaceIssueLabel,
   type WorkspaceIssuePage,
+  type WorkspaceIssueSummary,
   type WorkspaceIssueTimelineItem,
 } from "./issue-model.js";
 import { usernameKey } from "./username.js";
@@ -43,6 +44,29 @@ export interface UpdateIssueInput {
   readonly state?: "open" | "closed";
   readonly stateReason?: "completed" | "not_planned";
   readonly title?: string;
+}
+
+export function issueApiUsername(value: string): string {
+  return value === "@me" ? "me" : value;
+}
+
+export async function listIssues(
+  feature: WorkspaceIssueFeature,
+  input: ListIssuesInput,
+  limit: number,
+): Promise<readonly WorkspaceIssueSummary[]> {
+  const issues: WorkspaceIssueSummary[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await feature.list({
+      ...input,
+      limit: Math.min(limit - issues.length, 100),
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    issues.push(...page.issues);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor !== undefined && issues.length < limit);
+  return issues;
 }
 
 /**

@@ -304,11 +304,22 @@ describe("gateway over real HTTP and the MCP client", () => {
     const all = await connect({ pin: "2026-07-28" }, "?toolsets=all");
     const coreTools = await core.listTools();
     expect(await all.listTools()).toEqual(coreTools);
-    expect(coreTools.tools.map((tool) => tool.name)).toEqual(["whoami", "repo_list", "repo_view"]);
+    expect(coreTools.tools.map((tool) => tool.name)).toEqual([
+      "whoami",
+      "repo_list",
+      "repo_view",
+      "issue_list",
+      "issue_view",
+      "issue_create",
+      "issue_edit",
+      "issue_comment",
+      "issue_set_state",
+    ]);
+    const writes = ["issue_create", "issue_edit", "issue_comment", "issue_set_state"];
     for (const tool of coreTools.tools) {
       expect(tool.outputSchema).toBeDefined();
       expect(tool.annotations).toMatchObject({
-        readOnlyHint: true,
+        readOnlyHint: !writes.includes(tool.name),
         destructiveHint: false,
         openWorldHint: false,
       });

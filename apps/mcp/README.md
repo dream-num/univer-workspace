@@ -1,7 +1,8 @@
 # Univer Workspace MCP
 
 A private remote MCP application built on `@univerjs/univer-workspace-client-core`.
-Stage A exposes `whoami`, `repo_list`, and `repo_view` over Streamable HTTP using the
+Stage A and the first Stage B slice expose `whoami`, `repo_list`, `repo_view` and six Issue
+tools over Streamable HTTP using the
 2026-07-28 and 2025-11-25 protocols. Repository results match the CLI JSON and add
 browser URLs. Lists return `{ repos: [...] }` in both protocols.
 
@@ -52,16 +53,27 @@ Docker Desktop without changing those identities.
 
 `/mcp` defaults to `core`. Use `?toolsets=core,files,admin` to select groups or
 `?toolsets=all` for every group. Unknown names return HTTP 400 with the valid names.
-Only `core` has tools in Stage A, in this fixed order:
+Only `core` has tools so far, in this fixed order. Every object with a Browser page carries `url`.
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
 | `whoami` | None | `{ origin, subject: { id, name } }` |
 | `repo_list` | Optional `owner`, `type`, `limit` | `{ repos: [...] }`. Limit defaults to 30. Owner accepts a username or `@me`. Type accepts `personal` or `team` |
 | `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Accepts owner/slug, owner/personal, Space ID, or Workspace URL |
+| `issue_list` | Required `repo`; optional `state` (default `open`), `labels`, `assignee`, `author`, `search`, `limit` (default 30) | `{ issues: [...] }` |
+| `issue_view` | Required `repo`, `number` (`12`, `#12` or Issue URL); optional `comments` | Issue, plus `timeline` when `comments` is true |
+| `issue_create` | Required `repo`, `title`; optional `body`, `labels`, `assignees`, `nodes` | Issue |
+| `issue_edit` | Required `repo`, `number`; optional `title`, `body`, `add_labels`, `remove_labels`, `add_assignees`, `remove_assignees`, `add_nodes`, `remove_nodes` | Issue |
+| `issue_comment` | Required `repo`, `number`, `body` | Comment |
+| `issue_set_state` | Required `repo`, `number`, `state` (`open` or `closed`); optional `reason` (`completed` or `not_planned`) and `comment`, only with `closed` | Issue |
 
-All three tools declare `readOnlyHint: true`, `destructiveHint: false`, and
-`openWorldHint: false`, and an output schema. Tool failures preserve Client Core's
+Every tool declares a scope (`read` for the first five tools, `write` for the other four) and
+all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
+false, `openWorldHint` is false) and an output schema. Development passthrough grants all
+scopes; a connection without the scope gets the tool error `workspace-scope-required`.
+Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
+violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns
+`workspace-result-unknown`. Tool failures preserve Client Core's
 `{ code, message, detail }` in `structuredContent` and set `isError: true`.
 Authentication failures return HTTP 401 and
 `WWW-Authenticate: Bearer resource_metadata="<public origin>/.well-known/oauth-protected-resource/mcp"`.
@@ -90,7 +102,7 @@ The version 1 event has these fields:
 | `auth_kind`, `client_id` | `"dev"` in Stage A |
 | `client_name`, `client_version` | Request clientInfo in 2026-07-28. Both null in stateless 2025-11-25 |
 | `tool`, `toolset` | Tool name and group. Unknown tools use `unknown` and `core` |
-| `repo` | Resolved Space ID for `repo_view`, otherwise null |
+| `repo` | Resolved Space ID for repository-scoped tools, otherwise null |
 | `unit_type` | Null in Stage A |
 | `outcome` | `ok`, `tool_error`, `auth_error`, `rate_limited`, `timeout`, or `internal_error` |
 | `error_code` | For `tool_error`, the same code the tool result returns in `structuredContent.code`, including Workspace codes such as `NOT_FOUND`; otherwise null |

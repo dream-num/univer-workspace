@@ -11,13 +11,15 @@ import { toNodeHandler } from "@modelcontextprotocol/node";
 import {
   whoami,
   WorkspaceApplicationError,
+  workspaceError,
   WorkspaceHttp,
 } from "@univerjs/univer-workspace-client-core/product";
 import { pino, type Logger } from "pino";
 import { Counter, Histogram, Registry } from "prom-client";
 import { z } from "zod";
 import type { GatewayConfig } from "../shared/config.js";
-import type { ToolContext, ToolDefinition } from "./tools/definition.js";
+import { translateToolError } from "./tool-error.js";
+import type { ToolContext, ToolDefinition, ToolScope } from "./tools/definition.js";
 import { selectTools, toolsets } from "./tools/registry.js";
 
 const callEnvelope = z.object({
@@ -25,6 +27,12 @@ const callEnvelope = z.object({
   params: z.object({ name: z.string(), _meta: z.record(z.string(), z.unknown()).optional() }),
 });
 const clientInfoSchema = z.object({ name: z.string(), version: z.string() });
+const developmentPassthroughScopes: ReadonlySet<ToolScope> = new Set([
+  "read",
+  "write",
+  "publish",
+  "worktree:merge",
+]);
 type Outcome = "ok" | "tool_error" | "auth_error" | "rate_limited" | "timeout" | "internal_error";
 interface RequestState {
   readonly context: ToolContext;
@@ -35,9 +43,24 @@ interface RequestState {
   modern: boolean;
 }
 
+// The SDK would reject invalid arguments with plain text before the callback runs. Keep the precise schema for
+// tools/list and let the callback validate, so every tool returns the same structured argument error.
+function advertiseOnly(schema: z.ZodObject): z.ZodObject {
+  return {
+    "~standard": {
+      ...schema["~standard"],
+      validate: (value: unknown) => ({ value: value ?? {} }),
+    },
+  } as unknown as z.ZodObject;
+}
+
 export function createGateway(
   config: GatewayConfig,
-  options: { readonly logger?: Logger; readonly fetcher?: typeof fetch } = {},
+  options: {
+    readonly logger?: Logger;
+    readonly fetcher?: typeof fetch;
+    readonly scopes?: ReadonlySet<ToolScope>;
+  } = {},
 ) {
   const logger =
     options.logger ??
@@ -81,43 +104,51 @@ export function createGateway(
     state.modern = era === "modern";
     const server = new McpServer({ name: "univer-workspace", version: "0.0.0" });
     for (const tool of state.selected) {
-      server.registerTool(tool.name, tool, async (args) => {
-        try {
-          const result = await tool.run(state.context, args);
-          const structuredContent = z.json().parse(result.output);
-          state.repo = result.repo;
-          state.outcome = "ok";
-          return {
-            content: [{ type: "text", text: `${tool.name} completed.` }],
-            structuredContent,
-          };
-        } catch (error) {
-          if (error instanceof WorkspaceApplicationError) {
-            state.outcome =
-              error.code === "workspace-authentication-required" ? "auth_error" : "tool_error";
-            state.errorCode = state.outcome === "tool_error" ? error.code : null;
+      server.registerTool(
+        tool.name,
+        { ...tool, inputSchema: advertiseOnly(tool.inputSchema) },
+        async (args) => {
+          try {
+            if (!state.context.scopes.has(tool.scope)) {
+              throw workspaceError(
+                "workspace-scope-required",
+                `This connection is not authorized for ${tool.scope} access.`,
+                { required: tool.scope },
+              );
+            }
+            const result = await tool.run(state.context, tool.inputSchema.parse(args));
+            const structuredContent = z.json().parse(result.output);
+            if (!tool.outputSchema.safeParse(structuredContent).success) {
+              throw new Error(`Tool ${tool.name} returned output that violates its output schema.`);
+            }
+            state.repo = result.repo;
+            state.outcome = "ok";
+            return {
+              content: [{ type: "text", text: `${tool.name} completed.` }],
+              structuredContent,
+            };
+          } catch (error) {
+            const { outcome, code, message, detail } = translateToolError(error);
+            if (outcome === "internal_error") {
+              logger.error(
+                {
+                  request_id: state.context.requestId,
+                  tool: tool.name,
+                  error: error instanceof Error ? error.message : typeof error,
+                },
+                "Tool failed internally",
+              );
+            }
+            state.outcome = outcome;
+            state.errorCode = outcome === "tool_error" ? code : null;
             return {
               isError: true,
-              content: [{ type: "text", text: error.message.replace(/[\r\n]+/g, " ") }],
-              structuredContent: {
-                code: error.code,
-                message: error.message,
-                detail: z.json().parse(error.detail ?? null),
-              },
+              content: [{ type: "text", text: message.replace(/[\r\n]+/g, " ") }],
+              structuredContent: { code, message, detail },
             };
           }
-          state.outcome = "internal_error";
-          return {
-            isError: true,
-            content: [{ type: "text", text: "Internal tool error." }],
-            structuredContent: {
-              code: "workspace-internal-error",
-              message: "Internal tool error.",
-              detail: null,
-            },
-          };
-        }
-      });
+        },
+      );
     }
     return server;
   });
@@ -221,7 +252,13 @@ export function createGateway(
     }
     const call = callEnvelope.safeParse(body);
     const state: RequestState = {
-      context: { http, user, requestId, identityOrigin: config.WORKSPACE_ORIGIN },
+      context: {
+        http,
+        user,
+        requestId,
+        identityOrigin: config.WORKSPACE_ORIGIN,
+        scopes: options.scopes ?? developmentPassthroughScopes,
+      },
       selected,
       outcome: "tool_error",
       errorCode: null,

@@ -152,9 +152,12 @@ function eventIssues(event) {
     if (protocol === '2026-07-28' ? typeof event[key] !== 'string' || !event[key] : event[key] !== null) issues.push(`Invalid ${protocol} ${key}`);
   }
   if (event.trace_id !== null) issues.push('Unexpected trace_id without traceparent');
-  if (event.unit_type !== null || (tool !== 'repo_view' && event.repo !== null)) issues.push('Unexpected repository or Unit identity');
+  const repoScoped = typeof args.repo === 'string';
+  if (event.unit_type !== null || (!repoScoped && event.repo !== null) || (repoScoped && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
   if (event.outcome === 'tool_error') {
-    if (event.error_code !== result.structuredContent.code) issues.push('Event error_code differs from tool result');
+    const resultCode = result.structuredContent?.code;
+    if (typeof resultCode !== 'string') issues.push('Error result has no structuredContent.code');
+    else if (event.error_code !== resultCode) issues.push('Event error_code differs from tool result');
   } else if (event.error_code !== null) issues.push('Unexpected event error_code');
   return issues;
 }

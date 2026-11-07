@@ -18,6 +18,7 @@ import {
   type WorkspaceUnitType,
 } from "./space-model.js";
 import type { AuthenticatedWorkspaceHttp, WorkspaceHttp } from "./http.js";
+import { usernameKey } from "./username.js";
 
 export type WorkspaceResourceKindFilter = WorkspaceNodeResource["kind"] | "none";
 export interface BrowseSpaceInput {
@@ -26,6 +27,23 @@ export interface BrowseSpaceInput {
   readonly resourceKind?: WorkspaceResourceKindFilter;
   readonly spaceId: string;
   readonly unitType?: WorkspaceUnitType;
+}
+
+export function selectRepos(
+  spaces: readonly WorkspaceSpace[],
+  filter: { readonly owner?: string; readonly type?: "team" | "personal"; readonly limit: number },
+): WorkspaceSpace[] {
+  const owner = filter.owner === undefined ? undefined : usernameKey(filter.owner);
+  return spaces
+    .filter((space) => filter.type === undefined || space.type === filter.type)
+    .filter(
+      (space) =>
+        owner === undefined ||
+        (owner === "@me"
+          ? (space.affiliation ?? space.accessRole) === "owner"
+          : space.owner !== undefined && usernameKey(space.owner.username) === owner),
+    )
+    .slice(0, filter.limit);
 }
 
 export class WorkspaceSpaceFeature {
