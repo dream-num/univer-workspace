@@ -35,7 +35,7 @@ Univer Workspace 现在有两个 agent 入口，门槛都偏高：
 | D11 | Workspace Server 和 MCP Server 分开部署，MCP Server 单独扩缩容 | 第三轮讨论 |
 | D12 | MCP Server 是执行层，不连接任何数据库，包括 Workspace 的数据库和它自己的数据库。它只通过 Workspace 的 HTTP API 和协同协议工作 | 第三轮讨论 |
 | D13 | 原型阶段用本机 Docker 服务模拟远程 MCP Server，并扩展 `verify-uvw` skill，让它在启动验证实例时一起启动 MCP Server | 第三轮讨论 |
-| D14 | 本地测试 MCP 功能一律用本机 opencode，模型 `console-deepseek/deepseek-flash`（DeepSeek V4.1 Flash 1017，provider “Personal / DeepSeek”），不用 Claude Code。阶段 H 在各真实客户端里的验收不受影响 | 2026-11-07 评审 `local-verification.zh-CN.md` |
+| D14 | 本地测试 MCP 功能一律用本机 opencode，模型 `console-deepseek/deepseek-flash#high`（DeepSeek V4.1 Flash 1017，provider “Personal / DeepSeek”，reasoning effort 为 high。这个模型能理解图片），不用 Claude Code。阶段 H 在各真实客户端里的验收不受影响 | 2026-11-07 评审 `local-verification.zh-CN.md` |
 
 后续讨论如果推翻其中任何一条，在这张表里追加新行并注明日期，不要直接改旧行。
 
