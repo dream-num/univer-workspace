@@ -53,6 +53,11 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   passwordless CLI session handoff for password, Email-code, and external-identity users. Contract:
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli-manual.yml).
 
+- **Univer Workspace MCP** — the private Stage A remote gateway under `apps/mcp`, built on Client Core.
+  It exposes identity and repository reads with development session authentication, runs apart from Workspace Server,
+  and connects to no database. Use is limited to local and internal single-user environments until Stage G.
+  Contract: [MCP README](apps/mcp/README.md).
+
 - **Univer Workspace Agent** — the local browser application for conversations, document references,
   and agent Worktree review, composed from published DSH packages. Each instance has
   one active account for its single operator; switching accounts applies to every open tab.
