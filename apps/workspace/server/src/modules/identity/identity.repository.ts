@@ -3,6 +3,7 @@ import type { WorkspaceDatabase } from "../../db/database.js";
 import type {
   AuthenticationMethods,
   ExternalIdentityProvider,
+  SessionIssuedFor,
   User,
 } from "./identity.types.js";
 import type { WriteSource } from "./write-source.js";
@@ -31,6 +32,7 @@ export interface NewPasswordUser {
     readonly createdAt: number;
     readonly expiresAt: number;
     readonly writeSource: WriteSource;
+    readonly issuedFor?: SessionIssuedFor;
   };
   readonly createdAt: number;
 }
@@ -636,8 +638,9 @@ function insertSession(
   database
     .prepare(
       `INSERT INTO login_sessions
-        (id, secret_hash, user_id, created_at, expires_at, write_source)
-       VALUES (?, ?, ?, ?, ?, ?)`
+        (id, secret_hash, user_id, created_at, expires_at, write_source,
+         issued_for_pat_id, issued_for_grant_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       session.id,
@@ -645,7 +648,9 @@ function insertSession(
       userId,
       session.createdAt,
       session.expiresAt,
-      session.writeSource
+      session.writeSource,
+      session.issuedFor?.kind === "pat" ? session.issuedFor.id : null,
+      session.issuedFor?.kind === "oauth" ? session.issuedFor.id : null
     );
 }
 

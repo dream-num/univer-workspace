@@ -44,6 +44,17 @@ export type SessionView =
     }
   | AuthenticatedSession;
 
+/** The MCP token a downstream login session was issued for; deleting the token deletes the session. */
+export interface SessionIssuedFor {
+  readonly kind: "pat" | "oauth";
+  readonly id: string;
+}
+
+export interface IssueSessionOptions {
+  readonly ttlMs?: number;
+  readonly issuedFor?: SessionIssuedFor;
+}
+
 export interface IssuedSession {
   readonly cookieValue: string;
   readonly view: AuthenticatedSession;

@@ -15,7 +15,7 @@ import {
 import { logger } from "../../logging/logger.js";
 import type { EmailSender } from "../../integrations/email/index.js";
 import type { WriteSource } from "./write-source.js";
-import { IdentityRepository, type StoredSession } from "./identity.repository.js";
+import { IdentityRepository, type NewPasswordUser, type StoredSession } from "./identity.repository.js";
 import { emailLoginMessage } from "./email-login-mail.js";
 import type {
   AuthenticatedSession,
@@ -26,9 +26,11 @@ import type {
   EmailLoginCodeRequest,
   IssuedEmailLoginCode,
   IssuedSession,
+  IssueSessionOptions,
   PasswordChange,
   PasswordLogin,
   PasswordRegistration,
+  SessionIssuedFor,
   SessionView,
   User,
   UserProfilePatch,
@@ -91,7 +93,11 @@ export interface IdentityModule {
   ): Promise<void>;
   getSession(cookieHeader: string | undefined): SessionView;
   requireSession(cookieHeader: string | undefined): Principal;
-  issueSession(user: User, writeSource: WriteSource): IssuedSession;
+  issueSession(
+    user: User,
+    writeSource: WriteSource,
+    options?: IssueSessionOptions
+  ): IssuedSession;
   logout(cookieHeader: string | undefined): void;
   updateCurrentUser(
     cookieHeader: string | undefined,
@@ -282,12 +288,21 @@ export function createIdentityModule(options: {
     };
   }
 
-  function issueSession(user: User, writeSource: WriteSource): IssuedSession {
+  function issueSession(
+    user: User,
+    writeSource: WriteSource,
+    sessionOptions: IssueSessionOptions = {}
+  ): IssuedSession {
+    const ttlMs = sessionOptions.ttlMs ?? options.sessionTtlMs;
+    if (!Number.isInteger(ttlMs) || ttlMs <= 0 || ttlMs > options.sessionTtlMs) {
+      throw invalidInput("Session ttlMs must be a positive integer not above the session lifetime.", "ttlMs");
+    }
     const createdAt = now();
     const issued = createSessionToken(
       createdAt,
-      createdAt + options.sessionTtlMs,
-      writeSource
+      createdAt + ttlMs,
+      writeSource,
+      sessionOptions.issuedFor
     );
     repository.createSession(user.id, issued.stored);
     return {
@@ -1276,16 +1291,11 @@ function oauthCookieName(provider: ExternalIdentityProvider): string {
 function createSessionToken(
   createdAt: number,
   expiresAt: number,
-  writeSource: WriteSource
+  writeSource: WriteSource,
+  issuedFor?: SessionIssuedFor
 ): {
   readonly cookieValue: string;
-  readonly stored: {
-    readonly id: string;
-    readonly secretHash: string;
-    readonly createdAt: number;
-    readonly expiresAt: number;
-    readonly writeSource: WriteSource;
-  };
+  readonly stored: NewPasswordUser["session"];
 } {
   const id = randomUUID();
   const secret = randomBytes(32).toString("base64url");
@@ -1297,6 +1307,7 @@ function createSessionToken(
       createdAt,
       expiresAt,
       writeSource,
+      ...(issuedFor ? { issuedFor } : {}),
     },
   };
 }
@@ -1352,11 +1363,11 @@ async function verifyPassword(
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-function hashSessionSecret(secret: string): string {
+export function hashSessionSecret(secret: string): string {
   return createHash("sha256").update(secret).digest("base64url");
 }
 
-function secretMatches(secret: string, expectedHash: string): boolean {
+export function secretMatches(secret: string, expectedHash: string): boolean {
   const actual = Buffer.from(hashSessionSecret(secret), "base64url");
   const expected = Buffer.from(expectedHash, "base64url");
   return (

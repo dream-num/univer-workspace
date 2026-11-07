@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS login_sessions (
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
   write_source TEXT CHECK (write_source IN ('browser', 'agent')),
+  issued_for_pat_id TEXT REFERENCES personal_access_tokens(id) ON DELETE CASCADE,
+  issued_for_grant_id TEXT REFERENCES oauth_grants(id) ON DELETE CASCADE
+    CHECK (issued_for_pat_id IS NULL OR issued_for_grant_id IS NULL),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS login_sessions_user
@@ -701,4 +704,55 @@ CREATE TABLE IF NOT EXISTS space_pins (
   UNIQUE (user_id, position)
 );
 
-PRAGMA user_version = 17;
+CREATE TABLE IF NOT EXISTS oauth_clients (
+  client_id TEXT PRIMARY KEY,
+  client_name TEXT,
+  redirect_uris TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_used_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS oauth_grants (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_id TEXT NOT NULL,
+  scopes TEXT NOT NULL,
+  resource TEXT NOT NULL,
+  access_token_hash TEXT NOT NULL UNIQUE,
+  access_expires_at INTEGER NOT NULL,
+  refresh_token_hash TEXT NOT NULL UNIQUE,
+  refresh_expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_used_at INTEGER,
+  revoked_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS oauth_grants_user ON oauth_grants(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS oauth_refresh_history (
+  refresh_token_hash TEXT PRIMARY KEY,
+  grant_id TEXT NOT NULL REFERENCES oauth_grants(id) ON DELETE CASCADE,
+  retired_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS oauth_refresh_history_grant
+  ON oauth_refresh_history(grant_id);
+
+CREATE TABLE IF NOT EXISTS personal_access_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  scopes TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER,
+  last_used_at INTEGER,
+  revoked_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS personal_access_tokens_user
+  ON personal_access_tokens(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS login_sessions_pat
+  ON login_sessions(issued_for_pat_id) WHERE issued_for_pat_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS login_sessions_grant
+  ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
+
+PRAGMA user_version = 18;

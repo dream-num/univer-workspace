@@ -77,9 +77,9 @@ function readProductFacts(filename: string): {
   }
   const database = new DatabaseSync(filename, { readOnly: true });
   try {
-    if (database.prepare("PRAGMA user_version").get()?.user_version !== 17) {
+    if (database.prepare("PRAGMA user_version").get()?.user_version !== 18) {
       throw new Error(
-        "Prepare the product database to V17 before migrating the Collaboration database.",
+        "Prepare the product database to V18 before migrating the Collaboration database.",
       );
     }
     for (const row of database

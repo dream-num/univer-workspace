@@ -40,7 +40,7 @@ try {
     const version = migrated.connection.prepare("PRAGMA user_version").get() as {
       readonly user_version: number;
     };
-    assert.equal(version.user_version, 17);
+    assert.equal(version.user_version, 18);
     const space = migrated.connection
       .prepare("SELECT id, name, public_read FROM spaces")
       .get() as Record<string, unknown>;

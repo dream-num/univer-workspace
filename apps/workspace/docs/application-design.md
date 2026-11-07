@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V17 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V18 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -41,14 +41,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V17；
-- V17：校验 Schema 指纹；
-- V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V17；
-- V0：一致性备份后直接迁移到 V17；
+- Fresh：创建 V18；
+- V18：校验 Schema 指纹；
+- V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V18；
+- V0：一致性备份后直接迁移到 V18；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V17 Query。
+Worktree 等业务模块只编译和运行 V18 Query。
 
 V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
@@ -107,6 +107,8 @@ CLI password 路由与 Browser password 路由使用相同凭据及响应，额�
 
 V17 允许 `univer_resources` 与 `worktree_node_intents` 的 `unit_type` 取 `pdf`：SQLite 不能修改 CHECK，两张表在同一事务内重建，保留全部行、`univer_resources_kind_guard` 触发器与 `content_permission_objects` 的入向外键，沿用备份（`.v16-backup-…sqlite`）、回滚、指纹、外键和完整性检查流程。
 
+V18 为 MCP 远程接入持久化 OAuth Grant、动态注册 Client 与 Personal Access Token（`oauth_grants`、`oauth_refresh_history`、`oauth_clients`、`personal_access_tokens`），并在 `login_sessions` 追加可空的 `issued_for_pat_id`、`issued_for_grant_id`，标记下游登录 Session 由哪个 Token 换取、Token 吊销时一并删除。迁移只追加表与列，不重建表，沿用备份（`.v17-backup-…sqlite`）、回滚、指纹、外键和完整性检查流程。Refresh Token 轮换时退役的哈希进入 `oauth_refresh_history`：60 秒宽限期内出示只失败不吊销，之后出示则吊销整个 Grant；OAuth Token 必须绑定 `resource`。Token 服务（`modules/identity/access-tokens.ts`）目前只供内部使用，尚未暴露 HTTP 路由；现有 Browser、CLI 与 Agent 登录的行为不变。
+
 `GET /api/spaces/{spaceId}/activity?timeZone=<IANA>` 要求 Session 与有效 IANA 时区，返回规范化
 时区、截至该时区今天的 14 个日桶和窗口内最新 20 条事件。`opened` 按 `browser`、`agent`、
 `unknown` 汇总 Pull request 与 Issue 创建；`merged` 仅统计协同服务确认已合入的 Worktree。
@@ -125,7 +127,7 @@ SDK 1.0.0 启动时先准备产品数据库，再运行隔离的 `prepareCollabo
 应用 Service。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 2、Worktree 3、History 2；
-Comment 1 不变。产品数据库先准备到 V17，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Comment 1 不变。产品数据库先准备到 V18，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 

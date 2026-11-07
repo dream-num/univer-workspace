@@ -23,3 +23,5 @@ export type {
   GoogleOAuthProvider,
 } from "./identity.types.js";
 export { writeSourceView, type WriteSource, type WriteSourceView } from "./write-source.js";
+export { createAccessTokenService } from "./access-tokens.js";
+export type { AccessTokenService, McpScope } from "./access-tokens.js";

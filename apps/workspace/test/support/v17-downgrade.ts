@@ -1,5 +1,7 @@
+import { DROP_V18_SQL } from "./v18-downgrade.js";
+
 /**
- * Rebuilds Univer Resources and Worktree Node intents with the V16 Unit type
+ * Removes the V18 token structures, then rebuilds Univer Resources and Worktree Node intents with the V16 Unit type
  * CHECK (no PDF) so a schema.sql-built fixture reads as V16. Both tables are
  * recreated under a temporary name and renamed into place, so the inbound
  * `content_permission_objects` foreign key keeps naming `univer_resources`; the
@@ -7,6 +9,7 @@
  * are left untouched. Every other structure and row is untouched.
  */
 export const DROP_V17_SQL = `
+  ${DROP_V18_SQL}
   PRAGMA foreign_keys = OFF;
   CREATE TABLE univer_resources_v16 (
     resource_id TEXT PRIMARY KEY,
