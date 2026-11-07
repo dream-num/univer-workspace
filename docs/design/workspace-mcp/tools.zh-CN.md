@@ -17,7 +17,8 @@
 ### 1.2 输出
 
 - 每个工具都声明 `outputSchema`，结果放在 `structuredContent`。
-- 形状与 `--json` 输出一致：产品命令返回裸对象或数组，内容命令返回以名词为键的包装（`{units}`、`{unit}`、`{nodes}`、`{upload}`）。`execute`、`import`、`export` 返回裸结果。
+- 形状与 `--json` 输出一致：产品命令返回裸对象，内容命令返回以名词为键的包装（`{units}`、`{unit}`、`{nodes}`、`{upload}`）。`execute`、`import`、`export` 返回裸结果。
+- `--json` 输出是数组的命令，MCP 把数组包成以名词为键的对象，例如 `repo_list` 返回 `{repos}`。2025-11-25 要求 `structuredContent` 是对象，SDK 会把数组自动包成 `{result}`，而 2026-07-28 保持数组，同一个工具的形状因此随协议版本变化。显式名词键让两版协议得到同一个形状（[本地验证环境](local-verification.zh-CN.md) R2、附录 A.4）。
 - `content` 只放一行文字摘要，不重复整段 JSON。
 - 结果里凡是有对应网页的对象，都附带 `url` 字段，相当于顺带执行了一次 `uvw browse`。
 - `inspect`、`screenshot --json`、`lint --json` 等来自闭源 `@univer-cli/*` 包的输出，结构以各包的 `dist/index.d.ts` 为准。
