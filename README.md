@@ -178,6 +178,7 @@ contract.
 ```text
 apps/workspace                 Workspace Browser, Server, HTTP contract, and deployment app
 apps/cli                       Agent-ready remote Workspace automation application
+apps/mcp                       Private MCP gateway, Stage A local development authentication
 apps/agent                     Workspace Agent application for document conversations and review
 packages/client-core           Private Node-hosted Workspace Agent Client capabilities
 packages/reference-provider   Private Browser-only referenced-Unit policy
