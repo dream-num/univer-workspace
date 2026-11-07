@@ -11,7 +11,7 @@
 
 | # | 事项 | 决定 | 理由与影响 |
 | --- | --- | --- | --- |
-| R1 | 用哪个真实 agent 验证 MCP | 一律用本机 opencode，模型 `console-deepseek/deepseek-flash`（界面上显示为 “DeepSeek V4.1 Flash 1017”，provider “Personal / DeepSeek”）。不用 Claude Code。`verify-uvw` 为每次运行生成一个目录，里面只有一个 `opencode.json`，在这个目录里执行 `opencode run` | 评审决定。opencode 的后台服务按目录加载项目配置，所以不需要修改开发者的全局配置（实测，附录 A.6）。阶段 A 验收条目“Claude Code 通过 `verify-uvw env` 给出的 `claude mcp add` 命令连上本地 MCP”相应改写，见第 8 节 |
+| R1 | 用哪个真实 agent 验证 MCP | 一律用本机 opencode，模型 `console-deepseek/deepseek-flash#high`，即 reasoning effort 为 high（界面上显示为 “DeepSeek V4.1 Flash 1017”，provider “Personal / DeepSeek”）。不用 Claude Code。`verify-uvw` 为每次运行生成一个目录，里面只有一个 `opencode.json`，在这个目录里执行 `opencode run` | 评审决定。opencode 的后台服务按目录加载项目配置，所以不需要修改开发者的全局配置（实测，附录 A.6）。阶段 A 验收条目“Claude Code 通过 `verify-uvw env` 给出的 `claude mcp add` 命令连上本地 MCP”相应改写，见第 8 节 |
 | R2 | 列表类工具的 `structuredContent` 形状 | 两版协议都返回以名词为键的对象，例如 `repo_list` 返回 `{"repos": [...]}` | 2025-11-25 规定 `structuredContent` 必须是 JSON 对象，2026-07-28 允许任意 JSON 值。工具直接返回数组时，v2 SDK 对 2025-11-25 客户端自动包成 `{"result": [...]}`，对 2026-07-28 客户端保持数组（实测，附录 A.4）。同一个工具的结果形状于是随协议版本变化。显式使用名词键可以让两版协议得到同一个形状。[工具规格](tools.zh-CN.md) 1.2 节“产品命令返回裸对象或数组”需要随本文一起修订。对齐比较因此先在 MCP 一侧取出名词键，见 6.6 节 |
 | R3 | MCP SDK | 网关使用 v2 SDK：`@modelcontextprotocol/server` 2.4.0 与 `@modelcontextprotocol/node` 2.1.2。`verify-uvw` 的客户端使用 `@modelcontextprotocol/client` 2.4.0。全部精确版本 | v1 的 `@modelcontextprotocol/sdk` 1.32.2 最高只支持 2025-11-25。v2 用同一个处理函数服务两版协议（实测，附录 A.3） |
 | R4 | 开发认证的 session 来源 | `verify-uvw user` 另外调用一次 `POST /api/auth/cli/password/login`，把得到的 session 写入本次运行的 `home/mcp-session`。不读取 `uvw` 的 `session.json` | `session.json` 是 CLI 私有的存储格式（`apps/cli/AGENTS.md`）。独立的 session 让 `uvw auth logout` 之类的 CLI 旅程不会使 MCP 的证据失效。这个路由签发 `agent` 来源的 session，与 `uvw` 相同 |
@@ -157,7 +157,7 @@ services:
   | `trace_id` | 请求的 `_meta` 没有 `traceparent` |
   | `client_name`、`client_version` | 协议为 2025-11-25。无状态服务下 `initialize` 和 `tools/call` 由两个独立实例处理，`tools/call` 拿不到 `clientInfo`（实测）。2026-07-28 的每个请求都在 `_meta` 里带 `clientInfo`，所以不能为 `null` |
   | `repo`、`unit_type` | 工具不涉及仓库或 Unit |
-  | `error_code` | `outcome` 不是 `tool_error`，或者错误没有 `workspace-*` 错误码 |
+  | `error_code` | `outcome` 不是 `tool_error`。`outcome` 为 `tool_error` 时，它等于工具结果 `structuredContent.code`，不论是否以 `workspace-` 开头。Client Core 会原样传递 Workspace 自己的错误码，例如仓库不存在时的 `NOT_FOUND`，CLI 打印的也是这个码（实测） |
 
 - 2025-11-25 下也想区分客户端，可以在阶段 H 改用 `User-Agent`。阶段 A 不做。
 - 认证失败（`outcome: auth_error`）的事件在阶段 F 验收。阶段 A 的客户端在 `initialize` 或 `server/discover` 时就收到 401，请求到不了 `tools/call`。
@@ -244,7 +244,7 @@ export MCP_URL=http://127.0.0.1:3930/mcp
 export MCP_PROJECT=verify-uvw-<run-id>
 export MCP_IMAGE=univer-workspace-mcp:verify-<run-id>
 export MCP_OPENCODE_DIR=/tmp/verify-uvw/<run-id>/home/opencode-<随机后缀>
-export MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash
+export MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high
 # opencode: (cd "$MCP_OPENCODE_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" "<prompt>" < /dev/null)
 ```
 
@@ -347,7 +347,7 @@ verify-uvw mcp-logs
 | M8 | 未认证 | `$V mcp --auth none mcp-unauth whoami`，`$V mcp --auth invalid mcp-badtoken whoami`，两种协议各一次 | 四次退出码都是 4，`.out` 的 `status` 为 401，`www_authenticate` 含 `resource_metadata` |
 | M9 | Origin 校验 | `curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: http://evil.example' -H "Authorization: Bearer $(cat <run>/home/mcp-session)" -X POST "$MCP_URL"`，输出写入 `mcp-origin.txt` | 403 |
 | M10 | 生产环境拒绝 | `cid=$(docker run -d --network none -e MCP_ROLE=gateway -e NODE_ENV=production -e MCP_DEV_SESSION_PASSTHROUGH=1 "$MCP_IMAGE")`，每秒查一次 `docker inspect -f '{{.State.Running}}' $cid`，最多 20 秒。然后把 `docker logs $cid` 和 `{{.State.ExitCode}}` 写入 `mcp-prod-refuse.{out,exit}`，最后 `docker rm -f $cid`。macOS 默认没有 `timeout` 命令，所以不用它 | 20 秒内容器已停止，退出码非 0，日志提到两个变量名 |
-| M11 | opencode | 记下当前时间，`(cd "$MCP_OPENCODE_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" "Call the whoami tool from the verify-uvw MCP server once and reply with its result." < /dev/null) > $EVIDENCE/mcp-opencode-whoami.jsonl`，退出码写入 `mcp-opencode-whoami.exit`。再从 `$V mcp-logs` 取出这个时间之后 `tool` 为 `whoami` 的事件，写入 `mcp-opencode-whoami.event.json` | 退出码 0。有一个 `tool_use` 片段的 `state.metadata.metadata.toolCalls` 包含 `{"tool":"verify-uvw.whoami","status":"completed"}`，它的输出含本次运行的用户名。恰好一条对应事件，`outcome` 为 `ok`，`client_name` 为 `null`（opencode 使用 2025-11-25，见 5.4 节） |
+| M11 | opencode | 记下当前时间，`(cd "$MCP_OPENCODE_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" "Call the whoami tool from the verify-uvw MCP server once and reply with its result." < /dev/null) > $EVIDENCE/mcp-opencode-whoami.jsonl`，退出码写入 `mcp-opencode-whoami.exit`。再从 `$V mcp-logs` 取出这个时间之后 `tool` 为 `whoami` 的事件，写入 `mcp-opencode-whoami.event.json` | 退出码 0。有一个 `tool_use` 片段的 `part.state.metadata.metadata.toolCalls` 包含 `{"tool":"verify-uvw.whoami","status":"completed"}`，它的输出含本次运行的用户名。恰好一条对应事件，`outcome` 为 `ok`，`client_name` 为 `null`（opencode 使用 2025-11-25，见 5.4 节） |
 | M12 | 清理 | 记下开发者 3020、5173 上监听进程的 PID，`$V down \| tee $EVIDENCE/mcp-down.txt`，再查一次 PID | `down` 输出 `ok    MCP resources removed`。开发者实例的 PID 前后相同，或者前后都不存在 |
 
 opencode 的 `--format json` 输出只有 `step_start`、`tool_use`、`text`、`step_finish` 四类片段，不含开发者的插件、skills 或凭据（实测），所以整份保存。opencode 把 MCP 工具包在代码模式的 `execute` 工具里调用，所以检查 `toolCalls`，不检查 `tool_use` 的工具名。这次会话会进入开发者本机 opencode 的会话历史，这是用 opencode 验证的代价，不影响结果。
@@ -361,7 +361,7 @@ M2 到 M6 的每次工具调用都由 6.3 节的退出码 5 自动核对用量�
 | `up` 同时启动 Workspace 和网关，`doctor` 全部通过 | M1。按 R6 写作 `VERIFY_UVW_MCP=1 verify-uvw up` |
 | `mcp whoami` 返回本次运行的用户 | M2、M3 |
 | `repo_list` 与 `uvw repo list --json` 一致 | M4，按 R2 和 6.6 节比较 |
-| 真实 agent 连上本地 MCP 并调用 `whoami` | M11。按 R1 用 opencode 和 `console-deepseek/deepseek-flash`，不用 Claude Code |
+| 真实 agent 连上本地 MCP 并调用 `whoami` | M11。按 R1 用 opencode 和 `console-deepseek/deepseek-flash#high`，不用 Claude Code |
 | 不带 Bearer 得到 401 和 `WWW-Authenticate` | M8 |
 | 生产环境拒绝开发认证 | M10 |
 | 每次工具调用产生一条字段齐全的事件 | M2 到 M6 的 `.event.json` 和不为 5 的退出码，M11 的事件 |
@@ -439,16 +439,20 @@ v1 的 `@modelcontextprotocol/sdk` 最新版是 1.32.2，`SUPPORTED_PROTOCOL_VER
 - v2 SDK 接受数组 `outputSchema`，并按协议版本改写结果。同一个返回数组的工具，2025-11-25 客户端收到 `{"result":[{"id":"a"}]}`，`tools/list` 里的 `outputSchema` 也被改成 `object`。2026-07-28 客户端收到 `[{"id":"a"}]`（评审者实测，本文作者复现）。
 - 所以数组结果不会让 2025-11-25 客户端出错，但同一个工具在两版协议下形状不同。R2 用显式名词键消除这个差异，M3 才能要求两版协议的 `.out` 相同。
 
-### A.5 待回填的测量
+### A.5 阶段 A 实现后的测量（2026-11-08）
 
-阶段 A 实现后测量并填写：
+每项只测了一次，是单次观测，不是统计值：
 
 | 项目 | 值 |
 | --- | --- |
-| 镜像冷构建耗时（无缓存） | 待测 |
-| 只改 `apps/mcp/src` 后的热构建耗时 | 待测 |
-| `docker compose up` 到 `/healthz` 返回 200 的耗时 | 待测 |
-| 镜像大小 | 待测 |
+| 镜像冷构建耗时（`--no-cache`） | 未测得。两次尝试都在下载 npm 依赖时超时（分别在 226 秒和 301 秒失败） |
+| 只改 `apps/mcp/src` 后的热构建耗时 | 140 秒。依赖安装层命中缓存，`pnpm deploy` 一步重新解析并链接生产依赖，占了大部分时间 |
+| 构建输入完全不变时的构建耗时 | 11 秒 |
+| `VERIFY_UVW_MCP=1 verify-uvw up` 全程 | 88 秒，其中包括 rebase 改动源码时间戳之后的镜像重建 |
+| `docker compose up` 到 `/healthz` 返回 200 的耗时 | 1.9 秒 |
+| 镜像大小 | 729,493,628 字节（696 MiB） |
+
+热构建的 140 秒主要花在 `pnpm deploy` 上。如果它拖慢日常验证，可以把 `deploy` 拆到只依赖 manifest 的一层，再单独复制构建产物。这是可选的优化，阶段 A 没有做。
 
 ### A.6 opencode
 
@@ -461,7 +465,7 @@ opencode 2.0.26，模型 `console-deepseek/deepseek-flash`，对 A.3 的临时 M
 | `opencode.json` 里用 `"tools": {"*": false, "verify-uvw_*": true}` 只放行 MCP 工具 | MCP 工具也被关掉，模型回答“没有可用的工具” |
 | `opencode run --standalone`，带或不带自定义配置 | 卡住，没有输出，90 秒后被 `timeout` 结束 |
 | `opencode serve --port …` | 不监听端口，日志为空，不响应 SIGTERM，只能 `kill -9` |
-| `--format json` 的输出 | 只有 `step_start`、`tool_use`、`text`、`step_finish`。工具调用记录在 `tool_use` 的 `state.metadata.metadata.toolCalls`，例如 `{"tool":"verify-uvw.whoami","status":"completed"}`。搜索 `skills`、`memory`、`hook`、`apiKey` 都没有结果 |
+| `--format json` 的输出 | 只有 `step_start`、`tool_use`、`text`、`step_finish`。工具调用记录在 `tool_use` 的 `part.state.metadata.metadata.toolCalls`，例如 `{"tool":"verify-uvw.whoami","status":"completed"}`。搜索 `skills`、`memory`、`hook`、`apiKey` 都没有结果 |
 
 模型在一次运行里把 bash 调用当作纯文本输出，没有形成工具调用。`permission` 禁止了 bash，所以这个错误不会产生副作用，只会让那次运行失败。M11 的通过条件看 `toolCalls`，不看模型的文字。
 

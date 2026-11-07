@@ -215,7 +215,7 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 | `GET /mcp/files/downloads/{downloadId}` | 用签名 URL 下载 |
 
 这些端点与 Workspace 同域。下载一律带 `Content-Disposition: attachment`、`X-Content-Type-Options: nosniff` 和 `Content-Security-Policy: sandbox; default-src 'none'`，
-上传页不渲染任何用户内容。做法参照 `apps/workspace/server/src/integrations/univer/univer-assets.router.ts:147-152`。
+上传页不渲染任何用户内容。做法参照 `apps/workspace/server/src/modules/univer-assets/univer-assets.router.ts:147-152`。
 导出的 HTML、SVG、Markdown 可能包含任意内容，不能在 Workspace 的同源下以内联方式打开。
 
 ## 6. 执行层
@@ -295,7 +295,7 @@ MCP 不连数据库（D12），所以第一版的“统计接口”由两部分�
 | `tool`、`toolset` | 工具与所属 toolset |
 | `repo`、`unit_type` | 解析后的仓库与 Unit 类型（没有则为空） |
 | `outcome` | `ok`、`tool_error`、`auth_error`、`rate_limited`、`timeout`、`internal_error` |
-| `error_code` | `workspace-*` 错误码（如有） |
+| `error_code` | 工具错误的错误码，与返回给客户端的 `code` 相同。Workspace 自己的错误码（如 `NOT_FOUND`）原样记录 |
 | `duration_ms` | 网关总耗时 |
 | `executor` | `cold_start`、`warm`、`none` |
 | `cost` | 成本单位：`worker_cpu_ms`、`worker_peak_rss_mb`、`render_pages`、`export_bytes`、`upload_bytes`、`committed_revisions` |

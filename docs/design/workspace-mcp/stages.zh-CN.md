@@ -43,7 +43,7 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 - [ ] `VERIFY_UVW_MCP=1 verify-uvw up` 同时启动 Workspace 和 MCP 网关；`doctor` 全部通过，包括 MCP 的检查项。
 - [ ] `verify-uvw user` 之后，`verify-uvw mcp whoami whoami '{}'` 返回本次运行的用户，证据文件齐全。
 - [ ] `verify-uvw mcp repo-list repo_list '{}'` 的结果与 `verify-uvw cli repo-list repo list --json` 一致，按 [本地验证环境](local-verification.zh-CN.md) 6.6 节比较。
-- [ ] opencode（模型 `console-deepseek/deepseek-flash`）通过 `verify-uvw env` 给出的目录和命令连上本地 MCP，并调用 `whoami` 成功。附会话记录。
+- [ ] opencode（模型 `console-deepseek/deepseek-flash#high`）通过 `verify-uvw env` 给出的目录和命令连上本地 MCP，并调用 `whoami` 成功。附会话记录。
 - [ ] 不带 Bearer 的请求得到 401 和 `WWW-Authenticate`。
 - [ ] 设置 `NODE_ENV=production` 和 `MCP_DEV_SESSION_PASSTHROUGH=1` 时，网关拒绝启动。
 - [ ] 每次工具调用在网关日志里产生一条 `mcp.tool_call` 事件，字段符合架构文档 8.1 节。
@@ -75,7 +75,7 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 - [ ] 跑通一次完整的产品旅程：创建 Issue、开 PR、加 Unit、ready、在浏览器里看到 PR 处于 ready 状态（截图）。
 - [ ] `tools/list` 在 `core`、`files`、`admin`、`all` 四种组合下返回正确的工具集，顺序固定。
 - [ ] 每个工具都有 `outputSchema` 和三个注解。
-- [ ] 在 opencode（模型 `console-deepseek/deepseek-flash`）里用自然语言完成一次“找到我的 Personal Space，新建一个 Issue”的任务。
+- [ ] 在 opencode（模型 `console-deepseek/deepseek-flash#high`）里用自然语言完成一次“找到我的 Personal Space，新建一个 Issue”的任务。
 
 **不做。** `execute`、`inspect`、导入导出、渲染。
 
@@ -146,7 +146,7 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 **验收标准。**
 
 - [ ] trunk 和 Worktree 两种范围的截图都包含图片，与 `uvw screenshot` 的结果目视一致（两张截图并列作为证据）。
-- [ ] 小截图以图片内容返回，opencode 的会话记录里能看到 `image` 类型的结果。多页截图返回下载链接。
+- [ ] 小截图以图片内容返回，opencode 的会话记录里能看到 `image` 类型的结果，模型对截图内容的描述与 Unit 内容相符。多页截图返回下载链接。
 - [ ] `print_pdf` 生成的 PDF 能打开，页数与 `uvw print-pdf` 一致。
 - [ ] 渲染服务的容器没有到 Workspace 的网络路由，渲染仍然成功。
 - [ ] 测量浏览器池的单任务内存和吞吐，写回架构文档。
