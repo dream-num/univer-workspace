@@ -100,6 +100,7 @@ export {
   type WorkspaceUnitExchangeDependencies,
 } from "./office-exchange.js";
 export { WorkspaceUnitFeature } from "./unit.js";
+export { issueUrl, pullUrl, repoUrl } from "./urls.js";
 export { usernameKey } from "./username.js";
 export {
   WorkspaceCompileTypstFeature,

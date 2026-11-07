@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import {
+  pullUrl,
   workspaceError,
   type WorkspaceSpaceFeature,
   type WorkspaceWorktree,
@@ -17,7 +18,6 @@ import {
   type JsonFieldsOption,
 } from "../../command.js";
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
-import { pullUrl } from "../../urls.js";
 
 export const PR_JSON_FIELDS = [
   "id", "name", "state", "units", "number", "summary", "spaceId", "kind", "visibility", "creator", "createdAt", "createdVia", "updatedAt",
