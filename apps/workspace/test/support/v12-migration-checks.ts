@@ -87,7 +87,7 @@ export function verifyV12Migration(
       assert.deepEqual(rows(migrated.connection), before);
       assert.equal(
         migrated.connection.prepare("PRAGMA user_version").get()?.user_version,
-        16,
+        17,
       );
       if (seeded) {
         migrated.connection
@@ -131,7 +131,7 @@ export function verifyV12Migration(
       const restarted = open(filename);
       assert.equal(
         restarted.connection.prepare("PRAGMA user_version").get()?.user_version,
-        16,
+        17,
       );
       restarted.close();
       assert.equal(backups().length, 1);
@@ -149,7 +149,7 @@ export function verifyV12Migration(
     broken.close();
     assert.throws(
       () => open(filename),
-      /V12 to V16 migration failed.*rolled back.*backup/,
+      /V12 to V17 migration failed.*rolled back.*backup/,
     );
     for (const name of [
       "rollback.sqlite",

@@ -2148,7 +2148,7 @@ export interface components {
             discard: boolean;
         };
         /** @enum {string} */
-        UnitType: "sheet" | "doc" | "slide" | "board" | "base";
+        UnitType: "sheet" | "doc" | "slide" | "board" | "base" | "pdf";
         WorktreeUnitTarget: {
             spaceId: string;
             parentNodeId: string | null;

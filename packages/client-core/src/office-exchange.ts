@@ -66,7 +66,7 @@ export interface WorkspaceImportFileInput {
   readonly parentNodeId?: string;
   readonly sourcePath: string;
   readonly spaceId: string;
-  readonly type?: Exclude<WorkspaceUnitType, "board">;
+  readonly type?: Exclude<WorkspaceUnitType, "board" | "pdf">;
   readonly worktreeId: string;
 }
 
@@ -76,7 +76,7 @@ export interface WorkspaceImportFileResult {
   readonly nodeId: string;
   readonly resourceId: string;
   readonly sourcePath: string;
-  readonly type: Exclude<WorkspaceUnitType, "board">;
+  readonly type: Exclude<WorkspaceUnitType, "board" | "pdf">;
   readonly unitId: string;
   readonly worktreeId: string;
 }
@@ -89,7 +89,7 @@ export interface WorkspaceExportFileInput {
 
 export interface WorkspaceExportFileResult {
   readonly outputPath: string;
-  readonly type: Exclude<WorkspaceUnitType, "board">;
+  readonly type: Exclude<WorkspaceUnitType, "board" | "pdf">;
   readonly unitId: string;
   readonly worktreeId: string;
 }
@@ -192,8 +192,8 @@ export class WorkspaceUnitExchangeFeature {
 
 function inferImportType(
   sourcePath: string,
-  explicit?: Exclude<WorkspaceUnitType, "board">,
-): Exclude<WorkspaceUnitType, "board"> {
+  explicit?: Exclude<WorkspaceUnitType, "board" | "pdf">,
+): Exclude<WorkspaceUnitType, "board" | "pdf"> {
   const extension = extname(sourcePath).toLowerCase();
   if (extension === ".xls" || extension === ".xlsx") {
     if (explicit === undefined || explicit === "sheet" || explicit === "base") {
@@ -227,7 +227,7 @@ function inferExportFormat(outputPath: string): ExchangeFormat {
 }
 
 function requireCompatibleExport(
-  type: Exclude<WorkspaceUnitType, "board">,
+  type: Exclude<WorkspaceUnitType, "board" | "pdf">,
   format: ExchangeFormat,
 ): void {
   const compatible =
@@ -242,7 +242,7 @@ function requireCompatibleExport(
   }
 }
 
-function toInstanceType(type: Exclude<WorkspaceUnitType, "board">): WorkspaceExchangeUnitType {
+function toInstanceType(type: Exclude<WorkspaceUnitType, "board" | "pdf">): WorkspaceExchangeUnitType {
   switch (type) {
     case "sheet":
       return UniverInstanceType.UNIVER_SHEET;
@@ -257,7 +257,7 @@ function toInstanceType(type: Exclude<WorkspaceUnitType, "board">): WorkspaceExc
 
 async function exportUnit(
   exchange: ExportOfficeFile,
-  type: Exclude<WorkspaceUnitType, "board">,
+  type: Exclude<WorkspaceUnitType, "board" | "pdf">,
   data: Readonly<Record<string, unknown>>,
   format: ExchangeFormat,
   outputPath: string,
@@ -290,7 +290,7 @@ function requireCreatedUnit(
   unit: WorkspaceUnit,
   input: WorkspaceImportFileInput & {
     readonly name: string;
-    readonly type: Exclude<WorkspaceUnitType, "board">;
+    readonly type: Exclude<WorkspaceUnitType, "board" | "pdf">;
   },
 ): void {
   if (

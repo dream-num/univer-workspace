@@ -190,6 +190,7 @@ export {
   workspaceSnapshotPrefix,
   type WorkspaceRuntimeScope,
   type WorkspaceRuntimeTarget,
+  type WorkspaceRuntimeUnitType,
 } from "./runtime-target.js";
 export {
   getWorktree,

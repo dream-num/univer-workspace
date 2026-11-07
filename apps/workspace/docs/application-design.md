@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V16 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V17 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -41,14 +41,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V16；
-- V16：校验 Schema 指纹；
-- V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V16；
-- V0：一致性备份后直接迁移到 V16；
+- Fresh：创建 V17；
+- V17：校验 Schema 指纹；
+- V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V17；
+- V0：一致性备份后直接迁移到 V17；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V16 Query。
+Worktree 等业务模块只编译和运行 V17 Query。
 
 V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
@@ -105,6 +105,8 @@ CLI password 路由与 Browser password 路由使用相同凭据及响应，额�
 
 迁移前验证并备份 V15，事务失败回滚，成功后校验 V16 指纹，重复启动不重复备份。
 
+V17 允许 `univer_resources` 与 `worktree_node_intents` 的 `unit_type` 取 `pdf`：SQLite 不能修改 CHECK，两张表在同一事务内重建，保留全部行、`univer_resources_kind_guard` 触发器与 `content_permission_objects` 的入向外键，沿用备份（`.v16-backup-…sqlite`）、回滚、指纹、外键和完整性检查流程。
+
 `GET /api/spaces/{spaceId}/activity?timeZone=<IANA>` 要求 Session 与有效 IANA 时区，返回规范化
 时区、截至该时区今天的 14 个日桶和窗口内最新 20 条事件。`opened` 按 `browser`、`agent`、
 `unknown` 汇总 Pull request 与 Issue 创建；`merged` 仅统计协同服务确认已合入的 Worktree。
@@ -123,7 +125,7 @@ SDK 1.0.0 启动时先准备产品数据库，再运行隔离的 `prepareCollabo
 应用 Service。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 2、Worktree 3、History 2；
-Comment 1 不变。产品数据库先准备到 V16，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Comment 1 不变。产品数据库先准备到 V17，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
@@ -250,13 +252,19 @@ Office Exchange Module 适配 Univer Exchange Client 使用的 Universer 协议�
 
 - `source=HttpImport` 的 `/universer-api/stream/file/upload` 由 Exchange 接收；Unit Embedded
   Asset 的上传继续由 Univer Asset Module 处理；
-- import task 使用 `@univerjs-pro/exchange-node` 转换 XLS/XLSX/CSV/TSV、DOC/DOCX 或
-  PPT/PPTX；Workspace 文件入口按扩展名自动识别这些格式，并在当前 Space 与目录创建正式
+- import task 使用 `@univerjs-pro/exchange-node` 转换 XLS/XLSX/CSV/TSV、DOC/DOCX、
+  PPT/PPTX 或 PDF（PDF 转换依赖可选原生 peer `@univerjs-pro/exchange-pdf-node-binding`，
+  服务端通过 `@univerjs-pro/exchange-node/pdf` 注册适配器）；Workspace 文件入口按扩展名自动识别
+  Office 格式与 PDF（`isImportableDocument`），并在当前 Space 与目录创建正式
   Resource，Editor Ribbon 导入则默认创建在当前 User 的 Personal Space 根目录。两种入口都
   必须通过 Resource Module，不能直接写入一个没有产品归属的 Collaboration Unit；
 - export task 只接受服务端 `AccessResolver` 能解析且允许打开的 Trunk Unit，服务端自行
   确认 Unit Type，通过 Collaboration Service 固定当前 head 并读取包含 Sheet blocks 的恢复
   材料，再由 `UnitSnapshotMaterializer` 补全 snapshot；
+- 已知限制（SDK 1.3.1）：空白新建的 PDF Unit 一经编辑器修改就无法导出，原生导出器会以
+  "source-less PDF cannot apply imported semantic patches" 拒绝，因为编辑器 reducer 把叠加
+  对象的编辑同时镜像进了 `objectPatches`；Workspace 不做绕过，等上游版本修复（exchange 集成
+  测试中对应用例暂为 skip）；
 - 转换用 source、JSON 和 output 字节保存在 `BlobStore`，任务与临时文件身份只在当前进程
   保存并在两小时后失效，不写入产品数据库；
 - Worktree 和 Merge Preview 暂不注册 Exchange 插件，避免把 Trunk 内容误当作当前 Scope

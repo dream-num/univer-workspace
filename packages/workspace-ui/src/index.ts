@@ -42,6 +42,7 @@ export {
   ListTreeIcon,
   MessageSquareIcon,
   MessageSquarePlusIcon,
+  PdfMultiIcon,
   PencilIcon,
   PlusIcon,
   RefreshIcon,

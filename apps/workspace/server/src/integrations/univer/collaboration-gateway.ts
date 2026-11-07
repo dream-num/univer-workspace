@@ -559,6 +559,8 @@ function protocolUnitType(unitType: UnitType | null): UniverType {
       return UniverType.UNIVER_BOARD;
     case "base":
       return UniverType.UNIVER_BASE;
+    case "pdf":
+      return UniverType.UNIVER_PDF;
     default:
       throw new CollabError("INVALID_REQUEST", "Unknown unit type.");
   }

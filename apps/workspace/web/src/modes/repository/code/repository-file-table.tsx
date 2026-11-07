@@ -4,6 +4,7 @@ import {
   Database,
   File,
   FileText,
+  FileType as FileTypeIcon,
   Folder,
   FolderUp,
   LayoutDashboard,
@@ -39,6 +40,7 @@ const icons = {
   slide: Presentation,
   board: LayoutDashboard,
   base: Database,
+  pdf: FileTypeIcon,
 };
 
 export function TypeBadge({ type }: { readonly type: FileType }) {

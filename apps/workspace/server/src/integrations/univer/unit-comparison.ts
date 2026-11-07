@@ -572,5 +572,7 @@ function toUniverType(type: UnitType): UnitComparisonType {
       return UniverInstanceType.UNIVER_BASE;
     case "board":
       return UniverInstanceType.UNIVER_BOARD;
+    case "pdf":
+      throw new Error("Unit comparison does not support PDF Units.");
   }
 }

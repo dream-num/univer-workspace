@@ -17,6 +17,8 @@ import {
   type ExportOptions,
   type ISnapshotWithBlocks,
 } from "@univerjs-pro/exchange-node";
+// Registers the PDF conversion adapter (backed by @univerjs-pro/exchange-pdf-node-binding).
+import "@univerjs-pro/exchange-node/pdf";
 import {
   ErrorCode,
   FileSource,
@@ -593,6 +595,12 @@ function exchangeImportOptions(
       ),
     };
   }
+  if (unitType === "pdf") {
+    return {
+      type: UniverInstanceType.UNIVER_PDF,
+      fileName: filename,
+    };
+  }
   if (unitType === "sheet") {
     return {
       type: UniverInstanceType.UNIVER_SHEET,
@@ -670,6 +678,12 @@ function exchangeExportOptions(
       format: ExchangeFormat.DOCX,
     };
   }
+  if (unitType === "pdf") {
+    return {
+      type: UniverInstanceType.UNIVER_PDF,
+      format: ExchangeFormat.PDF,
+    };
+  }
   return {
     type: UniverInstanceType.UNIVER_SLIDE,
     format: ExchangeFormat.PPTX,
@@ -688,6 +702,8 @@ async function importUnitData(
     case UniverInstanceType.UNIVER_DOC:
       return { ...(await importBuffer(buffer, options)) };
     case UniverInstanceType.UNIVER_SLIDE:
+      return { ...(await importBuffer(buffer, options)) };
+    case UniverInstanceType.UNIVER_PDF:
       return { ...(await importBuffer(buffer, options)) };
   }
 }
@@ -790,6 +806,8 @@ function unitTypeFromProtocol(value: unknown): ExchangeUnitType {
       return "slide";
     case UniverType.UNIVER_BASE:
       return "base";
+    case UniverType.UNIVER_PDF:
+      return "pdf";
     default:
       throw invalidInput("The Univer Unit type cannot be exchanged.", "type");
   }
@@ -808,6 +826,8 @@ function unitTypeFromFilename(filename: string): ExchangeUnitType {
     case ".ppt":
     case ".pptx":
       return "slide";
+    case ".pdf":
+      return "pdf";
     default:
       throw invalidInput(
         "The uploaded file type is not supported for document import.",
@@ -827,7 +847,8 @@ function validExportFormat(
         format as ExchangeFormat
       )) ||
     (unitType === "doc" && format === ExchangeFormat.DOCX) ||
-    (unitType === "slide" && format === ExchangeFormat.PPTX);
+    (unitType === "slide" && format === ExchangeFormat.PPTX) ||
+    (unitType === "pdf" && format === ExchangeFormat.PDF);
   if (!compatible) {
     throw invalidInput(
       `The ${String(format)} format is not valid for a ${unitType} Unit.`,
@@ -840,6 +861,7 @@ function validExportFormat(
 function defaultFormat(unitType: ExchangeUnitType): ExchangeFormat {
   if (unitType === "doc") return ExchangeFormat.DOCX;
   if (unitType === "slide") return ExchangeFormat.PPTX;
+  if (unitType === "pdf") return ExchangeFormat.PDF;
   return ExchangeFormat.XLSX;
 }
 
@@ -855,6 +877,8 @@ function mediaType(format: ExchangeFormat): string {
       return "text/csv; charset=utf-8";
     case ExchangeFormat.TSV:
       return "text/tab-separated-values; charset=utf-8";
+    case ExchangeFormat.PDF:
+      return "application/pdf";
     default:
       return "application/octet-stream";
   }
@@ -892,8 +916,10 @@ function importedName(
   data: Readonly<Record<string, unknown>>,
   filename: string
 ): string {
+  // The PDF converter names the Unit after the whole upload filename; other
+  // converters carry a content title. Either way the Node takes the file stem.
   const candidate =
-    (typeof data.name === "string" && data.name.trim()) ||
+    (typeof data.name === "string" && data.name.trim() !== filename && data.name.trim()) ||
     (typeof data.title === "string" && data.title.trim()) ||
     stripExtension(filename) ||
     "Imported file";

@@ -1,6 +1,7 @@
 import {
   transformSnapshotToBaseData, transformSnapshotToDocumentData,
-  transformSnapshotToSlideData, transformSnapshotToWorkbookData,
+  transformSnapshotToPdfData, transformSnapshotToSlideData,
+  transformSnapshotToWorkbookData,
 } from "@univerjs-pro/collaboration";
 import { exportToBuffer, type ExportOptions, type ISnapshotWithBlocks } from "@univerjs-pro/exchange-node";
 import { UniverInstanceType } from "@univerjs/core";
@@ -71,5 +72,7 @@ export async function exportWorkspaceSnapshot(
       return exportToBuffer(await inline(await transformSnapshotToWorkbookData(aggregate.snapshot, structuredClone(aggregate.sheetBlocks))), options);
     case UniverInstanceType.UNIVER_BASE:
       return exportToBuffer(await inline(await transformSnapshotToBaseData(aggregate.snapshot, structuredClone(aggregate.sheetBlocks))), options);
+    case UniverInstanceType.UNIVER_PDF:
+      return exportToBuffer(await inline(transformSnapshotToPdfData(aggregate.snapshot)), options);
   }
 }

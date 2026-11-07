@@ -3,6 +3,7 @@ import {
   BoardsMultiIcon as UniverBoardsMultiIcon,
   DocsMultiIcon as UniverDocsMultiIcon,
   FolderIcon as UniverFolderIcon,
+  PdfMultiIcon as UniverPdfMultiIcon,
   SheetsMultiIcon as UniverSheetsMultiIcon,
   SlidesMultiIcon as UniverSlidesMultiIcon,
 } from "@univerjs/icons";
@@ -69,6 +70,7 @@ export const LinkIcon = icon(LucideLink);
 export const LockIcon = icon(LucideLock);
 export const ListTreeIcon = icon(LucideListTree);
 export const MessageSquareIcon = icon(LucideMessageSquare);
+export const PdfMultiIcon = icon(UniverPdfMultiIcon);
 export const MessageSquarePlusIcon = icon(LucideMessageSquarePlus);
 export const PencilIcon = icon(LucidePencil);
 export const PlusIcon = icon(LucidePlus);

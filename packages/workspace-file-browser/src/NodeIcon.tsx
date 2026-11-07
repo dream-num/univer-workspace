@@ -10,6 +10,7 @@ import {
   FileVideoIcon,
   FolderIcon,
   HtmlViewIcon,
+  PdfMultiIcon,
   SheetsMultiIcon,
   SlidesMultiIcon,
   type WorkspaceIconComponent,
@@ -23,6 +24,7 @@ const unitIcons: Record<WorkspaceUnitType, WorkspaceIconComponent> = {
   slide: SlidesMultiIcon,
   board: BoardsMultiIcon,
   base: BasesMultiIcon,
+  pdf: PdfMultiIcon,
 };
 
 export function NodeIcon(props: {

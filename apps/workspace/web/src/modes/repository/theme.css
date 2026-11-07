@@ -66,6 +66,7 @@
   --rd-t-group: #5E636B;
   --rd-t-board: #7C3AED;
   --rd-t-base: #0D9488;
+  --rd-t-pdf: #DC2626;
   --rd-open-soft: color-mix(in srgb, var(--rd-open) 12%, transparent);
 
   /* Shared primitives and body portals inherit the same mode palette. */
@@ -213,6 +214,7 @@
     --rd-t-group: #A6ADB5;
     --rd-t-board: #C8FF00;
     --rd-t-base: #2DD4BF;
+    --rd-t-pdf: #F87171;
     --rd-open-soft: color-mix(in srgb, var(--rd-open) 12%, transparent);
     --color-label-blue: #60A5FA;
     --color-label-yellow: #FACC15;

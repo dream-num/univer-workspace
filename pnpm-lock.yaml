@@ -4,7 +4,7 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-packageExtensionsChecksum: sha256-9o6iQA18Owr9Ij7AHMsci0zjr0Wa1BiC/1EvOeKRlMQ=
+packageExtensionsChecksum: sha256-oKFeGh1b//bUyHndKL7r4tPShgqCTSdoAjhCoqWqgD4=
 
 patchedDependencies:
   '@electron/osx-sign@1.3.3': 696166bebf77985fc1af6136f5bfebf07350f93a576ed9d22d8e87cdf4d0c59c
@@ -773,7 +773,10 @@ importers:
         version: 1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node':
         specifier: 1.3.1
-        version: 1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
+        version: 1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.0.1)(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/exchange-pdf-node-binding':
+        specifier: 1.0.1
+        version: 1.0.1
       '@univerjs-pro/ink':
         specifier: 1.3.1
         version: 1.3.1(react@19.2.8)(rxjs@7.8.2)
@@ -783,6 +786,21 @@ importers:
       '@univerjs-pro/license':
         specifier: 1.3.1
         version: 1.3.1(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/pdfs':
+        specifier: 1.3.1
+        version: 1.3.1(react@19.2.8)
+      '@univerjs-pro/pdfs-editor':
+        specifier: 1.3.1
+        version: 1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/pdfs-exchange-client':
+        specifier: 1.3.1
+        version: 1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/pdfs-print':
+        specifier: 1.3.1
+        version: 1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/pdfs-ui':
+        specifier: 1.3.1
+        version: 1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/shape-editor':
         specifier: 1.3.1
         version: 1.3.1(react@19.2.8)(rxjs@7.8.2)
@@ -1221,7 +1239,7 @@ importers:
         version: 1.3.1(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node':
         specifier: 1.3.1
-        version: 1.3.1(@univerjs-pro/embed@1.3.1(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)
+        version: 1.3.1(@univerjs-pro/embed@1.3.1(react@19.3.0)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.0.1)(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/core':
         specifier: 1.3.1
         version: 1.3.1(react@19.3.0)(rxjs@7.8.2)
@@ -1273,7 +1291,7 @@ importers:
         version: 1.3.1(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node':
         specifier: 1.3.1
-        version: 1.3.1(@univerjs-pro/embed@1.3.1(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2)
+        version: 1.3.1(@univerjs-pro/embed@1.3.1(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.0.1)(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/sheets-print':
         specifier: 1.3.1
         version: 1.3.1(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(@univerjs-pro/embed@1.3.1(react@18.3.1)(rxjs@7.8.2))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
@@ -5343,6 +5361,42 @@ packages:
       '@univerjs-pro/exchange-pdf-node-binding':
         optional: true
 
+  '@univerjs-pro/exchange-pdf-node-binding-darwin-arm64@1.0.1':
+    resolution: {integrity: sha512-miJ/ztLS2qXOZmTBgVyoKhaLg4l+wEVe4i3v/7tZzS8bn9YGxiayPzRD7iCAU0X/8OYC0livj+DCZUFciUFhRQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-darwin-arm64/-/exchange-pdf-node-binding-darwin-arm64-1.0.1.tgz}
+    engines: {node: '>=20'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@univerjs-pro/exchange-pdf-node-binding-darwin-x64@1.0.1':
+    resolution: {integrity: sha512-ydmSqNNZJwqYfM9cn4q+vEXE/Pb8TC3UTPuvKp+uDvBg8Xeu76f1TbMQHGk2C1yC0rjV4AFmmuE9tuGFhDY/GQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-darwin-x64/-/exchange-pdf-node-binding-darwin-x64-1.0.1.tgz}
+    engines: {node: '>=20'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu@1.0.1':
+    resolution: {integrity: sha512-ubY+ALkrPsrcnOE2xSPfCaOghDkXsMILcbyEDIyas2g3EFqFqE9t5F0PxtjYkRnbzLcWZ0KE3ZWZO+xUedBfPQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu/-/exchange-pdf-node-binding-linux-arm64-gnu-1.0.1.tgz}
+    engines: {node: '>=20'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu@1.0.1':
+    resolution: {integrity: sha512-Q4qg3PJmCZsBBnZiErWnUfW6m3KaaXPlSRy4g1ZVGuB3bsZu8EICo+b2LAYNPnPYqUddg7iacRqd0ebe9AieEA==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu/-/exchange-pdf-node-binding-linux-x64-gnu-1.0.1.tgz}
+    engines: {node: '>=20'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu@1.0.1':
+    resolution: {integrity: sha512-oOv8Dx6fTb3Luw4RX6hdKOToFt/46Z5NIgAZG/gLghzHtPxdAP/cq7yQQIU6oSlFPxmf+9r7+lQ29dqJBHmpFw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu/-/exchange-pdf-node-binding-win32-x64-gnu-1.0.1.tgz}
+    engines: {node: '>=20'}
+    cpu: [x64]
+    os: [win32]
+
+  '@univerjs-pro/exchange-pdf-node-binding@1.0.1':
+    resolution: {integrity: sha512-RLpAndeI5gHwIR2odPuX1bKGM+XWGQBcYLELCQTShXyc1giAUL4W6YCyaZ5Lrg/APKH1rbgrABEsC1MTGPpvtw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding/-/exchange-pdf-node-binding-1.0.1.tgz}
+    engines: {node: '>=20'}
+
   '@univerjs-pro/ink-ui@1.3.1':
     resolution: {integrity: sha512-dmk1k+pX9PiWZv0C/UG2L8jvBxNQ/O4rU5T96jdELoGUybB2HDK1b3RFCkFFm2G/OlZjbcWRahJUkfiTVV0zsA==, tarball: https://registry.npmjs.org/@univerjs-pro/ink-ui/-/ink-ui-1.3.1.tgz}
     peerDependencies:
@@ -5355,6 +5409,24 @@ packages:
   '@univerjs-pro/license@1.3.1':
     resolution: {integrity: sha512-uQaeFef+gK07gLIcoocU6hQ4SuwDszrSr6c6sfHv5rMgRiKGaG18TkgumkqPlZ3uDnyzuD8yXEB3vBpaId1pYQ==, tarball: https://registry.npmjs.org/@univerjs-pro/license/-/license-1.3.1.tgz}
     peerDependencies:
+      rxjs: '>=7.0.0'
+
+  '@univerjs-pro/pdfs-editor@1.3.1':
+    resolution: {integrity: sha512-HNA8Yt6Q3SA1G4N5bRy/ScEyV+Sca5FThDk794Q0M6zq/4WuDYzKOlREuPy+/W6qDPYPRe+iItHtuyBWyEfg1Q==, tarball: https://registry.npmjs.org/@univerjs-pro/pdfs-editor/-/pdfs-editor-1.3.1.tgz}
+
+  '@univerjs-pro/pdfs-exchange-client@1.3.1':
+    resolution: {integrity: sha512-ihdUWvKkswg0W6JsPrY3QbhBBrGdBBw523FKI71Y/f+W1ZJJfsarMnNBsncr9LyvfiZmRKXfgAgXIDhGMHIWpA==, tarball: https://registry.npmjs.org/@univerjs-pro/pdfs-exchange-client/-/pdfs-exchange-client-1.3.1.tgz}
+
+  '@univerjs-pro/pdfs-print@1.3.1':
+    resolution: {integrity: sha512-62Bz7DUvkpMAW3ndwz2oezBLneu5BrH9TZP0qA7UYo+QeOtLD1Xne1X62FQX6ou97s8C8AzZVsdCU6zaScsw/g==, tarball: https://registry.npmjs.org/@univerjs-pro/pdfs-print/-/pdfs-print-1.3.1.tgz}
+    peerDependencies:
+      react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+      rxjs: '>=7.0.0'
+
+  '@univerjs-pro/pdfs-ui@1.3.1':
+    resolution: {integrity: sha512-D6ixEH7N3KLR3or6JTHoV8zmz5HfNUc/m/bjg8z1rI0dtmsRFIsWX/U9ChgeHVf+QJQeyH/FTKtkMLVhTovAkA==, tarball: https://registry.npmjs.org/@univerjs-pro/pdfs-ui/-/pdfs-ui-1.3.1.tgz}
+    peerDependencies:
+      react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       rxjs: '>=7.0.0'
 
   '@univerjs-pro/pdfs@1.3.1':
@@ -7589,6 +7661,10 @@ packages:
     hasBin: true
     peerDependencies:
       typescript: ^5.x
+
+  opentype.js@2.0.0:
+    resolution: {integrity: sha512-kCyjv6xdDY1W/jLWZ/L3QhhTlKUqDZMQ5+Jdlw12b3dXkKNpYBqqlMMj0YDQPShWFTMwgZI1hG14kN3XUDSg/A==}
+    hasBin: true
 
   ot-json1@1.0.2:
     resolution: {integrity: sha512-IhxkqVWQqlkWULoi/Q2AdzKk0N5vQRbUMUwubFXFCPcY4TsOZjmp2YKrk0/z1TeiECPadWEK060sdFdQ3Grokg==}
@@ -16410,7 +16486,7 @@ snapshots:
       '@univerjs-pro/exchange-node-binding-linux-x64-gnu': 1.0.6
       '@univerjs-pro/exchange-node-binding-win32-x64-msvc': 1.0.6
 
-  '@univerjs-pro/exchange-node@1.3.1(@univerjs-pro/embed@1.3.1(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2)':
+  '@univerjs-pro/exchange-node@1.3.1(@univerjs-pro/embed@1.3.1(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.0.1)(react@18.3.1)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/collaboration': 1.3.1(@univerjs-pro/embed@1.3.1(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node-binding': 1.0.6
@@ -16418,12 +16494,14 @@ snapshots:
       '@univerjs-pro/slides': 1.3.1(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/core': 1.3.1(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/protocol': 1.3.1
+    optionalDependencies:
+      '@univerjs-pro/exchange-pdf-node-binding': 1.0.1
     transitivePeerDependencies:
       - '@univerjs-pro/embed'
       - react
       - rxjs
 
-  '@univerjs-pro/exchange-node@1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)':
+  '@univerjs-pro/exchange-node@1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.0.1)(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/collaboration': 1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node-binding': 1.0.6
@@ -16431,12 +16509,14 @@ snapshots:
       '@univerjs-pro/slides': 1.3.1(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/core': 1.3.1(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/protocol': 1.3.1
+    optionalDependencies:
+      '@univerjs-pro/exchange-pdf-node-binding': 1.0.1
     transitivePeerDependencies:
       - '@univerjs-pro/embed'
       - react
       - rxjs
 
-  '@univerjs-pro/exchange-node@1.3.1(@univerjs-pro/embed@1.3.1(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)':
+  '@univerjs-pro/exchange-node@1.3.1(@univerjs-pro/embed@1.3.1(react@19.3.0)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.0.1)(react@19.3.0)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/collaboration': 1.3.1(@univerjs-pro/embed@1.3.1(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node-binding': 1.0.6
@@ -16444,10 +16524,35 @@ snapshots:
       '@univerjs-pro/slides': 1.3.1(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/core': 1.3.1(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/protocol': 1.3.1
+    optionalDependencies:
+      '@univerjs-pro/exchange-pdf-node-binding': 1.0.1
     transitivePeerDependencies:
       - '@univerjs-pro/embed'
       - react
       - rxjs
+
+  '@univerjs-pro/exchange-pdf-node-binding-darwin-arm64@1.0.1':
+    optional: true
+
+  '@univerjs-pro/exchange-pdf-node-binding-darwin-x64@1.0.1':
+    optional: true
+
+  '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu@1.0.1':
+    optional: true
+
+  '@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu@1.0.1':
+    optional: true
+
+  '@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu@1.0.1':
+    optional: true
+
+  '@univerjs-pro/exchange-pdf-node-binding@1.0.1':
+    optionalDependencies:
+      '@univerjs-pro/exchange-pdf-node-binding-darwin-arm64': 1.0.1
+      '@univerjs-pro/exchange-pdf-node-binding-darwin-x64': 1.0.1
+      '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu': 1.0.1
+      '@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu': 1.0.1
+      '@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu': 1.0.1
 
   '@univerjs-pro/ink-ui@1.3.1(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)':
     dependencies:
@@ -16579,6 +16684,68 @@ snapshots:
       rxjs: 7.8.2
     transitivePeerDependencies:
       - react
+
+  '@univerjs-pro/pdfs-editor@1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/collaboration': 1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/license': 1.3.1(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/pdfs': 1.3.1(react@19.2.8)
+      '@univerjs/core': 1.3.1(react@19.2.8)(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - '@univerjs-pro/embed'
+      - react
+      - rxjs
+
+  '@univerjs-pro/pdfs-exchange-client@1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/collaboration': 1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/exchange-client': 1.3.1(@univerjs-pro/embed@1.3.1(react@19.2.8)(rxjs@7.8.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/license': 1.3.1(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/pdfs': 1.3.1(react@19.2.8)
+      '@univerjs-pro/pdfs-ui': 1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/core': 1.3.1(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.3(react@19.2.8)
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - '@univerjs-pro/embed'
+      - react
+      - react-dom
+      - rxjs
+
+  '@univerjs-pro/pdfs-print@1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/pdfs': 1.3.1(react@19.2.8)
+      '@univerjs-pro/pdfs-ui': 1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/core': 1.3.1(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/icons': 1.46.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs/ui': 1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      react: 19.2.8
+      rxjs: 7.8.2
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - react-dom
+
+  '@univerjs-pro/pdfs-ui@1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)':
+    dependencies:
+      '@univerjs-pro/license': 1.3.1(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/pdfs': 1.3.1(react@19.2.8)
+      '@univerjs/core': 1.3.1(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/design': 1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs/docs': 1.3.1(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/docs-ui': 1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/engine-render': 1.3.1(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/icons': 1.46.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@univerjs/ui': 1.3.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@wendellhu/redi': 1.1.3(react@19.2.8)
+      opentype.js: 2.0.0
+      react: 19.2.8
+      rxjs: 7.8.2
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+      - react-dom
 
   '@univerjs-pro/pdfs@1.3.1(react@18.3.1)':
     dependencies:
@@ -23926,6 +24093,8 @@ snapshots:
       supports-color: 10.2.2
       typescript: 5.9.3
       yargs-parser: 21.1.1
+
+  opentype.js@2.0.0: {}
 
   ot-json1@1.0.2:
     dependencies:

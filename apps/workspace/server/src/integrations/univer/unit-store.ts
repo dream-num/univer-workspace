@@ -6,6 +6,7 @@ import type * as CommentServiceModule from "@univerjs-pro/collaboration-comment-
 import type * as CollaborationDatabaseModule from "@univerjs-pro/collaboration-database-sqlite";
 import type * as HistoryDatabaseModule from "@univerjs-pro/collaboration-history-database-sqlite";
 import type * as HistoryServiceModule from "@univerjs-pro/collaboration-history-service";
+import type * as PdfsModule from "@univerjs-pro/pdfs";
 import type * as CollaborationServiceModule from "@univerjs-pro/collaboration-service";
 import type * as WorktreeServiceModule from "@univerjs-pro/collaboration-worktree-service";
 import type * as WorktreeDatabaseModule from "@univerjs-pro/collaboration-worktree-database-sqlite";
@@ -65,6 +66,9 @@ const { SQLiteWorktreeDatabaseAdapter } = moduleRequire(
 const { getSlidesEmptySnapshot } = moduleRequire(
   "@univerjs-pro/slides"
 ) as typeof SlidesModule;
+const { getPdfsEmptySnapshot } = moduleRequire(
+  "@univerjs-pro/pdfs"
+) as typeof PdfsModule;
 const {
   DocumentFlavor,
   getBasesEmptySnapshot,
@@ -266,6 +270,8 @@ function univerType(unitType: UnitType): ProtocolModule.UniverType {
       return UniverType.UNIVER_BOARD;
     case "base":
       return UniverType.UNIVER_BASE;
+    case "pdf":
+      return UniverType.UNIVER_PDF;
   }
 }
 
@@ -328,6 +334,11 @@ export function blankUnitData(input: {
       );
       data.rev = 1;
       return { type: UniverType.UNIVER_BASE, data };
+    }
+    case "pdf": {
+      const data = getPdfsEmptySnapshot(input.unitId, input.name);
+      data.rev = 1;
+      return { type: UniverType.UNIVER_PDF, data };
     }
   }
 }

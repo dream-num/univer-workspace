@@ -1,6 +1,6 @@
 export type SpaceType = "personal" | "team";
 export type AccessRole = "owner" | "admin" | "editor" | "viewer";
-export type UnitType = "sheet" | "doc" | "slide" | "board" | "base";
+export type UnitType = "sheet" | "doc" | "slide" | "board" | "base" | "pdf";
 export type ResourceKind = "univer" | "blob";
 export type BlobAvailability = "ready" | "quarantined";
 
