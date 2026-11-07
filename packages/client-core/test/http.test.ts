@@ -2,6 +2,140 @@ import { describe, expect, it, vi } from "vitest";
 import { WorkspaceHttp } from "../src/index.js";
 
 describe("Workspace HTTP transport", () => {
+  it.each(["GET", "POST"])("preserves default request URL and headers for %s", async (method) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response());
+    const http = new WorkspaceHttp({
+      cookie: "session=x",
+      fetcher,
+      origin: "https://workspace.test",
+      role: "client",
+    });
+
+    await http.request("/api/spaces", { method });
+
+    const [input, init] = fetcher.mock.calls[0]!;
+    expect(String(input)).toBe("https://workspace.test/api/spaces");
+    expect(init?.headers).toEqual({
+      cookie: "session=x",
+      ...(method === "POST" ? { origin: "https://workspace.test" } : {}),
+      "x-univer-cli-sdk-role": "client",
+    });
+    expect(init?.redirect).toBe("manual");
+  });
+
+  it.each(["/api/x?y=1", "http://127.0.0.1:5973/api/x?y=1"])(
+    "fetches %s through the transport origin while preserving identity",
+    async (path) => {
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response());
+      const http = new WorkspaceHttp({
+        cookie: "session=x",
+        fetcher,
+        origin: "http://127.0.0.1:5973",
+        role: "client",
+        transportOrigin: "http://host.docker.internal:3920/",
+      });
+
+      await http.request(path, { method: "POST", body: { name: "Plan" } });
+
+      const [input, init] = fetcher.mock.calls[0]!;
+      expect(String(input)).toBe("http://host.docker.internal:3920/api/x?y=1");
+      expect(new Headers(init?.headers).get("origin")).toBe("http://127.0.0.1:5973");
+      expect(new Headers(init?.headers).get("cookie")).toBe("session=x");
+      expect(init?.body).toBe('{"name":"Plan"}');
+      expect(http.origin).toBe("http://127.0.0.1:5973");
+      fetcher.mockClear();
+
+      await expect(http.request("http://host.docker.internal:3920/api/x")).rejects.toMatchObject({
+        code: "workspace-origin-mismatch",
+      });
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
+
+  it("preserves Collaboration bodies, headers and cancellation through the transport origin", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response());
+    const http = new WorkspaceHttp({
+      cookie: "session=x",
+      fetcher,
+      origin: "http://127.0.0.1:5973",
+      role: "worker",
+      transportOrigin: "http://host.docker.internal:3920",
+    });
+    const controller = new AbortController();
+
+    await http.collaborationRequest("http://127.0.0.1:5973/comb?y=1", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: "stale", origin: "http://other.test" },
+      body: '{"revision":1}',
+      signal: controller.signal,
+    });
+
+    const [request] = fetcher.mock.calls[0]!;
+    expect(request).toBeInstanceOf(Request);
+    if (!(request instanceof Request)) throw new Error("Expected a Collaboration Request");
+    expect(request.url).toBe("http://host.docker.internal:3920/comb?y=1");
+    expect(request.method).toBe("POST");
+    expect(request.headers.get("cookie")).toBe("session=x");
+    expect(request.headers.get("origin")).toBe("http://127.0.0.1:5973");
+    expect(request.headers.get("content-type")).toBe("application/json");
+    expect(request.headers.get("x-univer-cli-sdk-role")).toBe("worker");
+    expect(request.headers.get("x-univer-cli-sdk-worker-pid")).toBe(String(process.pid));
+    expect(request.redirect).toBe("manual");
+    await expect(request.text()).resolves.toBe('{"revision":1}');
+    controller.abort();
+    expect(request.signal.aborted).toBe(true);
+    fetcher.mockClear();
+
+    await expect(
+      http.collaborationRequest("http://host.docker.internal:3920/comb"),
+    ).rejects.toMatchObject({
+      code: "workspace-origin-mismatch",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rewrites only identity-origin Asset URLs and attaches cookies only to those URLs", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("asset"));
+    const http = new WorkspaceHttp({
+      cookie: "session=x",
+      fetcher,
+      origin: "http://127.0.0.1:5973",
+      role: "client",
+      transportOrigin: "http://host.docker.internal:3920",
+    });
+    const identityUrl = new URL("http://127.0.0.1:5973//asset?signature=a%2Fb#fragment");
+    const foreignUrl = new URL("https://cdn.test/asset?signature=a%2Fb#fragment");
+
+    await http.content(identityUrl);
+    await http.content(foreignUrl);
+
+    const [input, init] = fetcher.mock.calls[0]!;
+    expect(String(input)).toBe("http://host.docker.internal:3920//asset?signature=a%2Fb#fragment");
+    expect(new Headers(init?.headers).get("cookie")).toBe("session=x");
+    expect(identityUrl.href).toBe("http://127.0.0.1:5973//asset?signature=a%2Fb#fragment");
+    const [foreignInput, foreignInit] = fetcher.mock.calls[1]!;
+    expect(foreignInput).toBe(foreignUrl);
+    expect(new Headers(foreignInit?.headers).has("cookie")).toBe(false);
+  });
+
+  it.each([
+    "not-a-url",
+    "ftp://workspace.test",
+    "https://user:secret@workspace.test",
+    "https://workspace.test/api",
+    "https://workspace.test?query=1",
+    "https://workspace.test#fragment",
+  ])("rejects invalid transport origin %s", (transportOrigin) => {
+    expect(
+      () =>
+        new WorkspaceHttp({
+          origin: "https://workspace.test",
+          role: "client",
+          transportOrigin,
+        }),
+    ).toThrowError(expect.objectContaining({ code: "workspace-origin-invalid" }));
+  });
+
   it.each([
     "not-a-url",
     "ftp://workspace.test",

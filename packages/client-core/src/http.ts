@@ -5,6 +5,7 @@ export interface WorkspaceHttpOptions {
   readonly fetcher?: typeof fetch;
   readonly origin: string;
   readonly role: "client" | "worker";
+  readonly transportOrigin?: string;
 }
 
 export type AuthenticatedWorkspaceHttp = () => Promise<WorkspaceHttp>;
@@ -32,9 +33,12 @@ export class WorkspaceHttp {
   private readonly cookie: string | undefined;
   private readonly fetcher: typeof fetch;
   private readonly role: "client" | "worker";
+  private readonly transportOrigin: string | undefined;
 
   public constructor(options: WorkspaceHttpOptions) {
     this.origin = normalizeOrigin(options.origin);
+    this.transportOrigin =
+      options.transportOrigin === undefined ? undefined : normalizeOrigin(options.transportOrigin);
     this.cookie = options.cookie;
     this.fetcher = options.fetcher ?? fetch;
     this.role = options.role;
@@ -100,7 +104,7 @@ export class WorkspaceHttp {
           : { body: streamBody(options.streamBody), duplex: "half" }),
         ...(options.signal === undefined ? {} : { signal: options.signal }),
       };
-      response = await this.fetcher(url, request);
+      response = await this.fetcher(this.transportUrl(url), request);
     } catch (error) {
       throw workspaceError(
         "workspace-result-unknown",
@@ -168,7 +172,17 @@ export class WorkspaceHttp {
     }
     let response: Response;
     try {
-      response = await this.fetcher(new Request(request, { headers, redirect: "manual" }));
+      response = await this.fetcher(
+        this.transportOrigin === undefined
+          ? new Request(request, { headers, redirect: "manual" })
+          : new Request(this.transportUrl(url), {
+              method: request.method,
+              headers,
+              ...(request.body === null ? {} : { body: request.body, duplex: "half" }),
+              signal: request.signal,
+              redirect: "manual",
+            }),
+      );
     } catch (error) {
       throw workspaceError(
         "workspace-result-unknown",
@@ -192,7 +206,7 @@ export class WorkspaceHttp {
     const sameOrigin = url.origin === this.origin;
     let response: Response;
     try {
-      response = await this.fetcher(url, {
+      response = await this.fetcher(sameOrigin ? this.transportUrl(url) : url, {
         headers: {
           ...(sameOrigin ? { cookie: this.cookie! } : {}),
           "accept-encoding": "identity",
@@ -229,6 +243,15 @@ export class WorkspaceHttp {
       );
     }
     return response;
+  }
+
+  private transportUrl(url: URL): URL {
+    if (this.transportOrigin === undefined) return url;
+    const transportUrl = new URL(this.transportOrigin);
+    transportUrl.pathname = url.pathname;
+    transportUrl.search = url.search;
+    transportUrl.hash = url.hash;
+    return transportUrl;
   }
 }
 
