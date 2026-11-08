@@ -1,15 +1,15 @@
 # Univer Workspace 数据模型
 
-状态：V17，已实现
+状态：V18，已实现
 
 权威定义：`server/src/db/schema.sql`
 
 产品数据库使用 SQLite，开启 Foreign Key，Schema 版本为
-`PRAGMA user_version = 17`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+`PRAGMA user_version = 18`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿另存于
-`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V17
+`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V18
 Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
 `__record_id`，并把每条 Record ID 投影到该字段；Row/Column/Cell Map 是可从 Field 与 Record
 重建的派生数据。现有持久化 Base Snapshot 均使用该表示。
@@ -28,7 +28,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-启动入口先将产品数据库准备到 V17，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+启动入口先将产品数据库准备到 V18，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份，在副本上按 Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件
@@ -36,7 +36,7 @@ Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V17，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V18，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -56,6 +56,7 @@ Space
 User ── Recent Resource ── Resource
 User ── Space Star ── Space
 User ── Space Pin ── Space
+User ── OAuth Grant / Personal Access Token ── Login Session（下游凭据）
 Team Space ── Issue ─┬── Issue Comment / Issue Event
                      ├── Issue Label Link ── Issue Label
                      ├── Issue Assignee ── User
@@ -118,6 +119,44 @@ Server 进程内存，不进入产品数据库，进程重启后由用户重新�
 无默认值，不回填已有 Session。Session 签发流程写入 `write_source`，HTTP Worktree/Issue 创建复制到 `created_via`；
 摘要以 `createdVia` 暴露该值，`NULL` 返回 `unknown`。Worktree Operation payload 保存首次预留的来源，
 后续重试保留它。Session JSON 不暴露 `writeSource`。
+
+`issued_for_pat_id`（V18，`TEXT`，可空，`REFERENCES personal_access_tokens(id) ON DELETE CASCADE`）与
+`issued_for_grant_id`（V18，`TEXT`，可空，`REFERENCES oauth_grants(id) ON DELETE CASCADE`）标记该 Session 是为哪个
+Personal Access Token 或 OAuth Grant 签发的下游凭据，两列依次追加在表末，列级 CHECK
+`issued_for_pat_id IS NULL OR issued_for_grant_id IS NULL` 保证至多一个非空。两列均有仅覆盖非空行的部分索引
+`login_sessions_pat`、`login_sessions_grant`。现有登录入口（Browser、CLI、Agent OAuth）两列恒为 `NULL`，
+Session 行为与有效期不变。吊销 Token 时由 Token 服务显式删除其 Session（吊销只写 `revoked_at`，不触发级联）。
+
+### `oauth_clients`
+
+动态注册（RFC 7591）的公共 OAuth Client：`client_id`（主键）、可空 `client_name`、`redirect_uris`（JSON 数组文本）、
+`created_at`、可空 `last_used_at`。`OAUTH_CLIENTS_JSON` 中的静态 Client 仍留在配置里，不入库；
+Client ID Metadata Document 形式的 `client_id`（https URL）也不在此表登记。
+
+### `oauth_grants`
+
+一次签发给 MCP Client 的 OAuth 授权：一个 Access Token 加一个轮换的 Refresh Token。`user_id` 引用 `users`
+（`ON DELETE CASCADE`）；`client_id` 为 DCR ID、CIMD URL 或静态 ID，不建外键；`scopes` 为空格分隔的
+`read | write | publish | worktree:merge`；`resource` 为绑定的受众（RFC 8707）。仅保存哈希：
+`access_token_hash`、`refresh_token_hash` 均 `UNIQUE NOT NULL`。`resource` 必填：签发拒绝空值，刷新与校验 Access Token 必须出示相同的 `resource`。
+`access_expires_at`（1 小时）、`refresh_expires_at`（30 天，随轮换顺延）、`created_at`、`last_used_at`、
+`revoked_at`（软吊销）均为毫秒时间戳。明文形如 `uvw_at_<id>.<secret>`、`uvw_rt_<id>.<secret>`，`<id>` 即 Grant ID，
+哈希算法与 Session Secret 相同。索引 `oauth_grants_user(user_id, created_at DESC)`。
+
+### `oauth_refresh_history`
+
+每次轮换把被替换的 Refresh Token 哈希记入此表：`refresh_token_hash`（主键）、`grant_id`（`REFERENCES oauth_grants(id)
+ON DELETE CASCADE`）、`retired_at`（毫秒时间戳），索引 `oauth_refresh_history_grant(grant_id)`。出示已退役的 Refresh
+Token 时，距 `retired_at` 不足 60 秒（`REFRESH_REUSE_GRACE_MS`）视为响应丢失或客户端重试，只返回失败、不改动 Grant；
+超过宽限期视为重放，吊销整个 Grant 并删除其下游 Session。既不匹配当前哈希也不在历史中的 Token 只返回 `invalid`，
+不吊销任何 Grant（Grant ID 会出现在 Access Token 中，按 ID 吊销会让任何人终止任意 Grant）。
+
+### `personal_access_tokens`
+
+Personal Access Token（PAT）：`id`、`user_id`（`ON DELETE CASCADE`）、`name`、`token_hash`（`UNIQUE NOT NULL`）、
+空格分隔的 `scopes`（默认全部）、`created_at`、可空 `expires_at`（默认不过期）、`last_used_at`、`revoked_at`。
+明文形如 `uvw_pat_<id>.<secret>`，只在创建时返回一次，库中仅保存哈希。索引
+`personal_access_tokens_user(user_id, created_at DESC)`。
 
 ### `spaces`
 
@@ -465,11 +504,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V17，不备份；
-2. 完整 V17：校验指纹后正常启动，不重复备份；
-3. 完整 V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V17；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V17；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V17；
+1. 不存在或空文件：创建 V18，不备份；
+2. 完整 V18：校验指纹后正常启动，不重复备份；
+3. 完整 V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V18；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V18；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V18；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -496,12 +535,13 @@ Operation JSON。V0 迁移前要求没有 Pending/Failed Operation；后续版�
 - V14 → V15 新增 `space_pins` 和 `space_stars_user` 索引；既有行、Blob 身份与恢复状态不变；
 - V15 → V16 仅新增可空的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via`，CHECK 允许 `browser` 或 `agent`；已有行均为 `NULL`，无默认值、回填或新索引；
 - V16 → V17 重建 `univer_resources` 与 `worktree_node_intents`，`unit_type` CHECK 增加 `pdf`；既有行、`univer_resources_kind_guard` 触发器、入向外键、Blob 身份与恢复状态不变；
-- 旧表全部删除且 `user_version = 17`。
+- V17 → V18 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens`、各自索引，以及 `login_sessions.issued_for_pat_id`、`issued_for_grant_id` 两个可空列和两个部分索引；既有 Session 行、有效期与其它行不变，无需重建任何表；
+- 旧表全部删除且 `user_version = 18`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
 一致性备份始终保留，下一次启动可继续升级或由运维恢复。错误中会给出备份路径。
 迁移实现是唯一兼容边界；线上数据库全部完成升级后，可以删除 `migrations/`、
-`legacy-v0/` 及初始化函数中的一次调用，不影响 V17 Schema 或业务代码。
+`legacy-v0/` 及初始化函数中的一次调用，不影响 V18 Schema 或业务代码。
 
 V6 → V7 只重建 Operation 和删除任务表以扩展 CHECK 枚举，完整保留所有行和恢复字段；
 Blob 及上传会话表不变。升级前自动创建一致性备份；停旧实例后由单个新实例完成迁移。
@@ -553,13 +593,13 @@ V12 → V13 只重建 `external_identities`，把 Provider CHECK 从 `('github',
 `('github', 'google', 'discord')`；SQLite 不能原地修改 CHECK，因此迁移在同一事务内外键关闭后重命名旧表、
 创建新表并按原值复制，再逐行比对新旧 External Identity，确认列、约束和行完全保留。准备阶段在业务 Repository
 初始化前校验 V12 指纹、生成并验证一致性备份；事务提交前重新开启外键，检查 `foreign_key_check` 与
-`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都继续前进到 V17。失败事务回滚至 V12，备份保留且
+`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都继续前进到 V18。失败事务回滚至 V12，备份保留且
 启动失败。重复启动不重复迁移或备份。部署须先停全部旧实例，由单个 V13 实例完成迁移和健康检查后恢复服务；
 回退须停新实例并恢复 V12 备份。
 
 V14 → V15 在单个事务内新增 `space_pins` 和 `space_stars_user` 索引，不改写已有表、业务行、Blob 身份或恢复状态。
 准备阶段在业务 Repository 初始化前校验 V14 指纹，生成并验证一致性备份；事务提交前检查外键与完整性，
-随后校验 V15 指纹。V0 与所有旧版本升级链都落到 V17。失败事务回滚至 V14，备份保留，启动失败。
+随后校验 V15 指纹。V0 与所有旧版本升级链都落到 V18。失败事务回滚至 V14，备份保留，启动失败。
 重复启动不重复迁移或备份。部署先停止全部旧实例，由单个 V15 实例完成迁移和健康检查后恢复服务；
 回退先停止新实例，再恢复 V14 备份，不允许新旧版本同时写同一 SQLite 文件。
 
@@ -576,3 +616,10 @@ V16 → V17 允许 `univer_resources` 与 `worktree_node_intents` 的 `unit_type
 事务提交前比对行数、检查外键与完整性，随后校验 V17 指纹。失败事务回滚至 V16，备份保留且启动失败；
 成功后重复启动不重复迁移或备份。部署先停止全部旧实例，由单个 V17 实例完成迁移和健康检查后恢复服务；
 回退先停止新实例，再恢复 V16 备份。不得让 V16 与 V17 进程同时写同一 SQLite 文件。
+
+V17 → V18 为 MCP 的 OAuth 与 PAT 提供存储：新增上述三张表，并以 `ALTER TABLE ... ADD COLUMN` 向 `login_sessions`
+追加两个可空列（SQLite 允许默认为 `NULL` 的新列带 `REFERENCES` 与列级 CHECK），不重建任何表。准备阶段先校验 V17 指纹，
+生成并验证 `.v17-backup-…sqlite` 一致性备份；事务内比对 Session 行、检查外键与完整性，随后校验 V18 指纹。
+失败事务回滚至 V17，备份保留且启动失败；成功后重复启动不重复迁移或备份。部署先停止全部旧实例，
+由单个 V18 实例完成迁移和健康检查后恢复服务；回退先停止新实例，再恢复 V17 备份。
+不得让 V17 与 V18 进程同时写同一 SQLite 文件。

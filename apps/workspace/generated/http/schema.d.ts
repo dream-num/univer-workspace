@@ -54,7 +54,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Start an OAuth-style authorization for a registered client. */
+        /**
+         * Start an OAuth-style authorization for a registered client.
+         * @description Static `OAUTH_CLIENTS_JSON` clients keep their rules: an exact
+         *     registered `redirect_uri`, a 32 to 256 character base64url `state`, and
+         *     a `scope` from the client's configured scopes (default `identity`).
+         *
+         *     When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
+         *     (`POST /api/auth/register`) may also authorize. They must send
+         *     `response_type=code`, `code_challenge_method=S256` and a `resource`
+         *     equal to one of `MCP_RESOURCE_URLS`; `scope` is a subset of `read`,
+         *     `write`, `publish` and `worktree:merge` (default all four) and `state`
+         *     is optional, 1 to 1024 printable ASCII characters. A loopback
+         *     `redirect_uri` matches a registered one with any port (RFC 8252); every
+         *     other URI matches exactly. The user always sees a consent page that
+         *     lists the requested scopes, each of which can be unchecked; the code
+         *     carries only the checked scopes. An unknown client or unregistered
+         *     `redirect_uri` is answered here with 400; once both are verified, other
+         *     errors redirect to the client with RFC 6749 `error` (`invalid_request`,
+         *     `invalid_scope`, `invalid_target`, `unsupported_response_type` or
+         *     `access_denied`), `error_description` and `state`.
+         */
         get: operations["oauthAuthorize"];
         put?: never;
         post?: never;
@@ -74,8 +94,52 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Exchange a one-time authorization code for a registered client identity.
-         * @description When the granted scope includes `session`, the response also carries a
+         * Exchange a one-time authorization code for a registered client identity or MCP tokens, refresh MCP tokens, or exchange a personal access token or MCP access token for a downstream session.
+         * @description Three grants share this endpoint.
+         *
+         *     For dynamically registered MCP clients (only while `MCP_RESOURCE_URLS`
+         *     is set), `authorization_code` and `refresh_token` take a form body with
+         *     `client_id` and no secret, and must send the `resource` the grant is
+         *     bound to. They return `McpTokenResponse` with `Cache-Control:
+         *     no-store`. A code is good for one attempt; presenting an already
+         *     redeemed code revokes the grant it produced. A refresh token rotates;
+         *     presenting a rotated one within 60 seconds fails without side effects,
+         *     later it revokes the grant. Errors use the RFC 6749 section 5.2 body
+         *     `{ "error": "<code>", "error_description": "<description>" }` with
+         *     `Cache-Control: no-store`: `invalid_request` (400, malformed request),
+         *     `invalid_client` (401, unknown or missing `client_id`),
+         *     `unsupported_grant_type` (400, a grant the client may not use or the
+         *     server does not support) or `invalid_grant` (400, a bad code or refresh
+         *     token, including a wrong client, `redirect_uri`, `code_verifier` or
+         *     `resource`). While MCP OAuth is enabled, every non-static client
+         *     request and every `refresh_token` request uses these errors, including
+         *     unknown or missing clients. Token exchange keeps the rules below.
+         *
+         *     Static `OAUTH_CLIENTS_JSON` clients keep their existing
+         *     `authorization_code` behavior (JSON or form body) and Workspace error
+         *     objects. When MCP OAuth is disabled, all requests keep their existing
+         *     behavior.
+         *
+         *     `urn:ietf:params:oauth:grant-type:token-exchange` (RFC 8693) accepts
+         *     only an `application/x-www-form-urlencoded` body and is open only to a
+         *     confidential client registered with `"tokenExchange": true` that
+         *     authenticates with `client_secret`. The `subject_token` is a personal
+         *     access token or an MCP OAuth access token. An OAuth access token is
+         *     valid only when `resource` equals the resource its grant was issued
+         *     for; a personal access token ignores `resource`. The revocation check
+         *     and the session insert happen in one database transaction. The
+         *     response `access_token` is a Workspace login session, presented as the
+         *     `workspace_session` cookie. It lives for 10 minutes, or less when the
+         *     subject token expires sooner or the deployment session lifetime is
+         *     shorter; `expires_in` reports the actual lifetime. Such a session
+         *     cannot create personal access tokens, approve CLI logins, authorize
+         *     OAuth clients or link identities (403). Errors use the RFC 6749 body
+         *     `{ "error": "<code>" }`: `invalid_request` (400, including a JSON
+         *     body), `invalid_grant` (400), `unauthorized_client` (400, a
+         *     confidential client without `tokenExchange`) or `invalid_client` (401,
+         *     an unknown or public client or a wrong secret).
+         *
+         *     When the granted scope includes `session`, the response also carries a
          *     Workspace login session token in `access_token`; the client presents
          *     it as the `workspace_session` cookie on product and collaboration
          *     endpoints, acting with the authorizing User's permissions until it
@@ -83,6 +147,116 @@ export interface paths {
          */
         post: operations["oauthToken"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/oauth-authorization-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * RFC 8414 authorization server metadata for MCP clients.
+         * @description Served only while `MCP_RESOURCE_URLS` is set; otherwise 404. Endpoints
+         *     are absolute URLs under `PUBLIC_ORIGIN`. Client ID Metadata Documents
+         *     are not advertised.
+         */
+        get: operations["getOAuthAuthorizationServerMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * RFC 7591 dynamic registration of a public MCP client.
+         * @description Unauthenticated. Served only while `MCP_RESOURCE_URLS` is set;
+         *     otherwise 404. Accepts a JSON body of at most 16 KiB. No client secret
+         *     is issued. Registration stops with 503 once the deployment holds
+         *     `MCP_MAX_REGISTERED_CLIENTS` clients (default 10,000).
+         */
+        post: operations["registerOAuthClient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * RFC 7009 revocation of an MCP client's grant.
+         * @description Served only while `MCP_RESOURCE_URLS` is set; otherwise 404. Revokes
+         *     the grant behind a current access or refresh token, and the downstream
+         *     sessions exchanged from it, when it belongs to `client_id`. Answers 200
+         *     with an empty body whether or not the token was valid.
+         */
+        post: operations["revokeOAuthToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current User's personal access tokens.
+         * @description Token secrets and hashes are never returned.
+         */
+        get: operations["listPersonalAccessTokens"];
+        put?: never;
+        /**
+         * Create a personal access token.
+         * @description The plaintext token is returned only in this response. A session that
+         *     was itself issued by token exchange cannot create tokens.
+         */
+        post: operations["createPersonalAccessToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one of the current User's personal access tokens and end its downstream sessions. */
+        delete: operations["revokePersonalAccessToken"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1954,6 +2128,152 @@ export interface components {
             user: components["schemas"]["User"];
             authenticationMethods: components["schemas"]["AuthenticationMethods"];
         };
+        TokenExchangeRequest: {
+            /** @enum {string} */
+            grant_type: "urn:ietf:params:oauth:grant-type:token-exchange";
+            client_id: string;
+            client_secret: string;
+            /** @description A personal access token or an MCP OAuth access token. */
+            subject_token: string;
+            /** @enum {string} */
+            subject_token_type: "urn:ietf:params:oauth:token-type:access_token";
+            /** @description Required for OAuth access tokens; ignored for personal access tokens. */
+            resource?: string;
+        };
+        /** @description Authorization code grant for a dynamically registered (public) MCP client. */
+        McpAuthorizationCodeRequest: {
+            /** @enum {string} */
+            grant_type: "authorization_code";
+            code: string;
+            client_id: string;
+            /** @description The exact redirect URI of the authorization request, including a loopback port. */
+            redirect_uri: string;
+            code_verifier: string;
+            /** @description Must equal the `resource` of the authorization request. */
+            resource: string;
+        };
+        /** @description Refresh token grant for a dynamically registered MCP client. The refresh token rotates. */
+        McpRefreshTokenRequest: {
+            /** @enum {string} */
+            grant_type: "refresh_token";
+            refresh_token: string;
+            client_id: string;
+            /** @description Must equal the resource the grant was issued for. */
+            resource: string;
+            /** @description Ignored; a refreshed grant keeps its granted scopes. */
+            scope?: string;
+        };
+        McpTokenResponse: {
+            /** @description A `uvw_at_` access token bound to the grant's resource. */
+            access_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            expires_in: number;
+            /** @description A `uvw_rt_` refresh token. Presenting a rotated one within 60 seconds fails; later it revokes the grant. */
+            refresh_token: string;
+            /** @description Granted MCP scopes, space-separated. */
+            scope: string;
+        };
+        TokenExchangeSubject: {
+            /** @enum {string} */
+            kind: "pat" | "oauth";
+            id: string;
+            /** @description The OAuth client the grant was issued to; null for personal access tokens. */
+            client_id: string | null;
+        };
+        OAuthTokenError: {
+            /** @enum {string} */
+            error: "invalid_request" | "invalid_grant" | "unauthorized_client" | "invalid_client" | "unsupported_grant_type";
+            /** @description Present for MCP token errors, including unknown or missing clients. */
+            error_description?: string;
+        };
+        /** @enum {string} */
+        McpScope: "read" | "write" | "publish" | "worktree:merge";
+        AuthorizationServerMetadata: {
+            /** @description The configured `PUBLIC_ORIGIN`. */
+            issuer: string;
+            authorization_endpoint: string;
+            token_endpoint: string;
+            registration_endpoint: string;
+            revocation_endpoint: string;
+            response_types_supported: "code"[];
+            grant_types_supported: ("authorization_code" | "refresh_token")[];
+            code_challenge_methods_supported: "S256"[];
+            token_endpoint_auth_methods_supported: "none"[];
+            revocation_endpoint_auth_methods_supported: "none"[];
+            scopes_supported: components["schemas"]["McpScope"][];
+        };
+        /**
+         * @description RFC 7591 metadata for a public native client. Other metadata, such as
+         *     `client_uri` or `application_type`, is accepted and ignored.
+         */
+        ClientRegistrationRequest: {
+            /**
+             * @description Each URI is a loopback `http` URL (`127.0.0.1`, `[::1]` or
+             *     `localhost`), an `https` URL, or a reverse-domain private-use scheme
+             *     such as `com.example.app:/callback`, without a fragment or
+             *     credentials.
+             */
+            redirect_uris: string[];
+            client_name?: string;
+            /** @description Must include `authorization_code`. Defaults to both supported grants. */
+            grant_types?: ("authorization_code" | "refresh_token")[];
+            response_types?: "code"[];
+            /** @enum {string} */
+            token_endpoint_auth_method?: "none";
+            /** @description A space-separated subset of the MCP scopes. */
+            scope?: string;
+        };
+        ClientRegistrationResponse: {
+            client_id: string;
+            /** @description Unix epoch seconds. */
+            client_id_issued_at: number;
+            client_name?: string;
+            redirect_uris: string[];
+            grant_types: ("authorization_code" | "refresh_token")[];
+            response_types: "code"[];
+            /** @enum {string} */
+            token_endpoint_auth_method: "none";
+            /** @description The MCP scopes the client may request. */
+            scope: string;
+        };
+        ClientRegistrationError: {
+            /** @enum {string} */
+            error: "invalid_redirect_uri" | "invalid_client_metadata" | "temporarily_unavailable";
+            error_description: string;
+        };
+        TokenRevocationRequest: {
+            /** @description A current access or refresh token of the client's grant. */
+            token: string;
+            /** @description Ignored. */
+            token_type_hint?: string;
+            client_id: string;
+        };
+        PersonalAccessToken: {
+            id: string;
+            name: string;
+            scopes: components["schemas"]["McpScope"][];
+            /** @description Unix epoch milliseconds. */
+            createdAt: number;
+            expiresAt: number | null;
+            lastUsedAt: number | null;
+            revokedAt: number | null;
+        };
+        PersonalAccessTokenList: {
+            tokens: components["schemas"]["PersonalAccessToken"][];
+        };
+        PersonalAccessTokenCreate: {
+            name: string;
+            /** @description Defaults to all scopes. */
+            scopes?: components["schemas"]["McpScope"][];
+            /** @description Unix epoch milliseconds in the future. Defaults to null (no expiry). */
+            expiresAt?: number | null;
+        };
+        PersonalAccessTokenCreated: {
+            /** @description Plaintext token, shown once. */
+            token: string;
+            record: components["schemas"]["PersonalAccessToken"];
+        };
         PasswordRegistration: {
             username: string;
             displayName: string;
@@ -2881,9 +3201,16 @@ export interface operations {
             query: {
                 client_id: string;
                 redirect_uri: string;
-                state: string;
+                /** @description Required for static clients, as a 32 to 256 character base64url value; optional for MCP clients. */
+                state?: string;
                 code_challenge: string;
                 scope?: string;
+                /** @description Required for MCP clients. */
+                response_type?: "code";
+                /** @description Required for MCP clients. */
+                code_challenge_method?: "S256";
+                /** @description Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly. */
+                resource?: string;
             };
             header?: never;
             path?: never;
@@ -2891,7 +3218,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to Workspace login or back to the registered redirect_uri with a one-time code. */
+            /** @description Redirect to Workspace login, to the consent page, or back to the registered redirect_uri with a one-time code or an OAuth error. */
             302: {
                 headers: {
                     Location: string;
@@ -2900,6 +3227,15 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     oauthToken: {
@@ -2921,16 +3257,17 @@ export interface operations {
                     redirect_uri: string;
                     code_verifier: string;
                 };
+                "application/x-www-form-urlencoded": components["schemas"]["TokenExchangeRequest"] | components["schemas"]["McpAuthorizationCodeRequest"] | components["schemas"]["McpRefreshTokenRequest"];
             };
         };
         responses: {
-            /** @description The registered client identity and, for `session` grants, a login session token. */
+            /** @description The registered client identity and, for `session` grants, a login session token; or MCP tokens. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
+                    "application/json": components["schemas"]["McpTokenResponse"] | {
                         /**
                          * @description Workspace session token for `session` grants, empty
                          *     string for identity-only grants.
@@ -2939,23 +3276,223 @@ export interface operations {
                         token_type?: string;
                         /**
                          * @description Seconds until the issued session expires for `session`
-                         *     grants.
+                         *     grants and token exchange.
                          */
                         expires_in?: number;
+                        /**
+                         * @description Present for token exchange only.
+                         * @enum {string}
+                         */
+                        issued_token_type?: "urn:univer:params:oauth:token-type:workspace-session";
+                        /** @description Present for token exchange only. Granted MCP scopes, space-separated. */
+                        scope?: string;
+                        subject?: components["schemas"]["TokenExchangeSubject"];
                         user?: components["schemas"]["User"];
                     };
                 };
             };
-            400: components["responses"]["BadRequest"];
-            /** @description Invalid client secret or PKCE verifier. */
+            /** @description Workspace error for static clients or when MCP OAuth is disabled; otherwise `invalid_request`, `unsupported_grant_type` or `invalid_grant`. Token exchange may also return `unauthorized_client`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"] | components["schemas"]["OAuthTokenError"];
+                };
+            };
+            /** @description Workspace error for an invalid static-client secret or PKCE verifier; `invalid_client` for an unknown or missing MCP client or failed token-exchange client authentication. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "application/json": components["schemas"]["ErrorResponse"] | components["schemas"]["OAuthTokenError"];
                 };
             };
+        };
+    };
+    getOAuthAuthorizationServerMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorization server metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizationServerMetadata"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    registerOAuthClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientRegistrationRequest"];
+            };
+        };
+        responses: {
+            /** @description The registered client. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientRegistrationResponse"];
+                };
+            };
+            /** @description `invalid_redirect_uri` or `invalid_client_metadata`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientRegistrationError"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description `invalid_client_metadata`: the body is larger than 16 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientRegistrationError"];
+                };
+            };
+            /** @description `temporarily_unavailable`: the registered-client cap is reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientRegistrationError"];
+                };
+            };
+        };
+    };
+    revokeOAuthToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["TokenRevocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Processed; the token is no longer valid if it was. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `invalid_request`: a JSON body or a missing token. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthTokenError"];
+                };
+            };
+            /** @description `invalid_client`: `client_id` is not a registered MCP client. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthTokenError"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPersonalAccessTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personal access tokens, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalAccessTokenList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createPersonalAccessToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonalAccessTokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Created token. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalAccessTokenCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    revokePersonalAccessToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Token revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     logout: {
@@ -3198,6 +3735,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
         };
     };
@@ -3254,6 +3792,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             409: components["responses"]["Conflict"];
             /** @description The CLI authorization request expired. */
             410: {
@@ -3351,6 +3898,15 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     finishGitHubOAuth: {
@@ -3447,6 +4003,15 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     finishGoogleOAuth: {
@@ -3587,6 +4152,15 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     finishDiscordOAuth: {

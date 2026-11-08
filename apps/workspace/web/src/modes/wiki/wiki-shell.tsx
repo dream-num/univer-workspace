@@ -33,6 +33,7 @@ import { Button, Drawer, LoadingScreen, Tooltip } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import {
   AccountMenu,
+  AccessTokensDialog,
   AppSettingsDialog,
   ProfileDialog,
   PasswordDialog,
@@ -68,6 +69,7 @@ export function WikiShell({
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [accessTokensOpen, setAccessTokensOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const navigationSidebar = useResizableSidebar({
     storageKey: "workspace-navigation-sidebar",
@@ -352,6 +354,7 @@ export function WikiShell({
                 currentSession={currentSession}
                 onProfile={() => setProfileDialogOpen(true)}
                 onPassword={() => setPasswordDialogOpen(true)}
+                onAccessTokens={() => setAccessTokensOpen(true)}
                 logoutPending={logout.isPending}
                 onLogout={() => logout.mutate()}
                 extraItems={null}
@@ -400,6 +403,8 @@ export function WikiShell({
       <ProfileDialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen} />
 
       <PasswordDialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen} />
+
+      <AccessTokensDialog open={accessTokensOpen} onOpenChange={setAccessTokensOpen} />
 
       {currentSession.trialDeployment ? <TrialNoticeDialog userId={currentSession.user.id} /> : null}
 

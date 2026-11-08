@@ -50,6 +50,16 @@ paths:
     $ref: ./paths/auth.yaml#/~1api~1auth~1authorize
   /api/auth/token:
     $ref: ./paths/auth.yaml#/~1api~1auth~1token
+  /.well-known/oauth-authorization-server:
+    $ref: ./paths/auth.yaml#/~1.well-known~1oauth-authorization-server
+  /api/auth/register:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1register
+  /api/auth/revoke:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1revoke
+  /api/auth/tokens:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1tokens
+  /api/auth/tokens/{id}:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1tokens~1{id}
   /api/auth/logout:
     $ref: ./paths/auth.yaml#/~1api~1auth~1logout
   /api/auth/password/register:

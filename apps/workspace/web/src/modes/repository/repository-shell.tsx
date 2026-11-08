@@ -11,6 +11,7 @@ import { useI18n } from "../../shared/i18n";
 import { LoadingScreen, MenuItem } from "../../shared/ui";
 import {
   AccountMenu,
+  AccessTokensDialog,
   AppSettingsDialog,
   ProfileDialog,
   PasswordDialog,
@@ -33,6 +34,7 @@ export function RepositoryShell(props: WorkspaceShellProps) {
   const { t } = useI18n();
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [accessTokensOpen, setAccessTokensOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const frame = resolveFrame(props);
   const name = spaceDisplayName(selected.data, t);
@@ -78,6 +80,7 @@ export function RepositoryShell(props: WorkspaceShellProps) {
       currentSession={currentSession}
       onProfile={() => setProfileDialogOpen(true)}
       onPassword={() => setPasswordDialogOpen(true)}
+      onAccessTokens={() => setAccessTokensOpen(true)}
       logoutPending={logout.isPending}
       onLogout={() => logout.mutate()}
       extraItems={
@@ -102,6 +105,8 @@ export function RepositoryShell(props: WorkspaceShellProps) {
       <ProfileDialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen} />
 
       <PasswordDialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen} />
+
+      <AccessTokensDialog open={accessTokensOpen} onOpenChange={setAccessTokensOpen} />
 
       {currentSession.trialDeployment ? (
         <TrialNoticeDialog userId={currentSession.user.id} />

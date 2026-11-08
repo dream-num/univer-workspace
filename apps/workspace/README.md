@@ -27,6 +27,8 @@ hot module replacement, and proxies product API and WebSocket requests to port
 3020. Run both commands and open port 5173 for web development. Port 3020
 alone is sufficient for backend work or viewing the latest built web application.
 
+Manage personal access tokens in the Browser account menu under **Access tokens**.
+
 API documentation is available at:
 
 - `http://127.0.0.1:3020/api-docs`
@@ -316,6 +318,10 @@ redirect URI, the PKCE verifier, expiry, and one-time use before returning the
 Workspace identity. Registration is deployment-supplied via `OAUTH_CLIENTS_JSON`.
 External browser clients should use `clientType: "public"`, PKCE, and `requiresConsent: true`; they omit `clientSecret` and use an exact registered callback URL. The local Workspace Agent callback is `http://127.0.0.1:3101/auth/oauth/callback`. Internal service clients may remain confidential and use the existing no-consent behavior.
 
+A confidential client with `"tokenExchange": true` (for example the MCP gateway) may call the RFC 8693 grant on `POST /api/auth/token` to turn a personal access token or an MCP OAuth access token into a Workspace login session of at most 10 minutes (shorter when the token or the deployment session lifetime ends sooner); the grant takes a form body only, and the flag is rejected on public clients. Signed-in users manage personal access tokens with `GET`/`POST /api/auth/tokens` and `DELETE /api/auth/tokens/:id`; the plaintext token is returned only at creation, and a session issued by token exchange cannot create tokens, approve CLI logins, authorize OAuth clients or link identities (`403`), so no access it creates can outlive the token.
+
+MCP clients such as opencode, Claude and ChatGPT obtain their tokens through standard OAuth once `MCP_RESOURCE_URLS` lists the MCP server URLs they may request (comma-separated, compared exactly, for example `https://space.example.com/mcp`). It requires `PUBLIC_ORIGIN`, the Workspace origin those clients reach (for example `https://space.example.com`), which becomes the issuer of `GET /.well-known/oauth-authorization-server` (RFC 8414). Clients register themselves with `POST /api/auth/register` (RFC 7591, public clients only: loopback `http`, `https` or reverse-domain private-use redirect URIs, no secret; registration stops with `503` at `MCP_MAX_REGISTERED_CLIENTS`, default 10,000), then use `GET /api/auth/authorize` with PKCE `S256` and `resource`. A loopback redirect URI matches with any port. The user always sees a consent page listing `read`, `write`, `publish` and `worktree:merge`, each of which can be unchecked. `POST /api/auth/token` then returns a one-hour `uvw_at_` access token bound to that resource and a rotating 30-day `uvw_rt_` refresh token, and `POST /api/auth/revoke` (RFC 7009) revokes the grant. Without `MCP_RESOURCE_URLS` none of this is served and static clients behave as before; with it, static clients keep their exact rules. In development set `PUBLIC_ORIGIN=http://127.0.0.1:5173`; the Vite server proxies `/.well-known` to the API.
+
 The Agent client is not enabled by default: the entry in `.env.example` is only a
 commented example. For the exact active configuration and the local server, browser,
 account registration, and Agent connection steps, see
@@ -402,13 +408,13 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V16 product databases to V17 automatically.
+backs up and migrates supported V0 through V17 product databases to V18 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
 SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` is unchanged. Product V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
+`history=2`; `comment=1` is unchanged. Product V18 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
 and Issue source columns without backfilling existing rows. V15 added ordered Space
 pins and a per-user stars index. V14 added Email identities and Email login codes;
 V13 added the Google Provider; V12 added Space slugs and Worktree numbers;
@@ -418,7 +424,7 @@ application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V17,
+2. Start a single new instance. Startup first prepares the product database to V18,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -509,6 +515,19 @@ backup, then rebuilds the tables with foreign-key and integrity checks. A failed
 transaction rolls back; successful restarts do not repeat migration or backup. To roll
 back, stop V17 and restore the V16 backup. Never run V16 and V17 writers on the same
 SQLite file.
+
+V18 adds `oauth_clients`, `oauth_grants`, `oauth_refresh_history` and `personal_access_tokens`, which store
+dynamically registered OAuth clients, MCP OAuth grants (hashed access and rotating
+refresh tokens), the hashes of retired refresh tokens (reuse detection) and personal access tokens (hashed, revocable). It also appends
+nullable `login_sessions.issued_for_pat_id` and `issued_for_grant_id` columns that tie a
+downstream session to the token it was issued for. The migration only adds tables, indexes
+and columns, so existing sessions, expiries and logins are untouched. Stop every old
+instance, start one V18 instance, and wait for migration and health checks before
+restoring service. Startup validates V17, creates a readable `.v17-backup-…sqlite`
+backup, then migrates with foreign-key and integrity checks. A failed transaction rolls
+back; successful restarts do not repeat migration or backup. To roll back, stop V18 and
+restore the V17 backup. Never run V17 and V18 writers on the same SQLite file. No HTTP
+route uses the new tables yet.
 
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
 addresses repositories by `owner/slug`.
