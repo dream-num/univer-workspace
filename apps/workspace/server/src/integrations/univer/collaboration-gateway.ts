@@ -1,3 +1,4 @@
+import type { SessionSockets } from "../realtime/session-sockets.js";
 import type { ContentPermissions } from "./content-permissions.js";
 import type { Server } from "node:http";
 import {
@@ -80,6 +81,7 @@ export function createCollaborationGateway(options: {
   readonly snapshotMaterializer: Pick<IUnitSnapshotMaterializer, "materializeSnapshot">;
   readonly worktrees: WorktreesModule;
   readonly worktreeChangeFeed: WorktreeChangeFeed;
+  readonly sessionSockets: SessionSockets;
 }): CollaborationGateway {
   const {
     contentPermissions,
@@ -182,6 +184,8 @@ export function createCollaborationGateway(options: {
     const user = context.session.customData.user as
       | ReturnType<typeof protocolUser>
       | undefined;
+    context.connection.customData.sessionId = context.session.customData.sessionId;
+    context.connection.customData.sessionExpiresAt = context.session.customData.sessionExpiresAt;
     context.member.name = user?.name ?? context.session.userID;
     context.member.avatar = user?.avatar ?? "";
     await next();
@@ -288,6 +292,8 @@ export function createCollaborationGateway(options: {
     const user = context.session.customData.user as
       | ReturnType<typeof protocolUser>
       | undefined;
+    context.connection.customData.sessionId = context.session.customData.sessionId;
+    context.connection.customData.sessionExpiresAt = context.session.customData.sessionExpiresAt;
     context.member.name = user?.name ?? context.session.userID;
     context.member.avatar = user?.avatar ?? "";
     await next();
@@ -304,8 +310,8 @@ export function createCollaborationGateway(options: {
 
   transport.use(createCollaborationMetricsMiddleware());
   transport.use(async (context, next) => {
-    const session = identity.getSession(cookieHeader(context));
-    if (!session.authenticated) {
+    const session = identity.getRealtimeSession(cookieHeader(context));
+    if (!session) {
       const { pathname } = new URL(context.incomingMessage.url ?? "/", "http://localhost");
       if (
         context.incomingMessage.method !== "GET" ||
@@ -315,10 +321,14 @@ export function createCollaborationGateway(options: {
         return;
       }
     }
-    context.userID = session.authenticated
+    context.userID = session
       ? session.user.id
       : ANONYMOUS_USER_ID;
-    context.customData.user = session.authenticated
+    if (session) {
+      context.customData.sessionId = session.sessionId;
+      context.customData.sessionExpiresAt = session.expiresAt;
+    }
+    context.customData.user = session
       ? protocolUser(session.user)
       : anonymousProtocolUser;
     context.response.setHeader("Cache-Control", "private, no-store");
@@ -326,9 +336,9 @@ export function createCollaborationGateway(options: {
   });
   transport.register(historyEndpoint);
   transport.register(commentEndpoint);
-  transport.register(worktreeEndpoint);
+  transport.register(trackConnections(worktreeEndpoint, null, options.sessionSockets));
   transport.register(worktreeChangeFeed.endpoint(ticketStore));
-  transport.register(trackConnections(endpoint, nodeAccessConnections));
+  transport.register(trackConnections(endpoint, nodeAccessConnections, options.sessionSockets));
 
   const router = Router();
   router.use((request, response, next) => {
@@ -437,7 +447,8 @@ export function createCollaborationGateway(options: {
 
 function trackConnections(
   endpoint: NodeTransportEndpoint,
-  connections: Set<NodeTransportConnection>,
+  connections: Set<NodeTransportConnection> | null,
+  sessionSockets: SessionSockets,
 ): NodeTransportEndpoint {
   return {
     register(router) {
@@ -450,7 +461,7 @@ function trackConnections(
             handler({
               ...context,
               accept(socketHandler) {
-                context.accept(trackConnectionLifecycle(socketHandler, connections));
+                context.accept(trackConnectionLifecycle(socketHandler, connections, sessionSockets));
               },
             }),
           );
@@ -465,18 +476,28 @@ function trackConnections(
 
 function trackConnectionLifecycle(
   handler: NodeWebSocketHandler,
-  connections: Set<NodeTransportConnection>
+  connections: Set<NodeTransportConnection> | null,
+  sessionSockets: SessionSockets
 ): NodeWebSocketHandler {
+  let untrack: (() => void) | undefined;
+  let closed = false;
   return {
     async open(context) {
-      connections.add(context.connection);
+      connections?.add(context.connection);
       await handler.open?.(context);
+      if (closed) return;
+      const { sessionId, sessionExpiresAt } = context.connection.customData;
+      if (typeof sessionId === "string" && typeof sessionExpiresAt === "number") {
+        untrack = sessionSockets.track(sessionId, sessionExpiresAt, context.connection);
+      }
     },
     async message(context) {
       await handler.message?.(context);
     },
     async close(context) {
-      connections.delete(context.connection);
+      closed = true;
+      untrack?.();
+      connections?.delete(context.connection);
       await handler.close?.(context);
     },
   };

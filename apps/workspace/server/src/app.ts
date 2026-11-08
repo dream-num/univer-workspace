@@ -27,6 +27,7 @@ import {
   createCollaborationGateway,
   type CollaborationGateway,
 } from "./integrations/univer/collaboration-gateway.js";
+import { createSessionSockets } from "./integrations/realtime/session-sockets.js";
 import { createWorktreeChangeFeed } from "./integrations/realtime/worktree-change-feed.js";
 import {
   errorHandler,
@@ -179,9 +180,13 @@ export function createWorkspaceApplication(
   const emailSender =
     dependencies.emailSender ??
     (config.emailAuth ? createEmailSender(config.emailAuth) : null);
-  const accessTokens = createAccessTokenService({ database });
+  const identityRepository = new IdentityRepository(database);
+  const sessionSockets = createSessionSockets((sessionId) => identityRepository.findSession(sessionId) !== null);
+  const onSessionsDeleted = sessionSockets.closeSessions;
+  const accessTokens = createAccessTokenService({ database, onSessionsDeleted });
   const identity = createIdentityModule({
-    repository: new IdentityRepository(database),
+    repository: identityRepository,
+    onSessionsDeleted,
     sessionTtlMs: config.sessionTtlMs,
     githubOAuthProvider:
       dependencies.githubOAuthProvider ??
@@ -270,7 +275,7 @@ export function createWorkspaceApplication(
     access,
   });
   const univerAssetsRepository = new UniverAssetsRepository(database);
-  const worktreeChangeFeed = createWorktreeChangeFeed();
+  const worktreeChangeFeed = createWorktreeChangeFeed(sessionSockets);
   const issues = createIssuesModule({
     repository: new IssuesRepository(database),
     access,
@@ -327,6 +332,7 @@ export function createWorkspaceApplication(
         snapshotMaterializer: collaboration.snapshotMaterializer,
         worktrees,
         worktreeChangeFeed,
+        sessionSockets,
       })
     : null;
   invalidateRealtimeNodeAccess = () =>

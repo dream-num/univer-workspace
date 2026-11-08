@@ -66,13 +66,17 @@ type Row = Record<string, unknown>;
 /** Persisted MCP OAuth grants, personal access tokens and dynamically registered clients. No HTTP. */
 export function createAccessTokenService(options: {
   readonly database: WorkspaceDatabase;
+  readonly onSessionsDeleted?: (sessionIds: readonly string[]) => void;
   readonly now?: () => number;
 }) {
   const now = options.now ?? Date.now;
   const db = options.database.connection;
 
   function deleteSessions(column: "issued_for_pat_id" | "issued_for_grant_id", id: string): void {
+    const sessionIds = db.prepare(`SELECT id FROM login_sessions WHERE ${column} = ?`).all(id)
+      .map((row) => String(row.id));
     db.prepare(`DELETE FROM login_sessions WHERE ${column} = ?`).run(id);
+    options.onSessionsDeleted?.(sessionIds);
   }
 
   function revokeGrantNow(id: string, userId?: string): boolean {
